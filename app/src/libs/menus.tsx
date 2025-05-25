@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import Image from "next/image";
-import { Atom, Bug, User, Globe2, BookOpenText, Users } from "lucide-react";
+import { Atom, Bug, User, Globe2, BookOpenText, Users, Swords } from "lucide-react";
 import { Paintbrush, MessagesSquare, Newspaper, Scale, Receipt } from "lucide-react";
 import { Inbox, Flag } from "lucide-react";
 import { calcIsInVillage } from "./travel/controls";
@@ -111,6 +111,13 @@ export const useGameMenu = (userData: UserWithRelations) => {
       href: "/points",
       name: "Points",
       icon: <Receipt key="travel" className="h-6 w-6" />,
+    },
+    {
+      id: "ranked",
+      href: "/ranked",
+      name: "Ranked",
+      requireAwake: true,
+      icon: <Swords key="ranked" className="h-6 w-6" />,
     },
   ];
 

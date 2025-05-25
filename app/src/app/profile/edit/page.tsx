@@ -70,6 +70,7 @@ import { canSwapVillage } from "@/utils/permissions";
 import { canSwapBloodline } from "@/utils/permissions";
 import { useInfinitePagination } from "@/libs/pagination";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { canEditPublicUser } from "@/utils/permissions";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import type { Gender } from "@/validators/register";
@@ -273,6 +274,16 @@ export default function EditProfile() {
             onClick={setActiveElement}
           >
             <SwapVillage />
+          </Accordion>
+        )}
+        {canEditPublicUser({ ...userData, role: userData.role }) && (
+          <Accordion
+            title="Admin Controls"
+            selectedTitle={activeElement}
+            unselectedSubtitle="Advanced admin controls"
+            onClick={setActiveElement}
+          >
+            <AdminControls />
           </Accordion>
         )}
       </div>
@@ -1645,6 +1656,51 @@ const ChangeGender: React.FC = () => {
           </Confirm>
         </form>
       </Form>
+    </div>
+  );
+};
+
+const AdminControls: React.FC = () => {
+  const { mutate: massUnequipAll, isPending: isUnequippingRegular } = api.jutsu.massUnequipAll.useMutation({
+    onSuccess: (result) => {
+      showMutationToast(result);
+    },
+  });
+
+  const { mutate: massUnequipAllRanked, isPending: isUnequippingRanked } = api.jutsu.massUnequipAllRanked.useMutation({
+    onSuccess: (result) => {
+      showMutationToast(result);
+    },
+  });
+
+  const isPending = isUnequippingRegular || isUnequippingRanked;
+
+  return (
+    <div className="flex flex-col gap-4 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Mass Unequip All Jutsu</h3>
+          <p className="text-sm text-muted-foreground">
+            This will unequip all jutsu from all users. Use with caution.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="destructive" 
+            onClick={() => massUnequipAll()}
+            disabled={isPending}
+          >
+            {isUnequippingRegular ? "Processing..." : "Unequip All Regular"}
+          </Button>
+          <Button 
+            variant="destructive" 
+            onClick={() => massUnequipAllRanked()}
+            disabled={isPending}
+          >
+            {isUnequippingRanked ? "Processing..." : "Unequip All Ranked"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

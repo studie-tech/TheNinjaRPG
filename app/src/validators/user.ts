@@ -95,6 +95,7 @@ export const getPublicUsersSchema = z.object({
     "Staff",
     "Outlaws",
     "Community",
+    "Ranked",
   ]),
   username: z.string().optional(),
   ip: z.string().optional(),

@@ -38,6 +38,7 @@ import { marriageRouter } from "./routers/marriage";
 import { staffRouter } from "./routers/staff";
 import { backgroundSchemaRouter } from "./routers/backgroundSchema";
 import { linkPromotionRouter } from "./routers/linkpromotion";
+import { rankedpvpRouter } from "@/server/api/routers/rankedpvp";
 import { warRouter } from "./routers/war";
 
 /**
@@ -85,6 +86,7 @@ export const appRouter = createTRPCRouter({
   backgroundSchema: backgroundSchemaRouter,
   staff: staffRouter,
   linkPromotion: linkPromotionRouter,
+  rankedpvp: rankedpvpRouter,
   war: warRouter,
 });
 

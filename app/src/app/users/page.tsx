@@ -32,6 +32,7 @@ export default function Users() {
     "Outlaws",
     "Community",
     "Staff",
+    "Ranked",
   ] as const;
   type TabName = (typeof tabNames)[number];
   const [activeTab, setActiveTab] = useState<TabName>("Online");
@@ -59,6 +60,14 @@ export default function Users() {
   const userCountNow = onlineStats?.onlineNow || 0;
   const userCountDay = onlineStats?.onlineDay || 0;
   const maxOnline = onlineStats?.maxOnline || 0;
+
+  // Get PvP ranks for all users if we're in the Ranked tab
+  const allUserIds = users?.pages.flatMap(page => page.data.map(user => user.userId)) ?? [];
+  const { data: pvpRanks } = api.rankedpvp.getPvpRanks.useQuery(
+    { userIds: allUserIds },
+    { enabled: activeTab === "Ranked" && allUserIds.length > 0 }
+  );
+
   const allUsers = users?.pages
     .map((page) => page.data)
     .flat()
@@ -68,7 +77,9 @@ export default function Users() {
         <div>
           <p className="font-bold">{user.username}</p>
           <p>
-            Lvl. {user.level} {showUserRank(user)}
+            Lvl. {user.level} {activeTab === "Ranked" ? (
+              pvpRanks?.[user.userId] || "Loading..."
+            ) : showUserRank(user)}
           </p>
           <p>{user.village?.name || "Syndicate"}</p>
         </div>
@@ -99,6 +110,8 @@ export default function Users() {
   } else if (activeTab === "Staff") {
     columns.push({ key: "tavernMessages", header: "Yapper Rank", type: "string" });
     columns.push({ key: "role", header: "Role", type: "capitalized" });
+  } else if (activeTab === "Ranked") {
+    columns.push({ key: "rankedLp", header: "Ranked LP", type: "string" });
   }
   if (userData && canSeeIps(userData.role)) {
     columns.push({ key: "lastIp", header: "LastIP", type: "string" });
