@@ -1397,6 +1397,7 @@ export const userData = mysqlTable(
     travelFinishAt: datetime("travelFinishAt", { mode: "date", fsp: 3 }),
     isBanned: boolean("isBanned").default(false).notNull(),
     isSilenced: boolean("isSilenced").default(false).notNull(),
+    isMuted: boolean("isMuted").default(false).notNull(),
     role: mysqlEnum("role", consts.UserRoles).default("USER").notNull(),
     battleId: varchar("battleId", { length: 191 }),
     isAi: boolean("isAi").default(false).notNull(),

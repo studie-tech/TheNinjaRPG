@@ -94,6 +94,7 @@ import type { Village, VillageAlliance, VillageStructure } from "@/drizzle/schem
 import type { UserQuest, Clan } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { NavBarDropdownLink } from "@/libs/menus";
+import { canMuteUsers } from "@/utils/permissions";
 
 const pusher = getServerPusher();
 
@@ -1078,6 +1079,7 @@ export const profileRouter = createTRPCRouter({
             isAi: true,
             isBanned: true,
             isSilenced: true,
+            isMuted: true,
             isOutlaw: true,
             lastIp: true,
             level: true,
@@ -1300,6 +1302,48 @@ export const profileRouter = createTRPCRouter({
       return {
         success: true,
         message: "Successfully claimed reputation points for voting",
+      };
+    }),
+  toggleMuteUser: protectedProcedure
+    .input(z.object({ userId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!user) {
+        return { success: false, message: "User not found" };
+      }
+
+      if (!canMuteUsers(user.role)) {
+        return { success: false, message: "You do not have permission to mute users" };
+      }
+
+      const targetUser = await fetchUser(ctx.drizzle, input.userId);
+      if (!targetUser) {
+        return { success: false, message: "Target user not found" };
+      }
+
+      await ctx.drizzle
+        .update(userData)
+        .set({ isMuted: !targetUser.isMuted })
+        .where(eq(userData.userId, input.userId));
+
+      // Trigger a WebSocket event to force the muted user to reconnect
+      void pusher.trigger(input.userId, "event", {
+        type: "userMessage",
+        message: `You have been ${!targetUser.isMuted ? "muted" : "unmuted"}`,
+        route: "/profile",
+        routeText: "To Profile",
+      });
+
+      // Force disconnect the user's WebSocket connection
+      void pusher.trigger(input.userId, "disconnect", {
+        type: "forceDisconnect",
+        reason: "userMuteStatusChanged",
+      });
+
+      return {
+        success: true,
+        message: targetUser.isMuted ? "User unmuted" : "User muted",
       };
     }),
 });

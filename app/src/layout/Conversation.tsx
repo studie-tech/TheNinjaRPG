@@ -463,10 +463,10 @@ const Conversation: React.FC<ConversationProps> = (props) => {
    * Submit comment
    */
   const handleSubmitComment = handleSubmit((data) => {
-    if (userData?.isSilenced) {
+    if (userData?.isSilenced || userData?.isMuted) {
       showMutationToast({
         success: false,
-        message: "You are silenced and cannot send a message.",
+        message: "You are silenced or muted and cannot send a message.",
       });
       return;
     }
