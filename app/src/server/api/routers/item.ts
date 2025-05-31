@@ -177,7 +177,10 @@ export const itemRouter = createTRPCRouter({
           gte(item.cost, input.minCost),
           gte(item.repsCost, input.minRepsCost),
         ),
-        orderBy: (table, { asc }) => [asc(table.cost), asc(table.repsCost)],
+        orderBy: (table, { asc }) => [
+          asc(table.cost),
+          asc(table.repsCost),
+        ],
       });
       const nextCursor = results.length < input.limit ? null : currentCursor + 1;
       return {
@@ -284,11 +287,17 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const useritems = await fetchUserItems(ctx.drizzle, ctx.userId);
+      const [useritems, user] = await Promise.all([
+        fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, ctx.userId),
+      ]);
       const useritem = useritems.find((i) => i.id === input.userItemId);
       // Definitions & Guard
       if (!useritem) return errorResponse("User item not found");
       if (useritem.storedAtHome) return errorResponse("Fetch at home first");
+      if (user.level < useritem.item.requiredLevel) {
+        return errorResponse(`You need to be level ${useritem.item.requiredLevel} to equip this item`);
+      }
       const doEquip = !useritem.equipped || useritem.equipped !== input.slot;
       const info = useritem.item;
       const instances = useritems.filter(
@@ -566,7 +575,8 @@ export const itemRouter = createTRPCRouter({
       ).length;
       if (
         !info.effects.find((e) => e.type.includes("bloodline")) &&
-        instancesEquipped < info.maxEquips
+        instancesEquipped < info.maxEquips &&
+        user.level >= info.requiredLevel
       ) {
         ItemSlots.forEach((slot) => {
           if (slot.includes(info.slot) && !useritems.find((i) => i.equipped === slot)) {

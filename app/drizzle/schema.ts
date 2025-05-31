@@ -938,6 +938,7 @@ export const item = mysqlTable(
     hidden: boolean("hidden").default(false).notNull(),
     maxEquips: int("maxEquips").default(1).notNull(),
     preventBattleUsage: boolean("preventBattleUsage").default(false).notNull(),
+    requiredLevel: int("requiredLevel").default(1).notNull(),
   },
   (table) => {
     return {
@@ -951,6 +952,7 @@ export const item = mysqlTable(
       onlyInShopIdx: index("Item_onlyInShop_idx").on(table.inShop),
       costIdx: index("Item_cost_idx").on(table.cost),
       repsCostIdx: index("Item_repsCost_idx").on(table.repsCost),
+      requiredLevelIdx: index("Item_requiredLevel_idx").on(table.requiredLevel),
     };
   },
 );

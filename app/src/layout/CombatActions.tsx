@@ -31,6 +31,8 @@ interface ActionSelectorProps {
     frames?: number;
     speed?: number;
     lastUsedRound?: number;
+    cost?: number;
+    repsCost?: number;
   }[];
   counts?: {
     id: string;
@@ -48,6 +50,7 @@ interface ActionSelectorProps {
   emptyText?: string;
   lastElement?: HTMLDivElement | null;
   setLastElement?: (el: HTMLDivElement | null) => void;
+  renderItem?: (item: NonNullable<ActionSelectorProps["items"]>[number]) => React.ReactNode;
 }
 
 export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
@@ -98,31 +101,35 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
               ref={i === filtered.length - 1 ? props.setLastElement : null}
               className="relative"
             >
-              <ActionOption
-                className={`pr-1 h-full  ${
-                  isHighlight
-                    ? "rounded-xl border-2 border-amber-500 bg-amber-300 text-black"
-                    : ""
-                } ${bgColor} ${isGreyed ? "opacity-20" : ""}`}
-                src={item.image}
-                isGreyed={isGreyed}
-                alt={item.name}
-                warning={item?.warning}
-                roundFull={props.roundFull}
-                hideBorder={props.hideBorder}
-                rarity={item.rarity}
-                cooldown={item.cooldown}
-                frames={item.frames}
-                speed={item.speed}
-                lastUsedRound={item.lastUsedRound}
-                currentRound={props.currentRound}
-                txt={props.showLabels ? item.name : ""}
-                count={props.counts?.find((c) => c.id === item.id)?.quantity}
-                labelSingles={props.labelSingles}
-                onClick={() => {
-                  props.onClick(item.id);
-                }}
-              />
+              {props.renderItem ? (
+                props.renderItem(item)
+              ) : (
+                <ActionOption
+                  className={`pr-1 h-full  ${
+                    isHighlight
+                      ? "rounded-xl border-2 border-amber-500 bg-amber-300 text-black"
+                      : ""
+                  } ${bgColor} ${isGreyed ? "opacity-20" : ""}`}
+                  src={item.image}
+                  isGreyed={isGreyed}
+                  alt={item.name}
+                  warning={item?.warning}
+                  roundFull={props.roundFull}
+                  hideBorder={props.hideBorder}
+                  rarity={item.rarity}
+                  cooldown={item.cooldown}
+                  frames={item.frames}
+                  speed={item.speed}
+                  lastUsedRound={item.lastUsedRound}
+                  currentRound={props.currentRound}
+                  txt={props.showLabels ? item.name : ""}
+                  count={props.counts?.find((c) => c.id === item.id)?.quantity}
+                  labelSingles={props.labelSingles}
+                  onClick={() => {
+                    props.onClick(item.id);
+                  }}
+                />
+              )}
               {elements.map((element, i) => (
                 <div
                   key={i}

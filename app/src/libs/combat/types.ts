@@ -1163,6 +1163,7 @@ export const ItemValidatorRawSchema = z.object({
   weaponType: z.enum(WeaponTypes),
   rarity: z.enum(ItemRarities),
   slot: z.enum(ItemSlotTypes),
+  requiredLevel: z.coerce.number().int().min(1).max(100).default(1),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
 });
 export const ItemValidator =

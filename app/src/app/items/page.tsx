@@ -376,33 +376,52 @@ const Character: React.FC<CharacterProps> = (props) => {
       <Equip slot={"KEYSTONE"} act={act} txt="Keystone" pos={l + t1} items={items} />
       {isOpen && slot && (
         <Modal
-          title="Select Item to Equip"
+          title="Item Details"
           setIsOpen={setIsOpen}
           isValid={false}
-          proceed_label={equipped ? "Unequip" : undefined}
-          onAccept={() => {
-            if (equipped) {
-              setItem(equipped);
-              equip({ userItemId: equipped.id, slot: slot });
-            }
-          }}
         >
-          {!isEquipping && (
-            <ActionSelector
-              items={items?.filter((item) => slot?.includes(item.slot))}
-              counts={items}
-              showBgColor={false}
-              showLabels={false}
-              greyedIds={items
-                ?.filter((item) => item.equipped !== "NONE")
-                .map((item) => item.id)}
-              onClick={(id) => {
-                setItem(items?.find((item) => item.id === id));
-                equip({ userItemId: id, slot: slot });
-              }}
-            />
-          )}
-          {isEquipping && item && <Loader explanation={`Swapping ${item.name}`} />}
+          <div className="flex flex-col">
+            {equipped ? (
+              <>
+                <ItemWithEffects
+                  item={equipped.item}
+                  key={equipped.id}
+                  showStatistic="item"
+                />
+                {!isEquipping && (
+                  <div className="flex flex-row gap-1 mt-2">
+                    <Button
+                      variant="info"
+                      onClick={() => {
+                        setItem(equipped);
+                        equip({ userItemId: equipped.id, slot: slot });
+                      }}
+                    >
+                      <Shirt className="mr-2 h-5 w-5" />
+                      Unequip
+                    </Button>
+                  </div>
+                )}
+                {isEquipping && <Loader explanation={`Unequipping ${equipped.name}`} />}
+              </>
+            ) : !isEquipping ? (
+              <ActionSelector
+                items={items?.filter((item) => slot?.includes(item.slot))}
+                counts={items}
+                showBgColor={false}
+                showLabels={false}
+                greyedIds={items
+                  ?.filter((item) => item.equipped !== "NONE")
+                  .map((item) => item.id)}
+                onClick={(id) => {
+                  setItem(items?.find((item) => item.id === id));
+                  equip({ userItemId: id, slot: slot });
+                }}
+              />
+            ) : (
+              <Loader explanation={`Swapping ${item?.name}`} />
+            )}
+          </div>
         </Modal>
       )}
     </div>
