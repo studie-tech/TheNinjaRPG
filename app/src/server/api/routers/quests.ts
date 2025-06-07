@@ -322,6 +322,10 @@ export const questsRouter = createTRPCRouter({
       if (current) {
         return errorResponse(`Already active ${current.questType}`);
       }
+      // CAP CHECK
+      if (input.type === "mission" && (user.dailyMissions ?? 0) >= 30) {
+        return errorResponse("You have reached the daily cap of 30 missions.");
+      }
       // Fetch quest
       const result = getRandomElement(
         results.filter((e) => isAvailableUserQuests(e, user).check),
@@ -435,6 +439,10 @@ export const questsRouter = createTRPCRouter({
         );
         if (current) {
           return errorResponse(`Already active ${current.questType}`);
+        }
+        // CAP CHECK
+        if (questData.questType === "mission" && (user.dailyMissions ?? 0) >= 30) {
+          return errorResponse("You have reached the daily cap of 30 missions.");
         }
       } else {
         // Should not happen, record error and hard throw for monitoring
@@ -1178,6 +1186,7 @@ export const incrementDailyQuestCounter = async (
   enabled: boolean,
 ) => {
   if (enabled) {
+    if ((user.dailyMissions ?? 0) >= 30) return false;
     await client
       .update(userData)
       .set({ dailyMissions: sql`${userData.dailyMissions} + 1` })

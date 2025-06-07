@@ -13,6 +13,7 @@ export type ColumnDefinitionType<T, K extends keyof T> = {
   width?: number;
   onChange?: (id: string, column: string, value: string) => void;
   type: "avatar" | "string" | "capitalized" | "time_passed" | "date" | "jsx" | "input";
+  tooltip?: (row: T) => string;
 };
 
 type TableProps<T, K extends keyof T> = {
@@ -94,7 +95,11 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                       priority
                     />
                   )}
-                  {column.type === "string" && (row[column.key] as string)}
+                  {column.type === "string" && (
+                    <div title={column.tooltip?.(row)}>
+                      {row[column.key] as string}
+                    </div>
+                  )}
                   {column.type === "jsx" && (row[column.key] as React.ReactNode)}
                   {column.type === "capitalized" &&
                     capitalizeFirstLetter(row[column.key] as string)}

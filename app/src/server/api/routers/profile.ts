@@ -1752,14 +1752,17 @@ export const fetchPublicUsers = async (
         return [desc(userData.level), desc(userData.experience)];
       case "PvP":
         return [desc(userData.pvpStreak), desc(userData.experience)];
-      case "Weakest":
-        return [asc(userData.level), asc(userData.experience)];
       case "Staff":
         return [desc(userData.tavernMessages)];
       case "Outlaws":
         return [desc(userData.villagePrestige)];
       case "Community":
         return [desc(userData.tavernMessages)];
+      case "Dailies":
+        return [
+          desc(sql`${userData.dailyArenaFights} + ${userData.dailyMissions} + ${userData.dailyErrands}`),
+          desc(userData.experience),
+        ];
     }
   };
   const [users, user] = await Promise.all([
@@ -1809,6 +1812,9 @@ export const fetchPublicUsers = async (
         username: true,
         villagePrestige: true,
         tavernMessages: true,
+        dailyArenaFights: true,
+        dailyMissions: true,
+        dailyErrands: true,
       },
       // If AI, also include relations information
       with: {
