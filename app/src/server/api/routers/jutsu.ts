@@ -8,6 +8,7 @@ import {
   actionLog,
   jutsuLoadout,
   bloodline,
+  rankedUserJutsu,
 } from "@/drizzle/schema";
 import { fetchUser, fetchUpdatedUser } from "./profile";
 import { canTrainJutsu } from "@/libs/train";
@@ -455,6 +456,22 @@ export const jutsuRouter = createTRPCRouter({
         );
       });
     }),
+
+  getRankedUserJutsus: protectedProcedure
+    .input(jutsuFilteringSchema)
+    .query(async ({ ctx, input }) => {
+      const [user, results] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchRankedUserJutsus(ctx.drizzle, ctx.userId, input),
+      ]);
+      return results.filter((userjutsu) => {
+        return (
+          userjutsu.jutsu?.bloodlineId === "" ||
+          user?.bloodlineId === userjutsu.jutsu?.bloodlineId
+        );
+      });
+    }),
+
   // Get jutsus of public user
   getPublicUserJutsus: protectedProcedure
     .input(z.object({ userId: z.string() }))
@@ -474,6 +491,7 @@ export const jutsuRouter = createTRPCRouter({
       // Return
       return results;
     }),
+
   // Adjust jutsu level of public user
   adjustJutsuLevel: protectedProcedure
     .input(z.object({ userId: z.string(), jutsuId: z.string(), level: z.number() }))
@@ -517,6 +535,7 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       return { success: true, message: `Jutsu level adjusted to ${input.level}` };
     }),
+
   // Start training a given jutsu
   startTraining: protectedProcedure
     .input(z.object({ jutsuId: z.string() }))
@@ -548,6 +567,12 @@ export const jutsuRouter = createTRPCRouter({
         (uj) =>
           uj.equipped &&
           uj.jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
+      );
+
+      const shieldJutsus = userjutsus.filter(
+        (uj) =>
+          uj.equipped &&
+          uj.jutsu.effects.some((e) => e.type === "shield"),
       );
 
       if (!info) return errorResponse("Jutsu not found");
@@ -606,7 +631,7 @@ export const jutsuRouter = createTRPCRouter({
           jutsuId: input.jutsuId,
           finishTraining: new Date(Date.now() + trainTime),
           equipped:
-            curEquip < maxEquip && residualJutsus.length <= JUTSU_MAX_RESIDUAL_EQUIPPED
+            curEquip < maxEquip && residualJutsus.length <= JUTSU_MAX_RESIDUAL_EQUIPPED && shieldJutsus.length <= JUTSU_MAX_SHIELD_EQUIPPED
               ? 1
               : 0,
         });
@@ -711,19 +736,75 @@ export const jutsuRouter = createTRPCRouter({
       const newEquippedState = isEquipped ? 0 : 1;
       const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
       const isLoaded = userjutsuObj && loadout?.jutsuIds.includes(userjutsuObj.jutsuId);
+      
+      // Get counts of different jutsu types
       const residualJutsus = userjutsus.filter(
         (uj) =>
           uj.equipped &&
           uj.jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
       );
 
+      const shieldJutsus = userjutsus.filter(
+        (uj) =>
+          uj.equipped &&
+          uj.jutsu.effects.some((e) => e.type === "shield"),
+      );
+
+      const groundDotJutsus = userjutsus.filter(
+        (uj) =>
+          uj.equipped &&
+          uj.jutsu.effects.some((e) => e.type === "ground"),
+      );
+
+      const movepreventJutsus = userjutsus.filter(
+        (uj) =>
+          uj.equipped &&
+          uj.jutsu.effects.some((e) => e.type === "moveprevent"),
+      );
+
+      const curJutsuIsGround = userjutsuObj?.jutsu.effects.some(
+        (e) => e.type === "ground",
+      );
+
+      const curJutsuIsMovePrevent = userjutsuObj?.jutsu.effects.some(
+        (e) => e.type === "moveprevent",
+      );
+
       // Guards
       if (
         residualJutsus.length >= JUTSU_MAX_RESIDUAL_EQUIPPED &&
-        newEquippedState === 1
+        newEquippedState === 1 &&
+        userjutsuObj?.jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier)
       ) {
         return errorResponse(
           `You cannot equip more than ${JUTSU_MAX_RESIDUAL_EQUIPPED} residual jutsu. Please unequip first.`,
+        );
+      }
+      if (
+        shieldJutsus.length >= JUTSU_MAX_SHIELD_EQUIPPED &&
+        newEquippedState === 1 &&
+        userjutsuObj?.jutsu.effects.some((e) => e.type === "shield")
+      ) {
+        return errorResponse(
+          `You cannot equip more than ${JUTSU_MAX_SHIELD_EQUIPPED} shield jutsu. Please unequip first.`,
+        );
+      }
+      if (
+        groundDotJutsus.length >= JUTSU_MAX_GROUND_EQUIPPED &&
+        newEquippedState === 1 &&
+        curJutsuIsGround
+      ) {
+        return errorResponse(
+          `You cannot equip more than ${JUTSU_MAX_GROUND_EQUIPPED} ground dot jutsu. Please unequip first.`,
+        );
+      }
+      if (
+        movepreventJutsus.length >= JUTSU_MAX_MOVEPREVENT_EQUIPPED &&
+        newEquippedState === 1 &&
+        curJutsuIsMovePrevent
+      ) {
+        return errorResponse(
+          `You cannot equip more than ${JUTSU_MAX_MOVEPREVENT_EQUIPPED} move prevent jutsu. Please unequip first.`,
         );
       }
       if (!userjutsuObj) return errorResponse("Jutsu not found");
@@ -803,6 +884,166 @@ export const jutsuRouter = createTRPCRouter({
 
       return { success: true, message: `Order updated` };
     }),
+
+  toggleRankedEquip: protectedProcedure
+    .input(z.object({ jutsuId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const userData = await fetchUser(ctx.drizzle, ctx.userId);
+      const userJutsu = await ctx.drizzle.query.rankedUserJutsu.findFirst({
+        where: and(
+          eq(rankedUserJutsu.userId, ctx.userId),
+          eq(rankedUserJutsu.jutsuId, input.jutsuId),
+        ),
+      });
+
+      // If equipped, just unequip
+      if (userJutsu?.equipped) {
+        await ctx.drizzle
+          .update(rankedUserJutsu)
+          .set({ equipped: 0 })
+          .where(
+            and(
+              eq(rankedUserJutsu.userId, ctx.userId),
+              eq(rankedUserJutsu.jutsuId, input.jutsuId),
+            ),
+          );
+        return {
+          success: true,
+          message: "Jutsu unequipped",
+        };
+      }
+
+      // If not equipped, check limits before equipping
+      // Get all equipped jutsu
+      const equippedJutsu = await ctx.drizzle
+        .select()
+        .from(rankedUserJutsu)
+        .innerJoin(jutsu, eq(rankedUserJutsu.jutsuId, jutsu.id))
+        .where(
+          and(
+            eq(rankedUserJutsu.userId, ctx.userId),
+            eq(rankedUserJutsu.equipped, 1),
+          ),
+        );
+
+      // Get the jutsu being equipped
+      const jutsuToEquip = await ctx.drizzle.query.jutsu.findFirst({
+        where: eq(jutsu.id, input.jutsuId),
+      });
+
+      if (!jutsuToEquip) {
+        return {
+          success: false,
+          message: "Jutsu not found",
+        };
+      }
+
+      // Count jutsu by effect type
+      const shieldJutsus = equippedJutsu.filter(({ Jutsu }) =>
+        Jutsu.effects.some((e) => e.type === "shield")
+      );
+      const groundJutsus = equippedJutsu.filter(({ Jutsu }) =>
+        Jutsu.effects.some((e) => e.type === "ground")
+      );
+      const movepreventJutsus = equippedJutsu.filter(({ Jutsu }) =>
+        Jutsu.effects.some((e) => e.type === "moveprevent")
+      );
+
+      // Define type limits for ranked battles
+      const RANKED_TYPE_LIMITS = {
+        SHIELD: 2,
+        GROUND: 1,
+        MOVEPREVENT: 1,
+      };
+
+      // Check if we're at the limit for this jutsu's effects
+      if (jutsuToEquip.effects.some((e) => e.type === "shield") && 
+          shieldJutsus.length >= RANKED_TYPE_LIMITS.SHIELD) {
+        return {
+          success: false,
+          message: `You can only equip ${RANKED_TYPE_LIMITS.SHIELD} shield jutsu in ranked battles`,
+        };
+      }
+      if (jutsuToEquip.effects.some((e) => e.type === "ground") && 
+          groundJutsus.length >= RANKED_TYPE_LIMITS.GROUND) {
+        return {
+          success: false,
+          message: `You can only equip ${RANKED_TYPE_LIMITS.GROUND} ground jutsu in ranked battles`,
+        };
+      }
+      if (jutsuToEquip.effects.some((e) => e.type === "moveprevent") && 
+          movepreventJutsus.length >= RANKED_TYPE_LIMITS.MOVEPREVENT) {
+        return {
+          success: false,
+          message: `You can only equip ${RANKED_TYPE_LIMITS.MOVEPREVENT} move prevent jutsu in ranked battles`,
+        };
+      }
+
+      // If not equipped, equip it
+      if (userJutsu) {
+        await ctx.drizzle
+          .update(rankedUserJutsu)
+          .set({ equipped: 1 })
+          .where(
+            and(
+              eq(rankedUserJutsu.userId, ctx.userId),
+              eq(rankedUserJutsu.jutsuId, input.jutsuId),
+            ),
+          );
+      } else {
+        await ctx.drizzle
+          .insert(rankedUserJutsu)
+          .values({
+            id: nanoid(),
+            userId: ctx.userId,
+            jutsuId: input.jutsuId,
+            equipped: 1,
+            level: 1,
+          });
+      }
+
+      return {
+        success: true,
+        message: "Jutsu equipped",
+      };
+    }),
+
+  unequipAllRanked: protectedProcedure
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      await ctx.drizzle
+        .update(rankedUserJutsu)
+        .set({ equipped: 0 })
+        .where(eq(rankedUserJutsu.userId, ctx.userId));
+
+      return { success: true, message: "All jutsu unequipped from ranked loadout" };
+    }),
+
+  massUnequipAll: protectedProcedure
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Check if user has permission to edit users
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!user || !canEditPublicUser(user)) {
+        return errorResponse("You do not have permission to perform this action");
+      }
+
+      // Unequip all jutsu from all users
+      await ctx.drizzle
+        .update(userJutsu)
+        .set({ equipped: 0});
+
+      return { success: true, message: "All jutsu have been unequipped from all users" };
+    }),
+
+  massUnequipAllRanked: protectedProcedure
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      await ctx.drizzle
+        .update(rankedUserJutsu)
+        .set({ equipped: 0 });
+      return { success: true, message: "All ranked jutsu have been unequipped from all users" };
+    }),
 });
 
 /**
@@ -844,6 +1085,35 @@ export const fetchUserJutsus = async (
 
   return userjutsus.map((result) => ({
     ...result.UserJutsu,
+    jutsu: {
+      ...result.Jutsu,
+      bloodline: result.Bloodline,
+    },
+  }));
+};
+
+export const fetchRankedUserJutsus = async (
+  client: DrizzleClient,
+  userId: string,
+  input?: JutsuFilteringSchema,
+) => {
+  // Grab all rankedUserJutsus with Jutsu data
+  const userjutsus = await client
+    .select()
+    .from(rankedUserJutsu)
+    .innerJoin(jutsu, eq(rankedUserJutsu.jutsuId, jutsu.id))
+    .leftJoin(bloodline, eq(jutsu.bloodlineId, bloodline.id))
+    .where(
+      and(
+        eq(rankedUserJutsu.userId, userId),
+        ne(jutsu.jutsuType, "AI"),
+        ...jutsuDatabaseFilter(input),
+      ),
+    )
+    .orderBy(desc(rankedUserJutsu.equipped), desc(rankedUserJutsu.level));
+
+  return userjutsus.map((result) => ({
+    ...result.RankedUserJutsu,
     jutsu: {
       ...result.Jutsu,
       bloodline: result.Bloodline,

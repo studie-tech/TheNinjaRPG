@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import Image from "next/image";
-import { Atom, Bug, User, Globe2, BookOpenText } from "lucide-react";
+import { Atom, Bug, User, Globe2, BookOpenText, Users, Swords } from "lucide-react";
 import { Paintbrush, MessagesSquare, Newspaper, Scale, Receipt } from "lucide-react";
 import { Inbox, Flag, ShieldHalf } from "lucide-react";
 import { calcIsInVillage } from "./travel/controls";
@@ -124,6 +124,13 @@ export const useGameMenu = (userData: UserWithRelations) => {
       href: "/rules",
       name: "Rules",
       icon: <Scale key="rules" className="h-6 w-6" />,
+    },
+    {
+      id: "ranked",
+      href: "/ranked",
+      name: "Ranked",
+      requireAwake: true,
+      icon: <Swords key="ranked" className="h-6 w-6" />,
     },
   ];
 

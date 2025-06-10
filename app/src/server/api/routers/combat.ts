@@ -7,7 +7,7 @@ import {
   hasUserMiddleware,
 } from "@/api/trpc";
 import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
-import { eq, or, and, sql, gt, ne, isNotNull, isNull, inArray, gte } from "drizzle-orm";
+import { eq, or, and, sql, gt, ne, isNotNull, isNull, inArray, gte, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { desc } from "drizzle-orm";
 import { COMBAT_HEIGHT, COMBAT_WIDTH } from "@/libs/combat/constants";
@@ -31,7 +31,7 @@ import { fetchUpdatedUser, fetchUser } from "./profile";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { userData, questHistory, quest, gameSetting } from "@/drizzle/schema";
 import { battle, battleAction, battleHistory, war } from "@/drizzle/schema";
-import { villageAlliance, village, tournamentMatch } from "@/drizzle/schema";
+import { villageAlliance, village, tournamentMatch, rankedPvpQueue, item } from "@/drizzle/schema";
 import { performActionSchema, statSchema } from "@/libs/combat/types";
 import { performBattleAction } from "@/libs/combat/actions";
 import { availableUserActions } from "@/libs/combat/actions";
@@ -59,12 +59,81 @@ import type { CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
 import { IMG_BG_FOREST } from "@/drizzle/constants";
 import type { ZodBgSchemaType } from "@/validators/backgroundSchema";
+import { TRPCError } from "@trpc/server";
+import { rankedLoadout } from "@/drizzle/schema";
 
 // Debug flag when testing battle
 const debug = false;
 
 // Pusher instance
 const pusher = getServerPusher();
+
+// Ranked PvP stat distribution
+const RANKED_PVP_STATS = {                 
+  strength: 200000,
+  intelligence: 200000,
+  willpower: 200000,
+  speed: 200000,
+  ninjutsuOffence: 450000,
+  ninjutsuDefence: 450000,
+  genjutsuOffence: 450000,
+  genjutsuDefence: 450000,
+  taijutsuOffence: 450000,
+  taijutsuDefence: 450000,
+  bukijutsuOffence: 450000,
+  bukijutsuDefence: 450000,
+};
+
+// Helper function to initiate a ranked battle
+const initiateRankedBattle = async (
+  client: DrizzleClient,
+  player1Id: string,
+  player2Id: string,
+) => {
+  const result = await initiateBattle(
+    {
+      userIds: [player1Id],
+      targetIds: [player2Id],
+      client: client,
+      asset: "arena",
+      statDistribution: RANKED_PVP_STATS,
+    },
+    "RANKED",
+  );
+
+  if (result.success && result.battleId) {
+    // Remove both users from queue
+    await Promise.all([
+      client
+        .delete(rankedPvpQueue)
+        .where(eq(rankedPvpQueue.userId, player1Id)),
+      client
+        .delete(rankedPvpQueue)
+        .where(eq(rankedPvpQueue.userId, player2Id)),
+      // Update both users' status
+      client
+        .update(userData)
+        .set({ 
+          status: "BATTLE",
+          battleId: result.battleId,
+          updatedAt: new Date(),
+        })
+        .where(eq(userData.userId, player1Id)),
+      client
+        .update(userData)
+        .set({ 
+          status: "BATTLE",
+          battleId: result.battleId,
+          updatedAt: new Date(),
+        })
+        .where(eq(userData.userId, player2Id)),
+    ]);
+
+    return { success: true, message: "Match found!", battleId: result.battleId };
+  }
+
+  return { success: false, message: "Failed to initiate battle" };
+};
 
 export const combatRouter = createTRPCRouter({
   getBattle: protectedProcedure
@@ -675,6 +744,218 @@ export const combatRouter = createTRPCRouter({
       }
       return errorResponse("Failed to update battle state after multiple attempts");
     }),
+  getRankedPvpQueue: protectedProcedure
+    .query(async ({ ctx }) => {
+      const queueEntry = await ctx.drizzle.query.rankedPvpQueue.findFirst({
+        where: eq(rankedPvpQueue.userId, ctx.userId),
+        columns: {
+          queueStartTime: true,
+        },
+      });
+
+      const queueCount = await ctx.drizzle
+        .select({ count: sql<number>`count(*)` })
+        .from(rankedPvpQueue)
+        .then(result => result[0]?.count ?? 0);
+
+      return { 
+        inQueue: !!queueEntry,
+        createdAt: queueEntry?.queueStartTime,
+        queueCount,
+      };
+    }),
+  queueForRankedPvp: protectedProcedure
+    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .mutation(async ({ ctx }) => {
+      // Check if user is already in queue
+      const existingQueue = await ctx.drizzle.query.rankedPvpQueue.findFirst({
+        where: eq(rankedPvpQueue.userId, ctx.userId),
+      });
+      if (existingQueue) {
+        return errorResponse("Already in queue");
+      }
+
+      // Get user's current LP
+      const user = await ctx.drizzle.query.userData.findFirst({
+        where: eq(userData.userId, ctx.userId),
+        columns: { rankedLp: true },
+      });
+      if (!user) {
+        return errorResponse("User not found");
+      }
+
+      // Add to queue
+      await ctx.drizzle.insert(rankedPvpQueue).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        rankedLp: user.rankedLp,
+        queueStartTime: new Date(),
+        createdAt: new Date(),
+      });
+
+      // Update user status
+      await ctx.drizzle
+        .update(userData)
+        .set({ status: "QUEUED" })
+        .where(eq(userData.userId, ctx.userId));
+
+      // Try to find a match
+      const baseRange = 100;
+      const potentialOpponents = await ctx.drizzle.query.rankedPvpQueue.findMany({
+        where: ne(rankedPvpQueue.userId, ctx.userId),
+        orderBy: desc(rankedPvpQueue.queueStartTime),
+      });
+
+      // Find opponent considering queue time
+      for (const opponent of potentialOpponents) {
+        // Calculate additional range based on queue time for both players
+        const opponentQueueTimeMinutes = (new Date().getTime() - opponent.queueStartTime.getTime()) / (1000 * 60);
+        const opponentAdditionalRange = opponentQueueTimeMinutes >= 15 ? 10000 : 
+          opponentQueueTimeMinutes >= 2 ? 25 + Math.floor((opponentQueueTimeMinutes - 2) / 2) * 25 : 0;
+        const opponentTotalRange = baseRange + opponentAdditionalRange;
+
+        // Check if either player is within range of the other
+        const lpDiff = Math.abs(user.rankedLp - opponent.rankedLp);
+        // Allow matching any 1000+ LP players together
+        if (user.rankedLp >= 1000 && opponent.rankedLp >= 1000) {
+          return await initiateRankedBattle(ctx.drizzle, ctx.userId, opponent.userId);
+        }
+        // Prevent matching players below 300 LP with players above 900 LP
+        if ((user.rankedLp < 300 && opponent.rankedLp > 900) || 
+            (opponent.rankedLp < 300 && user.rankedLp > 900)) {
+          continue;
+        }
+        if (lpDiff <= opponentTotalRange) {
+          return await initiateRankedBattle(ctx.drizzle, ctx.userId, opponent.userId);
+        }
+      }
+
+      return { success: true, message: "Queued for ranked PvP" };
+    }),
+  leaveRankedPvpQueue: protectedProcedure
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Remove from queue
+      await ctx.drizzle
+        .delete(rankedPvpQueue)
+        .where(eq(rankedPvpQueue.userId, ctx.userId));
+
+      // Update user status
+      await ctx.drizzle
+        .update(userData)
+        .set({ status: "AWAKE" })
+        .where(eq(userData.userId, ctx.userId));
+
+      return { success: true, message: "Left ranked PvP queue" };
+    }),
+  checkRankedPvpMatches: protectedProcedure
+    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .mutation(async ({ ctx }) => {
+      // Get all queued players
+      const queuedPlayers = await ctx.drizzle.query.rankedPvpQueue.findMany({
+        orderBy: desc(rankedPvpQueue.queueStartTime),
+      });
+
+      console.log("Queued players:", queuedPlayers.map(p => ({ userId: p.userId, lp: p.rankedLp })));
+
+      // Try to match players
+      for (const player of queuedPlayers) {
+        if (!player) continue;
+        
+        // Skip if player already matched
+        const stillQueued = await ctx.drizzle.query.rankedPvpQueue.findFirst({
+          where: eq(rankedPvpQueue.userId, player.userId),
+        });
+        if (!stillQueued) continue;
+
+        // Calculate base range and additional range based on queue time
+        const baseRange = 100;
+        const queueTimeMinutes = (new Date().getTime() - player.queueStartTime.getTime()) / (1000 * 60);
+        const additionalRange = queueTimeMinutes >= 30 ? 10000 : 
+          queueTimeMinutes >= 5 ? 25 + Math.floor((queueTimeMinutes - 5) / 2) * 25 : 0;
+        const totalRange = baseRange + additionalRange;
+
+        // Find potential opponents considering expanded range
+        const potentialOpponents = queuedPlayers.filter(
+          (opponent) => {
+            if (opponent.userId === player.userId) return false;
+            
+            // Calculate opponent's range
+            const opponentQueueTimeMinutes = (new Date().getTime() - opponent.queueStartTime.getTime()) / (1000 * 60);
+            const opponentAdditionalRange = opponentQueueTimeMinutes >= 30 ? 10000 : 
+              opponentQueueTimeMinutes >= 5 ? 25 + Math.floor((opponentQueueTimeMinutes - 5) / 2) * 25 : 0;
+            const opponentBaseRange = 100;
+            const opponentTotalRange = opponentBaseRange + opponentAdditionalRange;
+
+            // Check if either player is within range of the other
+            const lpDiff = Math.abs(opponent.rankedLp - player.rankedLp);
+            // Allow matching any 1000+ LP players together
+            if (player.rankedLp >= 1000 && opponent.rankedLp >= 1000) {
+              return true;
+            }
+            // Prevent matching players below 300 LP with players above 900 LP
+            if ((player.rankedLp < 300 && opponent.rankedLp > 900) || 
+                (opponent.rankedLp < 300 && player.rankedLp > 900)) {
+              return false;
+            }
+            return lpDiff <= totalRange || lpDiff <= opponentTotalRange;
+          }
+        );
+
+        console.log(`Potential opponents for ${player.userId} (LP: ${player.rankedLp}, Range: ${totalRange}):`, 
+          potentialOpponents.map(p => ({ userId: p.userId, lp: p.rankedLp }))
+        );
+
+        if (potentialOpponents.length > 0) {
+          // Get the opponent who has been waiting the longest
+          const opponent = potentialOpponents[0];
+          if (!opponent) continue;
+
+          // Double check both players are still in queue
+          const [playerStillQueued, opponentStillQueued] = await Promise.all([
+            ctx.drizzle.query.rankedPvpQueue.findFirst({
+              where: eq(rankedPvpQueue.userId, player.userId),
+            }),
+            ctx.drizzle.query.rankedPvpQueue.findFirst({
+              where: eq(rankedPvpQueue.userId, opponent.userId),
+            }),
+          ]);
+
+          if (!playerStillQueued || !opponentStillQueued) {
+            console.log("One or both players no longer in queue");
+            continue;
+          }
+
+          console.log(`Attempting to match ${player.userId} with ${opponent.userId}`);
+
+          const result = await initiateRankedBattle(ctx.drizzle, player.userId, opponent.userId);
+
+          if (result.success && result.battleId) {
+            console.log(`Match found! Battle ID: ${result.battleId}`);
+            // Notify both players about the match
+            const pusher = getServerPusher();
+            await Promise.all([
+              pusher.trigger(player.userId, "event", { 
+                type: "battle", 
+                battleId: result.battleId 
+              }),
+              pusher.trigger(opponent.userId, "event", { 
+                type: "battle", 
+                battleId: result.battleId 
+              }),
+            ]);
+
+            return result;
+          } else {
+            console.log("Failed to initiate battle:", result);
+          }
+        } else {
+          console.log(`No potential opponents found for ${player.userId} (Range: ${totalRange})`);
+        }
+      }
+
+      return { success: true, message: "Checked for matches" };
+    }),
   startShrineBattle: protectedProcedure
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
@@ -718,6 +999,94 @@ export const combatRouter = createTRPCRouter({
         },
         "SHRINE_WAR",
       );
+    }),
+  getRankedLoadout: protectedProcedure
+    .query(async ({ ctx }) => {
+      return await ctx.drizzle.query.rankedLoadout.findFirst({
+        where: eq(rankedLoadout.userId, ctx.userId),
+      });
+    }),
+  updateRankedLoadout: protectedProcedure
+    .input(z.object({
+      weaponId: z.string().optional(),
+      consumable1Id: z.string().optional(),
+      consumable2Id: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Check if items exist and are of correct type
+      if (input.weaponId) {
+        const weapon = await ctx.drizzle.query.item.findFirst({
+          where: and(
+            eq(item.id, input.weaponId),
+            eq(item.itemType, "WEAPON"),
+            eq(item.inShop, true),
+          ),
+        });
+        if (!weapon) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Weapon not found or not available in shop",
+          });
+        }
+      }
+
+      if (input.consumable1Id) {
+        const consumable1 = await ctx.drizzle.query.item.findFirst({
+          where: and(
+            eq(item.id, input.consumable1Id),
+            eq(item.itemType, "CONSUMABLE"),
+            eq(item.inShop, true),
+          ),
+        });
+        if (!consumable1) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "First consumable not found or not available in shop",
+          });
+        }
+      }
+
+      if (input.consumable2Id) {
+        const consumable2 = await ctx.drizzle.query.item.findFirst({
+          where: and(
+            eq(item.id, input.consumable2Id),
+            eq(item.itemType, "CONSUMABLE"),
+            eq(item.inShop, true),
+          ),
+        });
+        if (!consumable2) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Second consumable not found or not available in shop",
+          });
+        }
+      }
+
+      // Update or create loadout
+      const existingLoadout = await ctx.drizzle.query.rankedLoadout.findFirst({
+        where: eq(rankedLoadout.userId, ctx.userId),
+      });
+
+      if (existingLoadout) {
+        await ctx.drizzle
+          .update(rankedLoadout)
+          .set({
+            weaponId: input.weaponId === undefined ? null : input.weaponId,
+            consumable1Id: input.consumable1Id === undefined ? existingLoadout.consumable1Id : input.consumable1Id,
+            consumable2Id: input.consumable2Id === undefined ? existingLoadout.consumable2Id : input.consumable2Id,
+          })
+          .where(eq(rankedLoadout.id, existingLoadout.id));
+      } else {
+        await ctx.drizzle.insert(rankedLoadout).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          weaponId: input.weaponId === undefined ? null : input.weaponId,
+          consumable1Id: input.consumable1Id === undefined ? null : input.consumable1Id,
+          consumable2Id: input.consumable2Id === undefined ? null : input.consumable2Id,
+        });
+      }
+
+      return { success: true };
     }),
 });
 
@@ -830,6 +1199,11 @@ export const initiateBattle = async (
           where: (jutsus) => eq(jutsus.equipped, 1),
           orderBy: (table, { desc }) => [desc(table.level)],
         },
+        rankedUserJutsus: {
+          with: { jutsu: true },
+          where: (rankedUserJutsus) => eq(rankedUserJutsus.equipped, 1),
+          orderBy: (table, { desc }) => [desc(table.level)],
+        },
         userQuests: {
           where: or(
             and(isNull(questHistory.endAt), eq(questHistory.completed, 0)),
@@ -896,9 +1270,9 @@ export const initiateBattle = async (
 
     // Check if user is asleep
     if (
-      ((user.status !== "AWAKE" && battleType !== "CLAN_BATTLE") ||
-        (user.status !== "QUEUED" && battleType === "CLAN_BATTLE")) &&
-      !AutoBattleTypes.includes(battleType)
+      (battleType === "CLAN_BATTLE" && user.status !== "QUEUED") ||
+      (battleType === "RANKED" && user.status !== "QUEUED") ||
+      (!["CLAN_BATTLE", "RANKED"].includes(battleType) && user.status !== "AWAKE" && !AutoBattleTypes.includes(battleType))
     ) {
       return { success: false, message: `User ${user.username} is not awake` };
     }
@@ -1092,7 +1466,7 @@ export const initiateBattle = async (
           defenderId: t,
           createdAt: new Date(),
         })),
-      ),
+      )
     ),
     client
       .update(userData)
@@ -1118,7 +1492,7 @@ export const initiateBattle = async (
             inArray(userData.userId, userIds),
             ...(!AutoBattleTypes.includes(battleType)
               ? [inArray(userData.userId, targetIds)]
-              : []),
+              : [])
           ),
           or(eq(userData.status, "AWAKE"), eq(userData.status, "QUEUED")),
           ...(battleType === "COMBAT"
@@ -1126,7 +1500,7 @@ export const initiateBattle = async (
                 and(
                   ...(sector ? [eq(userData.sector, sector)] : []),
                   ...(longitude ? [eq(userData.longitude, longitude)] : []),
-                  ...(latitude ? [eq(userData.latitude, latitude)] : []),
+                  ...(latitude ? [eq(userData.latitude, latitude)] : [])
                 ),
               ]
             : []),

@@ -19,6 +19,7 @@ import {
   double,
   primaryKey,
   unique,
+  timestamp,
 } from "drizzle-orm/mysql-core";
 import * as consts from "@/drizzle/constants";
 import { createInsertSchema } from "drizzle-zod";
@@ -1033,6 +1034,23 @@ export const jutsuLoadout = mysqlTable(
   },
 );
 
+export const rankedJutsuLoadout = mysqlTable(
+  "RankedJutsuLoadout",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    jutsuIds: json("content").$type<string[]>().notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("RankedJutsuLoadout_userId_idx").on(table.userId),
+    };
+  },
+);
+
 export const notification = mysqlTable(
   "Notification",
   {
@@ -1329,6 +1347,7 @@ export const userData = mysqlTable(
     anbuId: varchar("anbuId", { length: 191 }),
     clanId: varchar("clanId", { length: 191 }),
     jutsuLoadout: varchar("jutsuLoadout", { length: 191 }),
+    rankedJutsuLoadout: varchar("rankedJutsuLoadout", { length: 191 }),
     nRecruited: int("nRecruited").default(0).notNull(),
     lastIp: varchar("lastIp", { length: 191 }),
     username: varchar("username", { length: 191 }).notNull(),
@@ -1464,6 +1483,10 @@ export const userData = mysqlTable(
     tavernMessages: int("tavernMessages").default(0).notNull(),
     audioOn: boolean("audioOn").default(true).notNull(),
     tutorialStep: tinyint("tutorialStep", { unsigned: true }).default(0).notNull(),
+    rankedLp: int("rankedLp").notNull().default(150),
+    rankedBattles: int("rankedBattles").notNull().default(0),
+    rankedWins: int("rankedWins").notNull().default(0),
+    rankedStreak: int("rankedStreak").notNull().default(0),
     homeType: mysqlEnum("homeType", consts.HomeTypes).default("NONE").notNull(),
   },
   (table) => {
@@ -1475,6 +1498,7 @@ export const userData = mysqlTable(
       clanIdIdx: index("UserData_clanId_idx").on(table.clanId),
       anbuIdIdx: index("UserData_anbuId_idx").on(table.anbuId),
       jutsuLoadoutIdx: index("UserData_jutsuLoadout_idx").on(table.jutsuLoadout),
+      rankedJutsuLoadoutIdx: index("UserData_rankedJutsuLoadout_idx").on(table.rankedJutsuLoadout),
       levelIdx: index("UserData_level_idx").on(table.level),
       usernameKey: uniqueIndex("UserData_username_key").on(table.username),
       bloodlineIdIdx: index("UserData_bloodlineId_idx").on(table.bloodlineId),
@@ -1547,6 +1571,7 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   conversations: many(user2conversation),
   items: many(userItem),
   jutsus: many(userJutsu),
+  rankedUserJutsus: many(rankedUserJutsu),
   badges: many(userBadge),
   recruitedUsers: many(userData, { relationName: "recruiter" }),
   recruiter: one(userData, {
@@ -1571,6 +1596,10 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   loadout: one(jutsuLoadout, {
     fields: [userData.jutsuLoadout],
     references: [jutsuLoadout.id],
+  }),
+  rankedLoadout: one(rankedJutsuLoadout, {
+    fields: [userData.rankedJutsuLoadout],
+    references: [rankedJutsuLoadout.id],
   }),
   creatorBlacklist: many(userBlackList, { relationName: "creatorBlacklist" }),
   mpvpBattles: many(mpvpBattleUser),
@@ -1729,6 +1758,35 @@ export const userJutsu = mysqlTable(
 );
 export type UserJutsu = InferSelectModel<typeof userJutsu>;
 
+export const rankedUserJutsu = mysqlTable(
+  "RankedUserJutsu",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    jutsuId: varchar("jutsuId", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    level: int("level").default(1).notNull(),
+    equipped: tinyint("equipped").default(0).notNull(),
+    finishTraining: datetime("finishTraining", { mode: "date", fsp: 3 }),
+  },
+  (table) => {
+    return {
+      userIdJutsuIdKey: uniqueIndex("RankedUserJutsu_userId_jutsuId_key").on(
+        table.userId,
+        table.jutsuId,
+      ),
+      jutsuIdIdx: index("RankedUserJutsu_jutsuId_idx").on(table.jutsuId),
+      equippedIdx: index("RankedUserJutsu_equipped_idx").on(table.equipped),
+    };
+  },
+);
+export type RankedUserJutsu = InferSelectModel<typeof rankedUserJutsu>;
+
 export const userJutsuRelations = relations(userJutsu, ({ one }) => ({
   jutsu: one(jutsu, {
     fields: [userJutsu.jutsuId],
@@ -1736,6 +1794,17 @@ export const userJutsuRelations = relations(userJutsu, ({ one }) => ({
   }),
   user: one(userData, {
     fields: [userJutsu.userId],
+    references: [userData.userId],
+  }),
+}));
+
+export const rankedUserJutsuRelations = relations(rankedUserJutsu, ({ one }) => ({
+  jutsu: one(jutsu, {
+    fields: [rankedUserJutsu.jutsuId],
+    references: [jutsu.id],
+  }),
+  user: one(userData, {
+    fields: [rankedUserJutsu.userId],
     references: [userData.userId],
   }),
 }));
@@ -2789,8 +2858,6 @@ export const userPollVote = mysqlTable(
   },
 );
 
-export type UserPollVote = InferSelectModel<typeof userPollVote>;
-
 export const userPollVoteRelations = relations(userPollVote, ({ one }) => ({
   user: one(userData, {
     fields: [userPollVote.userId],
@@ -2803,6 +2870,36 @@ export const userPollVoteRelations = relations(userPollVote, ({ one }) => ({
   option: one(pollOption, {
     fields: [userPollVote.optionId],
     references: [pollOption.id],
+  }),
+}));
+
+export type UserPollVote = InferSelectModel<typeof userPollVote>;
+
+export const rankedPvpQueue = mysqlTable(
+  "RankedPvpQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 })
+      .notNull()
+      .references(() => userData.userId),
+    rankedLp: int("rankedLp").notNull(),
+    queueStartTime: timestamp("queueStartTime").notNull().defaultNow(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("RankedPvpQueue_userId_idx").on(table.userId),
+      rankedLpIdx: index("RankedPvpQueue_rankedLp_idx").on(table.rankedLp),
+    };
+  },
+);
+
+export type RankedPvpQueue = InferSelectModel<typeof rankedPvpQueue>;
+
+export const rankedPvpQueueRelations = relations(rankedPvpQueue, ({ one }) => ({
+  user: one(userData, {
+    fields: [rankedPvpQueue.userId],
+    references: [userData.userId],
   }),
 }));
 
@@ -2835,3 +2932,58 @@ export const userUploadRelations = relations(userUpload, ({ one }) => ({
 }));
 
 export type UserUpload = InferSelectModel<typeof userUpload>;
+
+export const rankedLoadout = mysqlTable("RankedLoadout", {
+  id: varchar("id", { length: 191 }).notNull().primaryKey(),
+  userId: varchar("userId", { length: 191 }).notNull(),
+  weaponId: varchar("weaponId", { length: 191 }),
+  consumable1Id: varchar("consumable1Id", { length: 191 }),
+  consumable2Id: varchar("consumable2Id", { length: 191 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const rankedLoadoutRelations = relations(rankedLoadout, ({ one }) => ({
+  user: one(userData, {
+    fields: [rankedLoadout.userId],
+    references: [userData.userId],
+  }),
+  weapon: one(item, {
+    fields: [rankedLoadout.weaponId],
+    references: [item.id],
+  }),
+  consumable1: one(item, {
+    fields: [rankedLoadout.consumable1Id],
+    references: [item.id],
+  }),
+  consumable2: one(item, {
+    fields: [rankedLoadout.consumable2Id],
+    references: [item.id],
+  }),
+}));
+
+export type RankedLoadout = InferSelectModel<typeof rankedLoadout>;
+
+export const rankedSeason = mysqlTable("RankedSeason", {
+  id: varchar("id", { length: 191 }).notNull().primaryKey(),
+  name: varchar("name", { length: 191 }).notNull(),
+  description: text("description").notNull(),
+  startDate: datetime("startDate", { mode: "date", fsp: 3 }).notNull(),
+  endDate: datetime("endDate", { mode: "date", fsp: 3 }).notNull(),
+  rewards: json("rewards").$type<{
+    division: string;
+    rewards: {
+      type: "item" | "jutsu" | "reputation" | "ryo";
+      id?: string;
+      amount: number;
+    }[];
+  }[]>().notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+});
+
+export type RankedSeason = InferSelectModel<typeof rankedSeason>;

@@ -25,6 +25,8 @@ import { COMBAT_HEIGHT, COMBAT_WIDTH } from "./constants";
 import { KILLING_NOTORIETY_GAIN } from "@/drizzle/constants";
 import { findWarsWithUser } from "@/libs/war";
 import { STREAK_LEVEL_DIFF } from "@/drizzle/constants";
+import { getUserElements } from "@/validators/user";
+import { checkJutsuElements } from "@/libs/train";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { REGEN_SECONDS } from "@/drizzle/constants";
 import {
@@ -57,6 +59,8 @@ import type { GroundEffect, UserEffect, BattleEffect } from "@/libs/combat/types
 import type { Battle, VillageAlliance, Village, GameSetting } from "@/drizzle/schema";
 import type { Item, UserItem, AiProfile } from "@/drizzle/schema";
 import type { BattleType } from "@/drizzle/constants";
+import { nanoid } from "nanoid";
+import { UserData, UserJutsu, RankedLoadout } from "@/drizzle/schema";
 
 /**
  * Check if a single tag is a shared cooldown tag
@@ -1227,6 +1231,31 @@ export const processUsersForBattle = (info: {
       user.curStamina = user.maxStamina;
     }
 
+    if (battleType === "RANKED") {
+      user.level = 100;
+      user.experience = 4399880;
+      user.bloodlineId = "";
+      user.maxHealth = 5050;
+      user.curHealth = 5050;
+      user.maxChakra = 5050;
+      user.curChakra = 5050;
+      user.maxStamina = 5050;
+      user.curStamina = 5050;
+      user.strength = 200000;
+      user.intelligence = 200000;
+      user.willpower = 200000;
+      user.speed = 200000;
+      user.ninjutsuOffence = 450000;
+      user.ninjutsuDefence = 450000;
+      user.genjutsuOffence = 450000;
+      user.genjutsuDefence = 450000;
+      user.taijutsuOffence = 450000;
+      user.taijutsuDefence = 450000;
+      user.bukijutsuOffence = 450000;
+      user.bukijutsuDefence = 450000;
+      user.medicalExperience = 400000;
+    }
+
     // Add highest offence name to user
     const offences = {
       ninjutsuOffence: user.ninjutsuOffence,
@@ -1366,7 +1395,7 @@ export const processUsersForBattle = (info: {
     // If in own village, add defence bonus
     const ownSector = user.sector === user.village?.sector;
     const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
-    if (ownSector && inVillage && battleType !== "ARENA") {
+    if (ownSector && inVillage && battleType !== "ARENA" && battleType !== "RANKED") {
       const boost = structureBoost("villageDefencePerLvl", user.village?.structures);
       const effect = DecreaseDamageTakenTag.parse({
         target: "SELF",
@@ -1390,7 +1419,7 @@ export const processUsersForBattle = (info: {
     }
 
     // Add bloodline efects
-    if (user.bloodline?.effects) {
+    if (user.bloodline?.effects && battleType !== "RANKED") {
       user.bloodline.effects.forEach((effect) => {
         const realized = realizeTag({
           tag: effect as UserEffect,
@@ -1426,13 +1455,25 @@ export const processUsersForBattle = (info: {
     }
 
     // Set jutsus updatedAt to now (we use it for determining usage cooldowns)
-    user.jutsus = user.jutsus
-      .filter((userjutsu) => {
+    user.jutsus = (battleType === "RANKED"
+      ? user.rankedUserJutsus?.map(jutsu => ({
+          ...jutsu,
+          experience: 0,
+        }))
+      : user.jutsus)?.filter((userjutsu) => {
         // Not if no jutsu
         if (!userjutsu.jutsu) {
           return false;
         }
-        // Not if cannot train jutsu
+        // For ranked battles, only check bloodline requirements
+        if (battleType === "RANKED") {
+          // Not if not the right bloodline
+          if (userjutsu.jutsu.bloodlineId !== "" && !user.isAi && user.bloodlineId !== userjutsu.jutsu.bloodlineId) {
+            return false;
+          }
+          return true;
+        }
+        // For non-ranked battles, check all requirements
         if (!checkJutsuItems(userjutsu.jutsu, user.items) && !user.isAi) {
           return false;
         }
@@ -1445,13 +1486,13 @@ export const processUsersForBattle = (info: {
           .filter((e) => e.type === "summon")
           .forEach((e) => "aiId" in e && allSummons.push(e.aiId));
         // Not if not the right bloodline
-        return (
-          userjutsu.jutsu.bloodlineId === "" ||
-          user.isAi ||
-          user.bloodlineId === userjutsu.jutsu.bloodlineId
-        );
-      })
-      .map((userjutsu) => {
+        if (userjutsu.jutsu.bloodlineId !== "" && !user.isAi && user.bloodlineId !== userjutsu.jutsu.bloodlineId) {
+          return false;
+        }
+        // Check elements
+        const userElements = new Set(getUserElements(user));
+        return checkJutsuElements(userjutsu.jutsu, userElements);
+      }).map((userjutsu) => {
         userjutsu.lastUsedRound = -userjutsu.jutsu.cooldown;
         return userjutsu;
       });
@@ -1473,7 +1514,38 @@ export const processUsersForBattle = (info: {
 
     // Add item effects
     const items: (UserItem & { item: Item; lastUsedRound: number })[] = [];
-    user.items
+    
+    // Get items to process - either ranked loadout items or regular items
+    const itemsToProcess = battleType === "RANKED" 
+      ? [
+          ...(user.rankedLoadout?.weapon ? [{ 
+            item: user.rankedLoadout.weapon, 
+            equipped: "WEAPON",
+            userId: user.userId,
+            itemId: user.rankedLoadout.weapon.id,
+            quantity: 1,
+            lastUsedRound: -user.rankedLoadout.weapon.cooldown
+          }] : []),
+          ...(user.rankedLoadout?.consumable1 ? [{ 
+            item: user.rankedLoadout.consumable1, 
+            equipped: "NONE",
+            userId: user.userId,
+            itemId: user.rankedLoadout.consumable1.id,
+            quantity: 6,
+            lastUsedRound: -user.rankedLoadout.consumable1.cooldown
+          }] : []),
+          ...(user.rankedLoadout?.consumable2 ? [{ 
+            item: user.rankedLoadout.consumable2, 
+            equipped: "NONE",
+            userId: user.userId,
+            itemId: user.rankedLoadout.consumable2.id,
+            quantity: 6,
+            lastUsedRound: -user.rankedLoadout.consumable2.cooldown
+          }] : []),
+        ] as (UserItem & { item: Item; lastUsedRound: number })[]
+      : user.items;
+
+    itemsToProcess
       .filter((useritem) => useritem.item && !useritem.item.preventBattleUsage)
       .forEach((useritem) => {
         const itemType = useritem.item.itemType;
@@ -1481,17 +1553,13 @@ export const processUsersForBattle = (info: {
         effects
           .filter((e) => e.type === "summon")
           .forEach((e) => "aiId" in e && allSummons.push(e.aiId));
-        if (
-          itemType === "ARMOR" ||
-          itemType === "ACCESSORY" ||
-          itemType === "KEYSTONE"
-        ) {
+        if ((itemType === "ARMOR" || itemType === "ACCESSORY" || itemType === "KEYSTONE") && battleType !== "RANKED") {
           if (useritem.item.effects && useritem.equipped !== "NONE") {
             effects.forEach((effect) => {
               const realized = realizeTag({
                 tag: effect,
                 user: user,
-                actionId: useritem.itemId,
+                actionId: useritem.item.id,
                 target: user,
                 level: user.level,
               });
@@ -1504,7 +1572,9 @@ export const processUsersForBattle = (info: {
           }
         } else {
           useritem.lastUsedRound = -useritem.item.cooldown;
-          items.push(useritem);
+          if (itemType !== "ARMOR" && itemType !== "ACCESSORY") {
+            items.push(useritem);
+          }
         }
       });
     user.items = items;

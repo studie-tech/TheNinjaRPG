@@ -20,6 +20,18 @@ export default function Profile() {
   // State
   const { data: userData } = useRequiredUserData();
 
+  // Fetch PvP rank
+  const shouldFetch = !!userData?.userId && userData?.rankedLp !== undefined;
+  const { data: pvpRank, error: pvpRankError, isLoading: pvpRankLoading } =
+    api.rankedpvp.getPvpRank.useQuery(
+      shouldFetch
+        ? { userId: userData.userId, rankedLp: userData.rankedLp }
+        : { userId: "", rankedLp: 0 }, // Provide default values instead of undefined
+      {
+        enabled: shouldFetch, // Prevents execution when data is missing
+      }
+    );
+  
   // Query
   const { data: marriages } = api.marriage.getMarriedUsers.useQuery(
     {},
@@ -60,6 +72,14 @@ export default function Profile() {
             <p>
               Lvl. {userData.level} {showUserRank(userData)}
             </p>
+            <p>
+              PvP Rank:{" "}
+              {pvpRankLoading
+                ? "Loading..."
+                : pvpRankError
+                ? "Error fetching PvP Rank"
+                : pvpRank || "Unknown"}
+            </p>
             <p>Money: {userData.money.toFixed(2)}</p>
             <p>Bank: {userData.bank.toFixed(2)}</p>
             <p>Status: {userData.status}</p>
@@ -75,6 +95,12 @@ export default function Profile() {
             <p>PvP Streak: {userData.pvpStreak}</p>
             <p>PvP Activity: {userData.pvpActivity}</p>
             <p>Medical Exp: {userData.medicalExperience}</p>
+            <br />
+            <b>Ranked Battles</b>
+            <p>Battles: {userData.rankedBattles}</p>
+            <p>Wins: {userData.rankedWins}</p>
+            <p>Win Rate: {userData.rankedBattles > 0 ? ((userData.rankedWins / userData.rankedBattles) * 100).toFixed(1) : "0"}%</p>
+            <p>Current Streak: {userData.rankedStreak}</p>
           </div>
           <div>
             <b>Reputation</b>

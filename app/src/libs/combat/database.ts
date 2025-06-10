@@ -21,6 +21,8 @@ import { updateUserOnMap } from "@/libs/pusher";
 import { JUTSU_XP_TO_LEVEL } from "@/drizzle/constants";
 import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { KAGE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
+import { calculateLPChange } from "./ranked";
 import { WAR_SHRINE_HP } from "@/drizzle/constants";
 import { findWarsWithUser } from "@/libs/war";
 import type { PusherClient } from "@/libs/pusher";
@@ -478,6 +480,34 @@ export const updateUser = async (
     if (user.villagePrestige + result.villagePrestige < 0) {
       user.allyVillage = false;
     }
+
+    // Calculate LP change for ranked battles
+    let lpChange = 0;
+    if (curBattle.battleType === "RANKED") {
+      const opponent = curBattle.usersState.find(u => u.userId !== userId);
+      if (opponent) {
+        lpChange = calculateLPChange(user, opponent, result.didWin > 0);
+      }
+    }
+
+    // Update ranked battle statistics if it's a ranked battle
+    if (curBattle.battleType === "RANKED") {
+      await client
+        .update(userData)
+        .set({
+          rankedBattles: sql`${userData.rankedBattles} + 1`,
+          ...(result.didWin > 0
+            ? {
+                rankedWins: sql`${userData.rankedWins} + 1`,
+                rankedStreak: sql`${userData.rankedStreak} + 1`,
+              }
+            : {
+                rankedStreak: 0,
+              }),
+        })
+        .where(eq(userData.userId, userId));
+    }
+
     // Update user & user items
     await Promise.all([
       // Delete items
@@ -566,6 +596,11 @@ export const updateUser = async (
                     : sql`immunityUntil`,
               }
             : { status: "AWAKE" }),
+          ...(curBattle.battleType === "RANKED" && lpChange !== 0
+            ? {
+                rankedLp: sql`GREATEST(rankedLp + ${lpChange}, 0)`,
+              }
+            : {}),
         })
         .where(eq(userData.userId, userId)),
     ]);

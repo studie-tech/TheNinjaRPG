@@ -5,6 +5,7 @@ import { fedJutsuLoadouts } from "@/utils/paypal";
 import { Folder } from "lucide-react";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
+import { usePathname } from "next/navigation";
 
 interface LoadoutSelectorProps {
   size?: "small" | "large";
@@ -13,6 +14,8 @@ interface LoadoutSelectorProps {
 const LoadoutSelector: React.FC<LoadoutSelectorProps> = (props) => {
   // State
   const { data: userData } = useRequiredUserData();
+  const pathname = usePathname();
+  const isRankedPage = pathname === "/ranked";
 
   // tRPC utility
   const utils = api.useUtils();
@@ -76,6 +79,11 @@ const LoadoutSelector: React.FC<LoadoutSelectorProps> = (props) => {
   return (
     <div className="flex flex-row gap-1">
       {data?.map((loadout, i) => {
+        // On ranked page, only show loadout 4
+        if (isRankedPage && i !== 3) return null;
+        // On regular pages, only show loadouts 1-3
+        if (!isRankedPage && i === 3) return null;
+        
         return (
           <div className="relative" key={i}>
             <Folder
