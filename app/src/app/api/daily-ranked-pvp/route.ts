@@ -1,4 +1,4 @@
-import { and, sql, eq } from "drizzle-orm";
+import { and, sql, eq, gt } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
 import { rankedSeason, userData } from "@/drizzle/schema";
 import { updateGameSetting } from "@/libs/gamesettings";
@@ -29,9 +29,13 @@ export async function GET() {
     if (endedSeason) {
       await endRankedSeason(drizzleDB, endedSeason.id);
     } else {
-      await drizzleDB.update(userData).set({
-        rankedLp: sql`${userData.rankedLp} * 0.95`,
-      });
+      await drizzleDB
+        .update(userData)
+        .set({
+          rankedLp: sql`${userData.rankedLp} * 0.95`,
+          rankedStreak: 0,
+        })
+        .where(gt(userData.rankedLp, 0));
     }
 
     return Response.json(`OK`);

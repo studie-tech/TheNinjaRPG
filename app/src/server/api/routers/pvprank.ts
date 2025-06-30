@@ -564,7 +564,10 @@ export const endRankedSeason = async (client: DrizzleClient, seasonId: string) =
   // Execute database updates in parallel (no explicit transaction)
   await Promise.all([
     // Reset LP for everyone
-    client.update(userData).set({ rankedLp: 0 }),
+    client
+      .update(userData)
+      .set({ rankedLp: 0, rankedStreak: 0 })
+      .where(gt(userData.rankedLp, 0)),
     // Mark season as ended
     client
       .update(rankedSeason)
