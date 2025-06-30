@@ -44,6 +44,7 @@ export function SeasonManager() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const { data: userData } = useUserData();
   const canEditContent = canChangeContent(userData?.role ?? "USER");
+  const canEndSeason = canChangeContent(userData?.role ?? "USER");
 
   const utils = api.useUtils();
 
@@ -178,7 +179,7 @@ export function SeasonManager() {
                   </DialogContent>
                 </Dialog>
 
-                {isSeasonActive && (
+                {isSeasonActive && canEndSeason && (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="outline">
