@@ -38,10 +38,10 @@ export function UnclaimedSeasonRewards() {
         <Button
           onClick={() => claimRewards.mutate()}
           className="hover:underline disabled:opacity-50"
-          disabled={isLoading}
+          disabled={claimRewards.isPending}
         >
           <Gift className="mr-2 h-5 w-5" />
-          {isLoading ? "Claiming…" : "Claim"}
+          {claimRewards.isPending ? "Claiming…" : "Claim"}
         </Button>
       </CardHeader>
       <CardContent className="space-y-2">
