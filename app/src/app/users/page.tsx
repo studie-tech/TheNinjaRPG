@@ -14,6 +14,8 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { showUserRank } from "@/libs/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
 import UserFiltering, { useFiltering, getFilter } from "@/layout/UserFiltering";
+import { getRankedRank } from "@/libs/ranked_pvp";
+import { RANKED_SANNIN_TOP_PLAYERS } from "@/drizzle/constants";
 import type { ArrayElement } from "@/utils/typeutils";
 import {
   Select,
@@ -70,21 +72,22 @@ export default function Users() {
   const userCountNow = onlineStats?.onlineNow || 0;
   const userCountDay = onlineStats?.onlineDay || 0;
   const maxOnline = onlineStats?.maxOnline || 0;
-  const allUsers = users?.pages
-    .map((page) => page.data)
-    .flat()
-    .map((user) => ({
-      ...user,
-      info: (
-        <div>
-          <p className="font-bold">{user.username}</p>
-          <p>
-            Lvl. {user.level} {showUserRank(user)}
-          </p>
-          <p>{user.village?.name || "Syndicate"}</p>
-        </div>
-      ),
-    }));
+  const flatUsers = users?.pages.map((page) => page.data).flat();
+  const topPlayersLP =
+    flatUsers?.slice(0, RANKED_SANNIN_TOP_PLAYERS).map((u) => u.rankedLp) || [];
+  const allUsers = flatUsers?.map((user) => ({
+    ...user,
+    info: (
+      <div>
+        <p className="font-bold">{user.username}</p>
+        <p>
+          Lvl. {user.level} {showUserRank(user)}
+        </p>
+        <p>{user.village?.name || "Syndicate"}</p>
+      </div>
+    ),
+    pvpRank: getRankedRank(user.rankedLp, topPlayersLP),
+  }));
   type User = ArrayElement<typeof allUsers>;
 
   useInfinitePagination({
@@ -105,6 +108,7 @@ export default function Users() {
     columns.push({ key: "pvpStreak", header: "PvP Streak", type: "string" });
   } else if (activeTab === "Ranked") {
     columns.push({ key: "rankedLp", header: "Ranked PvP LP", type: "string" });
+    columns.push({ key: "pvpRank", header: "PvP Rank", type: "string" });
   } else if (activeTab === "Outlaws") {
     columns.push({ key: "villagePrestige", header: "Notoriety", type: "string" });
   } else if (activeTab === "Community") {
