@@ -769,6 +769,13 @@ const Combat: React.FC<CombatProps> = (props) => {
                   </Button>
                 </div>
               )}
+              {battleType === "RANKED_PVP" && (
+                <Link href="/battlearena#PVP%20Rank" className="w-full">
+                  <Button id="toPvpRank" className="w-full">
+                    Back to PvP Queue
+                  </Button>
+                </Link>
+              )}
               {showTravelBtn && (
                 <Link href="/travel" className="basis-1/2">
                   <Button id="toTravel" className="w-full">
