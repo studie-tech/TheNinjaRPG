@@ -554,7 +554,7 @@ export const calcBattleResult = (battle: CompleteBattle, userId: string) => {
       const uExp = friends.reduce((a, b) => a + b.experience, 0) / friends.length;
       const oExp = targets.reduce((a, b) => a + b.experience, 0) / targets.length;
       const didWin = user.curHealth > 0 && !user.fledBattle;
-      const maxGain = 32 * battle.rewardScaling;
+      const maxGain = 32;
 
       // Experience boost
       let expBoost = 1;
@@ -605,6 +605,9 @@ export const calcBattleResult = (battle: CompleteBattle, userId: string) => {
       } else if (battleType === "ARENA") {
         experience = Math.min(experience, 20);
       }
+
+      // Scale experience based on reward scaling
+      experience *= battle.rewardScaling;
 
       // Find users who did not leave battle yet
       const friendsUsers = friends.filter((u) => !u.isAi);
