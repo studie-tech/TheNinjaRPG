@@ -132,6 +132,7 @@ export default function SeasonForm({
       { id: "reward_exp", type: "number" },
       { id: "reward_tokens", type: "number" },
       { id: "reward_prestige", type: "number" },
+      { id: "reward_reputation", type: "number" },
       { id: "reward_rank", type: "str_array", values: UserRanks },
     ];
 

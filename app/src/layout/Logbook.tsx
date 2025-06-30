@@ -549,6 +549,7 @@ export const useCheckRewards = () => {
             rewards.reward_exp > 0 ||
             rewards.reward_tokens > 0 ||
             rewards.reward_prestige > 0 ||
+            rewards.reward_reputation > 0 ||
             rewards.reward_jutsus.length > 0 ||
             rewards.reward_badges.length > 0 ||
             rewards.reward_bloodlines.length > 0 ||

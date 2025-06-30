@@ -132,6 +132,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
             reward_exp: data.reward_exp,
             reward_tokens: data.reward_tokens,
             reward_prestige: data.reward_prestige,
+            reward_reputation: data.reward_reputation,
             reward_jutsus: data.reward_jutsus,
             reward_badges: data.reward_badges,
             reward_items: data.reward_items,
@@ -241,6 +242,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   formData.push({ id: "reward_exp", type: "number" });
   formData.push({ id: "reward_tokens", type: "number" });
   formData.push({ id: "reward_prestige", type: "number" });
+  formData.push({ id: "reward_reputation", type: "number" });
   formData.push({ id: "reward_rank", type: "str_array", values: UserRanks });
 
   if (bloodlines) {

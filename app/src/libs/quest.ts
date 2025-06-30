@@ -141,6 +141,9 @@ export const getReward = (
         if (objective.reward_prestige) {
           rawRewards.reward_prestige += objective.reward_prestige;
         }
+        if (objective.reward_reputation) {
+          rawRewards.reward_reputation += objective.reward_reputation;
+        }
         if (objective.reward_jutsus) {
           rawRewards.reward_jutsus.push(...objective.reward_jutsus);
         }
@@ -170,6 +173,7 @@ export const getReward = (
     rawRewards.reward_exp = Math.floor(rawRewards.reward_exp * factor);
     rawRewards.reward_tokens = Math.floor(rawRewards.reward_tokens * factor);
     rawRewards.reward_prestige = Math.floor(rawRewards.reward_prestige * factor);
+    rawRewards.reward_reputation = Math.floor(rawRewards.reward_reputation * factor);
   }
   // Final rewards (some need a bit pose-processing)
   const rewards = postProcessRewards(rawRewards);
@@ -212,6 +216,7 @@ export const collapseRewards = (
     reward_exp: 0,
     reward_tokens: 0,
     reward_prestige: 0,
+    reward_reputation: 0,
     reward_items: [],
     reward_jutsus: [],
     reward_bloodlines: [],
@@ -226,6 +231,7 @@ export const collapseRewards = (
     collapsed.reward_exp += reward.reward_exp;
     collapsed.reward_tokens += reward.reward_tokens;
     collapsed.reward_prestige += reward.reward_prestige;
+    collapsed.reward_reputation += reward.reward_reputation;
 
     // Concatenate array rewards
     collapsed.reward_items.push(...reward.reward_items);

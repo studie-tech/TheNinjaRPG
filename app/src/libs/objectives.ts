@@ -394,5 +394,8 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
   if (questReward.reward_prestige) {
     rewards.push(`${questReward.reward_prestige} prestige`);
   }
+  if (questReward.reward_reputation) {
+    rewards.push(`${questReward.reward_reputation} reputation points`);
+  }
   return rewards;
 };

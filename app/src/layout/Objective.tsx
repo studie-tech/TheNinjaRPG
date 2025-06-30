@@ -157,6 +157,9 @@ export const Reward: React.FC<RewardProps> = (props) => {
   if (info?.reward_prestige) {
     rewards += `${rewards ? ", " : ""} ${info.reward_prestige} Prestige`;
   }
+  if (info?.reward_reputation) {
+    rewards += `${rewards ? ", " : ""} ${info.reward_reputation} Reputation Points`;
+  }
   return (
     <>
       {rewards && (

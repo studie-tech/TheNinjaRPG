@@ -24,7 +24,7 @@ import {
   bloodlineRolls,
 } from "@/drizzle/schema";
 import { userJutsu, userItem, userData, userBadge } from "@/drizzle/schema";
-import { quest, questHistory, actionLog, village } from "@/drizzle/schema";
+import { quest, questHistory, actionLog, village, userRewards } from "@/drizzle/schema";
 import { QuestValidator } from "@/validators/objectives";
 import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
 import { canChangeContent } from "@/utils/permissions";
@@ -56,7 +56,6 @@ import {
 } from "@/libs/quest";
 import { QuestTracker } from "@/validators/objectives";
 import type { QuestCounterFieldName } from "@/validators/user";
-import type { ObjectiveRewardType } from "@/validators/objectives";
 import type { SQL } from "drizzle-orm";
 import type { QuestType } from "@/drizzle/constants";
 import type { UserData, Quest } from "@/drizzle/schema";
@@ -653,6 +652,7 @@ export const questsRouter = createTRPCRouter({
             reward_exp: 0,
             reward_tokens: 0,
             reward_prestige: 0,
+            reward_reputation: 0,
             reward_jutsus: [],
             reward_bloodlines: [],
             reward_badges: [],
@@ -991,6 +991,8 @@ export const updateRewards = async (
     money: user.money + rewards.reward_money,
     earnedExperience: user.earnedExperience + rewards.reward_exp,
     villagePrestige: user.villagePrestige + rewards.reward_prestige,
+    reputationPoints: user.reputationPoints + rewards.reward_reputation,
+    reputationPointsTotal: user.reputationPointsTotal + rewards.reward_reputation,
     rank: getNewRank ? rewards.reward_rank : user.rank,
   };
   if (questCounterField) {
@@ -1007,6 +1009,15 @@ export const updateRewards = async (
       .where(eq(userData.userId, user.userId)),
     // If new rank, then delete sensei requests
     getNewRank ? deleteRequests(client, user.userId) : undefined,
+    // If reputation points, store that
+    rewards.reward_reputation > 0 &&
+      client.insert(userRewards).values({
+        id: nanoid(),
+        awardedById: user.userId,
+        receiverId: user.userId,
+        reputationAmount: rewards.reward_reputation,
+        reason: "QUEST/RANKED_PVP",
+      }),
     // Update village tokens
     rewards.reward_tokens > 0 && user.villageId
       ? client
