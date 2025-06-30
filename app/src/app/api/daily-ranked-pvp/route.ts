@@ -1,12 +1,10 @@
-import { gt, and, sql, eq } from "drizzle-orm";
+import { and, sql, eq } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
-import { rankedSeason, rankedUserRewards, userData } from "@/drizzle/schema";
+import { rankedSeason, userData } from "@/drizzle/schema";
 import { updateGameSetting } from "@/libs/gamesettings";
 import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
 import { cookies } from "next/headers";
-import { getRankedRank } from "@/libs/ranked_pvp";
-import { RANKED_SANNIN_TOP_PLAYERS } from "@/drizzle/constants";
-import { nanoid } from "nanoid";
+import { endRankedSeason } from "@/server/api/routers/pvprank";
 
 const ENDPOINT_NAME = "daily-pvp";
 
@@ -18,51 +16,18 @@ export async function GET() {
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
   if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
-  // Fetch users with rankedLp > 0
-  const [users, activeSeason] = await Promise.all([
-    drizzleDB.query.userData.findMany({
-      columns: {
-        userId: true,
-        rankedLp: true,
-      },
-      orderBy: (userData, { desc }) => [desc(userData.rankedLp)],
-      where: and(gt(userData.rankedLp, 0)),
-    }),
-    drizzleDB.query.rankedSeason.findMany({
-      where: and(eq(rankedSeason.ended, false)),
-    }),
-  ]);
+  // Fetch active (non-ended) seasons
+  const activeSeasons = await drizzleDB.query.rankedSeason.findMany({
+    where: and(eq(rankedSeason.ended, false)),
+  });
 
-  // Check if active season exists & is expired
-  const endedSeason = activeSeason.find((season) => season.endDate < new Date());
-  const topPlayers = users.slice(0, RANKED_SANNIN_TOP_PLAYERS);
+  // Check if any active season has expired
+  const endedSeason = activeSeasons.find((season) => season.endDate < new Date());
 
   // Perform work
   try {
     if (endedSeason) {
-      await Promise.all([
-        // Update users rankedLp to 0
-        drizzleDB.update(userData).set({ rankedLp: 0 }),
-        // Update rankedSeason to ended
-        drizzleDB
-          .update(rankedSeason)
-          .set({ ended: true })
-          .where(eq(rankedSeason.id, endedSeason.id)),
-        // Insert rankedUserRewards for top players
-        users.length > 0
-          ? drizzleDB.insert(rankedUserRewards).values(
-              users.map((user) => ({
-                id: nanoid(),
-                userId: user.userId,
-                seasonId: endedSeason.id,
-                division: getRankedRank(
-                  user.rankedLp,
-                  topPlayers.map((x) => x.rankedLp),
-                ),
-              })),
-            )
-          : null,
-      ]);
+      await endRankedSeason(drizzleDB, endedSeason.id);
     } else {
       await drizzleDB.update(userData).set({
         rankedLp: sql`${userData.rankedLp} * 0.95`,

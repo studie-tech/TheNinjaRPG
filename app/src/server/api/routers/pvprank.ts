@@ -22,6 +22,7 @@ import { collapseRewards } from "@/libs/quest";
 import { updateRewards } from "@/server/api/routers/quests";
 import { postProcessRewards } from "@/libs/quest";
 import type { DrizzleClient } from "@/server/db";
+import { getRankedRank } from "@/libs/ranked_pvp";
 
 export const pvpRankRouter = createTRPCRouter({
   // Get the user's season rewards
@@ -177,6 +178,33 @@ export const pvpRankRouter = createTRPCRouter({
           .where(eq(rankedUserRewards.seasonId, input.id)),
       ]);
       return { success: true, message: "Season deleted successfully" };
+    }),
+
+  // End a season manually
+  endSeason: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Fetch user & permission guard
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canChangeContent(user.role)) {
+        return errorResponse("You don't have permission to end ranked seasons");
+      }
+      // Verify season exists & not already ended
+      const season = await ctx.drizzle.query.rankedSeason.findFirst({
+        where: eq(rankedSeason.id, input.id),
+      });
+      if (!season) {
+        return errorResponse("Season not found");
+      }
+      if (season.ended) {
+        return errorResponse("Season already ended");
+      }
+
+      // Perform season ending logic
+      await endRankedSeason(ctx.drizzle, season.id);
+
+      return { success: true, message: "Season ended successfully" };
     }),
 
   // Get the ranked loadout
@@ -492,4 +520,57 @@ export const getUnclaimedUserSeasonRewards = async (
     )?.rewards;
     return { ...row, seasonRewards: divisionRewards };
   });
+};
+
+/**
+ * End a ranked season
+ * @param client - The Drizzle client
+ * @param seasonId - The ID of the season to end
+ */
+export const endRankedSeason = async (client: DrizzleClient, seasonId: string) => {
+  // Fetch users with LP > 0 and the season to end (validate again in case caller skipped)
+  const [users, season] = await Promise.all([
+    client.query.userData.findMany({
+      columns: {
+        userId: true,
+        rankedLp: true,
+      },
+      orderBy: (userData, { desc }) => [desc(userData.rankedLp)],
+      where: gt(userData.rankedLp, 0),
+    }),
+    client.query.rankedSeason.findFirst({
+      where: eq(rankedSeason.id, seasonId),
+    }),
+  ]);
+
+  if (!season) {
+    throw new Error("Season not found");
+  }
+  if (season.ended) {
+    return;
+  }
+
+  // Determine top players LP for "Sannin" rank calculation
+  const topPlayersLP = users.slice(0, RANKED_SANNIN_TOP_PLAYERS).map((u) => u.rankedLp);
+
+  // Prepare reward rows
+  const rewardRows = users.map((user) => ({
+    id: nanoid(),
+    userId: user.userId,
+    seasonId: season.id,
+    division: getRankedRank(user.rankedLp, topPlayersLP),
+  }));
+
+  // Execute database updates in parallel (no explicit transaction)
+  await Promise.all([
+    // Reset LP for everyone
+    client.update(userData).set({ rankedLp: 0 }),
+    // Mark season as ended
+    client
+      .update(rankedSeason)
+      .set({ ended: true, endDate: new Date() })
+      .where(eq(rankedSeason.id, season.id)),
+    // Insert rewards rows if any
+    rewardRows.length > 0 ? client.insert(rankedUserRewards).values(rewardRows) : null,
+  ]);
 };

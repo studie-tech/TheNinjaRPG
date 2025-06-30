@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, StopCircle } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import SeasonForm from "./SeasonForm";
 import {
@@ -57,6 +57,15 @@ export function SeasonManager() {
     },
   });
 
+  const endSeason = api.pvpRank.endSeason.useMutation({
+    onSuccess: (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        void utils.pvpRank.getSeasons.invalidate();
+      }
+    },
+  });
+
   const { data: seasons } = api.pvpRank.getSeasons.useQuery();
 
   useEffect(() => {
@@ -103,6 +112,13 @@ export function SeasonManager() {
     // Upcoming seasons – no badge for now
     return null;
   };
+
+  const now = new Date();
+
+  const isSeasonActive = selectedSeason
+    ? new Date(selectedSeason.startDate) <= now &&
+      now <= new Date(selectedSeason.endDate)
+    : false;
 
   return (
     <div className="space-y-4">
@@ -162,6 +178,35 @@ export function SeasonManager() {
                   </DialogContent>
                 </Dialog>
 
+                {isSeasonActive && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline">
+                        <StopCircle className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>End Season</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to end the season &quot;
+                          {selectedSeason.name}&quot;? Rewards will be distributed and
+                          players&apos; LP will be reset.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => endSeason.mutate({ id: selectedSeason.id })}
+                          className="bg-amber-500 text-white hover:bg-amber-600"
+                        >
+                          End Season
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="destructive">
@@ -200,7 +245,9 @@ export function SeasonManager() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>{selectedSeason.name}</CardTitle>
-            <SeasonStatusBadge season={selectedSeason} />
+            <div className="flex items-center gap-2">
+              <SeasonStatusBadge season={selectedSeason} />
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
