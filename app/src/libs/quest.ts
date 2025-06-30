@@ -466,7 +466,9 @@ export const getNewTrackers = (
             status.done = true;
             consequences.push({ type: "start_quest", ids: objective.newQuestIds });
           } else if (task === "start_battle") {
-            putInCombat();
+            if (!status.recentlyDied) {
+              putInCombat();
+            }
           }
 
           // Specific updates requested by the caller
@@ -579,6 +581,9 @@ export const getNewTrackers = (
                     if (completionOutcome === "Lose") {
                       status.done = true;
                     }
+                    if (task === "start_battle") {
+                      status.recentlyDied = true;
+                    }
                   } else if (taskUpdate.text === "Draw") {
                     if (objective.drawDescription) {
                       notifications.push(objective.drawDescription);
@@ -594,11 +599,22 @@ export const getNewTrackers = (
                       status.done = true;
                     }
                   }
-                  if (!status.done && "failObjectiveId" in objective) {
+                  if (
+                    !status.done &&
+                    "failObjectiveId" in objective &&
+                    objective.failObjectiveId
+                  ) {
                     status.selectedNextObjectiveId = objective.failObjectiveId;
                     status.done = true;
                   }
                 }
+              }
+
+              // Handle manual retriggering of start_battle objectives
+              if (task === "start_battle" && taskUpdate.text === "retry") {
+                status.recentlyDied = false;
+                putInCombat();
+                return;
               }
             });
           if ("value" in objective && status.value >= objective.value) {

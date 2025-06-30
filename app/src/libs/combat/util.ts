@@ -582,13 +582,15 @@ export const calcBattleResult = (battle: CompleteBattle, userId: string) => {
       }
 
       // Calculate Eperience gain
-      let experience = didWin ? eloDiff * expBoost : 0;
+      let experience = didWin
+        ? (battleType === "COMBAT" ? 300 : eloDiff) * expBoost
+        : 0;
       const streakBonus = 1 + user.pvpStreak * 0.05; // 5% per streak
       if (["COMBAT", "TOURNAMENT"].includes(battleType)) {
         experience *= 1.5;
         if (battleType === "COMBAT") {
           experience *= streakBonus;
-          experience = Math.min(experience, 100);
+          experience = Math.min(experience, 500);
         }
       } else if (
         [
@@ -630,7 +632,11 @@ export const calcBattleResult = (battle: CompleteBattle, userId: string) => {
 
       // Money/ryo calculation
       const moneyBoost = user?.clan?.ryoBoost ? 1 + user.clan.ryoBoost / 100 : 1;
-      const moneyDelta = didWin ? (randomInt(30, 40) + user.level) * moneyBoost : 0;
+      const moneyDelta = didWin
+        ? battleType === "COMBAT"
+          ? 3000
+          : (randomInt(30, 40) + user.level) * moneyBoost
+        : 0;
 
       // Include money stolen during combat
       if (battleType === "COMBAT" && user.moneyStolen) {

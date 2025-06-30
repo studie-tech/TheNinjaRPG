@@ -3,13 +3,16 @@ import Image from "next/image";
 import StatusBar from "@/layout/StatusBar";
 import Countdown from "@/layout/Countdown";
 import Modal2 from "@/layout/Modal2";
-import { CircleHelp } from "lucide-react";
+import { CircleHelp, RotateCcw } from "lucide-react";
 import { getObjectiveImage } from "@/libs/objectives";
 import { X, Check, Gift } from "lucide-react";
 import { hasReward } from "@/validators/objectives";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { getObjectiveSchema } from "@/validators/objectives";
 import { isObjectiveComplete } from "@/libs/objectives";
+import { api } from "@/app/_trpc/client";
+import { showMutationToast } from "@/libs/toast";
+import { Button } from "@/components/ui/button";
 import type { Quest } from "@/drizzle/schema";
 import type { AllObjectivesType, ObjectiveRewardType } from "@/validators/objectives";
 import type { QuestTrackerType } from "@/validators/objectives";
@@ -35,6 +38,19 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
 
   // Derived status of the objective
   const { done, value, canCollect } = isObjectiveComplete(tracker, parsed);
+
+  // Check if this is a start_battle objective with recentlyDied flag
+  const status = tracker?.goals.find((g) => g.id === objective.id);
+  const isStartBattleWithRecentlyDied = objective.task === "start_battle" && status?.recentlyDied;
+
+  // Retry battle mutation
+  const { mutate: retryBattle, isPending: isRetrying } = api.quests.retryBattle.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      // Refresh user data to update quest state
+      window.location.reload();
+    },
+  });
 
   // Indicator icon
   const indicatorIcons = done ? (
@@ -129,6 +145,21 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                 <Reward info={parsed} />
               </div>
               <div>{indicatorIcons}</div>
+            </div>
+          )}
+          {/* Retry button for start_battle objectives with recentlyDied flag */}
+          {isStartBattleWithRecentlyDied && (
+            <div className="flex flex-row items-center justify-end mt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => retryBattle({ questId: tracker.id })}
+                disabled={isRetrying}
+                className="flex items-center gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                {isRetrying ? "Retrying..." : "Retry Battle"}
+              </Button>
             </div>
           )}
         </div>

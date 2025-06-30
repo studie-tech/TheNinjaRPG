@@ -267,6 +267,7 @@ export const ObjectiveTracker = z.object({
   longitude: z.coerce.number().min(0).optional(),
   latitude: z.coerce.number().min(0).optional(),
   selectedNextObjectiveId: z.string().optional(),
+  recentlyDied: z.boolean().default(false),
 });
 export type ObjectiveTrackerType = z.infer<typeof ObjectiveTracker>;
 

@@ -338,9 +338,9 @@ export const battleJutsuExp = (
 ) => {
   switch (battleType) {
     case "COMBAT":
-      return experienceGain * (1 + userData.pvpStreak * 0.05);
+      return 100;
     case "SHRINE_WAR":
-      return experienceGain * (1 + userData.pvpStreak * 0.05);
+      return experienceGain * 0.75;
     case "ARENA":
       return experienceGain * 0.5;
     case "QUEST":

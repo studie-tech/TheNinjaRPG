@@ -290,7 +290,7 @@ export const kageRouter = createTRPCRouter({
           where: and(
             eq(actionLog.userId, ctx.userId),
             eq(actionLog.relatedId, input.kageId),
-            gte(actionLog.createdAt, sql`NOW() - INTERVAL 1 DAY`),
+            gte(actionLog.createdAt, sql`NOW() - INTERVAL 1 WEEK`),
           ),
         }),
       ]);

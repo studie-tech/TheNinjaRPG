@@ -1299,7 +1299,12 @@ export const clanRouter = createTRPCRouter({
           .where(eq(userData.userId, user.userId)),
         ctx.drizzle
           .update(clan)
-          .set({ leaderId: user.userId })
+          .set({
+            leaderId: user.userId,
+            coLeader1: null,
+            coLeader2: null,
+            coLeader3: null,
+          })
           .where(eq(clan.id, fetchedClan.id)),
         ...(["HIDEOUT", "TOWN"].includes(fetchedClan.village?.type ?? "")
           ? [

@@ -100,7 +100,6 @@ export const hospitalRouter = createTRPCRouter({
       if (!u) return errorResponse("Your user was not found");
       if (!t) return errorResponse("Your target was not found");
       // Derived
-      const sameLocation = u.longitude === t.longitude && u.latitude === t.latitude;
       const toHeal = t.maxHealth * (input.healPercentage / 100);
       const chakraCost = calcHealthToChakra(u, toHeal);
       const expGain = t.userId !== u.userId ? MEDNIN_HEAL_TO_EXP * toHeal : 0;
@@ -121,9 +120,6 @@ export const hospitalRouter = createTRPCRouter({
       }
       if (u.sector !== t.sector) {
         return errorResponse("You can only heal users in the same sector as you");
-      }
-      if (!sameLocation) {
-        return errorResponse("Target user is not in your sector");
       }
       if (chakraCost > u.curChakra) {
         return errorResponse("You don't have enough chakra to heal this much");

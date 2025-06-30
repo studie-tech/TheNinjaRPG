@@ -28,7 +28,11 @@ export const showMutationToast = (data: {
         description: data.message,
         variant: data.variant ?? "default",
         action: data.action ?? (
-          <ToastAction altText="OK" className="bg-green-600 h-5 md:h-10">
+          <ToastAction 
+            altText="OK" 
+            className="bg-green-600 h-5 md:h-10"
+            onClick={() => toast.dismiss()}
+          >
             <CheckCircle className="h-4 w-4 md:h-6 md:w-6 text-white my-4" />
           </ToastAction>
         ),
@@ -39,7 +43,11 @@ export const showMutationToast = (data: {
         description: data.message,
         variant: data.variant ?? "default",
         action: data.action ?? (
-          <ToastAction altText="OK" className="bg-red-600 h-5 md:h-10">
+          <ToastAction 
+            altText="OK" 
+            className="bg-red-600 h-5 md:h-10"
+            onClick={() => toast.dismiss()}
+          >
             <XOctagon className="h-4 w-4 md:h-6 md:w-6 text-white my-4" />
           </ToastAction>
         ),
