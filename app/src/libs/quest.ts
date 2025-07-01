@@ -261,10 +261,6 @@ export const collapseRewards = (
         }
       }
     }
-
-    // Sum seichi silver
-    collapsed.reward_seichi_silver =
-      (collapsed.reward_seichi_silver || 0) + (reward.reward_seichi_silver || 0);
   });
 
   return collapsed;

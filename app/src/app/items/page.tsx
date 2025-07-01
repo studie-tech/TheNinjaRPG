@@ -16,7 +16,7 @@ import { calcItemSellingPrice } from "@/libs/item";
 import { ActionSelector } from "@/layout/CombatActions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
+import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { calcMaxItems, calcMaxEventItems } from "@/libs/item";
 import { CircleFadingArrowUp, Shirt } from "lucide-react";
 import { COST_EXTRA_ITEM_SLOT, IMG_EQUIP_SILHOUETTE } from "@/drizzle/constants";
@@ -206,7 +206,11 @@ const Backpack: React.FC<BackpackProps> = (props) => {
 
   const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
     onSuccess: async (data) => {
-      showMutationToast(data);
+      if (data.success && "rewards" in data && data.rewards) {
+        showRewardToast(data.notifications, data.rewards, data.message, false);
+      } else {
+        showMutationToast(data);
+      }
       if (data.success) {
         await utils.profile.getUser.invalidate();
         await utils.item.getUserItems.invalidate();

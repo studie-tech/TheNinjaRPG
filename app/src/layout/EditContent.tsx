@@ -830,11 +830,19 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   });
 
   const { data: jutsuData } = api.jutsu.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("jutsus"),
+    enabled: fields.includes("jutsus") || fields.includes("reward_jutsus"),
   });
 
   const { data: itemData } = api.item.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("items"),
+    enabled: fields.includes("items") || fields.includes("reward_items"),
+  });
+
+  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined, {
+    enabled: fields.includes("reward_bloodlines"),
+  });
+
+  const { data: badgeData } = api.badge.getAll.useQuery(undefined, {
+    enabled: fields.includes("reward_badges"),
   });
 
   const { data: assetData } = api.misc.getAllGameAssetNames.useQuery(undefined, {
@@ -978,6 +986,36 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         return {
           id: value,
           values: jutsuData,
+          multiple: true,
+          type: "db_values",
+        };
+      } else if ((value as string) === "reward_items" && itemData) {
+        return {
+          id: value,
+          values: itemData.sort((a, b) => a.name.localeCompare(b.name)),
+          doubleWidth: true,
+          multiple: true,
+          label: "Reward Items [and drop chance%]",
+          type: "db_values_with_number",
+        };
+      } else if ((value as string) === "reward_jutsus" && jutsuData) {
+        return {
+          id: value,
+          values: jutsuData,
+          multiple: true,
+          type: "db_values",
+        };
+      } else if ((value as string) === "reward_bloodlines" && bloodlines) {
+        return {
+          id: value,
+          values: bloodlines,
+          multiple: true,
+          type: "db_values",
+        };
+      } else if ((value as string) === "reward_badges" && badgeData?.data) {
+        return {
+          id: value,
+          values: badgeData?.data,
           multiple: true,
           type: "db_values",
         };
