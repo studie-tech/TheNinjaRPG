@@ -13,7 +13,7 @@ import { Objective, Reward, EventTimer } from "@/layout/Objective";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
+import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { useInfinitePagination } from "@/libs/pagination";
 import { parseHtml } from "@/utils/parse";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
@@ -22,7 +22,6 @@ import {
   MISSIONS_PER_DAY,
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   IMG_SCENE_BACKGROUND,
-  IMG_SCENE_CHARACTER,
 } from "@/drizzle/constants";
 import { getActiveObjective } from "@/libs/objectives";
 import { cn } from "src/libs/shadui";
@@ -380,7 +379,9 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
       options={
         <div className="ml-3">
           <div className="mt-2 flex flex-row items-center ">
-            {["mission", "crime", "event", "errand"].includes(quest.questType) && (
+            {["mission", "crime", "event", "errand", "story"].includes(
+              quest.questType,
+            ) && (
               <Confirm2
                 title="Confirm deleting quest"
                 button={
@@ -437,7 +438,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                 <Image
                   src={character}
                   alt="Character"
-                  className="aspect-3 "
+                  className="max-h-full w-auto object-contain"
                   width={341}
                   height={512}
                 />
@@ -446,35 +447,37 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             {/* Bottom dialog area */}
             <div className="absolute inset-x-0 bottom-0 flex flex-col items-center pointer-events-none max-h-1/3">
               {/* Shown text */}
-              <div className="bg-poppopover w-full max-w-[calc(100%-2rem)] max-h-1/3 min-h-10 p-2 rounded-lg overflow-y-auto border-2 mb-2 pointer-events-auto">
+              <div className="bg-poppopover w-full max-w-[calc(100%-2rem)] max-h-32 min-h-10 p-2 rounded-lg overflow-y-auto border-2 mb-2 pointer-events-auto">
                 {shownText}
               </div>
-
-              {/* Dialog options */}
-              {activeObjective?.task === "dialog" && (
-                <div className="flex flex-row flex-wrap justify-end gap-2 w-full max-w-[calc(100%-2rem)] pr-4 pb-1 pointer-events-auto">
-                  {activeObjective.nextObjectiveId.map((entry) => (
-                    <div key={entry.nextObjectiveId}>
-                      <div
-                        className="bg-popover px-3 py-1 border-2 rounded-lg hover:bg-poppopover cursor-pointer whitespace-nowrap"
-                        onClick={() =>
-                          !isCheckingRewards &&
-                          checkRewards({
-                            questId: quest.id,
-                            nextObjectiveId: entry.nextObjectiveId,
-                          })
-                        }
-                      >
-                        {isCheckingRewards ? (
-                          <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                        ) : (
-                          entry.text
-                        )}
-                      </div>
-                    </div>
-                  ))}
+            </div>
+          </div>
+        )}
+        {/* Dialog options */}
+        {activeObjective?.task === "dialog" && (
+          <div className="w-full">
+            <h2 className="text-lg font-bold pl-2">Dialog Options</h2>
+            <div className="flex flex-wrap gap-1 w-full px-2 pb-1 pointer-events-auto">
+              {activeObjective.nextObjectiveId.map((entry) => (
+                <div key={entry.nextObjectiveId} className="flex justify-end">
+                  <div
+                    className="bg-popover px-2 py-1 border-2 rounded-lg hover:bg-poppopover cursor-pointer text-xs sm:text-sm break-words max-w-full text-right shadow-lg"
+                    onClick={() =>
+                      !isCheckingRewards &&
+                      checkRewards({
+                        questId: quest.id,
+                        nextObjectiveId: entry.nextObjectiveId,
+                      })
+                    }
+                  >
+                    {isCheckingRewards ? (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    ) : (
+                      entry.text
+                    )}
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         )}
@@ -550,115 +553,25 @@ export const useCheckRewards = () => {
             rewards.reward_exp > 0 ||
             rewards.reward_tokens > 0 ||
             rewards.reward_prestige > 0 ||
+            rewards.reward_reputation > 0 ||
             rewards.reward_jutsus.length > 0 ||
             rewards.reward_badges.length > 0 ||
             rewards.reward_bloodlines.length > 0 ||
             rewards.reward_items.length > 0;
-          const reward = (
-            <div className="flex flex-col gap-2">
-              {notifications.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  {notifications.map((description, i) => (
-                    <div key={`objective-success-${i}`}>
-                      <b>Objective {i + 1}:</b>
-                      <br />
-                      <i>{parseHtml(description)}</i>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {resolved && quest.successDescription && (
-                <div>
-                  <b>Quest Completed:</b>
-                  <br />
-                  <i>{parseHtml(quest.successDescription)}</i>
-                </div>
-              )}
-              <div className="flex flex-row items-center">
-                <div className="flex flex-col basis-2/3">
-                  {rewards.reward_money > 0 && (
-                    <span>
-                      <b>Money:</b> {rewards.reward_money} ryo
-                    </span>
-                  )}
-                  {rewards.reward_clanpoints > 0 && (
-                    <span>
-                      <b>Clan points:</b> {rewards.reward_clanpoints}
-                    </span>
-                  )}
-                  {rewards.reward_exp > 0 && (
-                    <span>
-                      <b>Experience:</b> {rewards.reward_exp}
-                    </span>
-                  )}
-                  {rewards.reward_tokens > 0 && (
-                    <span>
-                      <b>Village tokens:</b> {rewards.reward_tokens}
-                    </span>
-                  )}
-                  {rewards.reward_prestige > 0 && (
-                    <span>
-                      <b>Village prestige:</b> {rewards.reward_prestige}
-                    </span>
-                  )}
-                  {rewards.reward_jutsus.length > 0 && (
-                    <span>
-                      <b>Jutsus: </b> {rewards.reward_jutsus.join(", ")}
-                    </span>
-                  )}
-                  {rewards.reward_badges.length > 0 && (
-                    <span>
-                      <b>Badges: </b> {rewards.reward_badges.join(", ")}
-                    </span>
-                  )}
-                  {rewards.reward_bloodlines.length > 0 && (
-                    <span>
-                      <b>Swappable Bloodlines: </b>{" "}
-                      {rewards.reward_bloodlines.join(", ")}
-                    </span>
-                  )}
-                  {rewards.reward_items.length > 0 && (
-                    <span>
-                      <b>Items: </b>
-                      {rewards.reward_items.join(", ")}
-                    </span>
-                  )}
-                </div>
-                <div className="basis-1/3 flex flex-col">
-                  {badges.map((badge, i) => (
-                    <Image
-                      key={i}
-                      src={badge.image}
-                      width={128}
-                      height={128}
-                      alt={badge.name}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          );
-          if (resolved) {
-            showMutationToast({
-              success: true,
-              message: reward,
-              title: `Finished: ${quest.name}`,
-            });
-          } else if (showToast) {
-            showMutationToast({
-              success: true,
-              message: reward,
-              title: `Reward from ${quest.name}`,
-            });
-          }
-          await Promise.all([
-            utils.profile.getUser.invalidate(),
-            utils.quests.getQuestHistory.invalidate(),
-            utils.quests.allianceBuilding.invalidate(),
-            utils.quests.missionHall.invalidate(),
-            utils.quests.storyQuests.invalidate(),
-          ]);
+          // Show toast
+          const message = resolved
+            ? `Finished: ${quest.name}`
+            : `Reward from ${quest.name}`;
+          if (resolved || showToast)
+            showRewardToast(notifications, rewards, message, false, quest, badges);
         }
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.quests.getQuestHistory.invalidate(),
+          utils.quests.allianceBuilding.invalidate(),
+          utils.quests.missionHall.invalidate(),
+          utils.quests.storyQuests.invalidate(),
+        ]);
       },
     });
 

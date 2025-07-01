@@ -39,6 +39,7 @@ import { staffRouter } from "./routers/staff";
 import { backgroundSchemaRouter } from "./routers/backgroundSchema";
 import { linkPromotionRouter } from "./routers/linkpromotion";
 import { warRouter } from "./routers/war";
+import { pvpRankRouter } from "./routers/pvprank";
 
 /**
  * This is the primary router for your server.
@@ -86,6 +87,7 @@ export const appRouter = createTRPCRouter({
   staff: staffRouter,
   linkPromotion: linkPromotionRouter,
   war: warRouter,
+  pvpRank: pvpRankRouter,
 });
 
 // export type definition of API

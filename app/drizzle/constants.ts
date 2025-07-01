@@ -320,6 +320,7 @@ export const BattleTypes = [
   "QUEST",
   "VILLAGE_PROTECTOR",
   "TRAINING",
+  "RANKED_PVP",
 ] as const;
 export type BattleType = (typeof BattleTypes)[number];
 
@@ -750,6 +751,44 @@ export const KAGE_CHALLENGE_OPEN_FOR_SECONDS = 60 * 60; // Time in between being
 export const KAGE_UNACCEPTED_CHALLENGE_COST = 15000; // Cost of unaccepted challenge, i.e. going to Ai vs Ai
 export const WAR_FUNDS_COST = 10000; // Prestige cost of declaring war
 
+// Ranked PVP config
+export const RANKED_STREAK_BONUS = 10;
+export const RANKED_SANNIN_TOP_PLAYERS = 10;
+export const RANKED_RANKS = [
+  "Unranked",
+  "Wood",
+  "Adept",
+  "Master",
+  "Legend",
+  "Sannin",
+] as const;
+export type RankedRank = (typeof RANKED_RANKS)[number];
+export const RANKED_DIVISIONS = [
+  { key: "UNRANKED", name: "Unranked", rankedLp: 0, kFactor: 40 },
+  { key: "WOOD", name: "Wood", rankedLp: 150, kFactor: 40 },
+  { key: "ADEPT", name: "Adept", rankedLp: 300, kFactor: 32 },
+  { key: "MASTER", name: "Master", rankedLp: 600, kFactor: 24 },
+  { key: "LEGEND", name: "Legend", rankedLp: 900, kFactor: 16 },
+  { key: "SANNIN", name: "Sannin", rankedLp: Infinity, kFactor: 16 },
+] as const;
+export const RANKED_PVP_STATS = {
+  strength: MAX_GENS_CAP,
+  intelligence: MAX_GENS_CAP,
+  willpower: MAX_GENS_CAP,
+  speed: MAX_GENS_CAP,
+  ninjutsuOffence: MAX_STATS_CAP,
+  ninjutsuDefence: MAX_STATS_CAP,
+  genjutsuOffence: MAX_STATS_CAP,
+  genjutsuDefence: MAX_STATS_CAP,
+  taijutsuOffence: MAX_STATS_CAP,
+  taijutsuDefence: MAX_STATS_CAP,
+  bukijutsuOffence: MAX_STATS_CAP,
+  bukijutsuDefence: MAX_STATS_CAP,
+};
+export const RANKED_LOADOUT_MAX_JUTSUS = 15;
+export const RANKED_LOADOUT_MAX_WEAPONS = 2;
+export const RANKED_LOADOUT_MAX_CONSUMABLES = 4;
+
 // Game assets
 export const ID_ANIMATION_SMOKE = "gkYHdSzsHu";
 export const ID_ANIMATION_HIT = "oh4kVNrAwF";
@@ -928,6 +967,8 @@ export const IMG_HOME_SLEEP =
   "https://utfs.io/f/Hzww9EQvYURJu8FpvZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
 export const IMG_HOME_AWAKE =
   "https://utfs.io/f/Hzww9EQvYURJ1BKctL6bo95WClq4K0wxZUmJcvThgdVenO3P";
+export const IMG_MANUAL_RANKED =
+  "https://utfs.io/f/Hzww9EQvYURJAa3ucxOoZUC4muiGcQNzjfEndY5y1w20B8hT";
 export const IMG_MANUAL_AWARDS =
   "https://utfs.io/f/Hzww9EQvYURJD2QXqVzEwoh0WXMnscL279N8ayVQUCbRzS3p";
 export const IMG_MANUAL_COMBAT =

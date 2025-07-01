@@ -135,9 +135,9 @@ const MenuBoxProfile: React.FC = () => {
         );
       case "QUEUED":
         return (
-          <Link href="/clanhall" className="flex flex-row hover:text-orange-500">
+          <div className="flex flex-row hover:text-orange-500">
             QUEUED <Swords className="ml-1 h-6 w-6 hover:text-orange-500" />
-          </Link>
+          </div>
         );
       case "AWAKE":
         if (location) {

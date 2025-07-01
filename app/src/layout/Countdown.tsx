@@ -54,3 +54,29 @@ const Countdown: React.FC<CountdownProps> = (props) => {
 };
 
 export default Countdown;
+
+/**
+ * Timer gradually going up
+ * @param createdAt - The date the timer was created
+ * @returns The timer component
+ */
+export const QueueTimer = ({ createdAt }: { createdAt: Date }) => {
+  const [queueTime, setQueueTime] = useState("0:00");
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const now = new Date();
+      const diff = now.getTime() - new Date(createdAt).getTime();
+      const minutes = Math.floor(diff / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      setQueueTime(`${minutes}:${seconds.toString().padStart(2, "0")}`);
+    };
+
+    updateTimer(); // Initial update
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  return <span className="font-mono">{queueTime}</span>;
+};

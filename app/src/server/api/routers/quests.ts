@@ -24,7 +24,7 @@ import {
   bloodlineRolls,
 } from "@/drizzle/schema";
 import { userJutsu, userItem, userData, userBadge } from "@/drizzle/schema";
-import { quest, questHistory, actionLog, village } from "@/drizzle/schema";
+import { quest, questHistory, actionLog, village, userRewards } from "@/drizzle/schema";
 import { QuestValidator } from "@/validators/objectives";
 import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
 import { canChangeContent } from "@/utils/permissions";
@@ -56,7 +56,6 @@ import {
 } from "@/libs/quest";
 import { QuestTracker } from "@/validators/objectives";
 import type { QuestCounterFieldName } from "@/validators/user";
-import type { ObjectiveRewardType } from "@/validators/objectives";
 import type { SQL } from "drizzle-orm";
 import type { QuestType } from "@/drizzle/constants";
 import type { UserData, Quest } from "@/drizzle/schema";
@@ -513,9 +512,14 @@ export const questsRouter = createTRPCRouter({
       if (!current) {
         throw serverError("PRECONDITION_FAILED", `No active quest with id ${input.id}`);
       }
-      if (!["mission", "crime", "event", "errand"].includes(current.questType)) {
+      if (
+        !["mission", "crime", "event", "errand", "story"].includes(current.questType)
+      ) {
         throw serverError("PRECONDITION_FAILED", `Cannot abandon ${current.questType}`);
       }
+      // Derived
+      const questData = user.questData?.filter((q) => q.id !== input.id);
+      // Mutate
       await Promise.all([
         ctx.drizzle
           .update(questHistory)
@@ -528,7 +532,10 @@ export const questsRouter = createTRPCRouter({
           ),
         ctx.drizzle
           .update(userData)
-          .set({ questFinishAt: new Date() })
+          .set({
+            questFinishAt: new Date(),
+            questData: questData,
+          })
           .where(eq(userData.userId, ctx.userId)),
       ]);
       return { success: true, message: `Quest abandoned` };
@@ -653,6 +660,7 @@ export const questsRouter = createTRPCRouter({
             reward_exp: 0,
             reward_tokens: 0,
             reward_prestige: 0,
+            reward_reputation: 0,
             reward_jutsus: [],
             reward_bloodlines: [],
             reward_badges: [],
@@ -893,11 +901,21 @@ export const questsRouter = createTRPCRouter({
     .input(z.object({ userId: z.string(), questId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, targetUser] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUpdatedUser({ client: ctx.drizzle, userId: input.userId }),
+      ]);
       // Guard
       if (!user || !canEditPublicUser(user)) {
         return errorResponse("Not authorized to delete user quests");
       }
+      if (!targetUser.user) {
+        return errorResponse("Target user not found");
+      }
+      // Derives
+      const questData = targetUser.user.questData?.filter(
+        (q) => q.id !== input.questId,
+      );
       // Mutate
       await Promise.all([
         ctx.drizzle
@@ -908,6 +926,10 @@ export const questsRouter = createTRPCRouter({
               eq(questHistory.questId, input.questId),
             ),
           ),
+        ctx.drizzle
+          .update(userData)
+          .set({ questData })
+          .where(eq(userData.userId, input.userId)),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
@@ -919,6 +941,34 @@ export const questsRouter = createTRPCRouter({
         }),
       ]);
       return { success: true, message: "Quest deleted successfully" };
+    }),
+  retryBattle: protectedProcedure
+    .input(z.object({ questId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Fetch
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        hideInformation: false,
+      });
+      // Guard
+      if (!user) {
+        throw serverError("PRECONDITION_FAILED", "User does not exist");
+      }
+      // Get updated quest information with start_battle task and retry flag
+      const { notifications, consequences } = getNewTrackers(user, [
+        { task: "start_battle", text: "retry" },
+      ]);
+      // Handle consequences
+      const finalNotification = await handleQuestConsequences(
+        ctx.drizzle,
+        user,
+        consequences,
+        notifications,
+      );
+      // Return information
+      return { success: true, message: finalNotification.join("\n") };
     }),
 });
 
@@ -991,6 +1041,8 @@ export const updateRewards = async (
     money: user.money + rewards.reward_money,
     earnedExperience: user.earnedExperience + rewards.reward_exp,
     villagePrestige: user.villagePrestige + rewards.reward_prestige,
+    reputationPoints: user.reputationPoints + rewards.reward_reputation,
+    reputationPointsTotal: user.reputationPointsTotal + rewards.reward_reputation,
     rank: getNewRank ? rewards.reward_rank : user.rank,
   };
   if (questCounterField) {
@@ -1007,6 +1059,15 @@ export const updateRewards = async (
       .where(eq(userData.userId, user.userId)),
     // If new rank, then delete sensei requests
     getNewRank ? deleteRequests(client, user.userId) : undefined,
+    // If reputation points, store that
+    rewards.reward_reputation > 0 &&
+      client.insert(userRewards).values({
+        id: nanoid(),
+        awardedById: user.userId,
+        receiverId: user.userId,
+        reputationAmount: rewards.reward_reputation,
+        reason: "QUEST/RANKED_PVP",
+      }),
     // Update village tokens
     rewards.reward_tokens > 0 && user.villageId
       ? client

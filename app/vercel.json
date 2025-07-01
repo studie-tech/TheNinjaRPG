@@ -29,6 +29,10 @@
       "schedule": "0/5 0 * * *"
     },
     {
+      "path": "/api/daily-ranked-pvp",
+      "schedule": "0/5 0 * * *"
+    },
+    {
       "path": "/api/daily-quest",
       "schedule": "0/5 0 * * *"
     },

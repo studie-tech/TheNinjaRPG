@@ -574,7 +574,11 @@ const Combat: React.FC<CombatProps> = (props) => {
     (q) => q.questId === logbookModalQuestId,
   );
   const modalTracker = userData?.questData?.find((q) => q.id === logbookModalQuestId);
-  const toHospital = result && result.curHealth <= 0 && battleType !== "SPARRING";
+  const toHospital =
+    battleType &&
+    result &&
+    result.curHealth <= 0 &&
+    !["SPARRING", "RANKED_PVP"].includes(battleType);
   return (
     <>
       <div ref={mountRef}></div>
@@ -633,6 +637,15 @@ const Combat: React.FC<CombatProps> = (props) => {
           <div className="text-center text-white">
             <p className="p-5 pb-2 text-3xl">You {result.outcome}</p>
             <div className=" grid grid-cols-2">
+              {result.lpDiff !== 0 && (
+                <div>
+                  {result.lpDiff > 0 ? (
+                    <p>Ranked PvP LP: +{result.lpDiff.toFixed(2)}</p>
+                  ) : (
+                    <p>Ranked PvP LP: {result.lpDiff.toFixed(2)}</p>
+                  )}
+                </div>
+              )}
               {result.experience > 0 && (
                 <p>Experience Points: {result.experience.toFixed(2)}</p>
               )}
@@ -755,6 +768,13 @@ const Combat: React.FC<CombatProps> = (props) => {
                     Heal and Go Again (-500 Ryo)
                   </Button>
                 </div>
+              )}
+              {battleType === "RANKED_PVP" && (
+                <Link href="/battlearena#PVP%20Rank" className="w-full">
+                  <Button id="toPvpRank" className="w-full">
+                    Back to PvP Queue
+                  </Button>
+                </Link>
               )}
               {showTravelBtn && (
                 <Link href="/travel" className="basis-1/2">

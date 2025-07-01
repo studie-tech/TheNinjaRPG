@@ -94,6 +94,7 @@ export const getPublicUsersSchema = z.object({
     "Strongest",
     "Weakest",
     "PvP",
+    "Ranked",
     "Staff",
     "Outlaws",
     "Community",

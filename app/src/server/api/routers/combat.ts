@@ -19,6 +19,7 @@ import { calcBattleResult, maskBattle, alignBattle } from "@/libs/combat/util";
 import { processUsersForBattle } from "@/libs/combat/util";
 import { createAction, saveUsage } from "@/libs/combat/database";
 import { updateUser, updateBattle } from "@/libs/combat/database";
+import { calcHP, calcSP, calcCP, calcLevelRequirements } from "@/libs/profile";
 import { controlShownQuestLocationInformation } from "@/libs/quest";
 import {
   updateVillageAnbuClan,
@@ -29,8 +30,8 @@ import {
 } from "@/libs/combat/database";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import { userData, questHistory, quest, gameSetting } from "@/drizzle/schema";
-import { battle, battleAction, battleHistory, war } from "@/drizzle/schema";
+import { userData, questHistory, quest, gameSetting, jutsu } from "@/drizzle/schema";
+import { battle, battleAction, battleHistory, war, item } from "@/drizzle/schema";
 import { villageAlliance, village, tournamentMatch } from "@/drizzle/schema";
 import { performActionSchema, statSchema } from "@/libs/combat/types";
 import { performBattleAction } from "@/libs/combat/actions";
@@ -51,6 +52,7 @@ import { BATTLE_ARENA_DAILY_LIMIT, VILLAGE_SYNDICATE_ID } from "@/drizzle/consta
 import { BattleTypes } from "@/drizzle/constants";
 import { PvpBattleTypes } from "@/drizzle/constants";
 import { backgroundSchema } from "@/drizzle/schema";
+import type { RankedLoadout } from "@/drizzle/schema";
 import type { BattleType } from "@/drizzle/constants";
 import type { BattleUserState, StatSchemaType } from "@/libs/combat/types";
 import type { GroundEffect } from "@/libs/combat/types";
@@ -558,7 +560,7 @@ export const combatRouter = createTRPCRouter({
             userIds: [user.userId],
             targetIds: [selectedAI.userId],
             client: ctx.drizzle,
-            statDistribution: input.stats ?? undefined,
+            targetStatDistribution: input.stats ?? undefined,
             asset: "arena",
           },
           input.stats ? "TRAINING" : "ARENA",
@@ -764,14 +766,27 @@ export const initiateBattle = async (
     userIds: string[];
     targetIds: string[];
     client: DrizzleClient;
-    statDistribution?: StatSchemaType;
+    userStatDistribution?: StatSchemaType;
+    targetStatDistribution?: StatSchemaType;
     scaleTarget?: boolean;
+    forceLoadouts?: RankedLoadout[];
     asset?: "ocean" | "ground" | "dessert" | "ice" | "arena" | "default";
   },
   battleType: BattleType,
   scaleGains = 1,
 ) => {
   const { longitude, latitude, sector, userIds, targetIds, client } = info;
+
+  // Pre-process loadouts if they exist
+  const jutsusIds = [
+    ...new Set(info.forceLoadouts?.map((l) => l.loadout.jutsuIds).flat() || []),
+  ];
+  const itemIds = [
+    ...new Set([
+      ...(info.forceLoadouts?.map((l) => l.loadout.weaponIds).flat() || []),
+      ...(info.forceLoadouts?.map((l) => l.loadout.consumableIds).flat() || []),
+    ]),
+  ];
 
   // Use Promise.all to fetch all independent data in parallel
   const [
@@ -785,6 +800,8 @@ export const initiateBattle = async (
     achievements,
     fetchedUsers,
     previousBattleResults,
+    loadoutJutsus,
+    loadoutItems,
   ] = await Promise.all([
     // Conditionally Fetch background schema
     client.query.backgroundSchema.findFirst({
@@ -846,29 +863,74 @@ export const initiateBattle = async (
       },
       where: or(inArray(userData.userId, userIds), inArray(userData.userId, targetIds)),
     }),
-    ...(PvpBattleTypes.includes(battleType)
-      ? [
-          client
-            .select({ count: sql<number>`count(*)`.mapWith(Number) })
-            .from(battleHistory)
-            .where(
-              and(
-                or(
-                  and(
-                    inArray(battleHistory.attackedId, userIds),
-                    inArray(battleHistory.defenderId, targetIds),
-                  ),
-                  and(
-                    inArray(battleHistory.attackedId, userIds),
-                    inArray(battleHistory.defenderId, targetIds),
-                  ),
+    PvpBattleTypes.includes(battleType)
+      ? client
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(battleHistory)
+          .where(
+            and(
+              or(
+                and(
+                  inArray(battleHistory.attackedId, userIds),
+                  inArray(battleHistory.defenderId, targetIds),
                 ),
-                gt(battleHistory.createdAt, secondsFromDate(-60 * 60, new Date())),
+                and(
+                  inArray(battleHistory.attackedId, userIds),
+                  inArray(battleHistory.defenderId, targetIds),
+                ),
               ),
+              gt(battleHistory.createdAt, secondsFromDate(-60 * 60, new Date())),
             ),
-        ]
-      : []),
+          )
+      : null,
+    jutsusIds.length > 0
+      ? client.query.jutsu.findMany({ where: inArray(jutsu.id, jutsusIds) })
+      : [],
+    itemIds.length > 0
+      ? client.query.item.findMany({ where: inArray(item.id, itemIds) })
+      : [],
   ]);
+
+  // If we have forced loadouts, overwrite user items and jutsus appropriately
+  if (info.forceLoadouts && info.forceLoadouts.length > 0) {
+    for (const user of fetchedUsers) {
+      const userLoadout = info.forceLoadouts.find((l) => l.userId === user.userId);
+      if (userLoadout) {
+        user.items = loadoutItems
+          .filter((item) =>
+            [userLoadout.loadout.weaponIds, userLoadout.loadout.consumableIds]
+              .flat()
+              .includes(item.id),
+          )
+          .map((item) => ({
+            id: nanoid(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            userId: user.userId,
+            itemId: item.id,
+            quantity: 1,
+            equipped: "ITEM_1" as const,
+            item: item,
+            storedAtHome: false,
+          }));
+        user.jutsus = loadoutJutsus
+          .filter((jutsu) => userLoadout.loadout.jutsuIds.includes(jutsu.id))
+          .map((jutsu) => ({
+            id: nanoid(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            userId: user.userId,
+            jutsuId: jutsu.id,
+            level: 20,
+            experience: 0,
+            equipped: 1,
+            finishTraining: null,
+            jutsu: jutsu,
+          }));
+      }
+    }
+  }
+
   // Get background for the battle
   const background = getBackground(info.asset, activeSchema?.schema);
 
@@ -902,9 +964,10 @@ export const initiateBattle = async (
     if (user.isBanned) return { success: false, message: `${user.username} is banned` };
 
     // Check if user is asleep
+    const QUEUED_BATTLES = ["RANKED_PVP", "CLAN_BATTLE"];
     if (
-      ((user.status !== "AWAKE" && battleType !== "CLAN_BATTLE") ||
-        (user.status !== "QUEUED" && battleType === "CLAN_BATTLE")) &&
+      ((user.status !== "QUEUED" && QUEUED_BATTLES.includes(battleType)) ||
+        (user.status !== "AWAKE" && !QUEUED_BATTLES.includes(battleType))) &&
       !AutoBattleTypes.includes(battleType)
     ) {
       return { success: false, message: `User ${user.username} is not awake` };
@@ -930,8 +993,24 @@ export const initiateBattle = async (
     }
 
     // Manually Assign Stats
-    if (info?.statDistribution && targetIds.includes(user.userId)) {
-      manuallyAssignUserStats(user, info?.statDistribution);
+    if (info?.targetStatDistribution && targetIds.includes(user.userId)) {
+      manuallyAssignUserStats(user, info?.targetStatDistribution);
+    }
+    if (info?.userStatDistribution && userIds.includes(user.userId)) {
+      manuallyAssignUserStats(user, info?.userStatDistribution);
+    }
+
+    // If PvP rank, set pools to max & level to 100
+    if (battleType === "RANKED_PVP") {
+      user.maxHealth = calcHP(100);
+      user.maxChakra = calcSP(100);
+      user.maxStamina = calcCP(100);
+      user.curHealth = user.maxHealth;
+      user.curChakra = user.maxChakra;
+      user.curStamina = user.maxStamina;
+      user.level = 100;
+      user.experience = calcLevelRequirements(100);
+      user.rank = "ELITE JONIN";
     }
 
     // Add achievements to users for tracking

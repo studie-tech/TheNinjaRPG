@@ -29,6 +29,10 @@ import type { ZodAllTags } from "@/libs/combat/types";
 import type { QuestContentType } from "@/validators/objectives";
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { ObjectiveRewardType } from "@/validators/objectives";
+import type {
+  RankedSeasonDivisionReward,
+  RankedLoadoutSchema,
+} from "@/validators/pvpRank";
 import type { AiRuleType } from "@/validators/ai";
 import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import type { AdditionalContext } from "@/validators/reports";
@@ -1038,6 +1042,87 @@ export const jutsuLoadout = mysqlTable(
   },
 );
 
+export const rankedLoadout = mysqlTable("RankedLoadout", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  userId: varchar("userId", { length: 191 }).notNull(),
+  loadout: json("loadout").$type<RankedLoadoutSchema>().notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+});
+export type RankedLoadout = InferSelectModel<typeof rankedLoadout>;
+
+export const rankedLoadoutRelations = relations(rankedLoadout, ({ one }) => ({
+  user: one(userData, {
+    fields: [rankedLoadout.userId],
+    references: [userData.userId],
+  }),
+}));
+
+export const rankedSeason = mysqlTable("RankedSeason", {
+  id: varchar("id", { length: 191 }).notNull().primaryKey(),
+  name: varchar("name", { length: 191 }).notNull(),
+  description: text("description").notNull(),
+  startDate: datetime("startDate", { mode: "date", fsp: 3 }).notNull(),
+  endDate: datetime("endDate", { mode: "date", fsp: 3 }).notNull(),
+  rewards: json("rewards").$type<RankedSeasonDivisionReward[]>().notNull(),
+  ended: boolean("ended").default(false).notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+});
+export type RankedSeason = InferSelectModel<typeof rankedSeason>;
+
+export const rankedUserRewards = mysqlTable("RankedUserRewards", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  userId: varchar("userId", { length: 191 }).notNull(),
+  seasonId: varchar("seasonId", { length: 191 }).notNull(),
+  division: mysqlEnum("division", consts.RANKED_RANKS).notNull(),
+  claimed: boolean("claimed").default(false).notNull(),
+  claimedAt: datetime("claimedAt", { mode: "date", fsp: 3 }),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+});
+export type RankedUserRewards = InferSelectModel<typeof rankedUserRewards>;
+
+export const rankedPvpQueue = mysqlTable(
+  "RankedPvpQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    rankedLp: int("rankedLp").notNull(),
+    queueStartTime: datetime("queueStartTime", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("RankedPvpQueue_userId_idx").on(table.userId),
+      rankedLpIdx: index("RankedPvpQueue_rankedLp_idx").on(table.rankedLp),
+    };
+  },
+);
+
+export const rankedPvpQueueRelations = relations(rankedPvpQueue, ({ one }) => ({
+  user: one(userData, {
+    fields: [rankedPvpQueue.userId],
+    references: [userData.userId],
+  }),
+}));
+
 export const notification = mysqlTable(
   "Notification",
   {
@@ -1334,6 +1419,7 @@ export const userData = mysqlTable(
     anbuId: varchar("anbuId", { length: 191 }),
     clanId: varchar("clanId", { length: 191 }),
     jutsuLoadout: varchar("jutsuLoadout", { length: 191 }),
+    rankedLoadout: varchar("rankedLoadout", { length: 191 }),
     nRecruited: int("nRecruited").default(0).notNull(),
     lastIp: varchar("lastIp", { length: 191 }),
     username: varchar("username", { length: 191 }).notNull(),
@@ -1471,6 +1557,10 @@ export const userData = mysqlTable(
     tutorialStep: tinyint("tutorialStep", { unsigned: true }).default(0).notNull(),
     homeType: mysqlEnum("homeType", consts.HomeTypes).default("NONE").notNull(),
     staffAccount: boolean("staffAccount").default(false).notNull(),
+    rankedLp: int("rankedLp").default(0).notNull(),
+    rankedBattles: int("rankedBattles").default(0).notNull(),
+    rankedWins: int("rankedWins").default(0).notNull(),
+    rankedStreak: int("rankedStreak").default(0).notNull(),
   },
   (table) => {
     return {
@@ -1481,6 +1571,7 @@ export const userData = mysqlTable(
       clanIdIdx: index("UserData_clanId_idx").on(table.clanId),
       anbuIdIdx: index("UserData_anbuId_idx").on(table.anbuId),
       jutsuLoadoutIdx: index("UserData_jutsuLoadout_idx").on(table.jutsuLoadout),
+      rankedLoadoutIdx: index("UserData_rankedLoadout_idx").on(table.rankedLoadout),
       levelIdx: index("UserData_level_idx").on(table.level),
       usernameKey: uniqueIndex("UserData_username_key").on(table.username),
       bloodlineIdIdx: index("UserData_bloodlineId_idx").on(table.bloodlineId),
@@ -1593,6 +1684,14 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   dailyBankInterest: one(dailyBankInterest, {
     fields: [userData.userId],
     references: [dailyBankInterest.userId],
+  }),
+  rankedLoadout: one(rankedLoadout, {
+    fields: [userData.userId],
+    references: [rankedLoadout.userId],
+  }),
+  rankedQueue: one(rankedPvpQueue, {
+    fields: [userData.userId],
+    references: [rankedPvpQueue.userId],
   }),
 }));
 

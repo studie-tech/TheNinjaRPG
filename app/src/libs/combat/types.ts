@@ -27,12 +27,12 @@ export type BattleWar = War & {
  */
 export type BattleUserState = Omit<NonNullable<UserWithRelations>, "items"> & {
   jutsus: (UserJutsu & {
-    jutsu: Jutsu;
+    jutsu: Jutsu & { originalCooldown?: number };
     lastUsedRound: number;
   })[];
   basicActions: CombatAction[];
   items: (UserItem & {
-    item: Item;
+    item: Item & { originalCooldown?: number };
     lastUsedRound: number;
   })[];
   aiProfile: AiProfile;
@@ -103,6 +103,7 @@ export type CombatResult = {
   outcome: "Won" | "Lost" | "Draw" | "Fled";
   didWin: number;
   eloDiff: number;
+  lpDiff: number;
   experience: number;
   pvpStreak: number;
   curHealth: number;
@@ -148,6 +149,7 @@ export type CombatAction = {
   actionCostPerc: number;
   updatedAt: number;
   cooldown: number;
+  originalCooldown?: number;
   effects: ZodAllTags[];
   lastUsedRound?: number;
   data?: Jutsu | Item;

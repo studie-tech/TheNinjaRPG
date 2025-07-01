@@ -28,8 +28,9 @@ import {
   IMG_BADGE_NEW_QUEST,
   IMG_BADGE_START_BATTLE,
 } from "@/drizzle/constants";
+import { ObjectiveReward } from "@/validators/objectives";
 import type { Quest } from "@/drizzle/schema";
-import type { AllObjectivesType } from "@/validators/objectives";
+import type { AllObjectivesType, ObjectiveRewardType } from "@/validators/objectives";
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { ElementDefinition } from "cytoscape";
 
@@ -352,4 +353,49 @@ export const buildObjectiveEdges = (
   });
 
   return edges;
+};
+
+/**
+ * Returns a string array of rewards from an objective reward object.
+ * @param reward - The objective reward object.
+ * @returns A string array of rewards.
+ */
+export const getRewardArray = (reward?: ObjectiveRewardType) => {
+  const rewards: string[] = [];
+  if (!reward) return rewards;
+  const questReward = ObjectiveReward.parse(reward);
+  if (questReward.reward_items.length > 0) {
+    rewards.push(`${questReward.reward_items.length} items`);
+  }
+  if (questReward.reward_jutsus.length > 0) {
+    rewards.push(`${questReward.reward_jutsus.length} jutsus`);
+  }
+  if (questReward.reward_badges.length > 0) {
+    rewards.push(`${questReward.reward_badges.length} badges`);
+  }
+  if (questReward.reward_rank && questReward.reward_rank !== "NONE") {
+    rewards.push(`rank of ${questReward.reward_rank.toLowerCase()}`);
+  }
+  if (questReward.reward_bloodlines.length > 0) {
+    rewards.push(`${questReward.reward_bloodlines.length} bloodlines`);
+  }
+  if (questReward.reward_money) {
+    rewards.push(`${questReward.reward_money} ryo`);
+  }
+  if (questReward.reward_clanpoints) {
+    rewards.push(`${questReward.reward_clanpoints} clan points`);
+  }
+  if (questReward.reward_exp) {
+    rewards.push(`${questReward.reward_exp} exp`);
+  }
+  if (questReward.reward_tokens) {
+    rewards.push(`${questReward.reward_tokens} village tokens`);
+  }
+  if (questReward.reward_prestige) {
+    rewards.push(`${questReward.reward_prestige} prestige`);
+  }
+  if (questReward.reward_reputation) {
+    rewards.push(`${questReward.reward_reputation} reputation points`);
+  }
+  return rewards;
 };

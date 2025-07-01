@@ -736,90 +736,85 @@ export default LayoutCore4;
 const StrongestUsersBanner: React.FC = () => {
   // State
   const { isLoaded } = useUser();
-  const tabNames = ["Online", "Strongest", "Staff"] as const;
-  type TabName = (typeof tabNames)[number];
-  const [activeTab, setActiveTab] = useState<TabName>("Strongest");
+
+  // Get user data
+  const { data: userData } = useUserData();
+
   // Query
-  const { data: userData, isPending } = api.profile.getPublicUsers.useQuery(
-    {
-      limit: 10,
-      orderBy: activeTab,
-      isAi: false,
-    },
+  const { data: usersData, isPending } = api.profile.getPublicUsers.useQuery(
+    { limit: 10, orderBy: "Ranked", isAi: false },
     { enabled: isLoaded, staleTime: 1000 * 60 * 5 },
   );
-  const users = userData?.data;
+  const users = usersData?.data;
 
   return (
-    <SignedOut>
-      <div className="relative top-[-30px]">
-        <Image
-          className="left-0 relative -z-10 select-none w-[200px] lg:w-[260px] max-w-[200px] lg:max-w-[260px]"
-          src={IMG_LAYOUT_USERSBANNER_TOP}
-          width={260}
-          height={138}
-          alt="usersbanner_top"
-          loading="lazy"
-        ></Image>
-        <div
-          className="text-orange-100 relative left-0 w-[200px] lg:w-[260px] max-w-[200px] lg:max-w-[260px] bg-contain bg-repeat-y"
-          style={{ backgroundImage: `url(${IMG_LAYOUT_USERBANNER_MIDDLE})` }}
-        >
-          <div className="relative top-[-40px]">
-            <NavTabs
-              current={activeTab}
-              options={tabNames}
-              setValue={setActiveTab}
-              fontSize="text-xs"
-              className="text-orange-100 hover:text-orange-300"
-            />
-            {users?.map((user, i) => (
-              <Link
-                href={`/username/${user.username}`}
-                key={i}
-                className="hover:opacity-50"
-              >
-                <div
-                  className={`py-1 grid grid-cols-12 items-center justify-center relative top-2 left-8 lg:left-10 w-[154px] max-w-[154px] lg:w-[200px] lg:max-w-[200px] ${
-                    i % 2 == 0 ? "bg-pink-900" : ""
-                  } bg-opacity-50 text-xs lg:text-base`}
-                >
-                  <p className="pl-2">{i + 1}</p>
-                  <div className="col-span-2">
-                    <AvatarImage
-                      href={user.avatarLight}
-                      alt={user.username}
-                      size={100}
-                      priority
-                    />
-                  </div>
-                  <p className="col-span-5">{user.username}</p>
-                  <p className="col-span-4">{showUserRank(user)}</p>
-                </div>
-              </Link>
-            ))}
-            {isPending && (
-              <div className="flex flex-col gap-1 items-center pb-4">
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <Skeleton
-                    className="h-9 lg:h-10 w-full w-[154px] max-w-[154px] lg:w-[200px] lg:max-w-[200px] bg-muted/70"
-                    key={i}
-                  />
-                ))}
-              </div>
-            )}
+    <div className="relative top-[-30px]">
+      <Image
+        className="left-0 relative -z-10 select-none w-[200px] lg:w-[260px] max-w-[200px] lg:max-w-[260px]"
+        src={IMG_LAYOUT_USERSBANNER_TOP}
+        width={260}
+        height={138}
+        alt="usersbanner_top"
+        loading="lazy"
+      ></Image>
+      <div
+        className="text-orange-100 relative left-0 w-[200px] lg:w-[260px] max-w-[200px] lg:max-w-[260px] bg-contain bg-repeat-y"
+        style={{ backgroundImage: `url(${IMG_LAYOUT_USERBANNER_MIDDLE})` }}
+      >
+        <div className="relative top-[-40px]">
+          <div className="relative left-10 lg:left-14 w-[140px] max-w-[140px] lg:w-[178px] lg:max-w-[178px]">
+            <Link href={userData ? "/battlearena#PVP%20Rank" : "/login"}>
+              <Button decoration="gold" className="w-full" animation="pulse">
+                Join Ranked PvP
+              </Button>
+            </Link>
           </div>
+          {users?.map((user, i) => (
+            <Link
+              href={`/username/${user.username}`}
+              key={i}
+              className="hover:opacity-50"
+            >
+              <div
+                className={`py-1 grid grid-cols-12 items-center justify-center relative top-2 left-8 lg:left-10 w-[154px] max-w-[154px] lg:w-[200px] lg:max-w-[200px] ${
+                  i % 2 == 0 ? "bg-pink-900" : ""
+                } bg-opacity-50 text-xs lg:text-base`}
+              >
+                <p className="pl-2">{i + 1}</p>
+                <div className="col-span-2">
+                  <AvatarImage
+                    href={user.avatarLight}
+                    alt={user.username}
+                    size={100}
+                    priority
+                  />
+                </div>
+                <p className="col-span-5">{user.username}</p>
+                <p className="col-span-4">{user.rankedLp}</p>
+              </div>
+            </Link>
+          ))}
+          {isPending && (
+            <div className="flex flex-col gap-1 items-center pb-4">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <Skeleton
+                  className="h-9 lg:h-10 w-full w-[154px] max-w-[154px] lg:w-[200px] lg:max-w-[200px] bg-muted/70"
+                  key={i}
+                />
+              ))}
+            </div>
+          )}
         </div>
-        <Image
-          className="left-0 top-[-10px] relative -z-10 select-none w-[200px] lg:w-[260px] max-w-[200px] lg:max-w-[260px]"
-          src={IMG_LAYOUT_USERSBANNER_BOTTOM}
-          width={260}
-          height={138}
-          alt="usersbanner_bottom"
-          loading="lazy"
-        ></Image>
       </div>
-    </SignedOut>
+      <Image
+        className="left-0 top-[-10px] relative -z-10 select-none w-[200px] lg:w-[260px] max-w-[200px] lg:max-w-[260px]"
+        src={IMG_LAYOUT_USERSBANNER_BOTTOM}
+        width={260}
+        height={138}
+        alt="usersbanner_bottom"
+        loading="lazy"
+      ></Image>
+    </div>
   );
 };
 

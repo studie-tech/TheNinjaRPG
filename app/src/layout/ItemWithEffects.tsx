@@ -1,6 +1,5 @@
 import React from "react";
 import Link from "next/link";
-import Image from "next/image";
 import ContentImage from "@/layout/ContentImage";
 import Confirm2 from "@/layout/Confirm2";
 import { parseHtml } from "@/utils/parse";
@@ -10,8 +9,6 @@ import { useUserData } from "@/utils/UserContext";
 import { SquarePen, Trash2, BarChartBig, Copy, Box } from "lucide-react";
 import { getTagSchema } from "@/libs/combat/types";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { getObjectiveImage } from "@/libs/objectives";
-import { ObjectiveReward } from "@/validators/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { cn } from "src/libs/shadui";
 import { api } from "@/app/_trpc/client";
@@ -21,6 +18,7 @@ import type { ItemRarity, GameAsset } from "@/drizzle/schema";
 import type { Bloodline, Item, Jutsu, Quest } from "@/drizzle/schema";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { BackgroundSchema } from "@/drizzle/schema";
+import { getRewardArray } from "@/libs/objectives";
 
 export type GenericObject = {
   id: string;
@@ -122,40 +120,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   }
 
   // Define rewards from quests if they are there
-  const rewards: string[] = [];
-  if ("content" in item) {
-    const questReward = ObjectiveReward.parse(item.content?.reward);
-    if (questReward.reward_items.length > 0) {
-      rewards.push(`${item.content.reward.reward_items.length} items`);
-    }
-    if (questReward.reward_jutsus.length > 0) {
-      rewards.push(`${item.content.reward.reward_jutsus.length} jutsus`);
-    }
-    if (questReward.reward_badges.length > 0) {
-      rewards.push(`${item.content.reward.reward_badges.length} badges`);
-    }
-    if (questReward.reward_rank && questReward.reward_rank !== "NONE") {
-      rewards.push(`rank of ${item.content.reward.reward_rank.toLowerCase()}`);
-    }
-    if (questReward.reward_bloodlines) {
-      rewards.push(`${questReward.reward_bloodlines.length} bloodlines`);
-    }
-    if (questReward.reward_money) {
-      rewards.push(`${item.content.reward.reward_money} ryo`);
-    }
-    if (questReward.reward_clanpoints) {
-      rewards.push(`${item.content.reward.reward_clanpoints} clan points`);
-    }
-    if (questReward.reward_exp) {
-      rewards.push(`${item.content.reward.reward_exp} exp`);
-    }
-    if (questReward.reward_tokens) {
-      rewards.push(`${item.content.reward.reward_tokens} village tokens`);
-    }
-    if (questReward.reward_prestige) {
-      rewards.push(`${item.content.reward.reward_prestige} prestige`);
-    }
-  }
+  const rewards = "content" in item ? getRewardArray(item.content.reward) : [];
 
   return (
     <div className="mb-3 flex flex-row items-center rounded-lg border bg-popover p-2 align-middle shadow-sm ">

@@ -70,12 +70,13 @@ export const idsWithNumberField = z
   )
   .default([]);
 
-const rewardFields = {
+export const rewardFields = {
   reward_money: z.coerce.number().default(0),
   reward_clanpoints: z.coerce.number().default(0),
   reward_exp: z.coerce.number().default(0),
   reward_tokens: z.coerce.number().default(0),
   reward_prestige: z.coerce.number().default(0),
+  reward_reputation: z.coerce.number().default(0),
   reward_rank: z.enum(UserRanks).default("NONE"),
   reward_items: idsWithNumberField,
   reward_jutsus: z.array(z.string()).default([]),
@@ -93,6 +94,7 @@ export const hasReward = (reward: ObjectiveRewardType) => {
     parsedReward.reward_clanpoints > 0 ||
     parsedReward.reward_exp > 0 ||
     parsedReward.reward_prestige > 0 ||
+    parsedReward.reward_reputation > 0 ||
     parsedReward.reward_rank !== "NONE" ||
     parsedReward.reward_items.length > 0 ||
     parsedReward.reward_jutsus.length > 0 ||
@@ -265,6 +267,7 @@ export const ObjectiveTracker = z.object({
   longitude: z.coerce.number().min(0).optional(),
   latitude: z.coerce.number().min(0).optional(),
   selectedNextObjectiveId: z.string().optional(),
+  recentlyDied: z.boolean().default(false),
 });
 export type ObjectiveTrackerType = z.infer<typeof ObjectiveTracker>;
 

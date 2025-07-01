@@ -28,6 +28,7 @@ import UserRequestSystem from "@/layout/UserRequestSystem";
 import Loader from "@/layout/Loader";
 import { sendGTMEvent } from "@next/third-parties/google";
 import { Swords } from "lucide-react";
+import { RankedArenaMain, RankedLoadoutSelector } from "@/layout/PvpRank";
 import { BATTLE_ARENA_DAILY_LIMIT } from "@/drizzle/constants";
 import { createStatSchema } from "@/libs/combat/types";
 import {
@@ -45,10 +46,10 @@ import type { StatSchemaType } from "@/libs/combat/types";
 
 export default function Arena() {
   // Tab selection
-  const availableTabs = ["Arena", "Sparring", "Training Arena"] as const;
+  const availableTabs = ["Arena", "Sparring", "Training", "PVP Rank"] as const;
   type TabType = (typeof availableTabs)[number];
   const [tab, setTab] = useLocalStorage<TabType | null>("arenaTab", "Arena", true);
-  console.log(tab);
+
   const [aiId, setAiId] = useLocalStorage<string | undefined>("arenaAI", undefined);
   const [statDistribution, setStatDistribution] = useLocalStorage<
     StatSchemaType | undefined
@@ -72,8 +73,11 @@ export default function Arena() {
     case "Sparring":
       subtitle = "PVP Challenges";
       break;
-    case "Training Arena":
+    case "Training":
       subtitle = "Training Dummy";
+      break;
+    case "PVP Rank":
+      subtitle = "Ranked PVP (Preview Feature)";
       break;
   }
 
@@ -95,7 +99,8 @@ export default function Arena() {
       >
         {tab === "Arena" && <ChallengeAI aiId={aiId} />}
         {tab === "Sparring" && <ChallengeUser />}
-        {tab === "Training Arena" && (
+        {tab === "PVP Rank" && <RankedArenaMain />}
+        {tab === "Training" && (
           <div className="flex flex-col items-center">
             <p className="m-2">
               The arena is a fairly basic circular and raw battleground, where you can
@@ -107,12 +112,13 @@ export default function Arena() {
       </ContentBox>
       {tab === "Arena" && <SelectAI aiId={aiId} setAiId={setAiId} />}
       {tab === "Sparring" && <ActiveChallenges />}
-      {tab === "Training Arena" && (
+      {tab === "Training" && (
         <AssignTrainingDummyStats
           statDistribution={statDistribution}
           setStatDistribution={setStatDistribution}
         />
       )}
+      {tab === "PVP Rank" && <RankedLoadoutSelector />}
     </>
   );
 }
@@ -460,7 +466,7 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
             updatedAt: new Date(),
           });
           router.push("/combat");
-          showMutationToast({ ...data, message: "Entering the Training Arena" });
+          showMutationToast({ ...data, message: "Entering the Training" });
         } else {
           showMutationToast(data);
         }
@@ -543,7 +549,7 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
             <div className="min-h-64">
               <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
                 <div className="m-auto text-white">
-                  <p className="text-5xl">Entering the Training Arena</p>
+                  <p className="text-5xl">Entering the Training</p>
                   <Loader />
                 </div>
               </div>

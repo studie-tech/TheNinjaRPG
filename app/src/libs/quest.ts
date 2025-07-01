@@ -141,6 +141,9 @@ export const getReward = (
         if (objective.reward_prestige) {
           rawRewards.reward_prestige += objective.reward_prestige;
         }
+        if (objective.reward_reputation) {
+          rawRewards.reward_reputation += objective.reward_reputation;
+        }
         if (objective.reward_jutsus) {
           rawRewards.reward_jutsus.push(...objective.reward_jutsus);
         }
@@ -170,6 +173,7 @@ export const getReward = (
     rawRewards.reward_exp = Math.floor(rawRewards.reward_exp * factor);
     rawRewards.reward_tokens = Math.floor(rawRewards.reward_tokens * factor);
     rawRewards.reward_prestige = Math.floor(rawRewards.reward_prestige * factor);
+    rawRewards.reward_reputation = Math.floor(rawRewards.reward_reputation * factor);
   }
   // Final rewards (some need a bit pose-processing)
   const rewards = postProcessRewards(rawRewards);
@@ -195,6 +199,63 @@ export const postProcessRewards = (rewards: ObjectiveRewardType) => {
       .map((reward) => reward.ids)
       .flat(),
   };
+};
+export type PostProcessedRewards = ReturnType<typeof postProcessRewards>;
+
+/**
+ * Collapse multiple rewards into a single reward
+ * @param rewards - Rewards to collapse
+ * @returns Collapsed reward
+ */
+export const collapseRewards = (
+  rewards: ObjectiveRewardType[],
+): ObjectiveRewardType => {
+  const collapsed: ObjectiveRewardType = {
+    reward_money: 0,
+    reward_clanpoints: 0,
+    reward_exp: 0,
+    reward_tokens: 0,
+    reward_prestige: 0,
+    reward_reputation: 0,
+    reward_items: [],
+    reward_jutsus: [],
+    reward_bloodlines: [],
+    reward_badges: [],
+    reward_rank: "NONE",
+  };
+
+  rewards.forEach((reward) => {
+    // Sum numeric rewards
+    collapsed.reward_money += reward.reward_money;
+    collapsed.reward_clanpoints += reward.reward_clanpoints;
+    collapsed.reward_exp += reward.reward_exp;
+    collapsed.reward_tokens += reward.reward_tokens;
+    collapsed.reward_prestige += reward.reward_prestige;
+    collapsed.reward_reputation += reward.reward_reputation;
+
+    // Concatenate array rewards
+    collapsed.reward_items.push(...reward.reward_items);
+    collapsed.reward_jutsus.push(...reward.reward_jutsus);
+    collapsed.reward_bloodlines.push(...reward.reward_bloodlines);
+    collapsed.reward_badges.push(...reward.reward_badges);
+
+    // Handle rank reward (take the highest rank)
+    if (reward.reward_rank !== "NONE") {
+      if (collapsed.reward_rank === "NONE") {
+        collapsed.reward_rank = reward.reward_rank;
+      } else {
+        // Compare ranks and keep the higher one
+        const rankOrder = ["NONE", "GENIN", "CHUNIN", "JONIN", "SANNIN", "KAGE"];
+        const currentIndex = rankOrder.indexOf(collapsed.reward_rank);
+        const newIndex = rankOrder.indexOf(reward.reward_rank);
+        if (newIndex > currentIndex) {
+          collapsed.reward_rank = reward.reward_rank;
+        }
+      }
+    }
+  });
+
+  return collapsed;
 };
 
 export type QuestConsequence = {
@@ -405,7 +466,9 @@ export const getNewTrackers = (
             status.done = true;
             consequences.push({ type: "start_quest", ids: objective.newQuestIds });
           } else if (task === "start_battle") {
-            putInCombat();
+            if (!status.recentlyDied) {
+              putInCombat();
+            }
           }
 
           // Specific updates requested by the caller
@@ -518,6 +581,9 @@ export const getNewTrackers = (
                     if (completionOutcome === "Lose") {
                       status.done = true;
                     }
+                    if (task === "start_battle") {
+                      status.recentlyDied = true;
+                    }
                   } else if (taskUpdate.text === "Draw") {
                     if (objective.drawDescription) {
                       notifications.push(objective.drawDescription);
@@ -533,11 +599,22 @@ export const getNewTrackers = (
                       status.done = true;
                     }
                   }
-                  if (!status.done && "failObjectiveId" in objective) {
+                  if (
+                    !status.done &&
+                    "failObjectiveId" in objective &&
+                    objective.failObjectiveId
+                  ) {
                     status.selectedNextObjectiveId = objective.failObjectiveId;
                     status.done = true;
                   }
                 }
+              }
+
+              // Handle manual retriggering of start_battle objectives
+              if (task === "start_battle" && taskUpdate.text === "retry") {
+                status.recentlyDied = false;
+                putInCombat();
+                return;
               }
             });
           if ("value" in objective && status.value >= objective.value) {

@@ -113,9 +113,9 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                 <ActionOption
                   aspectRatioClass={props.aspectRatioClass}
                   className={cn(
-                    "pr-1 h-full",
+                    "h-full",
                     isHighlight
-                      ? "rounded-xl border-2 border-amber-500 bg-amber-300 text-black"
+                      ? "rounded-xl border-4 border-amber-500 bg-amber-300 text-black"
                       : "",
                     bgColor,
                     isGreyed ? "opacity-20" : "",
@@ -193,11 +193,11 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   );
   return (
     <div
-      className={`relative text-center leading-5 ${
-        props.className ?? ""
-      } flex cursor-pointer flex-col items-center ${
-        props.isGreyed ? "hover:opacity-80" : "hover:opacity-90"
-      }`}
+      className={cn(
+        "relative text-center flex cursor-pointer flex-col items-center justify-start",
+        props.isGreyed ? "hover:opacity-80" : "hover:opacity-90",
+        props.className,
+      )}
     >
       <div className="relative w-full">
         <ContentImage

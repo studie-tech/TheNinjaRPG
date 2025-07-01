@@ -542,9 +542,13 @@ export const updateUser = async (
         .set({
           experience: sql`experience + ${result.experience}`,
           pvpStreak: result.pvpStreak,
-          curHealth: result.curHealth,
-          curStamina: result.curStamina,
-          curChakra: result.curChakra,
+          ...(curBattle.battleType !== "RANKED_PVP"
+            ? {
+                curHealth: result.curHealth,
+                curStamina: result.curStamina,
+                curChakra: result.curChakra,
+              }
+            : {}),
           strength: sql`strength + ${result.strength}`,
           intelligence: sql`intelligence + ${result.intelligence}`,
           willpower: sql`willpower + ${result.willpower}`,
@@ -565,12 +569,21 @@ export const updateUser = async (
           questData: user.questData,
           battleId: null,
           regenAt: new Date(),
+          ...(curBattle.battleType === "RANKED_PVP"
+            ? {
+                rankedLp: sql`GREATEST(rankedLp + ${result.lpDiff}, 0)`,
+                rankedStreak: result.didWin ? sql`${userData.rankedStreak} + 1` : 0,
+                rankedWins: sql`rankedWins + ${result.didWin ? 1 : 0}`,
+                rankedBattles: sql`rankedBattles + 1`,
+              }
+            : {}),
           ...(isKageChallenge
             ? {
                 rank: sql`CASE WHEN ${userData.rank} = 'ELDER' THEN 'JONIN' ELSE ${userData.rank} END`,
               }
             : {}),
-          ...(result.curHealth <= 0 && curBattle.battleType !== "SPARRING"
+          ...(result.curHealth <= 0 &&
+          !["SPARRING", "RANKED_PVP"].includes(curBattle.battleType)
             ? {
                 status: "HOSPITALIZED",
                 longitude: HOSPITAL_LONG,

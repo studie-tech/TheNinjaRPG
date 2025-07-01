@@ -1,7 +1,7 @@
 import { eq, inArray, isNull, isNotNull, and, or, sql } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
 import { quest, questHistory, userData } from "@/drizzle/schema";
-import { UserRanks } from "@/drizzle/constants";
+import { UserRanks, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { availableQuestLetterRanks } from "@/libs/train";
 import { sleep } from "@/utils/time";
 import { updateGameSetting } from "@/libs/gamesettings";
@@ -36,6 +36,8 @@ export async function GET() {
       const ranks = availableQuestLetterRanks(rank);
       if (ranks.length > 0) {
         for (const village of villages) {
+          const requiredVillage =
+            village.type === "OUTLAW" ? VILLAGE_SYNDICATE_ID : (village.id ?? "");
           const newDaily = await drizzleDB.query.quest.findFirst({
             where: and(
               eq(quest.questType, "daily"),
@@ -43,7 +45,7 @@ export async function GET() {
               inArray(quest.questRank, ranks),
               or(
                 isNull(quest.requiredVillage),
-                eq(quest.requiredVillage, village.id ?? ""),
+                eq(quest.requiredVillage, requiredVillage),
               ),
             ),
             orderBy: sql`RAND()`,

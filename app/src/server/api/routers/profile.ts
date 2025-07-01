@@ -1763,6 +1763,8 @@ export const fetchPublicUsers = async (
         return [desc(userData.level), desc(userData.experience)];
       case "PvP":
         return [desc(userData.pvpStreak), desc(userData.experience)];
+      case "Ranked":
+        return [desc(userData.rankedLp), desc(userData.experience)];
       case "Staff":
         return [desc(userData.tavernMessages)];
       case "Outlaws":
@@ -1817,6 +1819,7 @@ export const fetchPublicUsers = async (
         lastIp: true,
         level: true,
         pvpStreak: true,
+        rankedLp: true,
         rank: true,
         reputationPointsTotal: true,
         role: true,

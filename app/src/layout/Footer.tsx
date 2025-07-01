@@ -4,7 +4,7 @@ import Link from "next/link";
 const Footer: React.FC = () => {
   return (
     <div className="col-span-6 text-center text-white">
-      <p className="text-sm">
+      <p className="text-xs">
         <Link
           href="https://app.termly.io/document/terms-of-service/71d95c2f-d6eb-4e3c-b480-9f0b9bb87830"
           target="_blank"
@@ -41,10 +41,10 @@ const Footer: React.FC = () => {
           Staff
         </Link>
       </p>
-      <p className="text-sm">
+      <p className="text-xs">
         TheNinja-RPG © by Studie-Tech ApS - 2005-{new Date().getFullYear()}
       </p>
-      <p className="mb-7 text-sm">
+      <p className="mb-7 text-xs">
         Hindegade 6 - 1303 København K - Denmark -{" "}
         <a href="mailto:contact@theninja-rpg.com">Contact</a>
       </p>
