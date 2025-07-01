@@ -128,6 +128,7 @@ export default function SeasonForm({
   const buildRewardFormData = () => {
     const data: FormEntry<keyof z.infer<typeof rewardSchema>>[] = [
       { id: "reward_money", type: "number" },
+      { id: "reward_seichi_silver", type: "number" },
       { id: "reward_clanpoints", type: "number" },
       { id: "reward_exp", type: "number" },
       { id: "reward_tokens", type: "number" },

@@ -41,16 +41,18 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
 
   // Check if this is a start_battle objective with recentlyDied flag
   const status = tracker?.goals.find((g) => g.id === objective.id);
-  const isStartBattleWithRecentlyDied = objective.task === "start_battle" && status?.recentlyDied;
+  const isStartBattleWithRecentlyDied =
+    objective.task === "start_battle" && status?.recentlyDied;
 
   // Retry battle mutation
-  const { mutate: retryBattle, isPending: isRetrying } = api.quests.retryBattle.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      // Refresh user data to update quest state
-      window.location.reload();
-    },
-  });
+  const { mutate: retryBattle, isPending: isRetrying } =
+    api.quests.retryBattle.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        // Refresh user data to update quest state
+        window.location.reload();
+      },
+    });
 
   // Indicator icon
   const indicatorIcons = done ? (
@@ -190,6 +192,9 @@ export const Reward: React.FC<RewardProps> = (props) => {
   }
   if (info?.reward_reputation) {
     rewards += `${rewards ? ", " : ""} ${info.reward_reputation} Reputation Points`;
+  }
+  if (info?.reward_seichi_silver) {
+    rewards += `${rewards ? ", " : ""} ${info.reward_seichi_silver} Seichi Silver`;
   }
   return (
     <>

@@ -130,6 +130,7 @@ export default function Profile() {
                         %
                       </p>
                       <p>Current Streak: {userData.rankedStreak}</p>
+                      <p>Seichi Silver: {userData.seichiSilver}</p>
                     </div>
                   </TooltipContent>
                 </Tooltip>

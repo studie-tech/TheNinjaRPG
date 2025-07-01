@@ -655,6 +655,7 @@ export const questsRouter = createTRPCRouter({
           sceneCharacters: [],
           objectives: [],
           reward: {
+            reward_seichi_silver: 0,
             reward_money: 0,
             reward_clanpoints: 0,
             reward_exp: 0,
@@ -1039,6 +1040,7 @@ export const updateRewards = async (
   const updatedUserData: Record<string, unknown> = {
     questData: user.questData,
     money: user.money + rewards.reward_money,
+    seichiSilver: user.seichiSilver + rewards.reward_seichi_silver,
     earnedExperience: user.earnedExperience + rewards.reward_exp,
     villagePrestige: user.villagePrestige + rewards.reward_prestige,
     reputationPoints: user.reputationPoints + rewards.reward_reputation,

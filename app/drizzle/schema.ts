@@ -1455,10 +1455,11 @@ export const userData = mysqlTable(
     bukijutsuOffence: double("bukijutsuOffence").default(10).notNull(),
     statsMultiplier: double("statsMultiplier").default(1).notNull(),
     poolsMultiplier: double("poolsMultiplier").default(1).notNull(),
-    reputationPoints: float("reputationPoints").default(5).notNull(),
     primaryElement: mysqlEnum("primaryElement", consts.ElementNames),
     secondaryElement: mysqlEnum("secondaryElement", consts.ElementNames),
+    reputationPoints: float("reputationPoints").default(5).notNull(),
     reputationPointsTotal: float("reputationPointsTotal").default(5).notNull(),
+    seichiSilver: int("seichiSilver").default(0).notNull(),
     villagePrestige: float("villagePrestige").default(0).notNull(),
     federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses)
       .default("NONE")

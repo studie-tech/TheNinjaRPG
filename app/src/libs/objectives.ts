@@ -382,6 +382,9 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
   if (questReward.reward_money) {
     rewards.push(`${questReward.reward_money} ryo`);
   }
+  if (questReward.reward_seichi_silver) {
+    rewards.push(`${questReward.reward_seichi_silver} seichi silver`);
+  }
   if (questReward.reward_clanpoints) {
     rewards.push(`${questReward.reward_clanpoints} clan points`);
   }
