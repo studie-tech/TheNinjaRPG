@@ -37,7 +37,6 @@ import {
 import { canSeeSecretData, canDeleteUsers, canSeeIps } from "@/utils/permissions";
 import { canChangeContent, canModerateRoles } from "@/utils/permissions";
 import { canInteractWithPolls } from "@/utils/permissions";
-import { canEditPublicUser } from "@/utils/permissions";
 import { usernameSchema } from "@/validators/register";
 import { insertNextQuest } from "@/routers/quests";
 import { fetchClan, removeFromClan } from "@/routers/clan";
@@ -66,7 +65,17 @@ import {
 } from "@/libs/gamesettings";
 import { updateUserSchema } from "@/validators/user";
 import { updateUserPreferencesSchema } from "@/validators/user";
-import { canChangeUserRole } from "@/utils/permissions";
+import {
+  canChangeUserRolesTo,
+  canEditUsername,
+  canEditCustomTitle,
+  canEditBloodline,
+  canEditVillage,
+  canEditRank,
+  canEditJutsus,
+  canEditItems,
+  canEditStaffAccountFlag,
+} from "@/utils/permissions";
 import { UserRanks, BasicElementName } from "@/drizzle/constants";
 import { getRandomElement } from "@/utils/array";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
@@ -637,14 +646,67 @@ export const profileRouter = createTRPCRouter({
         }),
         fetchVillage(ctx.drizzle, input.data?.villageId || VILLAGE_SYNDICATE_ID),
       ]);
-      // Guards
-      const availableRoles = canChangeUserRole(user.role);
-      if (!canEditPublicUser(user)) {
-        return errorResponse("You cannot edit public users");
-      }
+      // Basic existence guards
       if (!village) return errorResponse("Village not found");
       if (!target) return errorResponse("User not found");
-      if (!availableRoles) return errorResponse("Not allowed");
+
+      // Prepare jutsu & item id arrays for permission checks and later DB update
+      const oldJutsuIds = target.jutsus.map((j) => j.jutsuId);
+      const newJutsuIds = input.data.jutsus ?? [];
+      const oldItemIds = target.items.map((i) => i.itemId);
+      const newItemIds = input.data.items ?? [];
+
+      // Guard attribute-by-attribute permissions
+      const usernameChanged = input.data.username !== target.username;
+      if (usernameChanged && !canEditUsername(user.role)) {
+        return errorResponse("Not allowed to change username");
+      }
+
+      const customTitleChanged =
+        input.data.customTitle !== undefined &&
+        input.data.customTitle !== target.customTitle;
+      if (customTitleChanged && !canEditCustomTitle(user.role)) {
+        return errorResponse("Not allowed to change custom title");
+      }
+
+      const bloodlineChanged = input.data.bloodlineId !== target.bloodlineId;
+      if (bloodlineChanged && !canEditBloodline(user.role)) {
+        return errorResponse("Not allowed to change bloodline");
+      }
+
+      const villageChanged = village.id !== target.villageId;
+      if (villageChanged && !canEditVillage(user.role)) {
+        return errorResponse("Not allowed to change village");
+      }
+
+      const rankChanged = input.data.rank !== target.rank;
+      if (rankChanged && !canEditRank(user.role)) {
+        return errorResponse("Not allowed to change rank");
+      }
+
+      const staffAccountChanged =
+        input.data.staffAccount !== undefined &&
+        input.data.staffAccount !== target.staffAccount;
+      if (staffAccountChanged && !canEditStaffAccountFlag(user.role)) {
+        return errorResponse("Not allowed to toggle staff account flag");
+      }
+
+      // Check permissions for jutsus/items before performing updates
+      const jutsuChanged =
+        newJutsuIds.slice().sort().join(",") !== oldJutsuIds.slice().sort().join(",");
+      if (jutsuChanged && !canEditJutsus(user.role)) {
+        return errorResponse("Not allowed to modify jutsus");
+      }
+
+      const itemChanged =
+        newItemIds.slice().sort().join(",") !== oldItemIds.slice().sort().join(",");
+      if (itemChanged && !canEditItems(user.role)) {
+        return errorResponse("Not allowed to modify items");
+      }
+
+      // Role-change permissions (availableRoles) still apply below
+      const roleChanged = input.data.role !== target.role;
+      const availableRoles = canChangeUserRolesTo(user.role);
       if (!availableRoles.includes(target.role)) {
         return errorResponse(`Not allowed to change: ${target.role}`);
       }
@@ -661,10 +723,10 @@ export const profileRouter = createTRPCRouter({
       const { jutsuChanges, itemChanges } = await updateUserContent({
         client: ctx.drizzle,
         userId: target.userId,
-        oldJutsuIds: target.jutsus.map((j) => j.jutsuId),
-        newJutsuIds: input.data.jutsus ?? [],
-        oldItemIds: target.items.map((j) => j.itemId),
-        newItemIds: input.data.items ?? [],
+        oldJutsuIds,
+        newJutsuIds,
+        oldItemIds,
+        newItemIds,
       });
       // Calculate diff
       delete input.data.jutsus;
@@ -685,14 +747,27 @@ export const profileRouter = createTRPCRouter({
       if (!aiCheck.allowUpdate) {
         return errorResponse(aiCheck.comment);
       }
+      console.log("usernameChanged", usernameChanged);
+      console.log("customTitleChanged", customTitleChanged);
+      console.log("bloodlineChanged", bloodlineChanged);
+      console.log("villageChanged", villageChanged);
+      console.log("rankChanged", rankChanged);
+      console.log("staffAccountChanged", staffAccountChanged);
+      console.log("roleChanged", roleChanged);
       // Update database
-      console.log(input.data);
       await Promise.all([
         ctx.drizzle
           .update(userData)
           .set({
-            ...input.data,
-            ...(village.id !== user.villageId
+            userId: target.userId,
+            ...(usernameChanged ? { username: input.data.username } : {}),
+            ...(customTitleChanged ? { customTitle: input.data.customTitle } : {}),
+            ...(bloodlineChanged ? { bloodlineId: input.data.bloodlineId } : {}),
+            ...(villageChanged ? { villageId: input.data.villageId } : {}),
+            ...(rankChanged ? { rank: input.data.rank } : {}),
+            ...(staffAccountChanged ? { staffAccount: input.data.staffAccount } : {}),
+            ...(roleChanged ? { role: input.data.role } : {}),
+            ...(villageChanged
               ? {
                   isOutlaw: village.type === "OUTLAW" ? true : false,
                   sector: village.sector,

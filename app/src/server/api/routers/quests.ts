@@ -62,7 +62,7 @@ import type { UserData, Quest } from "@/drizzle/schema";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import type { GetRewardResult } from "@/libs/quest";
-import { canEditPublicUser } from "@/utils/permissions";
+import { canEditQuests } from "@/utils/permissions";
 
 export const questsRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
@@ -886,7 +886,7 @@ export const questsRouter = createTRPCRouter({
       // Check if user has permission to view quests
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Safety
-      if (!canEditPublicUser(user)) {
+      if (!canEditQuests(user.role)) {
         throw serverError("UNAUTHORIZED", "Not authorized to view user quests");
       }
       // Get all quests for the user
@@ -906,7 +906,7 @@ export const questsRouter = createTRPCRouter({
         fetchUpdatedUser({ client: ctx.drizzle, userId: input.userId }),
       ]);
       // Guard
-      if (!user || !canEditPublicUser(user)) {
+      if (!user || !canEditQuests(user.role)) {
         return errorResponse("Not authorized to delete user quests");
       }
       if (!targetUser.user) {

@@ -63,7 +63,7 @@ import {
   canModifyUserBadges,
   canSeeIps,
   canSeeActivityEvents,
-  canEditPublicUser,
+  canUnequipAllUsers,
   canRestoreActivityStreak,
   canUseMonitoringTests,
 } from "@/utils/permissions";
@@ -109,7 +109,7 @@ export const staffRouter = createTRPCRouter({
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
-      if (!canEditPublicUser(user)) {
+      if (!canUnequipAllUsers(user)) {
         return errorResponse("You do not have permission to unequip all gear");
       }
       // Update all equipped items to set equipped = 'NONE' for all users

@@ -53,18 +53,9 @@ import {
   IdCard,
 } from "lucide-react";
 import { updateUserSchema } from "@/validators/user";
-import { canChangeUserRole } from "@/utils/permissions";
 import { canSeeSecretData, canSeeIps } from "@/utils/permissions";
-import {
-  canModifyUserBadges,
-  canUnstuckVillage,
-  canAwardReputation,
-  canSeeActivityEvents,
-  canRestoreActivityStreak,
-} from "@/utils/permissions";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
-import { canClearUserNindo, canEditPublicUser } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { useUserEditForm } from "@/hooks/profile";
 import { Chart as ChartJS } from "chart.js/auto";
@@ -88,6 +79,23 @@ import { canCloneUser } from "@/utils/permissions";
 import type { Jutsu } from "@/drizzle/schema";
 import { NewConversationPrompt } from "@/app/inbox/page";
 import Table from "@/layout/Table";
+import {
+  canModifyUserBadges,
+  canUnstuckVillage,
+  canAwardReputation,
+  canSeeActivityEvents,
+  canRestoreActivityStreak,
+  canEditUsername,
+  canEditCustomTitle,
+  canEditBloodline,
+  canEditVillage,
+  canEditRank,
+  canEditJutsus,
+  canEditItems,
+  canEditStaffAccountFlag,
+  canClearUserNindo,
+  canEditQuests,
+} from "@/utils/permissions";
 
 interface PublicUserComponentProps {
   userId: string;
@@ -339,7 +347,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 
   // Derived
   const canChange = userData && canClearUserNindo(userData);
-  const availableRoles = userData && canChangeUserRole(userData.role);
 
   // Loaders
   if (isPendingProfile) return <Loader explanation="Fetching Public User Data" />;
@@ -410,19 +417,17 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 }}
               />
             )}
-            {availableRoles &&
-              availableRoles.length > 0 &&
-              canEditPublicUser(userData) && (
-                <EditUserComponent
-                  userId={profile.userId}
-                  profile={{
-                    ...profile,
-                    reason: "",
-                    items: profile.items.map((ui) => ui.itemId),
-                    jutsus: profile.jutsus.map((ui) => ui.jutsuId),
-                  }}
-                />
-              )}
+            {userData && (
+              <EditUserComponent
+                userId={profile.userId}
+                profile={{
+                  ...profile,
+                  reason: "",
+                  items: profile.items.map((ui) => ui.itemId),
+                  jutsus: profile.jutsus.map((ui) => ui.jutsuId),
+                }}
+              />
+            )}
             {userData && canAwardReputation(userData.role) && (
               <Confirm2
                 title="Award Reputation Points"
@@ -1152,13 +1157,31 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   const [selectedQuestType, setSelectedQuestType] = useState<string>("all");
   const now = new Date();
 
+  // Logged-in user – determines editing permissions
+  const { data: currentUser } = useUserData();
+  const userRole = currentUser?.role || "USER";
+
+  // Permission checks
+  const perms = {
+    canEditUsername: canEditUsername(userRole),
+    canEditCustomTitle: canEditCustomTitle(userRole),
+    canEditBloodline: canEditBloodline(userRole),
+    canEditVillage: canEditVillage(userRole),
+    canEditRank: canEditRank(userRole),
+    canEditJutsus: canEditJutsus(userRole),
+    canEditItems: canEditItems(userRole),
+    canEditStaffAccountFlag: canEditStaffAccountFlag(userRole),
+    canEditQuests: canEditQuests(userRole),
+  } as const;
+
+  const canEditSomething = Object.values(perms).some(Boolean);
+
   // tRPC utility
   const utils = api.useUtils();
 
-  // Queries
   const { data: userQuests } = api.quests.getUserQuests.useQuery(
     { userId: userId },
-    { enabled: !!userId },
+    { enabled: perms.canEditQuests && !!userId },
   );
 
   // Get unique quest types
@@ -1182,13 +1205,23 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
     },
   });
 
-  // Form handling
+  // Form handling – pass permissions so queries are conditionally executed inside hook
   const { form, formData, userJutsus, handleUserSubmit } = useUserEditForm(
     userId,
     profile,
+    {
+      canEditUsername: perms.canEditUsername,
+      canEditCustomTitle: perms.canEditCustomTitle,
+      canEditBloodline: perms.canEditBloodline,
+      canEditVillage: perms.canEditVillage,
+      canEditRank: perms.canEditRank,
+      canEditJutsus: perms.canEditJutsus,
+      canEditItems: perms.canEditItems,
+      canEditStaffAccountFlag: perms.canEditStaffAccountFlag,
+    },
   );
 
-  // Form for jutsu level
+  // Jutsu-specific helpers
   const jutsuLevelForm = useForm<{ level: number }>({
     defaultValues: {
       level: userJutsus?.find((uj) => uj.jutsuId === jutsu?.id)?.level || 0,
@@ -1206,7 +1239,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
     },
   });
 
-  // Derived
+  // Derived – only relevant if jutsu editing is permitted
   const userJutsu = userJutsus?.find((uj) => uj.jutsuId === jutsu?.id);
   const allJutsus = userJutsus?.map((uj) => uj.jutsu);
   const userJutsuCounts = userJutsus?.map((userJutsu) => {
@@ -1218,7 +1251,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
           : userJutsu.level,
     };
   });
-  const hasJutsus = userJutsus && userJutsus.length > 0;
+  const hasJutsus = perms.canEditJutsus && userJutsus && userJutsus.length > 0;
 
   // Update jutsu level form default value when jutsu changes
   useEffect(() => {
@@ -1226,6 +1259,10 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
       jutsuLevelForm.reset({ level: userJutsu.level });
     }
   }, [userJutsu, jutsuLevelForm]);
+
+  // Cases where we don't render anything
+  if (!currentUser) return null;
+  if (!canEditSomething) return null;
 
   return (
     <Confirm2
@@ -1241,7 +1278,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
         <TabsList className="text-center mt-3">
           <TabsTrigger value="userData">Main Data</TabsTrigger>
           {hasJutsus && <TabsTrigger value="jutsus">Jutsus Specifics</TabsTrigger>}
-          <TabsTrigger value="quests">Quests</TabsTrigger>
+          {perms.canEditQuests && <TabsTrigger value="quests">Quests</TabsTrigger>}
         </TabsList>
         <TabsContent value="userData">
           <EditContent
@@ -1328,73 +1365,77 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
             )}
           </TabsContent>
         )}
-        <TabsContent value="quests">
-          <div className="mt-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-white">User Quests</h3>
-              {questTypes.length > 0 && (
-                <select
-                  className="bg-card text-foreground border border-border rounded-md px-3 py-1"
-                  value={selectedQuestType}
-                  onChange={(e) => setSelectedQuestType(e.target.value)}
-                >
-                  <option value="all">All Quest Types</option>
-                  {questTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
+        {perms.canEditQuests && (
+          <TabsContent value="quests">
+            <div className="mt-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white">User Quests</h3>
+                {questTypes.length > 0 && (
+                  <select
+                    className="bg-card text-foreground border border-border rounded-md px-3 py-1"
+                    value={selectedQuestType}
+                    onChange={(e) => setSelectedQuestType(e.target.value)}
+                  >
+                    <option value="all">All Quest Types</option>
+                    {questTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              {filteredQuests && filteredQuests.length > 0 ? (
+                <div className="space-y-2">
+                  {filteredQuests.map((userQuest) => (
+                    <div
+                      key={userQuest.id}
+                      className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
+                    >
+                      <div>
+                        <h4 className="font-semibold text-foreground">
+                          {userQuest.quest.name}
+                        </h4>
+                        <p className="text-sm text-muted-foreground">
+                          Started: {userQuest.startedAt.toLocaleString()}
+                          {userQuest.endAt &&
+                            ` • Completed: ${userQuest.endAt.toLocaleString()}`}
+                        </p>
+                        {userQuest.quest.questType && (
+                          <p className="text-sm text-muted-foreground">
+                            Type: {userQuest.quest.questType}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          if (
+                            confirm(
+                              "Are you sure you want to delete this quest record?",
+                            )
+                          ) {
+                            deleteUserQuest.mutate({
+                              userId: userId,
+                              questId: userQuest.quest.id,
+                            });
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   ))}
-                </select>
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground">
+                  No quests found for this user.
+                </p>
               )}
             </div>
-            {filteredQuests && filteredQuests.length > 0 ? (
-              <div className="space-y-2">
-                {filteredQuests.map((userQuest) => (
-                  <div
-                    key={userQuest.id}
-                    className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
-                  >
-                    <div>
-                      <h4 className="font-semibold text-foreground">
-                        {userQuest.quest.name}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        Started: {userQuest.startedAt.toLocaleString()}
-                        {userQuest.endAt &&
-                          ` • Completed: ${userQuest.endAt.toLocaleString()}`}
-                      </p>
-                      {userQuest.quest.questType && (
-                        <p className="text-sm text-muted-foreground">
-                          Type: {userQuest.quest.questType}
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => {
-                        if (
-                          confirm("Are you sure you want to delete this quest record?")
-                        ) {
-                          deleteUserQuest.mutate({
-                            userId: userId,
-                            questId: userQuest.quest.id,
-                          });
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground">
-                No quests found for this user.
-              </p>
-            )}
-          </div>
-        </TabsContent>
+          </TabsContent>
+        )}
       </Tabs>
     </Confirm2>
   );

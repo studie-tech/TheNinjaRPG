@@ -2,17 +2,29 @@ import { calculateContentDiff } from "@/utils/diff";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { api } from "@/app/_trpc/client";
-import { UserRoles, UserRanks } from "@/drizzle/constants";
+import { UserRanks } from "@/drizzle/constants";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import { updateUserSchema } from "@/validators/user";
+import { canChangeUserRolesTo } from "@/utils/permissions";
 import type { UpdateUserSchema } from "@/validators/user";
 import type { FormEntry } from "@/layout/EditContent";
 
-/**
- * Hook used when creating frontend forms for editing AIs
- * @param data
- */
-export const useUserEditForm = (userId: string, user: UpdateUserSchema) => {
+export interface EditUserPermissions {
+  canEditUsername?: boolean;
+  canEditCustomTitle?: boolean;
+  canEditBloodline?: boolean;
+  canEditVillage?: boolean;
+  canEditRank?: boolean;
+  canEditJutsus?: boolean;
+  canEditItems?: boolean;
+  canEditStaffAccountFlag?: boolean;
+}
+
+export const useUserEditForm = (
+  userId: string,
+  user: UpdateUserSchema,
+  permissions?: EditUserPermissions,
+) => {
   // Form handling
   const form = useForm<UpdateUserSchema>({
     mode: "all",
@@ -22,14 +34,36 @@ export const useUserEditForm = (userId: string, user: UpdateUserSchema) => {
     resolver: zodResolver(updateUserSchema),
   });
 
-  // Query for bloodlines and villages
-  const { data: jutsus, isPending: l1 } = api.jutsu.getAllNames.useQuery(undefined);
-  const { data: items, isPending: l2 } = api.item.getAllNames.useQuery(undefined);
-  const { data: lines, isPending: l3 } = api.bloodline.getAllNames.useQuery(undefined);
-  const { data: villages, isPending: l5 } = api.village.getAllNames.useQuery(undefined);
-  const { data: userJutsus, isPending: l6 } = api.jutsu.getPublicUserJutsus.useQuery({
-    userId: userId,
+  // Permissions with defaults set to true (backwards compatibility)
+  const {
+    canEditUsername = true,
+    canEditCustomTitle = true,
+    canEditBloodline = true,
+    canEditVillage = true,
+    canEditRank = true,
+    canEditJutsus = true,
+    canEditItems = true,
+    canEditStaffAccountFlag = true,
+  } = permissions || {};
+
+  // Conditional queries based on permissions
+  const { data: jutsus, isPending: l1 } = api.jutsu.getAllNames.useQuery(undefined, {
+    enabled: canEditJutsus,
   });
+  const { data: items, isPending: l2 } = api.item.getAllNames.useQuery(undefined, {
+    enabled: canEditItems,
+  });
+  const { data: lines, isPending: l3 } = api.bloodline.getAllNames.useQuery(undefined, {
+    enabled: canEditBloodline,
+  });
+  const { data: villages, isPending: l5 } = api.village.getAllNames.useQuery(
+    undefined,
+    { enabled: canEditVillage },
+  );
+  const { data: userJutsus, isPending: l6 } = api.jutsu.getPublicUserJutsus.useQuery(
+    { userId: userId },
+    { enabled: canEditJutsus },
+  );
 
   // tRPC utility
   const utils = api.useUtils();
@@ -60,34 +94,65 @@ export const useUserEditForm = (userId: string, user: UpdateUserSchema) => {
     (errors) => showFormErrorsToast(errors),
   );
 
-  // Are we loading data
-  const loading = l1 || l2 || l3 || l4 || l5 || l6;
+  const availableRoles = user && canChangeUserRolesTo(user.role);
 
-  // Object for form values
-  const formData: FormEntry<keyof UpdateUserSchema>[] = [
-    { id: "username", type: "text" },
-    { id: "customTitle", type: "text" },
-    { id: "role", type: "str_array", values: UserRoles },
-    { id: "rank", type: "str_array", values: UserRanks },
-    { id: "bloodlineId", type: "db_values", values: lines, resetButton: true },
-    { id: "villageId", type: "db_values", values: villages, resetButton: true },
-    { id: "staffAccount", type: "boolean", label: "Staff Benefits" },
-    {
+  // Build formData based on permissions
+  const formData: FormEntry<keyof UpdateUserSchema>[] = [];
+
+  if (canEditUsername) {
+    formData.push({ id: "username", type: "text" });
+  }
+  if (canEditCustomTitle) {
+    formData.push({ id: "customTitle", type: "text" });
+  }
+  if (availableRoles && availableRoles.length > 0)
+    formData.push({ id: "role", type: "str_array", values: availableRoles });
+  if (canEditRank) {
+    formData.push({ id: "rank", type: "str_array", values: UserRanks });
+  }
+  if (canEditBloodline)
+    formData.push({
+      id: "bloodlineId",
+      type: "db_values",
+      values: lines || [],
+      resetButton: true,
+    });
+  if (canEditVillage)
+    formData.push({
+      id: "villageId",
+      type: "db_values",
+      values: villages || [],
+      resetButton: true,
+    });
+  if (canEditStaffAccountFlag)
+    formData.push({ id: "staffAccount", type: "boolean", label: "Staff Benefits" });
+
+  if (canEditJutsus)
+    formData.push({
       id: "jutsus",
       type: "db_values",
-      values: jutsusWithNames,
+      values: jutsusWithNames || [],
       multiple: true,
       doubleWidth: true,
-    },
-    {
+    });
+  if (canEditItems)
+    formData.push({
       id: "items",
       type: "db_values",
-      values: items,
+      values: items || [],
       multiple: true,
       doubleWidth: true,
-    },
-    { id: "reason", type: "richinput", doubleWidth: true },
-  ];
+    });
+  formData.push({ id: "reason", type: "richinput", doubleWidth: true });
+
+  // Determine if any of the queries we actually executed are loading
+  const loading =
+    l4 ||
+    (canEditJutsus ? l1 : false) ||
+    (canEditItems ? l2 : false) ||
+    (canEditBloodline ? l3 : false) ||
+    (canEditVillage ? l5 : false) ||
+    (canEditJutsus ? l6 : false);
 
   return { user, loading, form, formData, userJutsus, handleUserSubmit };
 };

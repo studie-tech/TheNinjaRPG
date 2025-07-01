@@ -50,7 +50,7 @@ export const canAdministrateWars = (role: UserRole) => {
   return ["CODING-ADMIN", "CONTENT-ADMIN", "CONTENT", "EVENT"].includes(role);
 };
 
-export const canChangeUserRole = (role: UserRole) => {
+export const canChangeUserRolesTo = (role: UserRole) => {
   if (role === "CODING-ADMIN") {
     return UserRoles;
   } else if (role === "CONTENT-ADMIN") {
@@ -61,7 +61,10 @@ export const canChangeUserRole = (role: UserRole) => {
     return ["USER", "CONTENT", "EVENT"];
   } else if (role === "MODERATOR-ADMIN") {
     return ["USER", "HEAD_MODERATOR", "MODERATOR", "JR_MODERATOR"];
+  } else if (role === "HEAD_MODERATOR") {
+    return ["USER", "MODERATOR", "JR_MODERATOR"];
   }
+  return ["USER"];
 };
 
 export const canSwapVillage = (role: UserRole) => {
@@ -230,16 +233,6 @@ export const canClearUserNindo = (user: UserData) => {
   );
 };
 
-export const canEditPublicUser = (user: UserData) => {
-  return [
-    "CONTENT-ADMIN",
-    "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
-    "MODERATOR-ADMIN",
-  ].includes(user.role);
-};
-
 export const canAwardReputation = (role: UserRole) => {
   return ["CODING-ADMIN", "CONTENT-ADMIN"].includes(role);
 };
@@ -320,4 +313,100 @@ export const canInteractWithPolls = (rank: UserRank) => {
 
 export const canClearSectors = (role: UserRole) => {
   return ["CODING-ADMIN", "CONTENT-ADMIN", "CONTENT", "EVENT"].includes(role);
+};
+
+export const canUnequipAllUsers = (user: UserData) => {
+  return [
+    "CONTENT-ADMIN",
+    "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
+    "MODERATOR-ADMIN",
+  ].includes(user.role);
+};
+
+export const canEditUsername = (role: UserRole) => {
+  return [
+    "CONTENT-ADMIN",
+    "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
+    "MODERATOR-ADMIN",
+    "HEAD_MODERATOR",
+    "MODERATOR",
+  ].includes(role);
+};
+
+export const canEditCustomTitle = (role: UserRole) => {
+  return [
+    "CONTENT-ADMIN",
+    "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
+    "MODERATOR-ADMIN",
+  ].includes(role);
+};
+
+export const canEditBloodline = (role: UserRole) => {
+  return [
+    "CONTENT-ADMIN",
+    "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
+    "MODERATOR-ADMIN",
+  ].includes(role);
+};
+
+export const canEditVillage = (role: UserRole) => {
+  return [
+    "CONTENT-ADMIN",
+    "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
+    "MODERATOR-ADMIN",
+  ].includes(role);
+};
+
+export const canEditRank = (role: UserRole) => {
+  return [
+    "CONTENT-ADMIN",
+    "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
+    "MODERATOR-ADMIN",
+  ].includes(role);
+};
+
+export const canEditJutsus = (role: UserRole) => {
+  return [
+    "CONTENT-ADMIN",
+    "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
+    "MODERATOR-ADMIN",
+  ].includes(role);
+};
+
+export const canEditItems = (role: UserRole) => {
+  return [
+    "CONTENT-ADMIN",
+    "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
+    "MODERATOR-ADMIN",
+  ].includes(role);
+};
+
+export const canEditQuests = (role: UserRole) => {
+  return [
+    "CONTENT-ADMIN",
+    "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
+    "MODERATOR-ADMIN",
+  ].includes(role);
+};
+
+export const canEditStaffAccountFlag = (role: UserRole) => {
+  return role === "CODING-ADMIN" || role === "CONTENT-ADMIN";
 };

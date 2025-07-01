@@ -27,11 +27,7 @@ import {
 import { DAY_S, secondsFromDate } from "@/utils/time";
 import { getFreeTransfers } from "@/libs/jutsu";
 import { JutsuValidator } from "@/libs/combat/types";
-import {
-  canChangeContent,
-  canEditPublicUser,
-  canTransferJutsu,
-} from "@/utils/permissions";
+import { canChangeContent, canEditJutsus, canTransferJutsu } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/discord";
 import { createTRPCRouter, errorResponse } from "@/server/api/trpc";
 import { protectedProcedure, publicProcedure } from "@/server/api/trpc";
@@ -465,7 +461,7 @@ export const jutsuRouter = createTRPCRouter({
         fetchUserJutsus(ctx.drizzle, input.userId),
       ]);
       // Guard
-      if (!canEditPublicUser(user)) {
+      if (!canEditJutsus(user.role)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Not allowed to edit public user",
@@ -485,7 +481,7 @@ export const jutsuRouter = createTRPCRouter({
         fetchUserJutsus(ctx.drizzle, input.userId),
       ]);
       // Guard)
-      if (!canEditPublicUser(user)) {
+      if (!canEditJutsus(user.role)) {
         return errorResponse("Not allowed to edit public user");
       }
       const userjutsu = userjutsus.find((j) => j.jutsuId === input.jutsuId);

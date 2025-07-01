@@ -68,7 +68,7 @@ import { UploadButton } from "@/utils/uploadthing";
 import { capUserStats } from "@/libs/profile";
 import { getUserElements } from "@/validators/user";
 import { canSwapBloodline } from "@/utils/permissions";
-import { canSwapVillage, canEditPublicUser } from "@/utils/permissions";
+import { canSwapVillage, canUnequipAllUsers } from "@/utils/permissions";
 import { canClearSectors } from "@/utils/permissions";
 import { useInfinitePagination } from "@/libs/pagination";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
@@ -1717,7 +1717,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
   // Show options
   return (
     <div className="grid grid-cols-3 items-center gap-4 p-4">
-      {canEditPublicUser(user) && (
+      {canUnequipAllUsers(user) && (
         <Confirm2
           title="Confirm Unequip All Gear"
           button={
