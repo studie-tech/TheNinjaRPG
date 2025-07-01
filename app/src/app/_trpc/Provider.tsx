@@ -70,7 +70,7 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
 }
 
 export const onError = (err: unknown) => {
-  console.log("onError", err);
+  console.error("onerror", err);
   if (err instanceof TRPCClientError) {
     toast({
       variant: "destructive",

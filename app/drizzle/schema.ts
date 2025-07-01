@@ -925,6 +925,7 @@ export const item = mysqlTable(
     method: mysqlEnum("method", consts.AttackMethods).default("SINGLE").notNull(),
     cost: int("cost").default(1).notNull(),
     repsCost: int("reputationCost").default(0).notNull(),
+    seichiSilverCost: int("seichiSilverCost").default(0).notNull(),
     stackSize: int("stackSize").default(1).notNull(),
     image: varchar("image", { length: 191 }).notNull(),
     destroyOnUse: tinyint("destroyOnUse").default(0).notNull(),

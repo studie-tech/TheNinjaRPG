@@ -1158,6 +1158,7 @@ export const ItemValidatorRawSchema = z.object({
   cooldown: z.coerce.number().int().min(0).max(300),
   cost: z.coerce.number().int().min(0),
   repsCost: z.coerce.number().int().min(0),
+  seichiSilverCost: z.coerce.number().int().min(0),
   range: z.coerce.number().int().min(0).max(10),
   maxEquips: z.coerce.number().int().min(0).max(10),
   method: z.enum(AttackMethods),

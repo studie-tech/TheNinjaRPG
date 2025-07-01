@@ -179,6 +179,7 @@ export const itemRouter = createTRPCRouter({
             : [eq(item.hidden, false)]),
           gte(item.cost, input.minCost),
           gte(item.repsCost, input.minRepsCost),
+          gte(item.seichiSilverCost, input.minSeichiSilverCost),
         ),
         orderBy: (table, { asc }) => [asc(table.cost), asc(table.repsCost)],
       });
@@ -526,6 +527,7 @@ export const itemRouter = createTRPCRouter({
       }
       const ryoCost = Math.ceil(info.cost * input.stack * factor);
       const repsCost = Math.ceil(info.repsCost * input.stack);
+      const seichiSilverCost = Math.ceil(info.seichiSilverCost * input.stack);
       // Figure out if we equip this
       let equipped: ItemSlot = "NONE";
       const instancesEquipped = useritems.filter(
@@ -548,12 +550,14 @@ export const itemRouter = createTRPCRouter({
         .set({
           money: sql`${userData.money} - ${ryoCost}`,
           reputationPoints: sql`${userData.reputationPoints} - ${repsCost}`,
+          seichiSilver: sql`${userData.seichiSilver} - ${seichiSilverCost}`,
         })
         .where(
           and(
             eq(userData.userId, uid),
             gte(userData.money, ryoCost),
             gte(userData.reputationPoints, repsCost),
+            gte(userData.seichiSilver, seichiSilverCost),
           ),
         );
       if (result.rowsAffected !== 1) {

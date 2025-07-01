@@ -50,7 +50,8 @@ import type { UserWithRelations } from "@/server/api/routers/profile";
 
 export default function BlackMarket() {
   // Tab selection
-  const [tab, setTab] = useState<"Bloodline" | "Item" | "Ryo" | null>(null);
+  const tabs = ["Bloodline", "Item", "Ryo"] as const;
+  const [tab, setTab] = useState<(typeof tabs)[number] | null>(null);
 
   // Settings
   const { data: userData } = useRequiredUserData();
@@ -69,7 +70,7 @@ export default function BlackMarket() {
           <NavTabs
             id="blackmarket-page"
             current={tab}
-            options={["Bloodline", "Item", "Ryo"]}
+            options={tabs}
             setValue={setTab}
           />
         }
@@ -82,7 +83,7 @@ export default function BlackMarket() {
               <i> - Have a bloodline genetically infused.</i>
             </li>
             <li>
-              <i> - Buy special items.</i>
+              <i> - Special items with Seichi silver or Reputation points.</i>
             </li>
             <li>
               <i> - Exchange ryo for reputation points.</i>
@@ -99,6 +100,15 @@ export default function BlackMarket() {
             defaultType="CONSUMABLE"
             initialBreak={true}
             minRepsCost={1}
+            title="Reputation Shop"
+            subtitle="Buy rare items"
+          />
+          <Shop
+            userData={userData}
+            defaultType="CONSUMABLE"
+            initialBreak={true}
+            minSeichiSilverCost={1}
+            title="Seichi Silver Shop"
             subtitle="Buy rare items"
           />
           {PITY_SYSTEM_ENABLED && <PityBloodlineRoll userData={userData} />}
