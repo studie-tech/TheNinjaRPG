@@ -1,0 +1,3 @@
+INSERT INTO `VillageStructure` (`id`, `name`, `image`, `villageId`, `level`, `maxLevel`, `curSp`, `maxSp`, `longitude`, `latitude`, `hasPage`, `anbuSquadsPerLvl`, `arenaRewardPerLvl`, `bankInterestPerLvl`, `blackDiscountPerLvl`, `clansPerLvl`, `hospitalSpeedupPerLvl`, `itemDiscountPerLvl`, `ramenDiscountPerLvl`, `regenIncreasePerLvl`, `sleepRegenPerLvl`, `structureDiscountPerLvl`, `trainBoostPerLvl`, `villageDefencePerLvl`, `patrolsPerLvl`, `baseCost`, `allyAccess`, `route`, `lastUpgradedAt`)
+VALUES
+	('YKbo1OduGfNDYfq5Iv', 'Colosseum', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGgy8KsKRfoVrha0LP4mAS5KM7wtiZbUNXJxd', '1nSqxViGqnXp_xXAPeQMC', 1, 10, 5000, 5000, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10000, 1, '/colosseum', NULL);

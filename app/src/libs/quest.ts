@@ -129,6 +129,9 @@ export const getReward = (
         if (objective.reward_money) {
           rawRewards.reward_money += objective.reward_money;
         }
+        if (objective.reward_seichi_silver) {
+          rawRewards.reward_seichi_silver += objective.reward_seichi_silver;
+        }
         if (objective.reward_clanpoints) {
           rawRewards.reward_clanpoints += objective.reward_clanpoints;
         }
@@ -174,6 +177,9 @@ export const getReward = (
     rawRewards.reward_tokens = Math.floor(rawRewards.reward_tokens * factor);
     rawRewards.reward_prestige = Math.floor(rawRewards.reward_prestige * factor);
     rawRewards.reward_reputation = Math.floor(rawRewards.reward_reputation * factor);
+    rawRewards.reward_seichi_silver = Math.floor(
+      rawRewards.reward_seichi_silver * factor,
+    );
   }
   // Final rewards (some need a bit pose-processing)
   const rewards = postProcessRewards(rawRewards);
@@ -212,6 +218,7 @@ export const collapseRewards = (
 ): ObjectiveRewardType => {
   const collapsed: ObjectiveRewardType = {
     reward_money: 0,
+    reward_seichi_silver: 0,
     reward_clanpoints: 0,
     reward_exp: 0,
     reward_tokens: 0,
@@ -227,6 +234,7 @@ export const collapseRewards = (
   rewards.forEach((reward) => {
     // Sum numeric rewards
     collapsed.reward_money += reward.reward_money;
+    collapsed.reward_seichi_silver += reward.reward_seichi_silver;
     collapsed.reward_clanpoints += reward.reward_clanpoints;
     collapsed.reward_exp += reward.reward_exp;
     collapsed.reward_tokens += reward.reward_tokens;

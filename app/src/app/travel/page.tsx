@@ -29,7 +29,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import { isAtEdge, findNearestEdge } from "@/libs/travel/controls";
 import { calcGlobalTravelTime } from "@/libs/travel/controls";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { showMutationToast } from "@/libs/toast";
+import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -205,7 +205,11 @@ export default function Travel() {
 
   const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
     onSuccess: async (data) => {
-      showMutationToast(data);
+      if (data.success && "rewards" in data && data.rewards) {
+        showRewardToast(data.notifications, data.rewards, data.message, false);
+      } else {
+        showMutationToast(data);
+      }
       if (data.success) {
         await utils.profile.getUser.invalidate();
         await utils.item.getUserItems.invalidate();

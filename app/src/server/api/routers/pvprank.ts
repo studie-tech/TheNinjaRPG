@@ -47,7 +47,12 @@ export const pvpRankRouter = createTRPCRouter({
     );
     const processedRewards = postProcessRewards(collapsedRewards);
     await Promise.all([
-      updateRewards(ctx.drizzle, user, processedRewards),
+      updateRewards({
+        client: ctx.drizzle,
+        user,
+        rewards: processedRewards,
+        reason: "RANKED_REWARDS",
+      }),
       ctx.drizzle
         .update(rankedUserRewards)
         .set({ claimed: true })

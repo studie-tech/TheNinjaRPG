@@ -6,6 +6,7 @@ import { ElementNames } from "@/drizzle/constants";
 import { DateTimeRegExp } from "@/utils/regex";
 import { StatTypes, GeneralTypes, PoolTypes } from "@/drizzle/constants";
 import { MAX_STATS_CAP, MAX_GENS_CAP, USER_CAPS } from "@/drizzle/constants";
+import { rewardFields } from "@/validators/objectives";
 import type { StatType, GeneralType, PoolType, ElementName } from "@/drizzle/constants";
 import type { publicState } from "@/libs/combat/constants";
 import type { StatNames, GenNames } from "@/libs/combat/constants";
@@ -668,6 +669,14 @@ export const RollRandomBloodline = z.object({
   calculation: z.enum(["percentage"]).default("percentage"),
 });
 
+export const NonCombatConsumeRewardTag = z.object({
+  ...BaseAttributes,
+  ...rewardFields,
+  type: z.literal("noncombatconsumereward").default("noncombatconsumereward"),
+  description: msg("Gain various rewards from consumption outside of combat"),
+});
+export type NonCombatConsumeRewardTagType = z.infer<typeof NonCombatConsumeRewardTag>;
+
 export const SealPreventTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
@@ -807,6 +816,7 @@ export const AllTags = z.union([
   MirrorTag.default({}),
   MovePreventTag.default({}),
   MoveTag.default({}),
+  NonCombatConsumeRewardTag.default({}),
   OneHitKillPreventTag.default({}),
   OneHitKillTag.default({}),
   PierceTag.default({}),
@@ -1029,6 +1039,9 @@ const SuperRefineBase = (data: ContentBaseValidatorType, ctx: z.RefinementCtx) =
 const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
   const hasBloodlineRoll = data.effects.find((e) => e.type === "rollbloodline");
   const hasRemoveBloodline = data.effects.find((e) => e.type === "removebloodline");
+  const hasNonCombatConsumeReward = data.effects.find(
+    (e) => e.type === "noncombatconsumereward",
+  );
   if (data.cost === 0 && data.repsCost === 0) {
     addIssue(ctx, "Must have either a ryo or reputation points cost");
   }
@@ -1037,6 +1050,17 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
   }
   if (data.itemType === "CONSUMABLE" && data.destroyOnUse === 0) {
     addIssue(ctx, "Consumable items must be destroyed on use");
+  }
+  if (hasNonCombatConsumeReward) {
+    if (data.itemType !== "CONSUMABLE") {
+      addIssue(ctx, "Non-combat consume reward must be consumable.");
+    }
+    if (data.target !== "SELF") {
+      addIssue(ctx, "Non-combat consume reward must target self");
+    }
+    if (data.method !== "SINGLE") {
+      addIssue(ctx, "Non-combat consume reward must have single method");
+    }
   }
   if (hasBloodlineRoll || hasRemoveBloodline) {
     if (data.itemType !== "CONSUMABLE") {
@@ -1057,8 +1081,14 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
 const SuperRefineJutsu = (data: JutsuValidatorType, ctx: z.RefinementCtx) => {
   const hasBloodlineRoll = data.effects.find((e) => e.type === "rollbloodline");
   const hasRemoveBloodline = data.effects.find((e) => e.type === "removebloodline");
+  const hasNonCombatConsumeReward = data.effects.find(
+    (e) => e.type === "noncombatconsumereward",
+  );
   if (hasBloodlineRoll || hasRemoveBloodline) {
     addIssue(ctx, "Cannot have bloodline add/remove effects on jutsu");
+  }
+  if (hasNonCombatConsumeReward) {
+    addIssue(ctx, "Cannot have non-combat consume reward on jutsu");
   }
 };
 
@@ -1073,6 +1103,8 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
       addIssue(ctx, "powerPerLevel must be 0 for rollbloodline effect");
     } else if (e.type === "removebloodline" && e.powerPerLevel > 0) {
       addIssue(ctx, "powerPerLevel must be 0 for removebloodline effect");
+    } else if (e.type === "noncombatconsumereward" && e.powerPerLevel > 0) {
+      addIssue(ctx, "powerPerLevel must be 0 for noncombatconsumereward effect");
     } else if (e.type === "clone" && e.rounds === 0) {
       addIssue(
         ctx,
@@ -1158,6 +1190,7 @@ export const ItemValidatorRawSchema = z.object({
   cooldown: z.coerce.number().int().min(0).max(300),
   cost: z.coerce.number().int().min(0),
   repsCost: z.coerce.number().int().min(0),
+  seichiSilverCost: z.coerce.number().int().min(0),
   range: z.coerce.number().int().min(0).max(10),
   maxEquips: z.coerce.number().int().min(0).max(10),
   method: z.enum(AttackMethods),

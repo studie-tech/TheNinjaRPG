@@ -98,8 +98,6 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
       ? (props.item.effects as Omit<ZodAllTags, "description">[])
       : [];
 
-  // Extract objectives if they exist
-  const objectives = "content" in props.item ? props.item.content.objectives : [];
   // Define image
   let image =
     "image" in item ? (
@@ -121,7 +119,6 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
 
   // Define rewards from quests if they are there
   const rewards = "content" in item ? getRewardArray(item.content.reward) : [];
-
   return (
     <div className="mb-3 flex flex-row items-center rounded-lg border bg-popover p-2 align-middle shadow-sm ">
       {!hideDetails && !hideImage && (
@@ -657,6 +654,92 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                               ))}
                             </div>
                           </span>
+                        )}
+                      {"reward_items" in parsedEffect &&
+                        parsedEffect.reward_items &&
+                        parsedEffect.reward_items.length > 0 && (
+                          <p>
+                            <b>Reward Items</b>: {parsedEffect.reward_items.length}
+                          </p>
+                        )}
+                      {"reward_jutsus" in parsedEffect &&
+                        parsedEffect.reward_jutsus &&
+                        parsedEffect.reward_jutsus.length > 0 && (
+                          <p>
+                            <b>Reward Jutsus</b>: {parsedEffect.reward_jutsus.length}
+                          </p>
+                        )}
+                      {"reward_bloodlines" in parsedEffect &&
+                        parsedEffect.reward_bloodlines &&
+                        parsedEffect.reward_bloodlines.length > 0 && (
+                          <p>
+                            <b>Reward Bloodlines</b>:{" "}
+                            {parsedEffect.reward_bloodlines.length}
+                          </p>
+                        )}
+                      {"reward_badges" in parsedEffect &&
+                        parsedEffect.reward_badges &&
+                        parsedEffect.reward_badges.length > 0 && (
+                          <p>
+                            <b>Reward Badges</b>: {parsedEffect.reward_badges.length}
+                          </p>
+                        )}
+                      {"reward_money" in parsedEffect &&
+                        parsedEffect.reward_money &&
+                        parsedEffect.reward_money > 0 && (
+                          <p>
+                            <b>Reward Money</b>: {parsedEffect.reward_money}
+                          </p>
+                        )}
+                      {"reward_reputation" in parsedEffect &&
+                        parsedEffect.reward_reputation &&
+                        parsedEffect.reward_reputation > 0 && (
+                          <p>
+                            <b>Reward Reputation</b>: {parsedEffect.reward_reputation}
+                          </p>
+                        )}
+                      {"reward_rank" in parsedEffect &&
+                        parsedEffect.reward_rank &&
+                        parsedEffect.reward_rank !== "NONE" && (
+                          <p>
+                            <b>Reward Rank</b>: {parsedEffect.reward_rank}
+                          </p>
+                        )}
+                      {"reward_tokens" in parsedEffect &&
+                        parsedEffect.reward_tokens &&
+                        parsedEffect.reward_tokens > 0 && (
+                          <p>
+                            <b>Reward Tokens</b>: {parsedEffect.reward_tokens}
+                          </p>
+                        )}
+                      {"reward_prestige" in parsedEffect &&
+                        parsedEffect.reward_prestige &&
+                        parsedEffect.reward_prestige > 0 && (
+                          <p>
+                            <b>Reward Prestige</b>: {parsedEffect.reward_prestige}
+                          </p>
+                        )}
+                      {"reward_clanpoints" in parsedEffect &&
+                        parsedEffect.reward_clanpoints &&
+                        parsedEffect.reward_clanpoints > 0 && (
+                          <p>
+                            <b>Reward Clanpoints</b>: {parsedEffect.reward_clanpoints}
+                          </p>
+                        )}
+                      {"reward_exp" in parsedEffect &&
+                        parsedEffect.reward_exp &&
+                        parsedEffect.reward_exp > 0 && (
+                          <p>
+                            <b>Reward Exp</b>: {parsedEffect.reward_exp}
+                          </p>
+                        )}
+                      {"reward_seichi_silver" in parsedEffect &&
+                        parsedEffect.reward_seichi_silver &&
+                        parsedEffect.reward_seichi_silver > 0 && (
+                          <p>
+                            <b>Reward Seichi Silver</b>:{" "}
+                            {parsedEffect.reward_seichi_silver}
+                          </p>
                         )}
                       {"direction" in parsedEffect &&
                         parsedEffect.direction &&

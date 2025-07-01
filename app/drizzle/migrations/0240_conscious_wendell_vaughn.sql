@@ -1,0 +1,1 @@
+CREATE INDEX `Battle_battleType_createdAt_idx` ON `Battle` (`battleType`,`createdAt`);

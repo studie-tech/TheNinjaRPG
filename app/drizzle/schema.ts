@@ -210,6 +210,10 @@ export const battle = mysqlTable(
   (table) => {
     return {
       idVersionKey: uniqueIndex("Battle_id_version_key").on(table.id, table.version),
+      battleTypeCreatedAt: index("Battle_battleType_createdAt_idx").on(
+        table.battleType,
+        table.createdAt,
+      ),
     };
   },
 );
@@ -925,6 +929,7 @@ export const item = mysqlTable(
     method: mysqlEnum("method", consts.AttackMethods).default("SINGLE").notNull(),
     cost: int("cost").default(1).notNull(),
     repsCost: int("reputationCost").default(0).notNull(),
+    seichiSilverCost: int("seichiSilverCost").default(0).notNull(),
     stackSize: int("stackSize").default(1).notNull(),
     image: varchar("image", { length: 191 }).notNull(),
     destroyOnUse: tinyint("destroyOnUse").default(0).notNull(),
@@ -1455,10 +1460,11 @@ export const userData = mysqlTable(
     bukijutsuOffence: double("bukijutsuOffence").default(10).notNull(),
     statsMultiplier: double("statsMultiplier").default(1).notNull(),
     poolsMultiplier: double("poolsMultiplier").default(1).notNull(),
-    reputationPoints: float("reputationPoints").default(5).notNull(),
     primaryElement: mysqlEnum("primaryElement", consts.ElementNames),
     secondaryElement: mysqlEnum("secondaryElement", consts.ElementNames),
+    reputationPoints: float("reputationPoints").default(5).notNull(),
     reputationPointsTotal: float("reputationPointsTotal").default(5).notNull(),
+    seichiSilver: int("seichiSilver").default(0).notNull(),
     villagePrestige: float("villagePrestige").default(0).notNull(),
     federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses)
       .default("NONE")

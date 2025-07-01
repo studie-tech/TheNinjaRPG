@@ -655,6 +655,7 @@ export const questsRouter = createTRPCRouter({
           sceneCharacters: [],
           objectives: [],
           reward: {
+            reward_seichi_silver: 0,
             reward_money: 0,
             reward_clanpoints: 0,
             reward_exp: 0,
@@ -777,7 +778,13 @@ export const questsRouter = createTRPCRouter({
       // Update database
       const [{ items, jutsus, bloodlines, badges }] = await Promise.all([
         // Update rewards
-        updateRewards(ctx.drizzle, user, rewards, questCounterField),
+        updateRewards({
+          client: ctx.drizzle,
+          user,
+          rewards,
+          questCounterField,
+          reason: "QUEST",
+        }),
         // Update quest history
         resolved
           ? ctx.drizzle
@@ -975,12 +982,15 @@ export const questsRouter = createTRPCRouter({
 /**
  * COMMON QUERIES WHICH ARE REUSED
  */
-export const updateRewards = async (
-  client: DrizzleClient,
-  user: UserData,
-  rewards: GetRewardResult,
-  questCounterField?: QuestCounterFieldName,
-) => {
+export const updateRewards = async (info: {
+  client: DrizzleClient;
+  user: UserData;
+  reason: string;
+  rewards: GetRewardResult;
+  questCounterField?: QuestCounterFieldName;
+}) => {
+  // Destructure
+  const { client, user, rewards, questCounterField, reason } = info;
   // Fetch names from the database
   const [items, jutsus, bloodlines, badges] = await Promise.all([
     // Fetch names from the database
@@ -1039,6 +1049,7 @@ export const updateRewards = async (
   const updatedUserData: Record<string, unknown> = {
     questData: user.questData,
     money: user.money + rewards.reward_money,
+    seichiSilver: user.seichiSilver + rewards.reward_seichi_silver,
     earnedExperience: user.earnedExperience + rewards.reward_exp,
     villagePrestige: user.villagePrestige + rewards.reward_prestige,
     reputationPoints: user.reputationPoints + rewards.reward_reputation,
@@ -1066,7 +1077,7 @@ export const updateRewards = async (
         awardedById: user.userId,
         receiverId: user.userId,
         reputationAmount: rewards.reward_reputation,
-        reason: "QUEST/RANKED_PVP",
+        reason: reason,
       }),
     // Update village tokens
     rewards.reward_tokens > 0 && user.villageId

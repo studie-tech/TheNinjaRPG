@@ -722,6 +722,67 @@ export const combatRouter = createTRPCRouter({
         "SHRINE_WAR",
       );
     }),
+  /**
+   * List all ongoing battles, optionally filtered by battleType.
+   * Defaults to RANKED_PVP if not specified.
+   */
+  listOngoingBattles: protectedProcedure
+    .input(
+      z.object({
+        battleType: z.enum(BattleTypes).default("RANKED_PVP"),
+        limit: z.number().min(1).max(100).default(20),
+        offset: z.number().min(0).default(0),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      // Optimized: fetch only userId, username, avatar from usersState JSON
+      const results = await ctx.drizzle.execute(
+        sql`
+          SELECT 
+            id, battleType, createdAt, round, updatedAt,
+            JSON_EXTRACT(usersState, '$[*].userId') as userIds,
+            JSON_EXTRACT(usersState, '$[*].username') as usernames,
+            JSON_EXTRACT(usersState, '$[*].avatar') as avatars
+          FROM Battle
+          WHERE battleType = ${input.battleType}
+          ORDER BY createdAt DESC
+          LIMIT ${input.limit} OFFSET ${input.offset}
+        `,
+      );
+
+      // Type the raw results from drizzle execute
+      interface RawBattleRow {
+        id: string;
+        battleType: BattleType;
+        createdAt: Date;
+        round: number;
+        updatedAt: Date;
+        userIds: string[] | null;
+        usernames: string[] | null;
+        avatars: string[] | null;
+      }
+
+      // Map the results to the expected format with proper type safety
+      const filteredBattles = (results.rows as unknown as RawBattleRow[]).map((row) => {
+        const users =
+          row?.userIds?.map((userId, i) => ({
+            userId: userId ?? null,
+            username: row?.usernames?.[i] ?? null,
+            avatar: row?.avatars?.[i] ?? null,
+          })) ?? [];
+
+        return {
+          id: row.id,
+          battleType: row.battleType,
+          createdAt: row.createdAt,
+          round: row.round,
+          updatedAt: row.updatedAt,
+          users,
+        };
+      });
+
+      return filteredBattles;
+    }),
 });
 
 /***********************************************

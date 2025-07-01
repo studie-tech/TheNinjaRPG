@@ -549,6 +549,7 @@ export const useCheckRewards = () => {
             notifications.length > 0 ||
             (resolved && quest.successDescription) ||
             rewards.reward_money > 0 ||
+            rewards.reward_seichi_silver > 0 ||
             rewards.reward_clanpoints > 0 ||
             rewards.reward_exp > 0 ||
             rewards.reward_tokens > 0 ||

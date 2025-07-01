@@ -16,6 +16,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
   // Feel free to tweak default props globally here.
   return (
     <SonnerToaster
+      richColors
       visibleToasts={9}
       mobileOffset={{ bottom: "16px" }}
       className="toaster group"

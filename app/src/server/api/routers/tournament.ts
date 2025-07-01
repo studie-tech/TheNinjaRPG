@@ -96,7 +96,12 @@ export const tournamentRouter = createTRPCRouter({
           const winnerId = getWinner(match);
           const winner = await fetchUser(ctx.drizzle, winnerId);
           await Promise.all([
-            updateRewards(ctx.drizzle, winner, finalRewards),
+            updateRewards({
+              client: ctx.drizzle,
+              user: winner,
+              rewards: finalRewards,
+              reason: "TOURNAMENT",
+            }),
             ctx.drizzle.delete(tournament).where(eq(tournament.id, input.tournamentId)),
             ctx.drizzle
               .delete(tournamentMatch)

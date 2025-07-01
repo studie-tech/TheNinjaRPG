@@ -128,6 +128,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
           objectives: newObjectives,
           reward: {
             reward_money: data.reward_money,
+            reward_seichi_silver: data.reward_seichi_silver,
             reward_clanpoints: data.reward_clanpoints,
             reward_exp: data.reward_exp,
             reward_tokens: data.reward_tokens,
@@ -238,6 +239,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
 
   // Rewards
   formData.push({ id: "reward_money", type: "number" });
+  formData.push({ id: "reward_seichi_silver", type: "number" });
   formData.push({ id: "reward_clanpoints", type: "number" });
   formData.push({ id: "reward_exp", type: "number" });
   formData.push({ id: "reward_tokens", type: "number" });

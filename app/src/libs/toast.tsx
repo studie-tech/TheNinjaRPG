@@ -28,8 +28,8 @@ export const showMutationToast = (data: {
         description: data.message,
         variant: data.variant ?? "default",
         action: data.action ?? (
-          <ToastAction 
-            altText="OK" 
+          <ToastAction
+            altText="OK"
             className="bg-green-600 h-5 md:h-10"
             onClick={() => toast.dismiss()}
           >
@@ -43,8 +43,8 @@ export const showMutationToast = (data: {
         description: data.message,
         variant: data.variant ?? "default",
         action: data.action ?? (
-          <ToastAction 
-            altText="OK" 
+          <ToastAction
+            altText="OK"
             className="bg-red-600 h-5 md:h-10"
             onClick={() => toast.dismiss()}
           >
@@ -135,6 +135,11 @@ export const showRewardToast = (
           {rewards.reward_money > 0 && (
             <span>
               <b>Money:</b> {rewards.reward_money} ryo
+            </span>
+          )}
+          {rewards.reward_seichi_silver > 0 && (
+            <span>
+              <b>Seichi Silver:</b> {rewards.reward_seichi_silver}
             </span>
           )}
           {rewards.reward_clanpoints > 0 && (

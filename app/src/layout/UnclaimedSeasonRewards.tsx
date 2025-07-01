@@ -11,7 +11,7 @@ import { showRewardToast } from "@/libs/toast";
 export function UnclaimedSeasonRewards() {
   // Fetch unclaimed rewards for the logged-in user
   const utils = api.useUtils();
-  const { data: unclaimedRewards, isLoading } =
+  const { data: unclaimedRewards } =
     api.pvpRank.getUnclaimedUserSeasonRewards.useQuery(undefined);
 
   // Optional: allow the player to claim all rewards directly from here

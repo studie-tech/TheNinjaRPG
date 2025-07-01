@@ -31,11 +31,12 @@ interface ShopProps {
   initialBreak?: boolean;
   minCost?: number;
   minRepsCost?: number;
+  minSeichiSilverCost?: number;
 }
 
 const Shop: React.FC<ShopProps> = (props) => {
   // Destructure
-  const { userData, defaultType, minCost, minRepsCost } = props;
+  const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost } = props;
 
   // Settings
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -52,6 +53,7 @@ const Shop: React.FC<ShopProps> = (props) => {
     {
       minCost,
       minRepsCost,
+      minSeichiSilverCost,
       eventItems: props.eventItems,
       limit: 500,
       ...getShopFilter(filteringState),
@@ -95,17 +97,27 @@ const Shop: React.FC<ShopProps> = (props) => {
   // Can user afford selected item
   const ryoCost = Math.ceil((item?.cost ?? 0) * stacksize * factor);
   const repsCost = Math.ceil((item?.repsCost ?? 0) * stacksize);
-  const canAfford = userData.money >= ryoCost && userData.reputationPoints >= repsCost;
-  const costString =
-    "Buy for " +
-    (ryoCost > 0 ? ryoCost + " ryo" : "") +
-    (repsCost > 0 ? repsCost + " reputation points" : "");
-  const missingString =
-    "Need " +
-    (ryoCost > userData.money ? ryoCost - userData.money + " more ryo " : "") +
-    (repsCost > userData.reputationPoints
-      ? repsCost - userData.reputationPoints + " more reputation points"
-      : "");
+  const seichiSilverCost = Math.ceil((item?.seichiSilverCost ?? 0) * stacksize);
+  const canAfford =
+    userData.money >= ryoCost &&
+    userData.reputationPoints >= repsCost &&
+    userData.seichiSilver >= seichiSilverCost;
+  const costs = [
+    ...(ryoCost > 0 ? [`${ryoCost} ryo`] : []),
+    ...(repsCost > 0 ? [`${repsCost} reputation points`] : []),
+    ...(seichiSilverCost > 0 ? [`${seichiSilverCost} seichi silver`] : []),
+  ];
+  const missing = [
+    ...(ryoCost > userData.money ? [`${ryoCost - userData.money} more ryo`] : []),
+    ...(repsCost > userData.reputationPoints
+      ? [`${repsCost - userData.reputationPoints} more reputation points`]
+      : []),
+    ...(seichiSilverCost > userData.seichiSilver
+      ? [`${seichiSilverCost - userData.seichiSilver} more seichi silver`]
+      : []),
+  ];
+  const costString = "Buy for " + costs.join(", ");
+  const missingString = "Need " + missing.join(", ");
 
   // Show loaders
   if (!isAwake) return <Loader explanation="Redirecting because not awake" />;

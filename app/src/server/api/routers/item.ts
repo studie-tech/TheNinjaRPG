@@ -29,7 +29,10 @@ import type { UserItemWithItem, UserData } from "@/drizzle/schema";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
-import type { ExecutedQuery } from "@planetscale/database";
+import { postProcessRewards, type PostProcessedRewards } from "@/libs/quest";
+import { updateRewards } from "./quests";
+import { collapseRewards } from "@/libs/quest";
+import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/objectives";
 
 export const itemRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
@@ -179,6 +182,7 @@ export const itemRouter = createTRPCRouter({
             : [eq(item.hidden, false)]),
           gte(item.cost, input.minCost),
           gte(item.repsCost, input.minRepsCost),
+          gte(item.seichiSilverCost, input.minSeichiSilverCost),
         ),
         orderBy: (table, { asc }) => [asc(table.cost), asc(table.repsCost)],
       });
@@ -309,10 +313,9 @@ export const itemRouter = createTRPCRouter({
   // Consume item
   consume: protectedProcedure
     .input(z.object({ userItemId: z.string() }))
-    .output(baseServerResponse.extend({ data: z.unknown().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [updatedUser, useritem, bloodlines, previousRolls] = await Promise.all([
+      const [updatedUser, useritem, allBloodlines, previousRolls] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -345,12 +348,15 @@ export const itemRouter = createTRPCRouter({
       };
       const data: unknown[] = [];
 
+      // Rewards
+      const rewards: ObjectiveRewardType[] = [];
+
       // Calculations
-      const promises: Promise<ExecutedQuery<any[] | Record<string, any>>>[] = [];
+      const promises: Promise<any>[] = [];
       useritem.item.effects.forEach((effect) => {
         if (effect.type === "rollbloodline") {
           const bloodlinePool = filterRollableBloodlines({
-            bloodlines,
+            bloodlines: allBloodlines,
             user,
             previousRolls,
             rank: effect.rank,
@@ -394,6 +400,8 @@ export const itemRouter = createTRPCRouter({
           } else {
             messages.push(`You rolled for a new bloodline, but none was found. `);
           }
+        } else if (effect.type === "noncombatconsumereward") {
+          rewards.push(ObjectiveReward.parse(effect));
         } else if (effect.type === "removebloodline") {
           if (Math.random() * 100 < effect.power) {
             updates.bloodlineId = null;
@@ -455,8 +463,22 @@ export const itemRouter = createTRPCRouter({
           });
         }
       });
+      // Parse rewards
+      let processedRewards: PostProcessedRewards | null = null;
+      if (rewards.length > 0) {
+        const collapsedRewards = collapseRewards(rewards);
+        processedRewards = postProcessRewards(collapsedRewards);
+      }
       // Mutate
-      await Promise.all([
+      const [{ items, jutsus, bloodlines, badges }] = await Promise.all([
+        processedRewards
+          ? updateRewards({
+              client: ctx.drizzle,
+              user,
+              rewards: processedRewards,
+              reason: "ITEM/CONSUME",
+            })
+          : { items: [], jutsus: [], bloodlines: [], badges: [] },
         ctx.drizzle
           .update(userData)
           .set(updates)
@@ -469,11 +491,19 @@ export const itemRouter = createTRPCRouter({
           : ctx.drizzle.delete(userItem).where(eq(userItem.id, input.userItemId)),
         ...promises,
       ]);
+      // Prettify rewards
+      if (processedRewards) {
+        processedRewards.reward_items = items.map((i) => i.name);
+        processedRewards.reward_jutsus = jutsus.map((i) => i.name);
+        processedRewards.reward_bloodlines = bloodlines.map((i) => i.name);
+        processedRewards.reward_badges = badges.map((i) => i.name);
+      }
       // Return
       return {
         success: true,
-        message: `You used ${useritem.item.name}. ${messages.join(". ")}`,
-        data,
+        message: `You used ${useritem.item.name}`,
+        notifications: messages,
+        rewards: processedRewards,
       };
     }),
   // Buy user item
@@ -526,6 +556,7 @@ export const itemRouter = createTRPCRouter({
       }
       const ryoCost = Math.ceil(info.cost * input.stack * factor);
       const repsCost = Math.ceil(info.repsCost * input.stack);
+      const seichiSilverCost = Math.ceil(info.seichiSilverCost * input.stack);
       // Figure out if we equip this
       let equipped: ItemSlot = "NONE";
       const instancesEquipped = useritems.filter(
@@ -548,12 +579,14 @@ export const itemRouter = createTRPCRouter({
         .set({
           money: sql`${userData.money} - ${ryoCost}`,
           reputationPoints: sql`${userData.reputationPoints} - ${repsCost}`,
+          seichiSilver: sql`${userData.seichiSilver} - ${seichiSilverCost}`,
         })
         .where(
           and(
             eq(userData.userId, uid),
             gte(userData.money, ryoCost),
             gte(userData.reputationPoints, repsCost),
+            gte(userData.seichiSilver, seichiSilverCost),
           ),
         );
       if (result.rowsAffected !== 1) {
