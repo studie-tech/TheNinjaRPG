@@ -52,16 +52,16 @@ export const availableUserActions = (
   const isStealth = isUserStealthed(userId, battle?.usersEffects);
   const isImmobilized = isUserImmobilized(userId, battle?.usersEffects);
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
-  // Basic attack & heal
-  const active = user?.basicActions;
-  const original = getBasicActions(user);
+  // Setup basic actions.
+  const current = user?.basicActions;
+  const base = getBasicActions(user);
   const basicActions = {
-    basicAttack: active?.find((ba) => ba.id == "sp") || original.basicAttack,
-    basicHeal: active?.find((ba) => ba.id == "cp") || original.basicHeal,
-    basicMove: active?.find((ba) => ba.id == "move") || original.basicMove,
-    basicClear: active?.find((ba) => ba.id == "clear") || original.basicClear,
-    basicCleanse: active?.find((ba) => ba.id == "cleanse") || original.basicCleanse,
-    basicFlee: active?.find((ba) => ba.id == "flee") || original.basicFlee,
+    basicAttack: current?.find((ba) => ba.id == "sp") || base.basicAttack,
+    basicHeal: current?.find((ba) => ba.id == "cp") || base.basicHeal,
+    basicMove: current?.find((ba) => ba.id == "move") || base.basicMove,
+    basicClear: current?.find((ba) => ba.id == "clear") || base.basicClear,
+    basicCleanse: current?.find((ba) => ba.id == "cleanse") || base.basicCleanse,
+    basicFlee: current?.find((ba) => ba.id == "flee") || base.basicFlee,
   };
   // Concatenate all actions
   let availableActions = [
@@ -88,6 +88,7 @@ export const availableUserActions = (
             range: 0,
             updatedAt: Date.now(),
             cooldown: 0,
+            originalCooldown: 0,
             effects: [],
           },
         ]
@@ -137,7 +138,17 @@ export const availableUserActions = (
       return true;
     });
   }
-
+  // If cooldowns are up, then update cooldown setting to original value
+  availableActions = availableActions.map((a) => {
+    if (a.cooldown && a.cooldown > 0 && a.lastUsedRound) {
+      const roundsPassed = (battle?.round || 0) - a.lastUsedRound;
+      if (roundsPassed >= a.cooldown) {
+        a.cooldown = a.originalCooldown;
+        a.lastUsedRound = -a.cooldown;
+      }
+    }
+    return a;
+  });
   // Return actions
   return availableActions;
 };
@@ -168,6 +179,7 @@ export const getBasicActions = (
       range: 1,
       updatedAt: Date.now(),
       cooldown: 0,
+      originalCooldown: 0,
       lastUsedRound:
         user?.basicActions?.find((ba) => ba.id == "sp")?.lastUsedRound ?? 0,
       level: user?.level,
@@ -197,6 +209,7 @@ export const getBasicActions = (
       range: 0,
       updatedAt: Date.now(),
       cooldown: 5,
+      originalCooldown: 5,
       lastUsedRound:
         user?.basicActions?.find((ba) => ba.id == "cp")?.lastUsedRound ?? -10,
       level: user?.level,
@@ -221,6 +234,7 @@ export const getBasicActions = (
       range: 1,
       updatedAt: Date.now(),
       cooldown: 0,
+      originalCooldown: 0,
       lastUsedRound:
         user?.basicActions?.find((ba) => ba.id == "move")?.lastUsedRound ?? 0,
       healthCost: 0,
@@ -240,6 +254,7 @@ export const getBasicActions = (
       range: 4,
       updatedAt: Date.now(),
       cooldown: 10,
+      originalCooldown: 10,
       lastUsedRound:
         user?.basicActions?.find((ba) => ba.id == "cleanse")?.lastUsedRound ?? -10,
       healthCost: 0,
@@ -259,6 +274,7 @@ export const getBasicActions = (
       range: 4,
       updatedAt: Date.now(),
       cooldown: 10,
+      originalCooldown: 10,
       lastUsedRound:
         user?.basicActions?.find((ba) => ba.id == "clear")?.lastUsedRound ?? -10,
       healthCost: 0,
@@ -278,6 +294,7 @@ export const getBasicActions = (
       range: 0,
       updatedAt: Date.now(),
       cooldown: 0,
+      originalCooldown: 0,
       lastUsedRound:
         user?.basicActions?.find((ba) => ba.id == "flee")?.lastUsedRound ?? 0,
       healthCost: 0.1,
@@ -296,7 +313,7 @@ export const getBasicActions = (
  * @returns The combat action
  */
 export const userItemToAction = (
-  useritem: UserItem & { item: Item; lastUsedRound: number },
+  useritem: UserItem & { item: Item; lastUsedRound: number; originalCooldown: number },
   user: ReturnedUserState,
 ): CombatAction => {
   return {
@@ -310,6 +327,7 @@ export const userItemToAction = (
     range: useritem.item.range,
     updatedAt: new Date(useritem.updatedAt).getTime(),
     cooldown: useritem.item.cooldown,
+    originalCooldown: useritem.originalCooldown,
     lastUsedRound: useritem.lastUsedRound,
     level: user.level,
     healthCost: Math.max(
@@ -337,7 +355,11 @@ export const userItemToAction = (
  * @returns The combat action
  */
 export const userJutsuToAction = (
-  userjutsu: UserJutsu & { jutsu: Jutsu; lastUsedRound: number },
+  userjutsu: UserJutsu & {
+    jutsu: Jutsu;
+    lastUsedRound: number;
+    originalCooldown: number;
+  },
 ): CombatAction => {
   return {
     id: userjutsu.jutsu.id,
@@ -350,6 +372,7 @@ export const userJutsuToAction = (
     range: userjutsu.jutsu.range,
     updatedAt: new Date(userjutsu.updatedAt).getTime(),
     cooldown: userjutsu.jutsu.cooldown,
+    originalCooldown: userjutsu.originalCooldown,
     lastUsedRound: userjutsu.lastUsedRound,
     healthCost: Math.max(
       0,
@@ -775,7 +798,7 @@ export const performBattleAction = (props: {
             // Apply GCD - set to current round and override cooldown to 3
             a.lastUsedRound = battle.round;
 
-            // Store original cooldown and set to 3
+            // Set cooldown of shared tag to 3
             if ("jutsu" in a && a.jutsu) {
               a.jutsu.cooldown = 3;
             } else if ("item" in a && a.item) {

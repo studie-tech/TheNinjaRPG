@@ -1480,6 +1480,7 @@ export const processUsersForBattle = (info: {
       })
       .map((userjutsu) => {
         userjutsu.lastUsedRound = -userjutsu.jutsu.cooldown;
+        userjutsu.originalCooldown = userjutsu.jutsu.cooldown;
         return userjutsu;
       });
 
@@ -1508,7 +1509,11 @@ export const processUsersForBattle = (info: {
     user.keystoneName = keystoneItem?.item.name ?? null;
 
     // Add item effects
-    const items: (UserItem & { item: Item; lastUsedRound: number })[] = [];
+    const items: (UserItem & {
+      item: Item;
+      lastUsedRound: number;
+      originalCooldown: number;
+    })[] = [];
     user.items
       .filter((useritem) => useritem.item && !useritem.item.preventBattleUsage)
       .forEach((useritem) => {
@@ -1540,6 +1545,7 @@ export const processUsersForBattle = (info: {
           }
         } else {
           useritem.lastUsedRound = -useritem.item.cooldown;
+          useritem.originalCooldown = useritem.item.cooldown;
           items.push(useritem);
         }
       });
