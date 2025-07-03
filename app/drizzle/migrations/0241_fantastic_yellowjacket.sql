@@ -1,0 +1,4 @@
+ALTER TABLE `Quest` MODIFY COLUMN `questType` enum('mission','crime','event','exam','errand','tier','daily','achievement','story','medical') NOT NULL;
+ALTER TABLE `QuestHistory` MODIFY COLUMN `questType` enum('mission','crime','event','exam','errand','tier','daily','achievement','story','medical') NOT NULL;
+ALTER TABLE `UserData` MODIFY COLUMN `role` enum('USER','CODING-ADMIN','CONTENT-ADMIN','EVENT-ADMIN','MODERATOR-ADMIN','HEAD_MODERATOR','MODERATOR','JR_MODERATOR','CONTENT','EVENT','CODER') NOT NULL DEFAULT 'USER';
+ALTER TABLE `Quest` ADD `medicalRank` enum('NONE','NOVICE','APPRENTICE','MASTER') DEFAULT 'NONE';

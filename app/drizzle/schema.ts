@@ -2233,6 +2233,7 @@ export const quest = mysqlTable(
     description: varchar("description", { length: 5000 }),
     successDescription: varchar("successDescription", { length: 5000 }),
     questRank: mysqlEnum("questRank", consts.LetterRanks).default("D").notNull(),
+    medicalRank: mysqlEnum("medicalRank", consts.MEDNIN_RANKS).default("NONE"),
     requiredLevel: int("requiredLevel").default(1).notNull(),
     prerequisiteQuestId: varchar("prerequisiteQuestId", { length: 191 }),
     tierLevel: int("tierLevel"),
