@@ -144,7 +144,20 @@ export const availableUserActions = (
       const roundsPassed = (battle?.round || 0) - a.lastUsedRound;
       if (roundsPassed >= a.cooldown) {
         a.cooldown = a.originalCooldown;
-        a.lastUsedRound = -a.cooldown;
+        a.lastUsedRound = -a.originalCooldown;
+        if (a.type === "jutsu") {
+          const entry = user?.jutsus?.find((j) => j.jutsu.id === a.id);
+          if (entry) {
+            entry.jutsu.cooldown = a.originalCooldown;
+            entry.lastUsedRound = -a.originalCooldown;
+          }
+        } else if (a.type === "item") {
+          const entry = user?.items?.find((i) => i.item.id === a.id);
+          if (entry) {
+            entry.item.cooldown = a.originalCooldown;
+            entry.lastUsedRound = -a.originalCooldown;
+          }
+        }
       }
     }
     return a;
