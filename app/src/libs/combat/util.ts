@@ -585,7 +585,7 @@ export const calcBattleResult = (battle: CompleteBattle, userId: string) => {
       let experience = didWin ? eloDiff * expBoost : 0;
       const streakBonus = 1 + user.pvpStreak * 0.05; // 5% per streak
       if (["COMBAT", "TOURNAMENT"].includes(battleType)) {
-        experience *= 4.5;
+        experience *= 10;
         if (battleType === "COMBAT") {
           experience *= streakBonus;
         }
