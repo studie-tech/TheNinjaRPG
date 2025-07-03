@@ -364,6 +364,7 @@ export const QuestTypes = [
   "daily",
   "achievement",
   "story",
+  "medical",
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
 export const QUESTS_CONCURRENT_LIMIT = 4;
@@ -909,6 +910,8 @@ export const IMG_BADGE_COLLECT_ITEM =
   "https://utfs.io/f/Hzww9EQvYURJtxtluhUYJDfpFXWm3nrcPluEtIZqyLkaSV1j";
 export const IMG_BADGE_DEFEAT_OPPONENTS =
   "https://utfs.io/f/Hzww9EQvYURJYwI8YKOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
+export const IMG_BADGE_MEDICAL_EXPERIENCE =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJzr5NPBemvaQu94EYJs8HpxVzofny6iPtbgCZ";
 
 export const IMG_BG_COLISEUM =
   "https://utfs.io/f/Hzww9EQvYURJo5wb6hZ9MPZpHJ7VliuEWDfATdxhv62SXnm4";
@@ -1189,6 +1192,8 @@ export const IMG_MISSION_D =
   "https://utfs.io/f/Hzww9EQvYURJ7r7fFcXKPBOUWGyFuM4DlL1v5HNTZhkte0z6";
 export const IMG_MISSION_E =
   "https://utfs.io/f/Hzww9EQvYURJPAguocQpKeUGyX2kj6u45AOQiSa1zYH0mqZo";
+export const IMG_MISSION_M =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJyweIVKukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
 
 export const IMG_BUILDING_MISSIONHALL =
   "https://utfs.io/f/Hzww9EQvYURJ2TCTWInMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8";
