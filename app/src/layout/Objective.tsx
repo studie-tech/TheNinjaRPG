@@ -196,6 +196,9 @@ export const Reward: React.FC<RewardProps> = (props) => {
   if (info?.reward_seichi_silver) {
     rewards += `${rewards ? ", " : ""} ${info.reward_seichi_silver} Seichi Silver`;
   }
+  if (info?.reward_medical_experience) {
+    rewards += `${rewards ? ", " : ""} ${info.reward_medical_experience} Medical Experience`;
+  }
   return (
     <>
       {rewards && (

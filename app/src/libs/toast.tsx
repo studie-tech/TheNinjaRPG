@@ -167,6 +167,11 @@ export const showRewardToast = (
               <b>Reputation points:</b> {rewards.reward_reputation}
             </span>
           )}
+          {rewards.reward_medical_experience > 0 && (
+            <span>
+              <b>Medical experience:</b> {rewards.reward_medical_experience}
+            </span>
+          )}
           {rewards.reward_jutsus.length > 0 && (
             <span>
               <b>Jutsus: </b> {rewards.reward_jutsus.join(", ")}

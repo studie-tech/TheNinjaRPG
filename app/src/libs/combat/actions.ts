@@ -702,23 +702,6 @@ export const performBattleAction = (props: {
 
   // Update the action state, so as keep state for technique cooldowns
   if (action.cooldown && action.cooldown > 0) {
-    // Restore original cooldowns when GCD expires (run this BEFORE applying new cooldowns)
-    user.jutsus.forEach((jutsu) => {
-      if (jutsu.jutsu.cooldown === 3 && jutsu.lastUsedRound && jutsu.jutsu.originalCooldown !== undefined) {
-        if (battle.round - jutsu.lastUsedRound >= 3) {
-          jutsu.jutsu.cooldown = jutsu.jutsu.originalCooldown;
-        }
-      }
-    });
-    
-    user.items.forEach((item) => {
-      if (item.item.cooldown === 3 && item.lastUsedRound && item.item.originalCooldown !== undefined) {
-        if (battle.round - item.lastUsedRound >= 3) {
-          item.item.cooldown = item.item.originalCooldown;
-        }
-      }
-    });
-
     // Update the last used round for the action
     let actionPerformed;
     switch (action.type) {
@@ -736,6 +719,27 @@ export const performBattleAction = (props: {
 
     // If this action has shared cooldown, update the rounds for all related actions
     if (actionHasSharedCooldown(action)) {
+      // Restore original cooldowns when GCD expires (run this BEFORE applying new cooldowns)
+      user.jutsus.forEach((jutsu) => {
+        if (jutsu.jutsu.cooldown === 3 && jutsu.lastUsedRound && jutsu.jutsu.originalCooldown !== undefined) {
+          if (battle.round - jutsu.lastUsedRound >= 3) {
+            jutsu.jutsu.cooldown = jutsu.jutsu.originalCooldown;
+            // Set lastUsedRound to 0 to prevent GCD from being applied again
+            jutsu.lastUsedRound = 0;
+          }
+        }
+      });
+      
+      user.items.forEach((item) => {
+        if (item.item.cooldown === 3 && item.lastUsedRound && item.item.originalCooldown !== undefined) {
+          if (battle.round - item.lastUsedRound >= 3) {
+            item.item.cooldown = item.item.originalCooldown;
+            // Set lastUsedRound to 0 to prevent GCD from being applied again
+            item.lastUsedRound = 0;
+          }
+        }
+      });
+
       // Get all shared cooldown tags from the current action
       const actionSharedTags = action.effects
         .filter((effect) => tagHasSharedCooldown(effect))
@@ -762,36 +766,56 @@ export const performBattleAction = (props: {
         .filter((a) => a.id !== action.id)
         .forEach((a) => {
           let cooldown = 0;
+          let lastUsedRound = 0;
           if ("jutsu" in a && a.jutsu) {
             cooldown = a.jutsu.cooldown;
+            lastUsedRound = a.lastUsedRound || 0;
           } else if ("item" in a && a.item) {
             cooldown = a.item.cooldown;
+            lastUsedRound = a.lastUsedRound || 0;
           } else if ("cooldown" in a) {
             cooldown = a.cooldown;
+            lastUsedRound = a.lastUsedRound || 0;
           }
-          const newLastUsedRound = battle.round + 3 - cooldown;
-          if (newLastUsedRound > (a.lastUsedRound || -1)) {
-            if (newLastUsedRound <= 0) {
-              // Apply GCD - set to current round and override cooldown to 3
-              a.lastUsedRound = battle.round;
-              
-              // Store original cooldown and set to 3
-              if ("jutsu" in a && a.jutsu) {
-                a.jutsu.originalCooldown = a.jutsu.cooldown;
-                a.jutsu.cooldown = 3;
-              } else if ("item" in a && a.item) {
-                a.item.originalCooldown = a.item.cooldown;
-                a.item.cooldown = 3;
-              } else if ("cooldown" in a) {
-                a.originalCooldown = a.cooldown;
-                a.cooldown = 3;
-              }
-            } else {
-              a.lastUsedRound = newLastUsedRound;
+          
+          // Check if this action is currently on cooldown
+          const roundsSinceLastUsed = battle.round - lastUsedRound;
+          const isOnCooldown = roundsSinceLastUsed < cooldown;
+          
+          // Only apply GCD to actions that are not currently on cooldown
+          if (!isOnCooldown) {
+            // Apply GCD - set to current round and override cooldown to 3
+            a.lastUsedRound = battle.round;
+            
+            // Store original cooldown and set to 3
+            if ("jutsu" in a && a.jutsu) {
+              a.jutsu.originalCooldown = a.jutsu.cooldown;
+              a.jutsu.cooldown = 3;
+            } else if ("item" in a && a.item) {
+              a.item.originalCooldown = a.item.cooldown;
+              a.item.cooldown = 3;
+            } else if ("cooldown" in a) {
+              a.originalCooldown = a.cooldown;
+              a.cooldown = 3;
             }
           }
         });
     }
+  } else {
+    // For actions with no cooldown, just update the last used round without triggering shared cooldowns
+    let actionPerformed;
+    switch (action.type) {
+      case "jutsu":
+        actionPerformed = user.jutsus.find((j) => j.jutsu.id === action.id);
+        break;
+      case "item":
+        actionPerformed = user.items.find((i) => i.item.id === action.id);
+        break;
+      case "basic":
+        actionPerformed = user.basicActions.find((ba) => ba.id === action.id);
+        break;
+    }
+    if (actionPerformed) actionPerformed.lastUsedRound = battle.round;
   }
 
   // Apply relevant effects, and get back new state + active effects

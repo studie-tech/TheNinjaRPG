@@ -111,6 +111,11 @@ const Post: React.FC<PostProps> = (props) => {
         "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent";
       userRole = "bg-purple-400";
       break;
+    case "EVENT-ADMIN":
+      userColor =
+        "bg-linear-to-r from-rose-500 via-rose-300 to-rose-500 bg-clip-text text-transparent";
+      userRole = "bg-rose-300";
+      break;
     case "MODERATOR-ADMIN":
       userColor =
         "bg-linear-to-r from-red-500 via-red-400 to-red-500 bg-clip-text text-transparent";
@@ -151,7 +156,7 @@ const Post: React.FC<PostProps> = (props) => {
         {props.user?.role !== "USER" && (
           <span
             className={`${userRole} p-1 m-1 rounded-md ${
-              ["CODER", "MODERATOR", "JR_MODERATOR"].includes(props.user.role)
+              ["CODER", "MODERATOR", "JR_MODERATOR", "EVENT-ADMIN"].includes(props.user.role)
                 ? "text-black"
                 : ""
             }`}

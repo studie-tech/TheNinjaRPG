@@ -55,7 +55,7 @@ export const canAdministrateWars = (role: UserRole) => {
 
 export const canChangeUserRolesTo = (role: UserRole): UserRole[] => {
   if (role === "CODING-ADMIN") {
-    return UserRoles as unknown as UserRole[];
+    return Array.from(UserRoles);
   } else if (role === "CONTENT-ADMIN") {
     return ["USER", "CONTENT", "CONTENT-ADMIN"];
   } else if (role === "EVENT-ADMIN") {
@@ -64,8 +64,12 @@ export const canChangeUserRolesTo = (role: UserRole): UserRole[] => {
     return ["USER", "HEAD_MODERATOR", "MODERATOR", "JR_MODERATOR"];
   } else if (role === "HEAD_MODERATOR") {
     return ["USER", "MODERATOR", "JR_MODERATOR"];
+  } else if (role === "CONTENT") {
+    return ["CONTENT"];
+  } else if (role === "EVENT") {
+    return ["EVENT"];
   }
-  return ["USER"];
+  return [];
 };
 
 export const canSwapVillage = (role: UserRole) => {

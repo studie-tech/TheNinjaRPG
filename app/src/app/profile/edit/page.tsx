@@ -921,7 +921,7 @@ const SwapVillage: React.FC = () => {
   }
 
   // Derived data
-  const canAfford = userData && userData.reputationPoints >= COST_SWAP_BLOODLINE;
+  const canAfford = userData && userData.reputationPoints >= COST_SWAP_VILLAGE;
 
   // Show component
   return (

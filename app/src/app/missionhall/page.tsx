@@ -29,13 +29,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { cn } from "src/libs/shadui";
+import { calcMedninRank } from "@/libs/hospital/hospital";
 
 export default function MissionHall() {
   const util = api.useUtils();
   const { userData, access } = useRequireInVillage("/missionhall");
 
   const currentQuest = userData?.userQuests?.find(
-    (q) => ["mission", "crime", "errand"].includes(q.quest.questType) && !q.endAt,
+    (q) =>
+      ["mission", "crime", "errand", "medical"].includes(q.quest.questType) && !q.endAt,
   );
   const currentTracker = userData?.questData?.find(
     (q) => q.id === currentQuest?.questId,
@@ -79,6 +82,11 @@ export default function MissionHall() {
   const aRanks = hallData?.filter(
     (m) => m.questType === classifier && m.questRank === "A",
   );
+  const medicalRanks = hallData?.filter((m) => m.questType === "medical");
+  const userMedicalRank = calcMedninRank({
+    medicalExperience: userData.medicalExperience,
+    rank: userData.rank,
+  });
 
   return (
     <ContentBox
@@ -120,28 +128,47 @@ export default function MissionHall() {
       {!currentQuest && !isPending && (
         <div className="grid grid-cols-3 italic p-3 gap-4 text-center">
           {getMissionHallSettings(userData.isOutlaw).map((setting, i) => {
+            // Check is user rank is high enough for this quest
+            const isErrand = setting.type === "errand";
+            const isMedical = setting.type === "medical";
+            const capped = isErrand
+              ? errandsLeft <= 0
+              : userData.dailyMissions >= MISSIONS_PER_DAY;
             // Count how many of this type and rank are available
-            const count =
+            let count =
               hallData?.filter(
                 (point) =>
                   point.questType === setting.type && point.questRank === setting.rank,
               )?.length ?? 0;
-            // Check is user rank is high enough for this quest
-            const isErrand = setting.type === "errand";
-            const isRankAllowed = availableUserRanks.includes(setting.rank) || isErrand;
-            // Completed field on user model
-            const capped = isErrand ? errandsLeft <= 0 : false;
+            count = isMedical
+              ? (medicalRanks?.filter(
+                  (q) =>
+                    q.questRank === setting.rank &&
+                    (q.medicalRank === "NONE" || q.medicalRank === userMedicalRank),
+                )?.length ?? 0)
+              : count;
+            // Checks
+            const rankCheck = availableUserRanks.includes(setting.rank) || isErrand;
+            const medicalCheck = isMedical
+              ? (medicalRanks?.some(
+                  (q) =>
+                    q.questRank === setting.rank &&
+                    (q.medicalRank === "NONE" || q.medicalRank === userMedicalRank),
+                ) ?? false)
+              : true;
+            const grayScale = count === 0 || capped || !rankCheck || !medicalCheck;
+
             if (setting.rank === "A") {
               return (
                 <Popover key={`mission-${i}`}>
                   <PopoverTrigger asChild>
                     <div
                       key={i}
-                      className={
-                        count === 0 || capped || !isRankAllowed
+                      className={cn(
+                        grayScale
                           ? "filter grayscale"
-                          : "hover:cursor-pointer hover:opacity-30"
-                      }
+                          : "hover:cursor-pointer hover:opacity-30",
+                      )}
                     >
                       <Image alt="small" src={setting.image} width={256} height={256} />
                       <p className="font-bold">{setting.name}</p>
@@ -235,82 +262,91 @@ export default function MissionHall() {
               );
             } else {
               return (
-                <AlertDialog key={i}>
-                  <AlertDialogTrigger asChild>
-                    <div
-                      className={
-                        count === 0 ||
-                        !isRankAllowed ||
-                        (!isErrand && userData.dailyMissions >= MISSIONS_PER_DAY)
-                          ? "filter grayscale"
-                          : "hover:cursor-pointer hover:opacity-30"
-                      }
-                    >
-                      <Image alt="small" src={setting.image} width={256} height={256} />
-                      <p className="font-bold">{setting.name}</p>
-                      <p>[Random out of {count} available]</p>
-                      {!isErrand &&
-                        userData.dailyMissions >= 9 &&
-                        userData.dailyMissions < MISSIONS_PER_DAY && (
-                          <p className="text-sm text-yellow-500">40% Rewards</p>
+                <>
+                  {setting.rank === "S" && <div></div>}
+                  <AlertDialog key={i}>
+                    <AlertDialogTrigger asChild>
+                      <div
+                        className={cn(
+                          grayScale
+                            ? "filter grayscale"
+                            : "hover:cursor-pointer hover:opacity-30",
                         )}
-                      {!isErrand && userData.dailyMissions >= MISSIONS_PER_DAY && (
-                        <p className="text-sm text-red-500">Daily Limit Reached</p>
-                      )}
-                    </div>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Accept Random Mission</AlertDialogTitle>
-                      <AlertDialogDescription>
+                      >
+                        <Image
+                          alt="small"
+                          src={setting.image}
+                          width={256}
+                          height={256}
+                        />
+                        <p className="font-bold">{setting.name}</p>
+                        <p>[Random out of {count} available]</p>
+                        {!isErrand &&
+                          userData.dailyMissions >= 9 &&
+                          userData.dailyMissions < MISSIONS_PER_DAY && (
+                            <p className="text-sm text-yellow-500">40% Rewards</p>
+                          )}
+                        {!isErrand && userData.dailyMissions >= MISSIONS_PER_DAY && (
+                          <p className="text-sm text-red-500">Daily Limit Reached</p>
+                        )}
+                      </div>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Accept Random Mission</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {!isErrand && userData.dailyMissions >= MISSIONS_PER_DAY ? (
+                            `You have reached your daily mission limit of ${MISSIONS_PER_DAY} missions. Please try again tomorrow.`
+                          ) : (
+                            <>
+                              Are you sure you want to accept a random{" "}
+                              {isMedical
+                                ? "medical mission"
+                                : `${setting.rank}-rank ${setting.type}`}
+                              ? You can only have one active {classifier} at a time.
+                              {!isErrand && userData.dailyMissions >= 9 && (
+                                <>
+                                  <br />
+                                  <br />
+                                  <span className="text-yellow-500">
+                                    Note: You have already completed 9 missions today.
+                                    This mission will only give 40% of its normal
+                                    rewards.
+                                  </span>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
                         {!isErrand && userData.dailyMissions >= MISSIONS_PER_DAY ? (
-                          `You have reached your daily mission limit of ${MISSIONS_PER_DAY} missions. Please try again tomorrow.`
+                          <AlertDialogAction disabled>
+                            Daily Limit Reached
+                          </AlertDialogAction>
                         ) : (
-                          <>
-                            Are you sure you want to accept a random {setting.rank}-rank{" "}
-                            {setting.type}? You can only have one active mission at a
-                            time.
-                            {!isErrand && userData.dailyMissions >= 9 && (
-                              <>
-                                <br />
-                                <br />
-                                <span className="text-yellow-500">
-                                  Note: You have already completed 9 missions today.
-                                  This mission will only give 40% of its normal rewards.
-                                </span>
-                              </>
-                            )}
-                          </>
+                          <AlertDialogAction
+                            onClick={(e) => {
+                              e.preventDefault();
+                              startRandom({
+                                type: setting.type,
+                                rank: setting.rank,
+                                userLevel: userData.level,
+                                userSector: userData.sector,
+                                userVillageId: userData.isOutlaw
+                                  ? VILLAGE_SYNDICATE_ID
+                                  : userData.villageId,
+                              });
+                            }}
+                          >
+                            Accept Mission
+                          </AlertDialogAction>
                         )}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      {!isErrand && userData.dailyMissions >= MISSIONS_PER_DAY ? (
-                        <AlertDialogAction disabled>
-                          Daily Limit Reached
-                        </AlertDialogAction>
-                      ) : (
-                        <AlertDialogAction
-                          onClick={(e) => {
-                            e.preventDefault();
-                            startRandom({
-                              type: setting.type,
-                              rank: setting.rank,
-                              userLevel: userData.level,
-                              userSector: userData.sector,
-                              userVillageId: userData.isOutlaw
-                                ? VILLAGE_SYNDICATE_ID
-                                : userData.villageId,
-                            });
-                          }}
-                        >
-                          Accept Mission
-                        </AlertDialogAction>
-                      )}
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
               );
             }
           })}

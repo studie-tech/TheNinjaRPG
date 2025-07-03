@@ -4,6 +4,7 @@ import { ObjectiveTracker, QuestTracker } from "@/validators/objectives";
 import { secondsPassed } from "@/utils/time";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
+import { calcMedninRank } from "@/libs/hospital/hospital";
 import {
   IMG_MISSION_S,
   IMG_MISSION_A,
@@ -11,8 +12,11 @@ import {
   IMG_MISSION_C,
   IMG_MISSION_D,
   IMG_MISSION_E,
+  IMG_MISSION_M,
   VILLAGE_SYNDICATE_ID,
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
+  MEDNIN_RANKS,
+  type MEDNIN_RANK,
   type LetterRank,
   type QuestType,
   MAP_TOTAL_SECTORS,
@@ -147,6 +151,9 @@ export const getReward = (
         if (objective.reward_reputation) {
           rawRewards.reward_reputation += objective.reward_reputation;
         }
+        if (objective.reward_medical_experience) {
+          rawRewards.reward_medical_experience += objective.reward_medical_experience;
+        }
         if (objective.reward_jutsus) {
           rawRewards.reward_jutsus.push(...objective.reward_jutsus);
         }
@@ -165,18 +172,20 @@ export const getReward = (
       }
     });
     // Scale rewards
-    const isMissionOrCrime =
-      userQuest.quest.questType === "mission" || userQuest.quest.questType === "crime";
+    const missionLike = ["mission", "crime", "medical"].includes(
+      userQuest.quest.questType,
+    );
     const factor =
-      isMissionOrCrime && user.dailyMissions > 9
-        ? ADDITIONAL_MISSION_REWARD_MULTIPLIER
-        : 1;
+      missionLike && user.dailyMissions > 9 ? ADDITIONAL_MISSION_REWARD_MULTIPLIER : 1;
     rawRewards.reward_money = Math.floor(rawRewards.reward_money * factor);
     rawRewards.reward_clanpoints = Math.floor(rawRewards.reward_clanpoints * factor);
     rawRewards.reward_exp = Math.floor(rawRewards.reward_exp * factor);
     rawRewards.reward_tokens = Math.floor(rawRewards.reward_tokens * factor);
     rawRewards.reward_prestige = Math.floor(rawRewards.reward_prestige * factor);
     rawRewards.reward_reputation = Math.floor(rawRewards.reward_reputation * factor);
+    rawRewards.reward_medical_experience = Math.floor(
+      rawRewards.reward_medical_experience * factor,
+    );
     rawRewards.reward_seichi_silver = Math.floor(
       rawRewards.reward_seichi_silver * factor,
     );
@@ -224,6 +233,7 @@ export const collapseRewards = (
     reward_tokens: 0,
     reward_prestige: 0,
     reward_reputation: 0,
+    reward_medical_experience: 0,
     reward_items: [],
     reward_jutsus: [],
     reward_bloodlines: [],
@@ -240,6 +250,7 @@ export const collapseRewards = (
     collapsed.reward_tokens += reward.reward_tokens;
     collapsed.reward_prestige += reward.reward_prestige;
     collapsed.reward_reputation += reward.reward_reputation;
+    collapsed.reward_medical_experience += reward.reward_medical_experience;
 
     // Concatenate array rewards
     collapsed.reward_items.push(...reward.reward_items);
@@ -433,6 +444,8 @@ export const getNewTrackers = (
           } else if (task === "errands_total") {
             const field = getQuestCounterFieldName("errand", "D");
             if (field) status.value = user[field];
+          } else if (task === "medical_experience") {
+            status.value = user.medicalExperience;
           }
 
           // If opponentAIs is in objective, get the ids
@@ -661,6 +674,14 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
       description: `Errands typically involve simple tasks such as fetching an item somewhere in the village, delivering groceries, etc.`,
     },
     {
+      type: "medical",
+      rank: "D",
+      name: "Medical",
+      image: IMG_MISSION_M,
+      delayMinutes: 5,
+      description: `Medical quests are specialized missions for medical ninja. These quests focus on healing, medical research, and providing medical assistance to the village.`,
+    },
+    {
       type: type,
       rank: "D",
       name: "D-rank",
@@ -796,14 +817,25 @@ export const isAvailableUserQuests = (
     previousAttempts?: number | null;
     previousCompletes?: number | null;
     completed?: number | null;
+    medicalRank?: MEDNIN_RANK | null;
   },
   user: UserData & {
     completedQuests: { id: string; questId: string; completed?: number }[];
   },
   ignorePreviousAttempts = false,
 ) => {
+  // Derived Data
   const maxAttempts = questAndUserQuestInfo.maxAttempts;
   const maxCompletes = questAndUserQuestInfo.maxCompletes;
+  const questMedRank = questAndUserQuestInfo.medicalRank;
+  const userMedRank = calcMedninRank({
+    medicalExperience: user.medicalExperience,
+    rank: user.rank,
+  });
+  const requiredRankIndex = questMedRank ? MEDNIN_RANKS.indexOf(questMedRank) : null;
+  const userRankIndex = MEDNIN_RANKS.indexOf(userMedRank);
+
+  // Checks
   const hideCheck = !questAndUserQuestInfo.hidden || canPlayHiddenQuests(user.role);
   const expiresCheck =
     !questAndUserQuestInfo.endsAt ||
@@ -812,6 +844,9 @@ export const isAvailableUserQuests = (
     !questAndUserQuestInfo.requiredVillage ||
     questAndUserQuestInfo.requiredVillage === user.villageId ||
     (questAndUserQuestInfo.requiredVillage === VILLAGE_SYNDICATE_ID && user.isOutlaw);
+
+  // Medical rank check for quests that require it
+  const medicalRankCheck = !requiredRankIndex || userRankIndex >= requiredRankIndex;
 
   // Event specific tests
   const eventCompletedCheck =
@@ -853,7 +888,8 @@ export const isAvailableUserQuests = (
     villageCheck &&
     prerequisiteCheck &&
     storyCompletedCheck &&
-    storyAttemptsCheck;
+    storyAttemptsCheck &&
+    medicalRankCheck;
 
   // If quest is not available, return the reason
   let message = "";
@@ -865,6 +901,7 @@ export const isAvailableUserQuests = (
   if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
   if (!storyCompletedCheck) message += "Story quest already completed\n";
   if (!storyAttemptsCheck) message += "Story quest has been attempted too many times\n";
+  if (!medicalRankCheck) message += `Quest requires medical rank ${questMedRank}\n`;
   // Returned detailed info on all the checks
   return { check, message };
 };

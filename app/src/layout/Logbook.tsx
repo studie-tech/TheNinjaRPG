@@ -379,7 +379,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
       options={
         <div className="ml-3">
           <div className="mt-2 flex flex-row items-center ">
-            {["mission", "crime", "event", "errand", "story"].includes(
+            {["mission", "crime", "event", "errand", "story", "medical"].includes(
               quest.questType,
             ) && (
               <Confirm2

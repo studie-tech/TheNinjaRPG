@@ -5,6 +5,7 @@ import {
   LetterRanks,
   QuestTypes,
   RetryQuestDelays,
+  MEDNIN_RANKS,
 } from "@/drizzle/constants";
 
 export const SimpleTasks = [
@@ -33,6 +34,8 @@ export const SimpleTasks = [
   "user_level",
   "reputation_points",
   "random_encounter_wins",
+  "medical_experience",
+  "medical_experience_gained",
   //"students_trained",
 ] as const;
 
@@ -83,6 +86,7 @@ export const rewardFields = {
   reward_jutsus: z.array(z.string()).default([]),
   reward_bloodlines: z.array(z.string()).default([]),
   reward_badges: z.array(z.string()).default([]),
+  reward_medical_experience: z.coerce.number().default(0),
 };
 
 export const ObjectiveReward = z.object(rewardFields);
@@ -97,6 +101,7 @@ export const hasReward = (reward: ObjectiveRewardType) => {
     parsedReward.reward_exp > 0 ||
     parsedReward.reward_prestige > 0 ||
     parsedReward.reward_reputation > 0 ||
+    parsedReward.reward_medical_experience > 0 ||
     parsedReward.reward_rank !== "NONE" ||
     parsedReward.reward_items.length > 0 ||
     parsedReward.reward_jutsus.length > 0 ||
@@ -293,6 +298,7 @@ export const QuestValidatorRawSchema = z.object({
   description: z.string().min(1).max(5000).nullable(),
   successDescription: z.string().min(1).max(5000).nullable(),
   questRank: z.enum(LetterRanks).optional(),
+  medicalRank: z.enum(MEDNIN_RANKS).optional().nullish(),
   requiredLevel: z.coerce.number().min(0).max(100).optional(),
   maxLevel: z.coerce.number().min(0).max(100).optional(),
   maxAttempts: z.coerce.number().min(0).max(100).default(1),

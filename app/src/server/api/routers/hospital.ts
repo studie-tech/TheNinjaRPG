@@ -9,6 +9,7 @@ import { calcHealCost } from "@/libs/hospital/hospital";
 import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
 import { fetchStructures } from "@/routers/village";
 import { structureBoost } from "@/utils/village";
+import { getNewTrackers } from "@/libs/quest";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { calcHealthToChakra } from "@/libs/hospital/hospital";
 import { MEDNIN_MIN_RANK } from "@/drizzle/constants";
@@ -106,7 +107,7 @@ export const hospitalRouter = createTRPCRouter({
       // Guard
       if (u.isBanned) return errorResponse("You are banned");
       if (t.isBanned) return errorResponse("Target is banned");
-      if (!["AWAKE", "ASLEEP"].includes(u.status)) {
+      if (u.status !== "AWAKE") {
         return errorResponse("You can't heal while you're not awake");
       }
       if (!MEDNIN_HEALABLE_STATES.find((s) => s === t.status)) {
@@ -124,12 +125,17 @@ export const hospitalRouter = createTRPCRouter({
       if (chakraCost > u.curChakra) {
         return errorResponse("You don't have enough chakra to heal this much");
       }
+      // Update trackers with medical experience gained
+      const { trackers } = getNewTrackers(u, [
+        { task: "medical_experience_gained", increment: expGain },
+      ]);
       // Reduce chakra & give med exp
       const uResult = await ctx.drizzle
         .update(userData)
         .set({
           medicalExperience: sql`${userData.medicalExperience} + ${expGain}`,
           curChakra: sql`${userData.curChakra} - ${chakraCost}`,
+          questData: trackers,
         })
         .where(and(eq(userData.userId, u.userId), gte(userData.curChakra, chakraCost)));
       // If successful deduction
@@ -152,7 +158,7 @@ export const hospitalRouter = createTRPCRouter({
           void updateUserOnMap(pusher, t.sector, t);
           return {
             success: true,
-            message: "You have healed the target user",
+            message: `You have healed the target user${expGain > 0 ? ` and gained ${Math.round(expGain)} medical experience` : ""}`,
             chakraCost,
             expGain,
           };

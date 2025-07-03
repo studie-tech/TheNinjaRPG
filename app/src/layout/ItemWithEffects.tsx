@@ -518,6 +518,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               </div>
             </div>
           )}
+          {/* Show medical rank requirement for quests */}
+          {"medicalRank" in item && item.medicalRank && item.medicalRank !== "NONE" && (
+            <div className="my-2 rounded-lg bg-poppopover p-2">
+              <p>
+                <b>Medical Rank Requirement</b>: {item.medicalRank}
+              </p>
+            </div>
+          )}
           {/* {objectives.length > 0 && (
             <div className={`my-2 rounded-lg bg-poppopover p-2`}>
               <p className="font-bold">Objectives</p>

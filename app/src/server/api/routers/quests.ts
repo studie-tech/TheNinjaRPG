@@ -54,6 +54,7 @@ import {
   controlShownQuestLocationInformation,
   isAvailableUserQuests,
 } from "@/libs/quest";
+import { MEDNIN_RANKS } from "@/drizzle/constants";
 import { QuestTracker } from "@/validators/objectives";
 import type { QuestCounterFieldName } from "@/validators/user";
 import type { SQL } from "drizzle-orm";
@@ -62,6 +63,7 @@ import type { UserData, Quest } from "@/drizzle/schema";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import type { GetRewardResult } from "@/libs/quest";
+import { calcMedninRank } from "@/libs/hospital/hospital";
 import { canEditQuests } from "@/utils/permissions";
 
 export const questsRouter = createTRPCRouter({
@@ -204,7 +206,7 @@ export const questsRouter = createTRPCRouter({
           )
           .where(
             and(
-              inArray(quest.questType, ["mission", "errand", "crime"]),
+              inArray(quest.questType, ["mission", "errand", "crime", "medical"]),
               ...(input.villageId
                 ? [
                     or(
@@ -262,7 +264,7 @@ export const questsRouter = createTRPCRouter({
   startRandom: protectedProcedure
     .input(
       z.object({
-        type: z.enum(["errand", "mission", "crime"]),
+        type: z.enum(["errand", "mission", "crime", "medical"]),
         rank: z.enum(LetterRanks),
         userLevel: z.number(),
         userSector: z.number(),
@@ -337,9 +339,12 @@ export const questsRouter = createTRPCRouter({
       if (!ranks.includes(input.rank) && input.type === "mission") {
         return errorResponse(`Rank ${input.rank} not allowed`);
       }
-      // Confirm user does not have any current active missions/crimes/errands
+
+      // Confirm user does not have any current active missions/crimes/errands/medical
       const current = user?.userQuests?.find(
-        (q) => ["mission", "crime", "errand"].includes(q.quest.questType) && !q.endAt,
+        (q) =>
+          ["mission", "crime", "errand", "medical"].includes(q.quest.questType) &&
+          !q.endAt,
       );
       if (current) {
         return errorResponse(`Already active ${current.questType}`);
@@ -462,7 +467,21 @@ export const questsRouter = createTRPCRouter({
               .join(", ")}. Abandon one to start this quest.`,
           );
         }
-      } else if (["mission", "crime"].includes(questData.questType)) {
+        // Check medical rank requirement for event quests
+        if (questData.medicalRank && questData.medicalRank !== "NONE") {
+          const userMedicalRank = calcMedninRank({
+            medicalExperience: user.medicalExperience,
+            rank: user.rank,
+          });
+          const requiredRankIndex = MEDNIN_RANKS.indexOf(questData.medicalRank);
+          const userRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
+          if (userRankIndex < requiredRankIndex) {
+            return errorResponse(
+              `This event quest requires minimum medical rank ${questData.medicalRank}, but you have ${userMedicalRank}`,
+            );
+          }
+        }
+      } else if (["mission", "crime", "medical"].includes(questData.questType)) {
         if (questData.questRank !== "A") {
           return errorResponse(`Only A rank missions/crimes are allowed`);
         }
@@ -473,7 +492,9 @@ export const questsRouter = createTRPCRouter({
           return errorResponse("Must be in your allied village to start quest");
         }
         const current = user?.userQuests?.find(
-          (q) => ["mission", "crime", "errand"].includes(q.quest.questType) && !q.endAt,
+          (q) =>
+            ["mission", "crime", "errand", "medical"].includes(q.quest.questType) &&
+            !q.endAt,
         );
         if (current) {
           return errorResponse(`Already active ${current.questType}`);
@@ -492,7 +513,7 @@ export const questsRouter = createTRPCRouter({
         incrementDailyQuestCounter(
           ctx.drizzle,
           user,
-          ["mission", "crime"].includes(questData.questType),
+          ["mission", "crime", "medical"].includes(questData.questType),
         ),
       ]);
       return { success: true, message: `Quest started: ${questData.name}` };
@@ -513,7 +534,9 @@ export const questsRouter = createTRPCRouter({
         throw serverError("PRECONDITION_FAILED", `No active quest with id ${input.id}`);
       }
       if (
-        !["mission", "crime", "event", "errand", "story"].includes(current.questType)
+        !["mission", "crime", "event", "errand", "story", "medical"].includes(
+          current.questType,
+        )
       ) {
         throw serverError("PRECONDITION_FAILED", `Cannot abandon ${current.questType}`);
       }
@@ -613,6 +636,7 @@ export const questsRouter = createTRPCRouter({
             ),
           );
         }
+
         // Update database
         await Promise.all([
           ctx.drizzle.update(quest).set(input.data).where(eq(quest.id, entry.id)),
@@ -648,6 +672,7 @@ export const questsRouter = createTRPCRouter({
         image: IMG_AVATAR_DEFAULT,
         description: "",
         questType: "mission",
+        medicalRank: "NONE",
         hidden: true,
         prerequisiteQuestId: "",
         content: {
@@ -655,6 +680,7 @@ export const questsRouter = createTRPCRouter({
           sceneCharacters: [],
           objectives: [],
           reward: {
+            reward_medical_experience: 0,
             reward_seichi_silver: 0,
             reward_money: 0,
             reward_clanpoints: 0,
@@ -1063,6 +1089,7 @@ export const updateRewards = async (info: {
     villagePrestige: user.villagePrestige + rewards.reward_prestige,
     reputationPoints: user.reputationPoints + rewards.reward_reputation,
     reputationPointsTotal: user.reputationPointsTotal + rewards.reward_reputation,
+    medicalExperience: user.medicalExperience + rewards.reward_medical_experience,
     rank: getNewRank ? rewards.reward_rank : user.rank,
   };
   if (questCounterField) {

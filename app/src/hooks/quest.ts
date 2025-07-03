@@ -7,6 +7,7 @@ import {
   QuestTypes,
   UserRanks,
   RetryQuestDelays,
+  MEDNIN_RANKS,
 } from "@/drizzle/constants";
 import { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -131,6 +132,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
             reward_seichi_silver: data.reward_seichi_silver,
             reward_clanpoints: data.reward_clanpoints,
             reward_exp: data.reward_exp,
+            reward_medical_experience: data.reward_medical_experience,
             reward_tokens: data.reward_tokens,
             reward_prestige: data.reward_prestige,
             reward_reputation: data.reward_reputation,
@@ -187,6 +189,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     { id: "consecutiveObjectives", type: "boolean", label: "Sequential Objectives" },
     { id: "questType", type: "str_array", values: QuestTypes },
     { id: "questRank", type: "str_array", values: LetterRanks },
+    { id: "medicalRank", type: "str_array", values: MEDNIN_RANKS },
     { id: "requiredLevel", type: "number" },
     { id: "maxLevel", type: "number", label: "Max Level" },
     {
@@ -245,6 +248,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   formData.push({ id: "reward_tokens", type: "number" });
   formData.push({ id: "reward_prestige", type: "number" });
   formData.push({ id: "reward_reputation", type: "number" });
+  formData.push({ id: "reward_medical_experience", type: "number" });
   formData.push({ id: "reward_rank", type: "str_array", values: UserRanks });
 
   if (bloodlines) {

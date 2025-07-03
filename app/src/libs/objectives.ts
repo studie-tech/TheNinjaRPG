@@ -17,6 +17,7 @@ import {
   IMG_BADGE_DAYS_IN_VILLAGE,
   IMG_BADGE_REPUTATION_POINTS,
   IMG_BADGE_USER_LEVEL,
+  IMG_BADGE_MEDICAL_EXPERIENCE,
   IMG_BADGE_MOVE_TO_LOCATION,
   IMG_BADGE_COLLECT_ITEM,
   IMG_BADGE_DEFEAT_OPPONENTS,
@@ -72,6 +73,10 @@ export const getObjectiveImage = (objective: AllObjectivesType) => {
       return { image: IMG_BADGE_REPUTATION_POINTS, title: "Reputation Bought" };
     case "user_level":
       return { image: IMG_BADGE_USER_LEVEL, title: "User Level" };
+    case "medical_experience":
+      return { image: IMG_BADGE_MEDICAL_EXPERIENCE, title: "Medical Experience" };
+    case "medical_experience_gained":
+      return { image: IMG_BADGE_MEDICAL_EXPERIENCE, title: "Medical Experience Gained" };
     case "move_to_location":
       return { image: IMG_BADGE_MOVE_TO_LOCATION, title: "Travel" };
     case "collect_item":
@@ -399,6 +404,9 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
   }
   if (questReward.reward_reputation) {
     rewards.push(`${questReward.reward_reputation} reputation points`);
+  }
+  if (questReward.reward_medical_experience) {
+    rewards.push(`${questReward.reward_medical_experience} medical experience`);
   }
   return rewards;
 };
