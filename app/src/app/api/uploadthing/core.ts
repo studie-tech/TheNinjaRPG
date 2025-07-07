@@ -153,15 +153,15 @@ const avatarMiddleware = async (fedRequirement?: (typeof FederalStatuses)[number
  * @param userId
  */
 const uploadHistoricalAvatar = async (
-  file: { url: string },
+  file: { ufsUrl: string },
   userId: string,
   updateUser?: boolean,
 ) => {
-  const thumbnailUrl = await createThumbnail(file.url);
+  const thumbnailUrl = await createThumbnail(file.ufsUrl);
   const promises = [
     drizzleDB.insert(historicalAvatar).values({
       replicateId: null,
-      avatar: file.url,
+      avatar: file.ufsUrl,
       avatarLight: thumbnailUrl,
       status: "succeeded",
       userId: userId,
@@ -171,7 +171,7 @@ const uploadHistoricalAvatar = async (
       ? [
           drizzleDB
             .update(userData)
-            .set({ avatar: file.url, avatarLight: thumbnailUrl })
+            .set({ avatar: file.ufsUrl, avatarLight: thumbnailUrl })
             .where(eq(userData.userId, userId)),
         ]
       : []),
