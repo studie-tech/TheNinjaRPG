@@ -1072,6 +1072,7 @@ export const initiateBattle = async (
       user.level = 100;
       user.experience = calcLevelRequirements(100);
       user.rank = "ELITE JONIN";
+      user.medicalExperience = 100000;
     }
 
     // Add achievements to users for tracking
