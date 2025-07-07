@@ -982,7 +982,7 @@ export const initiateBattle = async (
             updatedAt: new Date(),
             userId: user.userId,
             jutsuId: jutsu.id,
-            level: 20,
+            level: 25,
             experience: 0,
             equipped: 1,
             finishTraining: null,
