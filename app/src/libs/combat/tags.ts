@@ -160,8 +160,12 @@ export const copy = (
       };
     }
   } else {
+    const excludedFromTypes = ["bloodline", "armor", "item"];
+    
     const positiveEffects = usersEffects.filter(
-      (e) => e.targetId === target.userId && isPositiveUserEffect(e),
+      (e) => e.targetId === target.userId && 
+             isPositiveUserEffect(e) && 
+             !excludedFromTypes.includes(e.fromType || ""),
     );
     if (positiveEffects.length === 0) {
       return {
@@ -179,7 +183,7 @@ export const copy = (
         copiedEffect.fromEffectId = posEffect.id;
         copiedEffect.targetId = user.userId;
         copiedEffect.creatorId = user.userId;
-        copiedEffect.rounds = 1;
+        copiedEffect.rounds = effect.rounds;
         usersEffects.push(copiedEffect);
       }
     });
