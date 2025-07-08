@@ -159,7 +159,8 @@ export const copy = (
         color: "blue",
       };
     }
-  } else {
+  } else if (effect.isNew && !effect.castThisRound) {
+    // Only copy effects when the effect is first applied (isNew but not castThisRound)
     const excludedFromTypes = ["bloodline", "armor", "item", "village"];
     
     const positiveEffects = usersEffects.filter(
@@ -1828,7 +1829,7 @@ export const stun = (
   target: BattleUserState,
 ) => {
   // Prevent?
-  const { pass } = preventCheck(usersEffects, "stunprevent", target);
+  const { pass } = preventCheck(usersEffects, "stunprevent", target, effect);
   if (!pass) return preventResponse(effect, target, "resisted being stunned");
   // Apply
   const { power } = getPower(effect);
