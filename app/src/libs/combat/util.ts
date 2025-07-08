@@ -307,8 +307,6 @@ export const sortEffects = (
 ) => {
   const ordered: ZodAllTags["type"][] = [
     // Prevents
-    "copy",
-    "mirror",
     "stealth",
     "buffprevent",
     "cleanseprevent",
@@ -359,6 +357,8 @@ export const sortEffects = (
     "reflect",
     "decreaseheal",
     "increaseheal",
+    "copy",
+    "mirror",
     // End-modifiers
     "move",
     "visual",

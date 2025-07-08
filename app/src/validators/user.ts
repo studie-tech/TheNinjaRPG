@@ -48,10 +48,28 @@ export const getUserElements = (user: UserWithRelations) => {
   // Bloodline elements
   const bloodlineElements = getBloodlineElements(user);
   // Create final list of elements
-  const finalElements = bloodlineElements.length > 0 ? bloodlineElements : userElements;
+  let finalElements: ElementName[] = [];
+  
   if (bloodlineElements.length === 1 && userElements.length === 2) {
-    finalElements.push(userElements[1]!);
+    const bloodlineElement = bloodlineElements[0]!;
+    const primaryElement = userElements[0]!;
+    const secondaryElement = userElements[1]!;
+    
+    if (secondaryElement === bloodlineElement) {
+      // Secondary matches bloodline, keep primary and bloodline
+      finalElements = [primaryElement, bloodlineElement];
+    } else {
+      // Secondary doesn't match bloodline, replace primary with bloodline
+      finalElements = [bloodlineElement, secondaryElement];
+    }
+  } else if (bloodlineElements.length > 0) {
+    // Multiple bloodline elements or no secondary element
+    finalElements = bloodlineElements;
+  } else {
+    // No bloodline elements
+    finalElements = userElements;
   }
+  
   finalElements.push("None");
   return Array.from(new Set(finalElements));
 };
