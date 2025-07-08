@@ -171,6 +171,9 @@ export const copy = (
         };
       }
       
+      let copiedCount = 0;
+      const copiedEffects: string[] = [];
+      
       positiveEffects.forEach((posEffect) => {
         const prevCopy = usersEffects.find(
           (e) => e.fromEffectId === posEffect.id && e.rounds && e.rounds > 0,
@@ -183,10 +186,20 @@ export const copy = (
           copiedEffect.creatorId = user.userId;
           copiedEffect.rounds = effect.rounds;
           usersEffects.push(copiedEffect);
+          copiedCount++;
+          
+          // Create description of the copied effect
+          const effectPower = posEffect.power + posEffect.level * posEffect.powerPerLevel;
+          const effectDesc = `${posEffect.type} (${effectPower}${posEffect.calculation === "percentage" ? "%" : ""})`;
+          copiedEffects.push(effectDesc);
         }
       });
       
-      return getInfo(user, effect, `copies positive effects from ${target.username}`);
+      const effectsList = copiedEffects.join(", ");
+      return {
+        txt: `${user.username} copies ${copiedCount} positive effects from ${target.username}: ${effectsList}`,
+        color: "blue",
+      };
     } else {
       return {
         txt: `${user.username} tries to copy positive effects from ${target.username} but fails.`,
@@ -229,6 +242,9 @@ export const mirror = (
         };
       }
       
+      let mirroredCount = 0;
+      const mirroredEffects: string[] = [];
+      
       negativeEffects.forEach((negEffect) => {
         const prevMirror = usersEffects.find(
           (e) => e.fromEffectId === negEffect.id && e.rounds && e.rounds > 0,
@@ -241,10 +257,20 @@ export const mirror = (
           mirroredEffect.creatorId = user.userId;
           mirroredEffect.rounds = effect.rounds;
           usersEffects.push(mirroredEffect);
+          mirroredCount++;
+          
+          // Create description of the mirrored effect
+          const effectPower = negEffect.power + negEffect.level * negEffect.powerPerLevel;
+          const effectDesc = `${negEffect.type} (${effectPower}${negEffect.calculation === "percentage" ? "%" : ""})`;
+          mirroredEffects.push(effectDesc);
         }
       });
       
-      return getInfo(user, effect, `mirrors negative effects onto ${target.username}`);
+      const effectsList = mirroredEffects.join(", ");
+      return {
+        txt: `${user.username} mirrors ${mirroredCount} negative effects onto ${target.username}: ${effectsList}`,
+        color: "blue",
+      };
     } else {
       return {
         txt: `${user.username} tries to mirror negative effects onto ${target.username} but fails.`,
