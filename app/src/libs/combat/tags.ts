@@ -147,11 +147,45 @@ export const copy = (
   user: BattleUserState,
   target: BattleUserState,
 ): ActionEffect | undefined => {
-  // Calcualte chance of success
+  // Check if copy is prevented
+  const { pass } = preventCheck(usersEffects, "buffprevent", user, effect);
+  if (!pass) return preventResponse(effect, user, "cannot copy effects");
+  
+  // Calculate chance of success
   const { power } = getPower(effect);
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
+      const excludedFromTypes = ["bloodline", "armor", "item", "village"];
+      
+      const positiveEffects = usersEffects.filter(
+        (e) => e.targetId === target.userId && 
+               isPositiveUserEffect(e) && 
+               !excludedFromTypes.includes(e.fromType || ""),
+      );
+      
+      if (positiveEffects.length === 0) {
+        return {
+          txt: `${user.username} tries to copy positive effects from ${target.username} but finds no positive effects to copy.`,
+          color: "blue",
+        };
+      }
+      
+      positiveEffects.forEach((posEffect) => {
+        const prevCopy = usersEffects.find(
+          (e) => e.fromEffectId === posEffect.id && e.rounds && e.rounds > 0,
+        );
+        if (!prevCopy) {
+          const copiedEffect = structuredClone(posEffect);
+          copiedEffect.id = nanoid();
+          copiedEffect.fromEffectId = posEffect.id;
+          copiedEffect.targetId = user.userId;
+          copiedEffect.creatorId = user.userId;
+          copiedEffect.rounds = effect.rounds;
+          usersEffects.push(copiedEffect);
+        }
+      });
+      
       return getInfo(user, effect, `copies positive effects from ${target.username}`);
     } else {
       return {
@@ -159,35 +193,6 @@ export const copy = (
         color: "blue",
       };
     }
-  } else if (effect.isNew && !effect.castThisRound) {
-    // Only copy effects when the effect is first applied (isNew but not castThisRound)
-    const excludedFromTypes = ["bloodline", "armor", "item", "village"];
-    
-    const positiveEffects = usersEffects.filter(
-      (e) => e.targetId === target.userId && 
-             isPositiveUserEffect(e) && 
-             !excludedFromTypes.includes(e.fromType || ""),
-    );
-    if (positiveEffects.length === 0) {
-      return {
-        txt: `${user.username} tries to copy positive effects from ${target.username} but finds no positive effects to copy.`,
-        color: "blue",
-      };
-    }
-    positiveEffects.forEach((posEffect) => {
-      const prevCopy = usersEffects.find(
-        (e) => e.fromEffectId === posEffect.id && e.rounds && e.rounds > 0,
-      );
-      if (!prevCopy) {
-        const copiedEffect = structuredClone(posEffect);
-        copiedEffect.id = nanoid();
-        copiedEffect.fromEffectId = posEffect.id;
-        copiedEffect.targetId = user.userId;
-        copiedEffect.creatorId = user.userId;
-        copiedEffect.rounds = effect.rounds;
-        usersEffects.push(copiedEffect);
-      }
-    });
   }
 };
 
