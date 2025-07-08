@@ -1391,7 +1391,8 @@ export const processUsersForBattle = (info: {
     // If in own village, add defence bonus
     const ownSector = user.sector === user.village?.sector;
     const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
-    if (ownSector && inVillage && battleType !== "ARENA") {
+    const excludedBattleTypes = ["ARENA", "RANKED_PVP", "SPARRING"];
+    if (ownSector && inVillage && !excludedBattleTypes.includes(battleType)) {
       const boost = structureBoost("villageDefencePerLvl", user.village?.structures);
       const effect = DecreaseDamageTakenTag.parse({
         target: "SELF",
@@ -1411,6 +1412,7 @@ export const processUsersForBattle = (info: {
       realized.isNew = false;
       realized.castThisRound = false;
       realized.targetId = user.userId;
+      realized.fromType = "village";
       userEffects.push(realized);
     }
 

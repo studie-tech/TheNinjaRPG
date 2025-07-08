@@ -370,7 +370,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           await updateUser({
             currentlyTraining: null,
             trainingStartedAt: null,
-            experience: result.data.experience,
+            experience: userData.experience + result.data.experience,
             dailyTrainings: userData.dailyTrainings + 1,
             [result.data.currentlyTraining]:
               userData[result.data.currentlyTraining] + result.data.experience,

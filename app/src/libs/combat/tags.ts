@@ -160,7 +160,7 @@ export const copy = (
       };
     }
   } else {
-    const excludedFromTypes = ["bloodline", "armor", "item"];
+    const excludedFromTypes = ["bloodline", "armor", "item", "village"];
     
     const positiveEffects = usersEffects.filter(
       (e) => e.targetId === target.userId && 
@@ -1342,7 +1342,7 @@ export const drain = (
   target: BattleUserState,
 ) => {
   // Check if the effect is prevented
-  const { pass } = preventCheck(usersEffects, "debuffprevent", target);
+  const { pass } = preventCheck(usersEffects, "debuffprevent", target, effect);
   if (!pass) return preventResponse(effect, target, "cannot be debuffed");
 
   // Calculate drain amount
@@ -1414,7 +1414,7 @@ export const poison = (
   target: BattleUserState,
   usersEffects: UserEffect[],
 ) => {
-  const { pass } = preventCheck(usersEffects, "debuffprevent", target);
+  const { pass } = preventCheck(usersEffects, "debuffprevent", target, effect);
   if (!pass) return preventResponse(effect, target, "cannot be debuffed");
   const { power, qualifier } = getPower(effect);
 
