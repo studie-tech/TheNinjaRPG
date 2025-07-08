@@ -239,7 +239,7 @@ export const mirror = (
           mirroredEffect.fromEffectId = negEffect.id;
           mirroredEffect.targetId = target.userId;
           mirroredEffect.creatorId = user.userId;
-          mirroredEffect.rounds = 1;
+          mirroredEffect.rounds = effect.rounds;
           usersEffects.push(mirroredEffect);
         }
       });
