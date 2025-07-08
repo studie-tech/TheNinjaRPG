@@ -203,11 +203,47 @@ export const mirror = (
   user: BattleUserState,
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  // Check if mirror is prevented
+  const { pass } = preventCheck(usersEffects, "debuffprevent", target, effect);
+  if (!pass) return preventResponse(effect, target, "cannot be debuffed with mirrored effects");
+  
   // Calculate chance of success
   const { power } = getPower(effect);
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
+      const excludedFromTypes = ["bloodline", "armor", "item", "village"];
+      const excludedEffectTypes = ["damage", "pierce", "clear"];
+      
+      const negativeEffects = usersEffects.filter(
+        (e) => e.targetId === user.userId && 
+               isNegativeUserEffect(e) && 
+               !excludedFromTypes.includes(e.fromType || "") &&
+               !excludedEffectTypes.includes(e.type),
+      );
+      
+      if (negativeEffects.length === 0) {
+        return {
+          txt: `${user.username} tries to mirror negative effects onto ${target.username} but finds no negative effects to reflect.`,
+          color: "blue",
+        };
+      }
+      
+      negativeEffects.forEach((negEffect) => {
+        const prevMirror = usersEffects.find(
+          (e) => e.fromEffectId === negEffect.id && e.rounds && e.rounds > 0,
+        );
+        if (!prevMirror) {
+          const mirroredEffect = structuredClone(negEffect);
+          mirroredEffect.id = nanoid();
+          mirroredEffect.fromEffectId = negEffect.id;
+          mirroredEffect.targetId = target.userId;
+          mirroredEffect.creatorId = user.userId;
+          mirroredEffect.rounds = 1;
+          usersEffects.push(mirroredEffect);
+        }
+      });
+      
       return getInfo(user, effect, `mirrors negative effects onto ${target.username}`);
     } else {
       return {
@@ -215,30 +251,6 @@ export const mirror = (
         color: "blue",
       };
     }
-  } else {
-    const negativeEffects = usersEffects.filter(
-      (e) => e.targetId === user.userId && isNegativeUserEffect(e),
-    );
-    if (negativeEffects.length === 0) {
-      return {
-        txt: `${user.username} tries to mirror negative effects onto ${target.username} but finds no negative effects to reflect.`,
-        color: "blue",
-      };
-    }
-    negativeEffects.forEach((negEffect) => {
-      const prevMirror = usersEffects.find(
-        (e) => e.fromEffectId === negEffect.id && e.rounds && e.rounds > 0,
-      );
-      if (!prevMirror) {
-        const mirroredEffect = structuredClone(negEffect);
-        mirroredEffect.id = nanoid();
-        mirroredEffect.fromEffectId = negEffect.id;
-        mirroredEffect.targetId = target.userId;
-        mirroredEffect.creatorId = user.userId;
-        mirroredEffect.rounds = 1;
-        usersEffects.push(mirroredEffect);
-      }
-    });
   }
 };
 
