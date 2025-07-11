@@ -109,6 +109,14 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
       },
     });
 
+  const { mutate: stopTracking, isPending: isStoppingTracking } =
+    api.bounty.stopTracking.useMutation({
+      onSuccess: async (d) => {
+        showMutationToast(d);
+        await util.bounty.board.invalidate();
+      },
+    });
+
   const onSubmit = (data: CreateBountyFormData) => {
     if (selectedUsers.length === 0) {
       showMutationToast({ success: false, message: "Please select a target user" });
@@ -320,10 +328,15 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
             // User is tracking an open bounty
             if (b.youSignedUp && b.status === "OPEN") {
               return (
-                <Badge className="p-2" variant="outline">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => stopTracking({ bountyId: b.id })}
+                  disabled={isStoppingTracking}
+                >
                   <Eye className="h-4 w-4 mr-2" />
-                  Tracking
-                </Badge>
+                  Stop Tracking
+                </Button>
               );
             }
             if (b.status === "CLAIMED" && b.collectedAt) {

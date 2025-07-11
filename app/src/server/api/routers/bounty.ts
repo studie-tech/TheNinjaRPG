@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { and, eq, sql, gte, desc, inArray } from "drizzle-orm";
+import { and, eq, sql, gte, desc, inArray, or, isNull } from "drizzle-orm";
 import { bounty, bountySignup, userData } from "@/drizzle/schema";
 import {
   BOUNTY_MAX_HUNTERS,
@@ -18,6 +18,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { baseServerResponse, errorResponse } from "../trpc";
 import { fetchUser } from "@/routers/profile";
 import { canSeeHiddenBountyInfo } from "@/utils/permissions";
+import { z } from "zod";
 
 export const bountyRouter = createTRPCRouter({
   // Get open bounty board
@@ -28,38 +29,69 @@ export const bountyRouter = createTRPCRouter({
       const offset = (input.cursor ?? 0) * limit;
       const userId = ctx.userId;
 
-      // Fetch user info and bounty data in parallel for efficiency
-      const [currentUser, results] = await Promise.all([
-        fetchUser(ctx.drizzle, userId),
-        ctx.drizzle.query.bounty.findMany({
-          where: inArray(bounty.status, ["OPEN", "CLAIMED"]),
-          columns: {
-            id: true,
-            amountRyo: true,
-            createdAt: true,
-            status: true,
-            collectedAt: true,
-            claimedAt: true,
-            targetUserId: true,
-            claimedByUserId: true,
-            creatorUserId: true,
-          },
-          with: {
-            target: {
-              columns: {
-                username: true,
-                avatar: true,
-                level: true,
-                rank: true,
-                isOutlaw: true,
-              },
+      // Fetch user info first to determine permissions
+      const currentUser = await fetchUser(ctx.drizzle, userId);
+      const canSeeHiddenInfo = currentUser
+        ? canSeeHiddenBountyInfo(currentUser.role)
+        : false;
+
+      // Fetch bounty data with conditional sensitive information
+      const results = await ctx.drizzle.query.bounty.findMany({
+        where: and(
+          inArray(bounty.status, ["OPEN", "CLAIMED"]),
+          // Hide completed bounties (CLAIMED and collected)
+          or(
+            eq(bounty.status, "OPEN"),
+            and(eq(bounty.status, "CLAIMED"), isNull(bounty.collectedAt))
+          ),
+        ),
+        columns: {
+          id: true,
+          amountRyo: true,
+          createdAt: true,
+          status: true,
+          collectedAt: true,
+          claimedAt: true,
+          targetUserId: true,
+          claimedByUserId: true,
+          // Only include creatorUserId if user has permission
+          ...(canSeeHiddenInfo ? { creatorUserId: true } : {}),
+        },
+        with: {
+          target: {
+            columns: {
+              username: true,
+              avatar: true,
+              level: true,
+              rank: true,
+              isOutlaw: true,
             },
-            hunters: {
-              columns: {
-                hunterUserId: true,
-              },
-              with: {
-                hunter: {
+          },
+          // Always fetch hunters for count, but only include hunter details for staff
+          hunters: {
+            columns: {
+              hunterUserId: true,
+            },
+            ...(canSeeHiddenInfo
+              ? {
+                  with: {
+                    hunter: {
+                      columns: {
+                        username: true,
+                        avatar: true,
+                        level: true,
+                        rank: true,
+                        isOutlaw: true,
+                      },
+                    },
+                  },
+                }
+              : {}),
+          },
+          // Only fetch creator if user has permission
+          ...(canSeeHiddenInfo
+            ? {
+                creator: {
                   columns: {
                     username: true,
                     avatar: true,
@@ -68,42 +100,23 @@ export const bountyRouter = createTRPCRouter({
                     isOutlaw: true,
                   },
                 },
-              },
-            },
-            creator: {
-              columns: {
-                username: true,
-                avatar: true,
-                level: true,
-                rank: true,
-                isOutlaw: true,
-              },
-            },
-          },
-          orderBy: desc(bounty.createdAt),
-          limit,
-          offset,
-        }),
-      ]);
-
-      const canSeeHiddenInfo = currentUser
-        ? canSeeHiddenBountyInfo(currentUser.role)
-        : false;
+              }
+            : {}),
+        },
+        orderBy: desc(bounty.createdAt),
+        limit,
+        offset,
+      });
 
       // Transform results and filter based on permissions
       const transformedResults = results.map((bountyItem) => ({
         ...bountyItem,
-        // Only include creatorUserId if the current user created this bounty OR has permission
-        creatorUserId:
-          bountyItem.creatorUserId === userId || canSeeHiddenInfo
-            ? bountyItem.creatorUserId
-            : undefined,
-        huntersCount: bountyItem.hunters.length,
-        youSignedUp: bountyItem.hunters.some((h) => h.hunterUserId === userId),
+        huntersCount: bountyItem.hunters?.length ?? 0,
+        youSignedUp: bountyItem.hunters?.some((h) => h.hunterUserId === userId) ?? false,
         targetUser: bountyItem.target,
         creatorUser: canSeeHiddenInfo ? bountyItem.creator : undefined,
         huntingUsers: canSeeHiddenInfo
-          ? bountyItem.hunters.map((h) => h.hunter).filter(Boolean)
+          ? bountyItem.hunters?.map((h) => 'hunter' in h ? h.hunter : null).filter(Boolean)
           : undefined,
       }));
 
@@ -210,6 +223,33 @@ export const bountyRouter = createTRPCRouter({
         return errorResponse("Bounty closed");
       await ctx.drizzle.delete(bountySignup).where(eq(bountySignup.id, claim.id));
       return { success: true, message: "Claim withdrawn" };
+    }),
+
+  stopTracking: protectedProcedure
+    .input(z.object({ bountyId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [curBounty, userSignup] = await Promise.all([
+        ctx.drizzle.query.bounty.findFirst({
+          where: eq(bounty.id, input.bountyId),
+        }),
+        ctx.drizzle.query.bountySignup.findFirst({
+          where: and(
+            eq(bountySignup.bountyId, input.bountyId),
+            eq(bountySignup.hunterUserId, ctx.userId),
+          ),
+        }),
+      ]);
+
+      // Guards
+      if (!curBounty) return errorResponse("Bounty not found");
+      if (!userSignup) return errorResponse("You are not tracking this bounty");
+      if (curBounty.status !== "OPEN") return errorResponse("Bounty closed");
+
+      // Stop tracking the bounty
+      await ctx.drizzle.delete(bountySignup).where(eq(bountySignup.id, userSignup.id));
+      return { success: true, message: "Stopped tracking bounty" };
     }),
 
   collect: protectedProcedure
