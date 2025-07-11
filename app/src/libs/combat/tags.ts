@@ -1059,8 +1059,17 @@ export const damageUser = (
 ) => {
   // Store the raw damage before any calculations
   const rawDamage = damageCalc(effect, origin, target, config) * dmgModifier;
+  
   // Calculate the final damage with modifiers
-  const damage = rawDamage * (1 - (effect.barrierAbsorb ?? 0));
+  const thisRound = effect.castThisRound;
+  const instant = thisRound && effect.rounds === 0;
+  const residual = !thisRound && (effect.rounds === undefined || effect.rounds > 0);
+  
+  // Only apply barrier absorption to instant damage, not residual damage
+  const damage = instant 
+    ? rawDamage * (1 - (effect.barrierAbsorb ?? 0))
+    : rawDamage;
+  
   // Find out if target has any weakness tag related to this damage effect
   // const weaknessTags =
   // Fetch types to show to the user
@@ -1071,9 +1080,7 @@ export const damageUser = (
     ...("elements" in effect && effect.elements ? effect.elements : []),
     ...("poolsAffected" in effect && effect.poolsAffected ? effect.poolsAffected : []),
   ];
-  const thisRound = effect.castThisRound;
-  const instant = thisRound && effect.rounds === 0;
-  const residual = !thisRound && (effect.rounds === undefined || effect.rounds > 0);
+  
   if (instant || residual) {
     consequences.set(effect.id, {
       userId: effect.creatorId,

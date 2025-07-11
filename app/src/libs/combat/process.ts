@@ -585,11 +585,16 @@ export const applySingleEffect = (
     effect.targetType === "barrier" &&
     curUser
   ) {
-    const result = damageBarrier(newGroundEffects, curUser, effect, config);
-    if (result) {
-      longitude = result.barrier.longitude;
-      latitude = result.barrier.latitude;
-      actionEffects.push(result.info);
+    // Use the same turn-based logic as user damage
+    const isTargetOrNew = effect.targetId === actorId || effect.isNew;
+    const ratio = calcApplyRatio(effect, battle, effect.targetId, isTargetOrNew);
+    if (ratio > 0) {
+      const result = damageBarrier(newGroundEffects, curUser, effect, config);
+      if (result) {
+        longitude = result.barrier.longitude;
+        latitude = result.barrier.latitude;
+        actionEffects.push(result.info);
+      }
     }
   } else if (effect.targetType === "user" && cacheCheck) {
     // Get the user && effect details
