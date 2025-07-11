@@ -805,9 +805,10 @@ export const performBattleAction = (props: {
           // Check if this action is currently on cooldown
           const roundsSinceLastUsed = battle.round - lastUsedRound;
           const isOnCooldown = roundsSinceLastUsed < cooldown;
+          const turnsRemaining = cooldown - roundsSinceLastUsed;
 
-          // Only apply GCD to actions that are not currently on cooldown
-          if (!isOnCooldown) {
+          // Apply GCD to actions that are not on cooldown, or extend cooldown if less than 3 turns remain
+          if (!isOnCooldown || (isOnCooldown && turnsRemaining < 3)) {
             // Apply GCD - set to current round and override cooldown to 3
             a.lastUsedRound = battle.round;
 
