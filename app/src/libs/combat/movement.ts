@@ -41,6 +41,15 @@ export const isValidMove = (info: {
       return true;
     }
   } else {
+    // Check if the action has a move effect
+    const hasMoveEffect = action.effects.find((e) => e.type === "move");
+    
+    // If there's a move effect, barriers are not targetable
+    if (hasMoveEffect) {
+      return false;
+    }
+    
+    // Otherwise, only allow damage/pierce actions to target barriers
     if (action.effects.find((e) => ["damage", "pierce"].includes(e.type))) {
       return true;
     }
