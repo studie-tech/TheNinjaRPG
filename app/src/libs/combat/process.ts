@@ -585,9 +585,10 @@ export const applySingleEffect = (
     effect.targetType === "barrier" &&
     curUser
   ) {
-    // For barrier damage, always apply residual damage (not just when target is actor)
-    // Barriers should take residual damage once per turn like players
-    const ratio = calcApplyRatio(effect, battle, effect.targetId, true);
+    // For barrier damage, only apply if target is the actor (not if effect is new)
+    // This prevents residual damage from applying to barriers on every action
+    const isTarget = effect.targetId === actorId;
+    const ratio = calcApplyRatio(effect, battle, effect.targetId, isTarget);
     if (ratio > 0) {
       const result = damageBarrier(newGroundEffects, curUser, effect, config);
       if (result) {
