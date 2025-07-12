@@ -69,9 +69,9 @@ export const bountyRouter = createTRPCRouter({
           },
           // Always fetch hunters for count, but only include hunter details for staff
           hunters: {
-            columns: {
+            columns: canSeeHiddenInfo ? {
               hunterUserId: true,
-            },
+            } : {},
             ...(canSeeHiddenInfo
               ? {
                   with: {
@@ -112,7 +112,7 @@ export const bountyRouter = createTRPCRouter({
       const transformedResults = results.map((bountyItem) => ({
         ...bountyItem,
         huntersCount: bountyItem.hunters?.length ?? 0,
-        youSignedUp: bountyItem.hunters?.some((h) => h.hunterUserId === userId) ?? false,
+        youSignedUp: canSeeHiddenInfo ? bountyItem.hunters?.some((h) => 'hunterUserId' in h && h.hunterUserId === userId) ?? false : false,
         targetUser: bountyItem.target,
         creatorUser: canSeeHiddenInfo ? bountyItem.creator : undefined,
         huntingUsers: canSeeHiddenInfo
