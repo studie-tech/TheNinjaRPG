@@ -1105,10 +1105,13 @@ export const damageBarrier = (
   const barrier = groundEffects[idx];
   if (!barrier || !("curHealth" in barrier)) return undefined;
   
-  // Only apply damage if this is an instant effect, not residual
+  // Apply damage for both instant and residual effects
   const thisRound = effect.castThisRound;
   const instant = thisRound && effect.rounds === 0;
-  if (!instant) return undefined; // Don't apply residual damage immediately
+  const residual = !thisRound && (effect.rounds === undefined || effect.rounds > 0);
+  
+  // Only apply damage if this is an instant effect or residual effect
+  if (!instant && !residual) return undefined;
   
   const { power } = getPower(barrier);
   // Create barrier target user stats
