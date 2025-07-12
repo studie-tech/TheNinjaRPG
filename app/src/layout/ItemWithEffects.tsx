@@ -49,7 +49,8 @@ export interface ItemWithEffectsProps {
     | "quest"
     | "badge"
     | "asset"
-    | "backgroundSchema";
+    | "backgroundSchema"
+    | "skillTree";
   showStatistic?: "bloodline" | "item" | "jutsu" | "ai";
   showCopy?: "quest" | "ai";
   show3d?: boolean;

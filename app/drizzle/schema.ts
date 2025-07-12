@@ -385,6 +385,73 @@ export const bloodlineRelations = relations(bloodline, ({ one, many }) => ({
   }),
 }));
 
+export const skillTree = mysqlTable(
+  "SkillTree",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    image: varchar("image", { length: 191 }).notNull(),
+    description: text("description").notNull(),
+    effects: json("effects").$type<ZodAllTags[]>().notNull(),
+    tier: tinyint("tier").default(1).notNull(),
+    requiredSkillIds: json("requiredSkillIds").$type<string[]>().default([]).notNull(),
+    costSkillPoints: int("costSkillPoints").default(1).notNull(),
+    hidden: boolean("hidden").default(false).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      nameKey: uniqueIndex("SkillTree_name_key").on(table.name),
+      tierIdx: index("SkillTree_tier_idx").on(table.tier),
+      hiddenIdx: index("SkillTree_hidden_idx").on(table.hidden),
+    };
+  },
+);
+export type SkillTree = InferSelectModel<typeof skillTree>;
+
+export const skillTreeRelations = relations(skillTree, ({ many }) => ({
+  userSkills: many(userSkill),
+}));
+
+export const userSkill = mysqlTable(
+  "UserSkill",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    skillId: varchar("skillId", { length: 191 }).notNull(),
+    purchasedAt: datetime("purchasedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userSkillKey: uniqueIndex("UserSkill_userId_skillId_key").on(
+        table.userId,
+        table.skillId,
+      ),
+      userIdIdx: index("UserSkill_userId_idx").on(table.userId),
+      skillIdIdx: index("UserSkill_skillId_idx").on(table.skillId),
+    };
+  },
+);
+export type UserSkill = InferSelectModel<typeof userSkill>;
+
+export const userSkillRelations = relations(userSkill, ({ one }) => ({
+  user: one(userData, {
+    fields: [userSkill.userId],
+    references: [userData.userId],
+  }),
+  skill: one(skillTree, {
+    fields: [userSkill.skillId],
+    references: [skillTree.id],
+  }),
+}));
+
 export const bloodlineRolls = mysqlTable(
   "BloodlineRolls",
   {
@@ -1570,6 +1637,7 @@ export const userData = mysqlTable(
     rankedBattles: int("rankedBattles").default(0).notNull(),
     rankedWins: int("rankedWins").default(0).notNull(),
     rankedStreak: int("rankedStreak").default(0).notNull(),
+    skillPoints: int("skillPoints").default(0).notNull(),
   },
   (table) => {
     return {
@@ -1704,6 +1772,7 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   }),
   bounties: many(bounty, { relationName: "bounties" }),
   bountySignups: many(bountySignup),
+  userSkills: many(userSkill),
 }));
 
 export const userActivityEvent = mysqlTable("UserActivityEvent", {

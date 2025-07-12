@@ -264,10 +264,13 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   const { mutate: move, isPending: isMoving } = api.travel.moveInSector.useMutation({
     onSuccess: async (res) => {
-      // Unset target
-      setTarget(null);
+      // Stop moving if failed
+      if (res.success === false) {
+        setTarget(null);
+      }
       // If success without data, then we got attacked
       if (res.success && !res.data) {
+        setTarget(null);
         showMutationToast(res);
         await utils.profile.getUser.invalidate();
       }
@@ -404,8 +407,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       userData?.status === "AWAKE" &&
       origin.current &&
       !isMoving &&
-      !isAttacking &&
-      !target
+      !isAttacking
     ) {
       // Find nearby enemies to attack
       const nearbyEnemies = users.current.filter((user) => {

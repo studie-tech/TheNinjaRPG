@@ -54,7 +54,8 @@ import { calcLevelRequirements } from "@/libs/profile";
 import { activityStreakRewards } from "@/libs/profile";
 import { calcHP, calcSP, calcCP } from "@/libs/profile";
 import { COST_CHANGE_USERNAME, SENSEI_MAX_STUDENT_LEVEL } from "@/drizzle/constants";
-import { MAX_ATTRIBUTES } from "@/drizzle/constants";
+import { UserRolesWithSkillTreeAccess } from "@/drizzle/constants";
+import { MAX_ATTRIBUTES, MAX_SKILL_POINTS } from "@/drizzle/constants";
 import { REGEN_SECONDS } from "@/drizzle/constants";
 import { createStatSchema } from "@/libs/combat/types";
 import { isAvailableUserQuests } from "@/libs/quest";
@@ -279,6 +280,10 @@ export const profileRouter = createTRPCRouter({
     const { trackers } = getNewTrackers(user, [
       { task: "user_level", value: newLevel },
     ]);
+    // Calculate skill points reward for chunin+ ranks - only if under max
+    const isChunin = UserRolesWithSkillTreeAccess.includes(user.rank);
+    const skillPointsGain = isChunin && user.skillPoints < MAX_SKILL_POINTS ? 1 : 0;
+
     const result = await ctx.drizzle
       .update(userData)
       .set({
@@ -287,6 +292,9 @@ export const profileRouter = createTRPCRouter({
         maxStamina: calcSP(newLevel),
         maxChakra: calcCP(newLevel),
         questData: trackers,
+        ...(skillPointsGain > 0
+          ? { skillPoints: sql`${userData.skillPoints} + ${skillPointsGain}` }
+          : {}),
         ...(newLevel > SENSEI_MAX_STUDENT_LEVEL && user.senseiId
           ? { senseiId: null }
           : {}),
@@ -309,7 +317,12 @@ export const profileRouter = createTRPCRouter({
     }
     // Return response
     if (result.rowsAffected === 0) return errorResponse("Could not update level");
-    return { success: true, message: `User leveled up to ${newLevel}` };
+    const skillPointMessage =
+      skillPointsGain > 0 ? ` and gained ${skillPointsGain} skill point!` : "";
+    return {
+      success: true,
+      message: `User leveled up to ${newLevel}${skillPointMessage}`,
+    };
   }),
   // Get all information on logged in user
   getUser: protectedProcedure.query(async ({ ctx }) => {

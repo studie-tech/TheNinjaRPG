@@ -16,6 +16,7 @@ import {
   IMG_MANUAL_AWARDS,
   IMG_MANUAL_POLLS,
   IMG_MANUAL_RANKED,
+  IMG_MANUAL_SKILLTREE,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 
@@ -25,6 +26,7 @@ export default function ManualMain() {
     { name: "travel", img: IMG_MANUAL_TRAVEL },
     { name: "bloodline", img: IMG_MANUAL_BLOODLINE },
     { name: "jutsu", img: IMG_MANUAL_JUTSU },
+    { name: "skillTree", img: IMG_MANUAL_SKILLTREE },
     { name: "item", img: IMG_MANUAL_ITEM },
     { name: "ai", img: IMG_MANUAL_AI },
     { name: "quest", img: IMG_MANUAL_QUEST },

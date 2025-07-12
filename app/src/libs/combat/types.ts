@@ -16,6 +16,7 @@ import type { AnbuSquad } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type { BattleType } from "@/drizzle/constants";
 import type { WarAlly } from "@/drizzle/schema";
+import type { UserSkill, SkillTree } from "@/drizzle/schema";
 import type { BountyStatus } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 
@@ -40,6 +41,7 @@ export type BattleUserState = Omit<NonNullable<UserWithRelations>, "items"> & {
     lastUsedRound: number;
     originalCooldown: number;
   })[];
+  userSkills?: (UserSkill & { skill: SkillTree })[];
   aiProfile: AiProfile;
   round: number;
   loadout?: { jutsuIds: string[] } | null;
@@ -967,7 +969,7 @@ export type UserEffect = BattleEffect & {
   targetId: string;
   fromEffectId?: string;
   fromGround?: boolean;
-  fromType?: "jutsu" | "armor" | "item" | "basic" | "bloodline" | "village";
+  fromType?: "jutsu" | "armor" | "item" | "basic" | "bloodline" | "village" | "skill";
   elements?: ElementName[]; // TODO: Remove this, should already be in the tag
   cpSpent?: number;
   spSpent?: number;
@@ -1172,6 +1174,21 @@ export const BloodlineValidator = z.object({
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
 });
 export type ZodBloodlineType = z.infer<typeof BloodlineValidator>;
+
+/**
+ * SkillTree Type. Used for validating a skill tree object is set up properly
+ */
+export const SkillTreeValidator = z.object({
+  name: z.string(),
+  image: z.string(),
+  description: z.string(),
+  tier: z.coerce.number().int().min(1).max(10),
+  requiredSkillIds: z.array(z.string()),
+  costSkillPoints: z.coerce.number().int().min(1),
+  hidden: z.coerce.boolean().optional(),
+  effects: z.array(AllTags).superRefine(SuperRefineEffects),
+});
+export type ZodSkillTreeType = z.infer<typeof SkillTreeValidator>;
 
 /**
  * Item Type. Used for validating a item object is set up properly

@@ -1475,6 +1475,29 @@ export const processUsersForBattle = (info: {
       });
     }
 
+    // Add skill tree effects
+    if (user.userSkills && user.userSkills.length > 0 && battleType !== "RANKED_PVP") {
+      user.userSkills.forEach((userSkill) => {
+        if (userSkill.skill?.effects) {
+          userSkill.skill.effects.forEach((effect) => {
+            const realized = realizeTag({
+              tag: effect as UserEffect,
+              user: user,
+              actionId: userSkill.skillId,
+              target: user,
+              level: user.level,
+            });
+            realized.isNew = false;
+            realized.castThisRound = false;
+            realized.targetId = user.userId;
+            realized.fromType = "skill";
+            userEffects.push(realized);
+          });
+        }
+      });
+      user.userSkills = []; // Reset to avoid storing in battle table
+    }
+
     // Add users effects to the battle
     if (user.effects.length > 0) {
       user.effects.forEach((effect) => {
@@ -1491,6 +1514,7 @@ export const processUsersForBattle = (info: {
         realized.fromType = "bloodline";
         userEffects.push(realized);
       });
+      user.effects = []; // Reset to avoid storing in battle table
     }
 
     // Set jutsus updatedAt to now (we use it for determining usage cooldowns)

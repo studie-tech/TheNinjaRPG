@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
+All make commands should be run from the root directory `/`, not from `/app`.
+
 **Primary Development:**
 
 - `make start` - Start Next.js dev server at http://127.0.0.1:3000

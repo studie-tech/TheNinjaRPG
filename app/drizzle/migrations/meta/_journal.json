@@ -1716,6 +1716,13 @@
       "when": 1752243185118,
       "tag": "0244_normal_switch",
       "breakpoints": false
+    },
+    {
+      "idx": 245,
+      "version": "5",
+      "when": 1752314476703,
+      "tag": "0245_even_triathlon",
+      "breakpoints": false
     }
   ]
 }

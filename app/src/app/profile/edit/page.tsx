@@ -61,6 +61,7 @@ import { COST_SWAP_BLOODLINE } from "@/drizzle/constants";
 import { COST_SWAP_VILLAGE } from "@/drizzle/constants";
 import { COST_REROLL_ELEMENT } from "@/drizzle/constants";
 import { COST_CHANGE_GENDER } from "@/drizzle/constants";
+import { COST_SKILL_RESET } from "@/drizzle/constants";
 import { round } from "@/utils/math";
 import { genders } from "@/validators/register";
 import { updateUserPreferencesSchema } from "@/validators/user";
@@ -204,6 +205,16 @@ export default function EditProfile() {
           onClick={setActiveElement}
         >
           <ResetStats />
+        </Accordion>
+        <Accordion
+          title="Reset Skills"
+          selectedTitle={activeElement}
+          unselectedSubtitle="Reset all skill tree investments"
+          selectedSubtitle={`You can reset your skill tree and get all spent skill points back for ${COST_SKILL_RESET} reputation points. You
+          have ${userData.reputationPoints} reputation points.`}
+          onClick={setActiveElement}
+        >
+          <ResetSkills />
         </Accordion>
         {emailReminder && (
           <Accordion
@@ -1784,6 +1795,74 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
           </div>
         </Confirm2>
       )}
+    </div>
+  );
+};
+
+/**
+ * Reset skills component
+ */
+const ResetSkills: React.FC = () => {
+  // State
+  const { data: userData } = useRequiredUserData();
+  const utils = api.useUtils();
+
+  // Mutations
+  const { mutate: resetSkills, isPending } = api.skillTree.resetSkillPoints.useMutation(
+    {
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.profile.getUser.invalidate();
+          await utils.skillTree.getUserSkills.invalidate();
+        }
+      },
+    },
+  );
+
+  // Only show if we have userData
+  if (!userData) return <Loader explanation="Loading user" />;
+
+  // Guards
+  const canAfford = userData.reputationPoints >= COST_SKILL_RESET;
+
+  return (
+    <div className="p-4 space-y-4">
+      <div className="space-y-2 pb-4">
+        <p className="text-sm text-muted-foreground">
+          This will reset all your skill tree investments and refund all spent skill
+          points.
+        </p>
+      </div>
+
+      <Confirm2
+        title="Confirm Skill Reset"
+        button={
+          <Button
+            id="reset-skills"
+            type="submit"
+            className="w-full"
+            disabled={!canAfford || isPending}
+            variant={canAfford ? "default" : "destructive"}
+          >
+            {isPending ? (
+              <Loader size={5} />
+            ) : canAfford ? (
+              `Reset Skills for ${COST_SKILL_RESET} Reps`
+            ) : (
+              `Need ${COST_SKILL_RESET - userData.reputationPoints} More Reps`
+            )}
+          </Button>
+        }
+        onAccept={(e) => {
+          e.preventDefault();
+          resetSkills();
+        }}
+      >
+        This will reset all your skill tree investments and refund all spent skill
+        points for {COST_SKILL_RESET} reputation points. This action cannot be undone.
+        Are you sure you want to continue?
+      </Confirm2>
     </div>
   );
 };

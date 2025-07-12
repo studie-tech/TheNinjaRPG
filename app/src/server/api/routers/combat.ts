@@ -910,6 +910,9 @@ export const initiateBattle = async (
           where: (jutsus) => eq(jutsus.equipped, 1),
           orderBy: (table, { desc }) => [desc(table.level)],
         },
+        userSkills: {
+          with: { skill: true },
+        },
         userQuests: {
           where: or(
             and(isNull(questHistory.endAt), eq(questHistory.completed, 0)),
@@ -1155,6 +1158,9 @@ export const initiateBattle = async (
         jutsus: {
           with: { jutsu: true },
           where: (jutsus) => eq(jutsus.equipped, 1),
+        },
+        userSkills: {
+          with: { skill: true },
         },
         aiProfile: true,
       },

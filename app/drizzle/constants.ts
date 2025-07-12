@@ -34,6 +34,7 @@ export const ContentTypes = [
   "jutsu",
   "quest",
   "user",
+  "skillTree",
 ] as const;
 export type ContentType = (typeof ContentTypes)[number];
 
@@ -189,6 +190,9 @@ export const UserRoles = [
   "CODER",
 ] as const;
 export type UserRole = (typeof UserRoles)[number];
+
+export const UserRolesWithSkillTreeAccess = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"];
+export type UserRoleWithSkillTreeAccess = (typeof UserRolesWithSkillTreeAccess)[number];
 
 export const UserStatuses = [
   "AWAKE",
@@ -532,6 +536,7 @@ export const COST_RESET_STATS = 15;
 export const COST_EXTRA_ITEM_SLOT = 10;
 export const COST_EXTRA_JUTSU_SLOT = 50;
 export const COST_REROLL_ELEMENT = 20;
+export const COST_SKILL_RESET = 30;
 export const MAX_EXTRA_JUTSU_SLOTS = 2;
 export const BLOODLINE_ROLL_TYPES = [
   "NATURAL",
@@ -1007,6 +1012,8 @@ export const IMG_MANUAL_BLOODLINE =
   "https://utfs.io/f/Hzww9EQvYURJaCMo8gYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk";
 export const IMG_MANUAL_JUTSU =
   "https://utfs.io/f/Hzww9EQvYURJMI7fE4tsO4cexqW2RDgkE3zZbNXSFGitmnar";
+export const IMG_MANUAL_SKILLTREE =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQB2gVJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
 export const IMG_MANUAL_ITEM =
   "https://utfs.io/f/Hzww9EQvYURJb59vlYAtYUndMi56GkX19q0A4PzyeIloBrEa";
 export const IMG_MANUAL_AI =
@@ -1295,3 +1302,6 @@ export const BOUNTY_STATUSES = ["OPEN", "CLAIMED", "EXPIRED", "CANCELLED"] as co
 export type BountyStatus = (typeof BOUNTY_STATUSES)[number];
 export const BOUNTY_MAX_HUNTERS = 3;
 export const BOUNTY_MIN_AMOUNT = 1000000;
+
+// Skill system constants
+export const MAX_SKILL_POINTS = 20;

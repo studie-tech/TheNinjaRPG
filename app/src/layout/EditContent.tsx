@@ -799,7 +799,7 @@ export const EditContent = <
 
 interface EffectFormWrapperProps {
   idx: number;
-  type: "jutsu" | "bloodline" | "item";
+  type: "jutsu" | "bloodline" | "item" | "skillTree";
   availableTags: readonly string[];
   formClassName?: string;
   hideTagType?: boolean;
