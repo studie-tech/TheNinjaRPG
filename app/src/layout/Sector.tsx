@@ -59,6 +59,7 @@ interface SectorProps {
   target: SectorPoint | null;
   showSorrounding: boolean;
   showActive: boolean;
+  autoAttackMode: boolean;
   setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
   setTarget: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
   setPosition: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
@@ -66,7 +67,7 @@ interface SectorProps {
 
 const Sector: React.FC<SectorProps> = (props) => {
   // Incoming props
-  const { sector, target, showActive } = props;
+  const { sector, target, showActive, autoAttackMode } = props;
   const { setTarget, setPosition } = props;
 
   // State pertaining to the sector
@@ -263,13 +264,10 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   const { mutate: move, isPending: isMoving } = api.travel.moveInSector.useMutation({
     onSuccess: async (res) => {
-      // Stop moving if failed
-      if (res.success === false) {
-        setTarget(null);
-      }
+      // Unset target
+      setTarget(null);
       // If success without data, then we got attacked
       if (res.success && !res.data) {
-        setTarget(null);
         showMutationToast(res);
         await utils.profile.getUser.invalidate();
       }
@@ -397,6 +395,65 @@ const Sector: React.FC<SectorProps> = (props) => {
   useEffect(() => {
     showUsers.current = showActive;
   }, [showActive]);
+
+  // Auto-attack logic for ANBU users
+  useEffect(() => {
+    if (
+      autoAttackMode &&
+      userData?.anbuId &&
+      userData?.status === "AWAKE" &&
+      origin.current &&
+      !isMoving &&
+      !isAttacking &&
+      !target
+    ) {
+      // Find nearby enemies to attack
+      const nearbyEnemies = users.current.filter((user) => {
+        if (!user.userId || user.userId === userData.userId) return false;
+        if (user.status !== "AWAKE") return false;
+
+        // Check if user is an enemy (different village and not ally)
+        const isAlly =
+          user.villageId === userData.villageId || user.allianceStatus === "ALLY";
+
+        if (isAlly) return false;
+
+        // Check if user is in PvP restricted rank
+        if (RANKS_RESTRICTED_FROM_PVP.includes(user.rank)) return false;
+
+        return true;
+      });
+      if (nearbyEnemies.length > 0) {
+        // Find the closest enemy
+        const closestEnemy = nearbyEnemies.reduce((closest, enemy) => {
+          const currentDistance =
+            Math.abs(enemy.longitude - origin.current!.col) +
+            Math.abs(enemy.latitude - origin.current!.row);
+          const closestDistance =
+            Math.abs(closest.longitude - origin.current!.col) +
+            Math.abs(closest.latitude - origin.current!.row);
+
+          return currentDistance < closestDistance ? enemy : closest;
+        });
+        // If on the same tile, attack, otherwise setTarget
+        if (
+          closestEnemy.longitude === origin.current.col &&
+          closestEnemy.latitude === origin.current.row
+        ) {
+          attack({
+            userId: closestEnemy.userId,
+            longitude: closestEnemy.longitude,
+            latitude: closestEnemy.latitude,
+            sector: sector,
+            asset: origin.current?.asset,
+          });
+        } else {
+          setTarget({ x: closestEnemy.longitude, y: closestEnemy.latitude });
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sorrounding]);
 
   // Clear heal target if user moves away or target moves away
   useEffect(() => {

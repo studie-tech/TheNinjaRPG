@@ -22,6 +22,8 @@ import {
   GitMerge,
   MapPinned,
   Cookie,
+  Zap,
+  ZapOff,
 } from "lucide-react";
 import { HousePlus } from "lucide-react";
 import { api } from "@/app/_trpc/client";
@@ -66,6 +68,7 @@ export default function Travel() {
     "showOwnership",
     false,
   );
+  const [autoAttackMode, setAutoAttackMode] = useLocalStorage<boolean>("autoAttackMode", false);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showSorrounding, setShowSorrounding] = useState<boolean>(false);
 
@@ -264,6 +267,7 @@ export default function Travel() {
           target={targetPosition}
           showSorrounding={showSorrounding}
           showActive={showActive}
+          autoAttackMode={autoAttackMode}
           setShowSorrounding={setShowSorrounding}
           setTarget={setTargetPosition}
           setPosition={setCurrentPosition}
@@ -277,6 +281,7 @@ export default function Travel() {
     targetPosition,
     showSorrounding,
     showActive,
+    autoAttackMode,
     villages,
   ]);
 
@@ -310,6 +315,21 @@ export default function Travel() {
           <div className="flex flex-row items-center cursor-pointer">
             {activeTab === sectorLink && (
               <>
+                {userData?.anbuId && (
+                  <>
+                    {autoAttackMode ? (
+                      <Zap
+                        className={`h-7 w-7 mr-2 text-red-500`}
+                        onClick={() => setAutoAttackMode(false)}
+                      />
+                    ) : (
+                      <ZapOff
+                        className={`h-7 w-7 mr-2 hover:text-red-500`}
+                        onClick={() => setAutoAttackMode(true)}
+                      />
+                    )}
+                  </>
+                )}
                 {showActive ? (
                   <Eye
                     className={`h-7 w-7 mr-2 text-orange-500`}
@@ -490,8 +510,14 @@ export default function Travel() {
           </div>
         )}
       </ContentBox>
-      <div className="flex flex-row p-1">
+      <div className="flex flex-row p-1 justify-between items-center">
         {showSector && <LoadoutSelector size="small" />}
+        {showSector && userData?.anbuId && autoAttackMode && (
+          <div className="text-red-500 text-sm font-semibold flex items-center">
+            <Zap className="h-4 w-4 mr-1" />
+            Auto-Attack: Scanning for enemies to hunt...
+          </div>
+        )}
       </div>
       {shownConsumables && shownConsumables.length > 0 && (
         <div className="flex flex-col">

@@ -710,10 +710,10 @@ export const profileRouter = createTRPCRouter({
       // Role-change permissions (availableRoles) still apply below
       const roleChanged = input.data.role !== target.role;
       const availableRoles = canChangeUserRolesTo(user.role);
-      if (!availableRoles.includes(target.role)) {
+      if (roleChanged && !availableRoles.includes(target.role)) {
         return errorResponse(`Not allowed to change: ${target.role}`);
       }
-      if (!availableRoles.includes(input.data.role)) {
+      if (roleChanged && !availableRoles.includes(input.data.role)) {
         return errorResponse(`Only available roles: ${availableRoles.join(", ")}`);
       }
       if (village.id !== target.villageId) {
