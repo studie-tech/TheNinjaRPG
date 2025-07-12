@@ -29,6 +29,14 @@ import {
 import type { z } from "zod";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 
+// Type for hunter user data
+type HunterUser = {
+  username: string;
+  level: number;
+  rank: "STUDENT" | "GENIN" | "CHUNIN" | "JONIN" | "ELITE JONIN" | "ELDER" | "NONE";
+  isOutlaw: boolean;
+};
+
 type CreateBountyFormData = z.infer<typeof createBountySchema>;
 type UserSearchFormData = z.infer<ReturnType<typeof getSearchValidator>>;
 
@@ -267,7 +275,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
           ) : undefined,
           huntingInfo: b.huntingUsers ? (
             <div className="space-y-1">
-              {b.huntingUsers.map((hunter, idx) => (
+              {(b.huntingUsers as HunterUser[]).map((hunter, idx) => (
                 <div key={idx} className="text-sm">
                   <p className="font-medium">{hunter.username}</p>
                   <p className="text-xs text-gray-600">
@@ -286,7 +294,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
           ) : undefined,
           actionButton: (() => {
             // User can retract if they created the bounty and it's still open
-            if (b.creatorUserId === userData?.userId && b.status === "OPEN") {
+            if ('creatorUserId' in b && b.creatorUserId === userData?.userId && b.status === "OPEN") {
               return (
                 <Button
                   size="sm"
