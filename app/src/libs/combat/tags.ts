@@ -1104,6 +1104,12 @@ export const damageBarrier = (
   const idx = groundEffects.findIndex((g) => g.id === effect.targetId);
   const barrier = groundEffects[idx];
   if (!barrier || !("curHealth" in barrier)) return undefined;
+  
+  // Only apply damage if this is an instant effect, not residual
+  const thisRound = effect.castThisRound;
+  const instant = thisRound && effect.rounds === 0;
+  if (!instant) return undefined; // Don't apply residual damage immediately
+  
   const { power } = getPower(barrier);
   // Create barrier target user stats
   const target = structuredClone(origin);
