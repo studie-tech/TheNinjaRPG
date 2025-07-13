@@ -29,69 +29,45 @@ export const bountyRouter = createTRPCRouter({
       const offset = (input.cursor ?? 0) * limit;
       const userId = ctx.userId;
 
-      // Fetch user info first to determine permissions
-      const currentUser = await fetchUser(ctx.drizzle, userId);
-      const canSeeHiddenInfo = currentUser
-        ? canSeeHiddenBountyInfo(currentUser.role)
-        : false;
-
-      // Fetch bounty data with conditional sensitive information
-      const results = await ctx.drizzle.query.bounty.findMany({
-        where: and(
-          inArray(bounty.status, ["OPEN", "CLAIMED"]),
-          // Hide completed bounties (CLAIMED and collected)
-          or(
-            eq(bounty.status, "OPEN"),
-            and(eq(bounty.status, "CLAIMED"), isNull(bounty.collectedAt))
+      // Fetch user and bounties in parallel for efficiency
+      const [currentUser, results] = await Promise.all([
+        fetchUser(ctx.drizzle, userId),
+        ctx.drizzle.query.bounty.findMany({
+          where: and(
+            inArray(bounty.status, ["OPEN", "CLAIMED"]),
+            // Hide completed bounties (CLAIMED and collected)
+            or(
+              eq(bounty.status, "OPEN"),
+              and(eq(bounty.status, "CLAIMED"), isNull(bounty.collectedAt))
+            ),
           ),
-        ),
-        columns: {
-          id: true,
-          amountRyo: true,
-          createdAt: true,
-          status: true,
-          collectedAt: true,
-          claimedAt: true,
-          targetUserId: true,
-          claimedByUserId: true,
-          // Only include creatorUserId if user has permission
-          ...(canSeeHiddenInfo ? { creatorUserId: true } : {}),
-        },
-        with: {
-          target: {
-            columns: {
-              username: true,
-              avatar: true,
-              level: true,
-              rank: true,
-              isOutlaw: true,
-            },
+          columns: {
+            id: true,
+            amountRyo: true,
+            createdAt: true,
+            status: true,
+            collectedAt: true,
+            claimedAt: true,
+            targetUserId: true,
+            claimedByUserId: true,
+            creatorUserId: true,
           },
-          // Always fetch hunters for count, but only include hunter details for staff
-          hunters: {
-            columns: {
-              hunterUserId: true,
+          with: {
+            target: {
+              columns: {
+                username: true,
+                avatar: true,
+                level: true,
+                rank: true,
+                isOutlaw: true,
+              },
             },
-            ...(canSeeHiddenInfo
-              ? {
-                  with: {
-                    hunter: {
-                      columns: {
-                        username: true,
-                        avatar: true,
-                        level: true,
-                        rank: true,
-                        isOutlaw: true,
-                      },
-                    },
-                  },
-                }
-              : {}),
-          },
-          // Only fetch creator if user has permission
-          ...(canSeeHiddenInfo
-            ? {
-                creator: {
+            hunters: {
+              columns: {
+                hunterUserId: true,
+              },
+              with: {
+                hunter: {
                   columns: {
                     username: true,
                     avatar: true,
@@ -100,13 +76,27 @@ export const bountyRouter = createTRPCRouter({
                     isOutlaw: true,
                   },
                 },
-              }
-            : {}),
-        },
-        orderBy: desc(bounty.createdAt),
-        limit,
-        offset,
-      });
+              },
+            },
+            creator: {
+              columns: {
+                username: true,
+                avatar: true,
+                level: true,
+                rank: true,
+                isOutlaw: true,
+              },
+            },
+          },
+          orderBy: desc(bounty.createdAt),
+          limit,
+          offset,
+        }),
+      ]);
+
+      const canSeeHiddenInfo = currentUser
+        ? canSeeHiddenBountyInfo(currentUser.role)
+        : false;
 
       // Transform results and filter based on permissions
       const transformedResults = results.map((bountyItem) => ({
@@ -115,6 +105,7 @@ export const bountyRouter = createTRPCRouter({
         youSignedUp: bountyItem.hunters?.some((h) => h.hunterUserId === userId) ?? false,
         targetUser: bountyItem.target,
         creatorUser: canSeeHiddenInfo ? bountyItem.creator : undefined,
+        creatorUserId: canSeeHiddenInfo ? bountyItem.creatorUserId : undefined,
         huntingUsers: canSeeHiddenInfo
           ? bountyItem.hunters?.map((h) => 'hunter' in h ? h.hunter : null).filter(Boolean)
           : undefined,
