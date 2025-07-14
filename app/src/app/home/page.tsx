@@ -103,9 +103,14 @@ export default function HomePage() {
   const homeName = homeData ? HomeTypeDetails[homeData.homeType].name : "No Home";
   const homeRegen = homeData ? homeData.regen : 0;
   const homeStorage = homeData ? homeData.storage : 0;
-  const storedItems = userItems?.filter((useritem) => useritem.storedAtHome) ?? [];
+  const filteredItems = userItems?.filter(
+    (useritem) =>
+      !useritem.storedAtHome &&
+      (!useritem.craftingFinishedAt || useritem.craftingFinishedAt < new Date()),
+  );
+  const storedItems = filteredItems?.filter((useritem) => useritem.storedAtHome) ?? [];
   const nonStoredItems =
-    userItems
+    filteredItems
       ?.filter((useritem) => !useritem.storedAtHome)
       .filter((useritem) => useritem.equipped === "NONE") ?? [];
   const canStoreMoreItems = storedItems.length < homeStorage;

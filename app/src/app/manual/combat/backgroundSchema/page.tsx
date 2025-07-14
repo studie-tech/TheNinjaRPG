@@ -4,10 +4,8 @@ import { useRouter } from "next/navigation";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import MassEditContent from "@/layout/MassEditContent";
-// import BackgroundFiltering, { useFiltering, getFilter } from "@/layout/BackgroundFiltering";
 import { Button } from "@/components/ui/button";
-import { FilePlus, SquarePen } from "lucide-react";
+import { FilePlus } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeCombatBgScheme } from "@/utils/permissions";
@@ -69,16 +67,6 @@ export default function ManualbackgroundSchema() {
                   <FilePlus className="sm:mr-2 h-5 w-5" />
                   New
                 </Button>
-                <MassEditContent
-                  title="Mass Edit Background Schemas"
-                  type="backgroundSchema"
-                  button={
-                    <Button id="mass-edit-backgroundSchema">
-                      <SquarePen className="sm:mr-2 h-6 w-6" />
-                      Edit
-                    </Button>
-                  }
-                />
               </>
             )}
             {/* If you have a BackgroundFiltering component, you can include it here */}

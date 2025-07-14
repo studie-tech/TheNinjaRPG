@@ -17,6 +17,7 @@ import { canChangeContent } from "@/utils/permissions";
 import { tagTypes } from "@/libs/combat/types";
 import { useItemEditForm } from "@/hooks/item";
 import { getTagSchema } from "@/libs/combat/types";
+import type { CraftingRequirement } from "@/drizzle/schema";
 import type { ZodItemType } from "@/libs/combat/types";
 import type { Item } from "@/drizzle/schema";
 
@@ -27,10 +28,11 @@ export default function ItemEdit(props: { params: Promise<{ itemid: string }> })
   const { data: userData } = useRequiredUserData();
 
   // Queries
-  const { data, isPending, refetch } = api.item.get.useQuery(
-    { id: itemId },
-    { enabled: !!itemId },
-  );
+  const { data, isPending, refetch } =
+    api.item.getItemWithCraftingRequirements.useQuery(
+      { id: itemId },
+      { enabled: !!itemId },
+    );
 
   // Convert key null values to empty strings, preparing data for form
   setNullsToEmptyStrings(data);
@@ -52,7 +54,7 @@ export default function ItemEdit(props: { params: Promise<{ itemid: string }> })
 }
 
 interface SingleEditItemProps {
-  item: Item;
+  item: Item & { craftingRequirements: CraftingRequirement[] };
   refetch: () => void;
 }
 

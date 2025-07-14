@@ -7,6 +7,7 @@ import {
   tournamentMatch,
   userData,
   userItem,
+  userItemImbuement,
   userJutsu,
   mpvpBattleQueue,
   villageStructure,
@@ -207,7 +208,12 @@ export const updateKage = async (
           ]
         : []),
       ...(deleteItems.length > 0
-        ? [client.delete(userItem).where(inArray(userItem.id, deleteItems))]
+        ? [
+            client.delete(userItem).where(inArray(userItem.id, deleteItems)),
+            client
+              .delete(userItemImbuement)
+              .where(inArray(userItemImbuement.userItemId, deleteItems)),
+          ]
         : []),
       ...(updateItems.length > 0
         ? updateItems.map((ui) =>
@@ -520,7 +526,12 @@ export const updateUser = async (
         : []),
       // Delete items
       ...(deleteItems.length > 0
-        ? [client.delete(userItem).where(inArray(userItem.id, deleteItems))]
+        ? [
+            client.delete(userItem).where(inArray(userItem.id, deleteItems)),
+            client
+              .delete(userItemImbuement)
+              .where(inArray(userItemImbuement.userItemId, deleteItems)),
+          ]
         : []),
       // Update items quantity
       ...(updateItems.length > 0

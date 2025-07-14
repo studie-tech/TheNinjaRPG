@@ -115,6 +115,7 @@ export const PoolTypes = ["Health", "Chakra", "Stamina"] as const;
 export type PoolType = (typeof PoolTypes)[number];
 
 export const ItemRarities = ["COMMON", "RARE", "EPIC", "LEGENDARY"] as const;
+export type ItemRarity = (typeof ItemRarities)[number];
 
 export const ItemSlotTypes = [
   "HEAD",
@@ -231,6 +232,7 @@ export const ItemTypes = [
   "ACCESSORY",
   "MATERIAL",
   "KEYSTONE",
+  "CRYSTAL",
   "OTHER",
 ] as const;
 export type ItemType = (typeof ItemTypes)[number];
@@ -617,6 +619,59 @@ export const MEDNIN_REQUIRED_EXP: Record<MEDNIN_RANK, number> = {
   APPRENTICE: 100000,
   MASTER: 400000,
   LEGENDARY: 600000,
+};
+
+// Crafting config
+export const CRAFTING_RANKS = [
+  "NOVICE",
+  "APPRENTICE",
+  "MASTER",
+  "FORGEMASTER",
+] as const;
+export type CRAFTING_RANK = (typeof CRAFTING_RANKS)[number];
+export const CRAFTING_REQUIRED_EXP: Record<CRAFTING_RANK, number> = {
+  NOVICE: 0,
+  APPRENTICE: 100000,
+  MASTER: 300000,
+  FORGEMASTER: 600000,
+};
+export const CRAFTING_EXP_GAIN: Record<CRAFTING_RANK, number> = {
+  NOVICE: 1000,
+  APPRENTICE: 2000,
+  MASTER: 3000,
+  FORGEMASTER: 0,
+};
+export const CRAFTING_MAX_IMBUED_ITEMS: Record<CRAFTING_RANK, number> = {
+  NOVICE: 0,
+  APPRENTICE: 1,
+  MASTER: 2,
+  FORGEMASTER: 3,
+};
+export const CRAFTING_TIMES_MINS: Record<CRAFTING_RANK, Record<ItemRarity, number>> = {
+  NOVICE: {
+    COMMON: 60,
+    RARE: 90,
+    EPIC: 0, // Cannot craft epic items
+    LEGENDARY: 0, // Cannot craft legendary items
+  },
+  APPRENTICE: {
+    COMMON: 40,
+    RARE: 65,
+    EPIC: 90,
+    LEGENDARY: 0, // Cannot craft legendary items
+  },
+  MASTER: {
+    COMMON: 30,
+    RARE: 50,
+    EPIC: 70,
+    LEGENDARY: 240,
+  },
+  FORGEMASTER: {
+    COMMON: 15,
+    RARE: 30,
+    EPIC: 60,
+    LEGENDARY: 160,
+  },
 };
 
 // Ai profile config

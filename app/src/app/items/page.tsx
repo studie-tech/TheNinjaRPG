@@ -21,7 +21,7 @@ import { calcMaxItems, calcMaxEventItems } from "@/libs/item";
 import { CircleFadingArrowUp, Shirt } from "lucide-react";
 import { COST_EXTRA_ITEM_SLOT, IMG_EQUIP_SILHOUETTE } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import type { Item, UserItemWithItem, UserItem, ItemSlot } from "@/drizzle/schema";
+import type { Item, UserItemWithRelations, UserItem, ItemSlot } from "@/drizzle/schema";
 
 export default function MyItems() {
   // State
@@ -59,7 +59,15 @@ export default function MyItems() {
     });
 
   // Subtitle
-  const availableItems = userItems?.filter((ui) => !ui.storedAtHome);
+  const availableItems = userItems
+    ?.filter((ui) => !ui.storedAtHome)
+    .filter((ui) => !ui.craftingFinishedAt || ui.craftingFinishedAt < new Date())
+    .map((ui) => ({
+      ...ui,
+      imbuements: ui.imbuements.filter(
+        (i) => !i.craftingFinishedAt || i.craftingFinishedAt < new Date(),
+      ),
+    }));
   const normalItems = availableItems?.filter((ui) => !ui.item.isEventItem);
   const eventItems = availableItems?.filter((ui) => ui.item.isEventItem);
 
@@ -171,7 +179,7 @@ export default function MyItems() {
  * Backpack Screen
  */
 interface BackpackProps {
-  useritems: UserItemWithItem[] | undefined;
+  useritems: UserItemWithRelations[] | undefined;
   userData: NonNullable<UserWithRelations>;
 }
 
@@ -180,7 +188,9 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   const { useritems, userData } = props;
 
   // State
-  const [useritem, setUserItem] = useState<UserItemWithItem | undefined>(undefined);
+  const [useritem, setUserItem] = useState<UserItemWithRelations | undefined>(
+    undefined,
+  );
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
   // tRPC utility
@@ -273,7 +283,10 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           isValid={false}
         >
           <ItemWithEffects
-            item={useritem.item}
+            item={{
+              ...useritem.item,
+              imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
+            }}
             key={useritem.id}
             showStatistic="item"
           />
@@ -344,14 +357,16 @@ const Backpack: React.FC<BackpackProps> = (props) => {
  * Character Equip Screen
  */
 interface CharacterProps {
-  useritems: UserItemWithItem[] | undefined;
+  useritems: UserItemWithRelations[] | undefined;
 }
 
 const Character: React.FC<CharacterProps> = (props) => {
   // Set state
   const { useritems } = props;
   const [slot, setSlot] = useState<ItemSlot | undefined>(undefined);
-  const [item, setItem] = useState<(UserItem & Item) | undefined>(undefined);
+  const [useritem, setUserItem] = useState<UserItemWithRelations | undefined>(
+    undefined,
+  );
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [showItemDetails, setShowItemDetails] = useState<boolean>(false);
 
@@ -369,7 +384,7 @@ const Character: React.FC<CharacterProps> = (props) => {
     setSlot(slot);
     const equippedItem = items?.find((it) => it.equipped === slot);
     if (equippedItem) {
-      setItem(equippedItem);
+      setUserItem(equippedItem);
       setShowItemDetails(true);
     } else {
       setIsOpen(true);
@@ -388,7 +403,7 @@ const Character: React.FC<CharacterProps> = (props) => {
       document.body.style.cursor = "default";
       setIsOpen(false);
       setShowItemDetails(false);
-      setItem(undefined);
+      setUserItem(undefined);
     },
   });
 
@@ -435,7 +450,7 @@ const Character: React.FC<CharacterProps> = (props) => {
             proceed_label={equipped ? "Unequip" : undefined}
             onAccept={() => {
               if (equipped) {
-                setItem(equipped);
+                setUserItem(equipped);
                 equip({ userItemId: equipped.id, slot: slot });
               }
             }}
@@ -450,16 +465,16 @@ const Character: React.FC<CharacterProps> = (props) => {
                   ?.filter((item) => item.equipped !== "NONE")
                   .map((item) => item.id)}
                 onClick={(id) => {
-                  setItem(items?.find((item) => item.id === id));
+                  setUserItem(items?.find((item) => item.id === id));
                   equip({ userItemId: id, slot: slot });
                 }}
               />
             ) : (
-              <Loader explanation={`Swapping ${item?.name}`} />
+              <Loader explanation={`Swapping ${useritem?.item.name}`} />
             )}
           </Modal2>
         )}
-        {showItemDetails && item && (
+        {showItemDetails && useritem && (
           <Modal2
             title="Item Details"
             isOpen={showItemDetails}
@@ -467,11 +482,20 @@ const Character: React.FC<CharacterProps> = (props) => {
             isValid={false}
             proceed_label="Unequip"
             onAccept={() => {
-              equip({ userItemId: item.id, slot: slot! });
+              equip({ userItemId: useritem.id, slot: slot! });
             }}
           >
-            <ItemWithEffects item={item} key={item.id} showStatistic="item" />
-            {isEquipping && <Loader explanation={`Unequipping ${item.name}`} />}
+            <ItemWithEffects
+              item={{
+                ...useritem.item,
+                imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
+              }}
+              key={useritem.id}
+              showStatistic="item"
+            />
+            {isEquipping && (
+              <Loader explanation={`Unequipping ${useritem.item.name}`} />
+            )}
           </Modal2>
         )}
       </div>

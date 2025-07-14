@@ -34,6 +34,8 @@ export default function Users() {
     "Ranked",
     "Outlaws",
     "Community",
+    "Crafting",
+    "Medical",
     "Staff",
     ...(userData?.role !== "USER" ? ["Dailies"] : []),
   ];
@@ -45,6 +47,8 @@ export default function Users() {
     | "Ranked"
     | "Outlaws"
     | "Community"
+    | "Crafting"
+    | "Medical"
     | "Staff"
     | "Dailies";
   const [activeTab, setActiveTab] = useState<TabName>("Online");
@@ -104,6 +108,10 @@ export default function Users() {
     columns.push({ key: "experience", header: "Experience", type: "string" });
   } else if (activeTab === "Online") {
     columns.push({ key: "updatedAt", header: "Last Active", type: "time_passed" });
+  } else if (activeTab === "Crafting") {
+    columns.push({ key: "craftingExperience", header: "Crafting", type: "string" });
+  } else if (activeTab === "Medical") {
+    columns.push({ key: "medicalExperience", header: "Medical", type: "string" });
   } else if (activeTab === "PvP") {
     columns.push({ key: "pvpStreak", header: "PvP Streak", type: "string" });
   } else if (activeTab === "Ranked") {

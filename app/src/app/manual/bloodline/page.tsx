@@ -6,10 +6,9 @@ import Link from "next/link";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import MassEditContent from "@/layout/MassEditContent";
 import BloodFiltering, { useFiltering, getFilter } from "@/layout/BloodlineFiltering";
 import { Button } from "@/components/ui/button";
-import { FilePlus, SquarePen, ChartCandlestick } from "lucide-react";
+import { FilePlus, ChartCandlestick } from "lucide-react";
 import { ChartPie } from "lucide-react";
 import { useInfinitePagination } from "@/libs/pagination";
 import { api } from "@/app/_trpc/client";
@@ -114,16 +113,6 @@ export default function ManualBloodlines() {
                   <FilePlus className="sm:mr-2 h-5 w-5" />
                   New
                 </Button>
-                <MassEditContent
-                  title="Mass Edit Bloodlines"
-                  type="bloodline"
-                  button={
-                    <Button id="create-bloodline">
-                      <SquarePen className="sm:mr-2 h-6 w-6" />
-                      Edit
-                    </Button>
-                  }
-                />
               </>
             )}
             <BloodFiltering state={state} />

@@ -6,10 +6,9 @@ import Link from "next/link";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import MassEditContent from "@/layout/MassEditContent";
 import JutsuFiltering, { useFiltering, getFilter } from "@/layout/JutsuFiltering";
 import { Button } from "@/components/ui/button";
-import { FilePlus, SquarePen, ChartCandlestick, ChartPie } from "lucide-react";
+import { FilePlus, ChartCandlestick, ChartPie } from "lucide-react";
 import { useInfinitePagination } from "@/libs/pagination";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
@@ -111,16 +110,6 @@ export default function ManualJutsus() {
                   <FilePlus className="sm:mr-2 h-6 w-6" />
                   <p className="hidden sm:block">New</p>
                 </Button>
-                <MassEditContent
-                  title="Mass Edit Jutsus"
-                  type="jutsu"
-                  button={
-                    <Button id="create-jutsu">
-                      <SquarePen className="sm:mr-2 h-6 w-6" />
-                      <p className="hidden sm:block">Edit</p>
-                    </Button>
-                  }
-                />
               </>
             )}
             <JutsuFiltering state={state} />

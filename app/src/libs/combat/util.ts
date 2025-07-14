@@ -56,7 +56,13 @@ import type { ReturnedUserState, Consequence } from "./types";
 import type { CombatAction, BattleUserState } from "./types";
 import type { ZodAllTags } from "./types";
 import type { GroundEffect, UserEffect, BattleEffect } from "@/libs/combat/types";
-import type { Battle, VillageAlliance, Village, GameSetting } from "@/drizzle/schema";
+import type {
+  Battle,
+  VillageAlliance,
+  Village,
+  GameSetting,
+  UserItemImbuement,
+} from "@/drizzle/schema";
 import type { Item, UserItem, AiProfile } from "@/drizzle/schema";
 import type { BattleType } from "@/drizzle/constants";
 import { nanoid } from "nanoid";
@@ -1592,14 +1598,26 @@ export const processUsersForBattle = (info: {
     // Add item effects
     const items: (UserItem & {
       item: Item;
+      imbuements: (UserItemImbuement & { item: Item })[];
       lastUsedRound: number;
       originalCooldown: number;
     })[] = [];
     user.items
       .filter((useritem) => useritem.item && !useritem.item.preventBattleUsage)
       .forEach((useritem) => {
+        // Add any imbuement effects to the item effects
+        const imbuementEffects = useritem.imbuements
+          .map((imbuement) => imbuement.item.effects as UserEffect[])
+          .flat();
+        // Parse item
+        const effects = [
+          ...(useritem.item.effects as UserEffect[]),
+          ...imbuementEffects,
+        ];
         const itemType = useritem.item.itemType;
-        const effects = useritem.item.effects as UserEffect[];
+        useritem.item.effects = effects;
+        useritem.imbuements = []; // Reset to avoid storing in battle table
+        // Parse the effects
         effects
           .filter((e) => e.type === "summon")
           .forEach((e) => "aiId" in e && allSummons.push(e.aiId));
@@ -1609,6 +1627,7 @@ export const processUsersForBattle = (info: {
           itemType === "KEYSTONE"
         ) {
           if (useritem.item.effects && useritem.equipped !== "NONE") {
+            // Add item effects to user
             effects.forEach((effect) => {
               const realized = realizeTag({
                 tag: effect,

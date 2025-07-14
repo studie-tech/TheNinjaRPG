@@ -4,7 +4,7 @@ import ContentImage from "@/layout/ContentImage";
 import Confirm2 from "@/layout/Confirm2";
 import { parseHtml } from "@/utils/parse";
 import ElementImage from "@/layout/ElementImage";
-import { canChangeCombatBgScheme, canChangeContent } from "@/utils/permissions";
+import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { SquarePen, Trash2, BarChartBig, Copy, Box } from "lucide-react";
 import { getTagSchema } from "@/libs/combat/types";
@@ -37,7 +37,14 @@ export type GenericObject = {
 };
 
 export interface ItemWithEffectsProps {
-  item: Bloodline | Item | Jutsu | Quest | BackgroundSchema | GameAsset | GenericObject;
+  item:
+    | Bloodline
+    | (Item & { imbuements?: Item[] })
+    | Jutsu
+    | Quest
+    | BackgroundSchema
+    | GameAsset
+    | GenericObject;
   hideDetails?: boolean;
   imageBorder?: boolean;
   imageExtra?: React.ReactNode;
@@ -94,10 +101,19 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   });
 
   // Extract effects if they exist
-  const effects =
-    "effects" in props.item
+  const effects = [
+    ...("effects" in props.item
       ? (props.item.effects as Omit<ZodAllTags, "description">[])
-      : [];
+      : []
+    ).map((effect) => ({ ...effect, color: "bg-poppopover" })),
+    ...("imbuements" in props.item && props.item.imbuements
+      ? props.item.imbuements
+          ?.map((imbuement) =>
+            imbuement.effects?.map((effect) => ({ ...effect, color: "bg-purple-400" })),
+          )
+          .flat()
+      : []),
+  ].filter(Boolean);
 
   // Define image
   let image =
@@ -567,7 +583,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               <div
                 key={effect.type + i.toString()}
                 className={`my-2 rounded-lg ${
-                  parsedEffect ? "bg-poppopover" : "bg-red-100"
+                  parsedEffect ? effect.color : "bg-red-100"
                 } p-2`}
               >
                 {!parsedEffect && (

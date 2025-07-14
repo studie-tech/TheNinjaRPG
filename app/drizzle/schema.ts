@@ -1021,6 +1021,8 @@ export const item = mysqlTable(
     maxEquips: int("maxEquips").default(1).notNull(),
     preventBattleUsage: boolean("preventBattleUsage").default(false).notNull(),
     requiredLevel: int("requiredLevel").default(1).notNull(),
+    craftable: boolean("craftable").default(false).notNull(),
+    canBeImbued: boolean("canBeImbued").default(false).notNull(),
   },
   (table) => {
     return {
@@ -1042,6 +1044,55 @@ export type Item = InferSelectModel<typeof item>;
 export type ItemType = Item["itemType"];
 export type ItemSlotType = Item["slot"];
 export type ItemRarity = Item["rarity"];
+
+export const itemRelations = relations(item, ({ many }) => ({
+  craftingRequirements: many(craftingRequirement, {
+    relationName: "craftItems",
+  }),
+}));
+
+export const craftingRequirement = mysqlTable(
+  "CraftingRequirement",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    craftItemId: varchar("craftItemId", { length: 191 }).notNull(),
+    requirementItemId: varchar("requirementItemId", { length: 191 }).notNull(),
+    quantity: int("quantity").default(1).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      craftItemIdIdx: index("CraftingRequirement_craftItemId_idx").on(
+        table.craftItemId,
+      ),
+      requirementItemIdIdx: index("CraftingRequirement_requirementItemId_idx").on(
+        table.requirementItemId,
+      ),
+    };
+  },
+);
+export type CraftingRequirement = InferSelectModel<typeof craftingRequirement>;
+
+export const craftingRequirementRelations = relations(
+  craftingRequirement,
+  ({ one }) => ({
+    craftItem: one(item, {
+      fields: [craftingRequirement.craftItemId],
+      references: [item.id],
+      relationName: "craftItems",
+    }),
+    requirementItem: one(item, {
+      fields: [craftingRequirement.requirementItemId],
+      references: [item.id],
+      relationName: "requirementItems",
+    }),
+  }),
+);
 
 export const jutsu = mysqlTable(
   "Jutsu",
@@ -1591,6 +1642,7 @@ export const userData = mysqlTable(
     questData: json("questData").$type<QuestTrackerType[]>(),
     senseiId: varchar("senseiId", { length: 191 }),
     medicalExperience: int("medicalExperience").default(0).notNull(),
+    craftingExperience: int("craftingExperience").default(0).notNull(),
     // Settings
     preferredStat: mysqlEnum("preferredStat", consts.StatTypes),
     preferredGeneral1: mysqlEnum("preferredGeneral1", consts.GeneralTypes),
@@ -1867,6 +1919,7 @@ export const userItem = mysqlTable(
     quantity: int("quantity").default(1).notNull(),
     equipped: mysqlEnum("equipped", consts.ItemSlots).default("NONE").notNull(),
     storedAtHome: boolean("storedAtHome").default(false).notNull(),
+    craftingFinishedAt: datetime("craftingFinishedAt", { mode: "date", fsp: 3 }),
   },
   (table) => {
     return {
@@ -1880,8 +1933,12 @@ export const userItem = mysqlTable(
 export type UserItem = InferSelectModel<typeof userItem>;
 export type ItemSlot = UserItem["equipped"];
 export type UserItemWithItem = UserItem & { item: Item };
+export type UserItemWithRelations = UserItem & {
+  item: Item;
+  imbuements: (UserItemImbuement & { item: Item })[];
+};
 
-export const userItemRelations = relations(userItem, ({ one }) => ({
+export const userItemRelations = relations(userItem, ({ one, many }) => ({
   item: one(item, {
     fields: [userItem.itemId],
     references: [item.id],
@@ -1889,6 +1946,32 @@ export const userItemRelations = relations(userItem, ({ one }) => ({
   user: one(userData, {
     fields: [userItem.userId],
     references: [userData.userId],
+  }),
+  imbuements: many(userItemImbuement),
+}));
+
+export const userItemImbuement = mysqlTable("UserItemImbuement", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  userItemId: varchar("userItemId", { length: 191 }).notNull(),
+  imbuementItemId: varchar("imbuementItemId", { length: 191 }).notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+  craftingFinishedAt: datetime("craftingFinishedAt", {
+    mode: "date",
+    fsp: 3,
+  }).notNull(),
+});
+export type UserItemImbuement = InferSelectModel<typeof userItemImbuement>;
+
+export const userItemImbuementRelations = relations(userItemImbuement, ({ one }) => ({
+  userItem: one(userItem, {
+    fields: [userItemImbuement.userItemId],
+    references: [userItem.id],
+  }),
+  item: one(item, {
+    fields: [userItemImbuement.imbuementItemId],
+    references: [item.id],
   }),
 }));
 

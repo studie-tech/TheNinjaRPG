@@ -1,11 +1,40 @@
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { createTRPCRouter, protectedProcedure, errorResponse } from "@/server/api/trpc";
-import { userData } from "@/drizzle/schema";
+import { userData, userItem, item, userItemImbuement } from "@/drizzle/schema";
 import { fetchUser } from "@/server/api/routers/profile";
-import { OCCUPATIONS, OCCUPATION_CHANGE_COOLDOWN_DAYS } from "@/drizzle/constants";
+import {
+  fetchItemWithCraftingRequirements,
+  fetchUserItems,
+} from "@/server/api/routers/item";
+import {
+  OCCUPATIONS,
+  OCCUPATION_CHANGE_COOLDOWN_DAYS,
+  CRAFTING_TIMES_MINS,
+  CRAFTING_EXP_GAIN,
+  CRAFTING_MAX_IMBUED_ITEMS,
+} from "@/drizzle/constants";
+import {
+  getCraftingRank,
+  getTotalItemQuantity,
+  calculateItemConsumption,
+} from "@/libs/crafting";
+import { nanoid } from "nanoid";
 
 export const occupationRouter = createTRPCRouter({
+  getCraftableItems: protectedProcedure.query(async ({ ctx }) => {
+    return await ctx.drizzle.query.item.findMany({
+      where: eq(item.craftable, true),
+      with: {
+        craftingRequirements: {
+          with: {
+            requirementItem: true,
+          },
+        },
+      },
+    });
+  }),
+
   selectOccupation: protectedProcedure
     .input(z.object({ occupation: z.enum(OCCUPATIONS) }))
     .mutation(async ({ ctx, input }) => {
@@ -33,5 +62,241 @@ export const occupationRouter = createTRPCRouter({
         .where(eq(userData.userId, ctx.userId));
 
       return { success: true, message: "Occupation selected successfully!" };
+    }),
+
+  craftItem: protectedProcedure
+    .input(z.object({ itemId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Run all initial queries in parallel
+      const [user, itemWithRequirements, useritems] = await Promise.all([
+        // Get user data
+        fetchUser(ctx.drizzle, ctx.userId),
+        // Get item to craft with its requirements
+        fetchItemWithCraftingRequirements(ctx.drizzle, input.itemId),
+        // Check if user is already crafting something
+        fetchUserItems(ctx.drizzle, ctx.userId),
+      ]);
+      // Derived
+      const currentlyCrafting = useritems.find(
+        (item) =>
+          item.itemId === input.itemId &&
+          item.craftingFinishedAt &&
+          item.craftingFinishedAt > new Date(),
+      );
+      // Guards
+      if (user.occupation !== "CRAFTING") {
+        return errorResponse("You must have the Crafting occupation to craft items");
+      }
+      if (!itemWithRequirements) {
+        return errorResponse("Item not found");
+      }
+      if (currentlyCrafting) {
+        return errorResponse(
+          "You are already crafting an item. Please wait for it to finish.",
+        );
+      }
+      if (itemWithRequirements.hidden) {
+        return errorResponse("This item is hidden and cannot be crafted");
+      }
+      if (!itemWithRequirements.craftable) {
+        return errorResponse("This item is not craftable");
+      }
+      if (itemWithRequirements.craftingRequirements.length === 0) {
+        return errorResponse("This item cannot be crafted (no requirements defined)");
+      }
+      // Derived
+      const userCraftingRank = getCraftingRank(user.craftingExperience);
+      const craftingTime =
+        CRAFTING_TIMES_MINS[userCraftingRank][itemWithRequirements.rarity];
+      // Guards
+      if (craftingTime === 0) {
+        return errorResponse(
+          `You need to be at least ${itemWithRequirements.rarity === "EPIC" ? "Apprentice" : "Master"} rank to craft ${itemWithRequirements.rarity} items`,
+        );
+      }
+      // Validate user has enough materials using collapsed quantities
+      for (const requirement of itemWithRequirements.craftingRequirements) {
+        const totalQuantity = getTotalItemQuantity(
+          useritems,
+          requirement.requirementItemId,
+        );
+        if (totalQuantity < requirement.quantity) {
+          const itemName = requirement.requirementItem?.name || "Unknown item";
+          return errorResponse(
+            `You need ${requirement.quantity} ${itemName} (you have ${totalQuantity})`,
+          );
+        }
+      }
+
+      // Calculate crafting finish time
+      const finishTime = new Date(Date.now() + craftingTime * 60 * 1000);
+
+      // Execute crafting: consume materials and create crafting item
+      // Calculate consumption for each requirement
+      const allConsumptions = [];
+      for (const requirement of itemWithRequirements.craftingRequirements) {
+        const consumption = calculateItemConsumption(
+          useritems,
+          requirement.requirementItemId,
+          requirement.quantity,
+        );
+        if (!consumption.hasEnough) {
+          const itemName = requirement.requirementItem?.name || "Unknown item";
+          return errorResponse(`Insufficient ${itemName} for crafting`);
+        }
+        allConsumptions.push(...consumption.consumptions);
+      }
+
+      // Create database operations for consuming materials
+      const materialUpdates = allConsumptions.map((consumption) => {
+        if (consumption.newQuantity <= 0) {
+          return ctx.drizzle
+            .delete(userItem)
+            .where(eq(userItem.id, consumption.userItemId));
+        } else {
+          return ctx.drizzle
+            .update(userItem)
+            .set({ quantity: consumption.newQuantity })
+            .where(eq(userItem.id, consumption.userItemId));
+        }
+      });
+
+      // Create crafting item entry (quantity 0 initially, will be 1 when finished)
+      const craftingItemInsert = ctx.drizzle.insert(userItem).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        itemId: input.itemId,
+        quantity: 1,
+        craftingFinishedAt: finishTime,
+      });
+
+      // Award crafting experience (small amount when starting)
+      const expUpdate = ctx.drizzle
+        .update(userData)
+        .set({
+          craftingExperience: sql`${userData.craftingExperience} + ${CRAFTING_EXP_GAIN[userCraftingRank]}`,
+        })
+        .where(eq(userData.userId, ctx.userId));
+
+      await Promise.all([...materialUpdates, craftingItemInsert, expUpdate]);
+
+      return {
+        success: true,
+        message: `Started crafting ${itemWithRequirements.name}. It will be ready in ${craftingTime} minutes.`,
+        finishTime: finishTime.toISOString(),
+      };
+    }),
+
+  imbueItem: protectedProcedure
+    .input(
+      z.object({
+        userItemId: z.string(),
+        userCrystalItemId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Run all initial queries in parallel
+      const [user, userItems] = await Promise.all([
+        // Get user data
+        fetchUser(ctx.drizzle, ctx.userId),
+        // Get all user items (like in crafting)
+        fetchUserItems(ctx.drizzle, ctx.userId),
+      ]);
+
+      // Find target item and crystal from user items
+      const targetUserItem = userItems.find((ui) => ui.id === input.userItemId);
+      const crystalUserItem = userItems.find((ui) => ui.id === input.userCrystalItemId);
+      const crystalItem = crystalUserItem?.item;
+
+      // Derived
+      const userCraftingRank = getCraftingRank(user.craftingExperience);
+      const maxImbuedItems = CRAFTING_MAX_IMBUED_ITEMS[userCraftingRank];
+      const curImbuingItemsCount = userItems.filter(
+        (ui) =>
+          ui.imbuements.length > 0 &&
+          ui.imbuements.some(
+            (imbuement) =>
+              imbuement.craftingFinishedAt &&
+              new Date(imbuement.craftingFinishedAt) > new Date(),
+          ),
+      ).length;
+
+      // Guards
+      if (user.occupation !== "CRAFTING") {
+        return errorResponse("You must have the Crafting occupation to imbue items");
+      }
+      if (!targetUserItem) {
+        return errorResponse("Target item not found");
+      }
+      if (!crystalUserItem) {
+        return errorResponse("Crystal not found");
+      }
+      if (!crystalItem) {
+        return errorResponse("Crystal item data not found");
+      }
+      if (crystalUserItem.quantity <= 0) {
+        return errorResponse("You don't have this crystal");
+      }
+      if (crystalItem.itemType !== "CRYSTAL") {
+        return errorResponse("Selected item is not a crystal");
+      }
+      if (!targetUserItem.item?.canBeImbued) {
+        return errorResponse("This item cannot be imbued");
+      }
+      if (targetUserItem.equipped !== "NONE") {
+        return errorResponse("You cannot imbue an equipped item");
+      }
+      if (curImbuingItemsCount > 0) {
+        return errorResponse(
+          "You are already imbuing an item. Please wait for it to finish.",
+        );
+      }
+      if (targetUserItem.imbuements.length >= maxImbuedItems) {
+        return errorResponse(
+          `You have reached the maximum number of imbued items (${maxImbuedItems}) for your ${userCraftingRank} rank`,
+        );
+      }
+      // Derived
+      const imbuingTime = CRAFTING_TIMES_MINS[userCraftingRank][crystalItem.rarity];
+      const finishTime = new Date(Date.now() + imbuingTime * 60 * 1000);
+
+      // Check rarity
+      if (imbuingTime === 0) {
+        return errorResponse(
+          `You need to be at least ${crystalItem.rarity === "EPIC" ? "Apprentice" : "Master"} rank to imbue ${crystalItem.rarity} crystals`,
+        );
+      }
+
+      // Consume the crystal and create the imbuement
+      const consumeCrystal =
+        crystalUserItem.quantity > 1
+          ? ctx.drizzle
+              .update(userItem)
+              .set({ quantity: crystalUserItem.quantity - 1 })
+              .where(eq(userItem.id, crystalUserItem.id))
+          : ctx.drizzle.delete(userItem).where(eq(userItem.id, crystalUserItem.id));
+
+      const createImbuement = ctx.drizzle.insert(userItemImbuement).values({
+        id: nanoid(),
+        userItemId: input.userItemId,
+        imbuementItemId: crystalItem.id,
+        craftingFinishedAt: finishTime,
+      });
+
+      // Award small amount of crafting experience
+      const expUpdate = ctx.drizzle
+        .update(userData)
+        .set({
+          craftingExperience: sql`${userData.craftingExperience} + ${CRAFTING_EXP_GAIN[userCraftingRank] / 2}`,
+        })
+        .where(eq(userData.userId, ctx.userId));
+
+      await Promise.all([consumeCrystal, createImbuement, expUpdate]);
+
+      return {
+        success: true,
+        message: `Started imbuing ${targetUserItem.item.name} with ${crystalItem.name}. It will be ready in ${imbuingTime} minutes.`,
+        finishTime: finishTime.toISOString(),
+      };
     }),
 });

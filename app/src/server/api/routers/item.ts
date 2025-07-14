@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { eq, sql, gte, and, like } from "drizzle-orm";
-import { item, userItem, userData, actionLog, bloodlineRolls } from "@/drizzle/schema";
+import {
+  item,
+  userItem,
+  userItemImbuement,
+  userData,
+  actionLog,
+  bloodlineRolls,
+  craftingRequirement,
+} from "@/drizzle/schema";
 import { ItemTypes, ItemSlots } from "@/drizzle/constants";
 import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
 import { fetchStructures } from "@/routers/village";
@@ -28,7 +36,7 @@ import { itemFilteringSchema } from "@/validators/item";
 import { filterRollableBloodlines } from "@/libs/bloodline";
 import { fetchBloodlines } from "@/routers/bloodline";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
-import type { UserItemWithItem, UserData } from "@/drizzle/schema";
+import type { UserItemWithRelations, UserData } from "@/drizzle/schema";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
@@ -41,6 +49,7 @@ export const itemRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
     return await ctx.drizzle.query.item.findMany({
       columns: { id: true, name: true, image: true },
+      orderBy: (table, { asc }) => [asc(table.name)],
     });
   }),
   get: publicProcedure
@@ -51,6 +60,24 @@ export const itemRouter = createTRPCRouter({
         throw serverError("NOT_FOUND", "Item not found");
       }
       return result as Omit<typeof result, "effects"> & { effects: ZodAllTags[] };
+    }),
+  getItemWithCraftingRequirements: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await fetchItemWithCraftingRequirements(ctx.drizzle, input.id);
+      if (!result) {
+        throw serverError("NOT_FOUND", "Item not found");
+      }
+      return result;
+    }),
+  getUserItem: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await fetchUserItem(ctx.drizzle, ctx.userId, input.id);
+      if (!result) {
+        throw serverError("NOT_FOUND", "Item not found");
+      }
+      return result;
     }),
   // Create new item
   create: protectedProcedure
@@ -88,6 +115,9 @@ export const itemRouter = createTRPCRouter({
         await Promise.all([
           ctx.drizzle.delete(item).where(eq(item.id, input.id)),
           ctx.drizzle.delete(userItem).where(eq(userItem.itemId, input.id)),
+          ctx.drizzle
+            .delete(userItemImbuement)
+            .where(eq(userItemImbuement.imbuementItemId, input.id)),
           ctx.drizzle.insert(actionLog).values({
             id: nanoid(),
             userId: ctx.userId,
@@ -112,7 +142,7 @@ export const itemRouter = createTRPCRouter({
       // Query
       const [user, entry, itemWithName] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchItem(ctx.drizzle, input.id),
+        fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
         ctx.drizzle.query.item.findFirst({
           columns: { name: true, id: true },
           where: eq(item.name, input.data.name),
@@ -132,6 +162,12 @@ export const itemRouter = createTRPCRouter({
         createdAt: entry.createdAt,
         ...input.data,
       });
+      // Update crafting requirements
+      const newRequirements = input.data.craftingRequirements;
+      await ctx.drizzle
+        .delete(craftingRequirement)
+        .where(eq(craftingRequirement.craftItemId, input.id));
+
       // Update database
       await Promise.all([
         ctx.drizzle.update(item).set(input.data).where(eq(item.id, input.id)),
@@ -150,6 +186,22 @@ export const itemRouter = createTRPCRouter({
                 .update(userItem)
                 .set({ equipped: "NONE" })
                 .where(eq(userItem.itemId, entry.id)),
+            ]
+          : []),
+        ...(newRequirements && newRequirements?.length > 0
+          ? [
+              ctx.drizzle.insert(craftingRequirement).values(
+                newRequirements
+                  .map((req) =>
+                    req.ids?.map((id) => ({
+                      id: nanoid(),
+                      craftItemId: input.id,
+                      requirementItemId: id,
+                      quantity: req.number,
+                    })),
+                  )
+                  .flat(),
+              ),
             ]
           : []),
       ]);
@@ -231,12 +283,14 @@ export const itemRouter = createTRPCRouter({
       const info = await fetchItem(ctx.drizzle, input.itemId);
       const userItems = await ctx.drizzle.query.userItem.findMany({
         where: and(eq(userItem.userId, ctx.userId), eq(userItem.itemId, input.itemId)),
+        with: { imbuements: true },
       });
-      const totalQuantity = userItems.reduce((acc, i) => acc + i.quantity, 0);
-      if (info && userItems.length > 0) {
+      const filteredUserItems = userItems.filter((i) => i.imbuements.length === 0);
+      const totalQuantity = filteredUserItems.reduce((acc, i) => acc + i.quantity, 0);
+      if (info && filteredUserItems.length > 0) {
         let currentCount = 0;
-        for (const i of userItems.keys()) {
-          const id = userItems?.[i]?.id;
+        for (const i of filteredUserItems.keys()) {
+          const id = filteredUserItems?.[i]?.id;
           const newQuantity = Math.min(info.stackSize, totalQuantity - currentCount);
           if (id) {
             if (newQuantity > 0) {
@@ -268,11 +322,17 @@ export const itemRouter = createTRPCRouter({
       // Guard
       if (!useritem) return errorResponse("User item not found");
       if (useritem.userId !== user.userId) return errorResponse("Not yours to sell");
+      if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
+        return errorResponse("Cannot sell crafting item");
+      }
       // Derived
       const cost = calcItemSellingPrice(user, useritem, structures);
       // Mutate
       await Promise.all([
         ctx.drizzle.delete(userItem).where(eq(userItem.id, input.userItemId)),
+        ctx.drizzle
+          .delete(userItemImbuement)
+          .where(eq(userItemImbuement.userItemId, input.userItemId)),
         ctx.drizzle
           .update(userData)
           .set({ money: sql`${userData.money} + ${cost}` })
@@ -502,7 +562,12 @@ export const itemRouter = createTRPCRouter({
               .update(userItem)
               .set({ quantity: sql`${userItem.quantity} - 1` })
               .where(eq(userItem.id, input.userItemId))
-          : ctx.drizzle.delete(userItem).where(eq(userItem.id, input.userItemId)),
+          : Promise.all([
+              ctx.drizzle.delete(userItem).where(eq(userItem.id, input.userItemId)),
+              ctx.drizzle
+                .delete(userItemImbuement)
+                .where(eq(userItemImbuement.userItemId, input.userItemId)),
+            ]),
         ...promises,
       ]);
       // Prettify rewards
@@ -630,7 +695,12 @@ export const itemRouter = createTRPCRouter({
 
       // Get unequipped items that are not stored at home, sorted by cost (descending)
       const unequippedItems = useritems
-        .filter((ui) => ui.equipped === "NONE" && !ui.storedAtHome)
+        .filter(
+          (ui) =>
+            ui.equipped === "NONE" &&
+            !ui.storedAtHome &&
+            (!ui.craftingFinishedAt || ui.craftingFinishedAt < new Date()),
+        )
         .sort((a, b) => b.item.cost - a.item.cost);
       let availableSlots = ItemSlots.filter(
         (slot) => !useritems.find((ui) => ui.equipped === slot),
@@ -687,10 +757,26 @@ export const fetchItem = async (client: DrizzleClient, id: string) => {
   });
 };
 
+export const fetchItemWithCraftingRequirements = async (
+  client: DrizzleClient,
+  id: string,
+) => {
+  return await client.query.item.findFirst({
+    where: eq(item.id, id),
+    with: {
+      craftingRequirements: {
+        with: {
+          requirementItem: true,
+        },
+      },
+    },
+  });
+};
+
 export const fetchUserItems = async (client: DrizzleClient, userId: string) => {
   const useritems = await client.query.userItem.findMany({
-    where: eq(userItem.userId, userId),
-    with: { item: true },
+    where: and(eq(userItem.userId, userId)),
+    with: { item: true, imbuements: { with: { item: true } } },
   });
   return useritems.filter((ui) => ui.item && !ui.item.hidden);
 };
@@ -717,7 +803,7 @@ export const fetchUserItem = async (
 export const toggleEquipItem = async (
   client: DrizzleClient,
   userItemId: string,
-  useritems: UserItemWithItem[],
+  useritems: UserItemWithRelations[],
   user: UserData,
   slot?: ItemSlot,
 ) => {
@@ -730,6 +816,17 @@ export const toggleEquipItem = async (
       `You need to be level ${useritem.item.requiredLevel} to equip this item`,
     );
   }
+  if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
+    return errorResponse("Cannot equip crafting item");
+  }
+  const currentlyImbuing = useritem.imbuements.filter(
+    (imbuement) =>
+      imbuement.craftingFinishedAt && imbuement.craftingFinishedAt > new Date(),
+  );
+  if (currentlyImbuing.length > 0) {
+    return errorResponse("Cannot equip item because it is being imbued");
+  }
+
   const doEquip = !useritem.equipped || useritem.equipped !== slot;
   const info = useritem.item;
   const instances = useritems.filter(

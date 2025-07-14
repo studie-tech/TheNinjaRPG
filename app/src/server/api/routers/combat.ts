@@ -9,7 +9,7 @@ import {
 import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
 import { eq, or, and, sql, gt, ne, isNotNull, isNull, inArray, gte } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { desc } from "drizzle-orm";
+import { desc, lt } from "drizzle-orm";
 import { COMBAT_HEIGHT, COMBAT_WIDTH } from "@/libs/combat/constants";
 import { SECTOR_HEIGHT, SECTOR_WIDTH } from "@/libs/travel/constants";
 import { COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
@@ -901,8 +901,22 @@ export const initiateBattle = async (
         clan: true,
         anbuSquad: true,
         items: {
-          with: { item: true },
-          where: (items) => and(gt(items.quantity, 0), ne(items.equipped, "NONE")),
+          with: {
+            item: true,
+            imbuements: {
+              with: { item: true },
+              where: (imbuements) => lt(imbuements.craftingFinishedAt, new Date()),
+            },
+          },
+          where: (items) =>
+            and(
+              gt(items.quantity, 0),
+              ne(items.equipped, "NONE"),
+              or(
+                isNull(items.craftingFinishedAt),
+                lt(items.craftingFinishedAt, new Date()),
+              ),
+            ),
           orderBy: (table, { desc }) => [desc(table.quantity)],
         },
         jutsus: {
@@ -984,6 +998,8 @@ export const initiateBattle = async (
             equipped: "ITEM_1" as const,
             item: item,
             storedAtHome: false,
+            craftingFinishedAt: null,
+            imbuements: [],
           }));
         user.jutsus = loadoutJutsus
           .filter((jutsu) => userLoadout.loadout.jutsuIds.includes(jutsu.id))

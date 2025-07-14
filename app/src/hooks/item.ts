@@ -10,7 +10,7 @@ import { ItemRarities } from "@/drizzle/constants";
 import { ItemSlotTypes } from "@/drizzle/constants";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
-import type { Item } from "@/drizzle/schema";
+import type { Item, CraftingRequirement } from "@/drizzle/schema";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { FormEntry } from "@/layout/EditContent";
 import type { ZodItemType } from "@/libs/combat/types";
@@ -19,12 +19,23 @@ import type { ZodItemType } from "@/libs/combat/types";
  * Hook used when creating frontend forms for editing items
  * @param data
  */
-export const useItemEditForm = (data: Item, refetch: () => void) => {
+export const useItemEditForm = (
+  data: Item & { craftingRequirements: CraftingRequirement[] },
+  refetch: () => void,
+) => {
   // Case type
   const expireFromStoreAt = data.expireFromStoreAt
     ? data.expireFromStoreAt.slice(0, 10)
     : "";
-  const item = { ...data, effects: data.effects, expireFromStoreAt: expireFromStoreAt };
+  const item = {
+    ...data,
+    effects: data.effects,
+    expireFromStoreAt: expireFromStoreAt,
+    craftingRequirements: data.craftingRequirements.map((req) => ({
+      ids: [req.requirementItemId],
+      number: req.quantity,
+    })),
+  };
 
   // Form handling
   const form = useForm<ZodItemType>({
@@ -72,6 +83,17 @@ export const useItemEditForm = (data: Item, refetch: () => void) => {
     name: "image",
   });
 
+  // Watch for changes to craftable
+  const craftable = useWatch({
+    control: form.control,
+    name: "craftable",
+  });
+
+  // Query for items if this item is craftable
+  const { data: itemsData } = api.item.getAllNames.useQuery(undefined, {
+    enabled: craftable,
+  });
+
   // Object for form values
   const formData: FormEntry<keyof ZodItemType>[] = [
     { id: "name", label: "Item Name", type: "text" },
@@ -105,8 +127,20 @@ export const useItemEditForm = (data: Item, refetch: () => void) => {
     { id: "isEventItem", type: "boolean" },
     { id: "inShop", type: "boolean" },
     { id: "preventBattleUsage", type: "boolean" },
+    { id: "craftable", type: "boolean" },
+    { id: "canBeImbued", type: "boolean" },
     { id: "expireFromStoreAt", type: "date", label: "Remove from store at" },
   ];
+
+  if (craftable) {
+    formData.push({
+      id: "craftingRequirements",
+      doubleWidth: true,
+      label: "Crafting Requirements [and quantity]",
+      type: "db_values_with_number",
+      values: itemsData?.filter((i) => i.id !== item.id) || [],
+    });
+  }
 
   return { item, effects, form, formData, setEffects, handleItemSubmit };
 };

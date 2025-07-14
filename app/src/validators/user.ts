@@ -49,12 +49,12 @@ export const getUserElements = (user: UserWithRelations) => {
   const bloodlineElements = getBloodlineElements(user);
   // Create final list of elements
   let finalElements: ElementName[] = [];
-  
+
   if (bloodlineElements.length === 1 && userElements.length === 2) {
     const bloodlineElement = bloodlineElements[0]!;
     const primaryElement = userElements[0]!;
     const secondaryElement = userElements[1]!;
-    
+
     if (secondaryElement === bloodlineElement) {
       // Secondary matches bloodline, keep primary and bloodline
       finalElements = [primaryElement, bloodlineElement];
@@ -69,7 +69,7 @@ export const getUserElements = (user: UserWithRelations) => {
     // No bloodline elements
     finalElements = userElements;
   }
-  
+
   finalElements.push("None");
   return Array.from(new Set(finalElements));
 };
@@ -110,6 +110,8 @@ export const getPublicUsersSchema = z.object({
   orderBy: z.enum([
     "Online",
     "Strongest",
+    "Crafting",
+    "Medical",
     "Weakest",
     "PvP",
     "Ranked",

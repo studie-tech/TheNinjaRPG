@@ -6,9 +6,8 @@ import Link from "next/link";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import MassEditContent from "@/layout/MassEditContent";
 import { Button } from "@/components/ui/button";
-import { FilePlus, SquarePen, ChartCandlestick, ChartPie } from "lucide-react";
+import { FilePlus, ChartCandlestick, ChartPie } from "lucide-react";
 import { useInfinitePagination } from "@/libs/pagination";
 import ItemFiltering, { useFiltering, getFilter } from "@/layout/ItemFiltering";
 import { api } from "@/app/_trpc/client";
@@ -117,16 +116,6 @@ export default function ManualItems() {
                   <FilePlus className="mr-2 h-6 w-6" />
                   New
                 </Button>
-                <MassEditContent
-                  title="Mass Edit Items"
-                  type="item"
-                  button={
-                    <Button id="create-item" className="w-full">
-                      <SquarePen className="mr-2 h-6 w-6" />
-                      Edit
-                    </Button>
-                  }
-                />
               </div>
             )}
             <div className="ml-2">

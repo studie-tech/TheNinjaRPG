@@ -17,7 +17,6 @@ import {
 import { IMG_AVATAR_DEFAULT, IMG_SECTOR_USER_SPRITE_MASK } from "@/drizzle/constants";
 import { loadTexture } from "@/libs/threejs/util";
 import type { GlobalPoint } from "@/libs/travel/types";
-import type { UserWithRelations } from "@/server/api/routers/profile";
 
 /**
  * Cleanup three.js scene and renderer, removing all objects, materials and geometries

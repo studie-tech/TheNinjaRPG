@@ -10,7 +10,14 @@ import { rewardFields } from "@/validators/objectives";
 import type { StatType, GeneralType, PoolType, ElementName } from "@/drizzle/constants";
 import type { publicState } from "@/libs/combat/constants";
 import type { StatNames, GenNames } from "@/libs/combat/constants";
-import type { Jutsu, Item, VillageAlliance, Clan, War } from "@/drizzle/schema";
+import type {
+  Jutsu,
+  Item,
+  VillageAlliance,
+  Clan,
+  War,
+  UserItemImbuement,
+} from "@/drizzle/schema";
 import type { UserJutsu, UserItem, UserData, AiProfile } from "@/drizzle/schema";
 import type { AnbuSquad } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
@@ -38,6 +45,7 @@ export type BattleUserState = Omit<NonNullable<UserWithRelations>, "items"> & {
   basicActions: CombatAction[];
   items: (UserItem & {
     item: Item;
+    imbuements: (UserItemImbuement & { item: Item })[];
     lastUsedRound: number;
     originalCooldown: number;
   })[];
@@ -1239,6 +1247,18 @@ export const ItemValidatorRawSchema = z.object({
     .regex(DateTimeRegExp, "Must be of format YYYY-MM-DD")
     .nullable(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
+  canBeImbued: z.coerce.boolean().default(false),
+  craftable: z.coerce.boolean().default(false),
+  craftingRequirements: z
+    .array(
+      z.object({
+        ids: z.array(z.string()),
+        number: z.coerce.number().int().min(1).max(100),
+      }),
+    )
+    .default([])
+    .optional()
+    .nullish(),
 });
 export const ItemValidator =
   ItemValidatorRawSchema.superRefine(SuperRefineBase).superRefine(SuperRefineItem);

@@ -4,11 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import MassEditContent from "@/layout/MassEditContent";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import { Button } from "@/components/ui/button";
 import { api } from "@/app/_trpc/client";
-import { FilePlus, SquarePen } from "lucide-react";
+import { FilePlus } from "lucide-react";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { showMutationToast } from "@/libs/toast";
@@ -123,16 +122,6 @@ export default function ManualQuests() {
                   <FilePlus className="mr-1 h-6 w-6" />
                   New
                 </Button>
-                <MassEditContent
-                  title="Mass Edit Quests"
-                  type="quest"
-                  button={
-                    <Button id="create-quest">
-                      <SquarePen className="mr-2 h-6 w-6" />
-                      Edit
-                    </Button>
-                  }
-                />
               </div>
             )}
             <QuestFiltering state={state} />

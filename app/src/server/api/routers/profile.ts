@@ -1852,6 +1852,10 @@ export const fetchPublicUsers = async (
         return [desc(userData.updatedAt)];
       case "Strongest":
         return [desc(userData.level), desc(userData.experience)];
+      case "Crafting":
+        return [desc(userData.craftingExperience), desc(userData.experience)];
+      case "Medical":
+        return [desc(userData.medicalExperience), desc(userData.experience)];
       case "PvP":
         return [desc(userData.pvpStreak), desc(userData.experience)];
       case "Ranked":
@@ -1917,6 +1921,8 @@ export const fetchPublicUsers = async (
         updatedAt: true,
         userId: true,
         username: true,
+        craftingExperience: true,
+        medicalExperience: true,
         villagePrestige: true,
         tavernMessages: true,
         dailyArenaFights: true,
