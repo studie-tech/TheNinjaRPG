@@ -1,10 +1,11 @@
 import { nanoid } from "nanoid";
 import { and, eq, sql, gte, desc, inArray, or, isNull } from "drizzle-orm";
-import { bounty, bountySignup, userData } from "@/drizzle/schema";
+import { bounty, bountySignup, bountyContribution, userData } from "@/drizzle/schema";
 import {
   BOUNTY_MAX_HUNTERS,
   RANKS_RESTRICTED_FROM_PVP,
   BOUNTY_MIN_AMOUNT,
+  VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import {
   createBountySchema,
@@ -13,6 +14,7 @@ import {
   retractBountySchema,
   bountyBoardFilterSchema,
   collectBountySchema,
+  addBountyMoneySchema,
 } from "@/validators/bounty";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { baseServerResponse, errorResponse } from "../trpc";
@@ -33,14 +35,19 @@ export const bountyRouter = createTRPCRouter({
       const [currentUser, results] = await Promise.all([
         fetchUser(ctx.drizzle, userId),
         ctx.drizzle.query.bounty.findMany({
-          where: and(
-            inArray(bounty.status, ["OPEN", "CLAIMED"]),
-            // Hide completed bounties (CLAIMED and collected)
-            or(
-              eq(bounty.status, "OPEN"),
-              and(eq(bounty.status, "CLAIMED"), isNull(bounty.collectedAt))
-            ),
-          ),
+          where:
+            input.status === "all"
+              ? undefined
+              : input.status === "OPEN"
+                ? and(
+                    inArray(bounty.status, ["OPEN", "CLAIMED"]),
+                    // Hide completed bounties (CLAIMED and collected)
+                    or(
+                      eq(bounty.status, "OPEN"),
+                      and(eq(bounty.status, "CLAIMED"), isNull(bounty.collectedAt)),
+                    ),
+                  )
+                : eq(bounty.status, input.status),
           columns: {
             id: true,
             amountRyo: true,
@@ -60,6 +67,7 @@ export const bountyRouter = createTRPCRouter({
                 level: true,
                 rank: true,
                 isOutlaw: true,
+                villageId: true,
               },
             },
             hunters: {
@@ -74,6 +82,7 @@ export const bountyRouter = createTRPCRouter({
                     level: true,
                     rank: true,
                     isOutlaw: true,
+                    villageId: true,
                   },
                 },
               },
@@ -85,6 +94,17 @@ export const bountyRouter = createTRPCRouter({
                 level: true,
                 rank: true,
                 isOutlaw: true,
+                villageId: true,
+              },
+            },
+            claimedBy: {
+              columns: {
+                username: true,
+                avatar: true,
+                level: true,
+                rank: true,
+                isOutlaw: true,
+                villageId: true,
               },
             },
           },
@@ -99,17 +119,38 @@ export const bountyRouter = createTRPCRouter({
         : false;
 
       // Transform results and filter based on permissions
-      const transformedResults = results.map((bountyItem) => ({
-        ...bountyItem,
-        huntersCount: bountyItem.hunters?.length ?? 0,
-        youSignedUp: bountyItem.hunters?.some((h) => h.hunterUserId === userId) ?? false,
-        targetUser: bountyItem.target,
-        creatorUser: canSeeHiddenInfo ? bountyItem.creator : undefined,
-        creatorUserId: canSeeHiddenInfo ? bountyItem.creatorUserId : undefined,
-        huntingUsers: canSeeHiddenInfo
-          ? bountyItem.hunters?.map((h) => 'hunter' in h ? h.hunter : null).filter(Boolean)
-          : undefined,
-      }));
+      const transformedResults = results
+        .filter((bountyItem) => {
+          // Staff and syndicate users can see all bounties
+          if (canSeeHiddenInfo || currentUser?.villageId === VILLAGE_SYNDICATE_ID) {
+            return true;
+          }
+
+          // For other users, hide bounties from the same village
+          const targetVillageId = bountyItem.target?.villageId;
+          const creatorVillageId = bountyItem.creator?.villageId;
+          const userVillageId = currentUser?.villageId;
+
+          // Hide if target or creator is from the same village
+          return (
+            targetVillageId !== userVillageId && creatorVillageId !== userVillageId
+          );
+        })
+        .map((bountyItem) => ({
+          ...bountyItem,
+          huntersCount: bountyItem.hunters?.length ?? 0,
+          youSignedUp:
+            bountyItem.hunters?.some((h) => h.hunterUserId === userId) ?? false,
+          targetUser: bountyItem.target,
+          creatorUser: canSeeHiddenInfo ? bountyItem.creator : undefined,
+          creatorUserId: canSeeHiddenInfo ? bountyItem.creatorUserId : undefined,
+          huntingUsers: canSeeHiddenInfo
+            ? bountyItem.hunters
+                ?.map((h) => ("hunter" in h ? h.hunter : null))
+                .filter(Boolean)
+            : undefined,
+          claimedByUser: bountyItem.claimedBy,
+        }));
 
       const nextCursor = results.length < limit ? null : (input.cursor ?? 0) + 1;
       return { data: transformedResults, nextCursor };
@@ -136,6 +177,16 @@ export const bountyRouter = createTRPCRouter({
           `Bounty amount too low. Must be at least ${BOUNTY_MIN_AMOUNT.toLocaleString()} Ryo`,
         );
       if (creator.money < amountRyo) return errorResponse("Not enough ryo");
+
+      // Check if target already has an active bounty
+      const existingBounty = await ctx.drizzle.query.bounty.findFirst({
+        where: and(eq(bounty.targetUserId, targetUserId), eq(bounty.status, "OPEN")),
+      });
+      if (existingBounty) {
+        return errorResponse(
+          "Target already has an active bounty. You can add money to it instead.",
+        );
+      }
       // Mutation 1
       const result = await ctx.drizzle
         .update(userData)
@@ -143,14 +194,25 @@ export const bountyRouter = createTRPCRouter({
         .where(and(eq(userData.userId, ctx.userId), gte(userData.money, amountRyo)));
       if (result?.rowsAffected === 0) return errorResponse("Not enough ryo");
       // Mutation 2
-      await ctx.drizzle.insert(bounty).values({
-        id: nanoid(),
-        targetUserId,
-        creatorUserId: ctx.userId,
-        amountRyo,
-        status: "OPEN",
-        createdAt: new Date(),
-      });
+      const bountyId = nanoid();
+      await Promise.all([
+        ctx.drizzle.insert(bounty).values({
+          id: bountyId,
+          targetUserId,
+          creatorUserId: ctx.userId,
+          amountRyo,
+          originalAmountRyo: amountRyo,
+          status: "OPEN",
+          createdAt: new Date(),
+        }),
+        ctx.drizzle.insert(bountyContribution).values({
+          id: nanoid(),
+          bountyId,
+          contributorUserId: ctx.userId,
+          amountRyo,
+          createdAt: new Date(),
+        }),
+      ]);
       return { success: true, message: "Bounty created" };
     }),
 
@@ -160,7 +222,7 @@ export const bountyRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       const { bountyId } = input;
-      const [curBounty, curSignups, userSignups] = await Promise.all([
+      const [curBounty, curSignups, userSignups, target] = await Promise.all([
         ctx.drizzle.query.bounty.findFirst({
           where: eq(bounty.id, bountyId),
         }),
@@ -170,6 +232,7 @@ export const bountyRouter = createTRPCRouter({
         ctx.drizzle.query.bountySignup.findFirst({
           where: eq(bountySignup.hunterUserId, ctx.userId),
         }),
+        fetchUser(ctx.drizzle, input.targetUserId),
       ]);
       // Guards
       if (!curBounty) return errorResponse("Bounty not found");
@@ -178,6 +241,9 @@ export const bountyRouter = createTRPCRouter({
         return errorResponse("Cannot track your own bounty");
       if (curBounty.targetUserId === ctx.userId)
         return errorResponse("Cannot track your own bounty");
+      if (!target) return errorResponse("Target user not found");
+      if (target.userId !== curBounty.targetUserId)
+        return errorResponse("Target user does not match bounty");
       const hunter = await fetchUser(ctx.drizzle, ctx.userId);
       if (!hunter) return errorResponse("User not found");
       if (RANKS_RESTRICTED_FROM_PVP.includes(hunter.rank))
@@ -187,6 +253,13 @@ export const bountyRouter = createTRPCRouter({
       if (curSignups && curSignups.length >= BOUNTY_MAX_HUNTERS)
         return errorResponse("Maximum hunters signed up already");
       if (userSignups) return errorResponse("Already tracking a bounty.");
+      if (
+        hunter.villageId === target.villageId &&
+        hunter.villageId !== VILLAGE_SYNDICATE_ID
+      ) {
+        return errorResponse("Cannot take bounties on players in the same village");
+      }
+
       // Sign up for the bounty hunt
       await ctx.drizzle.insert(bountySignup).values({
         id: nanoid(),
@@ -288,14 +361,64 @@ export const bountyRouter = createTRPCRouter({
       return { success: true, message: "Bounty claimed successfully" };
     }),
 
+  addMoney: protectedProcedure
+    .input(addBountyMoneySchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [curBounty, user] = await Promise.all([
+        ctx.drizzle.query.bounty.findFirst({
+          where: eq(bounty.id, input.bountyId),
+        }),
+        fetchUser(ctx.drizzle, ctx.userId),
+      ]);
+      // Guards
+      if (!curBounty) return errorResponse("Bounty not found");
+      if (curBounty.status !== "OPEN") return errorResponse("Bounty not open");
+      if (input.amountRyo < 1) return errorResponse("Amount must be at least 1 Ryo");
+      if (user.money < input.amountRyo) return errorResponse("Not enough ryo");
+
+      // Execute mutations in parallel
+      await Promise.all([
+        // Add money to the bounty
+        ctx.drizzle
+          .update(bounty)
+          .set({ amountRyo: sql`${bounty.amountRyo} + ${input.amountRyo}` })
+          .where(eq(bounty.id, input.bountyId)),
+        // Deduct money from the user
+        ctx.drizzle
+          .update(userData)
+          .set({ money: sql`${userData.money} - ${input.amountRyo}` })
+          .where(eq(userData.userId, ctx.userId)),
+        // Track the contribution
+        ctx.drizzle.insert(bountyContribution).values({
+          id: nanoid(),
+          bountyId: input.bountyId,
+          contributorUserId: ctx.userId,
+          amountRyo: input.amountRyo,
+          createdAt: new Date(),
+        }),
+      ]);
+
+      return {
+        success: true,
+        message: `Added ${input.amountRyo.toLocaleString()} Ryo to bounty`,
+      };
+    }),
+
   retract: protectedProcedure
     .input(retractBountySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const curBounty = await ctx.drizzle.query.bounty.findFirst({
-        where: eq(bounty.id, input.bountyId),
-      });
+      const [curBounty, contributions] = await Promise.all([
+        ctx.drizzle.query.bounty.findFirst({
+          where: eq(bounty.id, input.bountyId),
+        }),
+        ctx.drizzle.query.bountyContribution.findMany({
+          where: eq(bountyContribution.bountyId, input.bountyId),
+        }),
+      ]);
       // Guards
       if (!curBounty) return errorResponse("Bounty not found");
       if (curBounty.creatorUserId !== ctx.userId)
@@ -319,11 +442,17 @@ export const bountyRouter = createTRPCRouter({
         ctx.drizzle
           .delete(bountySignup)
           .where(eq(bountySignup.bountyId, input.bountyId)),
-        // Refund the bounty amount to the creator
+        // Remove all contributions for this bounty
         ctx.drizzle
-          .update(userData)
-          .set({ money: sql`${userData.money} + ${curBounty.amountRyo}` })
-          .where(eq(userData.userId, ctx.userId)),
+          .delete(bountyContribution)
+          .where(eq(bountyContribution.bountyId, input.bountyId)),
+        // Refund all contributors their money
+        ...contributions.map((contribution) =>
+          ctx.drizzle
+            .update(userData)
+            .set({ money: sql`${userData.money} + ${contribution.amountRyo}` })
+            .where(eq(userData.userId, contribution.contributorUserId)),
+        ),
       ]);
       return { success: true, message: "Bounty retracted successfully" };
     }),

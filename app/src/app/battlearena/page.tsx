@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getSearchValidator } from "@/validators/register";
 import { useRouter } from "next/navigation";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -43,6 +44,7 @@ import { Input } from "@/components/ui/input";
 import type { z } from "zod";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import type { StatSchemaType } from "@/libs/combat/types";
+import { useState } from "react";
 
 export default function Arena() {
   // Tab selection
@@ -313,6 +315,9 @@ const ChallengeUser: React.FC = () => {
     defaultValue: [],
   })?.[0];
 
+  // Ranked rules toggle
+  const [useRankedRules, setUseRankedRules] = useState(false);
+
   // tRPC utility
   const utils = api.useUtils();
 
@@ -347,11 +352,21 @@ const ChallengeUser: React.FC = () => {
           showAi={false}
           maxUsers={maxUsers}
         />
+        <div className="flex items-center space-x-2 mt-2 mb-2">
+          <Checkbox
+            id="useRankedRules"
+            checked={useRankedRules}
+            onCheckedChange={(checked) => setUseRankedRules(checked === true)}
+          />
+          <label htmlFor="useRankedRules" className="text-sm">
+            Use ranked rules (ranked loadouts, level 100 stats, no LP rewards)
+          </label>
+        </div>
         {targetUser && (
           <Button
             id="challenge"
             className="mt-2 w-full"
-            onClick={() => create({ targetId: targetUser.userId })}
+            onClick={() => create({ targetId: targetUser.userId, useRankedRules })}
           >
             <Swords className="h-5 w-5 mr-2" />
             Challenge Now!

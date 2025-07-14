@@ -5,10 +5,11 @@ import { serverError, baseServerResponse } from "@/server/api/trpc";
 import { eq, or, and, gt, inArray } from "drizzle-orm";
 import { SPAR_EXPIRY_SECONDS } from "@/libs/combat/constants";
 import { secondsFromNow } from "@/utils/time";
-import { userRequest } from "@/drizzle/schema";
+import { userRequest, rankedLoadout } from "@/drizzle/schema";
 import { getServerPusher } from "@/libs/pusher";
 import { fetchUser } from "@/routers/profile";
 import { initiateBattle } from "@/routers/combat";
+import { RANKED_PVP_STATS } from "@/drizzle/constants";
 import type { UserRequestState, UserRequestType } from "@/drizzle/constants";
 import type { DrizzleClient } from "@/server/db";
 
@@ -19,7 +20,12 @@ export const sparringRouter = createTRPCRouter({
     return fetchRequests(ctx.drizzle, ["SPAR"], SPAR_EXPIRY_SECONDS * 2, ctx.userId);
   }),
   createChallenge: protectedProcedure
-    .input(z.object({ targetId: z.string() }))
+    .input(
+      z.object({
+        targetId: z.string(),
+        useRankedRules: z.boolean().optional().default(false),
+      }),
+    )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
@@ -33,7 +39,15 @@ export const sparringRouter = createTRPCRouter({
         return errorResponse("Max 1 challenge per 10 seconds");
       }
       // Mutate
-      await insertRequest(ctx.drizzle, user.userId, target.userId, "SPAR");
+      await insertRequest(
+        ctx.drizzle,
+        user.userId,
+        target.userId,
+        "SPAR",
+        undefined,
+        undefined,
+        input.useRankedRules,
+      );
       void pusher.trigger(input.targetId, "event", {
         type: "userMessage",
         message: "You have been challenged",
@@ -58,6 +72,48 @@ export const sparringRouter = createTRPCRouter({
       if (challenge.status !== "PENDING") {
         return errorResponse("Challenge not pending");
       }
+
+      // Determine battle type and setup based on challenge settings
+      const useRankedRules = challenge.useRankedRules || false;
+      const battleType = useRankedRules ? "RANKED_SPARRING" : "SPARRING";
+
+      // Get ranked loadouts if using ranked rules
+      let forceLoadouts = undefined;
+      if (useRankedRules) {
+        const [senderLoadout, receiverLoadout] = await Promise.all([
+          ctx.drizzle.query.rankedLoadout.findFirst({
+            where: eq(rankedLoadout.userId, challenge.senderId),
+          }),
+          ctx.drizzle.query.rankedLoadout.findFirst({
+            where: eq(rankedLoadout.userId, challenge.receiverId),
+          }),
+        ]);
+
+        if (!senderLoadout || !receiverLoadout) {
+          return errorResponse(
+            "Both players must have ranked loadouts for ranked sparring",
+          );
+        }
+
+        // Check that both loadouts have at least some items/jutsus equipped
+        const senderHasLoadout =
+          senderLoadout.loadout.jutsuIds.length > 0 ||
+          senderLoadout.loadout.weaponIds.length > 0 ||
+          senderLoadout.loadout.consumableIds.length > 0;
+        const receiverHasLoadout =
+          receiverLoadout.loadout.jutsuIds.length > 0 ||
+          receiverLoadout.loadout.weaponIds.length > 0 ||
+          receiverLoadout.loadout.consumableIds.length > 0;
+
+        if (!senderHasLoadout || !receiverHasLoadout) {
+          return errorResponse(
+            "Both players must have equipped items in their ranked loadouts for ranked rules sparring",
+          );
+        }
+
+        forceLoadouts = [senderLoadout, receiverLoadout];
+      }
+
       // Mutate
       const result = await initiateBattle(
         {
@@ -66,8 +122,11 @@ export const sparringRouter = createTRPCRouter({
           targetIds: [challenge.senderId],
           client: ctx.drizzle,
           asset: "arena",
+          targetStatDistribution: useRankedRules ? RANKED_PVP_STATS : undefined,
+          userStatDistribution: useRankedRules ? RANKED_PVP_STATS : undefined,
+          forceLoadouts,
         },
-        "SPARRING",
+        battleType,
       );
       if (result.success) {
         await Promise.all([
@@ -210,6 +269,7 @@ export const insertRequest = async (
   type: UserRequestType,
   value?: number,
   relatedId?: string,
+  useRankedRules?: boolean,
 ) => {
   await client.insert(userRequest).values({
     id: nanoid(),
@@ -219,5 +279,6 @@ export const insertRequest = async (
     type,
     value: value || null,
     relatedId: relatedId || null,
+    useRankedRules: useRankedRules || false,
   });
 };

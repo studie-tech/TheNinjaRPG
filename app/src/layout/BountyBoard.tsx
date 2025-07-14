@@ -2,7 +2,7 @@
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import Loader from "@/layout/Loader";
 import Image from "next/image";
@@ -15,8 +15,23 @@ import { showMutationToast } from "@/libs/toast";
 import { createBountySchema } from "@/validators/bounty";
 import { getSearchValidator } from "@/validators/register";
 import { showUserRank } from "@/libs/profile";
-import { Eye, Trophy, X } from "lucide-react";
+import { Eye, Trophy, X, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { canSeeHiddenBountyInfo } from "@/utils/permissions";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import {
   Form,
@@ -28,6 +43,7 @@ import {
 } from "@/components/ui/form";
 import type { z } from "zod";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 type CreateBountyFormData = z.infer<typeof createBountySchema>;
 type UserSearchFormData = z.infer<ReturnType<typeof getSearchValidator>>;
@@ -38,6 +54,14 @@ interface BountyBoardProps {
 
 export default function BountyBoard({ userData }: BountyBoardProps) {
   const util = api.useUtils();
+  const { updateUser } = useRequiredUserData();
+  const [bountyStatus, setBountyStatus] = useState<
+    "OPEN" | "CLAIMED" | "EXPIRED" | "CANCELLED" | "all"
+  >("OPEN");
+  const [addingMoneyTo, setAddingMoneyTo] = useState<string | null>(null);
+  const [addMoneyAmount, setAddMoneyAmount] = useState<number>(0);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const isStaff = canSeeHiddenBountyInfo(userData.role);
 
   const form = useForm<CreateBountyFormData>({
     resolver: zodResolver(createBountySchema),
@@ -70,7 +94,10 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
   }, [selectedUsers, form]);
 
   // Query
-  const { data, isLoading } = api.bounty.board.useQuery({ limit: 50 });
+  const { data, isLoading } = api.bounty.board.useQuery({
+    limit: 50,
+    status: bountyStatus,
+  });
 
   // Mutations
   const { mutate: createBounty, isPending: isCreating } = api.bounty.create.useMutation(
@@ -117,6 +144,20 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
       },
     });
 
+  const { mutate: addMoney, isPending: isAddingMoney } =
+    api.bounty.addMoney.useMutation({
+      onSuccess: async (data, variables) => {
+        showMutationToast(data);
+        if (data.success) {
+          setAddingMoneyTo(null);
+          setAddMoneyAmount(0);
+          setIsModalOpen(false);
+          await util.bounty.board.invalidate();
+          await updateUser({ money: userData.money - variables.amountRyo });
+        }
+      },
+    });
+
   const onSubmit = (data: CreateBountyFormData) => {
     if (selectedUsers.length === 0) {
       showMutationToast({ success: false, message: "Please select a target user" });
@@ -143,7 +184,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
     {
       key: "amountRyo",
       header: "Ryo",
-      type: "string",
+      type: "jsx",
     },
     {
       key: "hunters",
@@ -232,6 +273,28 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
         </Form>
       </div>
 
+      {isStaff && (
+        <div className="flex justify-end items-center gap-2 p-2">
+          <Select
+            value={bountyStatus}
+            onValueChange={(
+              value: "OPEN" | "CLAIMED" | "EXPIRED" | "CANCELLED" | "all",
+            ) => setBountyStatus(value)}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="OPEN">Open</SelectItem>
+              <SelectItem value="CLAIMED">Claimed</SelectItem>
+              <SelectItem value="EXPIRED">Expired</SelectItem>
+              <SelectItem value="CANCELLED">Cancelled</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <Table
         data={data?.data.map((b) => ({
           ...b,
@@ -250,6 +313,82 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
           ) : (
             <div>
               <p className="font-bold text-gray-500">Unknown User</p>
+            </div>
+          ),
+          amountRyo: (
+            <div className="flex items-center gap-2">
+              <span>{b.amountRyo.toLocaleString()}</span>
+              {b.status === "OPEN" && (
+                <Dialog
+                  open={isModalOpen && addingMoneyTo === b.id}
+                  onOpenChange={(open) => {
+                    setIsModalOpen(open);
+                    if (!open) {
+                      setAddingMoneyTo(null);
+                      setAddMoneyAmount(0);
+                    }
+                  }}
+                >
+                  <DialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setAddingMoneyTo(b.id);
+                        setIsModalOpen(true);
+                      }}
+                      disabled={isAddingMoney}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Add Money to Bounty</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <label
+                          htmlFor="amount"
+                          className="block text-sm font-medium mb-2"
+                        >
+                          Amount (Ryo)
+                        </label>
+                        <Input
+                          id="amount"
+                          type="number"
+                          placeholder="Enter amount"
+                          value={addMoneyAmount}
+                          onChange={(e) =>
+                            setAddMoneyAmount(parseInt(e.target.value) || 0)
+                          }
+                          min="1"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setIsModalOpen(false);
+                            setAddingMoneyTo(null);
+                            setAddMoneyAmount(0);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={() =>
+                            addMoney({ bountyId: b.id, amountRyo: addMoneyAmount })
+                          }
+                          disabled={isAddingMoney || addMoneyAmount <= 0}
+                        >
+                          Add Money
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
           ),
           hunters: `${b.huntersCount} / 3`,
@@ -321,7 +460,9 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
               return (
                 <Button
                   size="sm"
-                  onClick={() => signup({ bountyId: b.id })}
+                  onClick={() =>
+                    signup({ bountyId: b.id, targetUserId: b.targetUserId })
+                  }
                   disabled={isSigningup}
                 >
                   <Eye className="h-4 w-4 mr-2" />
@@ -348,7 +489,9 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 <Badge className="p-2" variant="outline">
                   <Trophy className="h-4 w-4 mr-2" />
                   Collected by{" "}
-                  {b.claimedByUserId === userData?.userId ? "You" : "Other"}
+                  {b.claimedByUserId === userData?.userId
+                    ? "You"
+                    : (b.claimedByUser?.username ?? "Unknown")}
                 </Badge>
               );
             }

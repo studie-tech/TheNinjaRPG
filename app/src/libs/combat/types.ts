@@ -1052,12 +1052,21 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
   const hasNonCombatConsumeReward = data.effects.find(
     (e) => e.type === "noncombatconsumereward",
   );
-  if (data.cost === 0 && data.repsCost === 0) {
-    addIssue(ctx, "Must have either a ryo or reputation points cost");
+  
+  // Cost validation - exactly one cost type must be set
+  const costTypes = [
+    { name: "ryo", value: data.cost },
+    { name: "reputation", value: data.repsCost },
+    { name: "seichi silver", value: data.seichiSilverCost }
+  ].filter(cost => cost.value > 0);
+  
+  if (costTypes.length === 0) {
+    addIssue(ctx, "Must have either a ryo, reputation points, or seichi silver cost");
+  } else if (costTypes.length > 1) {
+    const costNames = costTypes.map(c => c.name).join(", ");
+    addIssue(ctx, `Cannot have multiple cost types. Found: ${costNames}`);
   }
-  if (data.cost > 0 && data.repsCost > 0) {
-    addIssue(ctx, "Cannot have both ryo and reputation points cost");
-  }
+  
   if (data.itemType === "CONSUMABLE" && data.destroyOnUse === 0) {
     addIssue(ctx, "Consumable items must be destroyed on use");
   }

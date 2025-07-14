@@ -8,13 +8,8 @@ import { rankedSeason, rankedUserRewards } from "@/drizzle/schema";
 import { canChangeContent } from "@/utils/permissions";
 import { rankedLoadoutSchema, rankedSeasonSchema } from "@/validators/pvpRank";
 import { baseServerResponse, errorResponse } from "@/api/trpc";
-import {
-  RANKED_LOADOUT_MAX_CONSUMABLES,
-  RANKED_LOADOUT_MAX_WEAPONS,
-  RANKED_LOADOUT_MAX_JUTSUS,
-  RANKED_SANNIN_TOP_PLAYERS,
-  RANKED_PVP_STATS,
-} from "@/drizzle/constants";
+import { RANKED_SANNIN_TOP_PLAYERS, RANKED_PVP_STATS } from "@/drizzle/constants";
+import { validateJutsuLoadout, validateItemLoadout } from "@/libs/ranked_pvp";
 import { initiateBattle } from "@/routers/combat";
 import { secondsPassed } from "@/utils/time";
 import { fetchUser } from "@/routers/profile";
@@ -241,11 +236,15 @@ export const pvpRankRouter = createTRPCRouter({
       fetchUser(ctx.drizzle, ctx.userId),
       fetchUserRankedQueue(ctx.drizzle, ctx.userId),
     ]);
-    // Fix user status
-    if (user.status === "QUEUED" && !queueEntry) {
+    // Cleanups ub case of bad queuing state
+    if (user.status !== "QUEUED" && queueEntry) {
+      await ctx.drizzle
+        .delete(rankedPvpQueue)
+        .where(eq(rankedPvpQueue.userId, ctx.userId));
+    } else if (user.status === "QUEUED" && !queueEntry) {
       await ctx.drizzle
         .update(userData)
-        .set({ status: "AWAKE" })
+        .set({ status: "ASLEEP" })
         .where(eq(userData.userId, ctx.userId));
     }
     // Get the queue count
@@ -283,9 +282,6 @@ export const pvpRankRouter = createTRPCRouter({
           where: eq(rankedLoadout.userId, ctx.userId),
         }),
       ]);
-      // Split weapons and consumables
-      const weapons = items.filter((item) => item.itemType === "WEAPON");
-      const consumables = items.filter((item) => item.itemType === "CONSUMABLE");
       // Guard & ensure that all the items & jutsus exist and are of correct type
       if (!currentLoadout) {
         return errorResponse("No ranked loadout found");
@@ -296,21 +292,11 @@ export const pvpRankRouter = createTRPCRouter({
       if (jutsus.length !== input.jutsuIds.length) {
         return errorResponse("Some jutsus not found or not available in shop");
       }
-      // Check if items exist and are of correct type
-      if (weapons.length > RANKED_LOADOUT_MAX_WEAPONS) {
-        return errorResponse(
-          `You can only equip up to ${RANKED_LOADOUT_MAX_WEAPONS} weapons`,
-        );
-      }
-      if (consumables.length > RANKED_LOADOUT_MAX_CONSUMABLES) {
-        return errorResponse(
-          `You can only equip up to ${RANKED_LOADOUT_MAX_CONSUMABLES} consumables`,
-        );
-      }
-      if (jutsus.length > RANKED_LOADOUT_MAX_JUTSUS) {
-        return errorResponse(
-          `You can only equip up to ${RANKED_LOADOUT_MAX_JUTSUS} jutsus`,
-        );
+      // Check loadout
+      const jutsuCheck = validateJutsuLoadout(jutsus);
+      const itemCheck = validateItemLoadout(items);
+      if (!jutsuCheck.check || !itemCheck.check) {
+        return errorResponse(jutsuCheck.message || itemCheck.message);
       }
       // Run mutation
       await ctx.drizzle
@@ -323,22 +309,63 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Queue for ranked PVP battle
   queueForRankedPvp: protectedProcedure
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .output(
+      baseServerResponse.extend({
+        battleId: z.string().optional(),
+        removedJutsuIds: z.array(z.string()).optional(),
+      }),
+    )
     .mutation(async ({ ctx }) => {
       // Query
-      const [existingQueue, user] = await Promise.all([
+      const [existingQueue, user, currentLoadout] = await Promise.all([
         fetchUserRankedQueue(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.rankedLoadout.findFirst({
+          where: eq(rankedLoadout.userId, ctx.userId),
+        }),
       ]);
       // Guard
       if (existingQueue) {
         return errorResponse("Already in queue");
       }
+
+      // Validate loadout for residual jutsu limit
+      if (
+        currentLoadout?.loadout.jutsuIds.length ||
+        currentLoadout?.loadout.weaponIds.length ||
+        currentLoadout?.loadout.consumableIds.length
+      ) {
+        const [jutsus, items] = await Promise.all([
+          currentLoadout.loadout.jutsuIds.length > 0
+            ? ctx.drizzle.query.jutsu.findMany({
+                where: inArray(jutsu.id, currentLoadout.loadout.jutsuIds),
+              })
+            : [],
+          currentLoadout.loadout.weaponIds.length > 0 ||
+          currentLoadout.loadout.consumableIds.length > 0
+            ? ctx.drizzle.query.item.findMany({
+                where: inArray(item.id, [
+                  ...currentLoadout.loadout.weaponIds,
+                  ...currentLoadout.loadout.consumableIds,
+                ]),
+              })
+            : [],
+        ]);
+
+        // Check loadout
+        const jutsuCheck = validateJutsuLoadout(jutsus);
+        const itemCheck = validateItemLoadout(items);
+        if (!jutsuCheck.check || !itemCheck.check) {
+          return errorResponse(jutsuCheck.message || itemCheck.message);
+        }
+      }
+
       const result = await ctx.drizzle
         .update(userData)
         .set({ status: "QUEUED" })
         .where(and(eq(userData.userId, user.userId), eq(userData.status, "AWAKE")));
       if (result.rowsAffected === 0) return errorResponse("Need to be awake to queue");
+
       // Add to queue
       await ctx.drizzle.insert(rankedPvpQueue).values({
         id: nanoid(),

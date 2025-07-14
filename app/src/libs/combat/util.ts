@@ -578,12 +578,6 @@ export const calcBattleResult = (
         eloDiff = 0;
       }
 
-      // Ranked PvP LP change
-      let lpDiff = 0;
-      if (battleType === "RANKED_PVP" && targets[0]) {
-        lpDiff = calculateLpEloChange(user, targets[0], didWin, []);
-      }
-
       // Calculate Experience gain
       let experience = didWin ? eloDiff * expBoost : 0;
       const streakBonus = 1 + user.pvpStreak * 0.05; // 5% per streak
@@ -627,6 +621,17 @@ export const calcBattleResult = (
             ? "Won"
             : "Lost"
           : "Draw";
+
+      // Ranked PvP LP change - handle draws
+      let lpDiff = 0;
+      if (battleType === "RANKED_PVP" && targets[0]) {
+        if (outcome === "Draw") {
+          // Both players gain 10 LP for draws
+          lpDiff = 10;
+        } else {
+          lpDiff = calculateLpEloChange(user, targets[0], didWin, []);
+        }
+      }
 
       // Tokens & prestige
       let deltaTokens = 0;
@@ -944,7 +949,7 @@ export const calcBattleResult = (
       };
 
       // Things to reward for non-spars
-      const noRewardBattles = ["SPARRING", "TRAINING", "RANKED_PVP"];
+      const noRewardBattles = ["SPARRING", "TRAINING", "RANKED_PVP", "RANKED_SPARRING"];
       if (!noRewardBattles.includes(battleType)) {
         // Money stolen/given
         result.money = moneyDelta * battle.rewardScaling + user.moneyStolen;
@@ -1432,7 +1437,7 @@ export const processUsersForBattle = (info: {
     // If in own village, add defence bonus
     const ownSector = user.sector === user.village?.sector;
     const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
-    const excludedBattleTypes = ["ARENA", "RANKED_PVP", "SPARRING"];
+    const excludedBattleTypes = ["ARENA", "RANKED_PVP", "SPARRING", "RANKED_SPARRING"];
     if (ownSector && inVillage && !excludedBattleTypes.includes(battleType)) {
       const boost = structureBoost("villageDefencePerLvl", user.village?.structures);
       const effect = DecreaseDamageTakenTag.parse({
@@ -1458,7 +1463,11 @@ export const processUsersForBattle = (info: {
     }
 
     // Add bloodline efects
-    if (user.bloodline?.effects && battleType !== "RANKED_PVP") {
+    if (
+      user.bloodline?.effects &&
+      battleType !== "RANKED_PVP" &&
+      battleType !== "RANKED_SPARRING"
+    ) {
       user.bloodline.effects.forEach((effect) => {
         const realized = realizeTag({
           tag: effect as UserEffect,
@@ -1476,7 +1485,12 @@ export const processUsersForBattle = (info: {
     }
 
     // Add skill tree effects
-    if (user.userSkills && user.userSkills.length > 0 && battleType !== "RANKED_PVP") {
+    if (
+      user.userSkills &&
+      user.userSkills.length > 0 &&
+      battleType !== "RANKED_PVP" &&
+      battleType !== "RANKED_SPARRING"
+    ) {
       user.userSkills.forEach((userSkill) => {
         if (userSkill.skill?.effects) {
           userSkill.skill.effects.forEach((effect) => {
@@ -1525,7 +1539,7 @@ export const processUsersForBattle = (info: {
           return false;
         }
         // Not if cannot train jutsu
-        if (battleType !== "RANKED_PVP") {
+        if (battleType !== "RANKED_PVP" && battleType !== "RANKED_SPARRING") {
           if (!checkJutsuItems(userjutsu.jutsu, user.items) && !user.isAi) {
             return false;
           }

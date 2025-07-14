@@ -332,6 +332,7 @@ export const BattleTypes = [
   "VILLAGE_PROTECTOR",
   "TRAINING",
   "RANKED_PVP",
+  "RANKED_SPARRING",
 ] as const;
 export type BattleType = (typeof BattleTypes)[number];
 
@@ -340,6 +341,7 @@ export const PvpBattleTypes: BattleType[] = [
   "SPARRING",
   "CLAN_BATTLE",
   "TOURNAMENT",
+  "RANKED_SPARRING",
 ];
 
 export const TournamentTypes = ["CLAN"] as const;
@@ -440,6 +442,7 @@ export const ElementNames = [
   "Explosion",
   "Light",
   "Boil",
+  "Metal",
   "None",
 ] as const;
 export type ElementName = (typeof ElementNames)[number];
@@ -825,6 +828,12 @@ export const RANKED_PVP_STATS = {
 export const RANKED_LOADOUT_MAX_JUTSUS = 15;
 export const RANKED_LOADOUT_MAX_WEAPONS = 2;
 export const RANKED_LOADOUT_MAX_CONSUMABLES = 4;
+export const RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS = 4;
+export const RANKED_LOADOUT_MAX_POISON_ITEMS = 1;
+export const RANKED_LOADOUT_MAX_POISON_JUTSUS = 1;
+export const RANKED_LOADOUT_MAX_INCREASECOST_ITEMS = 1;
+export const RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS = 1;
+export const RANKED_LOADOUT_MAX_SUMMON_JUTSUS = 0;
 
 // Game assets
 export const ID_ANIMATION_SMOKE = "gkYHdSzsHu";
@@ -1181,6 +1190,8 @@ export const IMG_ELEMENT_LIGHTNING =
   "https://utfs.io/f/Hzww9EQvYURJ4DIVIclYIif5CL8BKvMsOh2ZnmS7yHt0jTD3";
 export const IMG_ELEMENT_BOIL =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5qAGAlo797jl4ubX8xrRqTZasyMp2WA5eLGU";
+export const IMG_ELEMENT_METAL =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJu0t3mRCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
 
 export const IMG_BASIC_HEAL =
   "https://utfs.io/f/Hzww9EQvYURJnlXNSKmojJ0EqeDCvBrNmZaXVdY97gSpOWiA";

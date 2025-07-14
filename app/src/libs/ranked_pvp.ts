@@ -2,8 +2,17 @@ import {
   RANKED_RANKS,
   RANKED_STREAK_BONUS,
   RANKED_DIVISIONS,
+  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
+  RANKED_LOADOUT_MAX_POISON_JUTSUS,
+  RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
+  RANKED_LOADOUT_MAX_POISON_ITEMS,
+  RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
+  RANKED_LOADOUT_MAX_JUTSUS,
+  RANKED_LOADOUT_MAX_WEAPONS,
+  RANKED_LOADOUT_MAX_CONSUMABLES,
+  RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
 } from "@/drizzle/constants";
-import type { UserData } from "@/drizzle/schema";
+import type { Jutsu, UserData, Item } from "@/drizzle/schema";
 import type { RankedRank } from "@/drizzle/constants";
 
 /**
@@ -93,3 +102,102 @@ export function calculateLpEloChange(
 
   return Math.round(lpChange);
 }
+
+/**
+ * Validate the jutsu loadout for ranked PvP
+ * @param jutsus - The jutsu loadout to validate
+ * @returns An object with a check flag and a message if the loadout is invalid
+ */
+export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
+  let check = true;
+  let message = "";
+
+  // Check residual jutsu limit
+  const residualJutsus = jutsus.filter((jutsu) =>
+    jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
+  );
+  if (residualJutsus.length > RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS} residual jutsu in ranked PvP`;
+  }
+
+  // Check poison jutsu limit
+  const poisonJutsus = jutsus.filter((jutsu) =>
+    jutsu.effects.some((e) => e.type === "poison"),
+  );
+  if (poisonJutsus.length > RANKED_LOADOUT_MAX_POISON_JUTSUS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_POISON_JUTSUS} poison jutsu in ranked PvP`;
+  }
+
+  // Check increasecost jutsu limit
+  const increasecostJutsus = jutsus.filter((jutsu) =>
+    jutsu.effects.some((e) => e.type === "increasepoolcost"),
+  );
+  if (increasecostJutsus.length > RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS} increasecost jutsu in ranked PvP`;
+  }
+
+  // Check summon jutsu limit
+  const summonJutsus = jutsus.filter((jutsu) =>
+    jutsu.effects.some((e) => e.type === "summon"),
+  );
+  if (summonJutsus.length > RANKED_LOADOUT_MAX_SUMMON_JUTSUS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_SUMMON_JUTSUS} summon jutsu in ranked PvP`;
+  }
+
+  if (jutsus.length > RANKED_LOADOUT_MAX_JUTSUS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_JUTSUS} jutsus`;
+  }
+
+  return { check, message };
+};
+
+/**
+ * Validate the item loadout for ranked PvP
+ * @param items - The item loadout to validate
+ * @returns An object with a check flag and a message if the loadout is invalid
+ */
+export const validateItemLoadout = (items: Item[]) => {
+  let check = true;
+  let message = "";
+
+  // Split weapons and consumables
+  const weapons = items.filter((item) => item.itemType === "WEAPON");
+  const consumables = items.filter((item) => item.itemType === "CONSUMABLE");
+
+  // Check poison items limit
+  const poisonItems = items.filter((item) =>
+    item.effects.some((e) => e.type === "poison"),
+  );
+  if (poisonItems.length > RANKED_LOADOUT_MAX_POISON_ITEMS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_POISON_ITEMS} poison item in ranked PvP`;
+  }
+
+  // Check increasecost items limit
+  const increasecostItems = items.filter((item) =>
+    item.effects.some((e) => e.type === "increasepoolcost"),
+  );
+  if (increasecostItems.length > RANKED_LOADOUT_MAX_INCREASECOST_ITEMS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} increasecost item in ranked PvP`;
+  }
+
+  // Check weapon limit
+  if (weapons.length > RANKED_LOADOUT_MAX_WEAPONS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_WEAPONS} weapons`;
+  }
+
+  // Check consumable limit
+  if (consumables.length > RANKED_LOADOUT_MAX_CONSUMABLES) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_CONSUMABLES} consumables`;
+  }
+
+  return { check, message };
+};

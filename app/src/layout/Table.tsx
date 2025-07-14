@@ -96,9 +96,7 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                     />
                   )}
                   {column.type === "string" && (
-                    <div title={column.tooltip?.(row)}>
-                      {row[column.key] as string}
-                    </div>
+                    <div title={column.tooltip?.(row)}>{row[column.key] as string}</div>
                   )}
                   {column.type === "jsx" && (row[column.key] as React.ReactNode)}
                   {column.type === "capitalized" &&

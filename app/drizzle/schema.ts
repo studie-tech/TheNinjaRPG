@@ -2629,6 +2629,7 @@ export const userRequest = mysqlTable(
     type: mysqlEnum("type", consts.UserRequestTypes).notNull(),
     value: int("value").default(0),
     relatedId: varchar("relatedId", { length: 191 }),
+    useRankedRules: boolean("useRankedRules").default(false),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -3079,6 +3080,7 @@ export const bounty = mysqlTable(
     targetUserId: varchar("targetUserId", { length: 191 }).notNull(),
     creatorUserId: varchar("creatorUserId", { length: 191 }).notNull(),
     amountRyo: bigint("amountRyo", { mode: "number" }).notNull(),
+    originalAmountRyo: bigint("originalAmountRyo", { mode: "number" }).notNull(),
     status: mysqlEnum("status", consts.BOUNTY_STATUSES).default("OPEN").notNull(),
     claimedByUserId: varchar("claimedByUserId", { length: 191 }), // Only one person can claim the prize
     collectedAt: datetime("collectedAt", { mode: "date", fsp: 3 }),
@@ -3144,6 +3146,37 @@ export const bountySignupRelations = relations(bountySignup, ({ one }) => ({
   }),
   hunter: one(userData, {
     fields: [bountySignup.hunterUserId],
+    references: [userData.userId],
+  }),
+}));
+
+export const bountyContribution = mysqlTable(
+  "BountyContribution",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    bountyId: varchar("bountyId", { length: 191 }).notNull(),
+    contributorUserId: varchar("contributorUserId", { length: 191 }).notNull(),
+    amountRyo: bigint("amountRyo", { mode: "number" }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      bountyIdx: index("BountyContribution_bountyId_idx").on(table.bountyId),
+      contributorIdx: index("BountyContribution_contributorUserId_idx").on(table.contributorUserId),
+    };
+  },
+);
+export type BountyContribution = InferSelectModel<typeof bountyContribution>;
+
+export const bountyContributionRelations = relations(bountyContribution, ({ one }) => ({
+  bounty: one(bounty, {
+    fields: [bountyContribution.bountyId],
+    references: [bounty.id],
+  }),
+  contributor: one(userData, {
+    fields: [bountyContribution.contributorUserId],
     references: [userData.userId],
   }),
 }));

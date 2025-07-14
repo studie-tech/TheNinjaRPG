@@ -605,7 +605,7 @@ export const updateUser = async (
               }
             : {}),
           ...(result.curHealth <= 0 &&
-          !["SPARRING", "RANKED_PVP"].includes(curBattle.battleType)
+          !["SPARRING", "RANKED_PVP", "RANKED_SPARRING"].includes(curBattle.battleType)
             ? {
                 status: "HOSPITALIZED",
                 longitude: HOSPITAL_LONG,
@@ -621,7 +621,7 @@ export const updateUser = async (
         .where(eq(userData.userId, userId)),
     ]);
     // Update map status
-    if (result.curHealth > 0 || curBattle.battleType === "SPARRING") {
+    if (result.curHealth > 0 || ["SPARRING", "RANKED_SPARRING"].includes(curBattle.battleType)) {
       void updateUserOnMap(pusher, user.sector, {
         ...user,
         longitude: user.originalLongitude,

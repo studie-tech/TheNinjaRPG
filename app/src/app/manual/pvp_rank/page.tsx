@@ -11,6 +11,11 @@ import {
   RANKED_LOADOUT_MAX_JUTSUS,
   RANKED_LOADOUT_MAX_WEAPONS,
   RANKED_LOADOUT_MAX_CONSUMABLES,
+  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
+  RANKED_LOADOUT_MAX_POISON_ITEMS,
+  RANKED_LOADOUT_MAX_POISON_JUTSUS,
+  RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
+  RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
 } from "@/drizzle/constants";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ContentBox from "@/layout/ContentBox";
@@ -76,6 +81,11 @@ export default function RankedManualPage() {
                   </li>
                   <li>{RANKED_LOADOUT_MAX_CONSUMABLES} types of consumables</li>
                   <li>{RANKED_LOADOUT_MAX_JUTSUS} jutsus from their ranked loadout</li>
+                  <li>Maximum {RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS} residual jutsu</li>
+                  <li>Maximum {RANKED_LOADOUT_MAX_POISON_JUTSUS} poison jutsu</li>
+                  <li>Maximum {RANKED_LOADOUT_MAX_POISON_ITEMS} poison item</li>
+                  <li>Maximum {RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS} increasecost jutsu</li>
+                  <li>Maximum {RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} increasecost item</li>
                 </ul>
               </div>
             </CardContent>
@@ -154,6 +164,11 @@ export default function RankedManualPage() {
                   <li>You can change your loadout at any time</li>
                   <li>Loadout changes take effect immediately</li>
                   <li>You cannot use items from your inventory in ranked battles</li>
+                  <li>Residual jutsu are limited to {RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS} in ranked battles</li>
+                  <li>Poison jutsu are limited to {RANKED_LOADOUT_MAX_POISON_JUTSUS} in ranked battles</li>
+                  <li>Poison items are limited to {RANKED_LOADOUT_MAX_POISON_ITEMS} in ranked battles</li>
+                  <li>Increasecost jutsu are limited to {RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS} in ranked battles</li>
+                  <li>Increasecost items are limited to {RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} in ranked battles</li>
                 </ul>
               </div>
             </CardContent>

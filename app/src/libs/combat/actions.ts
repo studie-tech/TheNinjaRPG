@@ -608,7 +608,8 @@ export const insertAction = (info: {
           useritem &&
           useritem.item.destroyOnUse &&
           battle.battleType !== "SPARRING" &&
-          battle.battleType !== "RANKED_PVP"
+          battle.battleType !== "RANKED_PVP" &&
+          battle.battleType !== "RANKED_SPARRING"
         ) {
           useritem.quantity -= 1;
         }

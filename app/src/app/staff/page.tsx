@@ -244,7 +244,7 @@ const Information: React.FC<InformationProps> = (props) => {
         />
       </PopoverTrigger>
       <PopoverContent>
-        <div className="max-w-[320px] min-w-[320px] relative">{props.children}</div>
+        <div className="relative whitespace-normal">{props.children}</div>
       </PopoverContent>
     </Popover>
   );

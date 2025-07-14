@@ -149,6 +149,9 @@ const ChallengeInfo: React.FC<{ request: UserRequest }> = ({ request }) => {
       <p>{request.createdAt.toDateString()}</p>
       <p>{request.createdAt.toLocaleTimeString()}</p>
       {request.type === "WAR_ALLY" && <p>Token Amount: {request.value}</p>}
+      {request.type === "SPAR" && request.useRankedRules && (
+        <p className="text-blue-600 font-semibold">Uses Ranked Rules</p>
+      )}
     </div>
   );
 };

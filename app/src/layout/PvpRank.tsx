@@ -18,7 +18,13 @@ import {
   RANKED_LOADOUT_MAX_JUTSUS,
   RANKED_LOADOUT_MAX_WEAPONS,
   RANKED_LOADOUT_MAX_CONSUMABLES,
+  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
+  RANKED_LOADOUT_MAX_POISON_ITEMS,
+  RANKED_LOADOUT_MAX_POISON_JUTSUS,
+  RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
+  RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
 } from "@/drizzle/constants";
+import { validateJutsuLoadout, validateItemLoadout } from "@/libs/ranked_pvp";
 import { QueueTimer } from "@/layout/Countdown";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
@@ -245,12 +251,6 @@ export const RankedLoadoutSelector: React.FC = () => {
     },
   });
 
-  // Filter out items that cost reputation
-  const filteredWeapons = weapons?.data.filter((weapon) => weapon.repsCost === 0);
-  const filteredConsumables = consumables?.data.filter(
-    (consumable) => consumable.repsCost === 0,
-  );
-
   // Get all jutsu and user jutsu data
 
   // Auto-paginate when the jutsu tab is active
@@ -265,40 +265,6 @@ export const RankedLoadoutSelector: React.FC = () => {
   const loadoutWeapons = rankedLoadout?.loadout.weaponIds ?? [];
   const loadoutConsumables = rankedLoadout?.loadout.consumableIds ?? [];
 
-  // Handle jutsu equipping
-  const handleToggleJutsu = (jutsu: Jutsu) => {
-    if (!rankedLoadout) return;
-    const alreadyEquipped = loadoutJutsus.includes(jutsu.id);
-    updateLoadout.mutate({
-      ...rankedLoadout.loadout,
-      jutsuIds: !alreadyEquipped
-        ? [...loadoutJutsus, jutsu.id]
-        : loadoutJutsus.filter((id) => id !== jutsu.id),
-    });
-  };
-
-  const handleToggleWeapon = (weapon: Item) => {
-    if (!rankedLoadout) return;
-    const alreadyEquipped = loadoutWeapons.includes(weapon.id);
-    updateLoadout.mutate({
-      ...rankedLoadout.loadout,
-      weaponIds: !alreadyEquipped
-        ? [...loadoutWeapons, weapon.id]
-        : loadoutWeapons.filter((id) => id !== weapon.id),
-    });
-  };
-
-  const handleToggleConsumable = (consumable: Item) => {
-    if (!rankedLoadout) return;
-    const alreadyEquipped = loadoutConsumables.includes(consumable.id);
-    updateLoadout.mutate({
-      ...rankedLoadout.loadout,
-      consumableIds: !alreadyEquipped
-        ? [...loadoutConsumables, consumable.id]
-        : loadoutConsumables.filter((id) => id !== consumable.id),
-    });
-  };
-
   const handleUnequipAll = () => {
     if (!rankedLoadout) return;
     updateLoadout.mutate({
@@ -310,6 +276,9 @@ export const RankedLoadoutSelector: React.FC = () => {
   };
 
   // Process data
+  const filteredWeapons = weapons?.data.filter((weapon) => weapon.repsCost === 0) || [];
+  const filteredConsumables =
+    consumables?.data.filter((consumable) => consumable.repsCost === 0) || [];
   const flatJutsu = allJutsu?.pages.flatMap((page) => page.data) ?? [];
   const equippedItems = rankedLoadout
     ? [...rankedLoadout.loadout.weaponIds, ...rankedLoadout.loadout.consumableIds]
@@ -317,6 +286,7 @@ export const RankedLoadoutSelector: React.FC = () => {
   const processedJutsu = flatJutsu
     .map((jutsu) => ({ ...jutsu, highlight: loadoutJutsus.includes(jutsu.id) }))
     .filter((jutsu) => jutsu.jutsuType === "NORMAL")
+    .filter((jutsu) => !jutsu.effects.some((e) => e.type === "summon")) // Exclude summon jutsu from ranked
     .sort((a, b) => {
       const aIndex = loadoutJutsus.indexOf(a.id) ?? -1;
       const bIndex = loadoutJutsus.indexOf(b.id) ?? -1;
@@ -325,6 +295,86 @@ export const RankedLoadoutSelector: React.FC = () => {
       if (bIndex === -1) return -1;
       return aIndex - bIndex;
     });
+
+  // Handle jutsu equipping
+  const handleToggleJutsu = (jutsu: Jutsu) => {
+    if (!rankedLoadout) return;
+    const alreadyEquipped = loadoutJutsus.includes(jutsu.id);
+
+    // If equipping (not unequipping), check limits
+    if (!alreadyEquipped) {
+      const newJutsuLoadout = processedJutsu.filter((j) =>
+        [...loadoutJutsus, jutsu.id].includes(j.id),
+      );
+      const jutsuCheck = validateJutsuLoadout(newJutsuLoadout);
+      if (!jutsuCheck.check) {
+        showMutationToast({
+          success: false,
+          message: jutsuCheck.message,
+        });
+        return;
+      }
+    }
+
+    updateLoadout.mutate({
+      ...rankedLoadout.loadout,
+      jutsuIds: !alreadyEquipped
+        ? [...loadoutJutsus, jutsu.id]
+        : loadoutJutsus.filter((id) => id !== jutsu.id),
+    });
+  };
+
+  /** Validate new item in terms of loadout constraints */
+  const validateNewItemLoadout = (newItem: Item) => {
+    const newItemLoadout = [...filteredWeapons, ...filteredConsumables].filter((item) =>
+      [...loadoutWeapons, ...loadoutConsumables, newItem.id].includes(item.id),
+    );
+    const itemCheck = validateItemLoadout(newItemLoadout);
+    if (!itemCheck.check) {
+      showMutationToast({
+        success: false,
+        message: itemCheck.message,
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const handleToggleWeapon = (weapon: Item) => {
+    if (!rankedLoadout) return;
+    const alreadyEquipped = loadoutWeapons.includes(weapon.id);
+
+    // If equipping (not unequipping), check limits
+    if (!alreadyEquipped) {
+      const check = validateNewItemLoadout(weapon);
+      if (!check) return;
+    }
+
+    updateLoadout.mutate({
+      ...rankedLoadout.loadout,
+      weaponIds: !alreadyEquipped
+        ? [...loadoutWeapons, weapon.id]
+        : loadoutWeapons.filter((id) => id !== weapon.id),
+    });
+  };
+
+  const handleToggleConsumable = (consumable: Item) => {
+    if (!rankedLoadout) return;
+    const alreadyEquipped = loadoutConsumables.includes(consumable.id);
+
+    // If equipping (not unequipping), check limits
+    if (!alreadyEquipped) {
+      const check = validateNewItemLoadout(consumable);
+      if (!check) return;
+    }
+
+    updateLoadout.mutate({
+      ...rankedLoadout.loadout,
+      consumableIds: !alreadyEquipped
+        ? [...loadoutConsumables, consumable.id]
+        : loadoutConsumables.filter((id) => id !== consumable.id),
+    });
+  };
 
   // State for item selection
   const [selectedItem, setSelectedItem] = useState<Item | undefined>(undefined);
@@ -450,6 +500,25 @@ export const RankedLoadoutSelector: React.FC = () => {
         >
           <div className="flex flex-col gap-4">
             <ItemWithEffects item={selectedItem} showStatistic="item" />
+            {!equippedItems.includes(selectedItem.id) &&
+              selectedItem.effects.some((e) => e.type === "poison") && (
+                <div className="text-sm text-muted-foreground">
+                  <p>
+                    ⚠️ This is a poison item. You can equip up to{" "}
+                    {RANKED_LOADOUT_MAX_POISON_ITEMS} poison item in ranked PvP.
+                  </p>
+                </div>
+              )}
+            {!equippedItems.includes(selectedItem.id) &&
+              selectedItem.effects.some((e) => e.type === "increasepoolcost") && (
+                <div className="text-sm text-muted-foreground">
+                  <p>
+                    ⚠️ This is an increasecost item. You can equip up to{" "}
+                    {RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} increasecost item in ranked
+                    PvP.
+                  </p>
+                </div>
+              )}
           </div>
         </Modal2>
       )}
@@ -468,7 +537,39 @@ export const RankedLoadoutSelector: React.FC = () => {
             setSelectedJutsu(undefined);
           }}
         >
-          <ItemWithEffects item={selectedJutsu} showStatistic="jutsu" />
+          <div className="flex flex-col gap-4">
+            <ItemWithEffects item={selectedJutsu} showStatistic="jutsu" />
+            {!loadoutJutsus.includes(selectedJutsu.id) &&
+              selectedJutsu.effects.some(
+                (e) => "residualModifier" in e && e.residualModifier,
+              ) && (
+                <div className="text-sm text-muted-foreground">
+                  <p>
+                    ⚠️ This is a residual jutsu. You can equip up to{" "}
+                    {RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS} residual jutsu in ranked PvP.
+                  </p>
+                </div>
+              )}
+            {!loadoutJutsus.includes(selectedJutsu.id) &&
+              selectedJutsu.effects.some((e) => e.type === "poison") && (
+                <div className="text-sm text-muted-foreground">
+                  <p>
+                    ⚠️ This is a poison jutsu. You can equip up to{" "}
+                    {RANKED_LOADOUT_MAX_POISON_JUTSUS} poison jutsu in ranked PvP.
+                  </p>
+                </div>
+              )}
+            {!loadoutJutsus.includes(selectedJutsu.id) &&
+              selectedJutsu.effects.some((e) => e.type === "increasepoolcost") && (
+                <div className="text-sm text-muted-foreground">
+                  <p>
+                    ⚠️ This is an increasecost jutsu. You can equip up to{" "}
+                    {RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS} increasecost jutsu in
+                    ranked PvP.
+                  </p>
+                </div>
+              )}
+          </div>
         </Modal2>
       )}
     </>

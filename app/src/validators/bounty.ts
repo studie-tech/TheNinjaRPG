@@ -9,6 +9,7 @@ export type CreateBountySchema = z.infer<typeof createBountySchema>;
 
 export const signupBountySchema = z.object({
   bountyId: z.string().min(1),
+  targetUserId: z.string().min(1),
 });
 export type SignupBountySchema = z.infer<typeof signupBountySchema>;
 
@@ -30,9 +31,17 @@ export type RetractBountySchema = z.infer<typeof retractBountySchema>;
 export const bountyBoardFilterSchema = z.object({
   cursor: z.number().nullish(),
   limit: z.number().min(1).max(100).default(30),
+  showCompleted: z.boolean().default(false),
+  status: z.enum(["OPEN", "CLAIMED", "EXPIRED", "CANCELLED", "all"]).default("OPEN"),
 });
 
 export const collectBountySchema = z.object({
   bountyId: z.string().min(1),
 });
 export type CollectBountySchema = z.infer<typeof collectBountySchema>;
+
+export const addBountyMoneySchema = z.object({
+  bountyId: z.string().min(1),
+  amountRyo: z.number().min(1),
+});
+export type AddBountyMoneySchema = z.infer<typeof addBountyMoneySchema>;
