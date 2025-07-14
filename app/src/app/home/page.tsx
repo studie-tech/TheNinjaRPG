@@ -105,8 +105,7 @@ export default function HomePage() {
   const homeStorage = homeData ? homeData.storage : 0;
   const filteredItems = userItems?.filter(
     (useritem) =>
-      !useritem.storedAtHome &&
-      (!useritem.craftingFinishedAt || useritem.craftingFinishedAt < new Date()),
+      !useritem.craftingFinishedAt || useritem.craftingFinishedAt < new Date(),
   );
   const storedItems = filteredItems?.filter((useritem) => useritem.storedAtHome) ?? [];
   const nonStoredItems =

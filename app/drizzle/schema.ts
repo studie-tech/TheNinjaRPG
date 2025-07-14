@@ -1950,18 +1950,33 @@ export const userItemRelations = relations(userItem, ({ one, many }) => ({
   imbuements: many(userItemImbuement),
 }));
 
-export const userItemImbuement = mysqlTable("UserItemImbuement", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  userItemId: varchar("userItemId", { length: 191 }).notNull(),
-  imbuementItemId: varchar("imbuementItemId", { length: 191 }).notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
-    .default(sql`(CURRENT_TIMESTAMP(3))`)
-    .notNull(),
-  craftingFinishedAt: datetime("craftingFinishedAt", {
-    mode: "date",
-    fsp: 3,
-  }).notNull(),
-});
+export const userItemImbuement = mysqlTable(
+  "UserItemImbuement",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userItemId: varchar("userItemId", { length: 191 }).notNull(),
+    imbuementItemId: varchar("imbuementItemId", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    craftingFinishedAt: datetime("craftingFinishedAt", {
+      mode: "date",
+      fsp: 3,
+    }).notNull(),
+  },
+  (table) => {
+    return {
+      userItemIdIdx: index("UserItemImbuement_userItemId_idx").on(table.userItemId),
+      imbuementItemIdIdx: index("UserItemImbuement_imbuementItemId_idx").on(
+        table.imbuementItemId,
+      ),
+      userItemImbuementKey: uniqueIndex("UserItemImbuement_userItem_imbuement_key").on(
+        table.userItemId,
+        table.imbuementItemId,
+      ),
+    };
+  },
+);
 export type UserItemImbuement = InferSelectModel<typeof userItemImbuement>;
 
 export const userItemImbuementRelations = relations(userItemImbuement, ({ one }) => ({
@@ -3247,7 +3262,9 @@ export const bountyContribution = mysqlTable(
   (table) => {
     return {
       bountyIdx: index("BountyContribution_bountyId_idx").on(table.bountyId),
-      contributorIdx: index("BountyContribution_contributorUserId_idx").on(table.contributorUserId),
+      contributorIdx: index("BountyContribution_contributorUserId_idx").on(
+        table.contributorUserId,
+      ),
     };
   },
 );
