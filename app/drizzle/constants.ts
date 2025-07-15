@@ -450,9 +450,9 @@ export const ElementNames = [
 export type ElementName = (typeof ElementNames)[number];
 
 // User stats config
-export const HP_PER_LVL = 50;
-export const SP_PER_LVL = 50;
-export const CP_PER_LVL = 50;
+export const HP_PER_LVL = 100;
+export const SP_PER_LVL = 100;
+export const CP_PER_LVL = 100;
 export const MAX_ATTRIBUTES = 5;
 export const RYO_CAP = 1000000000;
 export const MAX_STATS_CAP = 450000;
