@@ -1609,7 +1609,7 @@ export const processUsersForBattle = (info: {
       .forEach((useritem) => {
         // Add any imbuement effects to the item effects
         const imbuementEffects = useritem.imbuements
-          .map((imbuement) => imbuement.item.effects as UserEffect[])
+          ?.map((imbuement) => imbuement.item.effects as UserEffect[])
           .flat();
         // Parse item
         const effects = [

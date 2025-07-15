@@ -20,6 +20,7 @@ import { getObjectiveSchema } from "@/validators/objectives";
 import type { ZodQuestType, AllObjectivesType } from "@/validators/objectives";
 import type { Quest } from "@/drizzle/schema";
 import CytoscapeComponent from "react-cytoscapejs";
+import { QuestHelper } from "@/layout/ContentHelp";
 import type { ElementDefinition, Core, EventObjectNode, EventObject } from "cytoscape";
 import { getObjectiveImage, buildObjectiveEdges } from "@/libs/objectives";
 import { verifyQuestObjectiveFlow } from "@/libs/quest";
@@ -63,7 +64,7 @@ interface SingleEditQuestProps {
 
 const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
   const {
-    quest,
+    currentValues,
     objectives,
     form,
     formData,
@@ -151,66 +152,70 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         back_href="/manual/quest"
         noRightAlign={true}
         topRightContent={
-          formData.find((e) => e.id === "description") ? (
-            <ChatInputField
-              inputProps={{
-                id: "chatInput",
-                placeholder: "Instruct ChatGPT to edit",
-              }}
-              aiProps={{
-                apiEndpoint: "/api/chat/quest",
-                systemMessage: `\n                  Current quest data: ${JSON.stringify(form.getValues())}. \n                  Current objectives: ${JSON.stringify(objectives)}\n                `,
-              }}
-              onToolCall={(toolCall) => {
-                const data = toolCall.args as ZodQuestType;
-                let key: keyof typeof data;
-                for (key in data) {
-                  if (
-                    [
-                      "requiredVillage",
-                      "reward_items",
-                      "reward_jutsus",
-                      "reward_badges",
-                      "reward_bloodlines",
-                      "reward_rank",
-                      "attackers",
-                      "image",
-                    ].includes(key)
-                  ) {
-                    continue;
-                  } else if (key === "content") {
-                    const newObjectives = data.content?.objectives
-                      ?.map((objective) => {
-                        const schema = getObjectiveSchema(objective.task);
-                        const parsed = schema.safeParse({
-                          ...objective,
-                          id: nanoid(5),
-                        });
-                        if (parsed.success) {
-                          return parsed.data;
-                        } else {
-                          return undefined;
-                        }
-                      })
-                      .filter((e): e is NonNullable<typeof e> => e !== undefined);
-                    setObjectives(newObjectives);
-                  } else {
-                    form.setValue(key, data[key], { shouldDirty: true });
+          <div className="flex flex-row gap-2">
+            {formData.find((e) => e.id === "description") ? (
+              <ChatInputField
+                inputProps={{
+                  id: "chatInput",
+                  placeholder: "Instruct ChatGPT to edit",
+                }}
+                aiProps={{
+                  apiEndpoint: "/api/chat/quest",
+                  systemMessage: `\n                  Current quest data: ${JSON.stringify(form.getValues())}. \n                  Current objectives: ${JSON.stringify(objectives)}\n                `,
+                }}
+                onToolCall={(toolCall) => {
+                  const data = toolCall.args as ZodQuestType;
+                  let key: keyof typeof data;
+                  for (key in data) {
+                    if (
+                      [
+                        "requiredVillage",
+                        "reward_items",
+                        "reward_jutsus",
+                        "reward_badges",
+                        "reward_bloodlines",
+                        "reward_rank",
+                        "attackers",
+                        "image",
+                      ].includes(key)
+                    ) {
+                      continue;
+                    } else if (key === "content") {
+                      const newObjectives = data.content?.objectives
+                        ?.map((objective) => {
+                          const schema = getObjectiveSchema(objective.task);
+                          const parsed = schema.safeParse({
+                            ...objective,
+                            id: nanoid(5),
+                          });
+                          if (parsed.success) {
+                            return parsed.data;
+                          } else {
+                            return undefined;
+                          }
+                        })
+                        .filter((e): e is NonNullable<typeof e> => e !== undefined);
+                      setObjectives(newObjectives);
+                    } else {
+                      form.setValue(key, data[key], { shouldDirty: true });
+                    }
                   }
-                }
-                void form.trigger();
-              }}
-            />
-          ) : undefined
+                  void form.trigger();
+                }}
+              />
+            ) : undefined}
+            {currentValues && <QuestHelper quest={currentValues} />}
+          </div>
         }
       >
-        {!quest && <p>Could not find this item</p>}
-        {quest && (
+        {!props.quest && <p>Could not find this item</p>}
+        {props.quest && (
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold">Edit Quest</h1>
           </div>
         )}
-        {quest && (
+
+        {props.quest && (
           <EditContent
             schema={QuestValidator._def.schema.merge(ObjectiveReward)}
             form={form}
@@ -218,7 +223,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
             showSubmit={true}
             buttonTxt="Save to Database"
             type="quest"
-            relationId={quest.id}
+            relationId={props.quest.id}
             allowImageUpload={true}
             onAccept={handleQuestSubmit}
             submitDisabled={consecutiveObjectives && !isFlowValid}

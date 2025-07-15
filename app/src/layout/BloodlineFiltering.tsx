@@ -27,7 +27,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { searchJutsuSchema } from "@/validators/jutsu";
 import { Filter } from "lucide-react";
 import { StatTypes } from "@/drizzle/constants";
-import Toggle from "@/components/control/Toggle";
+import { TriStateToggle } from "@/components/control/Toggle";
 import { useUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import type { ElementName, LetterRank, StatType } from "@/drizzle/constants";
@@ -190,13 +190,15 @@ const BloodFiltering: React.FC<BloodFilteringProps> = (props) => {
           {/* Hidden */}
           {userData && canChangeContent(userData.role) && (
             <div className="mt-1">
-              <Toggle
+              <Label htmlFor="toggle-hidden-only">Visibility</Label>
+              <TriStateToggle
                 verticalLayout
                 id="toggle-hidden-only"
                 value={hidden}
                 setShowActive={setHidden}
                 labelActive="Hidden"
-                labelInactive="Non-Hidden"
+                labelInactive="Visible"
+                labelAll="All Visibility"
               />
             </div>
           )}
@@ -215,7 +217,7 @@ export const getFilter = (state: BloodFilteringState) => {
     village: state.village !== "None" ? state.village : undefined,
     rank: state.rank !== "None" ? state.rank : undefined,
     classification: state.classification !== "None" ? state.classification : undefined,
-    hidden: state.hidden ? state.hidden : undefined,
+    hidden: state.hidden,
     // Multiple selects
     element: state.element.length !== 0 ? (state.element as ElementName[]) : undefined,
     stat: state.stat.length !== 0 ? (state.stat as StatGenType[]) : undefined,
@@ -235,7 +237,7 @@ export const useFiltering = (defaultRank: LetterRank | None = "None") => {
   const [element, setElement] = useState<string[]>([]);
   const [stat, setStat] = useState<string[]>([]);
   const [effect, setEffect] = useState<string[]>([]);
-  const [hidden, setHidden] = useState<boolean | undefined>(false);
+  const [hidden, setHidden] = useState<boolean | undefined>(undefined);
 
   // Return all
   return {

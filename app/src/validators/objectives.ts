@@ -6,6 +6,7 @@ import {
   QuestTypes,
   RetryQuestDelays,
   MEDNIN_RANKS,
+  HUNTING_RANKS,
 } from "@/drizzle/constants";
 
 export const SimpleTasks = [
@@ -50,6 +51,7 @@ export type InstantTasksType = (typeof InstantTasks)[number];
 
 export const LocationTasks = [
   "move_to_location",
+  "win_encounter_at_location",
   "collect_item",
   "deliver_item",
   "defeat_opponents",
@@ -74,6 +76,7 @@ export const idsWithNumberField = z
   .default([]);
 
 export const rewardFields = {
+  reward_hunter_items: z.boolean().default(false),
   reward_seichi_silver: z.coerce.number().default(0),
   reward_money: z.coerce.number().default(0),
   reward_clanpoints: z.coerce.number().default(0),
@@ -88,6 +91,9 @@ export const rewardFields = {
   reward_bloodlines: z.array(z.string()).default([]),
   reward_badges: z.array(z.string()).default([]),
   reward_medical_experience: z.coerce.number().default(0),
+  reward_hunting_experience: z.coerce.number().default(0),
+  reward_crafting_experience: z.coerce.number().default(0),
+  reward_gathering_experience: z.coerce.number().default(0),
 };
 
 export const ObjectiveReward = z.object(rewardFields);
@@ -104,11 +110,15 @@ export const hasReward = (reward: ObjectiveRewardType) => {
     parsedReward.reward_prestige > 0 ||
     parsedReward.reward_reputation > 0 ||
     parsedReward.reward_medical_experience > 0 ||
+    parsedReward.reward_hunting_experience > 0 ||
+    parsedReward.reward_crafting_experience > 0 ||
+    parsedReward.reward_gathering_experience > 0 ||
     parsedReward.reward_rank !== "NONE" ||
     parsedReward.reward_items.length > 0 ||
     parsedReward.reward_jutsus.length > 0 ||
     parsedReward.reward_bloodlines.length > 0 ||
-    parsedReward.reward_badges.length > 0
+    parsedReward.reward_badges.length > 0 ||
+    parsedReward.reward_hunter_items
   );
 };
 
@@ -116,6 +126,7 @@ export const attackerFields = {
   attackers: idsWithNumberField,
   attackers_scaled_to_user: z.coerce.boolean().default(false),
   attackers_scale_gains: z.coerce.number().min(0).max(1).default(1),
+  attackers_max_per_battle: z.coerce.number().min(0).max(100).default(5),
 };
 
 export const baseObjectiveFields = {
@@ -220,6 +231,12 @@ export const MoveToObjective = z.object({
   task: z.literal("move_to_location").default("move_to_location"),
 });
 
+export const EncountersAtLocation = z.object({
+  ...baseObjectiveFields,
+  ...complexObjectiveFields,
+  task: z.literal("win_encounter_at_location").default("win_encounter_at_location"),
+});
+
 export const CollectItem = z.object({
   ...baseObjectiveFields,
   task: z.literal("collect_item").default("collect_item"),
@@ -264,6 +281,7 @@ export const AllObjectives = z.union([
   DeliverItem,
   DefeatOpponents,
   DialogObjective,
+  EncountersAtLocation,
 ]);
 export type AllObjectivesType = z.infer<typeof AllObjectives>;
 
@@ -301,6 +319,7 @@ export const QuestValidatorRawSchema = z.object({
   successDescription: z.string().min(1).max(5000).nullable(),
   questRank: z.enum(LetterRanks).optional(),
   medicalRank: z.enum(MEDNIN_RANKS).optional().nullish(),
+  huntingRank: z.enum(HUNTING_RANKS).optional().nullish(),
   requiredLevel: z.coerce.number().min(0).max(100).optional(),
   maxLevel: z.coerce.number().min(0).max(100).optional(),
   maxAttempts: z.coerce.number().min(0).max(100).default(1),
@@ -352,6 +371,8 @@ export const getObjectiveSchema = (type: string) => {
     return DefeatOpponents;
   } else if (type === "dialog") {
     return DialogObjective;
+  } else if (type === "win_encounter_at_location") {
+    return EncountersAtLocation;
   }
   throw new Error(`Unknown objective task ${type}`);
 };

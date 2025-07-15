@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { MultiSelect } from "@/components/ui/multi-select";
-import Toggle from "@/components/control/Toggle";
+import { TriStateToggle } from "@/components/control/Toggle";
 import { Filter } from "lucide-react";
 import {
   Form,
@@ -209,7 +209,7 @@ export const useFiltering = () => {
   const [stat, setStat] = useState<string[]>([]);
   const [staticAnim, setStaticAnim] = useState<string>("None");
   const [target, setTarget] = useState<AttackTarget | None>("None");
-  const [hidden, setHidden] = useState<boolean | undefined>(false);
+  const [hidden, setHidden] = useState<boolean | undefined>(undefined);
   const [villageId, setVillageId] = useState<string | null>("None");
 
   // -------------------------
@@ -716,13 +716,15 @@ const JutsuFiltering: React.FC<JutsuFilteringProps> = (props) => {
           {/* Hidden */}
           {userData && canChangeContent(userData.role) && (
             <div className="mt-1">
-              <Toggle
+              <Label htmlFor="toggle-hidden-only">Visibility</Label>
+              <TriStateToggle
                 verticalLayout
                 id="toggle-hidden-only"
                 value={hidden}
                 setShowActive={setHidden}
                 labelActive="Hidden"
-                labelInactive="Non-Hidden"
+                labelInactive="Visible"
+                labelAll="All Visibility"
               />
             </div>
           )}
@@ -890,7 +892,7 @@ export const getFilter = (state: JutsuFilteringState) => {
     stat: processArray(state.stat as StatGenType[]),
     static: state.staticAnim === "None" ? undefined : state.staticAnim,
     target: state.target === "None" ? undefined : state.target,
-    hidden: state.hidden ?? undefined,
+    hidden: state.hidden,
     villageId: state.villageId === "None" ? undefined : state.villageId,
 
     // Exclusions

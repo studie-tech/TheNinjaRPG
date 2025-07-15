@@ -1,4 +1,4 @@
-import { CRAFTING_REQUIRED_EXP } from "@/drizzle/constants";
+import { CRAFTING_REQUIRED_EXP, CRAFTING_MAX_IMBUED_ITEMS } from "@/drizzle/constants";
 import type { CRAFTING_RANK } from "@/drizzle/constants";
 import type { UserData, UserItem, Item } from "@/drizzle/schema";
 
@@ -20,15 +20,16 @@ export const getCraftingRank = (experience: number): CRAFTING_RANK => {
  * @returns The experience required for the next rank
  */
 export const getNextRankExperience = (craftingRank: CRAFTING_RANK) => {
-  return CRAFTING_REQUIRED_EXP[
-    craftingRank === "FORGEMASTER"
-      ? "FORGEMASTER"
-      : craftingRank === "MASTER"
-        ? "FORGEMASTER"
-        : craftingRank === "APPRENTICE"
-          ? "MASTER"
-          : "APPRENTICE"
-  ];
+  switch (craftingRank) {
+    case "FORGEMASTER":
+      return CRAFTING_REQUIRED_EXP.FORGEMASTER;
+    case "MASTER":
+      return CRAFTING_REQUIRED_EXP.MASTER;
+    case "APPRENTICE":
+      return CRAFTING_REQUIRED_EXP.APPRENTICE;
+    default:
+      return CRAFTING_REQUIRED_EXP.NOVICE;
+  }
 };
 
 /**
@@ -133,4 +134,40 @@ export const getCurrentCraftingStatus = (
       nextRankExperience,
     };
   }
+};
+
+/**
+ * Get the crafting rank progress
+ * @param experience - The experience of the user
+ * @returns The crafting rank progress
+ */
+export const getCraftingRankProgress = (experience: number) => {
+  const currentRank = getCraftingRank(experience);
+  const nextRankExp = getNextRankExperience(currentRank);
+
+  if (!nextRankExp) {
+    return { progress: 100, nextRank: null };
+  }
+  const currentRankExp = CRAFTING_REQUIRED_EXP[currentRank];
+  const progress =
+    ((experience - currentRankExp) / (nextRankExp - currentRankExp)) * 100;
+
+  return {
+    progress: Math.max(0, Math.min(100, progress)),
+    nextRank: getNextRankExperience(currentRank),
+  };
+};
+
+/**
+ * Calculate the effective max imbuements for an item
+ * @param craftingRank - The user's crafting rank
+ * @param itemMaxImbueNumber - The item's max imbue number
+ * @returns The effective max imbuements (minimum of rank limit and item limit)
+ */
+export const getEffectiveMaxImbuements = (
+  craftingRank: CRAFTING_RANK,
+  itemMaxImbueNumber: number,
+): number => {
+  const rankLimit = CRAFTING_MAX_IMBUED_ITEMS[craftingRank];
+  return Math.min(rankLimit, itemMaxImbueNumber);
 };

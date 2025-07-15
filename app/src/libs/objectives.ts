@@ -90,6 +90,11 @@ export const getObjectiveImage = (objective: AllObjectivesType) => {
       return { image: IMG_BADGE_DEFEAT_OPPONENTS, title: "Defeat" };
     case "random_encounter_wins":
       return { image: IMG_BADGE_RANDOM_ENCOUNTER_WINS, title: "Encounter Wins" };
+    case "win_encounter_at_location":
+      return {
+        image: IMG_BADGE_RANDOM_ENCOUNTER_WINS,
+        title: "Encounters at Location",
+      };
     case "fail_quest":
       return { image: IMG_BADGE_FAIL_QUEST, title: "Fail Quest" };
     case "reset_quest":
@@ -413,6 +418,15 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
   }
   if (questReward.reward_medical_experience) {
     rewards.push(`${questReward.reward_medical_experience} medical experience`);
+  }
+  if (questReward.reward_hunting_experience) {
+    rewards.push(`${questReward.reward_hunting_experience} hunting experience`);
+  }
+  if (questReward.reward_crafting_experience) {
+    rewards.push(`${questReward.reward_crafting_experience} crafting experience`);
+  }
+  if (questReward.reward_gathering_experience) {
+    rewards.push(`${questReward.reward_gathering_experience} gathering experience`);
   }
   return rewards;
 };

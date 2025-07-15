@@ -8,6 +8,7 @@ import {
   UserRanks,
   RetryQuestDelays,
   MEDNIN_RANKS,
+  HUNTING_RANKS,
 } from "@/drizzle/constants";
 import { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -20,7 +21,7 @@ import type { ZodQuestType, QuestContentType } from "@/validators/objectives";
 import type { ObjectiveRewardType } from "@/validators/objectives";
 
 // A merged type for quest with its rewards, so that we can show both in the same form
-type ZodCombinedQuest = ZodQuestType &
+export type ZodCombinedQuest = ZodQuestType &
   ObjectiveRewardType & {
     sceneBackground: string;
     sceneCharacters: string[];
@@ -134,12 +135,16 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
             reward_anbupoints: data.reward_anbupoints,
             reward_exp: data.reward_exp,
             reward_medical_experience: data.reward_medical_experience,
+            reward_hunting_experience: data.reward_hunting_experience,
+            reward_crafting_experience: data.reward_crafting_experience,
+            reward_gathering_experience: data.reward_gathering_experience,
             reward_tokens: data.reward_tokens,
             reward_prestige: data.reward_prestige,
             reward_reputation: data.reward_reputation,
             reward_jutsus: data.reward_jutsus,
             reward_badges: data.reward_badges,
             reward_items: data.reward_items,
+            reward_hunter_items: data.reward_hunter_items,
             reward_rank: data.reward_rank,
             reward_bloodlines: data.reward_bloodlines,
           },
@@ -159,6 +164,11 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     name: "content",
   });
   const objectives = content.objectives ?? [];
+
+  // Watch the entire thing
+  const currentValues = useWatch({
+    control: form.control,
+  });
 
   // Handle updating of effects
   const setObjectives = (values: AllObjectivesType[]) => {
@@ -191,6 +201,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     { id: "questType", type: "str_array", values: QuestTypes },
     { id: "questRank", type: "str_array", values: LetterRanks },
     { id: "medicalRank", type: "str_array", values: MEDNIN_RANKS },
+    { id: "huntingRank", type: "str_array", values: HUNTING_RANKS },
     { id: "requiredLevel", type: "number" },
     { id: "maxLevel", type: "number", label: "Max Level" },
     {
@@ -242,6 +253,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   }
 
   // Rewards
+  formData.push({ id: "reward_hunter_items", type: "boolean" });
   formData.push({ id: "reward_money", type: "number" });
   formData.push({ id: "reward_seichi_silver", type: "number" });
   formData.push({ id: "reward_clanpoints", type: "number" });
@@ -251,6 +263,9 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   formData.push({ id: "reward_prestige", type: "number" });
   formData.push({ id: "reward_reputation", type: "number" });
   formData.push({ id: "reward_medical_experience", type: "number" });
+  formData.push({ id: "reward_hunting_experience", type: "number" });
+  formData.push({ id: "reward_crafting_experience", type: "number" });
+  formData.push({ id: "reward_gathering_experience", type: "number" });
   formData.push({ id: "reward_rank", type: "str_array", values: UserRanks });
 
   if (bloodlines) {
@@ -303,7 +318,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   formData.push({ id: "startsAt", type: "date", label: "Starts At" });
 
   return {
-    quest,
+    currentValues,
     objectives,
     form,
     formData,

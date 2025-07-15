@@ -10,7 +10,7 @@ import Confirm2 from "@/layout/Confirm2";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import RichInput from "@/layout/RichInput";
 import AvatarImage from "@/layout/Avatar";
-import AnbuQuests from "@/layout/AnbuQuests";
+import QuestPicker from "@/layout/QuestPicker";
 import { mutateContentSchema } from "@/validators/comments";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
@@ -135,7 +135,11 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
         userAnbu={userData.anbuId}
       />
       {/* ANBU QUESTS */}
-      <AnbuQuests />
+      <QuestPicker
+        questType="anbu"
+        title="ANBU Missions"
+        subtitle="Empower the squad and help the village"
+      />
     </>
   );
 }

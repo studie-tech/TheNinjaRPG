@@ -123,6 +123,7 @@ export const useItemEditForm = (
     { id: "maxEquips", type: "number" },
     { id: "requiredLevel", type: "number", label: "Required Level" },
     { id: "canStack", type: "boolean" },
+    { id: "maxImbueNumber", type: "number" },
     { id: "hidden", type: "boolean" },
     { id: "isEventItem", type: "boolean" },
     { id: "inShop", type: "boolean" },

@@ -47,3 +47,12 @@ export const setEmptyStringsToNulls = (
 export const objectKeys = <T extends object>(obj: T) => {
   return Object.keys(obj) as Array<keyof T>;
 };
+
+/**
+ * Deep partial type
+ * @param T - The type to make partial
+ * @returns The partial type
+ */
+export type DeepPartial<T> = {
+  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
+};

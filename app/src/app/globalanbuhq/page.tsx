@@ -5,7 +5,7 @@ import { getInfiniteThreads } from "@/routers/forum";
 import { fetchUser } from "@/routers/profile";
 import { drizzleDB } from "@/server/db";
 import { IMG_BUILDING_GLOBALANBU } from "@/drizzle/constants";
-import StoryQuests from "@/layout/StoryQuests";
+import QuestPicker from "@/layout/QuestPicker";
 
 export default async function GlobalAnbuHQ() {
   // Session information
@@ -33,7 +33,14 @@ export default async function GlobalAnbuHQ() {
         image={IMG_BUILDING_GLOBALANBU}
         initialData={initialNews}
       />
-      {userData && <StoryQuests />}
+      {userData && (
+        <QuestPicker
+          questType="story"
+          title="Story Missions"
+          subtitle="Global Anbu HQ"
+          introduction="Story missions are special assignments that advance the game's narrative. They can only be started here at the Global Anbu HQ."
+        />
+      )}
     </>
   );
 }

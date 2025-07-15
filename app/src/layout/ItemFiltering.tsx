@@ -30,7 +30,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { searchJutsuSchema } from "@/validators/jutsu";
 import { Filter } from "lucide-react";
-import Toggle from "@/components/control/Toggle";
+import { TriStateToggle } from "@/components/control/Toggle";
 import { useUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import type { SearchJutsuSchema } from "@/validators/jutsu";
@@ -47,12 +47,26 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
   const { data: userData } = useUserData();
 
   // Destructure the state
-  const { setOnlyInShop, setEventItems } = props.state;
+  const {
+    setOnlyInShop,
+    setEventItems,
+    setCanBeCrafted,
+    setCanBeImbued,
+    setCanBeHunted,
+    setCanBeGathered,
+  } = props.state;
   const { setName, setEffect, setHidden } = props.state;
   const { setItemType, setRarity, setSlot, setMethod, setTarget } = props.state;
 
   const { itemType, itemRarity, slot, method, target } = props.state;
-  const { onlyInShop, eventItems } = props.state;
+  const {
+    onlyInShop,
+    eventItems,
+    canBeCrafted,
+    canBeImbued,
+    canBeHunted,
+    canBeGathered,
+  } = props.state;
   const { name, effect, hidden } = props.state;
 
   // Name search schema
@@ -226,36 +240,94 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
           </div>
           {/* Event Item */}
           <div className="mt-1">
-            <Toggle
+            <Label htmlFor="toggle-event-only">Event Status</Label>
+            <TriStateToggle
               verticalLayout
               id="toggle-event-only"
               value={eventItems}
               setShowActive={setEventItems}
-              labelActive="Event"
-              labelInactive="Non-Event"
+              labelActive="Event Only"
+              labelInactive="Non-Event Only"
+              labelAll="All Items"
             />
           </div>
           {/* Shop Item */}
           <div className="mt-1">
-            <Toggle
+            <Label htmlFor="toggle-in-shop">Shop Status</Label>
+            <TriStateToggle
               verticalLayout
               id="toggle-in-shop"
               value={onlyInShop}
               setShowActive={setOnlyInShop}
               labelActive="In Shop"
-              labelInactive="Not in Shop"
+              labelInactive="Not In Shop"
+              labelAll="All Shop Status"
+            />
+          </div>
+          {/* Can Be Crafted */}
+          <div className="mt-1">
+            <Label htmlFor="toggle-can-be-crafted">Crafting</Label>
+            <TriStateToggle
+              verticalLayout
+              id="toggle-can-be-crafted"
+              value={canBeCrafted}
+              setShowActive={setCanBeCrafted}
+              labelActive="Craftable"
+              labelInactive="Not Craftable"
+              labelAll="All Crafting"
+            />
+          </div>
+          {/* Can Be Imbued */}
+          <div className="mt-1">
+            <Label htmlFor="toggle-can-be-imbued">Imbuing</Label>
+            <TriStateToggle
+              verticalLayout
+              id="toggle-can-be-imbued"
+              value={canBeImbued}
+              setShowActive={setCanBeImbued}
+              labelActive="Imbuable"
+              labelInactive="Not Imbuable"
+              labelAll="All Imbuing"
+            />
+          </div>
+          {/* Can Be Hunted */}
+          <div className="mt-1">
+            <Label htmlFor="toggle-can-be-hunted">Hunting</Label>
+            <TriStateToggle
+              verticalLayout
+              id="toggle-can-be-hunted"
+              value={canBeHunted}
+              setShowActive={setCanBeHunted}
+              labelActive="Huntable"
+              labelInactive="Not Huntable"
+              labelAll="All Hunting"
+            />
+          </div>
+          {/* Can Be Gathered */}
+          <div className="mt-1">
+            <Label htmlFor="toggle-can-be-gathered">Gathering</Label>
+            <TriStateToggle
+              verticalLayout
+              id="toggle-can-be-gathered"
+              value={canBeGathered}
+              setShowActive={setCanBeGathered}
+              labelActive="Gatherable"
+              labelInactive="Not Gatherable"
+              labelAll="All Gathering"
             />
           </div>
           {/* Hidden */}
           {userData && canChangeContent(userData.role) && (
             <div className="mt-1">
-              <Toggle
+              <Label htmlFor="toggle-hidden-only">Visibility</Label>
+              <TriStateToggle
                 verticalLayout
                 id="toggle-hidden-only"
                 value={hidden}
                 setShowActive={setHidden}
                 labelActive="Hidden"
-                labelInactive="Non-Hidden"
+                labelInactive="Visible"
+                labelAll="All Visibility"
               />
             </div>
           )}
@@ -276,10 +348,14 @@ export const getFilter = (state: ItemFilteringState) => {
     slot: state.slot !== "ANY" ? state.slot : undefined,
     target: state.target !== "ANY" ? state.target : undefined,
     method: state.method !== "ANY" ? state.method : undefined,
-    eventItems: state.eventItems ? state.eventItems : false,
-    onlyInShop: state.onlyInShop ? state.onlyInShop : false,
+    eventItems: state.eventItems,
+    onlyInShop: state.onlyInShop,
     effect: state.effect !== "ANY" ? state.effect : undefined,
-    hidden: state.hidden ? state.hidden : undefined,
+    hidden: state.hidden,
+    canBeCrafted: state.canBeCrafted,
+    canBeImbued: state.canBeImbued,
+    canBeHunted: state.canBeHunted,
+    canBeGathered: state.canBeGathered,
   };
 };
 
@@ -295,12 +371,20 @@ export const useFiltering = () => {
   const [slot, setSlot] = useState<(typeof ItemSlotTypes)[number] | "ANY">("ANY");
   const [target, setTarget] = useState<(typeof AttackTargets)[number] | "ANY">("ANY");
   const [method, setMethod] = useState<(typeof AttackMethods)[number] | "ANY">("ANY");
-  const [eventItems, setEventItems] = useState<boolean | undefined>(false);
+  const [eventItems, setEventItems] = useState<boolean | undefined>(undefined);
   const [onlyInShop, setOnlyInShop] = useState<boolean | undefined>(true);
-  const [hidden, setHidden] = useState<boolean | undefined>(false);
+  const [hidden, setHidden] = useState<boolean | undefined>(undefined);
+  const [canBeCrafted, setCanBeCrafted] = useState<boolean | undefined>(undefined);
+  const [canBeImbued, setCanBeImbued] = useState<boolean | undefined>(undefined);
+  const [canBeHunted, setCanBeHunted] = useState<boolean | undefined>(undefined);
+  const [canBeGathered, setCanBeGathered] = useState<boolean | undefined>(undefined);
 
   // Return all
   return {
+    canBeCrafted,
+    canBeGathered,
+    canBeHunted,
+    canBeImbued,
     effect,
     eventItems,
     hidden,
@@ -309,6 +393,10 @@ export const useFiltering = () => {
     method,
     name,
     onlyInShop,
+    setCanBeCrafted,
+    setCanBeGathered,
+    setCanBeHunted,
+    setCanBeImbued,
     setEffect,
     setEventItems,
     setHidden,

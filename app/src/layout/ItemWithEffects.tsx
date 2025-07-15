@@ -324,6 +324,31 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 <b>Rarity</b>: {capitalizeFirstLetter(item.rarity)}
               </p>
             )}
+            {"maxImbueNumber" in item && item.maxImbueNumber > 0 && (
+              <p>
+                <b>Max Imbue Number</b>: {item.maxImbueNumber}
+              </p>
+            )}
+            {"canBeImbued" in item && item.canBeImbued && (
+              <p>
+                <b>Can be Imbued</b>: {item.canBeImbued ? "yes" : "no"}
+              </p>
+            )}
+            {"canBeHunted" in item && item.canBeHunted && (
+              <p>
+                <b>Can be Hunted</b>: {item.canBeHunted ? "yes" : "no"}
+              </p>
+            )}
+            {"canBeGathered" in item && item.canBeGathered && (
+              <p>
+                <b>Can be Gathered</b>: {item.canBeGathered ? "yes" : "no"}
+              </p>
+            )}
+            {"canBeCrafted" in item && item.canBeCrafted && (
+              <p>
+                <b>Can be Crafted</b>: {item.canBeCrafted ? "yes" : "no"}
+              </p>
+            )}
             {"statClassification" in item && item.statClassification && (
               <p>
                 <b>Class</b>: {capitalizeFirstLetter(item.statClassification)}
@@ -567,6 +592,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               </p>
             </div>
           )}
+          {"huntingRank" in item && item.huntingRank && item.huntingRank !== "NONE" && (
+            <div className="my-2 rounded-lg bg-poppopover p-2">
+              <p>
+                <b>Hunting Rank Requirement</b>: {item.huntingRank}
+              </p>
+            </div>
+          )}
           {/* {objectives.length > 0 && (
             <div className={`my-2 rounded-lg bg-poppopover p-2`}>
               <p className="font-bold">Objectives</p>
@@ -796,6 +828,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                           <p>
                             <b>Reward Seichi Silver</b>:{" "}
                             {parsedEffect.reward_seichi_silver}
+                          </p>
+                        )}
+                      {"reward_hunter_items" in parsedEffect &&
+                        parsedEffect.reward_hunter_items && (
+                          <p>
+                            <b>Reward Hunter Items</b>:{" "}
+                            {parsedEffect.reward_hunter_items ? "yes" : "no"}
                           </p>
                         )}
                       {"direction" in parsedEffect &&

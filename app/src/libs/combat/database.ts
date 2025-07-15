@@ -458,7 +458,7 @@ export const updateUser = async (
         ]);
         user.questData = trackers;
       }
-      if (curBattle.battleType === "QUEST") {
+      if (curBattle.battleType === "RANDOM_ENCOUNTER") {
         const { trackers } = getNewTrackers(user, [
           { task: "random_encounter_wins", increment: 1 },
         ]);
@@ -466,16 +466,17 @@ export const updateUser = async (
       }
     }
     // Update trackers
-    const { trackers, notifications, questIdsUpdated } = getNewTrackers(
-      user,
-      curBattle.usersState
+    const trackerEvents = [
+      ...curBattle.usersState
         .filter((u) => u.userId !== userId)
         .map((u) => [
+          // Defeat opponent with outcome
           {
             task: "defeat_opponents" as const,
             contentId: u.controllerId,
             text: result.outcome,
           },
+          // Start battle with outcome
           {
             task: "start_battle" as const,
             contentId: u.controllerId,
@@ -483,6 +484,20 @@ export const updateUser = async (
           },
         ])
         .flat(),
+      // Winning random encounter
+      ...(curBattle.battleType === "RANDOM_ENCOUNTER"
+        ? [
+            {
+              task: "win_encounter_at_location" as const,
+              contentId: user.userId,
+              text: result.outcome,
+            },
+          ]
+        : []),
+    ];
+    const { trackers, notifications, questIdsUpdated } = getNewTrackers(
+      user,
+      trackerEvents,
     );
     updatedQuestIds.push(...questIdsUpdated);
     user.questData = trackers;
@@ -490,7 +505,6 @@ export const updateUser = async (
     result.notifications.push(...notifications);
     // Is it a kage challenge
     const isKageChallenge = ["KAGE_AI", "KAGE_PVP"].includes(curBattle.battleType);
-    // Any items to be deleted?
     const deleteItems = user.items.filter((ui) => ui.quantity <= 0).map((i) => i.id);
     const updateItems = user.items.filter((ui) => ui.quantity > 0);
     // Any jutsus to be updated
@@ -632,7 +646,10 @@ export const updateUser = async (
         .where(eq(userData.userId, userId)),
     ]);
     // Update map status
-    if (result.curHealth > 0 || ["SPARRING", "RANKED_SPARRING"].includes(curBattle.battleType)) {
+    if (
+      result.curHealth > 0 ||
+      ["SPARRING", "RANKED_SPARRING"].includes(curBattle.battleType)
+    ) {
       void updateUserOnMap(pusher, user.sector, {
         ...user,
         longitude: user.originalLongitude,

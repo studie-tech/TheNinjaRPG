@@ -1237,6 +1237,7 @@ export const ItemValidatorRawSchema = z.object({
   staminaCostReducePerLvl: z.coerce.number().min(0).max(10000),
   actionCostPerc: z.coerce.number().int().min(1).max(100),
   canStack: z.coerce.boolean().default(false),
+  maxImbueNumber: z.coerce.number().int().min(1).max(3),
   inShop: z.coerce.boolean().default(false),
   isEventItem: z.coerce.boolean().default(false),
   preventBattleUsage: z.coerce.boolean().default(false),

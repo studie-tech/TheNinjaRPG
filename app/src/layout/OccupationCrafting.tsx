@@ -17,10 +17,14 @@ import {
   CRAFTING_REQUIRED_EXP,
   CRAFTING_TIMES_MINS,
   CRAFTING_MAX_IMBUED_ITEMS,
-  type CRAFTING_RANK,
 } from "@/drizzle/constants";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { getCurrentCraftingStatus, getTotalItemQuantity } from "@/libs/crafting";
+import {
+  getCurrentCraftingStatus,
+  getCraftingRankProgress,
+  getTotalItemQuantity,
+  getEffectiveMaxImbuements,
+} from "@/libs/crafting";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 
 export default function OccupationCrafting() {
@@ -118,32 +122,7 @@ export default function OccupationCrafting() {
     }
   };
 
-  const getCraftingRankProgress = () => {
-    if (!craftingStatus)
-      return { progress: 0, nextRank: "APPRENTICE" as CRAFTING_RANK };
-
-    const currentExp = craftingStatus.craftingExperience;
-    const currentRank = craftingStatus.craftingRank;
-
-    if (currentRank === "FORGEMASTER") {
-      return { progress: 100, nextRank: null };
-    }
-
-    const nextRank =
-      currentRank === "NOVICE"
-        ? "APPRENTICE"
-        : currentRank === "APPRENTICE"
-          ? "MASTER"
-          : "FORGEMASTER";
-    const currentReq = CRAFTING_REQUIRED_EXP[currentRank || "NOVICE"];
-    const nextReq = CRAFTING_REQUIRED_EXP[nextRank];
-
-    const progress = ((currentExp - currentReq) / (nextReq - currentReq)) * 100;
-
-    return { progress: Math.max(0, Math.min(100, progress)), nextRank };
-  };
-
-  const rankProgress = getCraftingRankProgress();
+  const rankProgress = getCraftingRankProgress(userData?.craftingExperience || 0);
 
   return (
     <ContentBox title="Crafting" subtitle="Craft items and equipment" initialBreak>
@@ -395,9 +374,9 @@ export default function OccupationCrafting() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Gem className="h-5 w-5" />
-                Available Items to Imbue
+                Imbueable Items
                 <Badge variant="outline" className="ml-auto">
-                  Max {maxCrystalsPerItem} crystals per item
+                  Max depends on item & crafting rank
                 </Badge>
               </CardTitle>
             </CardHeader>
@@ -424,6 +403,10 @@ export default function OccupationCrafting() {
                       <ActionSelector
                         items={imbuableItems
                           .map((userItem) => {
+                            const effectiveMaxImbuements = getEffectiveMaxImbuements(
+                              userCraftingRank,
+                              userItem.item?.maxImbueNumber || 1,
+                            );
                             const currentCrystals =
                               userItem.imbuements?.filter(
                                 (imbuement) =>
@@ -431,11 +414,11 @@ export default function OccupationCrafting() {
                                   new Date(imbuement.craftingFinishedAt) <= new Date(),
                               ).length || 0;
                             const canAddMoreCrystals =
-                              currentCrystals < maxCrystalsPerItem;
+                              currentCrystals < effectiveMaxImbuements;
 
                             return {
                               id: userItem.id,
-                              name: `${userItem.item?.name || "Unknown"} (${currentCrystals}/${maxCrystalsPerItem} crystals)`,
+                              name: `${userItem.item?.name || "Unknown"} (${currentCrystals}/${effectiveMaxImbuements} crystals)`,
                               image: userItem.item?.image || "",
                               rarity: userItem.item?.rarity || "COMMON",
                               type: "item" as const,

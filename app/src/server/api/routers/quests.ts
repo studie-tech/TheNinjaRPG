@@ -24,6 +24,7 @@ import {
   bloodline,
   bloodlineRolls,
 } from "@/drizzle/schema";
+import { getHuntingItemDrops } from "@/libs/hunting";
 import { userJutsu, userItem, userData, userBadge } from "@/drizzle/schema";
 import { quest, questHistory, actionLog, village, userRewards } from "@/drizzle/schema";
 import { QuestValidator } from "@/validators/objectives";
@@ -55,7 +56,7 @@ import {
   controlShownQuestLocationInformation,
   isAvailableUserQuests,
 } from "@/libs/quest";
-import { MEDNIN_RANKS } from "@/drizzle/constants";
+import { QuestTypes } from "@/drizzle/constants";
 import { QuestTracker } from "@/validators/objectives";
 import type { QuestCounterFieldName } from "@/validators/user";
 import type { SQL } from "drizzle-orm";
@@ -64,7 +65,6 @@ import type { UserData, Quest } from "@/drizzle/schema";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import type { GetRewardResult } from "@/libs/quest";
-import { calcMedninRank } from "@/libs/hospital/hospital";
 import { canEditQuests } from "@/utils/permissions";
 
 export const questsRouter = createTRPCRouter({
@@ -231,7 +231,7 @@ export const questsRouter = createTRPCRouter({
       return missions.filter((e) => isAvailableUserQuests(e, user, true).check);
     }),
   specificQuests: protectedProcedure
-    .input(z.object({ level: z.number(), questType: z.enum(["story", "anbu"]) }))
+    .input(z.object({ level: z.number(), questType: z.enum(QuestTypes) }))
     .query(async ({ ctx, input }) => {
       // Query
       const [{ user }, quests] = await Promise.all([
@@ -454,6 +454,17 @@ export const questsRouter = createTRPCRouter({
               .join(", ")}. Abandon one to start this quest.`,
           );
         }
+      } else if (questData.questType === "hunting") {
+        const current = user.userQuests?.filter(
+          (q) => q.quest.questType === "hunting" && !q.endAt,
+        );
+        if (current && current.length >= QUESTS_CONCURRENT_LIMIT) {
+          return errorResponse(
+            `Already ${QUESTS_CONCURRENT_LIMIT} active hunting quests; ${current
+              .map((c) => c.quest.name)
+              .join(", ")}. Abandon one to start this quest.`,
+          );
+        }
       } else if (questData.questType === "anbu") {
         if (!canAccessStructure(user, "/anbu", sectorVillage)) {
           return errorResponse("Must be in the Anbu page to start anbu quests");
@@ -484,20 +495,6 @@ export const questsRouter = createTRPCRouter({
               .map((c) => c.quest.name)
               .join(", ")}. Abandon one to start this quest.`,
           );
-        }
-        // Check medical rank requirement for event quests
-        if (questData.medicalRank && questData.medicalRank !== "NONE") {
-          const userMedicalRank = calcMedninRank({
-            medicalExperience: user.medicalExperience,
-            rank: user.rank,
-          });
-          const requiredRankIndex = MEDNIN_RANKS.indexOf(questData.medicalRank);
-          const userRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
-          if (userRankIndex < requiredRankIndex) {
-            return errorResponse(
-              `This event quest requires minimum medical rank ${questData.medicalRank}, but you have ${userMedicalRank}`,
-            );
-          }
         }
       } else if (["mission", "crime", "medical"].includes(questData.questType)) {
         if (questData.questRank !== "A") {
@@ -552,9 +549,15 @@ export const questsRouter = createTRPCRouter({
         throw serverError("PRECONDITION_FAILED", `No active quest with id ${input.id}`);
       }
       if (
-        !["mission", "crime", "event", "errand", "story", "medical"].includes(
-          current.questType,
-        )
+        ![
+          "mission",
+          "crime",
+          "event",
+          "errand",
+          "story",
+          "hunting",
+          "medical",
+        ].includes(current.questType)
       ) {
         throw serverError("PRECONDITION_FAILED", `Cannot abandon ${current.questType}`);
       }
@@ -691,6 +694,7 @@ export const questsRouter = createTRPCRouter({
         description: "",
         questType: "mission",
         medicalRank: "NONE",
+        huntingRank: "NONE",
         hidden: true,
         prerequisiteQuestId: "",
         content: {
@@ -699,6 +703,9 @@ export const questsRouter = createTRPCRouter({
           objectives: [],
           reward: {
             reward_medical_experience: 0,
+            reward_hunting_experience: 0,
+            reward_crafting_experience: 0,
+            reward_gathering_experience: 0,
             reward_seichi_silver: 0,
             reward_money: 0,
             reward_clanpoints: 0,
@@ -712,6 +719,7 @@ export const questsRouter = createTRPCRouter({
             reward_badges: [],
             reward_items: [],
             reward_rank: "NONE",
+            reward_hunter_items: false,
           },
         },
       });
@@ -1046,11 +1054,18 @@ export const updateRewards = async (info: {
   // Destructure
   const { client, user, rewards, questCounterField, reason } = info;
   // Fetch names from the database
-  const [items, jutsus, bloodlines, badges] = await Promise.all([
+  const [hunterItems, items, jutsus, bloodlines, badges] = await Promise.all([
+    // Fetch hunter items if needed
+    rewards.reward_hunter_items && user.occupation === "HUNTER"
+      ? client
+          .select({ id: item.id, name: item.name, rarity: item.rarity })
+          .from(item)
+          .where(eq(item.canBeHunted, true))
+      : undefined,
     // Fetch names from the database
     rewards.reward_items.length > 0
       ? client
-          .select({ id: item.id, name: item.name })
+          .select({ id: item.id, name: item.name, rarity: item.rarity })
           .from(item)
           .where(inArray(item.id, rewards.reward_items))
       : [],
@@ -1098,6 +1113,12 @@ export const updateRewards = async (info: {
       : [],
   ]);
 
+  // If we are rewarding hunter items, only select based on hunter rank
+  const droppedItems = getHuntingItemDrops(user.huntingExperience, hunterItems || []);
+
+  // Total items to insert
+  const itemsToInsert = [...items, ...(droppedItems || [])];
+
   // Update userdata
   const getNewRank = rewards.reward_rank !== "NONE";
   const updatedUserData: Record<string, unknown> = {
@@ -1109,6 +1130,9 @@ export const updateRewards = async (info: {
     reputationPoints: user.reputationPoints + rewards.reward_reputation,
     reputationPointsTotal: user.reputationPointsTotal + rewards.reward_reputation,
     medicalExperience: user.medicalExperience + rewards.reward_medical_experience,
+    huntingExperience: user.huntingExperience + rewards.reward_hunting_experience,
+    craftingExperience: user.craftingExperience + rewards.reward_crafting_experience,
+    gatheringExperience: user.gatheringExperience + rewards.reward_gathering_experience,
     rank: getNewRank ? rewards.reward_rank : user.rank,
   };
   if (questCounterField) {
@@ -1185,9 +1209,9 @@ export const updateRewards = async (info: {
     ],
     // Insert items
     ...[
-      items.length > 0 &&
+      itemsToInsert.length > 0 &&
         client.insert(userItem).values(
-          items.map(({ id }) => ({
+          itemsToInsert.map(({ id }) => ({
             id: nanoid(),
             userId: user.userId,
             itemId: id,
@@ -1207,7 +1231,7 @@ export const updateRewards = async (info: {
     ],
   ]);
   // Update rewards for readability
-  return { items, jutsus, bloodlines, badges };
+  return { items: itemsToInsert, jutsus, bloodlines, badges };
 };
 
 /**
@@ -1464,13 +1488,32 @@ export const handleQuestConsequences = async (
   if (!opponent) {
     activeObjectives.forEach((objective) => {
       if ("attackers" in objective && objective.attackers.length > 0) {
-        const opponents = objective.attackers
+        let opponents = objective.attackers
           .filter((ai) => Math.random() * 100 < ai.number)
           .map((ai) => ai.ids)
           .flat();
-        if (opponents.length > 0) {
+        // See if we should limit the number of attackers
+        if (
+          "attackers_max_per_battle" in objective &&
+          objective.attackers_max_per_battle > 0 &&
+          opponents.length > objective.attackers_max_per_battle
+        ) {
+          // Randomly shuffle attackers and slice
+          opponents = opponents
+            .sort(() => Math.random() - 0.5)
+            .slice(0, objective.attackers_max_per_battle);
+        }
+        // If it's "encounter_at_location", then check sector
+        let sectorCheck = true;
+        if (objective.task === "win_encounter_at_location") {
+          if (user.sector !== objective.sector) {
+            sectorCheck = false;
+          }
+        }
+        // If we have opponents, set the opponent
+        if (opponents.length > 0 && sectorCheck) {
           opponent = {
-            type: "combat",
+            type: "random_encounter",
             ids: opponents,
             scaleStats: objective.attackers_scaled_to_user,
             scaleGains: objective.attackers_scale_gains,
@@ -1568,7 +1611,7 @@ export const handleQuestConsequences = async (
                     scaleTarget: opponent.scaleStats ? true : false,
                     asset: "ground",
                   },
-                  "QUEST",
+                  opponent.type === "random_encounter" ? "RANDOM_ENCOUNTER" : "QUEST",
                   opponent.scaleGains ?? 1,
                 );
               })()

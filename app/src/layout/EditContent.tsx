@@ -15,6 +15,7 @@ import { getObjectiveSchema } from "@/validators/objectives";
 import { Button } from "@/components/ui/button";
 import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
 import { X, Plus } from "lucide-react";
+import { SimpleTasks } from "@/validators/objectives";
 import {
   Command,
   CommandEmpty,
@@ -1259,6 +1260,18 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
       (value) =>
         !["task", "id", "image", "item_name", "reward", "completed"].includes(value),
     )
+    .filter((value) => {
+      return (
+        watchTask !== "win_encounter_at_location" ||
+        !["latitude", "longitude", "locationType"].includes(value)
+      );
+    })
+    .filter((value) => {
+      return (
+        !(SimpleTasks as unknown as string[]).includes(watchTask) ||
+        !["latitude", "longitude", "sector"].includes(value)
+      );
+    })
     .filter((value) => {
       return (
         !sectorType ||

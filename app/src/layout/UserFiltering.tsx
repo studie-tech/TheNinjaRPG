@@ -25,7 +25,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { getPublicUsersSchema } from "@/validators/user";
 import { Filter } from "lucide-react";
 import { useUserData } from "@/utils/UserContext";
-import Toggle from "@/components/control/Toggle";
+import { TriStateToggle } from "@/components/control/Toggle";
 import type { GetPublicUsersSchema } from "@/validators/user";
 
 interface UserFilteringProps {
@@ -163,35 +163,41 @@ const UserFiltering: React.FC<UserFilteringProps> = (props) => {
             <>
               {/* Event AI */}
               <div className="mt-1">
-                <Toggle
+                <Label htmlFor="toggle-event-only">Event Status</Label>
+                <TriStateToggle
                   verticalLayout
                   id="toggle-event-only"
                   value={isEvent}
                   setShowActive={setIsEvent}
-                  labelActive="Event"
-                  labelInactive="Non-Event"
+                  labelActive="Event Only"
+                  labelInactive="Non-Event Only"
+                  labelAll="All Events"
                 />
               </div>
               {/* Summon AI */}
               <div className="mt-1">
-                <Toggle
+                <Label htmlFor="toggle-summon-only">Summon Status</Label>
+                <TriStateToggle
                   verticalLayout
                   id="toggle-summon-only"
                   value={isSummon}
                   setShowActive={setIsSummon}
-                  labelActive="Summon"
-                  labelInactive="Non-Summon"
+                  labelActive="Summon Only"
+                  labelInactive="Non-Summon Only"
+                  labelAll="All Summons"
                 />
               </div>
               {/* Arena AI */}
               <div className="mt-1">
-                <Toggle
+                <Label htmlFor="toggle-arena-only">Arena Status</Label>
+                <TriStateToggle
                   verticalLayout
                   id="toggle-arena-only"
                   value={inArena}
                   setShowActive={setInArena}
-                  labelActive="Arena"
-                  labelInactive="Non-Arena"
+                  labelActive="Arena Only"
+                  labelInactive="Non-Arena Only"
+                  labelAll="All Arena"
                 />
               </div>
             </>
@@ -211,9 +217,9 @@ export const getFilter = (state: UserFilteringState) => {
     ip: state.ip ? state.ip : undefined,
     bloodline: state.bloodline !== "None" ? state.bloodline : undefined,
     village: state.village !== "None" ? state.village : undefined,
-    isSummon: state.isSummon ? state.isSummon : undefined,
-    isEvent: state.isEvent ? state.isEvent : undefined,
-    inArena: state.inArena ? state.inArena : undefined,
+    isSummon: state.isSummon,
+    isEvent: state.isEvent,
+    inArena: state.inArena,
   };
 };
 
@@ -224,9 +230,9 @@ export const useFiltering = () => {
   const [ip, setIp] = useState<string>("");
   const [bloodline, setBloodline] = useState<string>("None");
   const [village, setVillage] = useState<string>("None");
-  const [isSummon, setIsSummon] = useState<boolean | undefined>(false);
-  const [isEvent, setIsEvent] = useState<boolean | undefined>(false);
-  const [inArena, setInArena] = useState<boolean | undefined>(true);
+  const [isSummon, setIsSummon] = useState<boolean | undefined>(undefined);
+  const [isEvent, setIsEvent] = useState<boolean | undefined>(undefined);
+  const [inArena, setInArena] = useState<boolean | undefined>(undefined);
 
   // Return all
   return {

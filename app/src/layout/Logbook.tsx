@@ -385,12 +385,13 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
               "errand",
               "story",
               "medical",
+              "hunting",
               "anbu",
             ].includes(quest.questType) && (
               <Confirm2
                 title="Confirm deleting quest"
                 button={
-                  <X className="ml-2 h-6 w-6 hover:text-orange-500 cursor-pointer" />
+                  <X className="ml-2 h-8 w-8 hover:text-orange-500 cursor-pointer bg-popover border-2 rounded-full p-1" />
                 }
                 onAccept={(e) => {
                   e.preventDefault();

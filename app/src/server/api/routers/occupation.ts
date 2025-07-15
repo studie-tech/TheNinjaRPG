@@ -12,12 +12,12 @@ import {
   OCCUPATION_CHANGE_COOLDOWN_DAYS,
   CRAFTING_TIMES_MINS,
   CRAFTING_EXP_GAIN,
-  CRAFTING_MAX_IMBUED_ITEMS,
 } from "@/drizzle/constants";
 import {
   getCraftingRank,
   getTotalItemQuantity,
   calculateItemConsumption,
+  getEffectiveMaxImbuements,
 } from "@/libs/crafting";
 import { nanoid } from "nanoid";
 
@@ -210,7 +210,10 @@ export const occupationRouter = createTRPCRouter({
 
       // Derived
       const userCraftingRank = getCraftingRank(user.craftingExperience);
-      const maxImbuedItems = CRAFTING_MAX_IMBUED_ITEMS[userCraftingRank];
+      const maxImbuedItems = getEffectiveMaxImbuements(
+        userCraftingRank,
+        targetUserItem?.item?.maxImbueNumber || 1,
+      );
       const curImbuingItemsCount = userItems.filter(
         (ui) =>
           ui.imbuements.length > 0 &&
@@ -253,7 +256,7 @@ export const occupationRouter = createTRPCRouter({
       }
       if (targetUserItem.imbuements.length >= maxImbuedItems) {
         return errorResponse(
-          `You have reached the maximum number of imbued items (${maxImbuedItems}) for your ${userCraftingRank} rank`,
+          `You have reached the maximum number of crystals for this item (${maxImbuedItems})`,
         );
       }
       // Derived

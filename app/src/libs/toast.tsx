@@ -177,6 +177,21 @@ export const showRewardToast = (
               <b>Medical experience:</b> {rewards.reward_medical_experience}
             </span>
           )}
+          {rewards.reward_hunting_experience > 0 && (
+            <span>
+              <b>Hunting experience:</b> {rewards.reward_hunting_experience}
+            </span>
+          )}
+          {rewards.reward_crafting_experience > 0 && (
+            <span>
+              <b>Crafting experience:</b> {rewards.reward_crafting_experience}
+            </span>
+          )}
+          {rewards.reward_gathering_experience > 0 && (
+            <span>
+              <b>Gathering experience:</b> {rewards.reward_gathering_experience}
+            </span>
+          )}
           {rewards.reward_jutsus.length > 0 && (
             <span>
               <b>Jutsus: </b> {rewards.reward_jutsus.join(", ")}

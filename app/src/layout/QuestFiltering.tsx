@@ -26,7 +26,7 @@ import { searchQuestSchema } from "@/validators/quest";
 import { Filter } from "lucide-react";
 import { LetterRanks, QuestTypes } from "@/drizzle/constants";
 import { allObjectiveTasks } from "@/validators/objectives";
-import Toggle from "@/components/control/Toggle";
+import { TriStateToggle } from "@/components/control/Toggle";
 import { useUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import type { AllObjectiveTask } from "@/validators/objectives";
@@ -211,13 +211,15 @@ const QuestFiltering: React.FC<QuestFilteringProps> = (props) => {
           {/* Hidden */}
           {userData && canChangeContent(userData.role) && (
             <div className="mt-1">
-              <Toggle
+              <Label htmlFor="toggle-hidden-only">Visibility</Label>
+              <TriStateToggle
                 verticalLayout
                 id="toggle-hidden-only"
                 value={hidden}
                 setShowActive={setHidden}
                 labelActive="Hidden"
-                labelInactive="Non-Hidden"
+                labelInactive="Visible"
+                labelAll="All Visibility"
               />
             </div>
           )}
@@ -241,7 +243,7 @@ export const getFilter = (state: QuestFilteringState) => {
     rank: state.rank !== "None" ? state.rank : undefined,
     userLevel: state.userLevel !== undefined ? state.userLevel : undefined,
     village: state.village !== "None" ? state.village : undefined,
-    hidden: state.hidden ? state.hidden : undefined,
+    hidden: state.hidden,
   };
 };
 
@@ -255,7 +257,7 @@ export const useFiltering = () => {
   const [rank, setRank] = useState<LetterRank | None>("None");
   const [userLevel, setUserLevel] = useState<number | undefined>(undefined);
   const [village, setVillage] = useState<string>("None");
-  const [hidden, setHidden] = useState<boolean | undefined>(false);
+  const [hidden, setHidden] = useState<boolean | undefined>(undefined);
 
   // Return all
   return {

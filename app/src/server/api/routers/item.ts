@@ -286,10 +286,24 @@ export const itemRouter = createTRPCRouter({
           ...(input.eventItems !== undefined
             ? [eq(item.isEventItem, input.eventItems)]
             : []),
-          ...(input.onlyInShop ? [eq(item.inShop, true)] : []),
+          ...(input.onlyInShop !== undefined
+            ? [eq(item.inShop, input.onlyInShop)]
+            : []),
           ...(input?.hidden !== undefined
             ? [eq(item.hidden, input.hidden)]
             : [eq(item.hidden, false)]),
+          ...(input?.canBeCrafted !== undefined
+            ? [eq(item.canBeCrafted, input.canBeCrafted)]
+            : []),
+          ...(input?.canBeImbued !== undefined
+            ? [eq(item.canBeImbued, input.canBeImbued)]
+            : []),
+          ...(input?.canBeHunted !== undefined
+            ? [eq(item.canBeHunted, input.canBeHunted)]
+            : []),
+          ...(input?.canBeGathered !== undefined
+            ? [eq(item.canBeGathered, input.canBeGathered)]
+            : []),
           gte(item.cost, input.minCost),
           gte(item.repsCost, input.minRepsCost),
           gte(item.seichiSilverCost, input.minSeichiSilverCost),

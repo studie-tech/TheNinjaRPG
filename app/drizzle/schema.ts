@@ -1015,6 +1015,7 @@ export const item = mysqlTable(
       .default(sql`('')`)
       .notNull(),
     canStack: boolean("canStack").default(false).notNull(),
+    maxImbueNumber: int("maxImbueNumber").default(1).notNull(),
     inShop: boolean("inShop").default(true).notNull(),
     isEventItem: boolean("isEventItem").default(false).notNull(),
     hidden: boolean("hidden").default(false).notNull(),
@@ -2414,6 +2415,7 @@ export const quest = mysqlTable(
     successDescription: varchar("successDescription", { length: 5000 }),
     questRank: mysqlEnum("questRank", consts.LetterRanks).default("D").notNull(),
     medicalRank: mysqlEnum("medicalRank", consts.MEDNIN_RANKS).default("NONE"),
+    huntingRank: mysqlEnum("huntingRank", consts.HUNTING_RANKS).default("NONE"),
     requiredLevel: int("requiredLevel").default(1).notNull(),
     prerequisiteQuestId: varchar("prerequisiteQuestId", { length: 191 }),
     tierLevel: int("tierLevel"),

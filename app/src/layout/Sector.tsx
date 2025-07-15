@@ -320,6 +320,7 @@ const Sector: React.FC<SectorProps> = (props) => {
               objective,
             );
             if (
+              // If we have don't have a tracker, or the objective is available, then check quest
               (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
               // If an objective is a location objective, then check quest
               (isOnLocation ||

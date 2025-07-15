@@ -148,6 +148,7 @@ export const StructureRoutes = [
   "/souvenirs",
   "/townhall",
   "/traininggrounds",
+  "/occupation",
 ] as const;
 export type StructureRoute = (typeof StructureRoutes)[number];
 
@@ -332,6 +333,7 @@ export const BattleTypes = [
   "SHRINE_WAR",
   "TOURNAMENT",
   "QUEST",
+  "RANDOM_ENCOUNTER",
   "VILLAGE_PROTECTOR",
   "TRAINING",
   "RANKED_PVP",
@@ -381,6 +383,7 @@ export const QuestTypes = [
   "story",
   "anbu",
   "medical",
+  "hunting",
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
 export const QUESTS_CONCURRENT_LIMIT = 4;
@@ -624,6 +627,7 @@ export const MEDNIN_REQUIRED_EXP: Record<MEDNIN_RANK, number> = {
 
 // Hunting config
 export const HUNTING_RANKS = [
+  "NONE",
   "D RANK",
   "C RANK",
   "B RANK",
@@ -632,25 +636,23 @@ export const HUNTING_RANKS = [
 ] as const;
 export type HUNTING_RANK = (typeof HUNTING_RANKS)[number];
 export const HUNTING_REQUIRED_EXP: Record<HUNTING_RANK, number> = {
-  "D RANK": 0,
+  NONE: 0,
+  "D RANK": 1,
   "C RANK": 30000,
   "B RANK": 76000,
   "A RANK": 90000,
   "S RANK": 120000,
 };
-export const HUNTING_EXPERIENCE_GAIN: Record<UserRank, number> = {
-  NONE: 200,
-  STUDENT: 200,
-  GENIN: 200,
-  CHUNIN: 300,
-  JONIN: 400,
-  "ELITE JONIN": 500,
-  ELDER: 600,
-};
 export const HUNTING_ITEM_DROP_CHANCES: Record<
   HUNTING_RANK,
   Record<ItemRarity, number>
 > = {
+  NONE: {
+    COMMON: 15,
+    RARE: 0,
+    EPIC: 0,
+    LEGENDARY: 0,
+  },
   "D RANK": {
     COMMON: 15,
     RARE: 10,
@@ -661,7 +663,7 @@ export const HUNTING_ITEM_DROP_CHANCES: Record<
     COMMON: 20,
     RARE: 15,
     EPIC: 5,
-    LEGENDARY: 11,
+    LEGENDARY: 1,
   },
   "B RANK": {
     COMMON: 25,
@@ -684,29 +686,29 @@ export const HUNTING_ITEM_DROP_CHANCES: Record<
 };
 
 // Gathering config
-export const CATHERING_RANKS = [
+export const GATHERING_RANKS = [
   "D RANK",
   "C RANK",
   "B RANK",
   "A RANK",
   "S RANK",
 ] as const;
-export type CATHERING_RANK = (typeof CATHERING_RANKS)[number];
-export const CATHERING_REQUIRED_EXP: Record<CATHERING_RANK, number> = {
+export type GATHERING_RANK = (typeof GATHERING_RANKS)[number];
+export const CATHERING_REQUIRED_EXP: Record<GATHERING_RANK, number> = {
   "D RANK": 0,
   "C RANK": 30000,
   "B RANK": 76000,
   "A RANK": 90000,
   "S RANK": 120000,
 };
-export const CATHERING_EXPERIENCE_GAIN: Record<ItemRarity, number> = {
+export const GATHERING_EXPERIENCE_GAIN: Record<ItemRarity, number> = {
   COMMON: 200,
   RARE: 300,
   EPIC: 400,
   LEGENDARY: 500,
 };
-export const CATHERING_ITEM_DROP_CHANCES: Record<
-  CATHERING_RANK,
+export const GATHERING_ITEM_DROP_CHANCES: Record<
+  GATHERING_RANK,
   Record<ItemRarity, number>
 > = {
   "D RANK": {

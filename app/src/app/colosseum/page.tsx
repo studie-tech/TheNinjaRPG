@@ -31,6 +31,7 @@ const battleTypeLabels: Record<BattleType, string> = {
   TRAINING: "Training",
   RANKED_PVP: "Ranked PvP",
   RANKED_SPARRING: "Ranked Sparring",
+  RANDOM_ENCOUNTER: "Random Encounter",
 };
 
 export default function ColosseumPage() {
@@ -108,8 +109,8 @@ export default function ColosseumPage() {
             <SelectValue>{battleTypeLabels[selectedType]}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {BattleTypes.filter(type => 
-              ["TOURNAMENT", "CLAN_BATTLE", "COMBAT", "RANKED_PVP"].includes(type)
+            {BattleTypes.filter((type) =>
+              ["TOURNAMENT", "CLAN_BATTLE", "COMBAT", "RANKED_PVP"].includes(type),
             ).map((type) => (
               <SelectItem key={type} value={type}>
                 {battleTypeLabels[type]}

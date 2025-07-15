@@ -17,11 +17,13 @@ import {
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   MEDNIN_RANKS,
   type MEDNIN_RANK,
+  type HUNTING_RANK,
   type LetterRank,
   type QuestType,
   MAP_TOTAL_SECTORS,
   SENSEI_STUDENT_MISSION_EXP_BOOST_PERC,
   SENSEI_MAX_STUDENT_LEVEL,
+  HUNTING_RANKS,
 } from "@/drizzle/constants";
 import { SECTOR_WIDTH, SECTOR_HEIGHT } from "@/libs/travel/constants";
 import { getUnique } from "@/utils/grouping";
@@ -32,8 +34,10 @@ import type {
   AllObjectiveTask,
   ObjectiveRewardType,
 } from "@/validators/objectives";
+import { getHuntingRank } from "@/libs/hunting";
 import type { Quest, UserData, UserItem } from "@/drizzle/schema";
 import type { QuestTrackerType } from "@/validators/objectives";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
 
 /**
  * Get currently active quests for a user
@@ -159,6 +163,16 @@ export const getReward = (
         if (objective.reward_medical_experience) {
           rawRewards.reward_medical_experience += objective.reward_medical_experience;
         }
+        if (objective.reward_hunting_experience) {
+          rawRewards.reward_hunting_experience += objective.reward_hunting_experience;
+        }
+        if (objective.reward_crafting_experience) {
+          rawRewards.reward_crafting_experience += objective.reward_crafting_experience;
+        }
+        if (objective.reward_gathering_experience) {
+          rawRewards.reward_gathering_experience +=
+            objective.reward_gathering_experience;
+        }
         if (objective.reward_jutsus) {
           rawRewards.reward_jutsus.push(...objective.reward_jutsus);
         }
@@ -191,6 +205,15 @@ export const getReward = (
     rawRewards.reward_reputation = Math.floor(rawRewards.reward_reputation * factor);
     rawRewards.reward_medical_experience = Math.floor(
       rawRewards.reward_medical_experience * factor,
+    );
+    rawRewards.reward_hunting_experience = Math.floor(
+      rawRewards.reward_hunting_experience * factor,
+    );
+    rawRewards.reward_crafting_experience = Math.floor(
+      rawRewards.reward_crafting_experience * factor,
+    );
+    rawRewards.reward_gathering_experience = Math.floor(
+      rawRewards.reward_gathering_experience * factor,
     );
     rawRewards.reward_seichi_silver = Math.floor(
       rawRewards.reward_seichi_silver * factor,
@@ -252,11 +275,15 @@ export const collapseRewards = (
     reward_prestige: 0,
     reward_reputation: 0,
     reward_medical_experience: 0,
+    reward_hunting_experience: 0,
+    reward_crafting_experience: 0,
+    reward_gathering_experience: 0,
     reward_items: [],
     reward_jutsus: [],
     reward_bloodlines: [],
     reward_badges: [],
     reward_rank: "NONE",
+    reward_hunter_items: false,
   };
 
   rewards.forEach((reward) => {
@@ -270,6 +297,14 @@ export const collapseRewards = (
     collapsed.reward_prestige += reward.reward_prestige;
     collapsed.reward_reputation += reward.reward_reputation;
     collapsed.reward_medical_experience += reward.reward_medical_experience;
+    collapsed.reward_hunting_experience += reward.reward_hunting_experience;
+    collapsed.reward_crafting_experience += reward.reward_crafting_experience;
+    collapsed.reward_gathering_experience += reward.reward_gathering_experience;
+
+    // Only set reward hunter items to true if any of the rewards have it
+    if (reward.reward_hunter_items) {
+      collapsed.reward_hunter_items = true;
+    }
 
     // Concatenate array rewards
     collapsed.reward_items.push(...reward.reward_items);
@@ -301,6 +336,7 @@ export type QuestConsequence = {
     | "add_item"
     | "remove_item"
     | "combat"
+    | "random_encounter"
     | "fail_quest"
     | "start_quest"
     | "reset_quest"
@@ -542,7 +578,7 @@ export const getNewTrackers = (
                 status.selectedNextObjectiveId = objective.nextObjectiveId;
               }
 
-              // If objective has a location, set to completed
+              // If objective has a location (sector & longitude/latitude), set to completed
               if (status && isLocationObjective(user, objective)) {
                 if (task === "move_to_location") {
                   notifications.push(`You arrived at destination for ${quest.name}.`);
@@ -584,11 +620,17 @@ export const getNewTrackers = (
                     ids: objective.deliverItemIds,
                   });
                   status.done = true;
-                }
-                if (task === "defeat_opponents" && opponentIds.length > 0) {
+                } else if (task === "defeat_opponents" && opponentIds.length > 0) {
                   if (!opponentIds.includes(taskUpdate.contentId || "1337")) {
                     putInCombat();
                   }
+                }
+              }
+
+              // If we're at a win_encounter_at_location objective, set to completed if we won
+              else if (task === "win_encounter_at_location") {
+                if (taskUpdate.text === "Won" && user.sector === objective.sector) {
+                  status.done = true;
                 }
               }
 
@@ -837,6 +879,7 @@ export const isAvailableUserQuests = (
     previousCompletes?: number | null;
     completed?: number | null;
     medicalRank?: MEDNIN_RANK | null;
+    huntingRank?: HUNTING_RANK | null;
   },
   user: UserData & {
     completedQuests: { id: string; questId: string; completed?: number }[];
@@ -851,8 +894,12 @@ export const isAvailableUserQuests = (
     medicalExperience: user.medicalExperience,
     rank: user.rank,
   });
-  const requiredRankIndex = questMedRank ? MEDNIN_RANKS.indexOf(questMedRank) : null;
-  const userRankIndex = MEDNIN_RANKS.indexOf(userMedRank);
+  const reqMedRankIdx = questMedRank ? MEDNIN_RANKS.indexOf(questMedRank) : null;
+  const userMedRankIdx = MEDNIN_RANKS.indexOf(userMedRank);
+  const questHuntRank = questAndUserQuestInfo.huntingRank;
+  const userHuntRank = getHuntingRank(user.huntingExperience);
+  const reqHuntRankIdx = questHuntRank ? HUNTING_RANKS.indexOf(questHuntRank) : null;
+  const userHuntRankIdx = HUNTING_RANKS.indexOf(userHuntRank);
 
   // Checks
   const hideCheck = !questAndUserQuestInfo.hidden || canPlayHiddenQuests(user.role);
@@ -865,7 +912,8 @@ export const isAvailableUserQuests = (
     (questAndUserQuestInfo.requiredVillage === VILLAGE_SYNDICATE_ID && user.isOutlaw);
 
   // Medical rank check for quests that require it
-  const medicalRankCheck = !requiredRankIndex || userRankIndex >= requiredRankIndex;
+  const medicalRankCheck = !reqMedRankIdx || userMedRankIdx >= reqMedRankIdx;
+  const huntingRankCheck = !reqHuntRankIdx || userHuntRankIdx >= reqHuntRankIdx;
 
   // Event specific tests
   const previousCheckTypes = ["event", "story", "anbu"];
@@ -896,7 +944,8 @@ export const isAvailableUserQuests = (
     eventAttemptsCheck &&
     villageCheck &&
     prerequisiteCheck &&
-    medicalRankCheck;
+    medicalRankCheck &&
+    huntingRankCheck;
 
   // If quest is not available, return the reason
   let message = "";
@@ -906,7 +955,10 @@ export const isAvailableUserQuests = (
   if (!eventAttemptsCheck) message += "Quest has been attempted too many times\n";
   if (!villageCheck) message += "Quest is not available in your village\n";
   if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
-  if (!medicalRankCheck) message += `Quest requires medical rank ${questMedRank}\n`;
+  if (!medicalRankCheck)
+    message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;
+  if (!huntingRankCheck)
+    message += `Quest requires hunting rank ${capitalizeFirstLetter(questHuntRank ?? "NONE")}\n`;
   // Returned detailed info on all the checks
   return { check, message };
 };

@@ -24,6 +24,10 @@ export const itemFilteringSchema = z.object({
   target: z.enum(AttackTargets).optional(),
   method: z.enum(AttackMethods).optional(),
   hidden: z.boolean().optional(),
+  canBeCrafted: z.boolean().optional(),
+  canBeImbued: z.boolean().optional(),
+  canBeHunted: z.boolean().optional(),
+  canBeGathered: z.boolean().optional(),
 });
 
 export type ItemFilteringSchema = z.infer<typeof itemFilteringSchema>;

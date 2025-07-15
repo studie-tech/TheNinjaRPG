@@ -10,17 +10,28 @@ import { Gamepad2 } from "lucide-react";
 import Accordion from "@/layout/Accordion";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import { useState, useEffect } from "react";
-import { useRequireInVillage } from "@/utils/UserContext";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type { QuestType } from "@/drizzle/constants";
 
-export default function StoryQuests() {
+interface QuestPickerProps {
+  questType: QuestType;
+  title: string;
+  subtitle: string;
+  introduction?: string;
+}
+
+const QuestPicker: React.FC<QuestPickerProps> = (props) => {
+  // Utils
   const util = api.useUtils();
+
+  // State
   const [activeElement, setActiveElement] = useState<string>("");
+  const { data: userData } = useRequiredUserData();
 
-  const { userData } = useRequireInVillage("/globalanbuhq");
-
-  const { data: storyQuests } = api.quests.specificQuests.useQuery({
+  // Query
+  const { data: quests } = api.quests.specificQuests.useQuery({
     level: userData?.level ?? 0,
-    questType: "story",
+    questType: props.questType,
   });
 
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
@@ -37,37 +48,40 @@ export default function StoryQuests() {
   useEffect(() => {
     if (userData && !activeElement) {
       const currentQuest = userData?.userQuests?.find((uq) =>
-        ["story"].includes(uq.quest.questType),
+        [props.questType].includes(uq.quest.questType),
       );
       if (currentQuest) {
         setActiveElement(currentQuest.quest.name);
       }
     }
-  }, [userData, activeElement]);
+  }, [userData, activeElement, props.questType]);
 
   if (!userData) return null;
 
   // Filter for story quests only
-  const availableStoryQuests = storyQuests ?? [];
+  const availableQuests = quests ?? [];
 
   return (
     <ContentBox
-      title="Story Missions"
-      subtitle="Global Anbu HQ"
+      title={props.title}
+      subtitle={props.subtitle}
       initialBreak={true}
       padding={false}
     >
-      <p className="text-center text-xl font-bold mb-4 px-3 pt-3">
-        Story missions are special assignments that advance the game&apos;s narrative.
-        They can only be started here at the Global Anbu HQ.
-      </p>
+      {props.introduction && (
+        <p className="text-center text-xl font-bold mb-4 px-3 pt-3">
+          {props.introduction}
+        </p>
+      )}
       {isPending && <Loader explanation="Starting quest..." />}
       {!isPending && (
-        <div className="mt-3 bg-popover">
-          {availableStoryQuests.length === 0 && (
-            <p className="font-bold">No current story quests available</p>
+        <div className="bg-popover">
+          {availableQuests.length === 0 && (
+            <p className="font-bold p-3">
+              No current {props.questType} quests available
+            </p>
           )}
-          {availableStoryQuests.map((quest, i) => {
+          {availableQuests.map((quest, i) => {
             const currentQuest = userData?.userQuests?.find(
               (uq) => uq.quest.id === quest.id && !uq.endAt,
             );
@@ -120,4 +134,6 @@ export default function StoryQuests() {
       )}
     </ContentBox>
   );
-}
+};
+
+export default QuestPicker;
