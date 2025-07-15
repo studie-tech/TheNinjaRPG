@@ -68,6 +68,7 @@ export const SHARED_COOLDOWN_TAGS = [
   "shield",
   "drain",
   "poison",
+  "moveprevent",
   "clear",
   "cleanse",
   "pierce",

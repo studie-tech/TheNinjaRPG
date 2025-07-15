@@ -59,7 +59,7 @@ export interface ItemWithEffectsProps {
     | "backgroundSchema"
     | "skillTree";
   showStatistic?: "bloodline" | "item" | "jutsu" | "ai";
-  showCopy?: "quest" | "ai";
+  showCopy?: "quest" | "ai" | "item";
   show3d?: boolean;
   hideTitle?: boolean;
   hideImage?: boolean;
@@ -96,6 +96,15 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         router.push(`/manual/ai/edit/${data.message}`);
+      }
+    },
+  });
+
+  const { mutate: cloneItem } = api.item.clone.useMutation({
+    onSuccess: (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        router.push(`/manual/item/edit/${data.message}`);
       }
     },
   });
@@ -223,6 +232,21 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     >
                       This will create a copy of this AI. You will be redirected to edit
                       the new AI.
+                    </Confirm2>
+                  )}
+                  {showCopy === "item" && (
+                    <Confirm2
+                      title="Clone Item"
+                      button={
+                        <Copy className="h-6 w-6 hover:text-popover-foreground/50" />
+                      }
+                      onAccept={(e) => {
+                        e.preventDefault();
+                        cloneItem({ id: item.id });
+                      }}
+                    >
+                      This will create a copy of this item. You will be redirected to
+                      edit the new item.
                     </Confirm2>
                   )}
                   {show3d && "avatar" in item && "avatar3d" in item && item.avatar3d ? (

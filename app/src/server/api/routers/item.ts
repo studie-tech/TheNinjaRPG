@@ -104,6 +104,50 @@ export const itemRouter = createTRPCRouter({
         return { success: false, message: `Not allowed to create item` };
       }
     }),
+  // Clone an existing item
+  clone: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Fetch
+      const [user, itemData] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
+      ]);
+      // Guard
+      if (!itemData) return errorResponse("Item not found");
+      if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+
+      // Create new item with copied data
+      const newItemId = nanoid();
+      const clonedItem = {
+        ...itemData,
+        id: newItemId,
+        name: `${itemData.name} - copy`,
+        hidden: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Run all inserts at once
+      await Promise.all([
+        ctx.drizzle.insert(item).values(clonedItem),
+        ...(itemData.craftingRequirements && itemData.craftingRequirements.length > 0
+          ? [
+              ctx.drizzle.insert(craftingRequirement).values(
+                itemData.craftingRequirements.map((req) => ({
+                  id: nanoid(),
+                  craftItemId: newItemId,
+                  requirementItemId: req.requirementItemId,
+                  quantity: req.quantity,
+                })),
+              ),
+            ]
+          : []),
+      ]);
+
+      return { success: true, message: newItemId };
+    }),
   // Delete a item
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))

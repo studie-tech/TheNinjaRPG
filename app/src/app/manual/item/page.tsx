@@ -133,6 +133,7 @@ export default function ManualItems() {
               onDelete={(id: string) => remove({ id })}
               showEdit="item"
               showStatistic="item"
+              showCopy="item"
             />
           </div>
         ))}
