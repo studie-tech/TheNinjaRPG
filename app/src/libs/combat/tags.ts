@@ -1365,7 +1365,7 @@ export const recoil = (
   return getInfo(target, effect, `will recoil ${qualifier} damage`);
 };
 
-/** Afterburn damage - take a percentage of incoming damage as self-damage */
+/** Afterburn damage - take a percentage of damage received as self-damage */
 export const afterburn = (
   effect: UserEffect,
   usersEffects: UserEffect[],
@@ -1379,7 +1379,8 @@ export const afterburn = (
   const { power, qualifier } = getPower(effect);
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
-      if (consequence.userId === effect.targetId && consequence.damage) {
+      // Look for damage that the afterburn target is receiving
+      if (consequence.targetId === effect.targetId && consequence.damage) {
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
@@ -1396,7 +1397,7 @@ export const afterburn = (
       }
     });
   }
-  return getInfo(target, effect, `will take ${qualifier} of incoming damage as afterburn`);
+  return getInfo(target, effect, `will take ${qualifier} of damage received as afterburn`);
 };
 
 /** Steal damage back to attacker as HP */
