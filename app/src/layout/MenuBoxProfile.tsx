@@ -612,6 +612,9 @@ const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({ effects, userId }) 
         case "recoil":
           insert(image, "text-red-500", `↓ Dmg recoil`, true, e);
           break;
+        case "afterburn":
+          insert(image, "text-red-500", `↓ Afterburn`, true, e);
+          break;
         case "drain":
           insert(image, "text-purple-500", `↓ Draining`, true, e);
           break;

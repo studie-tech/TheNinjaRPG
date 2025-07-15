@@ -224,6 +224,7 @@ export const calcApplyRatio = (
   // Certain buff/debuffs are applied always (e.g. resolving against each attack)
   const alwaysApply: ZodAllTags["type"][] = [
     "absorb",
+    "afterburn",
     "buffprevent",
     "cleanseprevent",
     "clearprevent",
