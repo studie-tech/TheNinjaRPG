@@ -1397,7 +1397,12 @@ export const afterburn = (
       }
     });
   }
-  return getInfo(target, effect, `will take ${qualifier} of damage received as afterburn`);
+  
+  const description = effect.calculation === "percentage" 
+    ? `will take ${qualifier} of damage received as afterburn`
+    : `will take ${qualifier} afterburn damage`;
+    
+  return getInfo(target, effect, description);
 };
 
 /** Steal damage back to attacker as HP */

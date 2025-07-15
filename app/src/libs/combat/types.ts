@@ -668,7 +668,7 @@ export const AfterburnTag = z.object({
   ...IncludeStats,
   ...PowerAttributes,
   type: z.literal("afterburn").default("afterburn"),
-  description: msg("Take a percentage of incoming damage as self-damage"),
+  description: msg("Take a percentage of incoming damage as afterburndamage"),
   calculation: z.enum(["static", "percentage"]).default("percentage"),
 });
 
