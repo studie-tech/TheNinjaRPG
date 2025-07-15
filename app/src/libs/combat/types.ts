@@ -211,6 +211,7 @@ export type Consequence = {
   rawResidual?: number;
   reflect?: number;
   recoil?: number;
+  afterburn?: number;
   lifesteal_hp?: number;
   absorb_hp?: number;
   absorb_sp?: number;
@@ -662,6 +663,15 @@ export const RecoilTag = z.object({
   calculation: z.enum(["static", "percentage"]).default("percentage"),
 });
 
+export const AfterburnTag = z.object({
+  ...BaseAttributes,
+  ...IncludeStats,
+  ...PowerAttributes,
+  type: z.literal("afterburn").default("afterburn"),
+  description: msg("Take a percentage of incoming damage as self-damage"),
+  calculation: z.enum(["static", "percentage"]).default("percentage"),
+});
+
 export const RobPreventTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
@@ -802,6 +812,7 @@ export const IncreaseMarriageSlots = z.object({
 /******************** */
 export const AllTags = z.union([
   AbsorbTag.default({}),
+  AfterburnTag.default({}),
   BarrierTag.default({}),
   BuffPreventTag.default({}),
   CleansePreventTag.default({}),
@@ -906,6 +917,7 @@ export const isPositiveUserEffect = (tag: ZodAllTags) => {
 export const isNegativeUserEffect = (tag: ZodAllTags) => {
   if (
     [
+      "afterburn",
       "buffprevent",
       // "cleanseprevent",
       "clear",

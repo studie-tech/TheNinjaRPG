@@ -10,6 +10,7 @@ import {
   absorb,
   reflect,
   recoil,
+  afterburn,
   lifesteal,
   drain,
   shield,
@@ -421,6 +422,16 @@ export const applyEffects = (
             });
           }
         }
+        if (c.afterburn && c.afterburn > 0) {
+          if (c.afterburn > 0) {
+            target.curHealth -= c.afterburn;
+            target.curHealth = Math.max(0, target.curHealth);
+            actionEffects.push({
+              txt: `${target.username} takes ${c.afterburn.toFixed(2)} afterburn damage`,
+              color: "red",
+            });
+          }
+        }
         if (
           c.lifesteal_hp &&
           c.lifesteal_hp > 0 &&
@@ -680,6 +691,8 @@ export const applySingleEffect = (
           info = reflect(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "recoil") {
           info = recoil(effect, usersEffects, consequences, curTarget);
+        } else if (effect.type === "afterburn") {
+          info = afterburn(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "lifesteal") {
           info = lifesteal(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "fleeprevent") {

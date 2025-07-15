@@ -1365,6 +1365,40 @@ export const recoil = (
   return getInfo(target, effect, `will recoil ${qualifier} damage`);
 };
 
+/** Afterburn damage - take a percentage of incoming damage as self-damage */
+export const afterburn = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  consequences: Map<string, Consequence>,
+  target: BattleUserState,
+) => {
+  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
+  if (preventTag && preventTag.createdRound < effect.createdRound) {
+    if (!pass) return preventResponse(effect, target, "cannot be debuffed with afterburn");
+  }
+  const { power, qualifier } = getPower(effect);
+  if (!effect.isNew && !effect.castThisRound) {
+    consequences.forEach((consequence, effectId) => {
+      if (consequence.userId === effect.targetId && consequence.damage) {
+        const damageEffect = usersEffects.find((e) => e.id === effectId);
+        if (damageEffect) {
+          const ratio = getEfficiencyRatio(damageEffect, effect);
+          const convert =
+            Math.floor(
+              effect.calculation === "percentage"
+                ? consequence.damage * (power / 100)
+                : power > consequence.damage
+                  ? consequence.damage
+                  : power,
+            ) * ratio;
+          consequence.afterburn = convert;
+        }
+      }
+    });
+  }
+  return getInfo(target, effect, `will take ${qualifier} of incoming damage as afterburn`);
+};
+
 /** Steal damage back to attacker as HP */
 export const lifesteal = (
   effect: UserEffect,

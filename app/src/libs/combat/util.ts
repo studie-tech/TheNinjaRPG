@@ -358,6 +358,7 @@ export const sortEffects = (
     "lifesteal",
     "drain",
     "poison",
+    "afterburn",
     "absorb",
     "recoil",
     "reflect",
