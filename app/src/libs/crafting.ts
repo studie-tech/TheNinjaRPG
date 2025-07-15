@@ -1,4 +1,8 @@
-import { CRAFTING_REQUIRED_EXP, CRAFTING_MAX_IMBUED_ITEMS } from "@/drizzle/constants";
+import {
+  CRAFTING_REQUIRED_EXP,
+  CRAFTING_MAX_IMBUED_ITEMS,
+  CRAFTING_RANKS,
+} from "@/drizzle/constants";
 import type { CRAFTING_RANK } from "@/drizzle/constants";
 import type { UserData, UserItem, Item } from "@/drizzle/schema";
 
@@ -15,21 +19,34 @@ export const getCraftingRank = (experience: number): CRAFTING_RANK => {
 };
 
 /**
+ * Get the next crafting rank
+ * @param craftingRank - The current crafting rank
+ * @returns The next crafting rank
+ */
+export const getNextCraftingRank = (craftingRank: CRAFTING_RANK) => {
+  const currentIndex = CRAFTING_RANKS.indexOf(craftingRank);
+  if (currentIndex === CRAFTING_RANKS.length - 1) return null;
+  return CRAFTING_RANKS[currentIndex + 1];
+};
+
+/**
+ * Get the experience required for a crafting rank
+ * @param craftingRank - The crafting rank
+ * @returns The experience required for the crafting rank
+ */
+export const getRankExperienceRequirement = (craftingRank: CRAFTING_RANK) => {
+  return CRAFTING_REQUIRED_EXP[craftingRank];
+};
+
+/**
  * Get the experience required for the next rank
  * @param craftingRank - The current crafting rank
  * @returns The experience required for the next rank
  */
 export const getNextRankExperience = (craftingRank: CRAFTING_RANK) => {
-  switch (craftingRank) {
-    case "FORGEMASTER":
-      return CRAFTING_REQUIRED_EXP.FORGEMASTER;
-    case "MASTER":
-      return CRAFTING_REQUIRED_EXP.MASTER;
-    case "APPRENTICE":
-      return CRAFTING_REQUIRED_EXP.APPRENTICE;
-    default:
-      return CRAFTING_REQUIRED_EXP.NOVICE;
-  }
+  const nextRank = getNextCraftingRank(craftingRank);
+  if (!nextRank) return null;
+  return CRAFTING_REQUIRED_EXP[nextRank];
 };
 
 /**

@@ -89,8 +89,8 @@ export const getHuntingItemDrops = (
   const rankChances = HUNTING_ITEM_DROP_CHANCES[currentRank];
   const drops: DroppedItem[] = [];
   for (const item of items) {
-    const chance = rankChances[item.rarity];
-    if (chance > 0) {
+    const chance = rankChances[item.rarity] / 100;
+    if (chance > 0 && Math.random() < chance) {
       drops.push(item);
     }
   }

@@ -637,7 +637,7 @@ export const HUNTING_RANKS = [
 export type HUNTING_RANK = (typeof HUNTING_RANKS)[number];
 export const HUNTING_REQUIRED_EXP: Record<HUNTING_RANK, number> = {
   NONE: 0,
-  "D RANK": 1,
+  "D RANK": 0,
   "C RANK": 30000,
   "B RANK": 76000,
   "A RANK": 90000,

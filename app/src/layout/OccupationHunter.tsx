@@ -52,15 +52,11 @@ export default function OccupationHunter() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Experience: {userData.huntingExperience.toLocaleString()}</span>
-                  {nextRankExp && (
-                    <span>Next rank: {nextRankExp.toLocaleString()} exp</span>
+                  {rankProgress.nextRank && nextRankExp && (
+                    <span>Next: {nextRankExp.toLocaleString()}</span>
                   )}
                 </div>
                 <Progress value={rankProgress.progress} className="h-2" />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Current: {huntingRank}</span>
-                  {rankProgress.nextRank && <span>Next: {rankProgress.nextRank}</span>}
-                </div>
               </div>
             </CardContent>
           </Card>
