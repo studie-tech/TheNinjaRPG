@@ -1026,6 +1026,7 @@ export const item = mysqlTable(
     canBeImbued: boolean("canBeImbued").default(false).notNull(),
     canBeHunted: boolean("canBeHunted").default(false).notNull(),
     canBeGathered: boolean("canBeGathered").default(false).notNull(),
+    canBeTraded: boolean("canBeTraded").default(false).notNull(),
   },
   (table) => {
     return {
@@ -1925,6 +1926,7 @@ export const userItem = mysqlTable(
     equipped: mysqlEnum("equipped", consts.ItemSlots).default("NONE").notNull(),
     storedAtHome: boolean("storedAtHome").default(false).notNull(),
     craftingFinishedAt: datetime("craftingFinishedAt", { mode: "date", fsp: 3 }),
+    isInAuction: boolean("isInAuction").default(false).notNull(),
   },
   (table) => {
     return {
@@ -1992,6 +1994,96 @@ export const userItemImbuementRelations = relations(userItemImbuement, ({ one })
   item: one(item, {
     fields: [userItemImbuement.imbuementItemId],
     references: [item.id],
+  }),
+}));
+
+// Auction House System Tables
+export const auctionListing = mysqlTable(
+  "AuctionListing",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    sellerId: varchar("sellerId", { length: 191 }).notNull(),
+    buyerId: varchar("buyerId", { length: 191 }),
+    userItemId: varchar("userItemId", { length: 191 }).notNull(),
+    listingType: mysqlEnum("listingType", consts.AUCTION_LISTING_TYPES).notNull(),
+    targetUserId: varchar("targetUserId", { length: 191 }),
+    startingPrice: double("startingPrice").notNull(),
+    buyoutPrice: double("buyoutPrice"),
+    currentPrice: double("currentPrice").notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+    status: mysqlEnum("status", consts.AUCTION_LISTING_STATES)
+      .default("ACTIVE")
+      .notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      sellerIdIdx: index("AuctionListing_sellerId_idx").on(table.sellerId),
+      buyerIdIdx: index("AuctionListing_buyerId_idx").on(table.buyerId),
+      userItemIdIdx: index("AuctionListing_userItemId_idx").on(table.userItemId),
+      targetUserIdIdx: index("AuctionListing_targetUserId_idx").on(table.targetUserId),
+      statusIdx: index("AuctionListing_status_idx").on(table.status),
+      expiresAtIdx: index("AuctionListing_expiresAt_idx").on(table.expiresAt),
+    };
+  },
+);
+export type AuctionListing = InferSelectModel<typeof auctionListing>;
+
+export const auctionListingRelations = relations(auctionListing, ({ one, many }) => ({
+  seller: one(userData, {
+    fields: [auctionListing.sellerId],
+    references: [userData.userId],
+  }),
+  buyer: one(userData, {
+    fields: [auctionListing.buyerId],
+    references: [userData.userId],
+  }),
+  targetUser: one(userData, {
+    fields: [auctionListing.targetUserId],
+    references: [userData.userId],
+  }),
+  userItem: one(userItem, {
+    fields: [auctionListing.userItemId],
+    references: [userItem.id],
+  }),
+  bids: many(auctionBid),
+}));
+
+export const auctionBid = mysqlTable(
+  "AuctionBid",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    auctionId: varchar("auctionId", { length: 191 }).notNull(),
+    bidderId: varchar("bidderId", { length: 191 }).notNull(),
+    amount: double("amount").notNull(),
+    status: mysqlEnum("status", consts.AUCTION_BID_STATES).default("ACTIVE").notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      auctionIdIdx: index("AuctionBid_auctionId_idx").on(table.auctionId),
+      bidderIdIdx: index("AuctionBid_bidderId_idx").on(table.bidderId),
+      amountIdx: index("AuctionBid_amount_idx").on(table.amount),
+    };
+  },
+);
+export type AuctionBid = InferSelectModel<typeof auctionBid>;
+
+export const auctionBidRelations = relations(auctionBid, ({ one }) => ({
+  auction: one(auctionListing, {
+    fields: [auctionBid.auctionId],
+    references: [auctionListing.id],
+  }),
+  bidder: one(userData, {
+    fields: [auctionBid.bidderId],
+    references: [userData.userId],
   }),
 }));
 

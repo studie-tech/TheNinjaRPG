@@ -8,28 +8,18 @@ All make commands should be run from the root directory `/`, not from `/app`.
 
 **Primary Development:**
 
-- `make start` - Start Next.js dev server at http://127.0.0.1:3000
-- `make build` - Build the Next.js application
+- `make build` - Build the Next.js application. Only run if explicitly asked.
 - `make test` - Run unit tests with vitest
 - `make lint` - Run ESLint on the codebase
-- `bun typecheck` - Type check TypeScript (from app directory)
 
 **Database Management:**
 
-- `make dbpush` - Push schema changes to database without migrations
-- `make makemigrations` - Generate database migration files
-- `make seed` - Seed database with initial data
-- `make emptymigration` - Create empty migration file
+- `make makemigrations` - Generate database migration files. Do this after updating schema.ts
 
 **Package Management:**
 
 - `make bun add [package]` - Add new package dependency
 - `make install` - Install dependencies with bun
-
-**Setup Commands:**
-
-- `make setup` - Install bun and start required services
-- `make help` - Show all available make commands
 
 ## Architecture Overview
 

@@ -912,6 +912,7 @@ export const initiateBattle = async (
             and(
               gt(items.quantity, 0),
               ne(items.equipped, "NONE"),
+              eq(items.isInAuction, false),
               or(
                 isNull(items.craftingFinishedAt),
                 lt(items.craftingFinishedAt, new Date()),
@@ -999,6 +1000,7 @@ export const initiateBattle = async (
             item: item,
             storedAtHome: false,
             craftingFinishedAt: null,
+            isInAuction: false,
             imbuements: [],
           }));
         user.jutsus = loadoutJutsus

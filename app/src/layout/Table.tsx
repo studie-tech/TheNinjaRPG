@@ -12,7 +12,15 @@ export type ColumnDefinitionType<T, K extends keyof T> = {
   header: string;
   width?: number;
   onChange?: (id: string, column: string, value: string) => void;
-  type: "avatar" | "string" | "capitalized" | "time_passed" | "date" | "jsx" | "input";
+  type:
+    | "avatar"
+    | "string"
+    | "number"
+    | "capitalized"
+    | "time_passed"
+    | "date"
+    | "jsx"
+    | "input";
   tooltip?: (row: T) => string;
 };
 
@@ -25,6 +33,7 @@ type TableProps<T, K extends keyof T> = {
     label: string | React.ReactNode;
     onClick: (row: T) => void;
   }[];
+  onRowClick?: (row: T) => void;
   setLastElement?: (element: HTMLDivElement | null) => void;
 };
 
@@ -56,10 +65,12 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
               ref={i === data.length - 1 ? props.setLastElement : null}
               className={`border-b border-gray-700 ${
                 i % 2 == 0 ? "bg-card" : "bg-popover"
-              } ${props.linkColumn ? "cursor-pointer hover:bg-poppopover" : ""}`}
+              } ${props.linkColumn || props.onRowClick ? "cursor-pointer hover:bg-poppopover" : ""}`}
               onClick={(e) => {
                 e.preventDefault();
-                if (props.linkColumn) {
+                if (props.onRowClick) {
+                  props.onRowClick(row);
+                } else if (props.linkColumn) {
                   let route = row[props.linkColumn] as string;
                   route = props.linkPrefix ? props.linkPrefix + route : route;
                   router.push(route);
@@ -97,6 +108,11 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                   )}
                   {column.type === "string" && (
                     <div title={column.tooltip?.(row)}>{row[column.key] as string}</div>
+                  )}
+                  {column.type === "number" && (
+                    <div title={column.tooltip?.(row)}>
+                      {(row[column.key] as number).toLocaleString()}
+                    </div>
                   )}
                   {column.type === "jsx" && (row[column.key] as React.ReactNode)}
                   {column.type === "capitalized" &&

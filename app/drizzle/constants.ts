@@ -149,6 +149,7 @@ export const StructureRoutes = [
   "/townhall",
   "/traininggrounds",
   "/occupation",
+  "/auctionhouse",
 ] as const;
 export type StructureRoute = (typeof StructureRoutes)[number];
 
@@ -1506,6 +1507,21 @@ export const HomeTypeDetails = {
   LARGE_ESTATE: { regen: 200, storage: 40, cost: 100000000, name: "Large Estate" },
 } as const;
 export type HomeTypeDetails = (typeof HomeTypeDetails)[keyof typeof HomeTypeDetails];
+
+// Auction system constants
+export const AUCTION_LISTING_STATES = [
+  "ACTIVE",
+  "SOLD",
+  "EXPIRED",
+  "CANCELLED",
+] as const;
+export type AuctionListingState = (typeof AUCTION_LISTING_STATES)[number];
+
+export const AUCTION_LISTING_TYPES = ["AUCTION", "DIRECT"] as const;
+export type AuctionListingType = (typeof AUCTION_LISTING_TYPES)[number];
+
+export const AUCTION_BID_STATES = ["ACTIVE", "REFUNDED", "WON"] as const;
+export type AuctionBidState = (typeof AUCTION_BID_STATES)[number];
 
 // Bounty system constants
 export const BOUNTY_STATUSES = ["OPEN", "CLAIMED", "EXPIRED", "CANCELLED"] as const;

@@ -25,5 +25,5 @@ Sentry.init({
   // allowUrls: [/https?:\/\/(www\.)?theninja-rpg\.com.*/],
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
-  debug: true,
+  debug: false,
 });

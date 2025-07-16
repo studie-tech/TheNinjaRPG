@@ -28,6 +28,7 @@ export const itemFilteringSchema = z.object({
   canBeImbued: z.boolean().optional(),
   canBeHunted: z.boolean().optional(),
   canBeGathered: z.boolean().optional(),
+  canBeTraded: z.boolean().optional(),
 });
 
 export type ItemFilteringSchema = z.infer<typeof itemFilteringSchema>;

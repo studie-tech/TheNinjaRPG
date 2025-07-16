@@ -37,10 +37,8 @@ export default async function Image({ params }: { params: { imageid: string } })
         }}
       >
         {url ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img width={width} height={height} src={url} alt="Concept Art" />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             width={width}
             height={height}

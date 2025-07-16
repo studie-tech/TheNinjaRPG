@@ -62,7 +62,10 @@ export const getTotalItemQuantity = (
   return userItems
     .filter(
       (item) =>
-        item.itemId === itemId && !(item.quantity === 0 && item.craftingFinishedAt),
+        item.itemId === itemId &&
+        item.quantity !== 0 &&
+        !item.isInAuction &&
+        (!item.craftingFinishedAt || item.craftingFinishedAt < new Date()),
     )
     .reduce((total, item) => total + item.quantity, 0);
 };
@@ -83,6 +86,8 @@ export const calculateItemConsumption = (
     .filter(
       (item) =>
         item.itemId === itemId &&
+        item.quantity !== 0 &&
+        !item.isInAuction &&
         (!item.craftingFinishedAt || item.craftingFinishedAt < new Date()),
     )
     .sort((a, b) => a.quantity - b.quantity); // Consume smaller stacks first

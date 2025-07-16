@@ -108,8 +108,6 @@ export const RankedArenaMain: React.FC = () => {
 
     // Clear the interval when the component unmounts or the user leaves the queue
     return () => clearInterval(intervalId);
-    // We deliberately omit `isCheckingRef` from the dependency array because the ref doesn't change between renders.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queueData?.inQueue, checkForMatches]);
 
   // Guards

@@ -62,6 +62,7 @@ export default function MyItems() {
   const availableItems = userItems
     ?.filter((ui) => !ui.storedAtHome)
     .filter((ui) => !ui.craftingFinishedAt || ui.craftingFinishedAt < new Date())
+    .filter((ui) => !ui.isInAuction)
     .map((ui) => ({
       ...ui,
       imbuements: ui.imbuements.filter(

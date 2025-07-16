@@ -1264,6 +1264,7 @@ export const ItemValidatorRawSchema = z.object({
   canBeCrafted: z.coerce.boolean().default(false),
   canBeHunted: z.coerce.boolean().default(false),
   canBeGathered: z.coerce.boolean().default(false),
+  canBeTraded: z.coerce.boolean().default(true),
   craftingRequirements: z
     .array(
       z.object({

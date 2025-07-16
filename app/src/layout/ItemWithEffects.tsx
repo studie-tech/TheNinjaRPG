@@ -344,6 +344,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 <b>Can be Gathered</b>: {item.canBeGathered ? "yes" : "no"}
               </p>
             )}
+            {"canBeTraded" in item && item.canBeTraded && (
+              <p>
+                <b>Can be Traded</b>: {item.canBeTraded ? "yes" : "no"}
+              </p>
+            )}
             {"canBeCrafted" in item && item.canBeCrafted && (
               <p>
                 <b>Can be Crafted</b>: {item.canBeCrafted ? "yes" : "no"}

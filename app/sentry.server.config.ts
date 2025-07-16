@@ -17,7 +17,7 @@ Sentry.init({
   ignoreErrors: ["Unauthorized for tRPC endpoint"],
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
-  debug: true,
+  debug: false,
 
   // Adds request headers and IP for users, for more info visit:
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii

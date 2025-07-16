@@ -54,6 +54,7 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
     setCanBeImbued,
     setCanBeHunted,
     setCanBeGathered,
+    setCanBeTraded,
   } = props.state;
   const { setName, setEffect, setHidden } = props.state;
   const { setItemType, setRarity, setSlot, setMethod, setTarget } = props.state;
@@ -66,6 +67,7 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
     canBeImbued,
     canBeHunted,
     canBeGathered,
+    canBeTraded,
   } = props.state;
   const { name, effect, hidden } = props.state;
 
@@ -316,6 +318,19 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
               labelAll="All Gathering"
             />
           </div>
+          {/* Can Be Traded */}
+          <div className="mt-1">
+            <Label htmlFor="toggle-can-be-traded">Trading</Label>
+            <TriStateToggle
+              verticalLayout
+              id="toggle-can-be-traded"
+              value={canBeTraded}
+              setShowActive={setCanBeTraded}
+              labelActive="Tradeable"
+              labelInactive="Not Tradeable"
+              labelAll="All Trading"
+            />
+          </div>
           {/* Hidden */}
           {userData && canChangeContent(userData.role) && (
             <div className="mt-1">
@@ -356,6 +371,7 @@ export const getFilter = (state: ItemFilteringState) => {
     canBeImbued: state.canBeImbued,
     canBeHunted: state.canBeHunted,
     canBeGathered: state.canBeGathered,
+    canBeTraded: state.canBeTraded,
   };
 };
 
@@ -378,6 +394,7 @@ export const useFiltering = () => {
   const [canBeImbued, setCanBeImbued] = useState<boolean | undefined>(undefined);
   const [canBeHunted, setCanBeHunted] = useState<boolean | undefined>(undefined);
   const [canBeGathered, setCanBeGathered] = useState<boolean | undefined>(undefined);
+  const [canBeTraded, setCanBeTraded] = useState<boolean | undefined>(undefined);
 
   // Return all
   return {
@@ -385,6 +402,7 @@ export const useFiltering = () => {
     canBeGathered,
     canBeHunted,
     canBeImbued,
+    canBeTraded,
     effect,
     eventItems,
     hidden,
@@ -397,6 +415,7 @@ export const useFiltering = () => {
     setCanBeGathered,
     setCanBeHunted,
     setCanBeImbued,
+    setCanBeTraded,
     setEffect,
     setEventItems,
     setHidden,

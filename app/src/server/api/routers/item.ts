@@ -304,6 +304,9 @@ export const itemRouter = createTRPCRouter({
           ...(input?.canBeGathered !== undefined
             ? [eq(item.canBeGathered, input.canBeGathered)]
             : []),
+          ...(input?.canBeTraded !== undefined
+            ? [eq(item.canBeTraded, input.canBeTraded)]
+            : []),
           gte(item.cost, input.minCost),
           gte(item.repsCost, input.minRepsCost),
           gte(item.seichiSilverCost, input.minSeichiSilverCost),
@@ -382,6 +385,9 @@ export const itemRouter = createTRPCRouter({
       if (useritem.userId !== user.userId) return errorResponse("Not yours to sell");
       if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
         return errorResponse("Cannot sell crafting item");
+      }
+      if (useritem.isInAuction) {
+        return errorResponse("Cannot sell item in auction");
       }
       // Derived
       const cost = calcItemSellingPrice(user, useritem, structures);
@@ -757,6 +763,7 @@ export const itemRouter = createTRPCRouter({
           (ui) =>
             ui.equipped === "NONE" &&
             !ui.storedAtHome &&
+            !ui.isInAuction &&
             (!ui.craftingFinishedAt || ui.craftingFinishedAt < new Date()),
         )
         .sort((a, b) => b.item.cost - a.item.cost);
@@ -876,6 +883,9 @@ export const toggleEquipItem = async (
   }
   if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
     return errorResponse("Cannot equip crafting item");
+  }
+  if (useritem.isInAuction) {
+    return errorResponse("Cannot equip item in auction");
   }
   const currentlyImbuing = useritem.imbuements.filter(
     (imbuement) =>
