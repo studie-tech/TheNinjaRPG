@@ -1,11 +1,12 @@
 import { nanoid } from "nanoid";
-import { eq, sql, gte, and, desc, isNull } from "drizzle-orm";
+import { eq, sql, gte, and, desc, isNull, like, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { fetchUser } from "./profile";
 import {
   userData,
   userItem,
+  item,
   actionLog,
   auctionListing,
   auctionBid,
@@ -101,46 +102,57 @@ export const auctionRouter = createTRPCRouter({
         whereConditions.push(sql`${auctionListing.currentPrice} <= ${maxPrice}`);
       }
 
-      // Get auction listings with userItem details
-      const listings = await ctx.drizzle.query.auctionListing.findMany({
-        where: and(...whereConditions),
-        with: {
-          userItem: {
-            with: {
-              item: true,
-              imbuements: {
-                with: {
-                  item: true,
+      // Add item name filter if provided
+      if (itemName) {
+        whereConditions.push(like(item.name, `%${itemName}%`));
+      }
+
+      // Get auction listings with joins for filtering
+      const listings = await ctx.drizzle
+        .select({ id: auctionListing.id })
+        .from(auctionListing)
+        .innerJoin(userItem, eq(auctionListing.userItemId, userItem.id))
+        .innerJoin(item, eq(userItem.itemId, item.id))
+        .where(and(...whereConditions))
+        .orderBy(desc(auctionListing.expiresAt))
+        .limit(limit)
+        .offset(cursor ? parseInt(cursor) : 0);
+
+      // Fetch full related data for the filtered results
+      const listingIds = listings.map((listing) => listing.id);
+      const fullListings =
+        listingIds.length > 0
+          ? await ctx.drizzle.query.auctionListing.findMany({
+              where: inArray(auctionListing.id, listingIds),
+              with: {
+                userItem: {
+                  with: {
+                    item: true,
+                    imbuements: {
+                      with: {
+                        item: true,
+                      },
+                    },
+                  },
+                },
+                seller: {
+                  columns: {
+                    userId: true,
+                    username: true,
+                    avatar: true,
+                  },
+                },
+                bids: {
+                  orderBy: desc(auctionBid.amount),
+                  limit: 1,
                 },
               },
-            },
-          },
-          seller: {
-            columns: {
-              userId: true,
-              username: true,
-              avatar: true,
-            },
-          },
-          bids: {
-            orderBy: desc(auctionBid.amount),
-            limit: 1,
-          },
-        },
-        orderBy: desc(auctionListing.expiresAt),
-        limit,
-        offset: cursor ? parseInt(cursor) : 0,
-      });
-
-      // Filter by item name if provided
-      const filteredListings = itemName
-        ? listings.filter((listing) =>
-            listing.userItem.item.name.toLowerCase().includes(itemName.toLowerCase()),
-          )
-        : listings;
+              orderBy: desc(auctionListing.expiresAt),
+            })
+          : [];
 
       return {
-        data: filteredListings,
+        data: fullListings,
         nextCursor:
           listings.length === limit ? (cursor ? parseInt(cursor) : 0) + limit : null,
       };
@@ -338,14 +350,6 @@ export const auctionRouter = createTRPCRouter({
       } else {
         // Create new bid
         const bidId = nanoid();
-        auction.bids.push({
-          id: bidId,
-          auctionId,
-          bidderId: ctx.userId,
-          amount,
-          createdAt: new Date(),
-          status: "ACTIVE",
-        });
         await Promise.all([
           ctx.drizzle.insert(auctionBid).values({
             id: bidId,
@@ -372,6 +376,15 @@ export const auctionRouter = createTRPCRouter({
             relatedId: bidId,
           }),
         ]);
+        // Force insert bid into auction object
+        auction.bids.push({
+          id: bidId,
+          auctionId,
+          bidderId: ctx.userId,
+          amount,
+          createdAt: new Date(),
+          status: "ACTIVE",
+        });
       }
 
       // If this is a buyout bid, complete the auction immediately

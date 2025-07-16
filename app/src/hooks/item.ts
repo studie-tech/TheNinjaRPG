@@ -131,6 +131,7 @@ export const useItemEditForm = (
     { id: "canBeHunted", type: "boolean" },
     { id: "canBeGathered", type: "boolean" },
     { id: "canBeCrafted", type: "boolean" },
+    { id: "canBeTraded", type: "boolean" },
     { id: "canBeImbued", type: "boolean" },
     { id: "expireFromStoreAt", type: "date", label: "Remove from store at" },
   ];

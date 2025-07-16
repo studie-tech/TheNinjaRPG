@@ -12,10 +12,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ZodCombinedQuest } from "@/hooks/quest";
+import type { ZodItemType } from "@/libs/combat/types";
 import type { DeepPartial } from "@/utils/typeutils";
 
 export interface QuestHelperProps {
   quest: DeepPartial<ZodCombinedQuest>;
+}
+
+export interface ItemHelperProps {
+  item: DeepPartial<ZodItemType>;
 }
 
 export const QuestHelper: React.FC<QuestHelperProps> = (props) => {
@@ -78,6 +83,63 @@ export const QuestHelper: React.FC<QuestHelperProps> = (props) => {
                 </p>
               </div>
             )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+};
+
+export const ItemHelper: React.FC<ItemHelperProps> = (props) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const { item } = props;
+
+  // Set initial state based on screen size
+  useEffect(() => {
+    const checkScreenSize = () => {
+      const isDesktop = window.innerWidth >= 768; // md breakpoint
+      setIsOpen(isDesktop);
+    };
+
+    checkScreenSize();
+    window.addEventListener("resize", checkScreenSize);
+    return () => window.removeEventListener("resize", checkScreenSize);
+  }, []);
+
+  return (
+    <div className="inline-block">
+      <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
+        <SheetTrigger asChild>
+          <Button
+            className="flex items-center gap-2"
+            variant={isOpen ? "default" : "outline"}
+          >
+            <HelpCircle className="h-6 w-6" />
+          </Button>
+        </SheetTrigger>
+
+        <SheetContent
+          side="right"
+          className="w-80 sm:w-96"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <HelpCircle className="h-5 w-5" />
+              Item Helper
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-4">
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <h3 className="font-medium text-gray-900 mb-2">Item: {item.name}</h3>
+              <p className="text-sm text-gray-600 capitalize">
+                Type: <span className="font-medium">{item.itemType}</span>
+              </p>
+            </div>
+
+            {renderItemTips(item)}
           </div>
         </SheetContent>
       </Sheet>
@@ -199,6 +261,99 @@ const renderGatheringTips = (quest: DeepPartial<ZodCombinedQuest>) => {
             configure how long each collection action takes.
           </p>
         </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Renders the tips for item configuration
+ * @param item - The item to render the tips for
+ * @returns The tips for item configuration
+ */
+const renderItemTips = (item: DeepPartial<ZodItemType>) => {
+  const warnings = [];
+
+  // Warning for canBeCrafted without canBeTraded
+  if ((item.canBeCrafted || item.canBeGathered) && !item.canBeTraded) {
+    warnings.push({
+      type: "warning",
+      title: "Trading Recommendation",
+      message:
+        "Items that can be crafted should typically also be tradeable. Consider enabling 'canBeTraded' for better item economy.",
+      color: "orange",
+    });
+  }
+
+  // Warning for inShop with other acquisition methods
+  if (
+    item.inShop &&
+    (item.isEventItem ||
+      item.canBeHunted ||
+      item.canBeGathered ||
+      item.canBeCrafted ||
+      item.canBeTraded)
+  ) {
+    const enabledMethods = [];
+    if (item.isEventItem) enabledMethods.push("Event Item");
+    if (item.canBeHunted) enabledMethods.push("Hunting");
+    if (item.canBeGathered) enabledMethods.push("Gathering");
+    if (item.canBeCrafted) enabledMethods.push("Crafting");
+    if (item.canBeTraded) enabledMethods.push("Trading");
+
+    warnings.push({
+      type: "warning",
+      title: "Shop Availability Question",
+      message: `This item is available in the shop but also obtainable through: ${enabledMethods.join(", ")}. Consider if shop availability is necessary when other acquisition methods exist.`,
+      color: "yellow",
+    });
+  }
+
+  if (warnings.length === 0) {
+    return (
+      <div className="p-3 bg-gray-50 rounded-lg border text-center">
+        <p className="text-sm text-gray-600">
+          No configuration warnings detected. Item settings look good!
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Alert>
+        <HelpCircle className="h-4 w-4" />
+        <AlertDescription>
+          <strong>Item Configuration Tips:</strong>
+        </AlertDescription>
+      </Alert>
+
+      <div className="space-y-3 text-sm">
+        {warnings.map((warning, index) => (
+          <div
+            key={index}
+            className={`p-3 rounded-lg border ${
+              warning.color === "orange"
+                ? "bg-orange-50 border-orange-200"
+                : "bg-yellow-50 border-yellow-200"
+            }`}
+          >
+            <h4
+              className={`font-medium mb-2 ${
+                warning.color === "orange" ? "text-orange-900" : "text-yellow-900"
+              }`}
+            >
+              {warning.title}
+            </h4>
+            <p
+              className={
+                warning.color === "orange" ? "text-orange-800" : "text-yellow-800"
+              }
+            >
+              {warning.message}
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );

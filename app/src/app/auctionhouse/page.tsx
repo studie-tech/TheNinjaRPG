@@ -46,6 +46,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import type { ColumnDefinitionType } from "@/layout/Table";
+import type { ArrayElement } from "@/utils/typeutils";
 
 export default function AuctionHousePage() {
   // Settings
@@ -153,7 +154,8 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
       ),
     })) || [];
 
-  const columns: ColumnDefinitionType<any, any>[] = [
+  type Listing = ArrayElement<typeof transformedData>;
+  const columns: ColumnDefinitionType<Listing, keyof Listing>[] = [
     {
       key: "itemIcon",
       header: "Item",

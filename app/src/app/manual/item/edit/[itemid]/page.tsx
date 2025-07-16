@@ -3,6 +3,7 @@
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import ChatInputField from "@/layout/ChatInputField";
+import { ItemHelper } from "@/layout/ContentHelp";
 import { api } from "@/app/_trpc/client";
 import { useEffect, use } from "react";
 import { useRouter } from "next/navigation";
@@ -89,45 +90,48 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         back_href="/manual/item"
         topRightContent={
           formData.find((e) => e.id === "description") ? (
-            <ChatInputField
-              inputProps={{
-                id: "chatInput",
-                placeholder: "Instruct ChatGPT to edit",
-              }}
-              aiProps={{
-                apiEndpoint: "/api/chat/item",
-                systemMessage: `
-                  Current item data: ${JSON.stringify(form.getValues())}. 
-                  Current effects: ${JSON.stringify(effects)}
-                `,
-              }}
-              onToolCall={(toolCall) => {
-                console.log("TOOL CALL", toolCall);
-                const data = toolCall.args as ZodItemType;
-                let key: keyof typeof data;
-                for (key in data) {
-                  if (["villageId", "image"].includes(key)) {
-                    continue;
-                  } else if (key === "effects") {
-                    const newEffects = data.effects
-                      .map((effect) => {
-                        const schema = getTagSchema(effect.type);
-                        const parsed = schema.safeParse(effect);
-                        if (parsed.success) {
-                          return parsed.data;
-                        } else {
-                          return undefined;
-                        }
-                      })
-                      .filter((e): e is NonNullable<typeof e> => e !== undefined);
-                    setEffects(newEffects);
-                  } else {
-                    form.setValue(key, data[key]);
+            <div className="flex gap-2 items-center">
+              <ChatInputField
+                inputProps={{
+                  id: "chatInput",
+                  placeholder: "Instruct ChatGPT to edit",
+                }}
+                aiProps={{
+                  apiEndpoint: "/api/chat/item",
+                  systemMessage: `
+                    Current item data: ${JSON.stringify(form.getValues())}. 
+                    Current effects: ${JSON.stringify(effects)}
+                  `,
+                }}
+                onToolCall={(toolCall) => {
+                  console.log("TOOL CALL", toolCall);
+                  const data = toolCall.args as ZodItemType;
+                  let key: keyof typeof data;
+                  for (key in data) {
+                    if (["villageId", "image"].includes(key)) {
+                      continue;
+                    } else if (key === "effects") {
+                      const newEffects = data.effects
+                        .map((effect) => {
+                          const schema = getTagSchema(effect.type);
+                          const parsed = schema.safeParse(effect);
+                          if (parsed.success) {
+                            return parsed.data;
+                          } else {
+                            return undefined;
+                          }
+                        })
+                        .filter((e): e is NonNullable<typeof e> => e !== undefined);
+                      setEffects(newEffects);
+                    } else {
+                      form.setValue(key, data[key]);
+                    }
                   }
-                }
-                void form.trigger();
-              }}
-            />
+                  void form.trigger();
+                }}
+              />
+              <ItemHelper item={form.getValues()} />
+            </div>
           ) : undefined
         }
       >
