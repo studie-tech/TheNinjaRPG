@@ -925,7 +925,7 @@ const RightSideBar: React.FC<{
             >
               <Button
                 decoration="gold"
-                className={`realtive w-full ${system.className || ""} ${disabled ? "opacity-30" : "hover:bg-orange-200"}`}
+                className={`relative w-full ${system.className || ""} ${disabled ? "opacity-30" : "hover:bg-orange-200"}`}
               >
                 <div className="grow">{system.name}</div>
                 <div>{system.icon && system.icon}</div>
