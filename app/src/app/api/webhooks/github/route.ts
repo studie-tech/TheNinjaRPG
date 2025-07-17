@@ -70,15 +70,8 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
-
-    // Temporarily disable signature verification for debugging
     if (!signature || !verifyGitHubSignature(payload, signature, webhookSecret)) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
-
-    // For now, just verify the signature but don't fail on it
-    if (signature && webhookSecret) {
-      const isValid = verifyGitHubSignature(payload, signature, webhookSecret);
     }
 
     const data = JSON.parse(payload) as GitHubWebhookPayload;
