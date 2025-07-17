@@ -1797,7 +1797,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
             resetAllUsersSkillPoints();
           }}
         >
-          This will reset all users' skill trees and refund their skill points <b>FOR ALL USERS</b>. Are you
+          This will reset all users&apos; skill trees and refund their skill points <b>FOR ALL USERS</b>. Are you
           sure you want to continue?
         </Confirm2>
       )}
