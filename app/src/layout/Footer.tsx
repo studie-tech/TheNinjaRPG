@@ -33,7 +33,7 @@ const Footer: React.FC = () => {
           Consent
         </Link>{" "}
         -{" "}
-        <Link href="/rules" className="hover:text-gray-500" id="tutorial-rules">
+        <Link href="/rules" className="hover:text-gray-500">
           Rules
         </Link>{" "}
         -{" "}

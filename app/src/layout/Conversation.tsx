@@ -345,6 +345,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               reactions: {},
               isPinned: 0,
               isReported: false,
+              isStaffOnly: false,
               villageName: userData.village?.name ?? null,
               villageHexColor: userData.village?.hexColor ?? null,
               villageKageId: userData.village?.kageId ?? null,

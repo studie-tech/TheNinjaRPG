@@ -1,6 +1,10 @@
 import { UserRoles } from "@/drizzle/constants";
 import type { UserData, UserRank, UserReport } from "@/drizzle/schema";
 import type { UserRole } from "@/drizzle/constants";
+import type { SupportTicket } from "@/drizzle/schema";
+import { SUPPORT_TICKET_STATUS_TRANSITIONS } from "@/drizzle/constants";
+import type { SupportTicketStatus } from "@/drizzle/constants";
+import type { User2Conversation, Conversation } from "@/drizzle/schema";
 
 export const canChangeContent = (role: UserRole) => {
   return [
@@ -463,4 +467,89 @@ export const canEditStaffAccountFlag = (role: UserRole) => {
 
 export const canSeeHiddenBountyInfo = (role: UserRole) => {
   return role !== "USER";
+};
+
+/**
+ * SUPPORT SYSTEM PERMISSIONS
+ */
+export const canViewSupportTicket = (
+  ticket: SupportTicket,
+  userId: string,
+  userRole: UserRole,
+) => {
+  if (ticket.createdByUserId === userId) return true;
+  if (ticket.isPublic) return true;
+  if (userRole !== "USER") return true;
+  if (ticket.assignedToUserId === userId) return true;
+  return false;
+};
+
+export const canEditSupportTicket = (
+  ticket: SupportTicket,
+  userId: string,
+  userRole: UserRole,
+) => {
+  if (userRole !== "USER") return true;
+  if (ticket.assignedToUserId === userId) return true;
+  if (ticket.createdByUserId === userId && ticket.status === "OPEN") return true;
+  return false;
+};
+
+export const canDeleteSupportTicket = (
+  ticket: SupportTicket,
+  userId: string,
+  userRole: UserRole,
+) => {
+  if (userRole !== "USER") return true;
+  if (ticket.createdByUserId === userId) {
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    return ticket.createdAt > dayAgo && !ticket.assignedToUserId;
+  }
+  return false;
+};
+
+export const canAssignSupportTicket = (userRole: UserRole) => {
+  return userRole !== "USER";
+};
+
+export function canEscalateToGithub(userRole: UserRole): boolean {
+  return userRole.includes("ADMIN") || userRole.includes("CONTENT");
+}
+
+export const canMergeSupportTickets = (userRole: UserRole) => {
+  return userRole !== "USER";
+};
+
+export const canViewSupportStatistics = (userRole: UserRole) => {
+  return userRole !== "USER";
+};
+
+export function canViewStaffOnlyComments(userRole: UserRole): boolean {
+  return userRole !== "USER";
+}
+
+export function canTransitionStatus(
+  fromStatus: SupportTicketStatus,
+  toStatus: SupportTicketStatus,
+): boolean {
+  const allowedTransitions = SUPPORT_TICKET_STATUS_TRANSITIONS[fromStatus] || [];
+  return allowedTransitions.includes(toStatus);
+}
+
+export const canViewConversation = (
+  conversation: Conversation & { users: User2Conversation[] },
+  userId: string,
+  userRole: UserRole,
+) => {
+  const isPublic = conversation.isPublic;
+  const inConversation = conversation.users.some((u) => u.userId === userId);
+  const isStaffAvailable = conversation.isStaffAvailable;
+  if (isPublic || inConversation || (userRole !== "USER" && isStaffAvailable)) {
+    return true;
+  }
+  return false;
+};
+
+export const canEditCannedResponses = (userRole: UserRole) => {
+  return userRole !== "USER";
 };

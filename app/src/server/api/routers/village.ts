@@ -442,7 +442,13 @@ export const villageRouter = createTRPCRouter({
       // Mutate
       await Promise.all([
         insertRequest(ctx.drizzle, user.userId, target.kageId, input.type),
-        createConvo(ctx.drizzle, ctx.userId, [target.kageId], title, content),
+        createConvo({
+          client: ctx.drizzle,
+          senderUserId: ctx.userId,
+          receiverUserIds: [target.kageId],
+          title,
+          content,
+        }),
       ]);
 
       return { success: true, message: "Alliance request sent" };

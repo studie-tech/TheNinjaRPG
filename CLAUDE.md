@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+<important>
+    Claude code should never (!) run git commands or github CLI!
+</important>
+
 ## Development Commands
 
 All make commands should be run from the root directory `/`, not from `/app`.
@@ -100,14 +104,16 @@ The combat system is the most complex feature, with dedicated files:
 - Always try to use `Promise.all()` for parallel database operations
 - Avoid transactions; use guards with where-statements instead
 - Schema is centralized in `@/drizzle/schema.ts`
+- We use the react compiler, and therefore must use useWatch hook, not watch, for react-hook-form.
 
 ## tRPC Patterns
 
 - All API endpoints use tRPC for type safety
 - Mutations follow pattern: queries → guards → mutation
-- Mutations return `baseServerResponse` from `@/server/api/trpc`
+- Mutations typical return type is `baseServerResponse` from `@/server/api/trpc`
 - Check existing endpoints to avoid duplication
 - Structure endpoints consistently across routers
+- Convenience functions for database interaction should be in the router files at the bottom, see e.g. "fetchUser" function in profile router.
 
 ## Code Style Guidelines
 

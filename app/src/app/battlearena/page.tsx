@@ -85,10 +85,10 @@ export default function Arena() {
       subtitle = "Training Dummy";
       break;
     case "PVP Rank":
-      subtitle = "Ranked PVP (Preview Feature)";
+      subtitle = "Ranked PVP";
       break;
     case "Battle Pyramid":
-      subtitle = "Climb the Battle Pyramid (Coming Soon)";
+      subtitle = "Climb the Battle Pyramid";
       break;
   }
 

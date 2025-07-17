@@ -44,6 +44,7 @@ import { bountyRouter } from "./routers/bounty";
 import { skillTreeRouter } from "./routers/skillTree";
 import { occupationRouter } from "./routers/occupation";
 import { auctionRouter } from "./routers/auction";
+import { supportRouter } from "./routers/support";
 
 /**
  * This is the primary router for your server.
@@ -96,6 +97,7 @@ export const appRouter = createTRPCRouter({
   skillTree: skillTreeRouter,
   occupation: occupationRouter,
   auction: auctionRouter,
+  support: supportRouter,
 });
 
 // export type definition of API

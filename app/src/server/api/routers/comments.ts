@@ -36,6 +36,7 @@ import { getServerPusher } from "@/libs/pusher";
 import { fetchUserReport } from "@/routers/reports";
 import { fetchThread } from "@/routers/forum";
 import { fetchUser } from "@/routers/profile";
+import { canViewConversation } from "@/utils/permissions";
 import { moderateContent } from "@/libs/moderator";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import sanitize from "@/utils/sanitize";
@@ -350,23 +351,32 @@ export const commentsRouter = createTRPCRouter({
       if (user.isBanned || user.isSilenced) {
         throw serverError("UNAUTHORIZED", "You are banned");
       }
-      const convoId = await createConvo(
-        ctx.drizzle,
-        ctx.userId,
-        input.users,
-        input.title,
-        input.comment,
-      );
+      const convoId = await createConvo({
+        client: ctx.drizzle,
+        senderUserId: ctx.userId,
+        receiverUserIds: input.users,
+        title: input.title,
+        content: input.comment,
+      });
       return { conversationId: convoId };
     }),
   exitConversation: protectedProcedure
     .input(z.object({ convo_id: z.string() }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const convo = await fetchConversation({
-        client: ctx.drizzle,
-        id: input.convo_id,
-        userId: ctx.userId,
-      });
+      const [user, convo] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchConversation({
+          client: ctx.drizzle,
+          id: input.convo_id,
+          userId: ctx.userId,
+        }),
+      ]);
+      // Guard
+      if (!canViewConversation(convo, ctx.userId, user.role)) {
+        return errorResponse("You are not allowed to view this conversation");
+      }
+      // Mutate
       await ctx.drizzle
         .delete(user2conversation)
         .where(
@@ -381,6 +391,7 @@ export const commentsRouter = createTRPCRouter({
           .delete(conversationComment)
           .where(eq(conversationComment.conversationId, convo.id));
       }
+      return { success: true, message: "Conversation exited" };
     }),
   fetchConversationComment: protectedProcedure
     .input(z.object({ commentId: z.string() }))
@@ -412,6 +423,7 @@ export const commentsRouter = createTRPCRouter({
           federalStatus: posterUser.federalStatus,
           nRecruited: posterUser.nRecruited,
           tavernMessages: posterUser.tavernMessages,
+          isStaffOnly: conversationComment.isStaffOnly,
         })
         .from(conversationComment)
         .innerJoin(posterUser, eq(posterUser.userId, conversationComment.userId))
@@ -477,6 +489,12 @@ export const commentsRouter = createTRPCRouter({
           userId: ctx.userId,
         }),
       ]);
+      // Guard
+      if (!canViewConversation(convo, ctx.userId, user.role)) {
+        return errorResponse("You are not allowed to view this conversation");
+      }
+
+      // Build aliases
       const posterBlacklist = alias(userBlackList, "posterBlacklist");
       const readerBlacklist = alias(userBlackList, "readerBlacklist");
 
@@ -522,6 +540,7 @@ export const commentsRouter = createTRPCRouter({
             federalStatus: userData.federalStatus,
             nRecruited: userData.nRecruited,
             tavernMessages: userData.tavernMessages,
+            isStaffOnly: conversationComment.isStaffOnly,
           })
           .from(conversationComment)
           .innerJoin(userData, eq(conversationComment.userId, userData.userId))
@@ -589,6 +608,9 @@ export const commentsRouter = createTRPCRouter({
       // Guard
       if (user.isBanned || user.isSilenced) {
         throw serverError("UNAUTHORIZED", "You are banned");
+      }
+      if (!canViewConversation(convo, ctx.userId, user.role)) {
+        return errorResponse("You are not allowed to view this conversation");
       }
       quotes.forEach((quote) => {
         if (quote.conversationId !== convo.id) {
@@ -859,9 +881,7 @@ export const fetchConversation = async (params: FetchConvoOptions) => {
     }
   };
   const convo = await getConvo();
-  const isPublic = convo?.isPublic;
-  const inConversation = convo?.users.some((u) => u.userId === userId);
-  if (convo && (isPublic || inConversation)) {
+  if (convo) {
     return convo;
   } else {
     throw serverError(
@@ -879,33 +899,45 @@ export const fetchConversation = async (params: FetchConvoOptions) => {
  * @param title - The title of the conversation.
  * @param content - The content of the first comment in the conversation.
  */
-export const createConvo = async (
-  client: DrizzleClient,
-  senderUserId: string,
-  receiverUserIds: string[],
-  title: string,
-  content: string,
-) => {
+export const createConvo = async (info: {
+  client: DrizzleClient;
+  senderUserId: string;
+  receiverUserIds: string[];
+  title: string;
+  content: string;
+  isStaffAvailable?: boolean;
+  convoId?: string;
+}) => {
+  const {
+    client,
+    senderUserId,
+    receiverUserIds,
+    title,
+    content,
+    convoId,
+    isStaffAvailable = false,
+  } = info;
   // Push notifications early
   const pusher = getServerPusher();
   receiverUserIds.forEach(
     (userId) => void pusher.trigger(userId, "event", { type: "newInbox" }),
   );
   // Update DB concurrently
-  const convoId = nanoid();
+  const insertId = convoId ?? nanoid();
   const messageId = nanoid();
   const sanitized = sanitize(content);
   await Promise.all([
     client.insert(conversation).values({
-      id: convoId,
+      id: insertId,
       title: title,
       createdById: senderUserId,
       isPublic: 0,
       isLocked: 0,
+      isStaffAvailable: isStaffAvailable,
     }),
     ...[...receiverUserIds, senderUserId].map((user) =>
       client.insert(user2conversation).values({
-        conversationId: convoId,
+        conversationId: insertId,
         userId: user,
       }),
     ),

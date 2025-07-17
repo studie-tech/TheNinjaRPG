@@ -70,14 +70,15 @@ export async function GET() {
 
         // Create conversation
         const now = new Date();
-        await createConvo(
-          drizzleDB,
-          TERR_BOT_ID,
-          [user.userId],
-          `Staff Review: ${now.toLocaleString()}`,
-          `Hey ${user.username}, here is a summary of your recent reviews from the last 7 days. This is an auto-generated message, and everything has been written by an AI based on the reviews, in order to keep the original messages annonymized:
+        await createConvo({
+          client: drizzleDB,
+          senderUserId: TERR_BOT_ID,
+          receiverUserIds: [user.userId],
+          title: `Staff Review: ${now.toLocaleString()}`,
+          content: `Hey ${user.username}, here is a summary of your recent reviews from the last 7 days. This is an auto-generated message, and everything has been written by an AI based on the reviews, in order to keep the original messages annonymized:
         <br /><br />${text.replace("```html", "").replace("```", "")}`,
-        );
+          isStaffAvailable: false,
+        });
       }),
     );
 

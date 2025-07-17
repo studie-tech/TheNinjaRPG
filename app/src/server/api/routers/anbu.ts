@@ -634,13 +634,13 @@ export const anbuRouter = createTRPCRouter({
 
       // Send message to all ANBU squad members
       const squadMemberIds = userSquad.members.map((member) => member.userId);
-      await createConvo(
-        ctx.drizzle,
-        ctx.userId,
-        squadMemberIds.filter((id) => id !== ctx.userId),
-        `🕵️ Espionage Report: ${targetVillage.name}`,
-        intelligenceReport,
-      );
+      await createConvo({
+        client: ctx.drizzle,
+        senderUserId: ctx.userId,
+        receiverUserIds: squadMemberIds.filter((id) => id !== ctx.userId),
+        title: `🕵️ Espionage Report: ${targetVillage.name}`,
+        content: intelligenceReport,
+      });
 
       return {
         success: true,

@@ -31,6 +31,7 @@ import { createConversationSchema } from "@/validators/comments";
 import { type CreateConversationSchema } from "@/validators/comments";
 import { getSearchValidator } from "@/validators/register";
 import type { FederalStatus } from "@/drizzle/schema";
+import { showMutationToast } from "@/libs/toast";
 
 export default function Inbox() {
   const { data: userData } = useRequiredUserData();
@@ -114,8 +115,11 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
 
   // Mutations
   const { mutate: exitConversation } = api.comments.exitConversation.useMutation({
-    onSuccess: async () => {
-      await refetch();
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await refetch();
+      }
     },
   });
 
@@ -262,7 +266,9 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   const createConversation = api.comments.createConversation.useMutation({
     onSuccess: (data) => {
       create.reset();
-      props.setSelectedConvo?.(data.conversationId);
+      if (data.conversationId) {
+        props.setSelectedConvo?.(data.conversationId);
+      }
     },
   });
 

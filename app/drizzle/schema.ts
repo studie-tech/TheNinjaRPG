@@ -751,6 +751,7 @@ export const conversation = mysqlTable(
       .notNull(),
     isLocked: tinyint("isLocked").default(0).notNull(),
     isPublic: tinyint("isPublic").default(1).notNull(),
+    isStaffAvailable: boolean("isStaffAvailable").default(false).notNull(),
   },
   (table) => {
     return {
@@ -759,6 +760,7 @@ export const conversation = mysqlTable(
     };
   },
 );
+export type Conversation = InferSelectModel<typeof conversation>;
 
 export const conversationRelations = relations(conversation, ({ many }) => ({
   users: many(user2conversation),
@@ -785,6 +787,7 @@ export const user2conversation = mysqlTable(
     };
   },
 );
+export type User2Conversation = InferSelectModel<typeof user2conversation>;
 
 export const user2conversationRelations = relations(user2conversation, ({ one }) => ({
   userData: one(userData, {
@@ -813,6 +816,7 @@ export const conversationComment = mysqlTable(
       .default({}),
     isPinned: tinyint("isPinned").default(0).notNull(),
     isReported: boolean("isReported").default(false).notNull(),
+    isStaffOnly: boolean("isStaffOnly").default(false).notNull(),
   },
   (table) => {
     return {
@@ -3376,6 +3380,136 @@ export const bountyContributionRelations = relations(bountyContribution, ({ one 
   }),
   contributor: one(userData, {
     fields: [bountyContribution.contributorUserId],
+    references: [userData.userId],
+  }),
+}));
+
+export const supportTicket = mysqlTable(
+  "SupportTicket",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    description: text("description").notNull(),
+    category: mysqlEnum("category", consts.SupportTicketCategories).notNull(),
+    priority: mysqlEnum("priority", consts.SupportTicketPriorities)
+      .default("MEDIUM")
+      .notNull(),
+    status: mysqlEnum("status", consts.SupportTicketStatuses).default("OPEN").notNull(),
+    isPublic: boolean("isPublic").default(false).notNull(),
+    tags: json("tags").$type<string[]>().notNull().default([]),
+    conversationId: varchar("conversationId", { length: 191 }).notNull(),
+    createdByUserId: varchar("createdByUserId", { length: 191 }).notNull(),
+    assignedToUserId: varchar("assignedToUserId", { length: 191 }),
+    githubIssueUrl: varchar("githubIssueUrl", { length: 500 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    closedAt: datetime("closedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => {
+    return {
+      createdByIdx: index("SupportTicket_createdByUserId_idx").on(
+        table.createdByUserId,
+      ),
+      assignedToIdx: index("SupportTicket_assignedToUserId_idx").on(
+        table.assignedToUserId,
+      ),
+      statusIdx: index("SupportTicket_status_idx").on(table.status),
+      categoryIdx: index("SupportTicket_category_idx").on(table.category),
+      priorityIdx: index("SupportTicket_priority_idx").on(table.priority),
+      publicIdx: index("SupportTicket_isPublic_idx").on(table.isPublic),
+      createdAtIdx: index("SupportTicket_createdAt_idx").on(table.createdAt),
+    };
+  },
+);
+export type SupportTicket = InferSelectModel<typeof supportTicket>;
+
+export const supportTicketActivity = mysqlTable(
+  "SupportTicketActivity",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    ticketId: varchar("ticketId", { length: 191 }).notNull(),
+    authorId: varchar("authorId", { length: 191 }).notNull(),
+    action: mysqlEnum("action", consts.SupportTicketActivityActions).notNull(),
+    oldValue: text("oldValue"),
+    newValue: text("newValue"),
+    metadata: json("metadata").$type<Record<string, any>>().notNull().default({}),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      ticketIdx: index("SupportTicketActivity_ticketId_idx").on(table.ticketId),
+      authorIdx: index("SupportTicketActivity_authorId_idx").on(table.authorId),
+      actionIdx: index("SupportTicketActivity_action_idx").on(table.action),
+      createdAtIdx: index("SupportTicketActivity_createdAt_idx").on(table.createdAt),
+    };
+  },
+);
+export type SupportTicketActivity = InferSelectModel<typeof supportTicketActivity>;
+
+export const cannedResponse = mysqlTable(
+  "CannedResponse",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    description: text("description").notNull(),
+    createdByUserId: varchar("createdByUserId", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      createdByIdx: index("CannedResponse_createdByUserId_idx").on(
+        table.createdByUserId,
+      ),
+      titleIdx: index("CannedResponse_title_idx").on(table.title),
+    };
+  },
+);
+export type CannedResponse = InferSelectModel<typeof cannedResponse>;
+
+export const supportTicketRelations = relations(supportTicket, ({ one, many }) => ({
+  createdBy: one(userData, {
+    fields: [supportTicket.createdByUserId],
+    references: [userData.userId],
+  }),
+  assignedTo: one(userData, {
+    fields: [supportTicket.assignedToUserId],
+    references: [userData.userId],
+  }),
+  conversation: one(conversation, {
+    fields: [supportTicket.conversationId],
+    references: [conversation.id],
+  }),
+  activities: many(supportTicketActivity),
+}));
+
+export const supportTicketActivityRelations = relations(
+  supportTicketActivity,
+  ({ one }) => ({
+    ticket: one(supportTicket, {
+      fields: [supportTicketActivity.ticketId],
+      references: [supportTicket.id],
+    }),
+    author: one(userData, {
+      fields: [supportTicketActivity.authorId],
+      references: [userData.userId],
+    }),
+  }),
+);
+
+export const cannedResponseRelations = relations(cannedResponse, ({ one }) => ({
+  createdBy: one(userData, {
+    fields: [cannedResponse.createdByUserId],
     references: [userData.userId],
   }),
 }));

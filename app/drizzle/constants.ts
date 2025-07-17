@@ -1532,3 +1532,133 @@ export const BOUNTY_MIN_AMOUNT = 1000000;
 
 // Skill system constants
 export const MAX_SKILL_POINTS = 20;
+
+// Support System Settings
+export const SupportTicketCategories = [
+  "BUG_REPORT",
+  "FEATURE_REQUEST",
+  "ACCOUNT_ISSUE",
+  "GAMEPLAY_QUESTION",
+  "PAYMENT_ISSUE",
+  "TECHNICAL_SUPPORT",
+  "OTHER",
+] as const;
+export type SupportTicketCategory = (typeof SupportTicketCategories)[number];
+
+export const SupportTicketPriorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
+export type SupportTicketPriority = (typeof SupportTicketPriorities)[number];
+
+export const SupportTicketStatuses = [
+  "OPEN",
+  "IN_PROGRESS",
+  "WAITING_FOR_USER",
+  "WAITING_FOR_STAFF",
+  "RESOLVED",
+  "CLOSED",
+] as const;
+export type SupportTicketStatus = (typeof SupportTicketStatuses)[number];
+
+export const SupportTicketActivityActions = [
+  "CREATED",
+  "UPDATED",
+  "ASSIGNED",
+  "UNASSIGNED",
+  "STATUS_CHANGED",
+  "PRIORITY_CHANGED",
+  "CATEGORY_CHANGED",
+  "TAGGED",
+  "UNTAGGED",
+  "MERGED",
+  "ESCALATED_TO_GITHUB",
+  "COMMENTED",
+  "CLOSED",
+  "REOPENED",
+] as const;
+export type SupportTicketActivityAction = (typeof SupportTicketActivityActions)[number];
+
+// Support Ticket Limits
+export const SUPPORT_TICKET_LIMITS = {
+  TITLE_MIN_LENGTH: 10,
+  TITLE_MAX_LENGTH: 255,
+  DESCRIPTION_MIN_LENGTH: 50,
+  DESCRIPTION_MAX_LENGTH: 5000,
+  COMMENT_MIN_LENGTH: 1,
+  COMMENT_MAX_LENGTH: 5000,
+  MAX_TAGS: 20,
+  MAX_TAG_LENGTH: 50,
+  MAX_ATTACHMENT_SIZE: 10 * 1024 * 1024, // 10MB
+  MAX_SUGGESTIONS: 10,
+  MAX_SEARCH_RESULTS: 50,
+  MAX_BULK_ACTIONS: 100,
+};
+
+// Support Ticket Status Transitions
+export const SUPPORT_TICKET_STATUS_TRANSITIONS: Record<
+  SupportTicketStatus,
+  SupportTicketStatus[]
+> = {
+  OPEN: ["IN_PROGRESS", "WAITING_FOR_USER", "RESOLVED", "CLOSED", "OPEN"],
+  IN_PROGRESS: [
+    "WAITING_FOR_USER",
+    "WAITING_FOR_STAFF",
+    "RESOLVED",
+    "CLOSED",
+    "IN_PROGRESS",
+  ],
+  WAITING_FOR_USER: ["IN_PROGRESS", "RESOLVED", "CLOSED", "WAITING_FOR_USER"],
+  WAITING_FOR_STAFF: ["IN_PROGRESS", "RESOLVED", "CLOSED", "WAITING_FOR_STAFF"],
+  RESOLVED: ["CLOSED", "OPEN", "RESOLVED"],
+  CLOSED: ["OPEN", "CLOSED"],
+};
+
+// Support Ticket Color Schemes
+export const SUPPORT_TICKET_COLORS = {
+  CATEGORY: {
+    BUG_REPORT: "bg-red-100 text-red-800",
+    FEATURE_REQUEST: "bg-blue-100 text-blue-800",
+    ACCOUNT_ISSUE: "bg-yellow-100 text-yellow-800",
+    GAMEPLAY_QUESTION: "bg-green-100 text-green-800",
+    PAYMENT_ISSUE: "bg-purple-100 text-purple-800",
+    TECHNICAL_SUPPORT: "bg-gray-100 text-gray-800",
+    OTHER: "bg-indigo-100 text-indigo-800",
+  },
+  PRIORITY: {
+    LOW: "bg-gray-100 text-gray-800",
+    MEDIUM: "bg-blue-100 text-blue-800",
+    HIGH: "bg-orange-100 text-orange-800",
+    URGENT: "bg-red-100 text-red-800",
+  },
+  STATUS: {
+    OPEN: "bg-green-100 text-green-800",
+    IN_PROGRESS: "bg-yellow-100 text-yellow-800",
+    WAITING_FOR_USER: "bg-blue-100 text-blue-800",
+    WAITING_FOR_STAFF: "bg-purple-100 text-purple-800",
+    RESOLVED: "bg-teal-100 text-teal-800",
+    CLOSED: "bg-gray-100 text-gray-800",
+  },
+};
+
+// Category descriptions to help users choose the right category
+export const SUPPORT_TICKET_CATEGORY_DESCRIPTIONS: Record<
+  SupportTicketCategory,
+  string
+> = {
+  BUG_REPORT: "Report a bug or technical issue with the game",
+  FEATURE_REQUEST: "Suggest a new feature or improvement",
+  ACCOUNT_ISSUE: "Problems with your account, login, or profile",
+  GAMEPLAY_QUESTION: "Questions about game mechanics, rules, or strategies",
+  PAYMENT_ISSUE: "Problems with purchases, subscriptions, or payments",
+  TECHNICAL_SUPPORT: "Technical problems or performance issues",
+  OTHER: "Any other questions or concerns",
+} as const;
+
+// Priority descriptions
+export const SUPPORT_TICKET_PRIORITY_DESCRIPTIONS: Record<
+  SupportTicketPriority,
+  string
+> = {
+  LOW: "Minor issue that doesn't affect gameplay",
+  MEDIUM: "Standard issue that may affect gameplay",
+  HIGH: "Important issue that significantly affects gameplay",
+  URGENT: "Critical issue that prevents gameplay",
+} as const;

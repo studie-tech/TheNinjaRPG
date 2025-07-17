@@ -2,12 +2,15 @@ import { type ReactNode } from "react";
 import Image from "next/image";
 import { Atom, Bug, User, Globe2, BookOpenText } from "lucide-react";
 import { Paintbrush, MessagesSquare, Newspaper, Scale, Receipt } from "lucide-react";
-import { Inbox, Flag, ShieldHalf, Briefcase } from "lucide-react";
+import { Inbox, Flag, ShieldHalf, Briefcase, LifeBuoy, Gavel } from "lucide-react";
+import { Clock, AlertCircle, CheckCircle, XCircle, MessageSquare } from "lucide-react";
 import { calcIsInVillage } from "./travel/controls";
 import { api } from "@/app/_trpc/client";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { usePathname } from "next/navigation";
+import type { SupportTicketStatus } from "@/drizzle/constants";
+
 export interface NavBarDropdownLink {
   id?: string;
   href: string;
@@ -125,6 +128,18 @@ export const useGameMenu = (userData: UserWithRelations) => {
       name: "Jobs",
       icon: <Briefcase key="jobs" className="h-6 w-6" />,
     },
+    {
+      id: "tutorial-support",
+      href: "/support",
+      name: "Help",
+      icon: <LifeBuoy key="support" className="h-6 w-6" />,
+    },
+    {
+      id: "tutorial-rules",
+      href: "/rules",
+      name: "Rules",
+      icon: <Gavel key="rules" className="h-6 w-6" />,
+    },
   ];
 
   // Get information from the sector the user is currently in. No stale time
@@ -196,4 +211,24 @@ export const useGameMenu = (userData: UserWithRelations) => {
   }
 
   return { systems, location };
+};
+
+/** Status icons for tickets */
+export const getStatusIcon = (status: SupportTicketStatus) => {
+  switch (status) {
+    case "OPEN":
+      return <AlertCircle className="h-4 w-4" />;
+    case "IN_PROGRESS":
+      return <Clock className="h-4 w-4" />;
+    case "WAITING_FOR_USER":
+      return <MessageSquare className="h-4 w-4" />;
+    case "WAITING_FOR_STAFF":
+      return <MessageSquare className="h-4 w-4" />;
+    case "RESOLVED":
+      return <CheckCircle className="h-4 w-4" />;
+    case "CLOSED":
+      return <XCircle className="h-4 w-4" />;
+    default:
+      return <AlertCircle className="h-4 w-4" />;
+  }
 };

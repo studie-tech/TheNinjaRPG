@@ -31,6 +31,7 @@ export interface PostProps {
   options?: React.ReactNode;
   align_middle?: boolean;
   hover_effect?: boolean;
+  href?: string;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }
@@ -156,7 +157,9 @@ const Post: React.FC<PostProps> = (props) => {
         {props.user?.role !== "USER" && (
           <span
             className={`${userRole} p-1 m-1 rounded-md ${
-              ["CODER", "MODERATOR", "JR_MODERATOR", "EVENT-ADMIN"].includes(props.user.role)
+              ["CODER", "MODERATOR", "JR_MODERATOR", "EVENT-ADMIN"].includes(
+                props.user.role,
+              )
                 ? "text-black"
                 : ""
             }`}
@@ -180,6 +183,23 @@ const Post: React.FC<PostProps> = (props) => {
         )}
       </div>
     </div>
+  );
+
+  const content = (
+    <>
+      <div className="grow basis-1/2">
+        <div className="flex flex-col h-full justify-center">
+          {props.title && (
+            <h3 className="text-2xl font-bold tracking-tight basis-1/5">
+              {props.title}
+            </h3>
+          )}
+          {UsernameBlock}
+          <div className="relative font-normal basis-3/4 ">{props.children}</div>
+        </div>
+      </div>
+      {props.options && <div className="absolute right-3 top-3">{props.options}</div>}
+    </>
   );
 
   return (
@@ -214,18 +234,13 @@ const Post: React.FC<PostProps> = (props) => {
           ) : undefined}
         </div>
       )}
-      <div className="grow basis-1/2">
-        <div className="flex flex-col h-full justify-center">
-          {props.title && (
-            <h3 className="text-2xl font-bold tracking-tight basis-1/5">
-              {props.title}
-            </h3>
-          )}
-          {UsernameBlock}
-          <div className="relative font-normal basis-3/4 ">{props.children}</div>
-        </div>
-      </div>
-      {props.options && <div className="absolute right-3 top-3">{props.options}</div>}
+      {props.href ? (
+        <Link className="hover:cursor-pointer" href={props.href}>
+          {content}
+        </Link>
+      ) : (
+        content
+      )}
     </div>
   );
 };
