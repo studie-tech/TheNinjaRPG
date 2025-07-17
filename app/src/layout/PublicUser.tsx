@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
+import { z } from "zod";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { getSearchValidator } from "@/validators/register";
 import {
@@ -51,6 +51,7 @@ import {
   PersonStanding,
   MessageCircle,
   IdCard,
+  Award,
 } from "lucide-react";
 import { updateUserSchema } from "@/validators/user";
 import { canSeeSecretData, canSeeIps } from "@/utils/permissions";
@@ -97,6 +98,7 @@ import {
   canEditQuests,
   canDeleteReferral,
   canChangeUserRolesTo,
+  canAwardExperience,
 } from "@/utils/permissions";
 
 interface PublicUserComponentProps {
@@ -217,6 +219,12 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     defaultValue: [],
   });
 
+  // Experience award form
+  const experienceForm = useForm<{ amount: number }>({
+    resolver: zodResolver(z.object({ amount: z.number().min(1).max(100000) })),
+    defaultValues: { amount: 100 },
+  });
+
   useEffect(() => {
     if (profile) {
       userSearchMethods.setValue("users", [
@@ -331,6 +339,15 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   });
 
   const deleteReferral = api.staff.deleteReferral.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.profile.getPublicUser.invalidate();
+      }
+    },
+  });
+
+  const awardExperience = api.profile.awardExperience.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
@@ -506,6 +523,54 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       placeholder="Enter reason for awarding"
                       control={form.control}
                       error={form.formState.errors.reason?.message}
+                    />
+                  </form>
+                </Form>
+              </Confirm2>
+            )}
+
+            {userData && canAwardExperience(userData) && (
+              <Confirm2
+                title="Award Experience Points"
+                proceed_label="Award Experience"
+                button={
+                  <Award className="h-6 w-6 cursor-pointer hover:text-orange-500" />
+                }
+                isValid={experienceForm.formState.isValid}
+                onAccept={experienceForm.handleSubmit((data) => {
+                  awardExperience.mutate({
+                    targetUserId: profile.userId,
+                    amount: data.amount,
+                  });
+                })}
+              >
+                Award unallocated experience points to {profile.username}. This will add to their
+                earned experience pool that they can then distribute to their stats.
+                <br /><br />
+                <b>DO NOT</b> abuse this feature! All assignments are logged and visible
+                to ALL users. Feature abuse for personal gain will result in severe
+                consequences.
+                <Form {...experienceForm}>
+                  <form className="space-y-4 mt-4">
+                    <FormField
+                      control={experienceForm.control}
+                      name="amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Experience Amount</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="Enter experience amount"
+                              {...field}
+                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                              min="1"
+                              max="100000"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
                   </form>
                 </Form>

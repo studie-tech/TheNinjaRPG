@@ -10,6 +10,8 @@ import { callDiscordContent } from "@/libs/discord";
 import { calculateContentDiff } from "@/utils/diff";
 import { IMG_AVATAR_DEFAULT, COST_SKILL_RESET } from "@/drizzle/constants";
 import { SkillTreeValidator } from "@/libs/combat/types";
+import { canUnequipAllUsers } from "@/utils/permissions";
+import { actionLog } from "@/drizzle/schema";
 
 export const skillTreeRouter = createTRPCRouter({
   // Get single skill by ID
@@ -295,6 +297,54 @@ export const skillTreeRouter = createTRPCRouter({
       return {
         success: true,
         message: `Skills points reset!`,
+      };
+    }),
+
+  // Reset all users' skill points (staff only)
+  resetAllUsersSkillPoints: protectedProcedure
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Fetch user data to check permissions
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+
+      if (!user) return errorResponse("User not found");
+
+      // Check if user has permission to unequip all users
+      if (!canUnequipAllUsers(user)) {
+        return errorResponse("You don't have permission to reset all users' skill trees");
+      }
+
+      // Get all users with skill trees
+      const allUsers = await ctx.drizzle.select().from(userData);
+      
+      if (allUsers.length === 0) {
+        return errorResponse("No users found");
+      }
+
+      // Delete all user skills (skill points remain, just reset used skills)
+      const result = await ctx.drizzle.delete(userSkill);
+
+      if (result.rowsAffected === 0) {
+        return errorResponse("Failed to reset skill trees");
+      }
+
+      // Log the action
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "userSkill",
+        changes: [`Mass reset all users' skill trees`],
+        relatedId: null,
+        relatedMsg: `Mass skill tree reset by ${user.username}`,
+        relatedImage: user.avatarLight,
+      });
+
+      return {
+        success: true,
+        message: `Reset skill trees for all ${allUsers.length} users`,
       };
     }),
 });

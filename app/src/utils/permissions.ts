@@ -566,3 +566,7 @@ export const canViewConversation = (
 export const canEditCannedResponses = (userRole: UserRole) => {
   return userRole !== "USER";
 };
+
+export const canAwardExperience = (user: UserData) => {
+  return ["CODING-ADMIN","CODER"].includes(user.role);
+};

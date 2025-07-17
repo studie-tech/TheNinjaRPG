@@ -38,6 +38,7 @@ import {
 import { canSeeSecretData, canDeleteUsers, canSeeIps } from "@/utils/permissions";
 import { canChangeContent, canModerateRoles } from "@/utils/permissions";
 import { canInteractWithPolls } from "@/utils/permissions";
+import { canAwardExperience } from "@/utils/permissions";
 import { usernameSchema } from "@/validators/register";
 import { insertNextQuest } from "@/routers/quests";
 import { fetchClan, removeFromClan } from "@/routers/clan";
@@ -1417,6 +1418,106 @@ export const profileRouter = createTRPCRouter({
       return {
         success: true,
         message: "Successfully claimed reputation points for voting",
+      };
+    }),
+  // Award experience to a user (staff only)
+  awardExperience: protectedProcedure
+    .input(z.object({ 
+      targetUserId: z.string(),
+      amount: z.number().min(1).max(100000)
+    }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [awarder, target] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, input.targetUserId),
+      ]);
+
+      // Guards
+      if (!awarder || !target) {
+        return errorResponse("User not found");
+      }
+
+      if (!canAwardExperience(awarder)) {
+        return errorResponse("You don't have permission to award experience");
+      }
+
+      // Mutation
+      const result = await ctx.drizzle
+        .update(userData)
+        .set({ 
+          earnedExperience: sql`${userData.earnedExperience} + ${input.amount}` 
+        })
+        .where(eq(userData.userId, input.targetUserId));
+
+      if (result.rowsAffected === 0) {
+        return errorResponse("Failed to award experience");
+      }
+
+      // Log the action
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "user",
+        changes: [`Awarded ${input.amount} experience points`],
+        relatedId: target.userId,
+        relatedMsg: `Experience awarded to ${target.username}`,
+        relatedImage: target.avatarLight,
+      });
+
+      return { 
+        success: true, 
+        message: `Awarded ${input.amount} experience points to ${target.username}` 
+      };
+    }),
+  // Award experience to all users (staff only)
+  awardExperienceToAll: protectedProcedure
+    .input(z.object({ 
+      amount: z.number().min(1).max(100000)
+    }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const awarder = await fetchUser(ctx.drizzle, ctx.userId);
+
+      // Guards
+      if (!canAwardExperience(awarder)) {
+        return errorResponse("You don't have permission to award experience");
+      }
+
+      // Get all users
+      const allUsers = await ctx.drizzle.select().from(userData);
+      
+      if (allUsers.length === 0) {
+        return errorResponse("No users found");
+      }
+
+      // Mutation - update all users
+      const result = await ctx.drizzle
+        .update(userData)
+        .set({ 
+          earnedExperience: sql`${userData.earnedExperience} + ${input.amount}` 
+        });
+
+      if (result.rowsAffected === 0) {
+        return errorResponse("Failed to award experience to users");
+      }
+
+      // Log the action
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "user",
+        changes: [`Mass awarded ${input.amount} experience points to all users`],
+        relatedId: null,
+        relatedMsg: `Mass experience awarded`,
+        relatedImage: awarder.avatarLight,
+      });
+
+      return { 
+        success: true, 
+        message: `Awarded ${input.amount} experience points to all ${allUsers.length} users` 
       };
     }),
 });

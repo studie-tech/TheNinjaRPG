@@ -47,6 +47,7 @@ import {
   SendHorizontal,
   Ban,
   ShieldOff,
+  Zap,
 } from "lucide-react";
 import { attributes, getSearchValidator } from "@/validators/register";
 import { colors, skin_colors } from "@/validators/register";
@@ -71,6 +72,7 @@ import { getUserElements } from "@/validators/user";
 import { canSwapBloodline } from "@/utils/permissions";
 import { canSwapVillage, canUnequipAllUsers } from "@/utils/permissions";
 import { canClearSectors } from "@/utils/permissions";
+import { canAwardExperience } from "@/utils/permissions";
 import { useInfinitePagination } from "@/libs/pagination";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -1694,6 +1696,8 @@ interface ManagementCommandsProps {
 const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
   // State for sector selection
   const [sectorNumber, setSectorNumber] = useState<number>(1);
+  // State for mass experience award
+  const [experienceAmount, setExperienceAmount] = useState<number>(100);
 
   // Utility
   const utils = api.useUtils();
@@ -1725,6 +1729,27 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
       },
     });
 
+  const { mutate: awardExperienceToAll, isPending: isAwardingExperience } =
+    api.profile.awardExperienceToAll.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.profile.getUser.invalidate();
+        }
+      },
+    });
+
+  const { mutate: resetAllUsersSkillPoints, isPending: isResettingSkillTrees } =
+    api.skillTree.resetAllUsersSkillPoints.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.profile.getUser.invalidate();
+          await utils.skillTree.getUserSkills.invalidate();
+        }
+      },
+    });
+
   // Show options
   return (
     <div className="grid grid-cols-3 items-center gap-4 p-4">
@@ -1750,6 +1775,70 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         >
           This will unequip all currently equipped gear <b>FOR ALL USERS</b>. Are you
           sure you want to continue?
+        </Confirm2>
+      )}
+      {canUnequipAllUsers(user) && (
+        <Confirm2
+          title="Confirm Reset All Skill Trees"
+          button={
+            <Button variant="destructive" disabled={isResettingSkillTrees} className="w-full">
+              {isResettingSkillTrees ? (
+                <Loader size={5} />
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Reset All Skill Trees
+                </>
+              )}
+            </Button>
+          }
+          onAccept={(e) => {
+            e.preventDefault();
+            resetAllUsersSkillPoints();
+          }}
+        >
+          This will reset all users' skill trees and refund their skill points <b>FOR ALL USERS</b>. Are you
+          sure you want to continue?
+        </Confirm2>
+      )}
+      {canAwardExperience(user) && (
+        <Confirm2
+          title="Confirm Mass Experience Award"
+          button={
+            <Button variant="default" disabled={isAwardingExperience} className="w-full">
+              {isAwardingExperience ? (
+                <Loader size={5} />
+              ) : (
+                <>
+                  <Zap className="h-4 w-4 mr-2" />
+                  Award Experience to All
+                </>
+              )}
+            </Button>
+          }
+          onAccept={(e) => {
+            e.preventDefault();
+            awardExperienceToAll({ amount: experienceAmount });
+          }}
+        >
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="experienceAmount">Experience Amount</Label>
+              <Input
+                id="experienceAmount"
+                type="number"
+                min={1}
+                max={100000}
+                value={experienceAmount}
+                onChange={(e) => setExperienceAmount(parseInt(e.target.value) || 100)}
+                className="w-32"
+              />
+            </div>
+            <p>
+              This will award <b>{experienceAmount}</b> experience points to <b>ALL USERS</b>. Are you
+              sure you want to continue?
+            </p>
+          </div>
         </Confirm2>
       )}
       {canClearSectors(user.role) && (
