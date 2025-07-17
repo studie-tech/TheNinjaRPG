@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { use } from "react";
+import Link from "next/link";
 import ContentBox from "@/layout/ContentBox";
 import Post from "@/layout/Post";
 import Loader from "@/layout/Loader";
@@ -9,11 +10,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Edit, Clock, AlertCircle, Tag, Users, Plus, Check, Copy } from "lucide-react";
+import { SiGithub } from "@icons-pack/react-simple-icons";
+import {
+  Edit,
+  Clock,
+  AlertCircle,
+  Tag,
+  Users,
+  Plus,
+  Check,
+  Copy,
+  ExternalLink,
+} from "lucide-react";
 import { showMutationToast } from "@/libs/toast";
 import { api } from "@/app/_trpc/client";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { canEditCannedResponses } from "@/utils/permissions";
+import { canEditCannedResponses, canEscalateToGithub } from "@/utils/permissions";
 import { toast } from "sonner";
 import {
   SUPPORT_TICKET_STATUS_TRANSITIONS,
@@ -84,11 +96,27 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
     },
   });
 
+  // Escalate to GitHub mutation
+  const escalateToGithub = api.support.escalateToGithub.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        void utils.support.getTicket.invalidate({ ticketId: params.ticketId });
+        setRefreshKey((prev) => prev + 1);
+      }
+    },
+  });
+
   // Canned responses handlers
   const handleCopyCannedResponse = (description: string) => {
-    void navigator.clipboard.writeText(description).then(() => {
-      toast.success("Canned response copied to clipboard!");
-    });
+    void navigator.clipboard
+      .writeText(description)
+      .then(() => {
+        toast.success("Canned response copied to clipboard!");
+      })
+      .catch(() => {
+        toast.error("Failed to copy to clipboard");
+      });
   };
 
   const handleCannedResponsesChange = () => {
@@ -132,7 +160,51 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
         back_href="/support"
         subtitle={`Ticket#: ${ticket.id}`}
       >
-        <Post user={ticket.createdBy} title={ticket.title}>
+        <Post
+          user={ticket.createdBy}
+          title={ticket.title}
+          options={
+            <>
+              {ticket.githubIssueUrl && (
+                <Link
+                  href={ticket.githubIssueUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button className="flex items-center gap-1 ">
+                    <ExternalLink className="h-3 w-3" />
+                    GitHub Issue
+                  </Button>
+                </Link>
+              )}
+              {isStaff &&
+                canEscalateToGithub(userData?.role) &&
+                !ticket.githubIssueUrl && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (
+                          confirm(
+                            "Are you sure you want to escalate this ticket to GitHub?",
+                          )
+                        ) {
+                          escalateToGithub.mutate({ ticketId: params.ticketId });
+                        }
+                      }}
+                      disabled={escalateToGithub.isPending}
+                    >
+                      <SiGithub className="text-black mr-2" size={10} />
+                      {escalateToGithub.isPending
+                        ? "Escalating..."
+                        : "Escalate to GitHub"}
+                    </Button>
+                  </div>
+                )}
+            </>
+          }
+        >
           <div className="space-y-4">
             {/* Ticket Metadata */}
             <div className="flex items-center gap-2 text-sm text-gray-600">

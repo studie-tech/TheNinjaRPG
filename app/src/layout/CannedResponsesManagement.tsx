@@ -22,10 +22,10 @@ interface CannedResponsesManagementProps {
   onResponsesChange?: () => void;
 }
 
-export default function CannedResponsesManagement({ 
-  isOpen, 
-  setIsOpen, 
-  onResponsesChange 
+export default function CannedResponsesManagement({
+  isOpen,
+  setIsOpen,
+  onResponsesChange,
 }: CannedResponsesManagementProps) {
   const { data: userData } = useUserData();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -100,9 +100,14 @@ export default function CannedResponsesManagement({
   };
 
   const handleCopy = (description: string) => {
-    void navigator.clipboard.writeText(description).then(() => {
-      toast.success("Canned response copied to clipboard!");
-    });
+    void navigator.clipboard
+      .writeText(description)
+      .then(() => {
+        toast.success("Canned response copied to clipboard!");
+      })
+      .catch(() => {
+        toast.error("Failed to copy to clipboard");
+      });
   };
 
   const closeModal = () => {
@@ -113,11 +118,7 @@ export default function CannedResponsesManagement({
 
   return (
     <>
-      <Modal2
-        isOpen={isOpen}
-        setIsOpen={setIsOpen}
-        title="Manage Canned Responses"
-      >
+      <Modal2 isOpen={isOpen} setIsOpen={setIsOpen} title="Manage Canned Responses">
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <p className="text-sm text-gray-600">
@@ -203,9 +204,7 @@ export default function CannedResponsesManagement({
             <Input
               id="title"
               value={formData.title}
-              onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               placeholder="Enter response title"
               required
             />

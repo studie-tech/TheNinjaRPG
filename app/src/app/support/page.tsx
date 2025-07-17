@@ -100,7 +100,7 @@ export default function SupportPage() {
       >
         {/* Statistics Cards (Staff Only) */}
         {isStaff && statistics && (
-          <div className="grid grid-cols-4 gap-2 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
             <Card>
               <CardHeader className="pb-0 pt-2">
                 <CardTitle className="text-sm font-medium">Total</CardTitle>
@@ -131,11 +131,11 @@ export default function SupportPage() {
             </Card>
             <Card>
               <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Speed</CardTitle>
+                <CardTitle className="text-sm font-medium">Avg. Response</CardTitle>
               </CardHeader>
               <CardContent className="py-1">
                 <div className="text-xl font-bold ">
-                  {statistics.averageResponseTime}h
+                  ~{statistics.averageResponseTime}mins
                 </div>
               </CardContent>
             </Card>
@@ -156,7 +156,7 @@ export default function SupportPage() {
               )}
 
               {allTickets.map((ticket, i) => (
-                <div key={`ticker-${i}-${ticket?.id}`}>
+                <div key={ticket?.id || `ticket-placeholder-${i}`}>
                   {ticket && (
                     <div ref={i === allTickets.length - 1 ? setLastElement : null}>
                       <Post
@@ -206,7 +206,7 @@ export default function SupportPage() {
                           {ticket.tags && ticket.tags.length > 0 && (
                             <div className="flex items-center gap-1 flex-wrap">
                               <Tag className="h-3 w-3 text-foreground" />
-                              {ticket.tags.map((tag: any, index: number) => (
+                              {ticket.tags.map((tag, index) => (
                                 <Badge
                                   key={index}
                                   variant="secondary"

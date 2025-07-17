@@ -15,6 +15,7 @@ import {
   updateSupportTicketSchema,
   supportTicketFilterSchema,
   supportTicketMetricsSchema,
+  escalateToGithubSchema,
   type SupportTicketFilteringSchema,
 } from "@/validators/support";
 import type { SupportTicketActivityAction } from "@/drizzle/constants";
@@ -28,7 +29,9 @@ import {
   canTransitionStatus,
   canViewSupportStatistics,
   canEditCannedResponses,
+  canEscalateToGithub,
 } from "@/utils/permissions";
+import { GITHUB_API_ENDPOINT } from "@/drizzle/constants";
 import { createConvo } from "@/server/api/routers/comments";
 import { reduceByKey } from "@/utils/grouping";
 import { fetchUser } from "@/server/api/routers/profile";
@@ -203,7 +206,12 @@ export const supportRouter = createTRPCRouter({
         updateData?.assignedToUserId !== ticket.assignedToUserId
       ) {
         activities.push({
-          action: updateData.assignedToUserId ? "ASSIGNED" : "UNASSIGNED",
+          action:
+            updateData.assignedToUserId && !ticket.assignedToUserId
+              ? "ASSIGNED"
+              : !updateData.assignedToUserId && ticket.assignedToUserId
+                ? "UNASSIGNED"
+                : "ASSIGNED",
           oldValue: ticket.assignedToUserId || undefined,
           newValue: updateData.assignedToUserId || undefined,
         });
@@ -477,6 +485,126 @@ export const supportRouter = createTRPCRouter({
       await ctx.drizzle.delete(cannedResponse).where(eq(cannedResponse.id, input.id));
 
       return { success: true, message: "Canned response deleted successfully" };
+    }),
+
+  // Escalate ticket to GitHub
+  escalateToGithub: protectedProcedure
+    .input(escalateToGithubSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, ticket] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        getSupportTicketWithRelations(ctx.drizzle, input.ticketId),
+      ]);
+
+      // Guards
+      if (!ticket) {
+        return errorResponse("Ticket not found");
+      }
+      if (!canEscalateToGithub(user.role)) {
+        return errorResponse("You don't have permission to escalate tickets to GitHub");
+      }
+      if (ticket.githubIssueUrl) {
+        return errorResponse("Ticket has already been escalated to GitHub");
+      }
+      const githubToken = process.env.GITHUB_ISSUE_TOKEN;
+      if (!githubToken) {
+        return errorResponse("GitHub API token is not configured");
+      }
+      try {
+        // Get all conversation comments to include in the GitHub issue
+        const comments = await ctx.drizzle.query.conversationComment.findMany({
+          where: eq(conversationComment.conversationId, ticket.conversationId),
+          with: {
+            user: {
+              columns: {
+                username: true,
+                role: true,
+              },
+            },
+          },
+          orderBy: asc(conversationComment.createdAt),
+        });
+
+        // Build the GitHub issue body
+        const ticketUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/support/${ticket.id}`;
+        let issueBody = `**Original Support Ticket**: ${ticketUrl}\n\n`;
+        issueBody += `**Category**: ${ticket.category}\n`;
+        issueBody += `**Priority**: ${ticket.priority}\n`;
+        issueBody += `**Status**: ${ticket.status}\n`;
+        issueBody += `**Created by**: ${ticket.createdBy.username}\n`;
+        issueBody += `**Created at**: ${ticket.createdAt.toISOString()}\n\n`;
+        issueBody += `**Description**:\n${ticket.description}\n\n`;
+
+        if (comments.length > 0) {
+          issueBody += `**Comments**:\n\n`;
+          comments.forEach((comment) => {
+            const role = comment.user.role !== "USER" ? ` (${comment.user.role})` : "";
+            issueBody += `**${comment.user.username}${role}** - ${comment.createdAt.toISOString()}:\n`;
+            issueBody += `${comment.content}\n\n`;
+          });
+        }
+
+        // Create GitHub issue
+        const githubResponse = await fetch(`${GITHUB_API_ENDPOINT}/issues`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${githubToken}`,
+            "Content-Type": "application/json",
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+          body: JSON.stringify({
+            title: `Support Ticket: ${ticket.title}`,
+            body: issueBody,
+            labels: [
+              "support",
+              ticket.category.toLowerCase(),
+              ticket.priority.toLowerCase(),
+            ],
+          }),
+        });
+
+        if (!githubResponse.ok) {
+          const errorData = (await githubResponse.json()) as { message?: string };
+          console.error("GitHub API Error:", errorData);
+          return errorResponse("Failed to create GitHub issue");
+        }
+
+        const githubIssue = (await githubResponse.json()) as {
+          html_url: string;
+          number: number;
+        };
+        const githubIssueUrl = githubIssue.html_url;
+
+        // Update ticket with GitHub issue URL
+        await Promise.all([
+          ctx.drizzle
+            .update(supportTicket)
+            .set({
+              githubIssueUrl,
+              updatedAt: new Date(),
+            })
+            .where(eq(supportTicket.id, ticket.id)),
+          createSupportTicketActivity(
+            ctx.drizzle,
+            ticket.id,
+            ctx.userId,
+            "ESCALATED_TO_GITHUB",
+            undefined,
+            githubIssueUrl,
+            { githubIssueNumber: githubIssue.number },
+          ),
+        ]);
+
+        return {
+          success: true,
+          message: "Ticket escalated to GitHub successfully",
+        };
+      } catch (error) {
+        return errorResponse("Failed to escalate ticket to GitHub");
+      }
     }),
 });
 
@@ -780,10 +908,10 @@ export const calculateSupportMetrics = async (
     tickets.length > 0 ? (ticketsWithResponse / tickets.length) * 100 : 0;
   const resolutionRate =
     tickets.length > 0 ? (resolvedTickets / tickets.length) * 100 : 0;
-
+  console.log(totalResponseTime);
   return {
-    averageResponseTime: Math.round(averageResponseTime / (1000 * 60 * 60)), // Convert to hours
-    averageResolutionTime: Math.round(averageResolutionTime / (1000 * 60 * 60)), // Convert to hours
+    averageResponseTime: Math.round(averageResponseTime / (1000 * 60)), // Convert to minutes
+    averageResolutionTime: Math.round(averageResolutionTime / (1000 * 60)), // Convert to minutes
     firstResponseRate: Math.round(firstResponseRate),
     resolutionRate: Math.round(resolutionRate),
   };

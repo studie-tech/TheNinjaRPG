@@ -93,7 +93,11 @@ export default function CreateSupportTicket() {
   };
 
   const addTag = () => {
-    if (currentTag.trim() && !watchedTags.includes(currentTag.trim())) {
+    if (
+      currentTag.trim() &&
+      !watchedTags.includes(currentTag.trim()) &&
+      watchedTags.length < SUPPORT_TICKET_LIMITS.MAX_TAGS
+    ) {
       const newTags = [...watchedTags, currentTag.trim()];
       setValue("tags", newTags);
       setCurrentTag("");
@@ -170,7 +174,8 @@ export default function CreateSupportTicket() {
                   {SUPPORT_TICKET_LIMITS.DESCRIPTION_MAX_LENGTH} characters
                 </p>
                 <div>
-                  <span className="font-medium">Tip:</span> Copy-pasting in this field.
+                  <span className="font-medium">Tip:</span> Copy-pasting is enabled in
+                  this field.
                 </div>
               </div>
             </div>

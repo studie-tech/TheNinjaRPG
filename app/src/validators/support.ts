@@ -31,6 +31,11 @@ export const updateSupportTicketSchema = z.object({
   assignedToUserId: z.string().optional(),
 });
 
+// Escalate to GitHub Schema
+export const escalateToGithubSchema = z.object({
+  ticketId: z.string(),
+});
+
 // Create Support Ticket Comment Schema
 export const createSupportTicketCommentSchema = z.object({
   content: z

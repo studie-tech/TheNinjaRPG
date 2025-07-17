@@ -1031,6 +1031,10 @@ export const ID_ANIMATION_HEAL = "I9aYhT5wMB";
 // Discord invite link
 export const DISCORD_INVITE_URL = "https://discord.gg/eNtgPdAh7j";
 
+// GitHub issue token
+export const GITHUB_API_ENDPOINT =
+  "https://api.github.com/repos/studie-tech/TheNinjaRPG";
+
 // Draco files (see https://github.com/google/draco/tree/main/javascript)
 export const DRACO_DECODER_URL =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJF0eCaMuG2iOewJtjGzvNcmEX3TBnoSfMDZPH";
