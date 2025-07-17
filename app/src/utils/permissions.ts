@@ -13,6 +13,7 @@ export const canChangeContent = (role: UserRole) => {
     "CODING-ADMIN",
     "MODERATOR-ADMIN",
     "CONTENT-ADMIN",
+    "CODER",
   ].includes(role);
 };
 
@@ -72,6 +73,8 @@ export const canChangeUserRolesTo = (role: UserRole): UserRole[] => {
     return ["CONTENT"];
   } else if (role === "EVENT") {
     return ["EVENT"];
+  } else if (role === "CODER") {
+    return ["CODER"];
   }
   return [];
 };
@@ -251,6 +254,7 @@ export const canEditPublicUser = (user: UserData) => {
     "CONTENT",
     "EVENT",
     "MODERATOR-ADMIN",
+    "CODER",
   ].includes(user.role);
 };
 
@@ -273,6 +277,7 @@ export const canEditClans = (role: UserRole) => {
     "MODERATOR-ADMIN",
     "CONTENT",
     "EVENT-ADMIN",
+    "CODER",
   ].includes(role);
 };
 
@@ -381,6 +386,7 @@ export const canEditUsername = (role: UserRole) => {
     "MODERATOR-ADMIN",
     "HEAD_MODERATOR",
     "MODERATOR",
+    "CODER",
   ].includes(role);
 };
 
@@ -392,6 +398,7 @@ export const canEditCustomTitle = (role: UserRole) => {
     "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
+    "CODER",
   ].includes(role);
 };
 
@@ -403,6 +410,7 @@ export const canEditBloodline = (role: UserRole) => {
     "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
+    "CODER",
   ].includes(role);
 };
 
@@ -414,6 +422,7 @@ export const canEditVillage = (role: UserRole) => {
     "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
+    "CODER",
   ].includes(role);
 };
 
@@ -425,6 +434,7 @@ export const canEditRank = (role: UserRole) => {
     "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
+    "CODER",
   ].includes(role);
 };
 
@@ -436,6 +446,7 @@ export const canEditJutsus = (role: UserRole) => {
     "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
+    "CODER",
   ].includes(role);
 };
 
@@ -447,6 +458,7 @@ export const canEditItems = (role: UserRole) => {
     "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
+    "CODER",
   ].includes(role);
 };
 
@@ -458,6 +470,7 @@ export const canEditQuests = (role: UserRole) => {
     "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
+    "CODER",
   ].includes(role);
 };
 

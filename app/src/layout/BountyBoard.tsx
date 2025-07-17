@@ -44,6 +44,7 @@ import {
 import type { z } from "zod";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
+import { useInfinitePagination } from "@/libs/pagination";
 
 type CreateBountyFormData = z.infer<typeof createBountySchema>;
 type UserSearchFormData = z.infer<ReturnType<typeof getSearchValidator>>;
@@ -61,6 +62,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
   const [addingMoneyTo, setAddingMoneyTo] = useState<string | null>(null);
   const [addMoneyAmount, setAddMoneyAmount] = useState<number>(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const isStaff = canSeeHiddenBountyInfo(userData.role);
 
   const form = useForm<CreateBountyFormData>({
@@ -94,10 +96,27 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
   }, [selectedUsers, form]);
 
   // Query
-  const { data, isLoading } = api.bounty.board.useQuery({
-    limit: 50,
-    status: bountyStatus,
-  });
+  const {
+    data,
+    isLoading,
+    isFetching,
+    hasNextPage,
+    fetchNextPage,
+  } = api.bounty.board.useInfiniteQuery(
+    {
+      limit: 20,
+      status: bountyStatus,
+    },
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+    }
+  );
+
+  // Flatten all pages data
+  const allBounties = data?.pages.flatMap(page => page.data) ?? [];
+
+  // Use infinite pagination hook
+  useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Mutations
   const { mutate: createBounty, isPending: isCreating } = api.bounty.create.useMutation(
@@ -191,7 +210,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
       header: "Hunters",
       type: "jsx",
     },
-    ...(data?.data.some((b) => b.creatorUser)
+    ...(allBounties.some((b) => b.creatorUser)
       ? [
           {
             key: "creatorInfo",
@@ -200,7 +219,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
           },
         ]
       : []),
-    ...(data?.data.some((b) => b.huntingUsers)
+    ...(allBounties.some((b) => b.huntingUsers)
       ? [
           {
             key: "huntingInfo",
@@ -296,7 +315,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
       )}
 
       <Table
-        data={data?.data.map((b) => ({
+        data={allBounties.map((b) => ({
           ...b,
           avatar: b.targetUser?.avatar,
           targetInfo: b.targetUser ? (
@@ -507,7 +526,15 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
             type: "jsx",
           },
         ]}
+        setLastElement={setLastElement}
       />
+      
+      {/* Show loading indicator when fetching more data */}
+      {isFetching && (
+        <div className="flex justify-center p-4">
+          <Loader explanation="Loading more bounties" />
+        </div>
+      )}
     </div>
   );
 }
