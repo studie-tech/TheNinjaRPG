@@ -9,7 +9,6 @@ import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import MenuBoxCombat from "@/layout/MenuBoxCombat";
 import Footer from "@/layout/Footer";
 import Loader from "@/layout/Loader";
-import NavTabs from "@/layout/NavTabs";
 import AvatarImage from "@/layout/Avatar";
 import SendTicketBtn from "@/layout/SendTicketButton";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
@@ -30,7 +29,6 @@ import {
 } from "@/components/ui/sheet";
 import { SiGithub, SiDiscord } from "@icons-pack/react-simple-icons";
 import { api } from "@/app/_trpc/client";
-import { showUserRank } from "@/libs/profile";
 import { useUser } from "@clerk/nextjs";
 import { getCurrentSeason } from "@/utils/time";
 import { showMutationToast } from "@/libs/toast";
@@ -135,7 +133,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
 
   // Derived data for layout
   const navbarMenuItems = getMainNavbarLinks();
-  const shownNotifications = notifications?.filter((n) => n.color !== "toast");
+  const shownNotifications = notifications?.filter(
+    (n) => n.color !== "toast" && n.color !== "hidden",
+  );
 
   // Split menu into two parts
   const navbarMenuItemsLeft = navbarMenuItems.slice(0, 3);
@@ -914,6 +914,7 @@ const RightSideBar: React.FC<{
       </SideBannerTitle>
       <div className="mt-1 grid grid-cols-1 gap-3 lg:grid-cols-2">
         {systems.map((system, i) => {
+          console.log(system);
           const disabled = system.requireAwake && userData?.status !== "AWAKE";
           return (
             <Link
@@ -924,10 +925,16 @@ const RightSideBar: React.FC<{
             >
               <Button
                 decoration="gold"
-                className={`w-full ${system.className || ""} ${disabled ? "opacity-30" : "hover:bg-orange-200"}`}
+                className={`realtive w-full ${system.className || ""} ${disabled ? "opacity-30" : "hover:bg-orange-200"}`}
               >
                 <div className="grow">{system.name}</div>
                 <div>{system.icon && system.icon}</div>
+                {system.notificationCount !== undefined &&
+                  system.notificationCount > 0 && (
+                    <div className="absolute top-0 right-[-3] flex items-center justify-center text-xs text-orange-100 bg-orange-500 rounded-full w-5 h-5 z-50">
+                      {system.notificationCount}
+                    </div>
+                  )}
               </Button>
             </Link>
           );

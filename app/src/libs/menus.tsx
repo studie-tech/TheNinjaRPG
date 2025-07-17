@@ -9,6 +9,7 @@ import { api } from "@/app/_trpc/client";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { usePathname } from "next/navigation";
+import { useUserData } from "@/utils/UserContext";
 import type { SupportTicketStatus } from "@/drizzle/constants";
 
 export interface NavBarDropdownLink {
@@ -17,9 +18,10 @@ export interface NavBarDropdownLink {
   name: string;
   requireAwake?: boolean;
   className?: string;
-  color?: "default" | "red" | "green" | "blue" | "toast";
+  color?: "default" | "red" | "green" | "blue" | "toast" | "hidden";
   icon?: ReactNode;
   onClick?: () => Promise<void>;
+  notificationCount?: number;
 }
 
 /**
@@ -63,6 +65,16 @@ export const getMainNavbarLinks = () => {
 
 export const useGameMenu = (userData: UserWithRelations) => {
   const pathname = usePathname();
+  const { notifications } = useUserData();
+
+  // Extract inbox notifications
+  const newInInbox =
+    notifications?.find((n) => n.href === "/inbox")?.notificationCount || 0;
+  const newInReports =
+    notifications?.find((n) => n.href === "/reports")?.notificationCount || 0;
+  const newInSupport =
+    notifications?.find((n) => n.href === "/support")?.notificationCount || 0;
+
   const systems: NavBarDropdownLink[] = [
     {
       id: "tutorial-profile",
@@ -87,6 +99,7 @@ export const useGameMenu = (userData: UserWithRelations) => {
       href: "/inbox",
       name: "Inbox",
       icon: <Inbox key="inbox" className="h-6 w-6" />,
+      notificationCount: newInInbox,
     },
     {
       id: "tutorial-jutsus",
@@ -100,6 +113,7 @@ export const useGameMenu = (userData: UserWithRelations) => {
       href: "/reports",
       name: "Reports",
       icon: <Flag key="reports" className="h-6 w-6" />,
+      notificationCount: newInReports,
     },
     {
       href: "/travel",
@@ -133,6 +147,7 @@ export const useGameMenu = (userData: UserWithRelations) => {
       href: "/support",
       name: "Help",
       icon: <LifeBuoy key="support" className="h-6 w-6" />,
+      notificationCount: newInSupport,
     },
     {
       id: "tutorial-rules",

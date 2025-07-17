@@ -33,6 +33,7 @@ import {
   historicalIp,
   village,
   userActivityEvent,
+  supportTicket,
 } from "@/drizzle/schema";
 import { canSeeSecretData, canDeleteUsers, canSeeIps } from "@/utils/permissions";
 import { canChangeContent, canModerateRoles } from "@/utils/permissions";
@@ -429,17 +430,39 @@ export const profileRouter = createTRPCRouter({
 
       // Get number of un-resolved user reports
       if (canModerateRoles.includes(user.role)) {
-        const reportCounts = await ctx.drizzle
-          .select({ count: sql<number>`count(*)`.mapWith(Number) })
-          .from(userReport)
-          .innerJoin(userData, eq(userData.userId, userReport.reportedUserId))
-          .where(inArray(userReport.status, ["UNVIEWED", "BAN_ESCALATED"]));
+        const [reportCounts, ticketCounts] = await Promise.all([
+          ctx.drizzle
+            .select({ count: sql<number>`count(*)`.mapWith(Number) })
+            .from(userReport)
+            .innerJoin(userData, eq(userData.userId, userReport.reportedUserId))
+            .where(inArray(userReport.status, ["UNVIEWED", "BAN_ESCALATED"])),
+          ctx.drizzle
+            .select({ count: sql<number>`count(*)`.mapWith(Number) })
+            .from(supportTicket)
+            .where(
+              inArray(supportTicket.status, [
+                "OPEN",
+                "IN_PROGRESS",
+                "WAITING_FOR_STAFF",
+              ]),
+            ),
+        ]);
         const userReports = reportCounts?.[0]?.count ?? 0;
         if (userReports > 0) {
           notifications.push({
             href: "/reports",
             name: `${userReports} waiting!`,
-            color: "blue",
+            color: "hidden",
+            notificationCount: userReports,
+          });
+        }
+        const userTickets = ticketCounts?.[0]?.count ?? 0;
+        if (userTickets > 0) {
+          notifications.push({
+            href: "/support",
+            name: `${userTickets} waiting!`,
+            color: "hidden",
+            notificationCount: userTickets,
           });
         }
       }
@@ -497,7 +520,8 @@ export const profileRouter = createTRPCRouter({
         notifications?.push({
           href: "/inbox",
           name: `${user.inboxNews} messages`,
-          color: "green",
+          color: "hidden",
+          notificationCount: user.inboxNews,
         });
       }
       // Stuff in news
