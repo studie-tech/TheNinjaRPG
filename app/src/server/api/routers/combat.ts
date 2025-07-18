@@ -1171,7 +1171,13 @@ export const initiateBattle = async (
         bloodline: true,
         village: true,
         items: {
-          with: { item: true },
+          with: {
+            item: true,
+            imbuements: {
+              with: { item: true },
+              where: (imbuements) => lt(imbuements.craftingFinishedAt, new Date()),
+            },
+          },
           where: (items) => and(gt(items.quantity, 0), isNotNull(items.equipped)),
         },
         jutsus: {
