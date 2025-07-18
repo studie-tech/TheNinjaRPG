@@ -1609,11 +1609,11 @@ export const processUsersForBattle = (info: {
       .forEach((useritem) => {
         // Add any imbuement effects to the item effects
         const imbuementEffects = useritem.imbuements
-          ?.map((imbuement) => Array.isArray(imbuement.item.effects) ? imbuement.item.effects as UserEffect[] : [])
+          ?.map((imbuement) => imbuement.item.effects as UserEffect[])
           .flat();
         // Parse item
         const effects = [
-          ...(Array.isArray(useritem.item.effects) ? useritem.item.effects as UserEffect[] : []),
+          ...(useritem.item.effects as UserEffect[]),
           ...imbuementEffects,
         ];
         const itemType = useritem.item.itemType;
