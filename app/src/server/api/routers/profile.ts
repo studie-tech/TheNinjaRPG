@@ -1486,13 +1486,6 @@ export const profileRouter = createTRPCRouter({
         return errorResponse("You don't have permission to award experience");
       }
 
-      // Get all users
-      const allUsers = await ctx.drizzle.select().from(userData);
-      
-      if (allUsers.length === 0) {
-        return errorResponse("No users found");
-      }
-
       // Mutation - update all users
       const result = await ctx.drizzle
         .update(userData)
@@ -1517,7 +1510,7 @@ export const profileRouter = createTRPCRouter({
 
       return { 
         success: true, 
-        message: `Awarded ${input.amount} experience points to all ${allUsers.length} users` 
+        message: `Awarded ${input.amount} experience points to all users` 
       };
     }),
 });
