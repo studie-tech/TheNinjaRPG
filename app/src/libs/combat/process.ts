@@ -404,13 +404,14 @@ export const applyEffects = (
         }
         if (c.reflect && c.reflect > 0) {
           if (c.reflect > 0) {
-            const totalDamage = c.rawDamage ?? 0;
-            const maxReflect = totalDamage * 0.6;
+            // Use the actual damage dealt (damage + residual) for the 60% cap calculation
+            const actualDamage = (c.damage ?? 0) + (c.residual ?? 0);
+            const maxReflect = actualDamage * 0.6;
             const finalReflect = Math.min(c.reflect, maxReflect);
             user.curHealth -= finalReflect;
             user.curHealth = Math.max(0, user.curHealth);
             actionEffects.push({
-              txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage Debug: Reflect: ${c.reflect} & Total Damage: ${totalDamage}`,
+              txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage Debug: Reflect: ${c.reflect} & Total Damage: ${actualDamage}`,
               color: "red",
             });
           }
@@ -441,19 +442,21 @@ export const applyEffects = (
           target.curHealth > 0 &&
           user.curHealth > 0
         ) {
-          const totalDamage = c.rawDamage ?? 0;
-          const maxLifesteal = totalDamage * 0.6;
+          // Use the actual damage dealt (damage + residual) for the 60% cap calculation
+          const actualDamage = (c.damage ?? 0) + (c.residual ?? 0);
+          const maxLifesteal = actualDamage * 0.6;
           const finalLifesteal = Math.min(c.lifesteal_hp, maxLifesteal);
           user.curHealth += finalLifesteal;
           user.curHealth = Math.min(user.maxHealth, user.curHealth);
           actionEffects.push({
-            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health Debug: Lifesteal HP: ${c.lifesteal_hp} & Total Damage: ${totalDamage}`,
+            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health Debug: Lifesteal HP: ${c.lifesteal_hp} & Total Damage: ${actualDamage}`,
             color: "green",
           });
         }
         if (c.absorb_hp && c.absorb_hp > 0 && target.curHealth > 0) {
-          const totalDamage = c.rawDamage ?? 0;
-          const maxAbsorb = totalDamage * 0.6;
+          // Use the actual damage dealt (damage + residual) for the 60% cap calculation
+          const actualDamage = (c.damage ?? 0) + (c.residual ?? 0);
+          const maxAbsorb = actualDamage * 0.6;
           if (c.absorb_hp > maxAbsorb) {
             c.absorb_hp = maxAbsorb;
           }
@@ -462,7 +465,7 @@ export const applyEffects = (
           actionEffects.push({
             txt: `${target.username} absorbs ${c.absorb_hp.toFixed(
               2,
-            )} damage and converts it to health Debug: Absorb HP: ${c.absorb_hp} & Total Damage: ${totalDamage}`,
+            )} damage and converts it to health Debug: Absorb HP: ${c.absorb_hp} & Total Damage: ${actualDamage}`,
             color: "green",
           });
         }
