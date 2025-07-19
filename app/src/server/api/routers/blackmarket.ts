@@ -427,7 +427,11 @@ export const blackMarketRouter = createTRPCRouter({
             excludedElements.push(user.secondaryElement);
           }
           // Add previously rolled elements to exclusion list
-          excludedElements.push(...(user.rolledElements || []).filter((e): e is typeof BasicElementName[number] => BasicElementName.includes(e as any)));
+          const validRolledElements = (user.rolledElements || []).filter(
+            (e): e is typeof BasicElementName[number] => 
+              BasicElementName.includes(e as typeof BasicElementName[number])
+          );
+          excludedElements.push(...validRolledElements);
           
           const available = BasicElementName.filter((e) => !excludedElements.includes(e));
           
@@ -455,7 +459,11 @@ export const blackMarketRouter = createTRPCRouter({
           // Get all elements except the current primary, secondary, and previously rolled elements
           const excludedElements = [user.primaryElement, user.secondaryElement];
           // Add previously rolled elements to exclusion list
-          excludedElements.push(...(user.rolledElements || []).filter((e): e is typeof BasicElementName[number] => BasicElementName.includes(e as any)));
+          const validRolledElements = (user.rolledElements || []).filter(
+            (e): e is typeof BasicElementName[number] => 
+              BasicElementName.includes(e as typeof BasicElementName[number])
+          );
+          excludedElements.push(...validRolledElements);
           
           const available = BasicElementName.filter((e) => !excludedElements.includes(e));
           
