@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { and, eq, sql, gte, desc, inArray, or, isNull } from "drizzle-orm";
-import { bounty, bountySignup, bountyContribution, userData } from "@/drizzle/schema";
+import { bounty, bountySignup, bountyContribution, userData, actionLog } from "@/drizzle/schema";
 import {
   BOUNTY_MAX_HUNTERS,
   RANKS_RESTRICTED_FROM_PVP,
@@ -455,6 +455,57 @@ export const bountyRouter = createTRPCRouter({
         ),
       ]);
       return { success: true, message: "Bounty retracted successfully" };
+    }),
+
+  removeAllTrackers: protectedProcedure
+    .input(z.object({ bountyId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [curBounty, user] = await Promise.all([
+        ctx.drizzle.query.bounty.findFirst({
+          where: eq(bounty.id, input.bountyId),
+        }),
+        fetchUser(ctx.drizzle, ctx.userId),
+      ]);
+      
+      // Guards
+      if (!curBounty) return errorResponse("Bounty not found");
+      if (!canSeeHiddenBountyInfo(user.role)) return errorResponse("Staff access required");
+      if (curBounty.status !== "OPEN") return errorResponse("Bounty not open");
+      
+      // Get all hunters tracking this bounty
+      const hunters = await ctx.drizzle.query.bountySignup.findMany({
+        where: eq(bountySignup.bountyId, input.bountyId),
+        with: {
+          hunter: {
+            columns: {
+              userId: true,
+              username: true,
+            },
+          },
+        },
+      });
+      
+      // Remove all hunter signups for this bounty
+      await ctx.drizzle
+        .delete(bountySignup)
+        .where(eq(bountySignup.bountyId, input.bountyId));
+      
+      // Log the action
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "bounty",
+        changes: [`Removed ${hunters.length} hunters from bounty tracking`],
+        relatedId: input.bountyId,
+        relatedMsg: `Staff removed all trackers from bounty: ${hunters.length} hunters removed`,
+      });
+      
+      return { 
+        success: true, 
+        message: `Removed ${hunters.length} hunters from bounty tracking` 
+      };
     }),
 
   // Get user's tracked bounties for map display

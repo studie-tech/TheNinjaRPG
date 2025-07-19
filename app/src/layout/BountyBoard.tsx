@@ -15,7 +15,7 @@ import { showMutationToast } from "@/libs/toast";
 import { createBountySchema } from "@/validators/bounty";
 import { getSearchValidator } from "@/validators/register";
 import { showUserRank } from "@/libs/profile";
-import { Eye, Trophy, X, Plus } from "lucide-react";
+import { Eye, Trophy, Users, X, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -173,6 +173,16 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
           setIsModalOpen(false);
           await util.bounty.board.invalidate();
           await updateUser({ money: userData.money - variables.amountRyo });
+        }
+      },
+    });
+
+  const { mutate: removeAllTrackers, isPending: isRemovingTrackers } =
+    api.bounty.removeAllTrackers.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await util.bounty.board.invalidate();
         }
       },
     });
@@ -443,6 +453,20 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
             </div>
           ) : undefined,
           actionButton: (() => {
+            // Staff can remove all trackers from open bounties
+            if (isStaff && b.status === "OPEN" && b.huntersCount > 0) {
+              return (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => removeAllTrackers({ bountyId: b.id })}
+                  disabled={isRemovingTrackers}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Remove All Trackers ({b.huntersCount})
+                </Button>
+              );
+            }
             // User can retract if they created the bounty and it's still open
             if (
               "creatorUserId" in b &&
