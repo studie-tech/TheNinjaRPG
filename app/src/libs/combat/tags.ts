@@ -1320,7 +1320,7 @@ export const reflect = (
                   : power,
             ) * ratio;
           // consequence.damage -= convert;
-          consequence.reflect = dmgConvert;
+          consequence.reflect = (consequence.reflect || 0) + dmgConvert;
         }
       }
     });

@@ -404,10 +404,13 @@ export const applyEffects = (
         }
         if (c.reflect && c.reflect > 0) {
           if (c.reflect > 0) {
-            user.curHealth -= c.reflect;
+            const totalDamage = c.rawDamage ?? 0;
+            const maxReflect = totalDamage * 0.6;
+            const finalReflect = Math.min(c.reflect, maxReflect);
+            user.curHealth -= finalReflect;
             user.curHealth = Math.max(0, user.curHealth);
             actionEffects.push({
-              txt: `${user.username} takes ${c.reflect.toFixed(2)} reflect damage`,
+              txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage`,
               color: "red",
             });
           }
@@ -438,10 +441,13 @@ export const applyEffects = (
           target.curHealth > 0 &&
           user.curHealth > 0
         ) {
-          user.curHealth += c.lifesteal_hp;
+          const totalDamage = c.rawDamage ?? 0;
+          const maxLifesteal = totalDamage * 0.6;
+          const finalLifesteal = Math.min(c.lifesteal_hp, maxLifesteal);
+          user.curHealth += finalLifesteal;
           user.curHealth = Math.min(user.maxHealth, user.curHealth);
           actionEffects.push({
-            txt: `${user.username} steals ${c.lifesteal_hp.toFixed(2)} damage as health`,
+            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health`,
             color: "green",
           });
         }
