@@ -781,6 +781,7 @@ const removeEffects = (
       .filter((e) => e.targetId === effect.targetId)
       .filter((e) => e.fromType !== "bloodline")
       .filter((e) => e.fromType !== "armor")
+      .filter((e) => e.fromType !== "skill")
       .filter(type === "positive" ? isPositiveUserEffect : isNegativeUserEffect)
       .map((e) => {
         e.rounds = 0;

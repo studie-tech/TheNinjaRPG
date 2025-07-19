@@ -45,6 +45,11 @@ import {
   WAR_SECTORWAR_AI_SHRINE_RECOVER,
   WAR_SECTORWAR_PVP_SHRINE_REDUCE,
   WAR_SECTORWAR_PVP_SHRINE_RECOVER,
+  PVP_KILL_TOKEN_REWARD,
+  PVP_KILL_TOKEN_REWARD_ANBU,
+  PVP_KILL_PRESTIGE_REWARD,
+  PVP_KILL_PRESTIGE_REWARD_ANBU,
+  PVP_KILL_ANBU_POINTS_REWARD,
 } from "@/drizzle/constants";
 import { calculateLpEloChange } from "@/libs/ranked_pvp";
 import { checkCoLeader } from "@/validators/clan";
@@ -644,6 +649,7 @@ export const calcBattleResult = (
       // Tokens & prestige
       let deltaTokens = 0;
       let deltaPrestige = 0;
+      let deltaAnbuPoints = 0;
       let clanPoints = 0;
 
       // Money/ryo calculation
@@ -700,7 +706,18 @@ export const calcBattleResult = (
             deltaPrestige -= isAlly || sameVillage ? FRIENDLY_PRESTIGE_COST : 0;
           }
 
-          // Village tokens for killing enemies
+          // Base prestige for PvP kill
+          deltaPrestige += user.anbuId ? PVP_KILL_PRESTIGE_REWARD_ANBU : PVP_KILL_PRESTIGE_REWARD;
+
+          // Base village tokens for PvP kill
+          deltaTokens += user.anbuId ? PVP_KILL_TOKEN_REWARD_ANBU : PVP_KILL_TOKEN_REWARD;
+
+          // ANBU points for PvP kill
+          if (user.anbuId) {
+            deltaAnbuPoints += PVP_KILL_ANBU_POINTS_REWARD;
+          }
+
+          // Additional village tokens for killing enemies
           deltaTokens +=
             target.relations
               .filter((r) => r.status === "ENEMY")
@@ -869,9 +886,6 @@ export const calcBattleResult = (
         });
       }
 
-      // ANBU boost to tokens
-      if (user.anbuId) deltaTokens *= 2;
-
       // Determine if pvpStreak should be adjusted
       const calculatePvpStreak = (
         battleType: string,
@@ -947,6 +961,7 @@ export const calcBattleResult = (
         friendsLeft: friendsLeft.length,
         targetsLeft: targetsLeft.length,
         villageTokens: deltaTokens,
+        anbuPoints: deltaAnbuPoints,
         townhallChangeHP: townhallChangeHP,
         shrineChangeHp: shrineChangeHp,
         shrineInfo: shrineInfo,

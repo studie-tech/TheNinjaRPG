@@ -907,6 +907,13 @@ export const WAR_TYPES = ["VILLAGE_WAR", "SECTOR_WAR", "WAR_RAID"] as const;
 export type WarType = (typeof WAR_TYPES)[number];
 export type WarState = (typeof WAR_STATES)[number];
 
+// PvP Rewards
+export const PVP_KILL_TOKEN_REWARD = 300; // Base village tokens for PvP kill
+export const PVP_KILL_TOKEN_REWARD_ANBU = 500; // Village tokens for PvP kill by ANBU member
+export const PVP_KILL_PRESTIGE_REWARD = 150; // Base prestige for PvP kill
+export const PVP_KILL_PRESTIGE_REWARD_ANBU = 300; // Prestige for PvP kill by ANBU member
+export const PVP_KILL_ANBU_POINTS_REWARD = 5; // ANBU points for PvP kill by ANBU member
+
 // Clans config
 export const CLAN_MPVP_MAX_USERS_PER_SIDE = 3;
 export const CLAN_CREATE_PRESTIGE_REQUIREMENT = 100;

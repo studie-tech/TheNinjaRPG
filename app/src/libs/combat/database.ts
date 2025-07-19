@@ -417,6 +417,14 @@ export const updateVillageAnbuClan = async (
             .where(eq(anbuSquad.id, user.anbuId)),
         ]
       : []),
+    ...(user.anbuId && result.anbuPoints > 0
+      ? [
+          client
+            .update(anbuSquad)
+            .set({ points: sql`${anbuSquad.points} + ${result.anbuPoints}` })
+            .where(eq(anbuSquad.id, user.anbuId)),
+        ]
+      : []),
     ...(user.clanId && result.clanPoints > 0
       ? [
           client

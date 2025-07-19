@@ -145,6 +145,7 @@ export type CombatResult = {
   friendsLeft: number;
   targetsLeft: number;
   villageTokens: number;
+  anbuPoints: number;
   townhallChangeHP: number;
   shrineChangeHp: number;
   townhallInfo: Record<string, number>;
