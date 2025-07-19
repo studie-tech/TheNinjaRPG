@@ -45,6 +45,7 @@ import type { z } from "zod";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { useInfinitePagination } from "@/libs/pagination";
+import type { ReactElement } from "react";
 
 type CreateBountyFormData = z.infer<typeof createBountySchema>;
 type UserSearchFormData = z.infer<ReturnType<typeof getSearchValidator>>;
@@ -454,7 +455,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
           ) : undefined,
           actionButton: (() => {
             // Create an array to hold multiple buttons
-            const buttons: JSX.Element[] = [];
+            const buttons: ReactElement[] = [];
             
             // Staff can remove all trackers from open bounties
             if (isStaff && b.status === "OPEN" && b.huntersCount > 0) {
