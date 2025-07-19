@@ -343,7 +343,12 @@ export const applyEffects = (
           c.residual = calcAdjustedDamage(target, c.residual, c.types);
         }
         if (c.reflect && c.reflect > 0) {
-          c.reflect = calcAdjustedDamage(user, c.reflect, c.types);
+          // Reflect damage should damage the attacker's shields, not the defender's
+          // Find the attacker (userId in the consequence) and apply shield absorption to them
+          const attacker = newUsersState.find((u) => u.userId === c.userId);
+          if (attacker) {
+            c.reflect = calcAdjustedDamage(attacker, c.reflect, c.types);
+          }
         }
         if (c.recoil && c.recoil > 0) {
           c.recoil = calcAdjustedDamage(user, c.recoil, c.types);
@@ -417,7 +422,7 @@ export const applyEffects = (
             user.curHealth -= finalReflect;
             user.curHealth = Math.max(0, user.curHealth);
             actionEffects.push({
-              txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage Debug: Reflect: ${c.reflect} & Pre-Shield Damage: ${preShieldDamage}`,
+              txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage`,
               color: "red",
             });
           }
@@ -455,7 +460,7 @@ export const applyEffects = (
           user.curHealth += finalLifesteal;
           user.curHealth = Math.min(user.maxHealth, user.curHealth);
           actionEffects.push({
-            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health Debug: Lifesteal HP: ${c.lifesteal_hp} & Pre-Shield Damage: ${preShieldDamage}`,
+            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health`,
             color: "green",
           });
         }
@@ -469,7 +474,7 @@ export const applyEffects = (
           actionEffects.push({
             txt: `${target.username} absorbs ${absorbAmount.toFixed(
               2,
-            )} damage and converts it to health Debug: Absorb HP: ${c.absorb_hp} & Pre-Shield Damage: ${preShieldDamage}`,
+            )} damage and converts it to health`,
             color: "green",
           });
         }
