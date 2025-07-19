@@ -410,7 +410,7 @@ export const applyEffects = (
             user.curHealth -= finalReflect;
             user.curHealth = Math.max(0, user.curHealth);
             actionEffects.push({
-              txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage`,
+              txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage Debug: Reflect: ${c.reflect} & Total Damage: ${totalDamage}`,
               color: "red",
             });
           }
@@ -447,7 +447,7 @@ export const applyEffects = (
           user.curHealth += finalLifesteal;
           user.curHealth = Math.min(user.maxHealth, user.curHealth);
           actionEffects.push({
-            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health`,
+            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health Debug: Lifesteal HP: ${c.lifesteal_hp} & Total Damage: ${totalDamage}`,
             color: "green",
           });
         }
@@ -462,7 +462,7 @@ export const applyEffects = (
           actionEffects.push({
             txt: `${target.username} absorbs ${c.absorb_hp.toFixed(
               2,
-            )} damage and converts it to health`,
+            )} damage and converts it to health Debug: Absorb HP: ${c.absorb_hp} & Total Damage: ${totalDamage}`,
             color: "green",
           });
         }
