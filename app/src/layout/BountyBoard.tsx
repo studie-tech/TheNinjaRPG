@@ -453,10 +453,14 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
             </div>
           ) : undefined,
           actionButton: (() => {
+            // Create an array to hold multiple buttons
+            const buttons: JSX.Element[] = [];
+            
             // Staff can remove all trackers from open bounties
             if (isStaff && b.status === "OPEN" && b.huntersCount > 0) {
-              return (
+              buttons.push(
                 <Button
+                  key="removeAll"
                   size="sm"
                   variant="destructive"
                   onClick={() => removeAllTrackers({ bountyId: b.id })}
@@ -473,8 +477,9 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
               b.creatorUserId === userData?.userId &&
               b.status === "OPEN"
             ) {
-              return (
+              buttons.push(
                 <Button
+                  key="retract"
                   size="sm"
                   variant="destructive"
                   onClick={() => retractBounty({ bountyId: b.id })}
@@ -487,8 +492,9 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
             }
             // User can collect if they're tracking and bounty is claimed but not yet collected
             if (b.youSignedUp && b.status === "CLAIMED" && !b.collectedAt) {
-              return (
+              buttons.push(
                 <Button
+                  key="collect"
                   size="sm"
                   onClick={() => collectBounty({ bountyId: b.id })}
                   disabled={isCollecting}
@@ -500,8 +506,9 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
             }
             // User can track if not signed up and bounty is open with space
             if (!b.youSignedUp && b.huntersCount < 3 && b.status === "OPEN") {
-              return (
+              buttons.push(
                 <Button
+                  key="track"
                   size="sm"
                   onClick={() =>
                     signup({ bountyId: b.id, targetUserId: b.targetUserId })
@@ -515,8 +522,9 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
             }
             // User is tracking an open bounty
             if (b.youSignedUp && b.status === "OPEN") {
-              return (
+              buttons.push(
                 <Button
+                  key="stopTracking"
                   size="sm"
                   variant="outline"
                   onClick={() => stopTracking({ bountyId: b.id })}
@@ -527,6 +535,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 </Button>
               );
             }
+            
             if (b.status === "CLAIMED" && b.collectedAt) {
               return (
                 <Badge className="p-2" variant="outline">
@@ -538,6 +547,16 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 </Badge>
               );
             }
+            
+            // Return multiple buttons if we have them, otherwise null
+            if (buttons.length > 0) {
+              return (
+                <div className="flex flex-col gap-2">
+                  {buttons}
+                </div>
+              );
+            }
+            
             // Bounty is full or closed
             return null;
           })(),

@@ -346,6 +346,7 @@ export const applyEffects = (
           // Reflect damage should damage the attacker's shields, not the defender's
           // Find the attacker (userId in the consequence) and apply shield absorption to them
           const attacker = newUsersState.find((u) => u.userId === c.userId);
+          const defender = newUsersState.find((u) => u.userId === c.targetId);
           if (attacker) {
             c.reflect = calcAdjustedDamage(attacker, c.reflect, c.types);
           }
