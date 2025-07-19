@@ -454,18 +454,18 @@ export const applyEffects = (
           });
         }
         if (c.absorb_hp && c.absorb_hp > 0 && target.curHealth > 0) {
-          // Use the actual damage dealt (damage + residual) for the 60% cap calculation
+          // For absorb, use rawDamage (pre-shield) for the 60% cap calculation
+          // but apply the absorb based on actual damage that got through
+          const rawDamage = c.rawDamage ?? 0;
           const actualDamage = (c.damage ?? 0) + (c.residual ?? 0);
-          const maxAbsorb = actualDamage * 0.6;
-          if (c.absorb_hp > maxAbsorb) {
-            c.absorb_hp = maxAbsorb;
-          }
-          target.curHealth += c.absorb_hp;
+          const maxAbsorb = rawDamage * 0.6;
+          const absorbAmount = Math.min(c.absorb_hp, maxAbsorb, actualDamage);
+          target.curHealth += absorbAmount;
           target.curHealth = Math.min(target.maxHealth, target.curHealth);
           actionEffects.push({
-            txt: `${target.username} absorbs ${c.absorb_hp.toFixed(
+            txt: `${target.username} absorbs ${absorbAmount.toFixed(
               2,
-            )} damage and converts it to health Debug: Absorb HP: ${c.absorb_hp} & Total Damage: ${actualDamage}`,
+            )} damage and converts it to health Debug: Absorb HP: ${c.absorb_hp} & Raw Damage: ${rawDamage} & Actual Damage: ${actualDamage}`,
             color: "green",
           });
         }
