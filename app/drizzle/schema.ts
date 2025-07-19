@@ -1592,6 +1592,7 @@ export const userData = mysqlTable(
     poolsMultiplier: double("poolsMultiplier").default(1).notNull(),
     primaryElement: mysqlEnum("primaryElement", consts.ElementNames),
     secondaryElement: mysqlEnum("secondaryElement", consts.ElementNames),
+    rolledElements: json("rolledElements").$type<string[]>().default([]).notNull(),
     reputationPoints: float("reputationPoints").default(5).notNull(),
     reputationPointsTotal: float("reputationPointsTotal").default(5).notNull(),
     seichiSilver: int("seichiSilver").default(0).notNull(),

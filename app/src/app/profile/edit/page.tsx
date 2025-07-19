@@ -1358,7 +1358,7 @@ const OwnNindoChange: React.FC = () => {
 };
 
 /**
- * Re-Roll Primary Element
+ * Re-Roll Elements
  */
 const RerollElement: React.FC = () => {
   // State
@@ -1388,24 +1388,53 @@ const RerollElement: React.FC = () => {
     userData?.primaryElement && activeElements[0] === userData.primaryElement;
   const canChangeSecond =
     userData?.secondaryElement && activeElements[1] === userData.secondaryElement;
-  const disabled = !canAfford || (!canChangeFirst && !canChangeSecond);
 
   return (
-    <Confirm2
-      title="Confirm Re-Roll"
-      button={
-        <Button id="create" type="submit" className="w-full my-3" disabled={disabled}>
-          Re-Roll Both Elements
-        </Button>
-      }
-      onAccept={(e) => {
-        e.preventDefault();
-        roll();
-      }}
-    >
-      Changing your base elements costs {COST_REROLL_ELEMENT} reputation points. Are you
-      sure you want to re-roll?
-    </Confirm2>
+    <div className="space-y-3">
+      {/* Primary Element Reroll */}
+      <Confirm2
+        title="Confirm Primary Element Re-Roll"
+        button={
+          <Button 
+            id="reroll-primary" 
+            type="submit" 
+            className="w-full" 
+            disabled={!canAfford || !canChangeFirst}
+          >
+            Re-Roll Primary Element
+          </Button>
+        }
+        onAccept={(e) => {
+          e.preventDefault();
+          roll({ elementType: "primary" });
+        }}
+      >
+        Rerolling your primary element costs {COST_REROLL_ELEMENT} reputation points. Are you
+        sure you want to re-roll your primary element?
+      </Confirm2>
+
+      {/* Secondary Element Reroll */}
+      <Confirm2
+        title="Confirm Secondary Element Re-Roll"
+        button={
+          <Button 
+            id="reroll-secondary" 
+            type="submit" 
+            className="w-full" 
+            disabled={!canAfford || !canChangeSecond}
+          >
+            Re-Roll Secondary Element
+          </Button>
+        }
+        onAccept={(e) => {
+          e.preventDefault();
+          roll({ elementType: "secondary" });
+        }}
+      >
+        Rerolling your secondary element costs {COST_REROLL_ELEMENT} reputation points. Are you
+        sure you want to re-roll your secondary element?
+      </Confirm2>
+    </div>
   );
 };
 

@@ -1,0 +1,1 @@
+ALTER TABLE `UserData` ADD `rolledElements` json NOT NULL DEFAULT ('[]'); 

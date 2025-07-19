@@ -405,26 +405,79 @@ export const blackMarketRouter = createTRPCRouter({
       }
     }),
   rerollElement: protectedProcedure
+    .input(z.object({ elementType: z.enum(["primary", "secondary"]) }))
     .output(baseServerResponse)
-    .mutation(async ({ ctx }) => {
+    .mutation(async ({ ctx, input }) => {
       // Fetch
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (user.reputationPoints < COST_REROLL_ELEMENT) {
         return errorResponse("Not enough reputation points");
       }
+      
       // Get the updated elements
       const rankId = UserRanks.findIndex((r) => r === user.rank);
-      if (rankId >= 1) {
-        const available = BasicElementName.filter((e) => e !== user.primaryElement);
-        user.primaryElement = getRandomElement(available) ?? null;
+      const changes: string[] = [];
+      
+      if (input.elementType === "primary") {
+        if (rankId >= 1) {
+          // Get all elements except the current primary, secondary, and previously rolled elements
+          const excludedElements = [user.primaryElement];
+          if (user.secondaryElement) {
+            excludedElements.push(user.secondaryElement);
+          }
+          // Add previously rolled elements to exclusion list
+          excludedElements.push(...(user.rolledElements || []).filter((e): e is typeof BasicElementName[number] => BasicElementName.includes(e as any)));
+          
+          const available = BasicElementName.filter((e) => !excludedElements.includes(e));
+          
+          // If no elements available, reset the rolled elements tracking
+          if (available.length === 0) {
+            user.rolledElements = [];
+            const resetAvailable = BasicElementName.filter((e) => e !== user.primaryElement);
+            user.primaryElement = getRandomElement(resetAvailable) ?? null;
+          } else {
+            user.primaryElement = getRandomElement(available) ?? null;
+            // Add the new element to rolled elements tracking
+            if (user.primaryElement && !user.rolledElements) {
+              user.rolledElements = [];
+            }
+            if (user.primaryElement) {
+              user.rolledElements.push(user.primaryElement);
+            }
+          }
+          changes.push("Primary element rerolled");
+        }
       }
-      if (user.secondaryElement) {
-        const available = BasicElementName.filter(
-          (e) => ![user.primaryElement, user.secondaryElement].includes(e),
-        );
-        user.secondaryElement = getRandomElement(available) ?? null;
+      
+      if (input.elementType === "secondary") {
+        if (user.secondaryElement) {
+          // Get all elements except the current primary, secondary, and previously rolled elements
+          const excludedElements = [user.primaryElement, user.secondaryElement];
+          // Add previously rolled elements to exclusion list
+          excludedElements.push(...(user.rolledElements || []).filter((e): e is typeof BasicElementName[number] => BasicElementName.includes(e as any)));
+          
+          const available = BasicElementName.filter((e) => !excludedElements.includes(e));
+          
+          // If no elements available, reset the rolled elements tracking
+          if (available.length === 0) {
+            user.rolledElements = [];
+            const resetAvailable = BasicElementName.filter((e) => e !== user.primaryElement);
+            user.secondaryElement = getRandomElement(resetAvailable) ?? null;
+          } else {
+            user.secondaryElement = getRandomElement(available) ?? null;
+            // Add the new element to rolled elements tracking
+            if (user.secondaryElement && !user.rolledElements) {
+              user.rolledElements = [];
+            }
+            if (user.secondaryElement) {
+              user.rolledElements.push(user.secondaryElement);
+            }
+          }
+          changes.push("Secondary element rerolled");
+        }
       }
+      
       // Mutate
       const result = await ctx.drizzle
         .update(userData)
@@ -441,12 +494,12 @@ export const blackMarketRouter = createTRPCRouter({
           id: nanoid(),
           userId: ctx.userId,
           tableName: "user",
-          changes: ["Element rerolled"],
+          changes: changes,
           relatedId: ctx.userId,
-          relatedMsg: "Update: Element rerolled",
+          relatedMsg: `Update: ${changes.join(", ")}`,
           relatedImage: user.avatarLight,
         });
-        return { success: true, message: "Element rerolled" };
+        return { success: true, message: changes.join(", ") };
       }
     }),
   // Update stats

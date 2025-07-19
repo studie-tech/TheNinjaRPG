@@ -712,8 +712,8 @@ export const calcBattleResult = (
           // Base village tokens for PvP kill
           deltaTokens += user.anbuId ? PVP_KILL_TOKEN_REWARD_ANBU : PVP_KILL_TOKEN_REWARD;
 
-          // ANBU points for PvP kill
-          if (user.anbuId) {
+          // ANBU points for PvP kill (only if target is not more than 10 levels under)
+          if (user.anbuId && (user.level - target.level) <= 10) {
             deltaAnbuPoints += PVP_KILL_ANBU_POINTS_REWARD;
           }
 
