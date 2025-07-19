@@ -222,6 +222,7 @@ export type Consequence = {
   drain_cp?: number;
   drain_sp?: number;
   poison?: number;
+  preShieldDamage?: number;
   types?: (GeneralType | StatType | ElementName | PoolType | ZodAllTags["type"])[];
 };
 

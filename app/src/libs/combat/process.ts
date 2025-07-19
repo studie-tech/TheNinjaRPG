@@ -331,6 +331,9 @@ export const applyEffects = (
 
         return remainingDamage;
       };
+      // Store pre-shield damage for reflect/lifesteal/absorb calculations
+      const preShieldDamage = (c.damage ?? 0) + (c.residual ?? 0);
+      
       // Adjust damages and reduce shields
       if (target && user) {
         if (c.damage && c.damage > 0) {
@@ -346,6 +349,9 @@ export const applyEffects = (
           c.recoil = calcAdjustedDamage(user, c.recoil, c.types);
         }
       }
+      
+      // Store pre-shield damage for later use
+      c.preShieldDamage = preShieldDamage;
       return c;
     })
     .reduce(collapseConsequences, [] as Consequence[])
@@ -404,14 +410,14 @@ export const applyEffects = (
         }
         if (c.reflect && c.reflect > 0) {
           if (c.reflect > 0) {
-            // Use the actual damage dealt (damage + residual) for the 60% cap calculation
-            const actualDamage = (c.damage ?? 0) + (c.residual ?? 0);
-            const maxReflect = actualDamage * 0.6;
+            // Use pre-shield damage for the 60% cap calculation to avoid shield interference
+            const preShieldDamage = c.preShieldDamage ?? 0;
+            const maxReflect = preShieldDamage * 0.6;
             const finalReflect = Math.min(c.reflect, maxReflect);
             user.curHealth -= finalReflect;
             user.curHealth = Math.max(0, user.curHealth);
             actionEffects.push({
-              txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage Debug: Reflect: ${c.reflect} & Total Damage: ${actualDamage}`,
+              txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage Debug: Reflect: ${c.reflect} & Pre-Shield Damage: ${preShieldDamage}`,
               color: "red",
             });
           }
@@ -442,30 +448,28 @@ export const applyEffects = (
           target.curHealth > 0 &&
           user.curHealth > 0
         ) {
-          // Use the actual damage dealt (damage + residual) for the 60% cap calculation
-          const actualDamage = (c.damage ?? 0) + (c.residual ?? 0);
-          const maxLifesteal = actualDamage * 0.6;
+          // Use pre-shield damage for the 60% cap calculation to avoid shield interference
+          const preShieldDamage = c.preShieldDamage ?? 0;
+          const maxLifesteal = preShieldDamage * 0.6;
           const finalLifesteal = Math.min(c.lifesteal_hp, maxLifesteal);
           user.curHealth += finalLifesteal;
           user.curHealth = Math.min(user.maxHealth, user.curHealth);
           actionEffects.push({
-            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health Debug: Lifesteal HP: ${c.lifesteal_hp} & Total Damage: ${actualDamage}`,
+            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health Debug: Lifesteal HP: ${c.lifesteal_hp} & Pre-Shield Damage: ${preShieldDamage}`,
             color: "green",
           });
         }
         if (c.absorb_hp && c.absorb_hp > 0 && target.curHealth > 0) {
-          // For absorb, use rawDamage (pre-shield) for the 60% cap calculation
-          // but apply the absorb based on actual damage that got through
-          const rawDamage = c.rawDamage ?? 0;
-          const actualDamage = (c.damage ?? 0) + (c.residual ?? 0);
-          const maxAbsorb = rawDamage * 0.6;
-          const absorbAmount = Math.min(c.absorb_hp, maxAbsorb, actualDamage);
+          // Use pre-shield damage for the 60% cap calculation to avoid shield interference
+          const preShieldDamage = c.preShieldDamage ?? 0;
+          const maxAbsorb = preShieldDamage * 0.6;
+          const absorbAmount = Math.min(c.absorb_hp, maxAbsorb);
           target.curHealth += absorbAmount;
           target.curHealth = Math.min(target.maxHealth, target.curHealth);
           actionEffects.push({
             txt: `${target.username} absorbs ${absorbAmount.toFixed(
               2,
-            )} damage and converts it to health Debug: Absorb HP: ${c.absorb_hp} & Raw Damage: ${rawDamage} & Actual Damage: ${actualDamage}`,
+            )} damage and converts it to health Debug: Absorb HP: ${c.absorb_hp} & Pre-Shield Damage: ${preShieldDamage}`,
             color: "green",
           });
         }
