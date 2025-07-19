@@ -505,8 +505,8 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 </Button>
               );
             }
-            // User can track if not signed up and bounty is open with space
-            if (!b.youSignedUp && b.huntersCount < 3 && b.status === "OPEN") {
+            // User can track if not signed up, not the creator, and bounty is open with space
+            if (!b.youSignedUp && b.huntersCount < 3 && b.status === "OPEN" && b.creatorUserId !== userData?.userId) {
               buttons.push(
                 <Button
                   key="track"

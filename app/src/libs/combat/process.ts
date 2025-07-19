@@ -343,13 +343,7 @@ export const applyEffects = (
           c.residual = calcAdjustedDamage(target, c.residual, c.types);
         }
         if (c.reflect && c.reflect > 0) {
-          // Reflect damage should damage the attacker's shields, not the defender's
-          // Find the attacker (userId in the consequence) and apply shield absorption to them
-          const attacker = newUsersState.find((u) => u.userId === c.userId);
-          const defender = newUsersState.find((u) => u.userId === c.targetId);
-          if (attacker) {
-            c.reflect = calcAdjustedDamage(attacker, c.reflect, c.types);
-          }
+          c.reflect = calcAdjustedDamage(target, c.reflect, c.types);
         }
         if (c.recoil && c.recoil > 0) {
           c.recoil = calcAdjustedDamage(user, c.recoil, c.types);
