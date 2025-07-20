@@ -5,7 +5,6 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import {
-  CalendarIcon,
   Plus,
   X,
   Vote,
@@ -17,7 +16,7 @@ import {
 } from "lucide-react";
 import { useUserData } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
-import { cn } from "@/libs/shadui";
+
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
@@ -28,8 +27,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   createPollSchema,

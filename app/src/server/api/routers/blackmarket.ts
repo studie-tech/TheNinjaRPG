@@ -427,12 +427,12 @@ export const blackMarketRouter = createTRPCRouter({
       } else if (user.rolledElements && typeof user.rolledElements === 'string') {
         // New format - parse the JSON string back to object
         try {
-          const parsed = JSON.parse(user.rolledElements);
+          const parsed = JSON.parse(user.rolledElements) as { primary?: unknown; secondary?: unknown };
           rolledElementsData = {
             primary: Array.isArray(parsed.primary) ? parsed.primary : [],
             secondary: Array.isArray(parsed.secondary) ? parsed.secondary : []
           };
-        } catch (error) {
+        } catch {
           rolledElementsData = { primary: [], secondary: [] };
         }
       } else if (user.rolledElements && typeof user.rolledElements === 'object') {
