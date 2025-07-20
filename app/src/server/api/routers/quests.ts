@@ -51,7 +51,8 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { SENSEI_STUDENT_RYO_PER_MISSION } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
-import { ERRANDS_PER_DAY, MEDICAL_MISSIONS_PER_DAY } from "@/drizzle/constants";
+import { ERRANDS_PER_DAY, MEDICAL_MISSIONS_PER_DAY, MEDNIN_RANKS } from "@/drizzle/constants";
+import { calcMedninRank } from "@/libs/hospital/hospital";
 import { questFilteringSchema } from "@/validators/quest";
 import type { QuestConsequence } from "@/libs/quest";
 import {
@@ -276,12 +277,25 @@ export const questsRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch user
-      const [updatedUser, sectorVillage, results] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      // Fetch user first to get medical rank
+      const updatedUser = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      const { user } = updatedUser;
+      if (!user) return errorResponse("User does not exist");
+      
+      // Calculate user's medical rank for filtering
+      const userMedicalRank = calcMedninRank({
+        medicalExperience: user.medicalExperience,
+        rank: user.rank,
+      });
+      
+      // Get available medical ranks for this user
+      const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
+      const availableMedicalRanks = MEDNIN_RANKS.slice(0, userMedicalRankIndex + 1);
+      
+      const [sectorVillage, results] = await Promise.all([
         fetchSectorVillage(ctx.drizzle, input.userSector),
         ctx.drizzle
           .select({
@@ -309,12 +323,17 @@ export const questsRouter = createTRPCRouter({
                 isNull(quest.requiredVillage),
                 eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
               ),
+              // For medical missions, filter by medical rank
+              ...(input.type === "medical" ? [
+                or(
+                  isNull(quest.medicalRank),
+                  inArray(quest.medicalRank, availableMedicalRanks as any[])
+                )
+              ] : []),
             ),
           ),
       ]);
-      // Destructure user & guard
-      const { user } = updatedUser;
-      if (!user) return errorResponse("User does not exist");
+      // Additional guards
       if (user.sector !== input.userSector) return errorResponse("Sector mismatch");
       if (user.level !== input.userLevel) {
         return errorResponse("User level does not match");

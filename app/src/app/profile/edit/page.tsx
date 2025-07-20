@@ -1413,6 +1413,8 @@ const RerollElement: React.FC = () => {
         sure you want to re-roll your primary element?
       </Confirm2>
 
+      <br />
+
       {/* Secondary Element Reroll */}
       <Confirm2
         title="Confirm Secondary Element Re-Roll"
