@@ -429,8 +429,8 @@ export const blackMarketRouter = createTRPCRouter({
         try {
           const parsed = JSON.parse(user.rolledElements) as { primary?: unknown; secondary?: unknown };
           rolledElementsData = {
-            primary: Array.isArray(parsed.primary) ? parsed.primary : [],
-            secondary: Array.isArray(parsed.secondary) ? parsed.secondary : []
+            primary: Array.isArray(parsed.primary) ? (parsed.primary as string[]) : [],
+            secondary: Array.isArray(parsed.secondary) ? (parsed.secondary as string[]) : []
           };
         } catch {
           rolledElementsData = { primary: [], secondary: [] };
