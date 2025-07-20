@@ -13,6 +13,7 @@ import {
   ERRANDS_PER_DAY,
   MEDICAL_MISSIONS_PER_DAY,
   IMG_BUILDING_MISSIONHALL,
+  MEDNIN_RANKS,
 } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
