@@ -291,9 +291,8 @@ export const questsRouter = createTRPCRouter({
         rank: user.rank,
       });
       
-      // Get available medical ranks for this user
-      const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
-      const availableMedicalRanks = MEDNIN_RANKS.slice(0, userMedicalRankIndex + 1);
+      // Get available medical ranks for this user - only exact rank
+      const availableMedicalRanks = [userMedicalRank];
       
       const [sectorVillage, results] = await Promise.all([
         fetchSectorVillage(ctx.drizzle, input.userSector),
