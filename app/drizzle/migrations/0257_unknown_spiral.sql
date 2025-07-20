@@ -1,0 +1,15 @@
+CREATE INDEX `EmailReminder_userId_idx` ON `EmailReminder` (`userId`);
+CREATE INDEX `PaypalTransaction_transactionId_idx` ON `PaypalTransaction` (`transactionId`);
+CREATE INDEX `PaypalTransaction_invoiceId_idx` ON `PaypalTransaction` (`invoiceId`);
+CREATE INDEX `Quest_endsAt_idx` ON `Quest` (`endsAt`);
+CREATE INDEX `Quest_startsAt_idx` ON `Quest` (`startsAt`);
+CREATE INDEX `UserData_isEvent_idx` ON `UserData` (`isEvent`);
+CREATE INDEX `UserData_inArena_idx` ON `UserData` (`inArena`);
+CREATE INDEX `UserData_isSummon_idx` ON `UserData` (`isSummon`);
+CREATE INDEX `UserData_rankedLp_idx` ON `UserData` (`rankedLp`);
+CREATE INDEX `UserData_experience_idx` ON `UserData` (`experience`);
+CREATE INDEX `UserReport_status_idx` ON `UserReport` (`status`);
+CREATE INDEX `War_attackerVillageId_idx` ON `War` (`attackerVillageId`);
+CREATE INDEX `War_defenderVillageId_idx` ON `War` (`defenderVillageId`);
+CREATE INDEX `War_sector_idx` ON `War` (`sector`);
+CREATE INDEX `War_status_idx` ON `War` (`status`);

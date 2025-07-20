@@ -1422,10 +1422,12 @@ export const profileRouter = createTRPCRouter({
     }),
   // Award experience to a user (staff only)
   awardExperience: protectedProcedure
-    .input(z.object({ 
-      targetUserId: z.string(),
-      amount: z.number().min(1).max(100000)
-    }))
+    .input(
+      z.object({
+        targetUserId: z.string(),
+        amount: z.number().min(1).max(100000),
+      }),
+    )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -1446,8 +1448,8 @@ export const profileRouter = createTRPCRouter({
       // Mutation
       const result = await ctx.drizzle
         .update(userData)
-        .set({ 
-          earnedExperience: sql`${userData.earnedExperience} + ${input.amount}` 
+        .set({
+          earnedExperience: sql`${userData.earnedExperience} + ${input.amount}`,
         })
         .where(eq(userData.userId, input.targetUserId));
 
@@ -1466,16 +1468,18 @@ export const profileRouter = createTRPCRouter({
         relatedImage: target.avatarLight,
       });
 
-      return { 
-        success: true, 
-        message: `Awarded ${input.amount} experience points to ${target.username}` 
+      return {
+        success: true,
+        message: `Awarded ${input.amount} experience points to ${target.username}`,
       };
     }),
   // Award experience to all users (staff only)
   awardExperienceToAll: protectedProcedure
-    .input(z.object({ 
-      amount: z.number().min(1).max(100000)
-    }))
+    .input(
+      z.object({
+        amount: z.number().min(1).max(100000),
+      }),
+    )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -1487,11 +1491,9 @@ export const profileRouter = createTRPCRouter({
       }
 
       // Mutation - update all users
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({ 
-          earnedExperience: sql`${userData.earnedExperience} + ${input.amount}` 
-        });
+      const result = await ctx.drizzle.update(userData).set({
+        earnedExperience: sql`${userData.earnedExperience} + ${input.amount}`,
+      });
 
       if (result.rowsAffected === 0) {
         return errorResponse("Failed to award experience to users");
@@ -1508,9 +1510,9 @@ export const profileRouter = createTRPCRouter({
         relatedImage: awarder.avatarLight,
       });
 
-      return { 
-        success: true, 
-        message: `Awarded ${input.amount} experience points to all users` 
+      return {
+        success: true,
+        message: `Awarded ${input.amount} experience points to all users`,
       };
     }),
 });
@@ -1684,7 +1686,7 @@ export const fetchUpdatedUser = async (props: {
       .select()
       .from(quest)
       .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
-    client.select().from(gameSetting),
+    client.select().from(gameSetting).where(like(gameSetting.name, "%regen%")),
     client.query.userData.findFirst({
       where: eq(userData.userId, userId),
       with: {

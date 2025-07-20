@@ -1332,7 +1332,6 @@ export const fetchUncompletedQuests = async (
     .where(
       and(
         eq(quest.questType, type),
-        lte(quest.requiredLevel, user.level),
         gte(quest.maxLevel, user.level),
         lte(quest.requiredLevel, user.level),
         or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),

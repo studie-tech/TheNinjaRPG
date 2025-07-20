@@ -9,7 +9,7 @@ import {
 import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
 import { eq, or, and, sql, gt, ne, isNotNull, isNull, inArray, gte } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { desc, lt } from "drizzle-orm";
+import { desc, lt, like } from "drizzle-orm";
 import { COMBAT_HEIGHT, COMBAT_WIDTH } from "@/libs/combat/constants";
 import { SECTOR_HEIGHT, SECTOR_WIDTH } from "@/libs/travel/constants";
 import { COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
@@ -883,7 +883,7 @@ export const initiateBattle = async (
     // Fetch game assets
     fetchGameAssets(client),
     // Fetch game settings
-    client.select().from(gameSetting),
+    client.select().from(gameSetting).where(like(gameSetting.name, "%regen%")),
     // Fetch villages
     client.select().from(village),
     // Fetch village alliances

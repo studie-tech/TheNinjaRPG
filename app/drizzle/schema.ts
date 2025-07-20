@@ -301,20 +301,28 @@ export const battleHistoryRelations = relations(battleHistory, ({ one, many }) =
   }),
 }));
 
-export const emailReminder = mysqlTable("EmailReminder", {
-  id: int("id").autoincrement().primaryKey().notNull(),
-  userId: varchar("userId", { length: 191 }),
-  callName: varchar("callName", { length: 191 }),
-  email: varchar("email", { length: 191 }).notNull(),
-  latestRejoinRequest: datetime("latestRejoinRequest", { mode: "date", fsp: 3 }),
-  lastActivity: datetime("lastActivity", { mode: "date", fsp: 3 }),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
-    .default(sql`(CURRENT_TIMESTAMP(3))`)
-    .notNull(),
-  secret: varchar("secret", { length: 191 }).notNull(),
-  disabled: boolean("disabled").default(false).notNull(),
-  validated: boolean("validated").default(true).notNull(),
-});
+export const emailReminder = mysqlTable(
+  "EmailReminder",
+  {
+    id: int("id").autoincrement().primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }),
+    callName: varchar("callName", { length: 191 }),
+    email: varchar("email", { length: 191 }).notNull(),
+    latestRejoinRequest: datetime("latestRejoinRequest", { mode: "date", fsp: 3 }),
+    lastActivity: datetime("lastActivity", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    secret: varchar("secret", { length: 191 }).notNull(),
+    disabled: boolean("disabled").default(false).notNull(),
+    validated: boolean("validated").default(true).notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("EmailReminder_userId_idx").on(table.userId),
+    };
+  },
+);
 
 export const userBlackList = mysqlTable(
   "UserBlackList",
@@ -976,6 +984,7 @@ export const historicalAvatar = mysqlTable(
       ),
       avatarKey: uniqueIndex("HistoricalAvatar_avatar_key").on(table.avatar),
       doneIdx: index("HistoricalAvatar_done_idx").on(table.done),
+      statusIdx: index("HistoricalAvatar_status_idx").on(table.status),
       userIdIdx: index("HistoricalAvatar_userId_idx").on(table.userId),
     };
   },
@@ -1356,6 +1365,10 @@ export const paypalTransaction = mysqlTable(
     return {
       orderIdKey: uniqueIndex("PaypalTransaction_orderId_key").on(table.orderId),
       createdByIdIdx: index("PaypalTransaction_createdById_idx").on(table.createdById),
+      transactionIdIdx: index("PaypalTransaction_transactionId_idx").on(
+        table.transactionId,
+      ),
+      invoiceIdIdx: index("PaypalTransaction_invoiceId_idx").on(table.invoiceId),
       affectedUserIdIdx: index("PaypalTransaction_affectedUserId_idx").on(
         table.affectedUserId,
       ),
@@ -1707,14 +1720,18 @@ export const userData = mysqlTable(
   },
   (table) => {
     return {
-      userIdKey: uniqueIndex("UserData_userId_key").on(table.userId),
       isAiIdx: index("UserData_isAi_idx").on(table.isAi),
+      isEventIdx: index("UserData_isEvent_idx").on(table.isEvent),
+      inArenaIdx: index("UserData_inArena_idx").on(table.inArena),
+      isSummonIdx: index("UserData_isSummon_idx").on(table.isSummon),
       rankIdx: index("UserData_rank_idx").on(table.rank),
       roleIdx: index("UserData_role_idx").on(table.role),
       clanIdIdx: index("UserData_clanId_idx").on(table.clanId),
       anbuIdIdx: index("UserData_anbuId_idx").on(table.anbuId),
       jutsuLoadoutIdx: index("UserData_jutsuLoadout_idx").on(table.jutsuLoadout),
       rankedLoadoutIdx: index("UserData_rankedLoadout_idx").on(table.rankedLoadout),
+      rankedLpIdx: index("UserData_rankedLp_idx").on(table.rankedLp),
+      experienceIdx: index("UserData_experience_idx").on(table.experience),
       levelIdx: index("UserData_level_idx").on(table.level),
       usernameKey: uniqueIndex("UserData_username_key").on(table.username),
       bloodlineIdIdx: index("UserData_bloodlineId_idx").on(table.bloodlineId),
@@ -2167,6 +2184,7 @@ export const userReport = mysqlTable(
       reportedUserIdIdx: index("UserReport_reportedUserId_idx").on(
         table.reportedUserId,
       ),
+      statusIdx: index("UserReport_status_idx").on(table.status),
     };
   },
 );
@@ -2545,6 +2563,8 @@ export const quest = mysqlTable(
       requiredLevelIdx: index("Quest_requiredLevel_idx").on(table.requiredLevel),
       maxLevelIdx: index("Quest_maxLevel_idx").on(table.maxLevel),
       requiredVillageIdx: index("Quest_requiredVillage_idx").on(table.requiredVillage),
+      endsAtIdx: index("Quest_endsAt_idx").on(table.endsAt),
+      startsAtIdx: index("Quest_startsAt_idx").on(table.startsAt),
       prerequisiteQuestIdIdx: index("Quest_prerequisiteQuestId_idx").on(
         table.prerequisiteQuestId,
       ),
@@ -2618,20 +2638,6 @@ export const gameSetting = mysqlTable(
   },
 );
 export type GameSetting = InferSelectModel<typeof gameSetting>;
-
-export const gameRule = mysqlTable(
-  "GameRule",
-  {
-    id: varchar("id", { length: 191 }).primaryKey().notNull(),
-    name: varchar("name", { length: 191 }).notNull(),
-    description: varchar("description", { length: 500 }).notNull(),
-    value: tinyint("value").default(0).notNull(),
-  },
-  (table) => {
-    return { name: index("name").on(table.name) };
-  },
-);
-export type GameRule = InferSelectModel<typeof gameRule>;
 
 export const userLikes = mysqlTable(
   "UserLikes",
@@ -2995,26 +3001,41 @@ export const userVoteRelations = relations(userVote, ({ one }) => ({
 }));
 
 // War System Tables
-export const war = mysqlTable("War", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  attackerVillageId: varchar("attackerVillageId", { length: 191 }).notNull(),
-  defenderVillageId: varchar("defenderVillageId", { length: 191 }).notNull(),
-  startedAt: datetime("startedAt", { mode: "date", fsp: 3 })
-    .default(sql`(CURRENT_TIMESTAMP(3))`)
-    .notNull(),
-  endedAt: datetime("endedAt", { mode: "date", fsp: 3 }),
-  status: mysqlEnum("status", consts.WAR_STATES).notNull(),
-  type: mysqlEnum("type", consts.WAR_TYPES).notNull(),
-  sector: smallint("sector").default(0).notNull(),
-  shrineHp: smallint("shrineHp").default(consts.WAR_SHRINE_HP).notNull(),
-  dailyTokenReduction: int("dailyTokenReduction").default(1000).notNull(),
-  lastTokenReductionAt: datetime("lastTokenReductionAt", { mode: "date", fsp: 3 })
-    .default(sql`(CURRENT_TIMESTAMP(3))`)
-    .notNull(),
-  targetStructureRoute: varchar("targetStructureRoute", { length: 191 })
-    .default("/townhall")
-    .notNull(),
-});
+export const war = mysqlTable(
+  "War",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    attackerVillageId: varchar("attackerVillageId", { length: 191 }).notNull(),
+    defenderVillageId: varchar("defenderVillageId", { length: 191 }).notNull(),
+    startedAt: datetime("startedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    endedAt: datetime("endedAt", { mode: "date", fsp: 3 }),
+    status: mysqlEnum("status", consts.WAR_STATES).notNull(),
+    type: mysqlEnum("type", consts.WAR_TYPES).notNull(),
+    sector: smallint("sector").default(0).notNull(),
+    shrineHp: smallint("shrineHp").default(consts.WAR_SHRINE_HP).notNull(),
+    dailyTokenReduction: int("dailyTokenReduction").default(1000).notNull(),
+    lastTokenReductionAt: datetime("lastTokenReductionAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    targetStructureRoute: varchar("targetStructureRoute", { length: 191 })
+      .default("/townhall")
+      .notNull(),
+  },
+  (table) => {
+    return {
+      attackerVillageIdIdx: index("War_attackerVillageId_idx").on(
+        table.attackerVillageId,
+      ),
+      defenderVillageIdIdx: index("War_defenderVillageId_idx").on(
+        table.defenderVillageId,
+      ),
+      sectorIdx: index("War_sector_idx").on(table.sector),
+      statusIdx: index("War_status_idx").on(table.status),
+    };
+  },
+);
 export type War = InferSelectModel<typeof war>;
 
 export const warRelations = relations(war, ({ one, many }) => ({
