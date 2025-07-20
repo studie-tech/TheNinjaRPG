@@ -419,37 +419,71 @@ export const blackMarketRouter = createTRPCRouter({
       const rankId = UserRanks.findIndex((r) => r === user.rank);
       const changes: string[] = [];
       
+      // Parse rolled elements - handle both old format (array) and new format (object)
+      let rolledElementsData: { primary: string[], secondary: string[] };
+      if (Array.isArray(user.rolledElements)) {
+        // Old format - convert to new format
+        rolledElementsData = { primary: [], secondary: [] };
+      } else if (user.rolledElements && typeof user.rolledElements === 'string') {
+        // New format - parse the JSON string back to object
+        try {
+          const parsed = JSON.parse(user.rolledElements);
+          rolledElementsData = {
+            primary: Array.isArray(parsed.primary) ? parsed.primary : [],
+            secondary: Array.isArray(parsed.secondary) ? parsed.secondary : []
+          };
+        } catch (error) {
+          rolledElementsData = { primary: [], secondary: [] };
+        }
+      } else if (user.rolledElements && typeof user.rolledElements === 'object') {
+        // Direct object format
+        const rolledObj = user.rolledElements as { primary?: string[], secondary?: string[] };
+        rolledElementsData = {
+          primary: Array.isArray(rolledObj.primary) ? rolledObj.primary : [],
+          secondary: Array.isArray(rolledObj.secondary) ? rolledObj.secondary : []
+        };
+      } else {
+        // No data
+        rolledElementsData = { primary: [], secondary: [] };
+      }
+      
+      // Ensure current elements are in their respective rolled arrays
+      if (user.primaryElement && !rolledElementsData.primary.includes(user.primaryElement)) {
+        rolledElementsData.primary.push(user.primaryElement);
+      }
+      if (user.secondaryElement && !rolledElementsData.secondary.includes(user.secondaryElement)) {
+        rolledElementsData.secondary.push(user.secondaryElement);
+      }
+      
       if (input.elementType === "primary") {
         if (rankId >= 1) {
-          // For primary reroll, always exclude secondary element and previously rolled elements
+          // For primary reroll, exclude secondary element and previously rolled primary elements
           const excludedElements: typeof ElementNames[number][] = [];
           if (user.secondaryElement) {
             excludedElements.push(user.secondaryElement);
           }
-          // Add previously rolled elements to exclusion list
-          const validRolledElements = (user.rolledElements || []).filter(
-            (e): e is typeof ElementNames[number] => 
-              ElementNames.includes(e as typeof ElementNames[number])
+          // Filter and type-cast primary rolled elements
+          const validPrimaryRolled = rolledElementsData.primary.filter(
+            (e): e is typeof ElementNames[number] => ElementNames.includes(e as typeof ElementNames[number])
           );
-          excludedElements.push(...validRolledElements);
+          excludedElements.push(...validPrimaryRolled);
           
           const available = BasicElementName.filter((e) => !excludedElements.includes(e));
           
-          // If no elements available, reset the rolled elements tracking
+          // If no elements available, reset the primary rolled elements tracking
           if (available.length === 0) {
-            user.rolledElements = [];
+            rolledElementsData.primary = [];
+            
             const resetAvailable = user.secondaryElement 
-              ? BasicElementName.filter((e) => e !== user.secondaryElement)
-              : BasicElementName;
+              ? BasicElementName.filter((e) => e !== user.secondaryElement && e !== user.primaryElement)
+              : BasicElementName.filter((e) => e !== user.primaryElement);
             user.primaryElement = getRandomElement(resetAvailable) ?? null;
+            // Don't add the new element to tracking after reset - let it be available for future rolls
           } else {
             user.primaryElement = getRandomElement(available) ?? null;
-            // Add the new element to rolled elements tracking
-            if (user.primaryElement && !user.rolledElements) {
-              user.rolledElements = [];
-            }
+            // Add the new element to primary rolled elements tracking
             if (user.primaryElement) {
-              user.rolledElements.push(user.primaryElement);
+              rolledElementsData.primary.push(user.primaryElement);
             }
           }
           changes.push("Primary element rerolled");
@@ -458,35 +492,33 @@ export const blackMarketRouter = createTRPCRouter({
       
       if (input.elementType === "secondary") {
         if (user.secondaryElement) {
-          // For secondary reroll, always exclude primary element and previously rolled elements
+          // For secondary reroll, exclude primary element and previously rolled secondary elements
           const excludedElements: typeof ElementNames[number][] = [];
           if (user.primaryElement) {
             excludedElements.push(user.primaryElement);
           }
-          // Add previously rolled elements to exclusion list
-          const validRolledElements = (user.rolledElements || []).filter(
-            (e): e is typeof ElementNames[number] => 
-              ElementNames.includes(e as typeof ElementNames[number])
+          // Filter and type-cast secondary rolled elements
+          const validSecondaryRolled = rolledElementsData.secondary.filter(
+            (e): e is typeof ElementNames[number] => ElementNames.includes(e as typeof ElementNames[number])
           );
-          excludedElements.push(...validRolledElements);
+          excludedElements.push(...validSecondaryRolled);
           
           const available = BasicElementName.filter((e) => !excludedElements.includes(e));
           
-          // If no elements available, reset the rolled elements tracking
+          // If no elements available, reset the secondary rolled elements tracking
           if (available.length === 0) {
-            user.rolledElements = [];
+            rolledElementsData.secondary = [];
+            
             const resetAvailable = user.primaryElement 
-              ? BasicElementName.filter((e) => e !== user.primaryElement)
-              : BasicElementName;
+              ? BasicElementName.filter((e) => e !== user.primaryElement && e !== user.secondaryElement)
+              : BasicElementName.filter((e) => e !== user.secondaryElement);
             user.secondaryElement = getRandomElement(resetAvailable) ?? null;
+            // Don't add the new element to tracking after reset - let it be available for future rolls
           } else {
             user.secondaryElement = getRandomElement(available) ?? null;
-            // Add the new element to rolled elements tracking
-            if (user.secondaryElement && !user.rolledElements) {
-              user.rolledElements = [];
-            }
+            // Add the new element to secondary rolled elements tracking
             if (user.secondaryElement) {
-              user.rolledElements.push(user.secondaryElement);
+              rolledElementsData.secondary.push(user.secondaryElement);
             }
           }
           changes.push("Secondary element rerolled");
@@ -499,7 +531,7 @@ export const blackMarketRouter = createTRPCRouter({
         .set({
           primaryElement: user.primaryElement,
           secondaryElement: user.secondaryElement,
-          rolledElements: user.rolledElements,
+          rolledElements: JSON.stringify(rolledElementsData) as unknown as string[],
           reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
         })
         .where(eq(userData.userId, ctx.userId));
