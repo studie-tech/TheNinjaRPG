@@ -18,7 +18,7 @@ import { MAX_EXTRA_JUTSU_SLOTS } from "@/drizzle/constants";
 import { COST_REROLL_ELEMENT } from "@/drizzle/constants";
 import { RYO_FOR_REP_MAX_LISTINGS } from "@/drizzle/constants";
 import { RYO_FOR_REP_MIN_REPS } from "@/drizzle/constants";
-import { UserRanks, BasicElementName } from "@/drizzle/constants";
+import { UserRanks, BasicElementName, ElementNames } from "@/drizzle/constants";
 import { getRandomElement } from "@/utils/array";
 import { genders } from "@/validators/register";
 import { baseServerResponse, errorResponse } from "../trpc";
@@ -421,15 +421,15 @@ export const blackMarketRouter = createTRPCRouter({
       
       if (input.elementType === "primary") {
         if (rankId >= 1) {
-          // Get all elements except the current primary, secondary, and previously rolled elements
-          const excludedElements = [user.primaryElement];
+          // For primary reroll, always exclude secondary element and previously rolled elements
+          const excludedElements: typeof ElementNames[number][] = [];
           if (user.secondaryElement) {
             excludedElements.push(user.secondaryElement);
           }
           // Add previously rolled elements to exclusion list
           const validRolledElements = (user.rolledElements || []).filter(
-            (e): e is typeof BasicElementName[number] => 
-              BasicElementName.includes(e as typeof BasicElementName[number])
+            (e): e is typeof ElementNames[number] => 
+              ElementNames.includes(e as typeof ElementNames[number])
           );
           excludedElements.push(...validRolledElements);
           
@@ -438,7 +438,9 @@ export const blackMarketRouter = createTRPCRouter({
           // If no elements available, reset the rolled elements tracking
           if (available.length === 0) {
             user.rolledElements = [];
-            const resetAvailable = BasicElementName.filter((e) => e !== user.primaryElement);
+            const resetAvailable = user.secondaryElement 
+              ? BasicElementName.filter((e) => e !== user.secondaryElement)
+              : BasicElementName;
             user.primaryElement = getRandomElement(resetAvailable) ?? null;
           } else {
             user.primaryElement = getRandomElement(available) ?? null;
@@ -456,12 +458,15 @@ export const blackMarketRouter = createTRPCRouter({
       
       if (input.elementType === "secondary") {
         if (user.secondaryElement) {
-          // Get all elements except the current primary, secondary, and previously rolled elements
-          const excludedElements = [user.primaryElement, user.secondaryElement];
+          // For secondary reroll, always exclude primary element and previously rolled elements
+          const excludedElements: typeof ElementNames[number][] = [];
+          if (user.primaryElement) {
+            excludedElements.push(user.primaryElement);
+          }
           // Add previously rolled elements to exclusion list
           const validRolledElements = (user.rolledElements || []).filter(
-            (e): e is typeof BasicElementName[number] => 
-              BasicElementName.includes(e as typeof BasicElementName[number])
+            (e): e is typeof ElementNames[number] => 
+              ElementNames.includes(e as typeof ElementNames[number])
           );
           excludedElements.push(...validRolledElements);
           
@@ -470,7 +475,9 @@ export const blackMarketRouter = createTRPCRouter({
           // If no elements available, reset the rolled elements tracking
           if (available.length === 0) {
             user.rolledElements = [];
-            const resetAvailable = BasicElementName.filter((e) => e !== user.primaryElement);
+            const resetAvailable = user.primaryElement 
+              ? BasicElementName.filter((e) => e !== user.primaryElement)
+              : BasicElementName;
             user.secondaryElement = getRandomElement(resetAvailable) ?? null;
           } else {
             user.secondaryElement = getRandomElement(available) ?? null;

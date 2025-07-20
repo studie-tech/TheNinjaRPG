@@ -135,13 +135,33 @@ export default function MissionHall({ userData }: MissionHallProps) {
                 (point) =>
                   point.questType === setting.type && point.questRank === setting.rank,
               )?.length ?? 0;
-            count = isMedical
-              ? (medicalRanks?.filter(
+            
+            // For medical missions, calculate fallback counts
+            let fallbackRank = "";
+            if (isMedical) {
+              const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
+              let fallbackCount = 0;
+              
+              // Try each rank from user's rank down to NONE
+              for (let i = userMedicalRankIndex; i >= 0; i--) {
+                const currentRank = MEDNIN_RANKS[i];
+                if (!currentRank) continue;
+                
+                const rankCount = medicalRanks?.filter(
                   (q) =>
                     q.questRank === setting.rank &&
-                    (q.medicalRank === "NONE" || q.medicalRank === userMedicalRank),
-                )?.length ?? 0)
-              : count;
+                    (q.medicalRank === "NONE" || q.medicalRank === currentRank),
+                )?.length ?? 0;
+                
+                if (rankCount > 0) {
+                  fallbackCount = rankCount;
+                  fallbackRank = currentRank;
+                  break;
+                }
+              }
+              
+              count = fallbackCount;
+            }
             // Checks
             const rankCheck = availableUserRanks.includes(setting.rank) || isErrand;
             const medicalCheck = isMedical
@@ -275,7 +295,13 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           height={256}
                         />
                         <p className="font-bold">{setting.name}</p>
-                        <p>[Random out of {count} available]</p>
+                        <p>
+                          [Random out of {count} available
+                          {isMedical && fallbackRank && fallbackRank !== userMedicalRank && (
+                            <span className="text-yellow-500"> ({fallbackRank} rank)</span>
+                          )}
+                          ]
+                        </p>
                         {!isErrand &&
                           userData.dailyMissions >= 9 &&
                           userData.dailyMissions < MISSIONS_PER_DAY && (
