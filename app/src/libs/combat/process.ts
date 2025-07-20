@@ -332,7 +332,7 @@ export const applyEffects = (
         return remainingDamage;
       };
       // Store pre-shield damage for reflect/lifesteal/absorb calculations
-      const preShieldDamage = (c.damage ?? 0) + (c.residual ?? 0);
+      const preShieldDamage = (c.damage ?? 0);
       
       // Adjust damages and reduce shields
       if (target && user) {
@@ -343,7 +343,7 @@ export const applyEffects = (
           c.residual = calcAdjustedDamage(target, c.residual, c.types);
         }
         if (c.reflect && c.reflect > 0) {
-          c.reflect = calcAdjustedDamage(target, c.reflect, c.types);
+          c.reflect = calcAdjustedDamage(user, c.reflect, c.types);
         }
         if (c.recoil && c.recoil > 0) {
           c.recoil = calcAdjustedDamage(user, c.recoil, c.types);

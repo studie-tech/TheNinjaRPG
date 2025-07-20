@@ -29,6 +29,7 @@ export async function GET() {
       dailyArenaFights: 0,
       dailyMissions: 0,
       dailyErrands: 0,
+      dailyMedicalMissions: 0,
       dailyTrainings: 0,
       aiCalls: 0,
     });

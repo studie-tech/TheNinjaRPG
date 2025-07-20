@@ -51,6 +51,7 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { SENSEI_STUDENT_RYO_PER_MISSION } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
+import { ERRANDS_PER_DAY, MEDICAL_MISSIONS_PER_DAY } from "@/drizzle/constants";
 import { questFilteringSchema } from "@/validators/quest";
 import type { QuestConsequence } from "@/libs/quest";
 import {
@@ -332,9 +333,20 @@ export const questsRouter = createTRPCRouter({
         (s) => s.type === input.type && s.rank === input.rank,
       );
       const isErrand = setting?.type === "errand";
+      const isMedical = setting?.type === "medical";
       // Guards
       if (!setting) return errorResponse("Setting not found");
       if (user.isBanned) return errorResponse("You are banned");
+      
+      // Check daily errand limit
+      if (isErrand && user.dailyErrands >= ERRANDS_PER_DAY) {
+        return errorResponse(`You have reached your daily errand limit of ${ERRANDS_PER_DAY} errands. Please try again tomorrow.`);
+      }
+      
+      // Check daily medical mission limit
+      if (isMedical && user.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY) {
+        return errorResponse(`You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`);
+      }
 
       // Check if user is allowed to perform this rank
       const ranks = availableQuestLetterRanks(user.rank);
@@ -365,6 +377,8 @@ export const questsRouter = createTRPCRouter({
           .set(
             isErrand
               ? { dailyErrands: sql`${userData.dailyErrands} + 1` }
+              : isMedical
+              ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
               : { dailyMissions: sql`${userData.dailyMissions} + 1` },
           )
           .where(eq(userData.userId, user.userId)),
@@ -555,7 +569,7 @@ export const questsRouter = createTRPCRouter({
         incrementDailyQuestCounter(
           ctx.drizzle,
           user,
-          ["mission", "crime", "medical"].includes(questData.questType),
+          questData.questType,
         ),
       ]);
       return { success: true, message: `Quest started: ${questData.name}` };
@@ -1399,12 +1413,16 @@ export const upsertQuestEntries = async (
 export const incrementDailyQuestCounter = async (
   client: DrizzleClient,
   user: UserData,
-  enabled: boolean,
+  questType: string,
 ) => {
-  if (enabled) {
+  if (["mission", "crime", "medical"].includes(questType)) {
+    const updateField = questType === "medical" 
+      ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
+      : { dailyMissions: sql`${userData.dailyMissions} + 1` };
+    
     await client
       .update(userData)
-      .set({ dailyMissions: sql`${userData.dailyMissions} + 1` })
+      .set(updateField)
       .where(eq(userData.userId, user.userId));
   }
 };

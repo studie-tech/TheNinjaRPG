@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   MISSIONS_PER_DAY,
   ERRANDS_PER_DAY,
+  MEDICAL_MISSIONS_PER_DAY,
   IMG_BUILDING_MISSIONHALL,
 } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
@@ -105,7 +106,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
           <p className="text-center p-3 text-xl font-bold">
             Errands [{userData.dailyErrands} / {ERRANDS_PER_DAY}] -{" "}
             {capitalizeFirstLetter(classifier)}s [{userData.dailyMissions} /{" "}
-            {MISSIONS_PER_DAY}]
+            {MISSIONS_PER_DAY}] - Medical Missions [{userData.dailyMedicalMissions} /{" "}
+            {MEDICAL_MISSIONS_PER_DAY}]
           </p>
         </>
       )}
@@ -124,6 +126,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
             const isMedical = setting.type === "medical";
             const capped = isErrand
               ? errandsLeft <= 0
+              : isMedical
+              ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY
               : userData.dailyMissions >= MISSIONS_PER_DAY;
             // Count how many of this type and rank are available
             let count =
@@ -280,14 +284,24 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         {!isErrand && userData.dailyMissions >= MISSIONS_PER_DAY && (
                           <p className="text-sm text-red-500">Daily Limit Reached</p>
                         )}
+                        {isErrand && userData.dailyErrands >= ERRANDS_PER_DAY && (
+                          <p className="text-sm text-red-500">Daily Limit Reached</p>
+                        )}
+                        {isMedical && userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY && (
+                          <p className="text-sm text-red-500">Daily Limit Reached</p>
+                        )}
                       </div>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>Accept Random Mission</AlertDialogTitle>
                         <AlertDialogDescription>
-                          {!isErrand && userData.dailyMissions >= MISSIONS_PER_DAY ? (
+                          {!isErrand && !isMedical && userData.dailyMissions >= MISSIONS_PER_DAY ? (
                             `You have reached your daily mission limit of ${MISSIONS_PER_DAY} missions. Please try again tomorrow.`
+                          ) : isErrand && userData.dailyErrands >= ERRANDS_PER_DAY ? (
+                            `You have reached your daily errand limit of ${ERRANDS_PER_DAY} errands. Please try again tomorrow.`
+                          ) : isMedical && userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY ? (
+                            `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`
                           ) : (
                             <>
                               Are you sure you want to accept a random{" "}
@@ -295,7 +309,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                                 ? "medical mission"
                                 : `${setting.rank}-rank ${setting.type}`}
                               ? You can only have one active {classifier} at a time.
-                              {!isErrand && userData.dailyMissions >= 9 && (
+                              {!isErrand && !isMedical && userData.dailyMissions >= 9 && (
                                 <>
                                   <br />
                                   <br />
@@ -312,7 +326,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        {!isErrand && userData.dailyMissions >= MISSIONS_PER_DAY ? (
+                        {(!isErrand && !isMedical && userData.dailyMissions >= MISSIONS_PER_DAY) || (isErrand && userData.dailyErrands >= ERRANDS_PER_DAY) || (isMedical && userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY) ? (
                           <AlertDialogAction disabled>
                             Daily Limit Reached
                           </AlertDialogAction>
