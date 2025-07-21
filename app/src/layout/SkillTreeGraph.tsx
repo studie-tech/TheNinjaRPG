@@ -79,7 +79,7 @@ export default function SkillTreeGraph({
 
     // Calculate layout - using circular nodes now
     const tierWidth = 300; // Doubled from 150
-    const skillHeight = 320; // Increased from 240 to accommodate larger text
+    const skillHeight = 240; // Back to original size
     const padding = 60; // Doubled from 30
 
     // 1) Track x-positions of skills that have already been laid out so later tiers
@@ -255,7 +255,7 @@ export default function SkillTreeGraph({
     const minX = Math.min(...skillNodes.map((n) => n.x)) - 60; // Doubled from 30
     const minY = Math.min(...skillNodes.map((n) => n.y)) - 60; // Doubled from 30
     const maxX = Math.max(...skillNodes.map((n) => n.x + 240)) + 60; // 240 is node width (doubled from 120)
-    const maxY = Math.max(...skillNodes.map((n) => n.y + 320)) + 60; // 320 is node height (increased from 240)
+    const maxY = Math.max(...skillNodes.map((n) => n.y + 240)) + 60; // 240 is node height (increased from 240)
 
     return { minX, minY, maxX, maxY };
   }, [skillNodes]);
