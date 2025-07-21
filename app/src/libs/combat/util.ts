@@ -1596,6 +1596,7 @@ export const processUsersForBattle = (info: {
         useritem.equipped === "KEYSTONE",
     );
     user.keystoneName = keystoneItem?.item.name ?? null;
+    user.keystoneItem = keystoneItem?.item ?? null;
 
     // Add item effects
     const items: (UserItem & {

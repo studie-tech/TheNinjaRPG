@@ -80,6 +80,7 @@ export type BattleUserState = Omit<NonNullable<UserWithRelations>, "items"> & {
   clan?: Clan | null;
   anbuSquad?: AnbuSquad | null;
   keystoneName?: string | null;
+  keystoneItem?: Item | null;
   bounties?: { id: string; status: BountyStatus; amountRyo: number }[];
   bountySignups?: { id: string; bountyId: string }[];
 };

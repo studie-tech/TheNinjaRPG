@@ -51,6 +51,7 @@ export const publicState = [
   "isSummon",
   "isOriginal",
   "keystoneName",
+  "keystoneItem",
   "latitude",
   "leftBattle",
   "level",
