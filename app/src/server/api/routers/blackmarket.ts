@@ -531,7 +531,7 @@ export const blackMarketRouter = createTRPCRouter({
         .set({
           primaryElement: user.primaryElement,
           secondaryElement: user.secondaryElement,
-          rolledElements: JSON.stringify(rolledElementsData) as unknown as string[],
+          rolledElements: [...rolledElementsData.primary, ...rolledElementsData.secondary],
           reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
         })
         .where(eq(userData.userId, ctx.userId));

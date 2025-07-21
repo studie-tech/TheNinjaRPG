@@ -487,19 +487,22 @@ export const bountyRouter = createTRPCRouter({
         },
       });
       
-      // Remove all hunter signups for this bounty
-      await ctx.drizzle
-        .delete(bountySignup)
-        .where(eq(bountySignup.bountyId, input.bountyId));
-      
-      // Log the action
-      await ctx.drizzle.insert(actionLog).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        tableName: "bounty",
-        changes: [`Removed ${hunters.length} hunters from bounty tracking`],
-        relatedId: input.bountyId,
-        relatedMsg: `Staff removed all trackers from bounty: ${hunters.length} hunters removed`,
+      // Execute deletion and logging in a transaction
+      await ctx.drizzle.transaction(async (tx) => {
+        // Remove all hunter signups for this bounty
+        await tx
+          .delete(bountySignup)
+          .where(eq(bountySignup.bountyId, input.bountyId));
+        
+        // Log the action
+        await tx.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "bounty",
+          changes: [`Removed ${hunters.length} hunters from bounty tracking`],
+          relatedId: input.bountyId,
+          relatedMsg: `Staff removed all trackers from bounty: ${hunters.length} hunters removed`,
+        });
       });
       
       return { 

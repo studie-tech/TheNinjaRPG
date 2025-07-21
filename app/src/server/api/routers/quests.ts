@@ -435,7 +435,7 @@ export const questsRouter = createTRPCRouter({
       }
       // Fetch quest
       const result = getRandomElement(
-        (results || []).filter((e) => isAvailableUserQuests(e, user).check),
+        results || [],
       );
       if (!result) return errorResponse("No assignments at this level could be found");
 
