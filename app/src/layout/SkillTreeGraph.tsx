@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Check, Lock, X } from "lucide-react";
+import { Check, Lock, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Modal2 from "@/layout/Modal2";
 import type { SkillTree } from "@/drizzle/schema";
@@ -40,6 +40,7 @@ export default function SkillTreeGraph({
   const [skillNodes, setSkillNodes] = useState<SkillNode[]>([]);
   const [selectedSkill, setSelectedSkill] = useState<SkillNode | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // Viewport state for panning and zooming
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -47,12 +48,22 @@ export default function SkillTreeGraph({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
 
+  // Get all unique effect types from skills
+  const allEffectTypes = Array.from(new Set(skills.flatMap(skill => 
+    skill.effects?.map(effect => effect.type) || []
+  ))).sort();
+  
+  // Filter skills based on selected category
+  const filteredSkills = selectedCategory 
+    ? skills.filter(skill => skill.effects?.some(effect => effect.type === selectedCategory))
+    : skills;
+
   // Layout skills in a tree structure
   useEffect(() => {
-    if (!skills.length) return;
+    if (!filteredSkills.length) return;
 
     // Group skills by tier
-    const skillsByTier = skills.reduce(
+    const skillsByTier = filteredSkills.reduce(
       (acc, skill) => {
         if (!acc[skill.tier]) acc[skill.tier] = [];
         acc[skill.tier]!.push(skill);
@@ -67,9 +78,9 @@ export default function SkillTreeGraph({
     const nodes: SkillNode[] = [];
 
     // Calculate layout - using circular nodes now
-    const tierWidth = 150; // Reduced for circular design
-    const skillHeight = 120; // Space for image + tier badge + cost
-    const padding = 30;
+    const tierWidth = 300; // Doubled from 150
+    const skillHeight = 320; // Increased from 240 to accommodate larger text
+    const padding = 60; // Doubled from 30
 
     // 1) Track x-positions of skills that have already been laid out so later tiers
     //    can reference their prerequisite positions.
@@ -79,7 +90,7 @@ export default function SkillTreeGraph({
     //    let us push completely isolated skills (no prereqs, no dependents) to
     //    the end of a tier, reducing edge crossings.
     const dependentsCount: Record<string, number> = {};
-    skills.forEach((s) => {
+    filteredSkills.forEach((s) => {
       s.requiredSkillIds.forEach((reqId) => {
         dependentsCount[reqId] = (dependentsCount[reqId] || 0) + 1;
       });
@@ -155,7 +166,7 @@ export default function SkillTreeGraph({
     });
 
     setSkillNodes(nodes);
-  }, [skills, userSkillIds, userSkillPoints, adminMode]);
+  }, [filteredSkills, userSkillIds, userSkillPoints, adminMode]);
 
   const handleSkillClick = (skill: SkillNode, e: React.MouseEvent) => {
     // Prevent click during drag
@@ -241,10 +252,10 @@ export default function SkillTreeGraph({
   const getContentBounds = useCallback(() => {
     if (!skillNodes.length) return { minX: 0, minY: 0, maxX: 800, maxY: 400 };
 
-    const minX = Math.min(...skillNodes.map((n) => n.x)) - 30;
-    const minY = Math.min(...skillNodes.map((n) => n.y)) - 30;
-    const maxX = Math.max(...skillNodes.map((n) => n.x + 120)) + 30; // 120 is node width
-    const maxY = Math.max(...skillNodes.map((n) => n.y + 120)) + 30; // 120 is node height
+    const minX = Math.min(...skillNodes.map((n) => n.x)) - 60; // Doubled from 30
+    const minY = Math.min(...skillNodes.map((n) => n.y)) - 60; // Doubled from 30
+    const maxX = Math.max(...skillNodes.map((n) => n.x + 240)) + 60; // 240 is node width (doubled from 120)
+    const maxY = Math.max(...skillNodes.map((n) => n.y + 320)) + 60; // 320 is node height (increased from 240)
 
     return { minX, minY, maxX, maxY };
   }, [skillNodes]);
@@ -289,6 +300,22 @@ export default function SkillTreeGraph({
     fitToView();
   }, [fitToView]);
 
+  // Zoom in function
+  const zoomIn = useCallback(() => {
+    setTransform(prev => ({
+      ...prev,
+      scale: Math.min(3, prev.scale * 1.2)
+    }));
+  }, []);
+
+  // Zoom out function
+  const zoomOut = useCallback(() => {
+    setTransform(prev => ({
+      ...prev,
+      scale: Math.max(0.1, prev.scale * 0.8)
+    }));
+  }, []);
+
   // SVG dimensions
   const { maxX, maxY } = getContentBounds();
   const svgWidth = Math.max(800, maxX + 100);
@@ -302,9 +329,43 @@ export default function SkillTreeGraph({
           <Button size="sm" variant="outline" onClick={resetView}>
             Fit to View
           </Button>
+          <Button size="sm" variant="outline" onClick={zoomOut}>
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={zoomIn}>
+            <ZoomIn className="h-4 w-4" />
+          </Button>
           <div className="text-sm text-muted-foreground flex items-center">
             Drag to pan • Scroll to zoom
           </div>
+        </div>
+
+        {/* Category Filters */}
+        <div className="mb-4">
+          <div className="flex flex-wrap gap-2 mb-2">
+            <Button
+              size="sm"
+              variant={selectedCategory === null ? "default" : "outline"}
+              onClick={() => setSelectedCategory(null)}
+            >
+              All Skills
+            </Button>
+            {allEffectTypes.map((effectType) => (
+              <Button
+                key={effectType}
+                size="sm"
+                variant={selectedCategory === effectType ? "default" : "outline"}
+                onClick={() => setSelectedCategory(effectType)}
+              >
+                {effectType}
+              </Button>
+            ))}
+          </div>
+          {selectedCategory && (
+            <div className="text-sm text-muted-foreground">
+              Showing skills with {selectedCategory} effects ({filteredSkills.length} skills)
+            </div>
+          )}
         </div>
 
         <div
@@ -327,10 +388,10 @@ export default function SkillTreeGraph({
                   const prereqSkill = skillNodes.find((s) => s.id === reqId);
                   if (!prereqSkill) return null;
 
-                  const startX = prereqSkill.x + 60; // Center of 120px wide node
-                  const startY = prereqSkill.y + 60; // Center of 120px tall node
-                  const endX = skill.x + 60;
-                  const endY = skill.y + 60;
+                  const startX = prereqSkill.x + 120; // Center of 240px wide node (doubled from 60)
+                  const startY = prereqSkill.y + 120; // Center of 240px tall node (doubled from 60)
+                  const endX = skill.x + 120;
+                  const endY = skill.y + 120;
 
                   return (
                     <line
@@ -390,9 +451,9 @@ export default function SkillTreeGraph({
 
               {/* Draw skill nodes */}
               {skillNodes.map((skill) => {
-                const centerX = skill.x + 60;
-                const centerY = skill.y + 60;
-                const badgeRadius = 12; // Same size for all badges
+                const centerX = skill.x + 120; // Doubled from 60
+                const centerY = skill.y + 120; // Doubled from 60
+                const badgeRadius = 24; // Doubled from 12
 
                 // Determine skill status for styling
                 const isLocked = !skill.isOwned && !skill.hasPrereqs;
@@ -410,7 +471,7 @@ export default function SkillTreeGraph({
                     <circle
                       cx={centerX}
                       cy={centerY}
-                      r="38"
+                      r="76" // Doubled from 38
                       className={`
                         cursor-pointer transition-all duration-200
                         ${
@@ -430,16 +491,16 @@ export default function SkillTreeGraph({
                     <defs>
                       <clipPath id={`skillClip-${skill.id}`}>
                         {/* Use slightly larger radius so image meets the outer stroke */}
-                        <circle cx={centerX} cy={centerY} r="36" />
+                        <circle cx={centerX} cy={centerY} r="72" /> {/* Doubled from 36 */}
                       </clipPath>
                     </defs>
 
                     <image
                       href={skill.image}
-                      x={centerX - 40}
-                      y={centerY - 40}
-                      width="80"
-                      height="80"
+                      x={centerX - 80} // Doubled from 40
+                      y={centerY - 80} // Doubled from 40
+                      width="160" // Doubled from 80
+                      height="160" // Doubled from 80
                       clipPath={`url(#skillClip-${skill.id})`}
                       preserveAspectRatio="xMidYMid slice"
                       className={`transition-all duration-200 ${
@@ -453,32 +514,32 @@ export default function SkillTreeGraph({
 
                     {/* Tier badge */}
                     <circle
-                      cx={centerX - 30}
-                      cy={centerY - 30}
+                      cx={centerX - 60} // Doubled from 30
+                      cy={centerY - 60} // Doubled from 30
                       r={badgeRadius}
                       className="fill-slate-700 dark:fill-slate-300 stroke-card stroke-2"
                     />
                     <text
-                      x={centerX - 30}
-                      y={centerY - 25}
+                      x={centerX - 60} // Doubled from 30
+                      y={centerY - 45} // Adjusted to prevent cutoff
                       textAnchor="middle"
-                      className="fill-white dark:fill-slate-800 text-md font-bold pointer-events-none"
+                      className="fill-white dark:fill-slate-800 text-3xl font-bold pointer-events-none" // Increased from text-2xl
                     >
                       {skill.tier}
                     </text>
 
                     {/* Cost badge */}
                     <circle
-                      cx={centerX + 30}
-                      cy={centerY - 30}
+                      cx={centerX + 60} // Doubled from 30
+                      cy={centerY - 60} // Doubled from 30
                       r={badgeRadius}
                       className="fill-yellow-500 dark:fill-yellow-400 stroke-card stroke-2"
                     />
                     <text
-                      x={centerX + 30}
-                      y={centerY - 25}
+                      x={centerX + 60} // Doubled from 30
+                      y={centerY - 45} // Adjusted to prevent cutoff
                       textAnchor="middle"
-                      className="fill-white dark:fill-slate-900 text-md font-bold pointer-events-none"
+                      className="fill-white dark:fill-slate-900 text-3xl font-bold pointer-events-none" // Increased from text-2xl
                     >
                       {skill.costSkillPoints}
                     </text>
@@ -486,8 +547,8 @@ export default function SkillTreeGraph({
                     {/* Status icon */}
                     {!adminMode && skill.isOwned && (
                       <foreignObject
-                        x={centerX + 30 - badgeRadius}
-                        y={centerY + 30 - badgeRadius}
+                        x={centerX + 60 - badgeRadius} // Doubled from 30
+                        y={centerY + 60 - badgeRadius} // Doubled from 30
                         width={badgeRadius * 2}
                         height={badgeRadius * 2}
                         className="pointer-events-none"
@@ -498,8 +559,8 @@ export default function SkillTreeGraph({
 
                     {!adminMode && isLocked && (
                       <foreignObject
-                        x={centerX + 30 - badgeRadius}
-                        y={centerY + 30 - badgeRadius}
+                        x={centerX + 60 - badgeRadius} // Doubled from 30
+                        y={centerY + 60 - badgeRadius} // Doubled from 30
                         width={badgeRadius * 2}
                         height={badgeRadius * 2}
                         className="pointer-events-none"
@@ -510,8 +571,8 @@ export default function SkillTreeGraph({
 
                     {!adminMode && isUnaffordable && (
                       <foreignObject
-                        x={centerX + 30 - badgeRadius}
-                        y={centerY + 30 - badgeRadius}
+                        x={centerX + 60 - badgeRadius} // Doubled from 30
+                        y={centerY + 60 - badgeRadius} // Doubled from 30
                         width={badgeRadius * 2}
                         height={badgeRadius * 2}
                         className="pointer-events-none"
@@ -523,21 +584,19 @@ export default function SkillTreeGraph({
                     {/* Skill name (below the node) */}
                     <text
                       x={centerX}
-                      y={centerY + 55}
+                      y={centerY + 140} // Increased from 110 to give more space
                       textAnchor="middle"
-                      className="text-xs font-medium fill-foreground pointer-events-none"
+                      className="text-2xl font-medium fill-foreground pointer-events-none" // Increased from text-xl
                     >
-                      {skill.name.length > 15
-                        ? `${skill.name.substring(0, 12)}...`
-                        : skill.name}
+                      {skill.name}
                     </text>
 
                     {adminMode && (
                       <text
                         x={centerX}
-                        y={centerY + 70}
+                        y={centerY + 170} // Increased from 140 to give more space
                         textAnchor="middle"
-                        className="text-[10px] fill-muted-foreground pointer-events-none"
+                        className="text-xl fill-muted-foreground pointer-events-none" // Increased from text-lg
                       >
                         {skill.hidden ? "Hidden" : "Visible"}
                       </text>
