@@ -433,6 +433,7 @@ export const blackMarketRouter = createTRPCRouter({
             secondary: Array.isArray(parsed.secondary) ? (parsed.secondary as string[]) : []
           };
         } catch {
+          console.error(`Failed to parse rolledElements for user ${user.userId}`);
           rolledElementsData = { primary: [], secondary: [] };
         }
       } else if (user.rolledElements && typeof user.rolledElements === 'object') {
@@ -531,7 +532,7 @@ export const blackMarketRouter = createTRPCRouter({
         .set({
           primaryElement: user.primaryElement,
           secondaryElement: user.secondaryElement,
-          rolledElements: [...rolledElementsData.primary, ...rolledElementsData.secondary],
+          rolledElements: JSON.stringify(rolledElementsData) as unknown as string[],
           reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
         })
         .where(eq(userData.userId, ctx.userId));
