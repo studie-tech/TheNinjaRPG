@@ -134,12 +134,14 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
         userRank={userData.rank}
         userAnbu={userData.anbuId}
       />
-      {/* ANBU QUESTS */}
-      <QuestPicker
-        questType="anbu"
-        title="ANBU Missions"
-        subtitle="Empower the squad and help the village"
-      />
+      {/* ANBU QUESTS - Only show if user is in the squad */}
+      {inSquad && (
+        <QuestPicker
+          questType="anbu"
+          title="ANBU Missions"
+          subtitle="Empower the squad and help the village"
+        />
+      )}
     </>
   );
 }
