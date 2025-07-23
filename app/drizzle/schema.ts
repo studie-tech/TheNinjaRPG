@@ -1718,6 +1718,7 @@ export const userData = mysqlTable(
     skillPoints: int("skillPoints").default(0).notNull(),
     occupation: mysqlEnum("occupation", consts.OCCUPATIONS),
     occupationSignupAt: datetime("occupationSignupAt", { mode: "date", fsp: 3 }),
+    dailyLockedTimeSeconds: int("dailyLockedTimeSeconds").default(0).notNull(), // Total seconds challenges have been locked today
   },
   (table) => {
     return {

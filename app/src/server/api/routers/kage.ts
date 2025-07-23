@@ -30,6 +30,7 @@ import {
   KAGE_MAX_WEEKLY_PRESTIGE_SEND,
   KAGE_UNACCEPTED_CHALLENGE_COST,
   KAGE_CHALLENGE_REJECT_COST,
+  KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS,
 } from "@/drizzle/constants";
 import {
   fetchRequests,
@@ -542,6 +543,19 @@ export const kageRouter = createTRPCRouter({
         return errorResponse(
           `Please wait ${Math.floor(KAGE_CHALLENGE_OPEN_FOR_SECONDS - secondsSinceOpen)} seconds before toggling`,
         );
+      }
+
+      // Check if trying to close challenges and daily limit has been reached
+      if (!userVillage.openForChallenges) {
+        // Currently closed, trying to open - this is always allowed
+      } else {
+        // Currently open, trying to close - check daily limit
+        const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
+        if (user.dailyLockedTimeSeconds >= maxDailySeconds) {
+          return errorResponse(
+            `Daily challenge lock limit of ${KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS} hours has been reached. Challenges will be automatically unlocked at the start of the next day.`
+          );
+        }
       }
 
       // Update

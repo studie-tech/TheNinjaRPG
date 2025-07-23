@@ -30,6 +30,7 @@ import { KAGE_CHALLENGE_SECS, KAGE_CHALLENGE_MINS } from "@/drizzle/constants";
 import { KAGE_RANK_REQUIREMENT, WAR_FUNDS_COST } from "@/drizzle/constants";
 import { KAGE_PRESTIGE_COST } from "@/drizzle/constants";
 import { KAGE_MIN_DAYS_IN_VILLAGE } from "@/drizzle/constants";
+import { KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS } from "@/drizzle/constants";
 import { getSearchValidator } from "@/validators/register";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -440,6 +441,15 @@ const KageChallenge: React.FC<{
   );
   const isAtWar = activeVillageWars && activeVillageWars.length > 0;
 
+  // Calculate daily locked time information
+  const dailyLockedTimeSeconds = user.dailyLockedTimeSeconds ?? 0;
+  const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
+  const remainingSeconds = Math.max(0, maxDailySeconds - dailyLockedTimeSeconds);
+  const remainingHours = Math.floor(remainingSeconds / 3600);
+  const remainingMinutes = Math.floor((remainingSeconds % 3600) / 60);
+  const usedHours = Math.floor(dailyLockedTimeSeconds / 3600);
+  const usedMinutes = Math.floor((dailyLockedTimeSeconds % 3600) / 60);
+
   // Mutations
   const { mutate: create, isPending: isSendingChallenge } =
     api.kage.createChallenge.useMutation({
@@ -545,6 +555,26 @@ const KageChallenge: React.FC<{
               {openForChallenges ? "Accepting Challenges" : "Not Accepting Challenges"}
             </Button>
           </p>
+          {isKage && (
+            <div className="p-3 text-sm text-gray-600">
+              <p>
+                <span className="font-bold">Daily Lock Time Used: </span>
+                <span className={dailyLockedTimeSeconds >= maxDailySeconds ? "text-red-500 font-bold" : ""}>
+                  {usedHours}h {usedMinutes}m / {KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS}h
+                </span>
+              </p>
+              {dailyLockedTimeSeconds >= maxDailySeconds ? (
+                <p className="text-red-500 font-bold">
+                  Daily limit reached! Challenges will be automatically unlocked at the start of the next day.
+                </p>
+              ) : (
+                <p>
+                  <span className="font-bold">Remaining Lock Time: </span>
+                  {remainingHours}h {remainingMinutes}m
+                </p>
+              )}
+            </div>
+          )}
           {requests && requests.length > 0 && openForChallenges && (
             <UserRequestSystem
               isLoading={

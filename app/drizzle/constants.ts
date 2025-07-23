@@ -982,8 +982,10 @@ export const KAGE_WAR_DECLARE_COST = 10000; // Declare war cost
 export const KAGE_CHALLENGE_REJECT_COST = 10000; // Cost of rejecting a challenge
 export const KAGE_CHALLENGE_ACCEPT_PRESTIGE = 2000; // Kage prestige gain of accepting challenge
 export const KAGE_CHALLENGE_WIN_PRESTIGE = 5000; // Kage prestige gain of winning challenge
-export const KAGE_CHALLENGE_LOSE_PRESTIGE_PER_HOUR = 500; // Kage prestige loss of not accepting challenges
+export const KAGE_CHALLENGE_LOSE_PRESTIGE_MIN = 1500; // Minimum prestige cost per hour for closed challenges
+export const KAGE_CHALLENGE_LOSE_PRESTIGE_PERCENTAGE = 0.04; // 4% of current prestige for closed challenges (current implementation)
 export const KAGE_CHALLENGE_OPEN_FOR_SECONDS = 60 * 60; // Time in between being able to toggle challenges
+export const KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS = 12; // Maximum hours per day that challenges can be locked
 export const KAGE_UNACCEPTED_CHALLENGE_COST = 15000; // Cost of unaccepted challenge, i.e. going to Ai vs Ai
 export const WAR_FUNDS_COST = 10000; // Prestige cost of declaring war
 
