@@ -669,7 +669,7 @@ async function getRolledElements(client: DrizzleClient, userId: string, elementT
     for (const log of rolls) {
       if (log.relatedMsg) {
         const element = log.relatedMsg.replace(`${elementPrefix} `, "").trim();
-        if (element && ElementNames.includes(element as any) && !elements.includes(element)) {
+        if (element && ElementNames.includes(element as typeof ElementNames[number]) && !elements.includes(element)) {
           elements.push(element);
         }
       }

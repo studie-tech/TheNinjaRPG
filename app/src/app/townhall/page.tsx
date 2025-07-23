@@ -430,8 +430,15 @@ const KageChallenge: React.FC<{
   );
 
   // Derived
-  const activeVillageWars = activeWars?.filter((w) => w.type === "VILLAGE_WAR");
   const isKage = user.userId === user.village?.kageId;
+
+  const { data: dailyLockedTimeData } = api.kage.getDailyLockedTime.useQuery(undefined, {
+    staleTime: 30000, // Cache for 30 seconds since this is calculated from actionLog
+    enabled: isKage, // Only fetch if user is kage
+  });
+
+  // Derived
+  const activeVillageWars = activeWars?.filter((w) => w.type === "VILLAGE_WAR");
   const openForChallenges = user.village?.openForChallenges;
   const pendingRequests = requests?.filter((r) => r.status === "PENDING");
   const nPendingRequests = pendingRequests?.length ?? 0;
@@ -442,7 +449,7 @@ const KageChallenge: React.FC<{
   const isAtWar = activeVillageWars && activeVillageWars.length > 0;
 
   // Calculate daily locked time information
-  const dailyLockedTimeSeconds = user.dailyLockedTimeSeconds ?? 0;
+  const dailyLockedTimeSeconds = dailyLockedTimeData?.dailyLockedTimeSeconds ?? 0;
   const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
   const remainingSeconds = Math.max(0, maxDailySeconds - dailyLockedTimeSeconds);
   const remainingHours = Math.floor(remainingSeconds / 3600);

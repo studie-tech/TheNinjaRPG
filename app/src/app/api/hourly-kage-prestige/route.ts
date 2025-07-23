@@ -1,13 +1,62 @@
 import { NextResponse } from "next/server";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, gte, asc } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
-import { village, userData } from "@/drizzle/schema";
+import { village, userData, actionLog } from "@/drizzle/schema";
 import { updateGameSetting } from "@/libs/gamesettings";
 import { lockWithHourlyTimer, handleEndpointError } from "@/libs/gamesettings";
 import { KAGE_CHALLENGE_LOSE_PRESTIGE_MIN, KAGE_CHALLENGE_LOSE_PRESTIGE_PERCENTAGE, KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS } from "@/drizzle/constants";
 import { cookies } from "next/headers";
+import { nanoid } from "nanoid";
 
 const ENDPOINT_NAME = "hourly-kage-prestige";
+
+/**
+ * Calculates the total time challenges have been locked today for a specific user
+ * by analyzing actionLog entries for kage challenge toggles
+ */
+async function calculateDailyLockedTime(userId: string): Promise<number> {
+  // Get the start of today (UTC)
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  // Get all kage challenge toggle logs for this user today
+  const toggleLogs = await drizzleDB
+    .select({
+      relatedMsg: actionLog.relatedMsg,
+      createdAt: actionLog.createdAt,
+    })
+    .from(actionLog)
+    .where(and(
+      eq(actionLog.userId, userId),
+      eq(actionLog.tableName, "kageChallengeToggle"),
+      gte(actionLog.createdAt, startOfDay)
+    ))
+    .orderBy(asc(actionLog.createdAt));
+
+  let totalLockedTime = 0;
+  let lastCloseTime: Date | null = null;
+
+  // Process toggle logs to calculate total locked time
+  for (const log of toggleLogs) {
+    if (log.relatedMsg === "Toggle: CLOSE") {
+      // Challenge was closed - record the time
+      lastCloseTime = log.createdAt;
+    } else if (log.relatedMsg === "Toggle: OPEN" && lastCloseTime) {
+      // Challenge was opened - calculate the duration it was closed
+      const duration = Math.floor((log.createdAt.getTime() - lastCloseTime.getTime()) / 1000);
+      totalLockedTime += duration;
+      lastCloseTime = null;
+    }
+  }
+
+  // If challenges are currently closed, add time from last close until now
+  if (lastCloseTime) {
+    const currentDuration = Math.floor((now.getTime() - lastCloseTime.getTime()) / 1000);
+    totalLockedTime += currentDuration;
+  }
+
+  return totalLockedTime;
+}
 
 export async function GET() {
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
@@ -34,7 +83,6 @@ export async function GET() {
         .select({ 
           userId: userData.userId, 
           villagePrestige: userData.villagePrestige,
-          dailyLockedTimeSeconds: userData.dailyLockedTimeSeconds,
         })
         .from(userData)
         .where(and(inArray(userData.userId, kageIds), eq(userData.isAi, false)));
@@ -45,44 +93,25 @@ export async function GET() {
         const villageData = kagesWithClosedChallenges.find(v => v.kageId === kage.userId);
         if (!villageData) continue;
 
-        // Calculate how long challenges have been locked since the last toggle
-        const timeSinceLastToggle = Math.floor((now.getTime() - villageData.openForChallengesAt.getTime()) / 1000);
-        
-        // Add this time to the daily locked time
-        const newDailyLockedTime = kage.dailyLockedTimeSeconds + timeSinceLastToggle;
+        // Calculate daily locked time from actionLog
+        const dailyLockedTimeSeconds = await calculateDailyLockedTime(kage.userId);
         
         // Check if we've exceeded the daily limit
         const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
         
-        if (newDailyLockedTime >= maxDailySeconds) {
-          // Auto-unlock challenges and reset daily locked time
-          await Promise.all([
-            drizzleDB
-              .update(village)
-              .set({
-                openForChallenges: true,
-                openForChallengesAt: now,
-              })
-              .where(eq(village.id, villageData.id)),
-            drizzleDB
-              .update(userData)
-              .set({
-                dailyLockedTimeSeconds: 0,
-              })
-              .where(eq(userData.userId, kage.userId))
-          ]);
+        if (dailyLockedTimeSeconds >= maxDailySeconds) {
+          // Auto-unlock challenges
+          await drizzleDB
+            .update(village)
+            .set({
+              openForChallenges: true,
+              openForChallengesAt: now,
+            })
+            .where(eq(village.id, villageData.id));
           
           console.log(`Auto-unlocked challenges for village ${villageData.id} after kage ${kage.userId} reached daily limit`);
           continue; // Skip prestige penalty for this kage
         }
-
-        // Update daily locked time for the kage
-        await drizzleDB
-          .update(userData)
-          .set({
-            dailyLockedTimeSeconds: newDailyLockedTime,
-          })
-          .where(eq(userData.userId, kage.userId));
 
         // Apply prestige penalty
         const prestigeLoss = Math.max(

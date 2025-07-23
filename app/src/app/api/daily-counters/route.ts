@@ -32,7 +32,6 @@ export async function GET() {
       dailyMedicalMissions: 0,
       dailyTrainings: 0,
       aiCalls: 0,
-      dailyLockedTimeSeconds: 0, // Reset daily locked time for all users
     });
 
     // For kages, reduce village Prestige by KAGE_DAILY_PRESTIGE_LOSS & the 1 just added

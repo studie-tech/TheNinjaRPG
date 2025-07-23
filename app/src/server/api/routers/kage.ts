@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, or, and, ne, sql, gte, isNull } from "drizzle-orm";
+import { eq, or, and, ne, sql, gte, isNull, asc, desc } from "drizzle-orm";
 import {
   clan,
   userData,
@@ -46,7 +46,63 @@ import { fetchActiveWars } from "@/routers/war";
 
 const pusher = getServerPusher();
 
+/**
+ * Calculates the total time challenges have been locked today for a specific user
+ * by analyzing actionLog entries for kage challenge toggles
+ */
+async function calculateDailyLockedTime(client: DrizzleClient, userId: string): Promise<number> {
+  // Get the start of today (UTC)
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  // Get all kage challenge toggle logs for this user today
+  const toggleLogs = await client
+    .select({
+      relatedMsg: actionLog.relatedMsg,
+      createdAt: actionLog.createdAt,
+    })
+    .from(actionLog)
+    .where(and(
+      eq(actionLog.userId, userId),
+      eq(actionLog.tableName, "kageChallengeToggle"),
+      gte(actionLog.createdAt, startOfDay)
+    ))
+    .orderBy(asc(actionLog.createdAt));
+
+  let totalLockedTime = 0;
+  let lastCloseTime: Date | null = null;
+
+  // Process toggle logs to calculate total locked time
+  for (const log of toggleLogs) {
+    if (log.relatedMsg === "Toggle: CLOSE") {
+      // Challenge was closed - record the time
+      lastCloseTime = log.createdAt;
+    } else if (log.relatedMsg === "Toggle: OPEN" && lastCloseTime) {
+      // Challenge was opened - calculate the duration it was closed
+      const duration = Math.floor((log.createdAt.getTime() - lastCloseTime.getTime()) / 1000);
+      totalLockedTime += duration;
+      lastCloseTime = null;
+    }
+  }
+
+  // If challenges are currently closed, add time from last close until now
+  if (lastCloseTime) {
+    const currentDuration = Math.floor((now.getTime() - lastCloseTime.getTime()) / 1000);
+    totalLockedTime += currentDuration;
+  }
+
+  return totalLockedTime;
+}
+
 export const kageRouter = createTRPCRouter({
+  /**
+   * Get the daily locked time for the current user
+   */
+  getDailyLockedTime: protectedProcedure.query(async ({ ctx }) => {
+    const dailyLockedTimeSeconds = await calculateDailyLockedTime(ctx.drizzle, ctx.userId);
+    return { dailyLockedTimeSeconds };
+  }),
+
   /**
    * Kage challenge & request challenge system
    */
@@ -538,11 +594,27 @@ export const kageRouter = createTRPCRouter({
       if (nPendingRequests > 0) {
         return errorResponse("Cannot toggle while there are pending challenges");
       }
-      const secondsSinceOpen = secondsPassed(userVillage.openForChallengesAt);
-      if (secondsSinceOpen < KAGE_CHALLENGE_OPEN_FOR_SECONDS) {
-        return errorResponse(
-          `Please wait ${Math.floor(KAGE_CHALLENGE_OPEN_FOR_SECONDS - secondsSinceOpen)} seconds before toggling`,
-        );
+
+      // Check cooldown from last toggle (using actionLog)
+      const lastToggle = await ctx.drizzle
+        .select({
+          createdAt: actionLog.createdAt,
+        })
+        .from(actionLog)
+        .where(and(
+          eq(actionLog.userId, ctx.userId),
+          eq(actionLog.tableName, "kageChallengeToggle")
+        ))
+        .orderBy(desc(actionLog.createdAt))
+        .limit(1);
+
+      if (lastToggle.length > 0) {
+        const secondsSinceLastToggle = secondsPassed(lastToggle[0]!.createdAt);
+        if (secondsSinceLastToggle < KAGE_CHALLENGE_OPEN_FOR_SECONDS) {
+          return errorResponse(
+            `Please wait ${Math.floor(KAGE_CHALLENGE_OPEN_FOR_SECONDS - secondsSinceLastToggle)} seconds before toggling`,
+          );
+        }
       }
 
       // Check if trying to close challenges and daily limit has been reached
@@ -550,22 +622,33 @@ export const kageRouter = createTRPCRouter({
         // Currently closed, trying to open - this is always allowed
       } else {
         // Currently open, trying to close - check daily limit
+        const dailyLockedTimeSeconds = await calculateDailyLockedTime(ctx.drizzle, ctx.userId);
         const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
-        if (user.dailyLockedTimeSeconds >= maxDailySeconds) {
+        if (dailyLockedTimeSeconds >= maxDailySeconds) {
           return errorResponse(
             `Daily challenge lock limit of ${KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS} hours has been reached. Challenges will be automatically unlocked at the start of the next day.`
           );
         }
       }
 
-      // Update
-      await ctx.drizzle
-        .update(village)
-        .set({
-          openForChallenges: !userVillage.openForChallenges,
-          openForChallengesAt: new Date(),
-        })
-        .where(eq(village.id, input.villageId));
+      // Update village and log the toggle
+      await Promise.all([
+        ctx.drizzle
+          .update(village)
+          .set({
+            openForChallenges: !userVillage.openForChallenges,
+            openForChallengesAt: new Date(),
+          })
+          .where(eq(village.id, input.villageId)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "kageChallengeToggle",
+          changes: [`Challenges ${!userVillage.openForChallenges ? "opened" : "closed"}`],
+          relatedId: input.villageId,
+          relatedMsg: `Toggle: ${userVillage.openForChallenges ? "CLOSE" : "OPEN"}`,
+        }),
+      ]);
 
       return {
         success: true,
