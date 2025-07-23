@@ -295,6 +295,36 @@ export const questsRouter = createTRPCRouter({
       let results: Quest[] = [];
       let usedMedicalRank: string | null = null;
       if (input.type === "medical") {
+        // Fetch all medical quests at once (no queries in loop)
+        const allMedicalResults = await ctx.drizzle
+          .select({
+            ...getTableColumns(quest),
+            previousAttempts: questHistory.previousAttempts,
+            completed: questHistory.completed,
+          })
+          .from(quest)
+          .leftJoin(
+            questHistory,
+            and(
+              eq(quest.id, questHistory.questId),
+              eq(questHistory.userId, ctx.userId),
+            ),
+          )
+          .where(
+            and(
+              eq(quest.questType, input.type),
+              eq(quest.questRank, input.rank),
+              lte(quest.requiredLevel, input.userLevel),
+              gte(quest.maxLevel, input.userLevel),
+              or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
+              or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
+              or(
+                isNull(quest.requiredVillage),
+                eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
+              ),
+            ),
+          );
+
         const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
         let foundMissions = false;
         
@@ -302,38 +332,11 @@ export const questsRouter = createTRPCRouter({
         for (let i = userMedicalRankIndex; i >= 0; i--) {
           const currentRank = MEDNIN_RANKS[i];
           if (!currentRank) continue;
-          const rankResults = await ctx.drizzle
-            .select({
-              ...getTableColumns(quest),
-              previousAttempts: questHistory.previousAttempts,
-              completed: questHistory.completed,
-            })
-            .from(quest)
-            .leftJoin(
-              questHistory,
-              and(
-                eq(quest.id, questHistory.questId),
-                eq(questHistory.userId, ctx.userId),
-              ),
-            )
-            .where(
-              and(
-                eq(quest.questType, input.type),
-                eq(quest.questRank, input.rank),
-                lte(quest.requiredLevel, input.userLevel),
-                gte(quest.maxLevel, input.userLevel),
-                or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
-                or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
-                or(
-                  isNull(quest.requiredVillage),
-                  eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
-                ),
-                or(
-                  isNull(quest.medicalRank),
-                  eq(quest.medicalRank, currentRank)
-                ),
-              ),
-            );
+          
+          // Filter results for this specific medical rank
+          const rankResults = allMedicalResults.filter((e) => 
+            !e.medicalRank || e.medicalRank === currentRank
+          );
           
           // Filter for available quests
           const availableMissions = rankResults.filter((e) => isAvailableUserQuests(e, user).check);
