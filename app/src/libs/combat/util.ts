@@ -706,15 +706,22 @@ export const calcBattleResult = (
             deltaPrestige -= isAlly || sameVillage ? FRIENDLY_PRESTIGE_COST : 0;
           }
 
-          // Base prestige for PvP kill
-          deltaPrestige += user.anbuId ? PVP_KILL_PRESTIGE_REWARD_ANBU : PVP_KILL_PRESTIGE_REWARD;
+          // Base prestige for PvP kill (only for enemies)
+          if (user.isOutlaw || !target.relations.some(r => 
+            (r.status === "ALLY" && 
+             ((r.villageIdA === vilId && r.villageIdB === target.villageId) ||
+              (r.villageIdA === target.villageId && r.villageIdB === vilId))) ||
+            target.villageId === vilId
+          )) {
+            deltaPrestige += user.anbuId ? PVP_KILL_PRESTIGE_REWARD_ANBU : PVP_KILL_PRESTIGE_REWARD;
+            
+            // Base village tokens for PvP kill (only for enemies)
+            deltaTokens += user.anbuId ? PVP_KILL_TOKEN_REWARD_ANBU : PVP_KILL_TOKEN_REWARD;
 
-          // Base village tokens for PvP kill
-          deltaTokens += user.anbuId ? PVP_KILL_TOKEN_REWARD_ANBU : PVP_KILL_TOKEN_REWARD;
-
-          // ANBU points for PvP kill (only if target is not more than 10 levels under)
-          if (user.anbuId && (user.level - target.level) <= 10) {
-            deltaAnbuPoints += PVP_KILL_ANBU_POINTS_REWARD;
+            // ANBU points for PvP kill (only if target is not more than 10 levels under)
+            if (user.anbuId && (user.level - target.level) <= 10) {
+              deltaAnbuPoints += PVP_KILL_ANBU_POINTS_REWARD;
+            }
           }
 
           // Additional village tokens for killing enemies
