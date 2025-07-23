@@ -732,7 +732,7 @@ export const GATHERING_ITEM_DROP_CHANCES: Record<
     COMMON: 20,
     RARE: 15,
     EPIC: 5,
-    LEGENDARY: 11,
+    LEGENDARY: 1,
   },
   "B RANK": {
     COMMON: 25,

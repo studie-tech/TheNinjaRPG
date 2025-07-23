@@ -419,42 +419,22 @@ export const blackMarketRouter = createTRPCRouter({
       const rankId = UserRanks.findIndex((r) => r === user.rank);
       const changes: string[] = [];
       
-      // Parse rolled elements - handle both old format (array) and new format (object)
-      let rolledElementsData: { primary: string[], secondary: string[] };
-      if (Array.isArray(user.rolledElements)) {
-        // Old format - convert to new format
-        rolledElementsData = { primary: [], secondary: [] };
-      } else if (user.rolledElements && typeof user.rolledElements === 'string') {
-        // New format - parse the JSON string back to object
-        try {
-          const parsed = JSON.parse(user.rolledElements) as { primary?: unknown; secondary?: unknown };
-          rolledElementsData = {
-            primary: Array.isArray(parsed.primary) ? (parsed.primary as string[]) : [],
-            secondary: Array.isArray(parsed.secondary) ? (parsed.secondary as string[]) : []
-          };
-        } catch {
-          console.error(`Failed to parse rolledElements for user ${user.userId}`);
-          rolledElementsData = { primary: [], secondary: [] };
-        }
-      } else if (user.rolledElements && typeof user.rolledElements === 'object') {
-        // Direct object format
-        const rolledObj = user.rolledElements as { primary?: string[], secondary?: string[] };
-        rolledElementsData = {
-          primary: Array.isArray(rolledObj.primary) ? rolledObj.primary : [],
-          secondary: Array.isArray(rolledObj.secondary) ? rolledObj.secondary : []
-        };
-      } else {
-        // No data
-        rolledElementsData = { primary: [], secondary: [] };
-      }
+      // Get rolled elements from actionLog
+      const rolledElementsData = await getRolledElements(ctx.drizzle, ctx.userId, input.elementType);
       
-      // Ensure current elements are in their respective rolled arrays
+      // Ensure current elements are in actionLog if not already tracked
       if (user.primaryElement && !rolledElementsData.primary.includes(user.primaryElement)) {
+        await addElementRoll(ctx.drizzle, ctx.userId, "primary", user.primaryElement);
         rolledElementsData.primary.push(user.primaryElement);
       }
       if (user.secondaryElement && !rolledElementsData.secondary.includes(user.secondaryElement)) {
+        await addElementRoll(ctx.drizzle, ctx.userId, "secondary", user.secondaryElement);
         rolledElementsData.secondary.push(user.secondaryElement);
       }
+      
+      // Track whether a reset occurred
+      let primaryReset = false;
+      let secondaryReset = false;
       
       if (input.elementType === "primary") {
         if (rankId >= 1) {
@@ -474,20 +454,33 @@ export const blackMarketRouter = createTRPCRouter({
           // If no elements available, reset the primary rolled elements tracking
           if (available.length === 0) {
             rolledElementsData.primary = [];
+            primaryReset = true;
             
+            // Add a reset marker to actionLog
+            await ctx.drizzle.insert(actionLog).values({
+              id: nanoid(),
+              userId: ctx.userId,
+              tableName: "elementRoll",
+              changes: ["Primary element tracking reset"],
+              relatedMsg: "RESET: Primary",
+            });
+            
+            // When resetting, only exclude the secondary element, not the current primary
+            // This allows the current primary to be rolled again after reset
             const resetAvailable = user.secondaryElement 
-              ? BasicElementName.filter((e) => e !== user.secondaryElement && e !== user.primaryElement)
-              : BasicElementName.filter((e) => e !== user.primaryElement);
+              ? BasicElementName.filter((e) => e !== user.secondaryElement)
+              : BasicElementName;
             user.primaryElement = getRandomElement(resetAvailable) ?? null;
             // Don't add the new element to tracking after reset - let it be available for future rolls
+            changes.push("Primary element rerolled (reset)");
           } else {
             user.primaryElement = getRandomElement(available) ?? null;
             // Add the new element to primary rolled elements tracking
             if (user.primaryElement) {
               rolledElementsData.primary.push(user.primaryElement);
             }
+            changes.push("Primary element rerolled");
           }
-          changes.push("Primary element rerolled");
         }
       }
       
@@ -509,47 +502,54 @@ export const blackMarketRouter = createTRPCRouter({
           // If no elements available, reset the secondary rolled elements tracking
           if (available.length === 0) {
             rolledElementsData.secondary = [];
+            secondaryReset = true;
             
+            // Add a reset marker to actionLog
+            await ctx.drizzle.insert(actionLog).values({
+              id: nanoid(),
+              userId: ctx.userId,
+              tableName: "elementRoll",
+              changes: ["Secondary element tracking reset"],
+              relatedMsg: "RESET: Secondary",
+            });
+            
+            // When resetting, only exclude the primary element, not the current secondary
+            // This allows the current secondary to be rolled again after reset
             const resetAvailable = user.primaryElement 
-              ? BasicElementName.filter((e) => e !== user.primaryElement && e !== user.secondaryElement)
-              : BasicElementName.filter((e) => e !== user.secondaryElement);
+              ? BasicElementName.filter((e) => e !== user.primaryElement)
+              : BasicElementName;
             user.secondaryElement = getRandomElement(resetAvailable) ?? null;
             // Don't add the new element to tracking after reset - let it be available for future rolls
+            changes.push("Secondary element rerolled (reset)");
           } else {
             user.secondaryElement = getRandomElement(available) ?? null;
             // Add the new element to secondary rolled elements tracking
             if (user.secondaryElement) {
               rolledElementsData.secondary.push(user.secondaryElement);
             }
+            changes.push("Secondary element rerolled");
           }
-          changes.push("Secondary element rerolled");
         }
       }
       
       // Mutate
-      const result = await ctx.drizzle
+      await ctx.drizzle
         .update(userData)
         .set({
           primaryElement: user.primaryElement,
           secondaryElement: user.secondaryElement,
-          rolledElements: JSON.stringify(rolledElementsData) as unknown as string[],
           reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
         })
         .where(eq(userData.userId, ctx.userId));
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
-      } else {
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "user",
-          changes: changes,
-          relatedId: ctx.userId,
-          relatedMsg: `Update: ${changes.join(", ")}`,
-          relatedImage: user.avatarLight,
-        });
-        return { success: true, message: changes.join(", ") };
+
+      // Add element roll to actionLog if a new element was rolled
+      if (input.elementType === "primary" && user.primaryElement && !primaryReset) {
+        await addElementRoll(ctx.drizzle, ctx.userId, "primary", user.primaryElement);
+      } else if (input.elementType === "secondary" && user.secondaryElement && !secondaryReset) {
+        await addElementRoll(ctx.drizzle, ctx.userId, "secondary", user.secondaryElement);
       }
+
+      return { success: true, message: `Element rerolled successfully. ${changes.join(", ")}` };
     }),
   // Update stats
   updateStats: protectedProcedure
@@ -629,3 +629,82 @@ export const fetchActiveUserOffers = async (client: DrizzleClient, userId: strin
     where: and(eq(ryoTrade.creatorUserId, userId), isNull(ryoTrade.purchaserUserId)),
   });
 };
+
+// Helper function to get rolled elements from actionLog
+async function getRolledElements(client: DrizzleClient, userId: string, elementType?: "primary" | "secondary"): Promise<{ primary: string[], secondary: string[] }> {
+  // Helper function to get rolled elements for a specific type
+  async function getRolledElementsForType(type: "primary" | "secondary"): Promise<string[]> {
+    const resetLog = await client
+      .select({
+        relatedMsg: actionLog.relatedMsg,
+        createdAt: actionLog.createdAt,
+      })
+      .from(actionLog)
+      .where(and(
+        eq(actionLog.userId, userId),
+        eq(actionLog.tableName, "elementRoll"),
+        eq(actionLog.relatedMsg, `RESET: ${type === "primary" ? "Primary" : "Secondary"}`)
+      ))
+      .orderBy(desc(actionLog.createdAt))
+      .limit(1);
+
+    const lastReset = resetLog[0]?.createdAt.getTime() || 0;
+    const elementPrefix = `${type === "primary" ? "Primary" : "Secondary"}:`;
+
+    const rolls = await client
+      .select({
+        relatedMsg: actionLog.relatedMsg,
+        createdAt: actionLog.createdAt,
+      })
+      .from(actionLog)
+      .where(and(
+        eq(actionLog.userId, userId),
+        eq(actionLog.tableName, "elementRoll"),
+        sql`${actionLog.relatedMsg} LIKE ${elementPrefix + '%'}`,
+        sql`${actionLog.createdAt} > FROM_UNIXTIME(${Math.floor(lastReset / 1000)})`
+      ))
+      .orderBy(asc(actionLog.createdAt));
+
+    const elements: string[] = [];
+    for (const log of rolls) {
+      if (log.relatedMsg) {
+        const element = log.relatedMsg.replace(`${elementPrefix} `, "").trim();
+        if (element && ElementNames.includes(element as any) && !elements.includes(element)) {
+          elements.push(element);
+        }
+      }
+    }
+
+    return elements;
+  }
+
+  // If elementType is specified, only pull data for that type
+  if (elementType === "primary") {
+    const primary = await getRolledElementsForType("primary");
+    return { primary, secondary: [] };
+  }
+
+  if (elementType === "secondary") {
+    const secondary = await getRolledElementsForType("secondary");
+    return { primary: [], secondary };
+  }
+
+  // If no elementType specified, pull both (for backward compatibility)
+  const [primary, secondary] = await Promise.all([
+    getRolledElementsForType("primary"),
+    getRolledElementsForType("secondary")
+  ]);
+
+  return { primary, secondary };
+}
+
+// Helper function to add a new element roll to actionLog
+async function addElementRoll(client: DrizzleClient, userId: string, elementType: "primary" | "secondary", element: string) {
+  await client.insert(actionLog).values({
+    id: nanoid(),
+    userId: userId,
+    tableName: "elementRoll",
+    changes: [`${elementType} element rolled`],
+    relatedMsg: `${elementType === "primary" ? "Primary" : "Secondary"}: ${element}`,
+  });
+}
