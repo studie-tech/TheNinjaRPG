@@ -1,62 +1,16 @@
 import { NextResponse } from "next/server";
-import { eq, and, sql, inArray, gte, asc } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
-import { village, userData, actionLog } from "@/drizzle/schema";
+import { village, userData } from "@/drizzle/schema";
 import { updateGameSetting } from "@/libs/gamesettings";
 import { lockWithHourlyTimer, handleEndpointError } from "@/libs/gamesettings";
 import { KAGE_CHALLENGE_LOSE_PRESTIGE_MIN, KAGE_CHALLENGE_LOSE_PRESTIGE_PERCENTAGE, KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS } from "@/drizzle/constants";
 import { cookies } from "next/headers";
-import { nanoid } from "nanoid";
+import { calculateDailyLockedTime } from "@/utils/kage";
 
 const ENDPOINT_NAME = "hourly-kage-prestige";
 
-/**
- * Calculates the total time challenges have been locked today for a specific user
- * by analyzing actionLog entries for kage challenge toggles
- */
-async function calculateDailyLockedTime(userId: string): Promise<number> {
-  // Get the start of today (UTC)
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
-  // Get all kage challenge toggle logs for this user today
-  const toggleLogs = await drizzleDB
-    .select({
-      relatedMsg: actionLog.relatedMsg,
-      createdAt: actionLog.createdAt,
-    })
-    .from(actionLog)
-    .where(and(
-      eq(actionLog.userId, userId),
-      eq(actionLog.tableName, "kageChallengeToggle"),
-      gte(actionLog.createdAt, startOfDay)
-    ))
-    .orderBy(asc(actionLog.createdAt));
 
-  let totalLockedTime = 0;
-  let lastCloseTime: Date | null = null;
-
-  // Process toggle logs to calculate total locked time
-  for (const log of toggleLogs) {
-    if (log.relatedMsg === "Toggle: CLOSE") {
-      // Challenge was closed - record the time
-      lastCloseTime = log.createdAt;
-    } else if (log.relatedMsg === "Toggle: OPEN" && lastCloseTime) {
-      // Challenge was opened - calculate the duration it was closed
-      const duration = Math.floor((log.createdAt.getTime() - lastCloseTime.getTime()) / 1000);
-      totalLockedTime += duration;
-      lastCloseTime = null;
-    }
-  }
-
-  // If challenges are currently closed, add time from last close until now
-  if (lastCloseTime) {
-    const currentDuration = Math.floor((now.getTime() - lastCloseTime.getTime()) / 1000);
-    totalLockedTime += currentDuration;
-  }
-
-  return totalLockedTime;
-}
 
 export async function GET() {
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
@@ -94,7 +48,7 @@ export async function GET() {
         if (!villageData) continue;
 
         // Calculate daily locked time from actionLog
-        const dailyLockedTimeSeconds = await calculateDailyLockedTime(kage.userId);
+        const dailyLockedTimeSeconds = await calculateDailyLockedTime(drizzleDB, kage.userId);
         
         // Check if we've exceeded the daily limit
         const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;

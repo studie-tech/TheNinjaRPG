@@ -15,7 +15,7 @@ import { errorResponse, baseServerResponse } from "@/server/api/trpc";
 import { initiateBattle } from "@/routers/combat";
 import { fetchVillage } from "@/routers/village";
 import { fetchUser, fetchUpdatedUser, updateNindo } from "@/routers/profile";
-import { canChallengeKage, canBeElder } from "@/utils/kage";
+import { canChallengeKage, canBeElder, calculateDailyLockedTime } from "@/utils/kage";
 import { calcStructureUpgrade } from "@/utils/village";
 import {
   KAGE_MAX_DAILIES,
@@ -46,53 +46,7 @@ import { fetchActiveWars } from "@/routers/war";
 
 const pusher = getServerPusher();
 
-/**
- * Calculates the total time challenges have been locked today for a specific user
- * by analyzing actionLog entries for kage challenge toggles
- */
-async function calculateDailyLockedTime(client: DrizzleClient, userId: string): Promise<number> {
-  // Get the start of today (UTC)
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
-  // Get all kage challenge toggle logs for this user today
-  const toggleLogs = await client
-    .select({
-      relatedMsg: actionLog.relatedMsg,
-      createdAt: actionLog.createdAt,
-    })
-    .from(actionLog)
-    .where(and(
-      eq(actionLog.userId, userId),
-      eq(actionLog.tableName, "kageChallengeToggle"),
-      gte(actionLog.createdAt, startOfDay)
-    ))
-    .orderBy(asc(actionLog.createdAt));
 
-  let totalLockedTime = 0;
-  let lastCloseTime: Date | null = null;
-
-  // Process toggle logs to calculate total locked time
-  for (const log of toggleLogs) {
-    if (log.relatedMsg === "Toggle: CLOSE") {
-      // Challenge was closed - record the time
-      lastCloseTime = log.createdAt;
-    } else if (log.relatedMsg === "Toggle: OPEN" && lastCloseTime) {
-      // Challenge was opened - calculate the duration it was closed
-      const duration = Math.floor((log.createdAt.getTime() - lastCloseTime.getTime()) / 1000);
-      totalLockedTime += duration;
-      lastCloseTime = null;
-    }
-  }
-
-  // If challenges are currently closed, add time from last close until now
-  if (lastCloseTime) {
-    const currentDuration = Math.floor((now.getTime() - lastCloseTime.getTime()) / 1000);
-    totalLockedTime += currentDuration;
-  }
-
-  return totalLockedTime;
-}
 
 export const kageRouter = createTRPCRouter({
   /**
