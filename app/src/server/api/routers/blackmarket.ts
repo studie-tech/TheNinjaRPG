@@ -432,114 +432,107 @@ export const blackMarketRouter = createTRPCRouter({
         rolledElementsData.secondary.push(user.secondaryElement);
       }
       
+      // Helper function to filter valid rolled elements
+      const filterValidRolledElements = (elements: string[]): typeof ElementNames[number][] => {
+        return elements.filter(
+          (e): e is typeof ElementNames[number] => ElementNames.includes(e as typeof ElementNames[number])
+        );
+      };
+      
+      // Extract common reroll logic
+      const rerollElementType = async (
+        elementType: "primary" | "secondary",
+        currentElement: string | null,
+        oppositeElement: string | null,
+        rolledElements: string[],
+        rankRequirement: boolean = true
+      ) => {
+        if (!rankRequirement) return { element: currentElement as typeof ElementNames[number] | null, reset: false, changes: [] };
+        
+        const excludedElements = oppositeElement ? [oppositeElement] : [];
+        const validRolled = filterValidRolledElements(rolledElements);
+        excludedElements.push(...validRolled);
+        
+        const available = BasicElementName.filter((e) => !excludedElements.includes(e));
+        
+        if (available.length === 0) {
+          // Reset logic
+          await ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "elementRoll",
+            changes: [`${elementType} element tracking reset`],
+            relatedMsg: `RESET: ${elementType === "primary" ? "Primary" : "Secondary"}`,
+          });
+          
+          const resetAvailable = oppositeElement 
+            ? BasicElementName.filter((e) => e !== oppositeElement)
+            : BasicElementName;
+          const newElement = getRandomElement(resetAvailable) ?? null;
+          return { element: newElement as typeof ElementNames[number] | null, reset: true, changes: [`${elementType} element rerolled (reset)`] };
+        } else {
+          const newElement = getRandomElement(available) ?? null;
+          return { element: newElement as typeof ElementNames[number] | null, reset: false, changes: [`${elementType} element rerolled`] };
+        }
+      };
+      
       // Track whether a reset occurred
       let primaryReset = false;
       let secondaryReset = false;
       
       if (input.elementType === "primary") {
         if (rankId >= 1) {
-          // For primary reroll, exclude secondary element and previously rolled primary elements
-          const excludedElements: typeof ElementNames[number][] = [];
-          if (user.secondaryElement) {
-            excludedElements.push(user.secondaryElement);
-          }
-          // Filter and type-cast primary rolled elements
-          const validPrimaryRolled = rolledElementsData.primary.filter(
-            (e): e is typeof ElementNames[number] => ElementNames.includes(e as typeof ElementNames[number])
+          const result = await rerollElementType(
+            "primary",
+            user.primaryElement,
+            user.secondaryElement,
+            rolledElementsData.primary,
+            true
           );
-          excludedElements.push(...validPrimaryRolled);
+          user.primaryElement = result.element;
+          primaryReset = result.reset;
+          changes.push(...result.changes);
           
-          const available = BasicElementName.filter((e) => !excludedElements.includes(e));
-          
-          // If no elements available, reset the primary rolled elements tracking
-          if (available.length === 0) {
-            rolledElementsData.primary = [];
-            primaryReset = true;
-            
-            // Add a reset marker to actionLog
-            await ctx.drizzle.insert(actionLog).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              tableName: "elementRoll",
-              changes: ["Primary element tracking reset"],
-              relatedMsg: "RESET: Primary",
-            });
-            
-            // When resetting, only exclude the secondary element, not the current primary
-            // This allows the current primary to be rolled again after reset
-            const resetAvailable = user.secondaryElement 
-              ? BasicElementName.filter((e) => e !== user.secondaryElement)
-              : BasicElementName;
-            user.primaryElement = getRandomElement(resetAvailable) ?? null;
-            // Don't add the new element to tracking after reset - let it be available for future rolls
-            changes.push("Primary element rerolled (reset)");
-          } else {
-            user.primaryElement = getRandomElement(available) ?? null;
-            // Add the new element to primary rolled elements tracking
-            if (user.primaryElement) {
-              rolledElementsData.primary.push(user.primaryElement);
-            }
-            changes.push("Primary element rerolled");
+          // Add the new element to tracking if not a reset
+          if (user.primaryElement && !primaryReset) {
+            rolledElementsData.primary.push(user.primaryElement);
           }
         }
       }
       
       if (input.elementType === "secondary") {
         if (user.secondaryElement) {
-          // For secondary reroll, exclude primary element and previously rolled secondary elements
-          const excludedElements: typeof ElementNames[number][] = [];
-          if (user.primaryElement) {
-            excludedElements.push(user.primaryElement);
-          }
-          // Filter and type-cast secondary rolled elements
-          const validSecondaryRolled = rolledElementsData.secondary.filter(
-            (e): e is typeof ElementNames[number] => ElementNames.includes(e as typeof ElementNames[number])
+          const result = await rerollElementType(
+            "secondary",
+            user.secondaryElement,
+            user.primaryElement,
+            rolledElementsData.secondary,
+            true
           );
-          excludedElements.push(...validSecondaryRolled);
+          user.secondaryElement = result.element;
+          secondaryReset = result.reset;
+          changes.push(...result.changes);
           
-          const available = BasicElementName.filter((e) => !excludedElements.includes(e));
-          
-          // If no elements available, reset the secondary rolled elements tracking
-          if (available.length === 0) {
-            rolledElementsData.secondary = [];
-            secondaryReset = true;
-            
-            // Add a reset marker to actionLog
-            await ctx.drizzle.insert(actionLog).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              tableName: "elementRoll",
-              changes: ["Secondary element tracking reset"],
-              relatedMsg: "RESET: Secondary",
-            });
-            
-            // When resetting, only exclude the primary element, not the current secondary
-            // This allows the current secondary to be rolled again after reset
-            const resetAvailable = user.primaryElement 
-              ? BasicElementName.filter((e) => e !== user.primaryElement)
-              : BasicElementName;
-            user.secondaryElement = getRandomElement(resetAvailable) ?? null;
-            // Don't add the new element to tracking after reset - let it be available for future rolls
-            changes.push("Secondary element rerolled (reset)");
-          } else {
-            user.secondaryElement = getRandomElement(available) ?? null;
-            // Add the new element to secondary rolled elements tracking
-            if (user.secondaryElement) {
-              rolledElementsData.secondary.push(user.secondaryElement);
-            }
-            changes.push("Secondary element rerolled");
+          // Add the new element to tracking if not a reset
+          if (user.secondaryElement && !secondaryReset) {
+            rolledElementsData.secondary.push(user.secondaryElement);
           }
         }
       }
       
-      // Mutate
+      // Mutate - only update the changed element
+      const updateData: Record<string, unknown> = {
+        reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
+      };
+      if (input.elementType === "primary") {
+        updateData.primaryElement = user.primaryElement;
+      } else {
+        updateData.secondaryElement = user.secondaryElement;
+      }
+
       await ctx.drizzle
         .update(userData)
-        .set({
-          primaryElement: user.primaryElement,
-          secondaryElement: user.secondaryElement,
-          reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
-        })
+        .set(updateData)
         .where(eq(userData.userId, ctx.userId));
 
       // Add element roll to actionLog if a new element was rolled
