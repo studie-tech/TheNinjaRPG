@@ -445,7 +445,7 @@ export const blackMarketRouter = createTRPCRouter({
         currentElement: string | null,
         oppositeElement: string | null,
         rolledElements: string[],
-        rankRequirement: boolean = true
+        rankRequirement = true
       ) => {
         if (!rankRequirement) return { element: currentElement as typeof ElementNames[number] | null, reset: false, changes: [] };
         

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, or, and, ne, sql, gte, isNull, asc, desc } from "drizzle-orm";
+import { eq, or, and, ne, sql, gte, isNull, desc } from "drizzle-orm";
 import {
   clan,
   userData,
