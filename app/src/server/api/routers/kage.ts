@@ -390,8 +390,8 @@ export const kageRouter = createTRPCRouter({
         userId: ctx.userId,
       });
       const village = user?.village;
-      const isHideoutOrTown = ["HIDEOUT", "TOWN"].includes(village?.type ?? "");
-      const lockout = isHideoutOrTown ? KAGE_DELAY_SECS : 0;
+      // Apply 24-hour lockout to all kages (villages, hideouts, and towns)
+      const lockout = KAGE_DELAY_SECS;
       // Guards
       if (!user) return errorResponse("User not found");
       if (!village) return errorResponse("Village not found");
@@ -399,7 +399,7 @@ export const kageRouter = createTRPCRouter({
       if (user.isSilenced) return errorResponse("User is silenced");
       if (village.kageId !== ctx.userId) return errorResponse("Not kage");
       if (secondsFromDate(lockout, village.leaderUpdatedAt) > new Date()) {
-        return errorResponse("Must have been kage for 24 hours");
+        return errorResponse("Must have been kage for 5 days");
       }
       // Update
       return updateNindo(ctx.drizzle, village.id, input.content, "kageOrder");

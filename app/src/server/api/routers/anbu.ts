@@ -373,6 +373,13 @@ export const anbuRouter = createTRPCRouter({
       if (!member) return errorResponse("Member not found");
       if (squad.villageId !== user.villageId) return errorResponse("Wrong village");
       if (!isLeader && !isElder && !isKage) return errorResponse("Not allowed");
+      
+      // Prevent kicking the last member - must disband squad instead
+      const nMembers = squad?.members.length || 0;
+      if (nMembers <= 1) {
+        return errorResponse("Cannot kick the last member. Use disband squad instead.");
+      }
+      
       // Mutate
       await removeFromSquad(ctx.drizzle, squad, member.userId);
       // Create
@@ -662,7 +669,6 @@ const removeFromSquad = async (
   userId: string,
 ) => {
   // Derived
-  const nMembers = squad?.members.length || 0;
   const otherUser = squad?.members
     .filter((m) => hasRequiredRank(m.rank, ANBU_LEADER_RANK_REQUIREMENT))
     .find((m) => m.userId !== userId);
@@ -673,15 +679,6 @@ const removeFromSquad = async (
       .update(anbuSquad)
       .set({ leaderId: otherUser?.userId ?? null })
       .where(eq(anbuSquad.id, squad.id)),
-    ...(nMembers <= 1
-      ? [
-          client.delete(anbuSquad).where(eq(anbuSquad.id, squad.id)),
-          client
-            .update(userData)
-            .set({ anbuId: null })
-            .where(eq(userData.anbuId, squad.id)),
-        ]
-      : []),
   ]);
 };
 
