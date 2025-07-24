@@ -451,9 +451,6 @@ const KageChallenge: React.FC<{
   // Calculate daily locked time information
   const dailyLockedTimeSeconds = dailyLockedTimeData?.dailyLockedTimeSeconds ?? 0;
   const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
-  const remainingSeconds = Math.max(0, maxDailySeconds - dailyLockedTimeSeconds);
-  const remainingHours = Math.floor(remainingSeconds / 3600);
-  const remainingMinutes = Math.floor((remainingSeconds % 3600) / 60);
   const usedHours = Math.floor(dailyLockedTimeSeconds / 3600);
   const usedMinutes = Math.floor((dailyLockedTimeSeconds % 3600) / 60);
 
@@ -577,7 +574,10 @@ const KageChallenge: React.FC<{
               ) : (
                 <p>
                   <span className="font-bold">Remaining Lock Time: </span>
-                  {remainingHours}h {remainingMinutes}m
+                  <Countdown 
+                    targetDate={new Date(new Date().setHours(24, 0, 0, 0))} 
+                    className="font-mono"
+                  />
                 </p>
               )}
             </div>
