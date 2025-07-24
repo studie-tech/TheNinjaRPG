@@ -461,47 +461,50 @@ export const bountyRouter = createTRPCRouter({
     .input(z.object({ bountyId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const [curBounty, user] = await Promise.all([
+      // Query - fetch bounty with hunters and user in parallel
+      const [curBountyWithHunters, user] = await Promise.all([
         ctx.drizzle.query.bounty.findFirst({
           where: eq(bounty.id, input.bountyId),
+          with: {
+            hunters: {
+              with: {
+                hunter: {
+                  columns: {
+                    userId: true,
+                    username: true,
+                  },
+                },
+              },
+            },
+          },
         }),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       
       // Guards
-      if (!curBounty) return errorResponse("Bounty not found");
+      if (!curBountyWithHunters) return errorResponse("Bounty not found");
       if (!canSeeHiddenBountyInfo(user.role)) return errorResponse("Staff access required");
-      if (curBounty.status !== "OPEN") return errorResponse("Bounty not open");
+      if (curBountyWithHunters.status !== "OPEN") return errorResponse("Bounty not open");
       
-      // Get all hunters tracking this bounty
-      const hunters = await ctx.drizzle.query.bountySignup.findMany({
-        where: eq(bountySignup.bountyId, input.bountyId),
-        with: {
-          hunter: {
-            columns: {
-              userId: true,
-              username: true,
-            },
-          },
-        },
-      });
+      const hunters = curBountyWithHunters.hunters;
       
-      // Execute deletion and logging (no transaction to avoid PlanetScale deadlocks)
-      // Remove all hunter signups for this bounty
-      await ctx.drizzle
-        .delete(bountySignup)
-        .where(eq(bountySignup.bountyId, input.bountyId));
-      
-      // Log the action
-      await ctx.drizzle.insert(actionLog).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        tableName: "bounty",
-        changes: [`Removed ${hunters.length} hunters from bounty tracking`],
-        relatedId: input.bountyId,
-        relatedMsg: `Staff removed all trackers from bounty: ${hunters.length} hunters removed`,
-      });
+      // Execute deletion and logging in parallel (no transaction to avoid PlanetScale deadlocks)
+      await Promise.all([
+        // Remove all hunter signups for this bounty
+        ctx.drizzle
+          .delete(bountySignup)
+          .where(eq(bountySignup.bountyId, input.bountyId)),
+        
+        // Log the action
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "bounty",
+          changes: [`Removed ${hunters.length} hunters from bounty tracking`],
+          relatedId: input.bountyId,
+          relatedMsg: `Staff removed all trackers from bounty: ${hunters.length} hunters removed`,
+        }),
+      ]);
       
       return { 
         success: true, 

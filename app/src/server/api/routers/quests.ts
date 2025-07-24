@@ -277,11 +277,72 @@ export const questsRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch user first to get medical rank
-      const updatedUser = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      // Fetch all data in parallel
+      const [updatedUser, sectorVillage, results] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        fetchSectorVillage(ctx.drizzle, input.userSector),
+        input.type === "medical"
+          ? ctx.drizzle
+              .select({
+                ...getTableColumns(quest),
+                previousAttempts: questHistory.previousAttempts,
+                completed: questHistory.completed,
+              })
+              .from(quest)
+              .leftJoin(
+                questHistory,
+                and(
+                  eq(quest.id, questHistory.questId),
+                  eq(questHistory.userId, ctx.userId),
+                ),
+              )
+              .where(
+                and(
+                  eq(quest.questType, input.type),
+                  eq(quest.questRank, input.rank),
+                  lte(quest.requiredLevel, input.userLevel),
+                  gte(quest.maxLevel, input.userLevel),
+                  or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
+                  or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
+                  or(
+                    isNull(quest.requiredVillage),
+                    eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
+                  ),
+                ),
+              )
+          : ctx.drizzle
+              .select({
+                ...getTableColumns(quest),
+                previousAttempts: questHistory.previousAttempts,
+                completed: questHistory.completed,
+              })
+              .from(quest)
+              .leftJoin(
+                questHistory,
+                and(
+                  eq(quest.id, questHistory.questId),
+                  eq(questHistory.userId, ctx.userId),
+                ),
+              )
+              .where(
+                and(
+                  eq(quest.questType, input.type),
+                  eq(quest.questRank, input.rank),
+                  lte(quest.requiredLevel, input.userLevel),
+                  gte(quest.maxLevel, input.userLevel),
+                  or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
+                  or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
+                  or(
+                    isNull(quest.requiredVillage),
+                    eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
+                  ),
+                ),
+              ),
+      ]);
+
       const { user } = updatedUser;
       if (!user) return errorResponse("User does not exist");
       
@@ -292,39 +353,9 @@ export const questsRouter = createTRPCRouter({
       });
       
       // For medical missions, try each rank individually in descending order
-      let results: Quest[] = [];
+      let finalResults: Quest[] = [];
       let usedMedicalRank: string | null = null;
       if (input.type === "medical") {
-        // Fetch all medical quests at once (no queries in loop)
-        const allMedicalResults = await ctx.drizzle
-          .select({
-            ...getTableColumns(quest),
-            previousAttempts: questHistory.previousAttempts,
-            completed: questHistory.completed,
-          })
-          .from(quest)
-          .leftJoin(
-            questHistory,
-            and(
-              eq(quest.id, questHistory.questId),
-              eq(questHistory.userId, ctx.userId),
-            ),
-          )
-          .where(
-            and(
-              eq(quest.questType, input.type),
-              eq(quest.questRank, input.rank),
-              lte(quest.requiredLevel, input.userLevel),
-              gte(quest.maxLevel, input.userLevel),
-              or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
-              or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
-              or(
-                isNull(quest.requiredVillage),
-                eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
-              ),
-            ),
-          );
-
         const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
         let foundMissions = false;
         
@@ -334,7 +365,7 @@ export const questsRouter = createTRPCRouter({
           if (!currentRank) continue;
           
           // Filter results for this specific medical rank
-          const rankResults = allMedicalResults.filter((e) => 
+          const rankResults = results.filter((e) => 
             !e.medicalRank || e.medicalRank === currentRank
           );
           
@@ -342,7 +373,7 @@ export const questsRouter = createTRPCRouter({
           const availableMissions = rankResults.filter((e) => isAvailableUserQuests(e, user).check);
           
           if (availableMissions.length > 0) {
-            results = availableMissions;
+            finalResults = availableMissions;
             usedMedicalRank = currentRank;
             foundMissions = true;
             break;
@@ -350,43 +381,12 @@ export const questsRouter = createTRPCRouter({
         }
         
         if (!foundMissions) {
-          results = [];
+          finalResults = [];
         }
       } else {
         // Non-medical missions use the original logic
-        results = await ctx.drizzle
-          .select({
-            ...getTableColumns(quest),
-            previousAttempts: questHistory.previousAttempts,
-            completed: questHistory.completed,
-          })
-          .from(quest)
-          .leftJoin(
-            questHistory,
-            and(
-              eq(quest.id, questHistory.questId),
-              eq(questHistory.userId, ctx.userId),
-            ),
-          )
-          .where(
-            and(
-              eq(quest.questType, input.type),
-              eq(quest.questRank, input.rank),
-              lte(quest.requiredLevel, input.userLevel),
-              gte(quest.maxLevel, input.userLevel),
-              or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
-              or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
-              or(
-                isNull(quest.requiredVillage),
-                eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
-              ),
-            ),
-          );
+        finalResults = results;
       }
-      
-      const [sectorVillage] = await Promise.all([
-        fetchSectorVillage(ctx.drizzle, input.userSector),
-      ]);
       // Additional guards
       if (user.sector !== input.userSector) return errorResponse("Sector mismatch");
       if (user.level !== input.userLevel) {
@@ -438,7 +438,7 @@ export const questsRouter = createTRPCRouter({
       }
       // Fetch quest
       const result = getRandomElement(
-        results || [],
+        finalResults || [],
       );
       if (!result) return errorResponse("No assignments at this level could be found");
 

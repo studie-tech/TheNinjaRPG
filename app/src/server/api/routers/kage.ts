@@ -529,11 +529,23 @@ export const kageRouter = createTRPCRouter({
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [user, requests, userVillage] = await Promise.all([
+      // Fetch all data in parallel
+      const [user, requests, userVillage, lastToggle, dailyLockedTimeSeconds] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchRequests(ctx.drizzle, ["KAGE"], KAGE_REQUESTS_SHOW_SECONDS, ctx.userId),
         fetchVillage(ctx.drizzle, input.villageId),
+        ctx.drizzle
+          .select({
+            createdAt: actionLog.createdAt,
+          })
+          .from(actionLog)
+          .where(and(
+            eq(actionLog.userId, ctx.userId),
+            eq(actionLog.tableName, "kageChallengeToggle")
+          ))
+          .orderBy(desc(actionLog.createdAt))
+          .limit(1),
+        calculateDailyLockedTime(ctx.drizzle, ctx.userId),
       ]);
 
       // Derived
@@ -549,19 +561,6 @@ export const kageRouter = createTRPCRouter({
         return errorResponse("Cannot toggle while there are pending challenges");
       }
 
-      // Check cooldown from last toggle (using actionLog)
-      const lastToggle = await ctx.drizzle
-        .select({
-          createdAt: actionLog.createdAt,
-        })
-        .from(actionLog)
-        .where(and(
-          eq(actionLog.userId, ctx.userId),
-          eq(actionLog.tableName, "kageChallengeToggle")
-        ))
-        .orderBy(desc(actionLog.createdAt))
-        .limit(1);
-
       if (lastToggle.length > 0) {
         const secondsSinceLastToggle = secondsPassed(lastToggle[0]!.createdAt);
         if (secondsSinceLastToggle < KAGE_CHALLENGE_OPEN_FOR_SECONDS) {
@@ -576,7 +575,6 @@ export const kageRouter = createTRPCRouter({
         // Currently closed, trying to open - this is always allowed
       } else {
         // Currently open, trying to close - check daily limit
-        const dailyLockedTimeSeconds = await calculateDailyLockedTime(ctx.drizzle, ctx.userId);
         const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
         if (dailyLockedTimeSeconds >= maxDailySeconds) {
           return errorResponse(

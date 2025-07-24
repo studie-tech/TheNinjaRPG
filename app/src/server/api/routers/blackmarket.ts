@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, sql, gte, gt, and, asc, desc, isNull, isNotNull } from "drizzle-orm";
+import { eq, sql, gte, gt, and, or, asc, desc, isNull, isNotNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { fetchUser } from "./profile";
@@ -408,8 +408,12 @@ export const blackMarketRouter = createTRPCRouter({
     .input(z.object({ elementType: z.enum(["primary", "secondary"]) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Fetch user and rolled elements in parallel
+      const [user, rolledElementsData] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        getRolledElements(ctx.drizzle, ctx.userId, input.elementType),
+      ]);
+      
       // Guard
       if (user.reputationPoints < COST_REROLL_ELEMENT) {
         return errorResponse("Not enough reputation points");
@@ -419,62 +423,24 @@ export const blackMarketRouter = createTRPCRouter({
       const rankId = UserRanks.findIndex((r) => r === user.rank);
       const changes: string[] = [];
       
-      // Get rolled elements from actionLog
-      const rolledElementsData = await getRolledElements(ctx.drizzle, ctx.userId, input.elementType);
-      
       // Ensure current elements are in actionLog if not already tracked
+      const addElementPromises: Promise<void>[] = [];
+      
       if (user.primaryElement && !rolledElementsData.primary.includes(user.primaryElement)) {
-        await addElementRoll(ctx.drizzle, ctx.userId, "primary", user.primaryElement);
+        addElementPromises.push(addElementRoll(ctx.drizzle, ctx.userId, "primary", user.primaryElement));
         rolledElementsData.primary.push(user.primaryElement);
       }
       if (user.secondaryElement && !rolledElementsData.secondary.includes(user.secondaryElement)) {
-        await addElementRoll(ctx.drizzle, ctx.userId, "secondary", user.secondaryElement);
+        addElementPromises.push(addElementRoll(ctx.drizzle, ctx.userId, "secondary", user.secondaryElement));
         rolledElementsData.secondary.push(user.secondaryElement);
       }
       
-      // Helper function to filter valid rolled elements
-      const filterValidRolledElements = (elements: string[]): typeof ElementNames[number][] => {
-        return elements.filter(
-          (e): e is typeof ElementNames[number] => ElementNames.includes(e as typeof ElementNames[number])
-        );
-      };
+      // Execute all addElementRoll operations in parallel
+      if (addElementPromises.length > 0) {
+        await Promise.all(addElementPromises);
+      }
       
-      // Extract common reroll logic
-      const rerollElementType = async (
-        elementType: "primary" | "secondary",
-        currentElement: string | null,
-        oppositeElement: string | null,
-        rolledElements: string[],
-        rankRequirement = true
-      ) => {
-        if (!rankRequirement) return { element: currentElement as typeof ElementNames[number] | null, reset: false, changes: [] };
-        
-        const excludedElements = oppositeElement ? [oppositeElement] : [];
-        const validRolled = filterValidRolledElements(rolledElements);
-        excludedElements.push(...validRolled);
-        
-        const available = BasicElementName.filter((e) => !excludedElements.includes(e));
-        
-        if (available.length === 0) {
-          // Reset logic
-          await ctx.drizzle.insert(actionLog).values({
-            id: nanoid(),
-            userId: ctx.userId,
-            tableName: "elementRoll",
-            changes: [`${elementType} element tracking reset`],
-            relatedMsg: `RESET: ${elementType === "primary" ? "Primary" : "Secondary"}`,
-          });
-          
-          const resetAvailable = oppositeElement 
-            ? BasicElementName.filter((e) => e !== oppositeElement)
-            : BasicElementName;
-          const newElement = getRandomElement(resetAvailable) ?? null;
-          return { element: newElement as typeof ElementNames[number] | null, reset: true, changes: [`${elementType} element rerolled (reset)`] };
-        } else {
-          const newElement = getRandomElement(available) ?? null;
-          return { element: newElement as typeof ElementNames[number] | null, reset: false, changes: [`${elementType} element rerolled`] };
-        }
-      };
+
       
       // Track whether a reset occurred
       let primaryReset = false;
@@ -483,6 +449,8 @@ export const blackMarketRouter = createTRPCRouter({
       if (input.elementType === "primary") {
         if (rankId >= 1) {
           const result = await rerollElementType(
+            ctx.drizzle,
+            ctx.userId,
             "primary",
             user.primaryElement,
             user.secondaryElement,
@@ -503,6 +471,8 @@ export const blackMarketRouter = createTRPCRouter({
       if (input.elementType === "secondary") {
         if (user.secondaryElement) {
           const result = await rerollElementType(
+            ctx.drizzle,
+            ctx.userId,
             "secondary",
             user.secondaryElement,
             user.primaryElement,
@@ -624,71 +594,73 @@ export const fetchActiveUserOffers = async (client: DrizzleClient, userId: strin
 };
 
 // Helper function to get rolled elements from actionLog
-async function getRolledElements(client: DrizzleClient, userId: string, elementType?: "primary" | "secondary"): Promise<{ primary: string[], secondary: string[] }> {
-  // Helper function to get rolled elements for a specific type
-  async function getRolledElementsForType(type: "primary" | "secondary"): Promise<string[]> {
-    const resetLog = await client
-      .select({
-        relatedMsg: actionLog.relatedMsg,
-        createdAt: actionLog.createdAt,
-      })
-      .from(actionLog)
-      .where(and(
-        eq(actionLog.userId, userId),
-        eq(actionLog.tableName, "elementRoll"),
-        eq(actionLog.relatedMsg, `RESET: ${type === "primary" ? "Primary" : "Secondary"}`)
-      ))
-      .orderBy(desc(actionLog.createdAt))
-      .limit(1);
+const getRolledElements = async (client: DrizzleClient, userId: string, elementType?: "primary" | "secondary") => {
+  // Get all relevant logs (resets and element rolls) in a single query
+  const allLogs = await client
+    .select({
+      relatedMsg: actionLog.relatedMsg,
+      createdAt: actionLog.createdAt,
+    })
+    .from(actionLog)
+    .where(and(
+      eq(actionLog.userId, userId),
+      eq(actionLog.tableName, "elementRoll"),
+      or(
+        eq(actionLog.relatedMsg, "RESET: Primary"),
+        eq(actionLog.relatedMsg, "RESET: Secondary"),
+        sql`${actionLog.relatedMsg} LIKE 'Primary: %'`,
+        sql`${actionLog.relatedMsg} LIKE 'Secondary: %'`
+      )
+    ))
+    .orderBy(asc(actionLog.createdAt));
 
-    const lastReset = resetLog[0]?.createdAt.getTime() || 0;
-    const elementPrefix = `${type === "primary" ? "Primary" : "Secondary"}:`;
+  // Find the latest reset times
+  const resetLogs = allLogs.filter(log => log.relatedMsg?.startsWith("RESET:"));
+  const lastPrimaryReset = resetLogs.find(log => log.relatedMsg === "RESET: Primary")?.createdAt.getTime() || 0;
+  const lastSecondaryReset = resetLogs.find(log => log.relatedMsg === "RESET: Secondary")?.createdAt.getTime() || 0;
 
-    const rolls = await client
-      .select({
-        relatedMsg: actionLog.relatedMsg,
-        createdAt: actionLog.createdAt,
-      })
-      .from(actionLog)
-      .where(and(
-        eq(actionLog.userId, userId),
-        eq(actionLog.tableName, "elementRoll"),
-        sql`${actionLog.relatedMsg} LIKE ${elementPrefix + '%'}`,
-        sql`${actionLog.createdAt} > FROM_UNIXTIME(${Math.floor(lastReset / 1000)})`
-      ))
-      .orderBy(asc(actionLog.createdAt));
+  // Filter element rolls that occurred after their respective resets
+  const elementRolls = allLogs.filter(log => {
+    if (!log.relatedMsg || log.relatedMsg.startsWith("RESET:")) return false;
+    
+    if (log.relatedMsg.startsWith("Primary: ")) {
+      return log.createdAt.getTime() > lastPrimaryReset;
+    }
+    if (log.relatedMsg.startsWith("Secondary: ")) {
+      return log.createdAt.getTime() > lastSecondaryReset;
+    }
+    return false;
+  });
 
-    const elements: string[] = [];
-    for (const log of rolls) {
-      if (log.relatedMsg) {
-        const element = log.relatedMsg.replace(`${elementPrefix} `, "").trim();
-        if (element && ElementNames.includes(element as typeof ElementNames[number]) && !elements.includes(element)) {
-          elements.push(element);
-        }
+  // Process the rolls and separate by type
+  const primaryElements: string[] = [];
+  const secondaryElements: string[] = [];
+
+  for (const log of elementRolls) {
+    if (!log.relatedMsg) continue;
+
+    if (log.relatedMsg.startsWith("Primary: ")) {
+      const element = log.relatedMsg.replace("Primary: ", "").trim();
+      if (element && ElementNames.includes(element as typeof ElementNames[number]) && !primaryElements.includes(element)) {
+        primaryElements.push(element);
+      }
+    } else if (log.relatedMsg.startsWith("Secondary: ")) {
+      const element = log.relatedMsg.replace("Secondary: ", "").trim();
+      if (element && ElementNames.includes(element as typeof ElementNames[number]) && !secondaryElements.includes(element)) {
+        secondaryElements.push(element);
       }
     }
-
-    return elements;
   }
 
-  // If elementType is specified, only pull data for that type
+  // Return based on requested elementType
   if (elementType === "primary") {
-    const primary = await getRolledElementsForType("primary");
-    return { primary, secondary: [] };
+    return { primary: primaryElements, secondary: [] };
   }
 
   if (elementType === "secondary") {
-    const secondary = await getRolledElementsForType("secondary");
-    return { primary: [], secondary };
+    return { primary: [], secondary: secondaryElements };
   }
-
-  // If no elementType specified, pull both (for backward compatibility)
-  const [primary, secondary] = await Promise.all([
-    getRolledElementsForType("primary"),
-    getRolledElementsForType("secondary")
-  ]);
-
-  return { primary, secondary };
+  return { primary: primaryElements, secondary: secondaryElements };
 }
 
 // Helper function to add a new element roll to actionLog
@@ -701,3 +673,49 @@ async function addElementRoll(client: DrizzleClient, userId: string, elementType
     relatedMsg: `${elementType === "primary" ? "Primary" : "Secondary"}: ${element}`,
   });
 }
+
+// Helper function to filter valid rolled elements
+const filterValidRolledElements = (elements: string[]): typeof ElementNames[number][] => {
+  return elements.filter(
+    (e): e is typeof ElementNames[number] => ElementNames.includes(e as typeof ElementNames[number])
+  );
+};
+
+// Helper function to reroll an element type
+const rerollElementType = async (
+  client: DrizzleClient,
+  userId: string,
+  elementType: "primary" | "secondary",
+  currentElement: string | null,
+  oppositeElement: string | null,
+  rolledElements: string[],
+  rankRequirement = true
+) => {
+  if (!rankRequirement) return { element: currentElement as typeof ElementNames[number] | null, reset: false, changes: [] };
+  
+  const excludedElements = oppositeElement ? [oppositeElement] : [];
+  const validRolled = filterValidRolledElements(rolledElements);
+  excludedElements.push(...validRolled);
+  
+  const available = BasicElementName.filter((e) => !excludedElements.includes(e));
+  
+  if (available.length === 0) {
+    // Reset logic
+    await client.insert(actionLog).values({
+      id: nanoid(),
+      userId: userId,
+      tableName: "elementRoll",
+      changes: [`${elementType} element tracking reset`],
+      relatedMsg: `RESET: ${elementType === "primary" ? "Primary" : "Secondary"}`,
+    });
+    
+    const resetAvailable = oppositeElement 
+      ? BasicElementName.filter((e) => e !== oppositeElement)
+      : BasicElementName;
+    const newElement = getRandomElement(resetAvailable) ?? null;
+    return { element: newElement as typeof ElementNames[number] | null, reset: true, changes: [`${elementType} element rerolled (reset)`] };
+  } else {
+    const newElement = getRandomElement(available) ?? null;
+    return { element: newElement as typeof ElementNames[number] | null, reset: false, changes: [`${elementType} element rerolled`] };
+  }
+};
