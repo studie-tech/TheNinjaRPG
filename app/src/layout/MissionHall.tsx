@@ -107,7 +107,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
           <p className="text-center p-3 text-xl font-bold">
             Errands [{userData.dailyErrands} / {ERRANDS_PER_DAY}] -{" "}
             {capitalizeFirstLetter(classifier)}s [{userData.dailyMissions} /{" "}
-            {MISSIONS_PER_DAY}] - Medical Missions [{userData.dailyMedicalMissions} /{" "}
+            {MISSIONS_PER_DAY}] - Medical [{userData.dailyMedicalMissions} /{" "}
             {MEDICAL_MISSIONS_PER_DAY}]
           </p>
         </>
@@ -128,39 +128,40 @@ export default function MissionHall({ userData }: MissionHallProps) {
             const capped = isErrand
               ? errandsLeft <= 0
               : isMedical
-              ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY
-              : userData.dailyMissions >= MISSIONS_PER_DAY;
+                ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY
+                : userData.dailyMissions >= MISSIONS_PER_DAY;
             // Count how many of this type and rank are available
             let count =
               hallData?.filter(
                 (point) =>
                   point.questType === setting.type && point.questRank === setting.rank,
               )?.length ?? 0;
-            
+
             // For medical missions, calculate fallback counts
             let fallbackRank = "";
             if (isMedical) {
               const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
               let fallbackCount = 0;
-              
+
               // Try each rank from user's rank down to NONE
               for (let i = userMedicalRankIndex; i >= 0; i--) {
                 const currentRank = MEDNIN_RANKS[i];
                 if (!currentRank) continue;
-                
-                const rankCount = medicalRanks?.filter(
-                  (q) =>
-                    q.questRank === setting.rank &&
-                    (q.medicalRank === "NONE" || q.medicalRank === currentRank),
-                )?.length ?? 0;
-                
+
+                const rankCount =
+                  medicalRanks?.filter(
+                    (q) =>
+                      q.questRank === setting.rank &&
+                      (q.medicalRank === "NONE" || q.medicalRank === currentRank),
+                  )?.length ?? 0;
+
                 if (rankCount > 0) {
                   fallbackCount = rankCount;
                   fallbackRank = currentRank;
                   break;
                 }
               }
-              
+
               count = fallbackCount;
             }
             // Checks
@@ -298,9 +299,14 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         <p className="font-bold">{setting.name}</p>
                         <p>
                           [Random out of {count} available
-                          {isMedical && fallbackRank && fallbackRank !== userMedicalRank && (
-                            <span className="text-yellow-500"> ({fallbackRank} rank)</span>
-                          )}
+                          {isMedical &&
+                            fallbackRank &&
+                            fallbackRank !== userMedicalRank && (
+                              <span className="text-yellow-500">
+                                {" "}
+                                ({fallbackRank} rank)
+                              </span>
+                            )}
                           ]
                         </p>
                         {!isErrand &&
@@ -314,20 +320,25 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         {isErrand && userData.dailyErrands >= ERRANDS_PER_DAY && (
                           <p className="text-sm text-red-500">Daily Limit Reached</p>
                         )}
-                        {isMedical && userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY && (
-                          <p className="text-sm text-red-500">Daily Limit Reached</p>
-                        )}
+                        {isMedical &&
+                          userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY && (
+                            <p className="text-sm text-red-500">Daily Limit Reached</p>
+                          )}
                       </div>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>Accept Random Mission</AlertDialogTitle>
                         <AlertDialogDescription>
-                          {!isErrand && !isMedical && userData.dailyMissions >= MISSIONS_PER_DAY ? (
+                          {!isErrand &&
+                          !isMedical &&
+                          userData.dailyMissions >= MISSIONS_PER_DAY ? (
                             `You have reached your daily mission limit of ${MISSIONS_PER_DAY} missions. Please try again tomorrow.`
                           ) : isErrand && userData.dailyErrands >= ERRANDS_PER_DAY ? (
                             `You have reached your daily errand limit of ${ERRANDS_PER_DAY} errands. Please try again tomorrow.`
-                          ) : isMedical && userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY ? (
+                          ) : isMedical &&
+                            userData.dailyMedicalMissions >=
+                              MEDICAL_MISSIONS_PER_DAY ? (
                             `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`
                           ) : (
                             <>
@@ -336,24 +347,31 @@ export default function MissionHall({ userData }: MissionHallProps) {
                                 ? "medical mission"
                                 : `${setting.rank}-rank ${setting.type}`}
                               ? You can only have one active {classifier} at a time.
-                              {!isErrand && !isMedical && userData.dailyMissions >= 9 && (
-                                <>
-                                  <br />
-                                  <br />
-                                  <span className="text-yellow-500">
-                                    Note: You have already completed 9 missions today.
-                                    This mission will only give 40% of its normal
-                                    rewards.
-                                  </span>
-                                </>
-                              )}
+                              {!isErrand &&
+                                !isMedical &&
+                                userData.dailyMissions >= 9 && (
+                                  <>
+                                    <br />
+                                    <br />
+                                    <span className="text-yellow-500">
+                                      Note: You have already completed 9 missions today.
+                                      This mission will only give 40% of its normal
+                                      rewards.
+                                    </span>
+                                  </>
+                                )}
                             </>
                           )}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        {(!isErrand && !isMedical && userData.dailyMissions >= MISSIONS_PER_DAY) || (isErrand && userData.dailyErrands >= ERRANDS_PER_DAY) || (isMedical && userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY) ? (
+                        {(!isErrand &&
+                          !isMedical &&
+                          userData.dailyMissions >= MISSIONS_PER_DAY) ||
+                        (isErrand && userData.dailyErrands >= ERRANDS_PER_DAY) ||
+                        (isMedical &&
+                          userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY) ? (
                           <AlertDialogAction disabled>
                             Daily Limit Reached
                           </AlertDialogAction>
