@@ -411,7 +411,7 @@ export const blackMarketRouter = createTRPCRouter({
       // Fetch user and rolled elements in parallel
       const [user, rolledElementsData] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        getRolledElements(ctx.drizzle, ctx.userId, input.elementType),
+        getRolledElements(ctx.drizzle, ctx.userId),
       ]);
       
       // Guard
@@ -693,6 +693,7 @@ const rerollElementType = async (
 ) => {
   if (!rankRequirement) return { element: currentElement as typeof ElementNames[number] | null, reset: false, changes: [] };
   
+  // Only exclude the opposite element and previously rolled elements of the SAME type
   const excludedElements = oppositeElement ? [oppositeElement] : [];
   const validRolled = filterValidRolledElements(rolledElements);
   excludedElements.push(...validRolled);
