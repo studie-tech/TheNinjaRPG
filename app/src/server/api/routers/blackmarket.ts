@@ -411,7 +411,7 @@ export const blackMarketRouter = createTRPCRouter({
       // Fetch user and rolled elements in parallel
       const [user, rolledElementsData] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        getRolledElements(ctx.drizzle, ctx.userId),
+        getRolledElements(ctx.drizzle, ctx.userId, input.elementType),
       ]);
       
       // Guard
@@ -428,11 +428,9 @@ export const blackMarketRouter = createTRPCRouter({
       
       if (user.primaryElement && !rolledElementsData.primary.includes(user.primaryElement)) {
         addElementPromises.push(addElementRoll(ctx.drizzle, ctx.userId, "primary", user.primaryElement));
-        rolledElementsData.primary.push(user.primaryElement);
       }
       if (user.secondaryElement && !rolledElementsData.secondary.includes(user.secondaryElement)) {
         addElementPromises.push(addElementRoll(ctx.drizzle, ctx.userId, "secondary", user.secondaryElement));
-        rolledElementsData.secondary.push(user.secondaryElement);
       }
       
       // Execute all addElementRoll operations in parallel
@@ -459,12 +457,7 @@ export const blackMarketRouter = createTRPCRouter({
           );
           user.primaryElement = result.element;
           primaryReset = result.reset;
-          changes.push(...result.changes);
-          
-          // Add the new element to tracking if not a reset
-          if (user.primaryElement && !primaryReset) {
-            rolledElementsData.primary.push(user.primaryElement);
-          }
+          changes.push(...result.changes);   
         }
       }
       
@@ -483,10 +476,7 @@ export const blackMarketRouter = createTRPCRouter({
           secondaryReset = result.reset;
           changes.push(...result.changes);
           
-          // Add the new element to tracking if not a reset
-          if (user.secondaryElement && !secondaryReset) {
-            rolledElementsData.secondary.push(user.secondaryElement);
-          }
+          // Note: Element tracking is handled by actionLog, not local array
         }
       }
       
@@ -505,10 +495,10 @@ export const blackMarketRouter = createTRPCRouter({
         .set(updateData)
         .where(eq(userData.userId, ctx.userId));
 
-      // Add element roll to actionLog if a new element was rolled
-      if (input.elementType === "primary" && user.primaryElement && !primaryReset) {
+      // Add element roll to actionLog for the new element
+      if (input.elementType === "primary" && user.primaryElement) {
         await addElementRoll(ctx.drizzle, ctx.userId, "primary", user.primaryElement);
-      } else if (input.elementType === "secondary" && user.secondaryElement && !secondaryReset) {
+      } else if (input.elementType === "secondary" && user.secondaryElement) {
         await addElementRoll(ctx.drizzle, ctx.userId, "secondary", user.secondaryElement);
       }
 
@@ -616,8 +606,15 @@ const getRolledElements = async (client: DrizzleClient, userId: string, elementT
 
   // Find the latest reset times
   const resetLogs = allLogs.filter(log => log.relatedMsg?.startsWith("RESET:"));
-  const lastPrimaryReset = resetLogs.find(log => log.relatedMsg === "RESET: Primary")?.createdAt.getTime() || 0;
-  const lastSecondaryReset = resetLogs.find(log => log.relatedMsg === "RESET: Secondary")?.createdAt.getTime() || 0;
+  const primaryResetLogs = resetLogs.filter(log => log.relatedMsg === "RESET: Primary");
+  const secondaryResetLogs = resetLogs.filter(log => log.relatedMsg === "RESET: Secondary");
+  
+  const lastPrimaryReset = primaryResetLogs.length > 0 
+    ? primaryResetLogs[primaryResetLogs.length - 1]?.createdAt.getTime() ?? 0
+    : 0;
+  const lastSecondaryReset = secondaryResetLogs.length > 0 
+    ? secondaryResetLogs[secondaryResetLogs.length - 1]?.createdAt.getTime() ?? 0
+    : 0;
 
   // Filter element rolls that occurred after their respective resets
   const elementRolls = allLogs.filter(log => {
@@ -693,8 +690,14 @@ const rerollElementType = async (
 ) => {
   if (!rankRequirement) return { element: currentElement as typeof ElementNames[number] | null, reset: false, changes: [] };
   
-  // Only exclude the opposite element and previously rolled elements of the SAME type
+  // Exclude the opposite element, current element, and previously rolled elements of the SAME type
   const excludedElements = oppositeElement ? [oppositeElement] : [];
+  
+  // Only exclude current element if it's not already in rolledElements
+  if (currentElement && !rolledElements.includes(currentElement)) {
+    excludedElements.push(currentElement);
+  }
+  
   const validRolled = filterValidRolledElements(rolledElements);
   excludedElements.push(...validRolled);
   
