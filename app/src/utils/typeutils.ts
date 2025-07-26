@@ -1,3 +1,5 @@
+import type { ExecutedQuery } from "@planetscale/database";
+
 export type ArrayElement<A> = A extends readonly (infer T)[] ? T : never;
 
 export type JsonData =
@@ -56,3 +58,8 @@ export const objectKeys = <T extends object>(obj: T) => {
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
 };
+
+/**
+ * A promise that returns a database query result or void
+ */
+export type DatabasePromiseReturn = ExecutedQuery<any[] | Record<string, any>> | void;

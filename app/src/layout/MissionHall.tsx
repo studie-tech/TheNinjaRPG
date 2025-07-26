@@ -6,14 +6,13 @@ import Image from "next/image";
 import { showMutationToast } from "@/libs/toast";
 import { api } from "@/app/_trpc/client";
 import { availableQuestLetterRanks } from "@/libs/train";
-import { getMissionHallSettings } from "@/libs/quest";
+import { getMissionHallSettings, fallbackQuestsFilter } from "@/libs/quest";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   MISSIONS_PER_DAY,
   ERRANDS_PER_DAY,
   MEDICAL_MISSIONS_PER_DAY,
   IMG_BUILDING_MISSIONHALL,
-  MEDNIN_RANKS,
 } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
@@ -131,39 +130,13 @@ export default function MissionHall({ userData }: MissionHallProps) {
                 ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY
                 : userData.dailyMissions >= MISSIONS_PER_DAY;
             // Count how many of this type and rank are available
-            let count =
-              hallData?.filter(
-                (point) =>
-                  point.questType === setting.type && point.questRank === setting.rank,
-              )?.length ?? 0;
-
-            // For medical missions, calculate fallback counts
-            let fallbackRank = "";
-            if (isMedical) {
-              const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
-              let fallbackCount = 0;
-
-              // Try each rank from user's rank down to NONE
-              for (let i = userMedicalRankIndex; i >= 0; i--) {
-                const currentRank = MEDNIN_RANKS[i];
-                if (!currentRank) continue;
-
-                const rankCount =
-                  medicalRanks?.filter(
-                    (q) =>
-                      q.questRank === setting.rank &&
-                      (q.medicalRank === "NONE" || q.medicalRank === currentRank),
-                  )?.length ?? 0;
-
-                if (rankCount > 0) {
-                  fallbackCount = rankCount;
-                  fallbackRank = currentRank;
-                  break;
-                }
-              }
-
-              count = fallbackCount;
-            }
+            const { filtered, rankInfo } = fallbackQuestsFilter(
+              hallData || [],
+              userData,
+              setting.type,
+            );
+            const count =
+              filtered?.filter((q) => q.questRank === setting.rank)?.length ?? 0;
             // Checks
             const rankCheck = availableUserRanks.includes(setting.rank) || isErrand;
             const medicalCheck = isMedical
@@ -297,17 +270,11 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           height={256}
                         />
                         <p className="font-bold">{setting.name}</p>
-                        <p>
-                          [Random out of {count} available
-                          {isMedical &&
-                            fallbackRank &&
-                            fallbackRank !== userMedicalRank && (
-                              <span className="text-yellow-500">
-                                {" "}
-                                ({fallbackRank} rank)
-                              </span>
-                            )}
-                          ]
+                        <p className="flex flex-col">
+                          [Random out of {count} available]
+                          {rankInfo && (
+                            <span className="text-yellow-500"> {rankInfo}</span>
+                          )}
                         </p>
                         {!isErrand &&
                           userData.dailyMissions >= 9 &&

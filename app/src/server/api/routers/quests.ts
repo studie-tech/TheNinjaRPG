@@ -37,7 +37,12 @@ import { LetterRanks } from "@/drizzle/constants";
 import { calculateContentDiff } from "@/utils/diff";
 import { initiateBattle } from "@/routers/combat";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
-import { getNewTrackers, getReward, verifyQuestObjectiveFlow } from "@/libs/quest";
+import {
+  getNewTrackers,
+  getReward,
+  verifyQuestObjectiveFlow,
+  fallbackQuestsFilter,
+} from "@/libs/quest";
 import { getActiveObjectives } from "@/libs/quest";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { getMissionHallSettings } from "@/libs/quest";
@@ -51,7 +56,7 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { SENSEI_STUDENT_RYO_PER_MISSION } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
-import { ERRANDS_PER_DAY, MEDICAL_MISSIONS_PER_DAY, MEDNIN_RANKS } from "@/drizzle/constants";
+import { ERRANDS_PER_DAY, MEDICAL_MISSIONS_PER_DAY } from "@/drizzle/constants";
 import { calcMedninRank } from "@/libs/hospital/hospital";
 import { questFilteringSchema } from "@/validators/quest";
 import type { QuestConsequence } from "@/libs/quest";
@@ -305,11 +310,17 @@ export const questsRouter = createTRPCRouter({
                   eq(quest.questRank, input.rank),
                   lte(quest.requiredLevel, input.userLevel),
                   gte(quest.maxLevel, input.userLevel),
-                  or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
+                  or(
+                    isNull(quest.startsAt),
+                    gte(quest.startsAt, new Date().toISOString()),
+                  ),
                   or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
                   or(
                     isNull(quest.requiredVillage),
-                    eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
+                    eq(
+                      quest.requiredVillage,
+                      input.userVillageId ?? VILLAGE_SYNDICATE_ID,
+                    ),
                   ),
                 ),
               )
@@ -333,11 +344,17 @@ export const questsRouter = createTRPCRouter({
                   eq(quest.questRank, input.rank),
                   lte(quest.requiredLevel, input.userLevel),
                   gte(quest.maxLevel, input.userLevel),
-                  or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
+                  or(
+                    isNull(quest.startsAt),
+                    gte(quest.startsAt, new Date().toISOString()),
+                  ),
                   or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
                   or(
                     isNull(quest.requiredVillage),
-                    eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
+                    eq(
+                      quest.requiredVillage,
+                      input.userVillageId ?? VILLAGE_SYNDICATE_ID,
+                    ),
                   ),
                 ),
               ),
@@ -345,48 +362,10 @@ export const questsRouter = createTRPCRouter({
 
       const { user } = updatedUser;
       if (!user) return errorResponse("User does not exist");
-      
-      // Calculate user's medical rank for filtering
-      const userMedicalRank = calcMedninRank({
-        medicalExperience: user.medicalExperience,
-        rank: user.rank,
-      });
-      
-      // For medical missions, try each rank individually in descending order
-      let finalResults: Quest[] = [];
-      let usedMedicalRank: string | null = null;
-      if (input.type === "medical") {
-        const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
-        let foundMissions = false;
-        
-        // Try each rank from user's rank down to NONE
-        for (let i = userMedicalRankIndex; i >= 0; i--) {
-          const currentRank = MEDNIN_RANKS[i];
-          if (!currentRank) continue;
-          
-          // Filter results for this specific medical rank
-          const rankResults = results.filter((e) => 
-            !e.medicalRank || e.medicalRank === currentRank
-          );
-          
-          // Filter for available quests
-          const availableMissions = rankResults.filter((e) => isAvailableUserQuests(e, user).check);
-          
-          if (availableMissions.length > 0) {
-            finalResults = availableMissions;
-            usedMedicalRank = currentRank;
-            foundMissions = true;
-            break;
-          }
-        }
-        
-        if (!foundMissions) {
-          finalResults = [];
-        }
-      } else {
-        // Non-medical missions use the original logic
-        finalResults = results;
-      }
+
+      // For certain quest types, we fallback to lower ranks if the user does not have the required rank
+      const { filtered, rankInfo } = fallbackQuestsFilter(results, user, input.type);
+
       // Additional guards
       if (user.sector !== input.userSector) return errorResponse("Sector mismatch");
       if (user.level !== input.userLevel) {
@@ -410,15 +389,19 @@ export const questsRouter = createTRPCRouter({
       // Guards
       if (!setting) return errorResponse("Setting not found");
       if (user.isBanned) return errorResponse("You are banned");
-      
+
       // Check daily errand limit
       if (isErrand && user.dailyErrands >= ERRANDS_PER_DAY) {
-        return errorResponse(`You have reached your daily errand limit of ${ERRANDS_PER_DAY} errands. Please try again tomorrow.`);
+        return errorResponse(
+          `You have reached your daily errand limit of ${ERRANDS_PER_DAY} errands. Please try again tomorrow.`,
+        );
       }
-      
+
       // Check daily medical mission limit
       if (isMedical && user.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY) {
-        return errorResponse(`You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`);
+        return errorResponse(
+          `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`,
+        );
       }
 
       // Check if user is allowed to perform this rank
@@ -437,9 +420,7 @@ export const questsRouter = createTRPCRouter({
         return errorResponse(`Already active ${current.questType}`);
       }
       // Fetch quest
-      const result = getRandomElement(
-        finalResults || [],
-      );
+      const result = getRandomElement(filtered || []);
       if (!result) return errorResponse("No assignments at this level could be found");
 
       // Insert quest entry
@@ -451,14 +432,11 @@ export const questsRouter = createTRPCRouter({
             isErrand
               ? { dailyErrands: sql`${userData.dailyErrands} + 1` }
               : isMedical
-              ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
-              : { dailyMissions: sql`${userData.dailyMissions} + 1` },
+                ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
+                : { dailyMissions: sql`${userData.dailyMissions} + 1` },
           )
           .where(eq(userData.userId, user.userId)),
       ]);
-      const rankInfo = input.type === "medical" && usedMedicalRank && usedMedicalRank !== userMedicalRank 
-        ? ` (using ${usedMedicalRank} rank missions)` 
-        : "";
       return { success: true, message: `Quest started: ${result.name}${rankInfo}` };
     }),
   startQuest: protectedProcedure
@@ -642,11 +620,7 @@ export const questsRouter = createTRPCRouter({
       // Insert quest entry
       await Promise.all([
         upsertQuestEntry(ctx.drizzle, user, questData),
-        incrementDailyQuestCounter(
-          ctx.drizzle,
-          user,
-          questData.questType,
-        ),
+        incrementDailyQuestCounter(ctx.drizzle, user, questData.questType),
       ]);
       return { success: true, message: `Quest started: ${questData.name}` };
     }),
@@ -1492,10 +1466,11 @@ export const incrementDailyQuestCounter = async (
   questType: string,
 ) => {
   if (["mission", "crime", "medical"].includes(questType)) {
-    const updateField = questType === "medical" 
-      ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
-      : { dailyMissions: sql`${userData.dailyMissions} + 1` };
-    
+    const updateField =
+      questType === "medical"
+        ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
+        : { dailyMissions: sql`${userData.dailyMissions} + 1` };
+
     await client
       .update(userData)
       .set(updateField)

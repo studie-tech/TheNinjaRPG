@@ -1,6 +1,6 @@
 import { tagTypes } from "./combat/types";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { LetterRanks } from "@/drizzle/constants";
+import { ElementNames, LetterRanks } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { FED_NORMAL_JUTSU_SLOTS } from "@/drizzle/constants";
 import { FED_SILVER_JUTSU_SLOTS } from "@/drizzle/constants";
@@ -140,6 +140,12 @@ export const checkJutsuElements = (jutsu: Jutsu, userElements: Set<ElementName>)
   });
   if (jutsuElements.length === 0) jutsuElements.push("None");
   return jutsuElements.find((e) => userElements.has(e));
+};
+
+export const filterValidElementsTypeguard = (elements: string[]): ElementName[] => {
+  return elements.filter((e): e is ElementName =>
+    ElementNames.includes(e as ElementName),
+  );
 };
 
 export const checkJutsuItems = (
