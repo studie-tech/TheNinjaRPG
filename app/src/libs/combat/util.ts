@@ -885,7 +885,10 @@ export const calcBattleResult = (
         const wasKageKilled = targets.some(target => target.village?.kageId === target.userId);
         
         if (shrineChangeHp !== 0) shrineChangeHp /= Math.abs(shrineChangeHp);
-        if (townhallChangeHP !== 0) townhallChangeHP /= Math.abs(townhallChangeHP);
+        // Only reduce townhallChangeHP if no kage was killed
+        if (townhallChangeHP !== 0 && !wasKageKilled) {
+          townhallChangeHP /= Math.abs(townhallChangeHP);
+        }
         Object.keys(shrineInfo).forEach((sector) => {
           const abs = Math.abs(shrineInfo[sector as unknown as number]!);
           if (abs !== 0) shrineInfo[sector as unknown as number]! /= abs;
