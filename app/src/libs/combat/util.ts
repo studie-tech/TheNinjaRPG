@@ -881,6 +881,9 @@ export const calcBattleResult = (
       // Adjust shrine & townhall datamage based on level different
       const maxTargetLevel = Math.max(...targets.map((t) => t.level), 0);
       if (Math.abs(user.level - maxTargetLevel) > STREAK_LEVEL_DIFF) {
+        // Check if any kage was killed in this battle
+        const wasKageKilled = targets.some(target => target.village?.kageId === target.userId);
+        
         if (shrineChangeHp !== 0) shrineChangeHp /= Math.abs(shrineChangeHp);
         if (townhallChangeHP !== 0) townhallChangeHP /= Math.abs(townhallChangeHP);
         Object.keys(shrineInfo).forEach((sector) => {
@@ -889,7 +892,12 @@ export const calcBattleResult = (
         });
         Object.keys(townhallInfo).forEach((name) => {
           const abs = Math.abs(townhallInfo[name]!);
-          if (abs !== 0) townhallInfo[name]! /= abs;
+          if (abs !== 0) {
+            // If a kage was killed, preserve all war damage at full value
+            if (!wasKageKilled) {
+              townhallInfo[name]! /= abs;
+            }
+          }
         });
       }
 
