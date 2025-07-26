@@ -337,7 +337,10 @@ export const commentsRouter = createTRPCRouter({
                 ),
               ),
         )
-        .map((c) => c.conversation)
+        .map((c) => ({
+          ...c.conversation,
+          users: c.conversation.users.filter((u) => u.userData),
+        }))
         .sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
       // Return filtered conversations
       return filteredConverations;

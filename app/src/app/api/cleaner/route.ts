@@ -80,6 +80,7 @@ export async function GET() {
         and(
           lte(conversation.updatedAt, new Date(Date.now() - oneDay * 14)),
           eq(conversation.isPublic, 0),
+          eq(conversation.isStaffAvailable, false),
         ),
       );
 
@@ -112,6 +113,9 @@ export async function GET() {
     // Step 9: Delete user2conversation where the conversation does not exist anymore
     await drizzleDB.execute(
       sql`DELETE FROM ${user2conversation} a WHERE NOT EXISTS (SELECT id FROM ${conversation} b WHERE b.id = a.conversationId)`,
+    );
+    await drizzleDB.execute(
+      sql`DELETE FROM ${user2conversation} a WHERE NOT EXISTS (SELECT userId FROM ${userData} b WHERE b.userId = a.userId)`,
     );
 
     // Step 10: Remove user jutsus where the jutsu ID no longer exists

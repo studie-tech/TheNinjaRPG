@@ -883,7 +883,7 @@ export const initiateBattle = async (
     // Fetch game assets
     fetchGameAssets(client),
     // Fetch game settings
-    client.select().from(gameSetting).where(like(gameSetting.name, "%regen%")),
+    client.select().from(gameSetting),
     // Fetch villages
     client.select().from(village),
     // Fetch village alliances

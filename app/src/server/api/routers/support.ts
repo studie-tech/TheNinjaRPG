@@ -881,7 +881,7 @@ export const calculateSupportMetrics = async (
 
   for (const ticket of tickets) {
     // Calculate first response time
-    const firstStaffResponse = ticket.conversation.comments.find(
+    const firstStaffResponse = ticket.conversation?.comments.find(
       (comment) => comment.user.role !== "USER",
     );
 

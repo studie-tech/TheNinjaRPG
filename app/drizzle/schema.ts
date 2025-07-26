@@ -294,6 +294,7 @@ export const battleHistoryRelations = relations(battleHistory, ({ one, many }) =
   attacker: one(userData, {
     fields: [battleHistory.attackedId],
     references: [userData.userId],
+    relationName: "attacker",
   }),
   defender: one(userData, {
     fields: [battleHistory.defenderId],
@@ -1858,6 +1859,7 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   bounties: many(bounty, { relationName: "bounties" }),
   bountySignups: many(bountySignup),
   userSkills: many(userSkill),
+  battleHistory: many(battleHistory, { relationName: "attacker" }),
 }));
 
 export const userActivityEvent = mysqlTable("UserActivityEvent", {
