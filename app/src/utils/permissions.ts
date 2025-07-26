@@ -570,5 +570,13 @@ export const canEditCannedResponses = (userRole: UserRole) => {
 };
 
 export const canAwardExperience = (user: UserData) => {
-  return ["CODING-ADMIN","CODER"].includes(user.role);
+  return ["CODING-ADMIN", "CODER"].includes(user.role);
+};
+
+export const canRollPrimaryElement = (user: UserData) => {
+  return !["STUDENT", "NONE"].includes(user.rank);
+};
+
+export const canRollSecondaryElement = (user: UserData) => {
+  return !["STUDENT", "GENIN", "NONE"].includes(user.rank);
 };

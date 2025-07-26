@@ -18,10 +18,11 @@ import { MAX_EXTRA_JUTSU_SLOTS } from "@/drizzle/constants";
 import { COST_REROLL_ELEMENT } from "@/drizzle/constants";
 import { RYO_FOR_REP_MAX_LISTINGS } from "@/drizzle/constants";
 import { RYO_FOR_REP_MIN_REPS } from "@/drizzle/constants";
-import { UserRanks, BasicElementName, ElementNames } from "@/drizzle/constants";
+import { BasicElementName, ElementNames } from "@/drizzle/constants";
 import { getRandomElement } from "@/utils/array";
 import { genders } from "@/validators/register";
 import { baseServerResponse, errorResponse } from "../trpc";
+import { canRollPrimaryElement, canRollSecondaryElement } from "@/utils/permissions";
 import { filterValidElementsTypeguard } from "@/libs/train";
 import type { DrizzleClient } from "@/server/db";
 import type { ElementName } from "@/drizzle/constants";
@@ -417,14 +418,16 @@ export const blackMarketRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         getRolledElements(ctx.drizzle, ctx.userId),
       ]);
-      const rankId = UserRanks.findIndex((r) => r === user.rank);
 
       // Guard
       if (user.reputationPoints < COST_REROLL_ELEMENT) {
         return errorResponse("Not enough reputation points");
       }
-      if (rankId < 1) {
-        return errorResponse("You must be at least a Genin to reroll elements");
+      if (input.elementType === "primary" && !canRollPrimaryElement(user)) {
+        return errorResponse("Must be at least a genin to reroll primary elements");
+      }
+      if (input.elementType === "secondary" && !canRollSecondaryElement(user)) {
+        return errorResponse("Must be at least a chunin to reroll secondary elements");
       }
 
       // All the promises to be executed at the end
