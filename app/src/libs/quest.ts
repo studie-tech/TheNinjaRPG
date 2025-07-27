@@ -196,7 +196,7 @@ export const getReward = (
       userQuest.quest.questType,
     );
     const factor =
-      missionLike && user.dailyMissions > 9 ? ADDITIONAL_MISSION_REWARD_MULTIPLIER : 1;
+      missionLike && user.dailyMissions >= 9 ? ADDITIONAL_MISSION_REWARD_MULTIPLIER : 1;
     rawRewards.reward_money = Math.floor(rawRewards.reward_money * factor);
     rawRewards.reward_clanpoints = Math.floor(rawRewards.reward_clanpoints * factor);
     rawRewards.reward_anbupoints = Math.floor(rawRewards.reward_anbupoints * factor);

@@ -315,12 +315,9 @@ export const questsRouter = createTRPCRouter({
                     gte(quest.startsAt, new Date().toISOString()),
                   ),
                   or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
-                  or(
-                    isNull(quest.requiredVillage),
-                    eq(
-                      quest.requiredVillage,
-                      input.userVillageId ?? VILLAGE_SYNDICATE_ID,
-                    ),
+                  eq(
+                    quest.requiredVillage,
+                    input.userVillageId ?? VILLAGE_SYNDICATE_ID,
                   ),
                 ),
               )
@@ -349,12 +346,9 @@ export const questsRouter = createTRPCRouter({
                     gte(quest.startsAt, new Date().toISOString()),
                   ),
                   or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
-                  or(
-                    isNull(quest.requiredVillage),
-                    eq(
-                      quest.requiredVillage,
-                      input.userVillageId ?? VILLAGE_SYNDICATE_ID,
-                    ),
+                  eq(
+                    quest.requiredVillage,
+                    input.userVillageId ?? VILLAGE_SYNDICATE_ID,
                   ),
                 ),
               ),
