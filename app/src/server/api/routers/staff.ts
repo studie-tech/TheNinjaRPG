@@ -52,6 +52,7 @@ import {
   userVote,
   village,
   userActivityEvent,
+  warKill,
 } from "@/drizzle/schema";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
@@ -854,5 +855,7 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
     client.delete(pollOption).where(eq(pollOption.createdByUserId, userId)),
     client.delete(userPollVote).where(eq(userPollVote.userId, userId)),
     client.delete(userUpload).where(eq(userUpload.userId, userId)),
+    client.delete(warKill).where(eq(warKill.killerId, userId)),
+    client.delete(warKill).where(eq(warKill.victimId, userId)),
   ]);
 };

@@ -1,7 +1,9 @@
 import React from "react";
 import ContentImage from "./ContentImage";
 import { useUserData } from "@/utils/UserContext";
-import { Info } from "lucide-react";
+import { Info, HelpCircle } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 import ElementImage from "@/layout/ElementImage";
 import { canChangeContent } from "@/utils/permissions";
 import {
@@ -12,6 +14,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "src/libs/shadui";
 import { type ItemRarity } from "@/drizzle/schema";
+import type { Item, Jutsu } from "@/drizzle/schema";
 import type { ZodAllTags } from "@/libs/combat/types";
 
 interface ActionSelectorProps {
@@ -57,6 +60,8 @@ interface ActionSelectorProps {
   renderItem?: (
     item: NonNullable<ActionSelectorProps["items"]>[number],
   ) => React.ReactNode;
+  /** When true, display a help icon on each item that shows details in a pop-over */
+  showInfoIcon?: boolean;
 }
 
 export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
@@ -140,6 +145,41 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                   }}
                 />
               )}
+
+              {/* Help / info icon */}
+              {props.showInfoIcon && (
+                <Popover>
+                  <PopoverTrigger
+                    className="absolute top-1 right-1 z-10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    <HelpCircle className="h-5 w-5 cursor-pointer text-white hover:text-orange-500" />
+                  </PopoverTrigger>
+                  <PopoverContent className="min-w-96 p-2">
+                    {item.type === "jutsu" ||
+                    item.type === "item" ||
+                    item.type === "basic" ? (
+                      <ItemWithEffects item={item as Item | Jutsu} hideImage />
+                    ) : (
+                      <div className="flex flex-col gap-2 text-sm">
+                        <span className="font-semibold">{item.name}</span>
+                        {item.effects && item.effects.length > 0 && (
+                          <div className="flex flex-col gap-1">
+                            {item.effects.map((e, idx) => (
+                              <span key={idx}>
+                                Effect {idx + 1}: {e.type}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              )}
+
               {elements.map((element, i) => (
                 <div
                   key={i}

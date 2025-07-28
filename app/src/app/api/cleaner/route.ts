@@ -8,7 +8,7 @@ import { userItem, mpvpBattleQueue, mpvpBattleUser } from "@/drizzle/schema";
 import { trainingLog, village, captcha, userRequest } from "@/drizzle/schema";
 import { battleHistory, battleAction, historicalAvatar, clan } from "@/drizzle/schema";
 import { conversation, user2conversation, conversationComment } from "@/drizzle/schema";
-import { rankedPvpQueue } from "@/drizzle/schema";
+import { rankedPvpQueue, warKill } from "@/drizzle/schema";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { secondsFromNow } from "@/utils/time";
 import { updateGameSetting, checkGameTimer } from "@/libs/gamesettings";
@@ -80,6 +80,7 @@ export async function GET() {
         and(
           lte(conversation.updatedAt, new Date(Date.now() - oneDay * 14)),
           eq(conversation.isPublic, 0),
+          eq(conversation.isStaffAvailable, false),
         ),
       );
 
@@ -112,6 +113,9 @@ export async function GET() {
     // Step 9: Delete user2conversation where the conversation does not exist anymore
     await drizzleDB.execute(
       sql`DELETE FROM ${user2conversation} a WHERE NOT EXISTS (SELECT id FROM ${conversation} b WHERE b.id = a.conversationId)`,
+    );
+    await drizzleDB.execute(
+      sql`DELETE FROM ${user2conversation} a WHERE NOT EXISTS (SELECT userId FROM ${userData} b WHERE b.userId = a.userId)`,
     );
 
     // Step 10: Remove user jutsus where the jutsu ID no longer exists
@@ -285,6 +289,11 @@ export async function GET() {
     // Clear rankedPvpQueue entries older than 1 day
     await drizzleDB.execute(
       sql`DELETE FROM ${rankedPvpQueue} WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 1 DAY`,
+    );
+
+    // Clear war kills older than 10 days
+    await drizzleDB.execute(
+      sql`DELETE FROM ${warKill} WHERE killedAt < CURRENT_TIMESTAMP(3) - INTERVAL 30 DAY`,
     );
 
     return Response.json(`OK`);

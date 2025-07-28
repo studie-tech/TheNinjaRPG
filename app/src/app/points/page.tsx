@@ -51,11 +51,7 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { cn } from "@/libs/shadui";
-import { format } from "date-fns";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import type { z } from "zod";
 import type { BuyRepsSchema } from "@/validators/points";

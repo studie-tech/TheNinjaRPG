@@ -294,6 +294,7 @@ export const battleHistoryRelations = relations(battleHistory, ({ one, many }) =
   attacker: one(userData, {
     fields: [battleHistory.attackedId],
     references: [userData.userId],
+    relationName: "attacker",
   }),
   defender: one(userData, {
     fields: [battleHistory.defenderId],
@@ -1695,6 +1696,7 @@ export const userData = mysqlTable(
       .notNull(),
     dailyMissions: smallint("dailyMissions", { unsigned: true }).default(0).notNull(),
     dailyErrands: smallint("dailyErrands", { unsigned: true }).default(0).notNull(),
+    dailyMedicalMissions: smallint("dailyMedicalMissions", { unsigned: true }).default(0).notNull(),
     dailyTrainings: smallint("dailyTrainings", { unsigned: true }).default(0).notNull(),
     movedTooFastCount: int("movedTooFastCount").default(0).notNull(),
     extraItemSlots: smallint("extraItemSlots", { unsigned: true }).default(0).notNull(),
@@ -1857,6 +1859,7 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   bounties: many(bounty, { relationName: "bounties" }),
   bountySignups: many(bountySignup),
   userSkills: many(userSkill),
+  battleHistory: many(battleHistory, { relationName: "attacker" }),
 }));
 
 export const userActivityEvent = mysqlTable("UserActivityEvent", {

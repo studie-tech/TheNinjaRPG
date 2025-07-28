@@ -15,6 +15,10 @@ import { userBattleAtom, combatActionIdAtom } from "@/utils/UserContext";
 import type { BattleState } from "@/libs/combat/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { Button } from "@/components/ui/button";
+import { LayoutGrid } from "lucide-react";
+import { useLocalStorage } from "@/hooks/localstorage";
 
 const Combat = dynamic(() => import("@/layout/Combat"));
 
@@ -24,6 +28,10 @@ export default function CombatPage() {
 
   // State
   const [actionId, setActionId] = useAtom(combatActionIdAtom);
+  const [showGridNumbers, setShowGridNumbers] = useLocalStorage<boolean>(
+    "showGridNumbers",
+    true,
+  );
   const [battleState, setBattleState] = useState<BattleState | undefined>(undefined);
   const [lastViewedVersion, setLastViewedVersion] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>("actions");
@@ -82,11 +90,12 @@ export default function CombatPage() {
           action={actions.find((a) => a.id === actionId)}
           userId={userId}
           setBattleState={setBattleState}
+          showGridNumbers={showGridNumbers}
         />
       )
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [versionId, actionId, userId, results]);
+  }, [versionId, actionId, userId, results, showGridNumbers]);
 
   // Handle key-presses
   useEffect(() => {
@@ -114,18 +123,29 @@ export default function CombatPage() {
     <div className="sm:container">
       <ContentBox
         title="Combat"
-        subtitle="Sparring"
+        subtitle={
+          battle?.battleType ? capitalizeFirstLetter(battle?.battleType) : "Sparring"
+        }
         padding={false}
         topRightContent={
           battle &&
           user &&
           userData?.status === "BATTLE" && (
-            <ActionTimer
-              user={user}
-              battle={battle}
-              isPending={battleState.isPending}
-              action={action}
-            />
+            <div className="flex flex-row items-center gap-2">
+              <ActionTimer
+                user={{ userId: userId, actionPoints: 0 }}
+                battle={battle}
+                isPending={battleState.isPending}
+              />
+              <Button
+                variant={showGridNumbers ? "default" : "outline"}
+                size="icon"
+                onClick={() => setShowGridNumbers(!showGridNumbers)}
+                className="h-8 w-8 min-w-8 min-h-8"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+            </div>
           )
         }
       >
@@ -144,6 +164,7 @@ export default function CombatPage() {
             <>
               {userData?.status === "BATTLE" && (
                 <ActionSelector
+                  showInfoIcon={true}
                   items={actions}
                   currentRound={battle.round}
                   showBgColor={true}
@@ -173,7 +194,7 @@ export default function CombatPage() {
               value={activeTab}
               onValueChange={setActiveTab}
             >
-              <TabsList className="w-full my-2">
+              <TabsList className="w-full mt-2 border-2 rounded-none">
                 <TabsTrigger value="actions" className="flex-1">
                   Actions
                 </TabsTrigger>
@@ -186,10 +207,12 @@ export default function CombatPage() {
                   )}
                 </TabsTrigger>
               </TabsList>
-              <TabsContent value="actions">
+              <TabsContent value="actions" className="mt-0 p-0">
                 {userData?.status === "BATTLE" && (
                   <ActionSelector
+                    showInfoIcon={true}
                     items={actions}
+                    className="p-1"
                     currentRound={battle.round}
                     showBgColor={true}
                     showLabels={true}
@@ -204,7 +227,7 @@ export default function CombatPage() {
                   />
                 )}
               </TabsContent>
-              <TabsContent value="history">
+              <TabsContent value="history" className="mt-0 pt-0">
                 <CombatHistory
                   battleId={battle.id}
                   battleVersion={battle.version}

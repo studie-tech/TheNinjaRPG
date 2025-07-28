@@ -96,6 +96,7 @@ export const drawCombatBackground = (
   // Groups for organizing objects
   const group_tiles = new Group();
   const group_edges = new Group();
+  const group_names = new Group();
 
   // Create the grid first
   const honeycombGrid = getBattleGrid(hexsize, {
@@ -141,6 +142,54 @@ export const drawCombatBackground = (
       edgeMesh.matrixAutoUpdate = false;
       group_edges.add(edgeMesh);
 
+      // Draw the name
+      // Draw the tile name using a 2D canvas and render as a texture on a sprite
+      // Draw the tile name using a 2D canvas and render as a texture on a sprite
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        // Set font and measure text
+        const fontSize = 18;
+        const text = tile.name ?? "";
+        ctx.font = `${fontSize}px Arial`;
+        const textWidth = ctx.measureText(text).width;
+
+        // Set canvas size based on text
+        canvas.width = Math.ceil(textWidth + 12);
+        canvas.height = Math.ceil(fontSize + 10);
+
+        // Redraw font after resizing
+        ctx.font = `${fontSize}px arial narrow`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.globalAlpha = 0.3; // Set alpha to 0.5 for all drawing
+        ctx.fillStyle = "white";
+        ctx.lineWidth = 4;
+
+        // Draw text with stroke for contrast
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        ctx.fillText(text, cx, cy);
+
+        // Create texture and sprite
+        const texture = createTexture(canvas);
+        texture.needsUpdate = true;
+        const spriteMaterial = new SpriteMaterial({ map: texture, transparent: true });
+        const sprite = new Sprite(spriteMaterial);
+
+        // Position the sprite at the tile center, slightly above the tile
+        // The z-index is set to be above the tile and edge meshes
+        sprite.position.set(tile.x, tile.y - (2 * cy) / 3, -8);
+
+        // Scale the sprite to fit the tile size
+        // Use hex size to determine a reasonable scale
+        const scale = (Math.max(tile.height, tile.width) * 0.2) / fontSize;
+        sprite.scale.set(canvas.width * scale, canvas.height * scale, 1);
+
+        // Add to the tiles group
+        group_names.add(sprite);
+      }
+
       // Draw any objects on the tiles based on randomness
       // const sprites = getMapSprites(prng, 1, "combat", tile, 0);
       // sprites.map((sprite) => group_assets.add(sprite));
@@ -150,7 +199,7 @@ export const drawCombatBackground = (
   // Reverse the order of objects in the group_assets
   // group_assets.children.sort((a, b) => b.position.y - a.position.y);
 
-  return { group_tiles, group_edges, honeycombGrid };
+  return { group_tiles, group_edges, group_names, honeycombGrid };
 };
 
 /**

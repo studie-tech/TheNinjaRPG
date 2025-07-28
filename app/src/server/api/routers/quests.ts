@@ -37,7 +37,12 @@ import { LetterRanks } from "@/drizzle/constants";
 import { calculateContentDiff } from "@/utils/diff";
 import { initiateBattle } from "@/routers/combat";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
-import { getNewTrackers, getReward, verifyQuestObjectiveFlow } from "@/libs/quest";
+import {
+  getNewTrackers,
+  getReward,
+  verifyQuestObjectiveFlow,
+  fallbackQuestsFilter,
+} from "@/libs/quest";
 import { getActiveObjectives } from "@/libs/quest";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { getMissionHallSettings } from "@/libs/quest";
@@ -51,6 +56,7 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { SENSEI_STUDENT_RYO_PER_MISSION } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
+import { ERRANDS_PER_DAY, MEDICAL_MISSIONS_PER_DAY } from "@/drizzle/constants";
 import { questFilteringSchema } from "@/validators/quest";
 import type { QuestConsequence } from "@/libs/quest";
 import {
@@ -114,6 +120,7 @@ export const questsRouter = createTRPCRouter({
         offset: skip,
         limit: input.limit,
       });
+      console.log("===========", results);
       results.forEach((r) => controlShownQuestLocationInformation(r));
       const nextCursor = results.length < input.limit ? null : currentCursor + 1;
       return {
@@ -275,45 +282,91 @@ export const questsRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch user
+      // Fetch all data in parallel
       const [updatedUser, sectorVillage, results] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         fetchSectorVillage(ctx.drizzle, input.userSector),
-        ctx.drizzle
-          .select({
-            ...getTableColumns(quest),
-            previousAttempts: questHistory.previousAttempts,
-            completed: questHistory.completed,
-          })
-          .from(quest)
-          .leftJoin(
-            questHistory,
-            and(
-              eq(quest.id, questHistory.questId),
-              eq(questHistory.userId, ctx.userId),
-            ),
-          )
-          .where(
-            and(
-              eq(quest.questType, input.type),
-              eq(quest.questRank, input.rank),
-              lte(quest.requiredLevel, input.userLevel),
-              gte(quest.maxLevel, input.userLevel),
-              or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
-              or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
-              or(
-                isNull(quest.requiredVillage),
-                eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
+        input.type === "medical"
+          ? ctx.drizzle
+              .select({
+                ...getTableColumns(quest),
+                previousAttempts: questHistory.previousAttempts,
+                completed: questHistory.completed,
+              })
+              .from(quest)
+              .leftJoin(
+                questHistory,
+                and(
+                  eq(quest.id, questHistory.questId),
+                  eq(questHistory.userId, ctx.userId),
+                ),
+              )
+              .where(
+                and(
+                  eq(quest.questType, input.type),
+                  eq(quest.questRank, input.rank),
+                  lte(quest.requiredLevel, input.userLevel),
+                  gte(quest.maxLevel, input.userLevel),
+                  or(
+                    isNull(quest.startsAt),
+                    gte(quest.startsAt, new Date().toISOString()),
+                  ),
+                  or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
+                  or(
+                    isNull(quest.requiredVillage),
+                    eq(
+                      quest.requiredVillage,
+                      input.userVillageId ?? VILLAGE_SYNDICATE_ID,
+                    ),
+                  ),
+                ),
+              )
+          : ctx.drizzle
+              .select({
+                ...getTableColumns(quest),
+                previousAttempts: questHistory.previousAttempts,
+                completed: questHistory.completed,
+              })
+              .from(quest)
+              .leftJoin(
+                questHistory,
+                and(
+                  eq(quest.id, questHistory.questId),
+                  eq(questHistory.userId, ctx.userId),
+                ),
+              )
+              .where(
+                and(
+                  eq(quest.questType, input.type),
+                  eq(quest.questRank, input.rank),
+                  lte(quest.requiredLevel, input.userLevel),
+                  gte(quest.maxLevel, input.userLevel),
+                  or(
+                    isNull(quest.startsAt),
+                    gte(quest.startsAt, new Date().toISOString()),
+                  ),
+                  or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
+                  or(
+                    isNull(quest.requiredVillage),
+                    eq(
+                      quest.requiredVillage,
+                      input.userVillageId ?? VILLAGE_SYNDICATE_ID,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
       ]);
-      // Destructure user & guard
+
       const { user } = updatedUser;
       if (!user) return errorResponse("User does not exist");
+
+      // For certain quest types, we fallback to lower ranks if the user does not have the required rank
+      const { filtered, rankInfo } = fallbackQuestsFilter(results, user, input.type);
+
+      // Additional guards
       if (user.sector !== input.userSector) return errorResponse("Sector mismatch");
       if (user.level !== input.userLevel) {
         return errorResponse("User level does not match");
@@ -332,9 +385,24 @@ export const questsRouter = createTRPCRouter({
         (s) => s.type === input.type && s.rank === input.rank,
       );
       const isErrand = setting?.type === "errand";
+      const isMedical = setting?.type === "medical";
       // Guards
       if (!setting) return errorResponse("Setting not found");
       if (user.isBanned) return errorResponse("You are banned");
+
+      // Check daily errand limit
+      if (isErrand && user.dailyErrands >= ERRANDS_PER_DAY) {
+        return errorResponse(
+          `You have reached your daily errand limit of ${ERRANDS_PER_DAY} errands. Please try again tomorrow.`,
+        );
+      }
+
+      // Check daily medical mission limit
+      if (isMedical && user.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY) {
+        return errorResponse(
+          `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`,
+        );
+      }
 
       // Check if user is allowed to perform this rank
       const ranks = availableQuestLetterRanks(user.rank);
@@ -365,11 +433,13 @@ export const questsRouter = createTRPCRouter({
           .set(
             isErrand
               ? { dailyErrands: sql`${userData.dailyErrands} + 1` }
-              : { dailyMissions: sql`${userData.dailyMissions} + 1` },
+              : isMedical
+                ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
+                : { dailyMissions: sql`${userData.dailyMissions} + 1` },
           )
           .where(eq(userData.userId, user.userId)),
       ]);
-      return { success: true, message: `Quest started: ${result.name}` };
+      return { success: true, message: `Quest started: ${result.name}${rankInfo}` };
     }),
   startQuest: protectedProcedure
     .input(z.object({ questId: z.string(), userSector: z.number() }))
@@ -552,11 +622,7 @@ export const questsRouter = createTRPCRouter({
       // Insert quest entry
       await Promise.all([
         upsertQuestEntry(ctx.drizzle, user, questData),
-        incrementDailyQuestCounter(
-          ctx.drizzle,
-          user,
-          ["mission", "crime", "medical"].includes(questData.questType),
-        ),
+        incrementDailyQuestCounter(ctx.drizzle, user, questData.questType),
       ]);
       return { success: true, message: `Quest started: ${questData.name}` };
     }),
@@ -1399,12 +1465,17 @@ export const upsertQuestEntries = async (
 export const incrementDailyQuestCounter = async (
   client: DrizzleClient,
   user: UserData,
-  enabled: boolean,
+  questType: string,
 ) => {
-  if (enabled) {
+  if (["mission", "crime", "medical"].includes(questType)) {
+    const updateField =
+      questType === "medical"
+        ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
+        : { dailyMissions: sql`${userData.dailyMissions} + 1` };
+
     await client
       .update(userData)
-      .set({ dailyMissions: sql`${userData.dailyMissions} + 1` })
+      .set(updateField)
       .where(eq(userData.userId, user.userId));
   }
 };

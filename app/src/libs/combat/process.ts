@@ -331,6 +331,9 @@ export const applyEffects = (
 
         return remainingDamage;
       };
+      // Store pre-shield damage for reflect/lifesteal/absorb calculations
+      const preShieldDamage = (c.damage ?? 0);
+      
       // Adjust damages and reduce shields
       if (target && user) {
         if (c.damage && c.damage > 0) {
@@ -346,6 +349,9 @@ export const applyEffects = (
           c.recoil = calcAdjustedDamage(user, c.recoil, c.types);
         }
       }
+      
+      // Store pre-shield damage for later use
+      c.preShieldDamage = preShieldDamage;
       return c;
     })
     .reduce(collapseConsequences, [] as Consequence[])
@@ -404,10 +410,14 @@ export const applyEffects = (
         }
         if (c.reflect && c.reflect > 0) {
           if (c.reflect > 0) {
-            user.curHealth -= c.reflect;
+            // Use pre-shield damage for the 60% cap calculation to avoid shield interference
+            const preShieldDamage = c.preShieldDamage ?? 0;
+            const maxReflect = preShieldDamage * 0.6;
+            const finalReflect = Math.min(c.reflect, maxReflect);
+            user.curHealth -= finalReflect;
             user.curHealth = Math.max(0, user.curHealth);
             actionEffects.push({
-              txt: `${user.username} takes ${c.reflect.toFixed(2)} reflect damage`,
+              txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage`,
               color: "red",
             });
           }
@@ -438,23 +448,26 @@ export const applyEffects = (
           target.curHealth > 0 &&
           user.curHealth > 0
         ) {
-          user.curHealth += c.lifesteal_hp;
+          // Use pre-shield damage for the 60% cap calculation to avoid shield interference
+          const preShieldDamage = c.preShieldDamage ?? 0;
+          const maxLifesteal = preShieldDamage * 0.6;
+          const finalLifesteal = Math.min(c.lifesteal_hp, maxLifesteal);
+          user.curHealth += finalLifesteal;
           user.curHealth = Math.min(user.maxHealth, user.curHealth);
           actionEffects.push({
-            txt: `${user.username} steals ${c.lifesteal_hp.toFixed(2)} damage as health`,
+            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health`,
             color: "green",
           });
         }
         if (c.absorb_hp && c.absorb_hp > 0 && target.curHealth > 0) {
-          const totalDamage = c.rawDamage ?? 0;
-          const maxAbsorb = totalDamage * 0.6;
-          if (c.absorb_hp > maxAbsorb) {
-            c.absorb_hp = maxAbsorb;
-          }
-          target.curHealth += c.absorb_hp;
+          // Use pre-shield damage for the 60% cap calculation to avoid shield interference
+          const preShieldDamage = c.preShieldDamage ?? 0;
+          const maxAbsorb = preShieldDamage * 0.6;
+          const absorbAmount = Math.min(c.absorb_hp, maxAbsorb);
+          target.curHealth += absorbAmount;
           target.curHealth = Math.min(target.maxHealth, target.curHealth);
           actionEffects.push({
-            txt: `${target.username} absorbs ${c.absorb_hp.toFixed(
+            txt: `${target.username} absorbs ${absorbAmount.toFixed(
               2,
             )} damage and converts it to health`,
             color: "green",

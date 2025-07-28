@@ -78,6 +78,7 @@ export const SHARED_COOLDOWN_TAGS = [
   "clearprevent",
   "seal",
   "increasepoolcost",
+  "afterburn",
 ] as const;
 
 export const LOG_TYPES = [
@@ -553,7 +554,7 @@ export const COST_SWAP_VILLAGE = 0;
 export const COST_RESET_STATS = 15;
 export const COST_EXTRA_ITEM_SLOT = 10;
 export const COST_EXTRA_JUTSU_SLOT = 50;
-export const COST_REROLL_ELEMENT = 20;
+export const COST_REROLL_ELEMENT = 10;
 export const COST_SKILL_RESET = 30;
 export const MAX_EXTRA_JUTSU_SLOTS = 2;
 export const BLOODLINE_ROLL_TYPES = [
@@ -586,7 +587,7 @@ export const ANBU_LEADER_RANK_REQUIREMENT = "JONIN";
 export const ANBU_MAX_MEMBERS = 4;
 export const ANBU_HOSPITAL_DISCOUNT_PERC = 5;
 export const ANBU_ITEMSHOP_DISCOUNT_PERC = 5;
-export const ANBU_DELAY_SECS = 24 * 3600;
+export const ANBU_DELAY_SECS = 5 * 24 * 3600; // Delay before kage can disband ANBU squads (5 days)
 export const ANBU_MAX_ESPIONAGE_LEVEL = 10;
 export const ANBU_ESPIONAGE_BASE_CHANCE_PERC = 10;
 export const ANBU_ESPIONAGE_CHANGE_PER_LEVEL = 5;
@@ -732,7 +733,7 @@ export const GATHERING_ITEM_DROP_CHANCES: Record<
     COMMON: 20,
     RARE: 15,
     EPIC: 5,
-    LEGENDARY: 11,
+    LEGENDARY: 1,
   },
   "B RANK": {
     COMMON: 25,
@@ -857,6 +858,7 @@ export const FED_EVENT_ITEMS_DEFAULT = 10;
 // Missions config
 export const ERRANDS_PER_DAY = 50;
 export const MISSIONS_PER_DAY = 20;
+export const MEDICAL_MISSIONS_PER_DAY = 9;
 export const ADDITIONAL_MISSION_REWARD_MULTIPLIER = 0.4;
 
 // War config
@@ -906,6 +908,13 @@ export const WAR_STATES = [
 export const WAR_TYPES = ["VILLAGE_WAR", "SECTOR_WAR", "WAR_RAID"] as const;
 export type WarType = (typeof WAR_TYPES)[number];
 export type WarState = (typeof WAR_STATES)[number];
+
+// PvP Rewards
+export const PVP_KILL_TOKEN_REWARD = 300; // Base village tokens for PvP kill
+export const PVP_KILL_TOKEN_REWARD_ANBU = 500; // Village tokens for PvP kill by ANBU member
+export const PVP_KILL_PRESTIGE_REWARD = 150; // Base prestige for PvP kill
+export const PVP_KILL_PRESTIGE_REWARD_ANBU = 300; // Prestige for PvP kill by ANBU member
+export const PVP_KILL_ANBU_POINTS_REWARD = 5; // ANBU points for PvP kill by ANBU member
 
 // Clans config
 export const CLAN_MPVP_MAX_USERS_PER_SIDE = 3;
@@ -959,7 +968,7 @@ export const KAGE_CHALLENGE_SECS = KAGE_CHALLENGE_MINS * 60; // 10 minutes for a
 export const KAGE_CHALLENGE_TIMEOUT_MINS = 30; // Timeout for PvP kage battle
 export const KAGE_DAILY_PRESTIGE_LOSS = 500; // Kage prestige loss
 export const KAGE_DEFAULT_PRESTIGE = 5000; // Starting prestige of kage
-export const KAGE_DELAY_SECS = 24 * 3600; // Delay before kage can perform actions
+export const KAGE_DELAY_SECS = 5 * 24 * 3600; // Delay before kage can perform actions (5 days)
 export const KAGE_ELDER_MIN_DAYS = 100; // minimum days in village to be elder
 export const KAGE_REQUESTS_SHOW_SECONDS = 24 * 60 * 60; // Show requests for 24 hours
 export const KAGE_MAX_DAILIES = 3;
@@ -974,8 +983,10 @@ export const KAGE_WAR_DECLARE_COST = 10000; // Declare war cost
 export const KAGE_CHALLENGE_REJECT_COST = 10000; // Cost of rejecting a challenge
 export const KAGE_CHALLENGE_ACCEPT_PRESTIGE = 2000; // Kage prestige gain of accepting challenge
 export const KAGE_CHALLENGE_WIN_PRESTIGE = 5000; // Kage prestige gain of winning challenge
-export const KAGE_CHALLENGE_LOSE_PRESTIGE_PER_HOUR = 500; // Kage prestige loss of not accepting challenges
+export const KAGE_CHALLENGE_LOSE_PRESTIGE_MIN = 1500; // Minimum prestige cost per hour for closed challenges
+export const KAGE_CHALLENGE_LOSE_PRESTIGE_PERCENTAGE = 0.04; // 4% of current prestige for closed challenges (current implementation)
 export const KAGE_CHALLENGE_OPEN_FOR_SECONDS = 60 * 60; // Time in between being able to toggle challenges
+export const KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS = 12; // Maximum hours per day that challenges can be locked
 export const KAGE_UNACCEPTED_CHALLENGE_COST = 15000; // Cost of unaccepted challenge, i.e. going to Ai vs Ai
 export const WAR_FUNDS_COST = 10000; // Prestige cost of declaring war
 

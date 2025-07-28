@@ -8,6 +8,9 @@ import ActionTimer from "@/layout/ActionTimer";
 import ContentBox from "@/layout/ContentBox";
 import CombatHistory from "@/layout/CombatHistory";
 import type { BattleState } from "@/libs/combat/types";
+import { Button } from "@/components/ui/button";
+import { LayoutGrid } from "lucide-react";
+import { useLocalStorage } from "@/hooks/localstorage";
 
 const Combat = dynamic(() => import("@/layout/Combat"));
 
@@ -15,6 +18,10 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
   const params = use(props.params);
   // State
   const [userId, setUserId] = useState<string | undefined>(undefined);
+  const [showGridNumbers, setShowGridNumbers] = useLocalStorage<boolean>(
+    "showGridNumbers",
+    true,
+  );
   const [battleState, setBattleState] = useState<BattleState | undefined>(undefined);
   const battleId = params.battleid;
 
@@ -45,11 +52,12 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
           action={undefined}
           userId={userId}
           setBattleState={setBattleState}
+          showGridNumbers={showGridNumbers}
         />
       )
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [versionId, userId]);
+  }, [versionId, userId, showGridNumbers]);
 
   return (
     <ContentBox
@@ -58,13 +66,23 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
       back_href="/profile"
       padding={false}
       topRightContent={
-        battle && (
-          <ActionTimer
-            user={{ userId: userId, actionPoints: 0 }}
-            battle={battle}
-            isPending={battleState.isPending}
-          />
-        )
+        <div className="flex flex-row items-center gap-2">
+          {battle && (
+            <ActionTimer
+              user={{ userId: userId, actionPoints: 0 }}
+              battle={battle}
+              isPending={battleState.isPending}
+            />
+          )}
+          <Button
+            variant={showGridNumbers ? "default" : "outline"}
+            size="icon"
+            onClick={() => setShowGridNumbers(!showGridNumbers)}
+            className="h-8 w-8 min-w-8 min-h-8"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+        </div>
       }
     >
       {combat}

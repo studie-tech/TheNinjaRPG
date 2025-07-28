@@ -146,6 +146,7 @@ export type CombatResult = {
   friendsLeft: number;
   targetsLeft: number;
   villageTokens: number;
+  anbuPoints: number;
   townhallChangeHP: number;
   shrineChangeHp: number;
   townhallInfo: Record<string, number>;
@@ -222,6 +223,7 @@ export type Consequence = {
   drain_cp?: number;
   drain_sp?: number;
   poison?: number;
+  preShieldDamage?: number;
   types?: (GeneralType | StatType | ElementName | PoolType | ZodAllTags["type"])[];
 };
 

@@ -86,13 +86,15 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
 
   // Update ticket mutation
   const updateTicket = api.support.updateTicket.useMutation({
-    onSuccess: () => {
-      showMutationToast({
-        success: true,
-        message: "Ticket updated successfully!",
-      });
-      void utils.support.getTicket.invalidate({ ticketId: params.ticketId });
-      setRefreshKey((prev) => prev + 1);
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await Promise.all([
+          utils.support.getTicket.invalidate({ ticketId: params.ticketId }),
+          utils.support.getTickets.invalidate(),
+        ]);
+        setRefreshKey((prev) => prev + 1);
+      }
     },
   });
 
@@ -101,7 +103,10 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        void utils.support.getTicket.invalidate({ ticketId: params.ticketId });
+        await Promise.all([
+          utils.support.getTicket.invalidate({ ticketId: params.ticketId }),
+          utils.support.getTickets.invalidate(),
+        ]);
         setRefreshKey((prev) => prev + 1);
       }
     },
@@ -450,6 +455,12 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
         convo_id={ticket.conversationId}
         title="Conversation"
         subtitle="Talk with staff"
+        onCommentPosted={() => {
+          updateTicket.mutate({
+            ticketId: params.ticketId,
+            status: "IN_PROGRESS",
+          });
+        }}
       />
 
       {/* Canned Responses */}

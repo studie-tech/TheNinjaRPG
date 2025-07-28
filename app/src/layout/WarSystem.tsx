@@ -1126,13 +1126,18 @@ export const VillageWar: React.FC<{
         className="max-w-[99%]"
       >
         <div className="min-h-[200px]">
+          <p className="text-sm text-muted-foreground">
+            Kills are recorded for 30 days after the war ends.
+          </p>
           {warKills && warKills.length > 0 ? (
-            <Table
-              data={tableData}
-              columns={killColumns}
-              linkColumn="killerId"
-              linkPrefix="/userid/"
-            />
+            <div className="border rounded-lg">
+              <Table
+                data={tableData}
+                columns={killColumns}
+                linkColumn="killerId"
+                linkPrefix="/userid/"
+              />
+            </div>
           ) : (
             <p className="text-center text-muted-foreground">No kills recorded yet</p>
           )}

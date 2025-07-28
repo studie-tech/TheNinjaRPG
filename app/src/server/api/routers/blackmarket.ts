@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, sql, gte, gt, and, asc, desc, isNull, isNotNull } from "drizzle-orm";
+import { eq, sql, gte, gt, and, or, asc, desc, isNull, isNotNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { fetchUser } from "./profile";
@@ -18,11 +18,16 @@ import { MAX_EXTRA_JUTSU_SLOTS } from "@/drizzle/constants";
 import { COST_REROLL_ELEMENT } from "@/drizzle/constants";
 import { RYO_FOR_REP_MAX_LISTINGS } from "@/drizzle/constants";
 import { RYO_FOR_REP_MIN_REPS } from "@/drizzle/constants";
-import { UserRanks, BasicElementName } from "@/drizzle/constants";
+import { BasicElementName, ElementNames } from "@/drizzle/constants";
 import { getRandomElement } from "@/utils/array";
 import { genders } from "@/validators/register";
 import { baseServerResponse, errorResponse } from "../trpc";
+import { canRollPrimaryElement, canRollSecondaryElement } from "@/utils/permissions";
+import { filterValidElementsTypeguard } from "@/libs/train";
 import type { DrizzleClient } from "@/server/db";
+import type { ElementName } from "@/drizzle/constants";
+import type { DatabasePromiseReturn } from "@/utils/typeutils";
+
 import { canChangeContent } from "@/utils/permissions";
 
 export const blackMarketRouter = createTRPCRouter({
@@ -405,49 +410,103 @@ export const blackMarketRouter = createTRPCRouter({
       }
     }),
   rerollElement: protectedProcedure
+    .input(z.object({ elementType: z.enum(["primary", "secondary"]) }))
     .output(baseServerResponse)
-    .mutation(async ({ ctx }) => {
-      // Fetch
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+    .mutation(async ({ ctx, input }) => {
+      // Fetch user and rolled elements in parallel
+      const [user, rollHistory] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        getRolledElements(ctx.drizzle, ctx.userId),
+      ]);
+
       // Guard
       if (user.reputationPoints < COST_REROLL_ELEMENT) {
         return errorResponse("Not enough reputation points");
       }
-      // Get the updated elements
-      const rankId = UserRanks.findIndex((r) => r === user.rank);
-      if (rankId >= 1) {
-        const available = BasicElementName.filter((e) => e !== user.primaryElement);
-        user.primaryElement = getRandomElement(available) ?? null;
+      if (input.elementType === "primary" && !canRollPrimaryElement(user)) {
+        return errorResponse("Must be at least a genin to reroll primary elements");
       }
-      if (user.secondaryElement) {
-        const available = BasicElementName.filter(
-          (e) => ![user.primaryElement, user.secondaryElement].includes(e),
+      if (input.elementType === "secondary" && !canRollSecondaryElement(user)) {
+        return errorResponse("Must be at least a chunin to reroll secondary elements");
+      }
+
+      // All the promises to be executed at the end
+      const mutations: Promise<DatabasePromiseReturn>[] = [];
+
+      // Ensure current elements are in actionLog if not already tracked
+      if (user.primaryElement && !rollHistory.primary.includes(user.primaryElement)) {
+        mutations.push(
+          addElementRoll(ctx.drizzle, ctx.userId, "primary", user.primaryElement),
         );
-        user.secondaryElement = getRandomElement(available) ?? null;
+        rollHistory.primary.push(user.primaryElement);
       }
-      // Mutate
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
-          primaryElement: user.primaryElement,
-          secondaryElement: user.secondaryElement,
-          reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
-        })
-        .where(eq(userData.userId, ctx.userId));
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
+      if (
+        user.secondaryElement &&
+        !rollHistory.secondary.includes(user.secondaryElement)
+      ) {
+        mutations.push(
+          addElementRoll(ctx.drizzle, ctx.userId, "secondary", user.secondaryElement),
+        );
+        rollHistory.secondary.push(user.secondaryElement);
+      }
+
+      // Execute all addElementRoll operations in parallel
+      if (mutations.length > 0) {
+        await Promise.all(mutations);
+      }
+
+      // Get the new element
+      const result = rerollElementType(
+        input.elementType,
+        input.elementType === "primary" ? user.primaryElement : user.secondaryElement,
+        input.elementType === "primary" ? user.secondaryElement : user.primaryElement,
+        input.elementType === "primary" ? rollHistory.primary : rollHistory.secondary,
+      );
+      if (!result.element) {
+        return errorResponse("No element found");
+      }
+
+      // Add promises to the mutations
+      if (result.reset) {
+        mutations.push(
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "elementRoll",
+            changes: [`${input.elementType} element tracking reset`],
+            relatedMsg: `RESET: ${input.elementType}`,
+          }),
+        );
+      }
+
+      // Mutation for updating the user data
+      const updateData: Record<string, unknown> = {
+        reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
+      };
+      if (input.elementType === "primary") {
+        updateData.primaryElement = result.element;
       } else {
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "user",
-          changes: ["Element rerolled"],
-          relatedId: ctx.userId,
-          relatedMsg: "Update: Element rerolled",
-          relatedImage: user.avatarLight,
-        });
-        return { success: true, message: "Element rerolled" };
+        updateData.secondaryElement = result.element;
       }
+      mutations.push(
+        ctx.drizzle
+          .update(userData)
+          .set(updateData)
+          .where(eq(userData.userId, ctx.userId)),
+      );
+
+      // Add element roll to actionLog for the new element
+      mutations.push(
+        addElementRoll(ctx.drizzle, ctx.userId, input.elementType, result.element),
+      );
+
+      // Run all the mutations in parallel
+      await Promise.all(mutations);
+
+      return {
+        success: true,
+        message: `Element rerolled successfully. ${result.changes.join(", ")}`,
+      };
     }),
   // Update stats
   updateStats: protectedProcedure
@@ -526,4 +585,148 @@ export const fetchActiveUserOffers = async (client: DrizzleClient, userId: strin
   return await client.query.ryoTrade.findMany({
     where: and(eq(ryoTrade.creatorUserId, userId), isNull(ryoTrade.purchaserUserId)),
   });
+};
+
+/**
+ * Gets the rolled elements from actionLog.
+ *
+ * @param {DrizzleClient} client - The Drizzle client used to make the query.
+ * @param {string} userId - The ID of the user who rolled the element.
+ * @param {string} elementType - The type of element rolled (primary or secondary).
+ * @returns {Promise<{primary: string[], secondary: string[]}>} A promise that resolves to an object containing the rolled elements.
+ */
+export const getRolledElements = async (client: DrizzleClient, userId: string) => {
+  // Get all relevant logs (resets and element rolls) in a single query
+  const allLogs = await client
+    .select({
+      relatedMsg: actionLog.relatedMsg,
+      createdAt: actionLog.createdAt,
+    })
+    .from(actionLog)
+    .where(and(eq(actionLog.userId, userId), eq(actionLog.tableName, "elementRoll")))
+    .orderBy(asc(actionLog.createdAt));
+
+  // Find the latest reset times
+  const resetLogs = allLogs.filter((log) => log.relatedMsg?.startsWith("RESET:"));
+  const primaryResetLogs = resetLogs.filter(
+    (log) => log.relatedMsg === "RESET: primary",
+  );
+  const secondaryResetLogs = resetLogs.filter(
+    (log) => log.relatedMsg === "RESET: secondary",
+  );
+  const lastPrimaryReset =
+    primaryResetLogs.length > 0
+      ? (primaryResetLogs[primaryResetLogs.length - 1]?.createdAt.getTime() ?? 0)
+      : 0;
+  const lastSecondaryReset =
+    secondaryResetLogs.length > 0
+      ? (secondaryResetLogs[secondaryResetLogs.length - 1]?.createdAt.getTime() ?? 0)
+      : 0;
+
+  // Filter element rolls that occurred after their respective resets
+  const elementRolls = allLogs.filter((log) => {
+    if (!log.relatedMsg || log.relatedMsg.startsWith("RESET:")) return false;
+
+    if (log.relatedMsg.startsWith("Primary: ")) {
+      return log.createdAt.getTime() > lastPrimaryReset;
+    }
+    if (log.relatedMsg.startsWith("Secondary: ")) {
+      return log.createdAt.getTime() > lastSecondaryReset;
+    }
+    return false;
+  });
+
+  // Process the rolls and separate by type
+  const primaryElements: string[] = [];
+  const secondaryElements: string[] = [];
+  for (const log of elementRolls) {
+    if (!log.relatedMsg) continue;
+
+    if (log.relatedMsg.startsWith("Primary: ")) {
+      const element = log.relatedMsg.replace("Primary: ", "").trim();
+      if (
+        element &&
+        ElementNames.includes(element as ElementName) &&
+        !primaryElements.includes(element)
+      ) {
+        primaryElements.push(element);
+      }
+    } else if (log.relatedMsg.startsWith("Secondary: ")) {
+      const element = log.relatedMsg.replace("Secondary: ", "").trim();
+      if (
+        element &&
+        ElementNames.includes(element as ElementName) &&
+        !secondaryElements.includes(element)
+      ) {
+        secondaryElements.push(element);
+      }
+    }
+  }
+
+  // Return elements
+  return {
+    primary: filterValidElementsTypeguard(primaryElements),
+    secondary: filterValidElementsTypeguard(secondaryElements),
+  };
+};
+
+/**
+ * Adds a new element roll to actionLog.
+ *
+ * @param {DrizzleClient} client - The Drizzle client used to make the query.
+ * @param {string} userId - The ID of the user who rolled the element.
+ * @param {string} elementType - The type of element rolled (primary or secondary).
+ * @param {string} element - The name of the element rolled.
+ */
+const addElementRoll = async (
+  client: DrizzleClient,
+  userId: string,
+  elementType: "primary" | "secondary",
+  element: ElementName,
+) => {
+  await client.insert(actionLog).values({
+    id: nanoid(),
+    userId: userId,
+    tableName: "elementRoll",
+    changes: [`${elementType} element rolled`],
+    relatedMsg: `${elementType === "primary" ? "Primary" : "Secondary"}: ${element}`,
+  });
+};
+
+/**
+ * Rerolls an element type.
+ *
+ * @param {DrizzleClient} client - The Drizzle client used to make the query.
+ * @param {string} userId - The ID of the user who rolled the element.
+ * @param {string} elementType - The type of element rolled (primary or secondary).
+ * @param currentElement
+ * @param oppositeElement
+ * @param rolledElements
+ * @returns
+ */
+const rerollElementType = (
+  elementType: "primary" | "secondary",
+  currentElement: ElementName | null,
+  oppositeElement: ElementName | null,
+  rolledElements: ElementName[],
+) => {
+  // Exclude the opposite element, and current element if it's not already in rolledElements, and previously rolled elements
+  const excludedElements = oppositeElement ? [oppositeElement] : [];
+  if (currentElement && !rolledElements.includes(currentElement)) {
+    excludedElements.push(currentElement);
+  }
+  excludedElements.push(...rolledElements);
+
+  // Get available elements (only basic types)
+  const elementsLeft = BasicElementName.filter((e) => !excludedElements.includes(e));
+  const shouldReset = elementsLeft.length === 0;
+  const available = shouldReset
+    ? BasicElementName.filter((e) => e !== oppositeElement)
+    : elementsLeft;
+
+  return {
+    element: getRandomElement(available) ?? null,
+    reset: shouldReset,
+    changes: [`${elementType} element rerolled ${shouldReset ? "(reset)" : ""}`],
+  };
 };

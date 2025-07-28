@@ -1,14 +1,16 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Loader from "./Loader";
 import ElementImage from "@/layout/ElementImage";
 import { api } from "@/app/_trpc/client";
 import { groupBy } from "@/utils/grouping";
 import { insertComponentsIntoText } from "@/utils/string";
 import { cn } from "src/libs/shadui";
+import { parseHtml } from "@/utils/parse";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { canViewFullBattleLog } from "@/utils/permissions";
 import type { CombatResult } from "@/libs/combat/types";
 import type { ActionEffect } from "@/libs/combat/types";
+import { ChevronsDown } from "lucide-react";
 
 interface CombatHistoryProps {
   battleId: string;
@@ -22,6 +24,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
   // State
   const { battleId, battleVersion, battleRound, results, asc } = props;
   const { data: userData } = useRequiredUserData();
+  const [openRounds, setOpenRounds] = useState<number[]>([]);
 
   // From database
   const { data: allEntries, isFetching } = api.combat.getBattleEntries.useQuery(
@@ -67,118 +70,166 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
 
   // Create the history
   const history: React.ReactNode[] = [];
+
+  // Ensure the latest round is opened by default or whenever a new round appears
+  useEffect(() => {
+    if (maxRound) {
+      const latest = maxRound;
+      const secondLatest = maxRound - 1;
+      setOpenRounds([latest, secondLatest].filter((r) => r > 0));
+    }
+  }, [maxRound]);
+
   sortedGroups?.forEach((entries, round) => {
+    const isOpen = openRounds.includes(round);
+
+    const roundHeader = (
+      <div
+        className={cn(
+          "flex items-center gap-2 py-1 px-1 rounded-md hover:bg-slate-200 cursor-pointer",
+          isOpen && "bg-slate-300",
+        )}
+        onClick={() => {
+          setOpenRounds((prev) =>
+            isOpen ? prev.filter((r) => r !== round) : [...prev, round],
+          );
+        }}
+      >
+        <div className="w-2 h-2 rounded-full bg-gray-700" />
+        <ChevronsDown
+          className={cn(
+            "h-4 w-4 transition-transform text-gray-700",
+            !isOpen && "-rotate-90",
+          )}
+        />
+        <span className="text-sm font-semibold text-gray-800">Round {round}</span>
+      </div>
+    );
+
+    const latestRoundBattleVersion = entries?.sort(
+      (a, b) => b.battleVersion - a.battleVersion,
+    )?.[0]?.battleVersion;
+
     history.push(
-      <li key={`r-${round}`} className=" ml-4">
-        <div className="absolute w-3 h-3 rounded-full mt-1.5 -left-1.5 border border-gray-900 bg-gray-700"></div>
-        <time className="mb-1 text-sm font-normal leading-none text-gray-900">
-          Round {round}
-        </time>
-        {entries
-          .sort((a, b) => b.battleVersion - a.battleVersion)
-          .map((entry) => {
-            const effects = entry.appliedEffects as ActionEffect[];
-            return (
-              <div
-                key={`v-${entry.battleVersion}`}
-                className="mb-4 text-base font-normal text-gray-500"
-              >
-                {userData?.showBattleDescription
-                  ? `#${entry.battleVersion}: ${entry.description}`
-                  : ""}
-                {effects?.map((effect, i) => {
-                  const color =
-                    effect.color === "red"
-                      ? "text-red-500"
-                      : effect.color === "blue"
-                        ? "text-blue-500"
-                        : effect.color === "green"
-                          ? "text-green-500"
-                          : effect.color === "yellow"
-                            ? "text-yellow-500"
-                            : effect.color === "purple"
-                              ? "text-purple-500"
-                              : effect.color === "orange"
-                                ? "text-orange-500"
-                                : effect.color === "pink"
-                                  ? "text-pink-500"
-                                  : effect.color === "gray"
-                                    ? "text-gray-500"
-                                    : "text-black";
-                  const text = insertComponentsIntoText(effect.txt, {
-                    Highest: (
-                      <span key={`${round}-${i}-H`} className="text-stone-500">
-                        Highest
-                      </span>
-                    ),
-                    Taijutsu: (
-                      <span key={`${round}-${i}-T`} className="text-green-600">
-                        Taijutsu
-                      </span>
-                    ),
-                    Bukijutsu: (
-                      <span key={`${round}-${i}-B`} className="text-red-600">
-                        Bukijutsu
-                      </span>
-                    ),
-                    Ninjutsu: (
-                      <span key={`${round}-${i}-N`} className="text-blue-600">
-                        Ninjutsu
-                      </span>
-                    ),
-                    Genjutsu: (
-                      <span key={`${round}-${i}-G`} className="text-purple-600">
-                        Genjutsu
-                      </span>
-                    ),
-                    Strength: (
-                      <span key={`${round}-${i}-Str`} className="text-blue-800">
-                        Strength
-                      </span>
-                    ),
-                    Intelligence: (
-                      <span key={`${round}-${i}-I`} className="text-teal-600">
-                        Intelligence
-                      </span>
-                    ),
-                    Willpower: (
-                      <span key={`${round}-${i}-W`} className="text-orange-600">
-                        Willpower
-                      </span>
-                    ),
-                    Speed: (
-                      <span key={`${round}-${i}-Spd`} className="text-cyan-600">
-                        Speed
-                      </span>
-                    ),
-                  });
-                  return (
-                    <div key={`combathistory-${i}`} className={cn(color)}>
-                      - {text}{" "}
-                      <div className="pl-2 flex flex-row items-center gap-1">
-                        {effect.types?.map((t, ti) => (
-                          <ElementImage key={ti} element={t} className="w-5 h-5" />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
+      <li key={`r-${round}`} className="pl-2 relative">
+        {roundHeader}
+        <div className="flex flex-col gap-1">
+          {isOpen &&
+            entries
+              .sort((a, b) => b.battleVersion - a.battleVersion)
+              .map((entry) => {
+                const effects = entry.appliedEffects as ActionEffect[];
+                const isNewUser =
+                  entry.description.includes(". It is now ") ||
+                  entry.description.includes("End Turn: ");
+                const isLastEntry = entry.battleVersion === latestRoundBattleVersion;
+                return (
+                  <div
+                    key={`v-${entry.battleVersion}`}
+                    className="text-sm font-normal text-gray-600 pl-4 py-1"
+                  >
+                    {isNewUser && !isLastEntry ? <hr className="mb-3 mt-0" /> : null}
+                    {userData?.showBattleDescription ? (
+                      <p>
+                        #{entry.battleVersion}: {parseHtml(entry.description)}
+                      </p>
+                    ) : (
+                      ""
+                    )}
+                    {effects?.map((effect, i) => {
+                      const color =
+                        effect.color === "red"
+                          ? "text-red-500"
+                          : effect.color === "blue"
+                            ? "text-blue-500"
+                            : effect.color === "green"
+                              ? "text-green-500"
+                              : effect.color === "yellow"
+                                ? "text-yellow-500"
+                                : effect.color === "purple"
+                                  ? "text-purple-500"
+                                  : effect.color === "orange"
+                                    ? "text-orange-500"
+                                    : effect.color === "pink"
+                                      ? "text-pink-500"
+                                      : effect.color === "gray"
+                                        ? "text-gray-500"
+                                        : "text-black";
+                      const text = insertComponentsIntoText(effect.txt, {
+                        Highest: (
+                          <span key={`${round}-${i}-H`} className="text-stone-500">
+                            Highest
+                          </span>
+                        ),
+                        Taijutsu: (
+                          <span key={`${round}-${i}-T`} className="text-green-600">
+                            Taijutsu
+                          </span>
+                        ),
+                        Bukijutsu: (
+                          <span key={`${round}-${i}-B`} className="text-red-600">
+                            Bukijutsu
+                          </span>
+                        ),
+                        Ninjutsu: (
+                          <span key={`${round}-${i}-N`} className="text-blue-600">
+                            Ninjutsu
+                          </span>
+                        ),
+                        Genjutsu: (
+                          <span key={`${round}-${i}-G`} className="text-purple-600">
+                            Genjutsu
+                          </span>
+                        ),
+                        Strength: (
+                          <span key={`${round}-${i}-Str`} className="text-blue-800">
+                            Strength
+                          </span>
+                        ),
+                        Intelligence: (
+                          <span key={`${round}-${i}-I`} className="text-teal-600">
+                            Intelligence
+                          </span>
+                        ),
+                        Willpower: (
+                          <span key={`${round}-${i}-W`} className="text-orange-600">
+                            Willpower
+                          </span>
+                        ),
+                        Speed: (
+                          <span key={`${round}-${i}-Spd`} className="text-cyan-600">
+                            Speed
+                          </span>
+                        ),
+                      });
+                      return (
+                        <div key={`combathistory-${i}`} className={cn(color)}>
+                          - {text}{" "}
+                          <div className="pl-2 flex flex-row items-center gap-1">
+                            {effect.types?.map((t, ti) => (
+                              <ElementImage key={ti} element={t} className="w-5 h-5" />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+        </div>
       </li>,
     );
   });
 
   // Show component
   return (
-    <div className="relative flex flex-col border-b-2 border-l-2 pl-2 border-r-2 bg-slate-100 max-h-80 overflow-auto">
+    <div className="relative flex flex-col border-b-2 border-l-2 pt-2 border-r-2 bg-slate-100 overflow-auto">
       {isFetching && (
         <div className="absolute right-2 top-2">
           <Loader />
         </div>
       )}
-      <ol className="relative border-l border-gray-700 w-full">{history}</ol>
+      <ol className="w-full">{history}</ol>
     </div>
   );
 };

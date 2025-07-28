@@ -45,6 +45,11 @@ import {
   WAR_SECTORWAR_AI_SHRINE_RECOVER,
   WAR_SECTORWAR_PVP_SHRINE_REDUCE,
   WAR_SECTORWAR_PVP_SHRINE_RECOVER,
+  PVP_KILL_TOKEN_REWARD,
+  PVP_KILL_TOKEN_REWARD_ANBU,
+  PVP_KILL_PRESTIGE_REWARD,
+  PVP_KILL_PRESTIGE_REWARD_ANBU,
+  PVP_KILL_ANBU_POINTS_REWARD,
 } from "@/drizzle/constants";
 import { calculateLpEloChange } from "@/libs/ranked_pvp";
 import { checkCoLeader } from "@/validators/clan";
@@ -101,6 +106,7 @@ export const getBattleGrid = (hexsize: number, origin?: { x: number; y: number }
     })
     .map((tile) => {
       tile.cost = 1;
+      tile.name = `${String.fromCharCode(65 + tile.col)}${tile.row + 1}`;
       return tile;
     });
   return grid;
@@ -644,6 +650,7 @@ export const calcBattleResult = (
       // Tokens & prestige
       let deltaTokens = 0;
       let deltaPrestige = 0;
+      let deltaAnbuPoints = 0;
       let clanPoints = 0;
 
       // Money/ryo calculation
@@ -700,7 +707,33 @@ export const calcBattleResult = (
             deltaPrestige -= isAlly || sameVillage ? FRIENDLY_PRESTIGE_COST : 0;
           }
 
-          // Village tokens for killing enemies
+          // Base prestige for PvP kill (only for enemies)
+          if (
+            user.isOutlaw ||
+            !target.relations.some(
+              (r) =>
+                (r.status === "ALLY" &&
+                  ((r.villageIdA === vilId && r.villageIdB === target.villageId) ||
+                    (r.villageIdA === target.villageId && r.villageIdB === vilId))) ||
+                target.villageId === vilId,
+            )
+          ) {
+            deltaPrestige += user.anbuId
+              ? PVP_KILL_PRESTIGE_REWARD_ANBU
+              : PVP_KILL_PRESTIGE_REWARD;
+
+            // Base village tokens for PvP kill (only for enemies)
+            deltaTokens += user.anbuId
+              ? PVP_KILL_TOKEN_REWARD_ANBU
+              : PVP_KILL_TOKEN_REWARD;
+
+            // ANBU points for PvP kill (only if target is not more than 10 levels under)
+            if (user.anbuId && user.level - target.level <= 10) {
+              deltaAnbuPoints += PVP_KILL_ANBU_POINTS_REWARD;
+            }
+          }
+
+          // Additional village tokens for killing enemies
           deltaTokens +=
             target.relations
               .filter((r) => r.status === "ENEMY")
@@ -857,20 +890,30 @@ export const calcBattleResult = (
       // Adjust shrine & townhall datamage based on level different
       const maxTargetLevel = Math.max(...targets.map((t) => t.level), 0);
       if (Math.abs(user.level - maxTargetLevel) > STREAK_LEVEL_DIFF) {
+        // Check if any kage was killed in this battle
+        const wasKageKilled = targets.some(
+          (target) => target.village?.kageId === target.userId,
+        );
+
         if (shrineChangeHp !== 0) shrineChangeHp /= Math.abs(shrineChangeHp);
-        if (townhallChangeHP !== 0) townhallChangeHP /= Math.abs(townhallChangeHP);
+        // Only reduce townhallChangeHP if no kage was killed
+        if (townhallChangeHP !== 0 && !wasKageKilled) {
+          townhallChangeHP /= Math.abs(townhallChangeHP);
+        }
         Object.keys(shrineInfo).forEach((sector) => {
           const abs = Math.abs(shrineInfo[sector as unknown as number]!);
           if (abs !== 0) shrineInfo[sector as unknown as number]! /= abs;
         });
         Object.keys(townhallInfo).forEach((name) => {
           const abs = Math.abs(townhallInfo[name]!);
-          if (abs !== 0) townhallInfo[name]! /= abs;
+          if (abs !== 0) {
+            // If a kage was killed, preserve all war damage at full value
+            if (!wasKageKilled) {
+              townhallInfo[name]! /= abs;
+            }
+          }
         });
       }
-
-      // ANBU boost to tokens
-      if (user.anbuId) deltaTokens *= 2;
 
       // Determine if pvpStreak should be adjusted
       const calculatePvpStreak = (
@@ -947,6 +990,7 @@ export const calcBattleResult = (
         friendsLeft: friendsLeft.length,
         targetsLeft: targetsLeft.length,
         villageTokens: deltaTokens,
+        anbuPoints: deltaAnbuPoints,
         townhallChangeHP: townhallChangeHP,
         shrineChangeHp: shrineChangeHp,
         shrineInfo: shrineInfo,

@@ -782,7 +782,7 @@ export const warRouter = createTRPCRouter({
   getWarKills: protectedProcedure
     .input(z.object({ warId: z.string() }))
     .query(async ({ ctx, input }) => {
-      return await ctx.drizzle.query.warKill.findMany({
+      const results = await ctx.drizzle.query.warKill.findMany({
         where: eq(warKill.warId, input.warId),
         with: {
           killer: { columns: { userId: true, avatar: true, username: true } },
@@ -792,6 +792,8 @@ export const warRouter = createTRPCRouter({
         },
         orderBy: [desc(warKill.killedAt)],
       });
+      // Ensure killer and victim are not null
+      return results.filter((kill) => kill.killer && kill.victim);
     }),
 
   getWarKillStats: protectedProcedure

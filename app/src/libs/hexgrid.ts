@@ -13,6 +13,7 @@ import type { HexOffset, HexOptions } from "honeycomb-grid";
  */
 export class TerrainHex extends Hex {
   asset?: "ocean" | "ground" | "dessert" | "ice";
+  name?: string;
   level!: number;
   cost!: number;
 }

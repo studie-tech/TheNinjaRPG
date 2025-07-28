@@ -69,6 +69,8 @@ export const getObjectiveImage = (objective: AllObjectivesType) => {
       return { image: IMG_BADGE_STATS_TRAINED, title: "Stats Trained" };
     case "days_in_village":
       return { image: IMG_BADGE_DAYS_IN_VILLAGE, title: "Days in Village" };
+    case "days_as_kage":
+      return { image: IMG_BADGE_DAYS_IN_VILLAGE, title: "Days as Kage" };
     case "reputation_points":
       return { image: IMG_BADGE_REPUTATION_POINTS, title: "Reputation Bought" };
     case "user_level":

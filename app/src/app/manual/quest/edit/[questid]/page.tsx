@@ -352,7 +352,7 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
       setTooltipData(null);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consecutiveObjectives, objectives, setSelectedObjectiveId]);
+  }, [consecutiveObjectives, objectives]);
 
   return (
     <ContentBox

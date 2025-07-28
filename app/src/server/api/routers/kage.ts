@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, or, and, ne, sql, gte, isNull } from "drizzle-orm";
+import { eq, or, and, ne, sql, gte, isNull, desc } from "drizzle-orm";
 import {
   clan,
   userData,
@@ -15,7 +15,7 @@ import { errorResponse, baseServerResponse } from "@/server/api/trpc";
 import { initiateBattle } from "@/routers/combat";
 import { fetchVillage } from "@/routers/village";
 import { fetchUser, fetchUpdatedUser, updateNindo } from "@/routers/profile";
-import { canChallengeKage, canBeElder } from "@/utils/kage";
+import { canChallengeKage, canBeElder, calculateDailyLockedTime } from "@/utils/kage";
 import { calcStructureUpgrade } from "@/utils/village";
 import {
   KAGE_MAX_DAILIES,
@@ -30,6 +30,7 @@ import {
   KAGE_MAX_WEEKLY_PRESTIGE_SEND,
   KAGE_UNACCEPTED_CHALLENGE_COST,
   KAGE_CHALLENGE_REJECT_COST,
+  KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS,
 } from "@/drizzle/constants";
 import {
   fetchRequests,
@@ -45,7 +46,17 @@ import { fetchActiveWars } from "@/routers/war";
 
 const pusher = getServerPusher();
 
+
+
 export const kageRouter = createTRPCRouter({
+  /**
+   * Get the daily locked time for the current user
+   */
+  getDailyLockedTime: protectedProcedure.query(async ({ ctx }) => {
+    const dailyLockedTimeSeconds = await calculateDailyLockedTime(ctx.drizzle, ctx.userId);
+    return { dailyLockedTimeSeconds };
+  }),
+
   /**
    * Kage challenge & request challenge system
    */
@@ -379,8 +390,8 @@ export const kageRouter = createTRPCRouter({
         userId: ctx.userId,
       });
       const village = user?.village;
-      const isHideoutOrTown = ["HIDEOUT", "TOWN"].includes(village?.type ?? "");
-      const lockout = isHideoutOrTown ? KAGE_DELAY_SECS : 0;
+      // Apply 24-hour lockout to all kages (villages, hideouts, and towns)
+      const lockout = KAGE_DELAY_SECS;
       // Guards
       if (!user) return errorResponse("User not found");
       if (!village) return errorResponse("Village not found");
@@ -388,7 +399,7 @@ export const kageRouter = createTRPCRouter({
       if (user.isSilenced) return errorResponse("User is silenced");
       if (village.kageId !== ctx.userId) return errorResponse("Not kage");
       if (secondsFromDate(lockout, village.leaderUpdatedAt) > new Date()) {
-        return errorResponse("Must have been kage for 24 hours");
+        return errorResponse("Must have been kage for 5 days");
       }
       // Update
       return updateNindo(ctx.drizzle, village.id, input.content, "kageOrder");
@@ -518,11 +529,23 @@ export const kageRouter = createTRPCRouter({
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [user, requests, userVillage] = await Promise.all([
+      // Fetch all data in parallel
+      const [user, requests, userVillage, lastToggle, dailyLockedTimeSeconds] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchRequests(ctx.drizzle, ["KAGE"], KAGE_REQUESTS_SHOW_SECONDS, ctx.userId),
         fetchVillage(ctx.drizzle, input.villageId),
+        ctx.drizzle
+          .select({
+            createdAt: actionLog.createdAt,
+          })
+          .from(actionLog)
+          .where(and(
+            eq(actionLog.userId, ctx.userId),
+            eq(actionLog.tableName, "kageChallengeToggle")
+          ))
+          .orderBy(desc(actionLog.createdAt))
+          .limit(1),
+        calculateDailyLockedTime(ctx.drizzle, ctx.userId),
       ]);
 
       // Derived
@@ -537,21 +560,47 @@ export const kageRouter = createTRPCRouter({
       if (nPendingRequests > 0) {
         return errorResponse("Cannot toggle while there are pending challenges");
       }
-      const secondsSinceOpen = secondsPassed(userVillage.openForChallengesAt);
-      if (secondsSinceOpen < KAGE_CHALLENGE_OPEN_FOR_SECONDS) {
-        return errorResponse(
-          `Please wait ${Math.floor(KAGE_CHALLENGE_OPEN_FOR_SECONDS - secondsSinceOpen)} seconds before toggling`,
-        );
+
+      if (lastToggle.length > 0) {
+        const secondsSinceLastToggle = secondsPassed(lastToggle[0]!.createdAt);
+        if (secondsSinceLastToggle < KAGE_CHALLENGE_OPEN_FOR_SECONDS) {
+          return errorResponse(
+            `Please wait ${Math.floor(KAGE_CHALLENGE_OPEN_FOR_SECONDS - secondsSinceLastToggle)} seconds before toggling`,
+          );
+        }
       }
 
-      // Update
-      await ctx.drizzle
-        .update(village)
-        .set({
-          openForChallenges: !userVillage.openForChallenges,
-          openForChallengesAt: new Date(),
-        })
-        .where(eq(village.id, input.villageId));
+      // Check if trying to close challenges and daily limit has been reached
+      if (!userVillage.openForChallenges) {
+        // Currently closed, trying to open - this is always allowed
+      } else {
+        // Currently open, trying to close - check daily limit
+        const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
+        if (dailyLockedTimeSeconds >= maxDailySeconds) {
+          return errorResponse(
+            `Daily challenge lock limit of ${KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS} hours has been reached. Challenges will be automatically unlocked at the start of the next day.`
+          );
+        }
+      }
+
+      // Update village and log the toggle
+      await Promise.all([
+        ctx.drizzle
+          .update(village)
+          .set({
+            openForChallenges: !userVillage.openForChallenges,
+            openForChallengesAt: new Date(),
+          })
+          .where(eq(village.id, input.villageId)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "kageChallengeToggle",
+          changes: [`Challenges ${!userVillage.openForChallenges ? "opened" : "closed"}`],
+          relatedId: input.villageId,
+          relatedMsg: `Toggle: ${userVillage.openForChallenges ? "CLOSE" : "OPEN"}`,
+        }),
+      ]);
 
       return {
         success: true,

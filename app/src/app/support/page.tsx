@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import ContentBox from "@/layout/ContentBox";
 import { parseHtml } from "@/utils/parse";
@@ -68,6 +68,24 @@ export default function SupportPage() {
     { enabled: !!isStaff },
   );
 
+  // Auto-filter to user's assigned tickets on first load if user has assigned tickets
+  useEffect(() => {
+    if (
+      isStaff &&
+      statistics?.assignedToCurrentUser &&
+      statistics.assignedToCurrentUser > 0 &&
+      filterState.assignedToUserId === "None"
+    ) {
+      filterState.setAssignedToUserId(userData?.userId || "None");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isStaff,
+    statistics?.assignedToCurrentUser,
+    filterState.assignedToUserId,
+    userData?.userId,
+  ]);
+
   if (!userData) return <Loader explanation="Loading userdata" />;
 
   return (
@@ -90,7 +108,7 @@ export default function SupportPage() {
       >
         {/* Statistics Cards (Staff Only) */}
         {isStaff && statistics && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
+          <div className="grid grid-cols-2 gap-2 mb-6">
             <Card>
               <CardHeader className="pb-0 pt-2">
                 <CardTitle className="text-sm font-medium">Total</CardTitle>
@@ -116,6 +134,16 @@ export default function SupportPage() {
               <CardContent className="py-1">
                 <div className="text-xl font-bold  text-green-600">
                   {statistics.resolvedTickets}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-0 pt-2">
+                <CardTitle className="text-sm font-medium">Assigned to Me</CardTitle>
+              </CardHeader>
+              <CardContent className="py-1">
+                <div className="text-xl font-bold  text-blue-600">
+                  {statistics.assignedToCurrentUser}
                 </div>
               </CardContent>
             </Card>

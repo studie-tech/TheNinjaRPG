@@ -12,7 +12,15 @@ import Loader from "@/layout/Loader";
 import AvatarImage from "@/layout/Avatar";
 import SendTicketBtn from "@/layout/SendTicketButton";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import { CircleUserRound, CircleHelp, Compass, Cog, Milk } from "lucide-react";
+import {
+  CircleUserRound,
+  CircleHelp,
+  Compass,
+  Cog,
+  Milk,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { Bell, Info, ShieldAlert, ShieldCheck, Eclipse } from "lucide-react";
 import { Earth, House, MessageCircleWarning, Inbox } from "lucide-react";
 import { Volume2, VolumeX, Link2 } from "lucide-react";
@@ -65,6 +73,7 @@ import type { NavBarDropdownLink } from "@/libs/menus";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { usePathname } from "next/navigation";
 import { cn } from "src/libs/shadui";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 export interface LayoutProps {
   children: React.ReactNode;
 }
@@ -98,6 +107,25 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
     }
     return "light";
   });
+
+  // Light layout mode: hide desktop logo & navbar, use mobile side sheets (persisted)
+  const [lightLayout, setLightLayout] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("lightLayout");
+      if (saved !== null) return JSON.parse(saved) as boolean;
+    }
+    return false; // default = full layout
+  });
+
+  const toggleLightLayout = () => {
+    setLightLayout((prev) => {
+      const newState = !prev;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("lightLayout", JSON.stringify(newState));
+      }
+      return newState;
+    });
+  };
 
   // Initial value is derived only from server-side props to avoid hydration mismatches.
   // We later synchronize with client-side localStorage once the component is mounted.
@@ -301,7 +329,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
    * Icons shown to logged in users in navbar
    */
   const signedInIcons = (
-    <div className="flex flex-row">
+    <div className="flex flex-row items-center">
       <SignedIn>
         <UserButton
           appearance={{
@@ -314,24 +342,26 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
         onClick={() => setLeftSideBarOpen(false)}
         aria-label="Event Notifications"
       >
-        <Bell className="h-7 w-7 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 rounded-full mx-1 ml-2 p-1" />
+        <Bell className="h-6 w-6 xl:h-7 xl:w-7 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 rounded-full mx-1 ml-2 p-1" />
       </Link>
       <div
-        className="hover:cursor-pointer h-7 w-7 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 rounded-full mx-1 p-1"
         onClick={userData ? () => toggleAudioMutation() : toggleLocalAudio}
         aria-label="Toggle Audio"
       >
         {localAudioOn ? (
           <>
-            <Volume2 className="h-5 w-5" />
+            <Volume2 className="h-6 w-6 xl:h-7 xl:w-7 rounded-full mx-1 p-1 hover:cursor-pointer hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 " />
             <audio autoPlay loop src={MUSIC_DEFAULT}></audio>
           </>
         ) : (
-          <VolumeX className="h-5 w-5" suppressHydrationWarning />
+          <VolumeX
+            className="h-6 w-6 xl:h-7 xl:w-7 rounded-full mx-1 p-1 hover:cursor-pointer hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80"
+            suppressHydrationWarning
+          />
         )}
       </div>
       <Eclipse
-        className={`hover:cursor-pointer h-7 w-7 min-w-7 min-h-7 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 rounded-full mx-1 p-1 ${theme === "light" ? "bg-yellow-100" : "bg-blue-100"}`}
+        className={`hover:cursor-pointer h-6 w-6 xl:h-7 xl:w-7 min-w-6 min-h-6 xl:min-w-7 xl:min-h-7 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 rounded-full mx-1 p-1 ${theme === "light" ? "bg-yellow-100" : "bg-blue-100"}`}
         onClick={() => {
           if (!theme || theme === "light") {
             localStorage.setItem("theme", "dark");
@@ -399,73 +429,94 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           unoptimized
         />
         <div className="max-w-[1280px] ml-auto mr-auto w-full absolute top-0 bottom-0 md:relative">
-          {/* LOGO */}
-          <Link href="/">
-            <Image
-              className="hidden md:block z-2 relative top-3 left-[50%] translate-x-[-50%] select-none"
-              id="tutorial-logo"
-              src={IMG_LOGO_FULL}
-              width={384}
-              height={138}
-              alt="logo"
-              loading="lazy"
-            />
-            <Image
-              className="block md:hidden absolute top-3 left-[50%] translate-x-[-50%] w-1/2 max-w-250"
-              id="tutorial-logo"
-              src={IMG_LOGO_SHORT}
-              width={250}
-              height={63}
-              alt="logo"
-              loading="lazy"
-            />
-          </Link>
-          {/* DESKTOP NAVBAR */}
-          <div className="hidden md:block z-1 relative top-[-10px] left-[50%] translate-x-[-50%] text-orange-100 font-bold text-lg lg:text-2xl">
-            <Image
-              className="select-none"
-              src={imageset.navbar}
-              width={1280}
-              height={133}
-              alt="navbar"
-              loading="lazy"
-            />
-            <div className="absolute top-6 grid grid-cols-3 w-1/2 px-24 lg:px-36">
-              {navbarMenuItemsLeft.map((link) => (
-                <Link
-                  key={link.name}
-                  className="hover:text-orange-500 flex flex-row gap-1 z-10 items-center justify-center hover:cursor-pointer"
-                  href={link.href}
-                  onClick={async () => {
-                    if (link.onClick) {
-                      await link.onClick();
-                    }
-                  }}
-                  prefetch={false}
-                >
-                  {link.icon}
-                  {link.name}
-                </Link>
-              ))}
-            </div>
-            <div className="absolute top-6 right-0 grid grid-cols-3 w-1/2 px-24 lg:px-36">
-              {navbarMenuItemsRight.map((link) => (
-                <Link
-                  key={link.name}
-                  className="hover:text-orange-500 flex flex-row gap-1 z-10 items-center justify-center"
-                  href={link.href}
-                  onClick={async () => {
-                    if (link.onClick) await link.onClick();
-                  }}
-                  prefetch={false}
-                >
-                  {link.icon}
-                  {link.name}
-                </Link>
-              ))}
-              {signedInIcons}
-            </div>
+          {/* LOGO WITH TOGGLE */}
+          <div className="relative z-2 top-3 w-full flex justify-center select-none z-50">
+            {!lightLayout && (
+              <Link href="/">
+                <Image
+                  className="hidden md:block"
+                  id="tutorial-logo"
+                  src={IMG_LOGO_FULL}
+                  width={384}
+                  height={138}
+                  alt="logo"
+                  loading="lazy"
+                />
+              </Link>
+            )}
+            {/* Mobile logo (always visible) */}
+            <Link href="/">
+              <Image
+                className="block md:hidden absolute top-0 left-[50%] translate-x-[-50%] w-1/2 max-w-250"
+                id="tutorial-logo-mobile"
+                src={IMG_LOGO_SHORT}
+                width={250}
+                height={63}
+                alt="logo"
+                loading="lazy"
+              />
+            </Link>
+            {/* Toggle button (desktop only) */}
+            <button
+              aria-label={lightLayout ? "Show Layout" : "Hide Layout"}
+              onClick={toggleLightLayout}
+              className="hidden md:flex items-center justify-center absolute top-0 right-2 h-8 w-8 bg-slate-700/70 hover:bg-slate-600 text-white rounded-full"
+            >
+              {lightLayout ? (
+                <Eye className="h-6 w-6" />
+              ) : (
+                <EyeOff className="h-6 w-6" />
+              )}
+            </button>
           </div>
+          {/* DESKTOP NAVBAR */}
+          {!lightLayout && (
+            <div className="hidden md:block z-1 relative top-[-10px] left-[50%] translate-x-[-50%] text-orange-100 font-bold text-lg lg:text-2xl">
+              <Image
+                className="select-none"
+                src={imageset.navbar}
+                width={1280}
+                height={133}
+                alt="navbar"
+                loading="lazy"
+              />
+              <div className="absolute top-6 grid grid-cols-3 w-1/2 px-24 lg:px-36">
+                {navbarMenuItemsLeft.map((link) => (
+                  <Link
+                    key={link.name}
+                    className="hover:text-orange-500 flex flex-row gap-1 z-10 items-center justify-center hover:cursor-pointer"
+                    href={link.href}
+                    onClick={async () => {
+                      if (link.onClick) {
+                        await link.onClick();
+                      }
+                    }}
+                    prefetch={false}
+                  >
+                    {link.icon}
+                    {link.name}
+                  </Link>
+                ))}
+              </div>
+              <div className="absolute top-6 right-0 grid grid-cols-3 w-1/2 px-24 lg:px-36">
+                {navbarMenuItemsRight.map((link) => (
+                  <Link
+                    key={link.name}
+                    className="hover:text-orange-500 flex flex-row gap-1 z-10 items-center justify-center"
+                    href={link.href}
+                    onClick={async () => {
+                      if (link.onClick) await link.onClick();
+                    }}
+                    prefetch={false}
+                  >
+                    {link.icon}
+                    {link.name}
+                  </Link>
+                ))}
+                {signedInIcons}
+              </div>
+            </div>
+          )}
           {/* DESKTOP HANDSIGN */}
           <Image
             className="hidden md:block z-10 relative top-[-120px] left-[50%] translate-x-[-50%] select-none"
@@ -878,11 +929,9 @@ const RightSideBar: React.FC<{
   // Derived data
   const inBattle = userData?.status === "BATTLE";
 
-  // Render
-  return (
+  // Helper to render the default sidebar content (without MenuBoxCombat)
+  const renderDefaultSidebar = () => (
     <>
-      {/* COMBAT */}
-      <MenuBoxCombat />
       {/* NOTIFICATIONS */}
       {userData && notifications && notifications.length > 0 && (
         <>
@@ -925,15 +974,10 @@ const RightSideBar: React.FC<{
               <Button
                 decoration="gold"
                 className={`relative w-full ${system.className || ""} ${disabled ? "opacity-30" : "hover:bg-orange-200"}`}
+                count={system.notificationCount}
               >
                 <div className="grow">{system.name}</div>
                 <div>{system.icon && system.icon}</div>
-                {system.notificationCount !== undefined &&
-                  system.notificationCount > 0 && (
-                    <div className="absolute top-0 right-[-3] flex items-center justify-center text-xs text-orange-100 bg-orange-500 rounded-full w-5 h-5 z-50">
-                      {system.notificationCount}
-                    </div>
-                  )}
               </Button>
             </Link>
           );
@@ -955,6 +999,25 @@ const RightSideBar: React.FC<{
       )}
     </>
   );
+
+  // Render
+  if (inBattle) {
+    return (
+      <Tabs defaultValue="battle" className="w-full">
+        <TabsContent value="menu">{renderDefaultSidebar()}</TabsContent>
+        <TabsContent value="battle">
+          <MenuBoxCombat />
+        </TabsContent>
+        <TabsList className="w-full  border-2">
+          <TabsTrigger value="menu">Menu</TabsTrigger>
+          <TabsTrigger value="battle">Battle</TabsTrigger>
+        </TabsList>
+      </Tabs>
+    );
+  }
+
+  // Default (not in battle)
+  return renderDefaultSidebar();
 };
 
 // Get wallpaper based on the season

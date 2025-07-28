@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * WARNING: This page is loaded very frequently, so it is important to keep it as light as possible.
+ * Do not casually introduce new queries without considering if if could be moved to a tab component loaded only on need.
+ * Ensure that queries are only run when needed.
+ */
+
 import React, { useEffect, useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { useForm, useWatch } from "react-hook-form";
@@ -26,6 +32,7 @@ import StatusBar from "@/layout/StatusBar";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Confirm2 from "@/layout/Confirm2";
+import Modal2 from "@/layout/Modal2";
 import Loader from "@/layout/Loader";
 import ReportUser from "@/layout/Report";
 import Post from "@/layout/Post";
@@ -34,7 +41,6 @@ import GraphCombatLog from "@/layout/GraphCombatLog";
 import DeleteUserButton from "@/layout/DeleteUserButton";
 import { ActionSelector } from "@/layout/CombatActions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useLocalStorage } from "@/hooks/localstorage";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrainingSpeeds } from "@/drizzle/constants";
 import GlowingBorder from "./GlowingBorder";
@@ -77,7 +83,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { canCloneUser } from "@/utils/permissions";
-import type { Jutsu } from "@/drizzle/schema";
+import type { Jutsu, UserBadge, Badge } from "@/drizzle/schema";
 import { NewConversationPrompt } from "@/app/inbox/page";
 import Table from "@/layout/Table";
 import {
@@ -142,7 +148,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     showBloodlineHistory,
   } = props;
   // Get state
-  const [showActive, setShowActive] = useLocalStorage<string>("pDetails", "nindo");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showActive, setShowActive] = useState("nindo");
   const { data: userData } = useUserData();
 
   const canSeeSecrets = userData && canSeeSecretData(userData.role);
@@ -160,42 +167,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   // Queries
   const { data: profile, isPending: isPendingProfile } =
     api.profile.getPublicUser.useQuery({ userId: userId }, { enabled: !!userId });
-
-  const { data: reports, isPending: isPendingReports } =
-    api.reports.getUserReports.useQuery(
-      { userId: userId },
-      { enabled: !!enableReports },
-    );
-
-  const { data: historicalIps, isPending: isPendingHistoricalIps } =
-    api.staff.getUserHistoricalIps.useQuery(
-      { userId: userId },
-      { enabled: !!enableHistoricalIps },
-    );
-
-  const { data: activityEvents, isPending: isPendingActivityEvents } =
-    api.staff.getUserActivityEvents.useQuery(
-      { userId: userId },
-      { enabled: !!enableActivityEvents },
-    );
-
-  const { data: marriages } = api.marriage.getMarriedUsers.useQuery(
-    { id: userId },
-    { staleTime: 300000 },
-  );
-
-  const { data: badges } = api.badge.getAllNames.useQuery(undefined);
-
-  const { data: todayPveCount } = api.profile.getUserDailyPveBattleCount.useQuery(
-    { userId: userId },
-    {},
-  );
-
-  const { data: bloodlineHistory, isPending: isPendingBloodlineHistory } =
-    api.logs.getBloodlineHistory.useQuery(
-      { userId: userId },
-      { enabled: !!enableBloodlineHistory },
-    );
 
   // Forms
   const form = useForm<z.infer<typeof awardSchema>>({
@@ -298,36 +269,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     },
   });
 
-  const insertUserBadge = api.staff.insertUserBadge.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-        await utils.logs.getContentChanges.invalidate();
-      }
-    },
-  });
-
-  const removeUserBadge = api.staff.removeUserBadge.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-        await utils.logs.getContentChanges.invalidate();
-      }
-    },
-  });
-
-  const restoreActivityStreak = api.staff.restoreUserActivityStreak.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-        await utils.staff.getUserActivityEvents.invalidate();
-      }
-    },
-  });
-
+  // mutations related to badges and activity events were relocated to their tab components.
   const awardMutation = api.misc.awardReputation.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
@@ -335,15 +277,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         await utils.profile.getPublicUser.invalidate();
       }
       form.reset();
-    },
-  });
-
-  const deleteReferral = api.staff.deleteReferral.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-      }
     },
   });
 
@@ -446,15 +379,30 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               />
             )}
             {userData && (
-              <EditUserComponent
-                userId={profile.userId}
-                profile={{
-                  ...profile,
-                  reason: "",
-                  items: profile.items.map((ui) => ui.itemId),
-                  jutsus: profile.jutsus.map((ui) => ui.jutsuId),
-                }}
-              />
+              <>
+                <Settings
+                  className="h-6 w-6 cursor-pointer hover:text-orange-500"
+                  onClick={() => setShowEditModal(true)}
+                />
+                <Modal2
+                  title="Update User Data"
+                  isOpen={showEditModal}
+                  setIsOpen={setShowEditModal}
+                  proceed_label="Done"
+                >
+                  {showEditModal && (
+                    <EditUserComponent
+                      userId={profile.userId}
+                      profile={{
+                        ...profile,
+                        reason: "",
+                        items: profile.items.map((ui) => ui.itemId),
+                        jutsus: profile.jutsus.map((ui) => ui.jutsuId),
+                      }}
+                    />
+                  )}
+                </Modal2>
+              </>
             )}
             {userData && canAwardReputation(userData.role) && (
               <Confirm2
@@ -544,9 +492,11 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   });
                 })}
               >
-                Award unallocated experience points to {profile.username}. This will add to their
-                earned experience pool that they can then distribute to their stats.
-                <br /><br />
+                Award unallocated experience points to {profile.username}. This will add
+                to their earned experience pool that they can then distribute to their
+                stats.
+                <br />
+                <br />
                 <b>DO NOT</b> abuse this feature! All assignments are logged and visible
                 to ALL users. Feature abuse for personal gain will result in severe
                 consequences.
@@ -563,7 +513,9 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                               type="number"
                               placeholder="Enter experience amount"
                               {...field}
-                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                              onChange={(e) =>
+                                field.onChange(parseInt(e.target.value) || 0)
+                              }
                               min="1"
                               max="100000"
                             />
@@ -649,7 +601,9 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             <p>Experience: {profile.experience}</p>
             {canSeeSecrets && <p>Unclaimed Exp: {profile.earnedExperience}</p>}
             <p>Experience for lvl: ---</p>
-            <p>PVE Fights: {`${profile.pveFights} (+${todayPveCount})`}</p>
+            <p>
+              PVE Fights: {`${profile.pveFights} (+${profile.battleHistory.length})`}
+            </p>
             <p>Yapper Rank: {profile.tavernMessages}</p>
             <br />
             <b>Special</b>
@@ -747,171 +701,15 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       {canSeeSecrets && (
         <div className="text-center text-sm italic">Unique ID: {profile.userId}</div>
       )}
-      {/* MARRIED USERS */}
-      {showMarriages && marriages !== undefined && marriages.length > 0 && (
-        <ContentBox
-          title="Married Users"
-          subtitle={`${profile.username} is married to these users`}
-          initialBreak={true}
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-            {marriages.map((user, i) => (
-              <Link
-                href={`/username/${user.username}`}
-                className="text-center"
-                key={`marriage-${i}`}
-              >
-                <AvatarImage
-                  href={user.avatar}
-                  alt={user.username}
-                  userId={user.userId}
-                  hover_effect={true}
-                  priority={true}
-                  size={100}
-                />
-                <div>
-                  <div className="font-bold">{user.username}</div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </ContentBox>
-      )}
-      {/* RECRUITED USERS */}
-      {showRecruited && profile.recruitedUsers.length > 0 && (
-        <ContentBox
-          title="Recruited Users"
-          subtitle={`${profile.username} referred these users`}
-          initialBreak={true}
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-            {profile.recruitedUsers.map((user, i) => (
-              <div key={`recruited-${i}`} className="text-center relative">
-                <Link href={`/username/${user.username}`} className="block">
-                  <AvatarImage
-                    href={user.avatar}
-                    alt={user.username}
-                    userId={user.userId}
-                    hover_effect={true}
-                    priority={true}
-                    size={100}
-                  />
-                  <div>
-                    <div className="font-bold">{user.username}</div>
-                    <div>
-                      Lvl. {user.level} {capitalizeFirstLetter(user.rank)}
-                    </div>
-                  </div>
-                </Link>
-                {userData && canDeleteReferral(userData.role) && (
-                  <Confirm2
-                    title="Delete Referral"
-                    proceed_label="Delete"
-                    button={
-                      <Trash2 className="absolute right-[8%] top-0 h-9 w-9 border-2 border-black cursor-pointer rounded-full bg-red-100 fill-slate-500 p-1 hover:fill-red-500" />
-                    }
-                    onAccept={() => deleteReferral.mutate({ userId: user.userId })}
-                  >
-                    Are you sure you want to delete the referral relationship between{" "}
-                    <strong>{profile.username}</strong> and{" "}
-                    <strong>{user.username}</strong>? This action will remove the
-                    referral and cannot be undone.
-                  </Confirm2>
-                )}
-              </div>
-            ))}
-          </div>
-        </ContentBox>
-      )}
-      {/* STUDENTS */}
-      {showStudents && profile.students.length > 0 && (
-        <ContentBox title="Students" subtitle={`Past and present`} initialBreak={true}>
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-            {profile.students.map((user, i) => (
-              <Link
-                href={`/username/${user.username}`}
-                className="text-center"
-                key={`student-${i}`}
-              >
-                <AvatarImage
-                  href={user.avatar}
-                  alt={user.username}
-                  userId={user.userId}
-                  hover_effect={true}
-                  priority={true}
-                  size={100}
-                />
-                <div>
-                  <div className="font-bold">{user.username}</div>
-                  <div>
-                    Lvl. {user.level} {capitalizeFirstLetter(user.rank)}
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </ContentBox>
-      )}
-      {/* USER BADGES */}
+      {/* Badges are now displayed directly below the profile */}
       {showBadges && (
-        <ContentBox
-          title="Achieved Badges"
-          subtitle={`Achieved through quests & help`}
-          initialBreak={true}
-          topRightContent={
-            <>
-              {badges && userData && canModifyUserBadges(userData.role) && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button className="w-full">
-                      <Plus className="h-6 w-6 mr-2" /> New
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent>
-                    <ActionSelector
-                      items={badges.filter(
-                        (b) => !profile.badges.some((ub) => ub.badgeId === b.id),
-                      )}
-                      labelSingles={true}
-                      onClick={(id) => {
-                        insertUserBadge.mutate({ userId: profile.userId, badgeId: id });
-                      }}
-                      showBgColor={false}
-                      roundFull={true}
-                      hideBorder={true}
-                      showLabels={true}
-                      emptyText="No badges exist yet."
-                    />
-                  </PopoverContent>
-                </Popover>
-              )}
-            </>
-          }
-        >
-          {profile.badges.length === 0 && <p>No badges found</p>}
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-            {profile.badges.map((userbadge, i) => (
-              <div key={`badge-${i}`} className="text-center relative">
-                <Image
-                  src={userbadge.badge.image}
-                  alt={userbadge.badge.name}
-                  width={128}
-                  height={128}
-                />
-                <div>
-                  <div className="font-bold">{userbadge.badge.name}</div>
-                </div>
-                {userData && canModifyUserBadges(userData.role) && (
-                  <Trash2
-                    className="absolute right-[8%] top-0 h-9 w-9 border-2 border-black cursor-pointer rounded-full bg-amber-100 fill-slate-500 p-1 hover:fill-orange-500"
-                    onClick={() => removeUserBadge.mutate(userbadge)}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        </ContentBox>
+        <BadgesTab
+          userId={profile.userId}
+          username={profile.username}
+          currentBadges={profile.badges}
+        />
       )}
+      {/* Marriages, Students, and Badges sections are now rendered inside tabs below */}
       {(showNindo ||
         showCombatLogs ||
         showTransactions ||
@@ -939,8 +737,12 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 {showReports && enableReports && (
                   <TabsTrigger value="reports">Reports</TabsTrigger>
                 )}
-              </TabsList>
-              <TabsList className="text-center">
+
+                {showMarriages && (
+                  <TabsTrigger value="marriages">Marriages</TabsTrigger>
+                )}
+                {showStudents && <TabsTrigger value="students">Students</TabsTrigger>}
+                {showRecruited && <TabsTrigger value="recruits">Recruits</TabsTrigger>}
                 {showTrainingLogs && enableLogs && (
                   <TabsTrigger value="training">Training Log</TabsTrigger>
                 )}
@@ -1030,46 +832,41 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           {/* USER REPORTS */}
           {showReports && enableReports && (
             <TabsContent value="reports">
-              <ContentBox
-                title="Reports"
-                subtitle={`Reports against ${profile.username}`}
-                initialBreak={true}
-              >
-                {isPendingReports && <Loader explanation="Fetching User Reports" />}
-                {reports?.length === 0 && <p>No reports found</p>}
-                {reports?.map((report) => {
-                  return (
-                    <Link key={`report-${report.id}`} href={"/reports/" + report.id}>
-                      <Post
-                        title={`${report.reporterUser?.username} on ${report.system}`}
-                        hover_effect={true}
-                        align_middle={true}
-                        image={
-                          <div className="m-3 w-16 ">
-                            {report.reporterUser?.avatar && (
-                              <Image
-                                src={report.reporterUser.avatar}
-                                width={100}
-                                height={100}
-                                alt="Forum Icon"
-                              ></Image>
-                            )}
-                          </div>
-                        }
-                      >
-                        {parseHtml(report.reason)}
-                        <b>Status:</b> {report.status.toLowerCase()}
-                      </Post>
-                    </Link>
-                  );
-                })}
-              </ContentBox>
+              <ReportsTab userId={profile.userId} isActive={showActive === "reports"} />
+            </TabsContent>
+          )}
+          {/* USER MARRIAGES */}
+          {showMarriages && (
+            <TabsContent value="marriages">
+              <MarriagesTab
+                userId={profile.userId}
+                username={profile.username}
+                isActive={showActive === "marriages"}
+              />
+            </TabsContent>
+          )}
+          {/* USER STUDENTS */}
+          {showStudents && (
+            <TabsContent value="students">
+              <StudentsTab students={profile.students} />
+            </TabsContent>
+          )}
+          {/* USER RECRUITS */}
+          {showRecruited && (
+            <TabsContent value="recruits">
+              <RecruitedUsersTab
+                recruits={profile.recruitedUsers}
+                parentUsername={profile.username}
+              />
             </TabsContent>
           )}
           {/* USER TRAINING LOG */}
           {showTrainingLogs && (
             <TabsContent value="training">
-              <UserTrainingLog userId={profile.userId} />
+              <UserTrainingLog
+                userId={profile.userId}
+                isActive={showActive === "training"}
+              />
             </TabsContent>
           )}
           {/* USER ACTION LOG */}
@@ -1086,146 +883,28 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           {/* USER HISTORICAL IPS */}
           {enableHistoricalIps && (
             <TabsContent value="historicalIps">
-              <ContentBox
-                title="Historical IPs"
-                subtitle={`IP addresses used the last 90 days`}
-                initialBreak={true}
-              >
-                {isPendingHistoricalIps && (
-                  <Loader explanation="Fetching Historical IPs" />
-                )}
-                {historicalIps?.length === 0 && <p>No historical IP records found</p>}
-                {historicalIps && historicalIps.length > 0 && (
-                  <div className="space-y-2">
-                    {historicalIps.map((ip, i) => (
-                      <div
-                        key={`ip-${i}`}
-                        className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
-                      >
-                        <div>
-                          <h4 className="font-semibold text-foreground">
-                            <Link
-                              href={`/users/ipsearch/${ip.ip}`}
-                              className="hover:text-orange-500 hover:cursor-pointer"
-                            >
-                              {ip.ip}
-                            </Link>
-                          </h4>
-                          <p className="text-sm text-muted-foreground">
-                            Last used: {ip.usedAt.toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </ContentBox>
+              <HistoricalIpsTab
+                userId={profile.userId}
+                isActive={showActive === "historicalIps"}
+              />
             </TabsContent>
           )}
           {/* USER ACTIVITY EVENTS */}
           {enableActivityEvents && (
             <TabsContent value="activityEvents">
-              <ContentBox
-                title="Activity Events"
-                subtitle={`Latest claimed activity events`}
-                initialBreak={true}
-              >
-                {isPendingActivityEvents && (
-                  <Loader explanation="Fetching Activity Events" />
-                )}
-                {activityEvents?.length === 0 && <p>No activity events found</p>}
-                {activityEvents && activityEvents.length > 0 && (
-                  <div className="space-y-2">
-                    {activityEvents.map((event, i) => (
-                      <div
-                        key={`event-${i}`}
-                        className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
-                      >
-                        <div>
-                          <h4 className="font-semibold text-foreground">
-                            Activity Event #{event.id}
-                          </h4>
-                          <p className="text-sm text-muted-foreground">
-                            Streak: {event.streak}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Created: {event.createdAt.toLocaleString()}
-                          </p>
-                        </div>
-                        {userData && canRestoreActivityStreak(userData.role) && (
-                          <Confirm2
-                            title="Restore Activity Streak"
-                            proceed_label="Restore Streak"
-                            button={
-                              <Button variant="secondary" size="sm">
-                                Restore Streak
-                              </Button>
-                            }
-                            onAccept={() => {
-                              restoreActivityStreak.mutate({
-                                userId: profile.userId,
-                                activityEventId: event.id,
-                              });
-                            }}
-                          >
-                            Are you sure you want to restore the activity streak to{" "}
-                            <strong>{event.streak}</strong>? This action will update the
-                            user&apos;s current activity streak.
-                          </Confirm2>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </ContentBox>
+              <ActivityEventsTab
+                userId={profile.userId}
+                isActive={showActive === "activityEvents"}
+              />
             </TabsContent>
           )}
           {/* USER BLOODLINE HISTORY */}
           {enableBloodlineHistory && (
             <TabsContent value="bloodlineHistory">
-              <ContentBox
-                title="Bloodline History"
-                subtitle="All bloodlines this user has had"
-                initialBreak={true}
-                padding={false}
-              >
-                {isPendingBloodlineHistory && (
-                  <Loader explanation="Fetching Bloodline History" />
-                )}
-                {bloodlineHistory?.length === 0 && <p>No bloodline history found</p>}
-                {bloodlineHistory && bloodlineHistory.length > 0 && (
-                  <Table
-                    data={bloodlineHistory}
-                    columns={[
-                      {
-                        key: "image",
-                        header: "Image",
-                        type: "avatar",
-                      },
-                      {
-                        key: "name",
-                        header: "Name",
-                        type: "string",
-                      },
-                      {
-                        key: "rank",
-                        header: "Rank",
-                        type: "capitalized",
-                      },
-                      {
-                        key: "type",
-                        header: "Roll Type",
-                        type: "capitalized",
-                      },
-                      {
-                        key: "createdAt",
-                        header: "Date",
-                        type: "date",
-                      },
-                    ]}
-                  />
-                )}
-              </ContentBox>
+              <BloodlineHistoryTab
+                userId={profile.userId}
+                isActive={showActive === "bloodlineHistory"}
+              />
             </TabsContent>
           )}
         </Tabs>
@@ -1358,179 +1037,171 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   if (!canEditSomething) return null;
 
   return (
-    <Confirm2
-      title="Update User Data"
-      proceed_label="Done"
-      button={<Settings className="h-6 w-6 cursor-pointer hover:text-orange-500" />}
+    <Tabs
+      defaultValue={showActive}
+      className="flex flex-col items-center justify-center"
+      onValueChange={(value) => setShowActive(value)}
     >
-      <Tabs
-        defaultValue={showActive}
-        className="flex flex-col items-center justify-center"
-        onValueChange={(value) => setShowActive(value)}
-      >
-        <TabsList className="text-center mt-3">
-          <TabsTrigger value="userData">Main Data</TabsTrigger>
-          {hasJutsus && <TabsTrigger value="jutsus">Jutsus Specifics</TabsTrigger>}
-          {perms.canEditQuests && <TabsTrigger value="quests">Quests</TabsTrigger>}
-        </TabsList>
-        <TabsContent value="userData">
-          <EditContent
-            schema={updateUserSchema}
-            form={form}
-            formData={formData}
-            showSubmit={true}
-            buttonTxt="Save to Database"
-            type="ai"
-            relationId={userId}
-            allowImageUpload={true}
-            onAccept={handleUserSubmit}
-          />
-        </TabsContent>
-        {hasJutsus && (
-          <TabsContent value="jutsus">
-            <div className="mt-5">
-              <ActionSelector
-                items={allJutsus}
-                counts={userJutsuCounts}
-                selectedId={jutsu?.id}
-                labelSingles={true}
-                emptyText="No jutsus assigned to this user"
-                gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
-                onClick={(id) => {
-                  if (id == jutsu?.id) {
-                    setJutsu(undefined);
-                  } else {
-                    setJutsu(allJutsus?.find((jutsu) => jutsu.id === id));
-                  }
-                }}
-                showBgColor={false}
-                showLabels={true}
-              />
-            </div>
-            {jutsu && (
-              <div className="mt-4 flex items-center justify-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Form {...jutsuLevelForm}>
-                    <form
-                      onSubmit={jutsuLevelForm.handleSubmit((data) => {
-                        if (jutsu) {
-                          adjustJutsuLevel.mutate({
-                            userId: userId,
-                            jutsuId: jutsu.id,
-                            level: data.level,
-                          });
-                        }
-                      })}
-                      className="flex items-center justify-between w-full gap-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <FormField
-                          control={jutsuLevelForm.control}
-                          name="level"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Level</FormLabel>
-                              <div className="relative flex flex-row gap-2">
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    className="w-20"
-                                    min={0}
-                                    max={25}
-                                    {...field}
-                                    onChange={(e) => {
-                                      const value = e.target.value;
-                                      field.onChange(value ? parseInt(value) : 0);
-                                    }}
-                                  />
-                                </FormControl>
-                                <Button type="submit">Update</Button>
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </form>
-                  </Form>
-                </div>
-              </div>
-            )}
-          </TabsContent>
-        )}
-        {perms.canEditQuests && (
-          <TabsContent value="quests">
-            <div className="mt-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white">User Quests</h3>
-                {questTypes.length > 0 && (
-                  <select
-                    className="bg-card text-foreground border border-border rounded-md px-3 py-1"
-                    value={selectedQuestType}
-                    onChange={(e) => setSelectedQuestType(e.target.value)}
+      <TabsList className="text-center mt-3">
+        <TabsTrigger value="userData">Main Data</TabsTrigger>
+        {hasJutsus && <TabsTrigger value="jutsus">Jutsus Specifics</TabsTrigger>}
+        {perms.canEditQuests && <TabsTrigger value="quests">Quests</TabsTrigger>}
+      </TabsList>
+      <TabsContent value="userData">
+        <EditContent
+          schema={updateUserSchema}
+          form={form}
+          formData={formData}
+          showSubmit={true}
+          buttonTxt="Save to Database"
+          type="ai"
+          relationId={userId}
+          allowImageUpload={true}
+          onAccept={handleUserSubmit}
+        />
+      </TabsContent>
+      {hasJutsus && (
+        <TabsContent value="jutsus">
+          <div className="mt-5">
+            <ActionSelector
+              items={allJutsus}
+              counts={userJutsuCounts}
+              selectedId={jutsu?.id}
+              labelSingles={true}
+              emptyText="No jutsus assigned to this user"
+              gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
+              onClick={(id) => {
+                if (id == jutsu?.id) {
+                  setJutsu(undefined);
+                } else {
+                  setJutsu(allJutsus?.find((jutsu) => jutsu.id === id));
+                }
+              }}
+              showBgColor={false}
+              showLabels={true}
+            />
+          </div>
+          {jutsu && (
+            <div className="mt-4 flex items-center justify-center gap-4">
+              <div className="flex items-center gap-2">
+                <Form {...jutsuLevelForm}>
+                  <form
+                    onSubmit={jutsuLevelForm.handleSubmit((data) => {
+                      if (jutsu) {
+                        adjustJutsuLevel.mutate({
+                          userId: userId,
+                          jutsuId: jutsu.id,
+                          level: data.level,
+                        });
+                      }
+                    })}
+                    className="flex items-center justify-between w-full gap-2"
                   >
-                    <option value="all">All Quest Types</option>
-                    {questTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-              {filteredQuests && filteredQuests.length > 0 ? (
-                <div className="space-y-2">
-                  {filteredQuests.map((userQuest) => (
-                    <div
-                      key={userQuest.id}
-                      className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
-                    >
-                      <div>
-                        <h4 className="font-semibold text-foreground">
-                          {userQuest.quest.name}
-                        </h4>
-                        <p className="text-sm text-muted-foreground">
-                          Started: {userQuest.startedAt.toLocaleString()}
-                          {userQuest.endAt &&
-                            ` • Completed: ${userQuest.endAt.toLocaleString()}`}
-                        </p>
-                        {userQuest.quest.questType && (
-                          <p className="text-sm text-muted-foreground">
-                            Type: {userQuest.quest.questType}
-                          </p>
+                    <div className="flex items-center gap-2">
+                      <FormField
+                        control={jutsuLevelForm.control}
+                        name="level"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Level</FormLabel>
+                            <div className="relative flex flex-row gap-2">
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  className="w-20"
+                                  min={0}
+                                  max={25}
+                                  {...field}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    field.onChange(value ? parseInt(value) : 0);
+                                  }}
+                                />
+                              </FormControl>
+                              <Button type="submit">Update</Button>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
                         )}
-                      </div>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => {
-                          if (
-                            confirm(
-                              "Are you sure you want to delete this quest record?",
-                            )
-                          ) {
-                            deleteUserQuest.mutate({
-                              userId: userId,
-                              questId: userQuest.quest.id,
-                            });
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      />
                     </div>
+                  </form>
+                </Form>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+      )}
+      {perms.canEditQuests && (
+        <TabsContent value="quests">
+          <div className="mt-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">User Quests</h3>
+              {questTypes.length > 0 && (
+                <select
+                  className="bg-card text-foreground border border-border rounded-md px-3 py-1"
+                  value={selectedQuestType}
+                  onChange={(e) => setSelectedQuestType(e.target.value)}
+                >
+                  <option value="all">All Quest Types</option>
+                  {questTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
                   ))}
-                </div>
-              ) : (
-                <p className="text-center text-muted-foreground">
-                  No quests found for this user.
-                </p>
+                </select>
               )}
             </div>
-          </TabsContent>
-        )}
-      </Tabs>
-    </Confirm2>
+            {filteredQuests && filteredQuests.length > 0 ? (
+              <div className="space-y-2">
+                {filteredQuests.map((userQuest) => (
+                  <div
+                    key={userQuest.id}
+                    className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
+                  >
+                    <div>
+                      <h4 className="font-semibold text-foreground">
+                        {userQuest.quest.name}
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        Started: {userQuest.startedAt.toLocaleString()}
+                        {userQuest.endAt &&
+                          ` • Completed: ${userQuest.endAt.toLocaleString()}`}
+                      </p>
+                      {userQuest.quest.questType && (
+                        <p className="text-sm text-muted-foreground">
+                          Type: {userQuest.quest.questType}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        if (
+                          confirm("Are you sure you want to delete this quest record?")
+                        ) {
+                          deleteUserQuest.mutate({
+                            userId: userId,
+                            questId: userQuest.quest.id,
+                          });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground">
+                No quests found for this user.
+              </p>
+            )}
+          </div>
+        </TabsContent>
+      )}
+    </Tabs>
   );
 };
 
@@ -1595,16 +1266,20 @@ const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
 
 interface TrainingStatsComponentProps {
   userId: string;
+  isActive: boolean;
 }
 
-const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({ userId }) => {
+const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
+  userId,
+  isActive,
+}) => {
   // State
   const chart = useRef<HTMLCanvasElement>(null);
 
   // Query
   const { data: logEntries } = api.train.getTrainingLog.useQuery(
-    { userId: userId },
-    {},
+    { userId },
+    { enabled: isActive },
   );
 
   // Create dataset for each training speed
@@ -1714,6 +1389,490 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({ userId }) => {
       <div className="relative w-[99%] p-3">
         <canvas ref={chart} id="chart"></canvas>
       </div>
+    </ContentBox>
+  );
+};
+
+// ---------------- TAB COMPONENTS: Lazy-loaded queries ----------------
+
+interface TabComponentProps {
+  userId: string;
+  isActive: boolean;
+}
+
+const ReportsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
+  const { data: currentUser } = useUserData();
+  const canSeeSecrets = currentUser && canSeeSecretData(currentUser.role);
+
+  const { data: reports, isPending } = api.reports.getUserReports.useQuery(
+    { userId },
+    { enabled: isActive && !!canSeeSecrets },
+  );
+
+  if (!canSeeSecrets) return null;
+
+  return (
+    <ContentBox
+      title="Reports"
+      subtitle="Reports against this user"
+      initialBreak={true}
+    >
+      {isPending && <Loader explanation="Fetching User Reports" />}
+      {reports?.length === 0 && <p>No reports found</p>}
+      {reports?.map((report) => (
+        <Link key={`report-${report.id}`} href={`/reports/${report.id}`}>
+          <Post
+            title={`${report.reporterUser?.username} on ${report.system}`}
+            hover_effect={true}
+            align_middle={true}
+            image={
+              <div className="m-3 w-16 ">
+                {report.reporterUser?.avatar && (
+                  <Image
+                    src={report.reporterUser.avatar}
+                    width={100}
+                    height={100}
+                    alt="Reporter Avatar"
+                  />
+                )}
+              </div>
+            }
+          >
+            {parseHtml(report.reason)}
+            <b>Status:</b> {report.status.toLowerCase()}
+          </Post>
+        </Link>
+      ))}
+    </ContentBox>
+  );
+};
+
+const HistoricalIpsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
+  const { data: currentUser } = useUserData();
+  const canSeeIpsPerm = currentUser && canSeeIps(currentUser.role);
+
+  const { data: historicalIps, isPending } = api.staff.getUserHistoricalIps.useQuery(
+    { userId },
+    { enabled: isActive && !!canSeeIpsPerm },
+  );
+
+  if (!canSeeIpsPerm) return null;
+
+  return (
+    <ContentBox
+      title="Historical IPs"
+      subtitle="IP addresses used the last 90 days"
+      initialBreak={true}
+    >
+      {isPending && <Loader explanation="Fetching Historical IPs" />}
+      {historicalIps?.length === 0 && <p>No historical IP records found</p>}
+      {historicalIps && historicalIps.length > 0 && (
+        <div className="space-y-2">
+          {historicalIps.map((ip, i) => (
+            <div
+              key={`ip-${i}`}
+              className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
+            >
+              <div>
+                <h4 className="font-semibold text-foreground">
+                  <Link
+                    href={`/users/ipsearch/${ip.ip}`}
+                    className="hover:text-orange-500 hover:cursor-pointer"
+                  >
+                    {ip.ip}
+                  </Link>
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Last used: {ip.usedAt.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </ContentBox>
+  );
+};
+
+const ActivityEventsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
+  const { data: currentUser } = useUserData();
+  const canSeeEvents = currentUser && canSeeActivityEvents(currentUser.role);
+  const utils = api.useUtils();
+
+  const { data: activityEvents, isPending } = api.staff.getUserActivityEvents.useQuery(
+    { userId },
+    { enabled: isActive && !!canSeeEvents },
+  );
+
+  const restoreActivityStreak = api.staff.restoreUserActivityStreak.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.staff.getUserActivityEvents.invalidate();
+      }
+    },
+  });
+
+  if (!canSeeEvents) return null;
+
+  return (
+    <ContentBox
+      title="Activity Events"
+      subtitle="Latest claimed activity events"
+      initialBreak={true}
+    >
+      {isPending && <Loader explanation="Fetching Activity Events" />}
+      {activityEvents?.length === 0 && <p>No activity events found</p>}
+      {activityEvents && activityEvents.length > 0 && (
+        <div className="space-y-2">
+          {activityEvents.map((event, i) => (
+            <div
+              key={`event-${i}`}
+              className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
+            >
+              <div>
+                <h4 className="font-semibold text-foreground">
+                  Activity Event #{event.id}
+                </h4>
+                <p className="text-sm text-muted-foreground">Streak: {event.streak}</p>
+                <p className="text-sm text-muted-foreground">
+                  Created: {event.createdAt.toLocaleString()}
+                </p>
+              </div>
+              {currentUser && canRestoreActivityStreak(currentUser.role) && (
+                <Confirm2
+                  title="Restore Activity Streak"
+                  proceed_label="Restore Streak"
+                  button={
+                    <Button variant="secondary" size="sm">
+                      Restore Streak
+                    </Button>
+                  }
+                  onAccept={() =>
+                    restoreActivityStreak.mutate({ userId, activityEventId: event.id })
+                  }
+                >
+                  Are you sure you want to restore the activity streak to{" "}
+                  <strong>{event.streak}</strong>? This action will update the
+                  user&apos;s current activity streak.
+                </Confirm2>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </ContentBox>
+  );
+};
+
+const BloodlineHistoryTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
+  const { data: currentUser } = useUserData();
+  const canSeeSecrets = currentUser && canSeeSecretData(currentUser.role);
+
+  const { data: bloodlineHistory, isPending } = api.logs.getBloodlineHistory.useQuery(
+    { userId },
+    { enabled: isActive && !!canSeeSecrets },
+  );
+
+  if (!canSeeSecrets) return null;
+
+  return (
+    <ContentBox
+      title="Bloodline History"
+      subtitle="All bloodlines this user has had"
+      initialBreak={true}
+      padding={false}
+    >
+      {isPending && <Loader explanation="Fetching Bloodline History" />}
+      {bloodlineHistory?.length === 0 && (
+        <p className="p-3">No bloodline history found</p>
+      )}
+      {bloodlineHistory && bloodlineHistory.length > 0 && (
+        <Table
+          data={bloodlineHistory}
+          columns={[
+            { key: "image", header: "Image", type: "avatar" },
+            { key: "name", header: "Name", type: "string" },
+            { key: "rank", header: "Rank", type: "capitalized" },
+            { key: "type", header: "Roll Type", type: "capitalized" },
+            { key: "createdAt", header: "Date", type: "date" },
+          ]}
+        />
+      )}
+    </ContentBox>
+  );
+};
+
+// ---------------- Additional Tab Components ----------------
+
+interface StudentsTabProps {
+  students: Array<{
+    userId: string;
+    username: string;
+    rank: string;
+    level: number;
+    avatar: string | null;
+  }>;
+}
+
+const StudentsTab: React.FC<StudentsTabProps> = ({ students }) => {
+  return (
+    <ContentBox title="Students" subtitle="Past and present" initialBreak={true}>
+      {(!students || students.length === 0) && <p>No students found</p>}
+      {students && students.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
+          {students.map((user, i) => (
+            <Link
+              href={`/username/${user.username}`}
+              className="text-center"
+              key={`student-${i}`}
+            >
+              <AvatarImage
+                href={user.avatar || ""}
+                alt={user.username}
+                userId={user.userId}
+                hover_effect={true}
+                priority={true}
+                size={100}
+              />
+              <div>
+                <div className="font-bold">{user.username}</div>
+                <div>
+                  Lvl. {user.level} {capitalizeFirstLetter(user.rank)}
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </ContentBox>
+  );
+};
+
+interface MarriagesTabProps extends TabComponentProps {
+  username: string;
+}
+
+const MarriagesTab: React.FC<MarriagesTabProps> = ({ userId, username, isActive }) => {
+  const { data: marriages, isPending } = api.marriage.getMarriedUsers.useQuery(
+    { id: userId },
+    { staleTime: 300000, enabled: isActive },
+  );
+
+  if (isPending) return <Loader explanation="Fetching Married Users" />;
+
+  return (
+    <ContentBox
+      title="Married Users"
+      subtitle={`${username} is married to these users`}
+      initialBreak={true}
+    >
+      {(!marriages || marriages.length === 0) && <p>No married users found</p>}
+      {marriages && marriages.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
+          {marriages.map((user, i) => (
+            <Link
+              href={`/username/${user.username}`}
+              className="text-center"
+              key={`marriage-${i}`}
+            >
+              <AvatarImage
+                href={user.avatar}
+                alt={user.username}
+                userId={user.userId}
+                hover_effect={true}
+                priority={true}
+                size={100}
+              />
+              <div>
+                <div className="font-bold">{user.username}</div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </ContentBox>
+  );
+};
+
+interface BadgesTabProps {
+  userId: string;
+  username: string;
+  currentBadges: (UserBadge & { badge: Badge })[];
+}
+
+const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }) => {
+  const { data: currentUser } = useUserData();
+  const canModify = currentUser && canModifyUserBadges(currentUser.role);
+
+  // Only fetch the list of all badges when the add-badge popover is opened
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const { data: allBadges } = api.badge.getAllNames.useQuery(undefined, {
+    enabled: popoverOpen,
+  });
+
+  const utils = api.useUtils();
+
+  const insertUserBadge = api.staff.insertUserBadge.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.profile.getPublicUser.invalidate();
+        await utils.logs.getContentChanges.invalidate();
+      }
+    },
+  });
+
+  const removeUserBadge = api.staff.removeUserBadge.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.profile.getPublicUser.invalidate();
+        await utils.logs.getContentChanges.invalidate();
+      }
+    },
+  });
+
+  return (
+    <ContentBox
+      title="Achieved Badges"
+      subtitle={`Badges earned by ${username}`}
+      initialBreak={true}
+      topRightContent={
+        <>
+          {canModify && (
+            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button className="w-full">
+                  <Plus className="h-6 w-6 mr-2" /> New
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-96">
+                <ActionSelector
+                  items={
+                    allBadges
+                      ? allBadges.filter(
+                          (b) => !currentBadges.some((ub) => ub.badgeId === b.id),
+                        )
+                      : []
+                  }
+                  labelSingles={true}
+                  onClick={(id) => insertUserBadge.mutate({ userId, badgeId: id })}
+                  showBgColor={false}
+                  roundFull={true}
+                  hideBorder={true}
+                  gridClassNameOverwrite="grid grid-cols-5 md:grid-cols-6"
+                  showLabels={true}
+                  emptyText="No badges exist yet."
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+        </>
+      }
+    >
+      {currentBadges.length === 0 && <p>No badges found</p>}
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
+        {currentBadges.map((userbadge, i) => (
+          <div key={`badge-${i}`} className="text-center relative">
+            <Image
+              src={userbadge.badge.image}
+              alt={userbadge.badge.name}
+              width={128}
+              height={128}
+            />
+            <div>
+              <div className="font-bold">{userbadge.badge.name}</div>
+            </div>
+            {canModify && (
+              <Trash2
+                className="absolute right-[8%] top-0 h-9 w-9 border-2 border-black cursor-pointer rounded-full bg-amber-100 fill-slate-500 p-1 hover:fill-orange-500"
+                onClick={() => removeUserBadge.mutate(userbadge)}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </ContentBox>
+  );
+};
+
+// ---------------- Recruited Users Tab ----------------
+
+interface RecruitedUsersTabProps {
+  recruits: Array<{
+    userId: string;
+    username: string;
+    rank: string;
+    level: number;
+    avatar: string | null;
+  }>;
+  parentUsername: string;
+}
+
+const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
+  recruits,
+  parentUsername,
+}) => {
+  const { data: currentUser } = useUserData();
+  const canDelete = currentUser && canDeleteReferral(currentUser.role);
+
+  const utils = api.useUtils();
+
+  const deleteReferral = api.staff.deleteReferral.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.profile.getPublicUser.invalidate();
+      }
+    },
+  });
+
+  return (
+    <ContentBox
+      title="Recruited Users"
+      subtitle={`${parentUsername} referred these users`}
+      initialBreak={true}
+    >
+      {(!recruits || recruits.length === 0) && <p>No recruits found</p>}
+      {recruits && recruits.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
+          {recruits.map((user, i) => (
+            <div key={`recruited-${i}`} className="text-center relative">
+              <Link href={`/username/${user.username}`} className="block">
+                <AvatarImage
+                  href={user.avatar || ""}
+                  alt={user.username}
+                  userId={user.userId}
+                  hover_effect={true}
+                  priority={true}
+                  size={100}
+                />
+                <div>
+                  <div className="font-bold">{user.username}</div>
+                  <div>
+                    Lvl. {user.level} {capitalizeFirstLetter(user.rank)}
+                  </div>
+                </div>
+              </Link>
+              {canDelete && (
+                <Confirm2
+                  title="Delete Referral"
+                  proceed_label="Delete"
+                  button={
+                    <Trash2 className="absolute right-[8%] top-0 h-9 w-9 border-2 border-black cursor-pointer rounded-full bg-red-100 fill-slate-500 p-1 hover:fill-red-500" />
+                  }
+                  onAccept={() => deleteReferral.mutate({ userId: user.userId })}
+                >
+                  Are you sure you want to delete the referral relationship between{" "}
+                  <strong>{parentUsername}</strong> and <strong>{user.username}</strong>
+                  ? This action will remove the referral and cannot be undone.
+                </Confirm2>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </ContentBox>
   );
 };

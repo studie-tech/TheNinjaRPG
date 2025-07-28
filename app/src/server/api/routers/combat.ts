@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import {
@@ -9,7 +10,7 @@ import {
 import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
 import { eq, or, and, sql, gt, ne, isNotNull, isNull, inArray, gte } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { desc, lt, like } from "drizzle-orm";
+import { desc, lt } from "drizzle-orm";
 import { COMBAT_HEIGHT, COMBAT_WIDTH } from "@/libs/combat/constants";
 import { SECTOR_HEIGHT, SECTOR_WIDTH } from "@/libs/travel/constants";
 import { COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
@@ -60,6 +61,7 @@ import type { ActionEffect } from "@/libs/combat/types";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
 import { IMG_BG_FOREST } from "@/drizzle/constants";
+import { flushSafe } from "@/app/api/trpc/[trpc]/route";
 import type { ZodBgSchemaType } from "@/validators/backgroundSchema";
 
 // Debug flag when testing battle
@@ -290,6 +292,7 @@ export const combatRouter = createTRPCRouter({
     .use(hasUserMiddleware)
     .input(performActionSchema)
     .mutation(async ({ ctx, input }) => {
+      Sentry.profiler.startProfiler();
       if (debug) console.log("============ Performing action ============");
 
       // Short-form
@@ -478,6 +481,11 @@ export const combatRouter = createTRPCRouter({
                 });
               }
             }
+
+            // Stop profiling
+            Sentry.profiler.stopProfiler();
+            const tempResult = await Sentry.flush(15000);
+            console.log("Sentry flush tempResult: ", tempResult);
 
             // Return the new battle + result state if applicable
             return {
@@ -883,7 +891,7 @@ export const initiateBattle = async (
     // Fetch game assets
     fetchGameAssets(client),
     // Fetch game settings
-    client.select().from(gameSetting).where(like(gameSetting.name, "%regen%")),
+    client.select().from(gameSetting),
     // Fetch villages
     client.select().from(village),
     // Fetch village alliances

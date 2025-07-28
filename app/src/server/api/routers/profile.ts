@@ -1153,19 +1153,6 @@ export const profileRouter = createTRPCRouter({
         limit: 5,
       });
     }),
-  getUserDailyPveBattleCount: publicProcedure
-    .input(z.object({ userId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      //Query
-      const result = ctx.drizzle.query.battleHistory.findMany({
-        where: and(
-          eq(battleHistory.attackedId, input.userId),
-          notInArray(battleHistory.battleType, ["SPARRING", "COMBAT"]),
-          gte(battleHistory.createdAt, getTimeOfLastReset()),
-        ),
-      });
-      return (await result).length;
-    }),
   // Get public information on a user
   getPublicUser: publicProcedure
     .input(z.object({ userId: z.string() }))
@@ -1252,6 +1239,17 @@ export const profileRouter = createTRPCRouter({
               columns: {
                 name: true,
               },
+            },
+            battleHistory: {
+              columns: {
+                battleType: true,
+                createdAt: true,
+              },
+              where: and(
+                eq(battleHistory.attackedId, input.userId),
+                notInArray(battleHistory.battleType, ["SPARRING", "COMBAT"]),
+                gte(battleHistory.createdAt, getTimeOfLastReset()),
+              ),
             },
           },
         }),
@@ -1686,7 +1684,7 @@ export const fetchUpdatedUser = async (props: {
       .select()
       .from(quest)
       .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
-    client.select().from(gameSetting).where(like(gameSetting.name, "%regen%")),
+    client.select().from(gameSetting),
     client.query.userData.findFirst({
       where: eq(userData.userId, userId),
       with: {

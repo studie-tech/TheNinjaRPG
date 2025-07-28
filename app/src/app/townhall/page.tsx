@@ -30,6 +30,7 @@ import { KAGE_CHALLENGE_SECS, KAGE_CHALLENGE_MINS } from "@/drizzle/constants";
 import { KAGE_RANK_REQUIREMENT, WAR_FUNDS_COST } from "@/drizzle/constants";
 import { KAGE_PRESTIGE_COST } from "@/drizzle/constants";
 import { KAGE_MIN_DAYS_IN_VILLAGE } from "@/drizzle/constants";
+import { KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS } from "@/drizzle/constants";
 import { getSearchValidator } from "@/validators/register";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -429,8 +430,15 @@ const KageChallenge: React.FC<{
   );
 
   // Derived
-  const activeVillageWars = activeWars?.filter((w) => w.type === "VILLAGE_WAR");
   const isKage = user.userId === user.village?.kageId;
+
+  const { data: dailyLockedTimeData } = api.kage.getDailyLockedTime.useQuery(undefined, {
+    staleTime: 30000, // Cache for 30 seconds since this is calculated from actionLog
+    enabled: isKage, // Only fetch if user is kage
+  });
+
+  // Derived
+  const activeVillageWars = activeWars?.filter((w) => w.type === "VILLAGE_WAR");
   const openForChallenges = user.village?.openForChallenges;
   const pendingRequests = requests?.filter((r) => r.status === "PENDING");
   const nPendingRequests = pendingRequests?.length ?? 0;
@@ -439,6 +447,12 @@ const KageChallenge: React.FC<{
     (r) => secondsPassed(r.createdAt) > KAGE_CHALLENGE_SECS,
   );
   const isAtWar = activeVillageWars && activeVillageWars.length > 0;
+
+  // Calculate daily locked time information
+  const dailyLockedTimeSeconds = dailyLockedTimeData?.dailyLockedTimeSeconds ?? 0;
+  const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
+  const usedHours = Math.floor(dailyLockedTimeSeconds / 3600);
+  const usedMinutes = Math.floor((dailyLockedTimeSeconds % 3600) / 60);
 
   // Mutations
   const { mutate: create, isPending: isSendingChallenge } =
@@ -545,6 +559,29 @@ const KageChallenge: React.FC<{
               {openForChallenges ? "Accepting Challenges" : "Not Accepting Challenges"}
             </Button>
           </p>
+          {isKage && (
+            <div className="p-3 text-sm text-gray-600">
+              <p>
+                <span className="font-bold">Daily Lock Time Used: </span>
+                <span className={dailyLockedTimeSeconds >= maxDailySeconds ? "text-red-500 font-bold" : ""}>
+                  {usedHours}h {usedMinutes}m / {KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS}h
+                </span>
+              </p>
+              {dailyLockedTimeSeconds >= maxDailySeconds ? (
+                <p className="text-red-500 font-bold">
+                  Daily limit reached! Challenges will be automatically unlocked at the start of the next day.
+                </p>
+              ) : (
+                <p>
+                  <span className="font-bold">Remaining Lock Time: </span>
+                  <Countdown 
+                    targetDate={new Date(new Date().setHours(24, 0, 0, 0))} 
+                    className="font-mono"
+                  />
+                </p>
+              )}
+            </div>
+          )}
           {requests && requests.length > 0 && openForChallenges && (
             <UserRequestSystem
               isLoading={

@@ -1357,8 +1357,43 @@ const OwnNindoChange: React.FC = () => {
   );
 };
 
+interface ElementRerollButtonProps {
+  elementType: "primary" | "secondary";
+  canAfford: boolean;
+  canChange: boolean;
+  onReroll: (elementType: "primary" | "secondary") => void;
+}
+
+const ElementRerollButton: React.FC<ElementRerollButtonProps> = ({
+  elementType,
+  canAfford,
+  canChange,
+  onReroll
+}) => (
+  <Confirm2
+    title={`Confirm ${elementType.charAt(0).toUpperCase() + elementType.slice(1)} Element Re-Roll`}
+    button={
+      <Button 
+        id={`reroll-${elementType}`}
+        type="submit" 
+        className="w-full" 
+        disabled={!canAfford || !canChange}
+      >
+        Re-Roll {elementType.charAt(0).toUpperCase() + elementType.slice(1)} Element
+      </Button>
+    }
+    onAccept={(e) => {
+      e.preventDefault();
+      onReroll(elementType);
+    }}
+  >
+    Rerolling your {elementType} element costs {COST_REROLL_ELEMENT} reputation points. Are you
+    sure you want to re-roll your {elementType} element?
+  </Confirm2>
+);
+
 /**
- * Re-Roll Primary Element
+ * Re-Roll Elements
  */
 const RerollElement: React.FC = () => {
   // State
@@ -1388,24 +1423,24 @@ const RerollElement: React.FC = () => {
     userData?.primaryElement && activeElements[0] === userData.primaryElement;
   const canChangeSecond =
     userData?.secondaryElement && activeElements[1] === userData.secondaryElement;
-  const disabled = !canAfford || (!canChangeFirst && !canChangeSecond);
 
   return (
-    <Confirm2
-      title="Confirm Re-Roll"
-      button={
-        <Button id="create" type="submit" className="w-full my-3" disabled={disabled}>
-          Re-Roll Both Elements
-        </Button>
-      }
-      onAccept={(e) => {
-        e.preventDefault();
-        roll();
-      }}
-    >
-      Changing your base elements costs {COST_REROLL_ELEMENT} reputation points. Are you
-      sure you want to re-roll?
-    </Confirm2>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-4">
+        <ElementRerollButton
+          elementType="primary"
+          canAfford={canAfford ?? false}
+          canChange={canChangeFirst ?? false}
+          onReroll={(elementType) => roll({ elementType })}
+        />
+        <ElementRerollButton
+          elementType="secondary"
+          canAfford={canAfford ?? false}
+          canChange={canChangeSecond ?? false}
+          onReroll={(elementType) => roll({ elementType })}
+        />
+      </div>
+    </div>
   );
 };
 

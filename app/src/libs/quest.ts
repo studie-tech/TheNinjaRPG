@@ -1140,3 +1140,53 @@ export const verifyQuestObjectiveFlow = (
     return { check: false, message: (err as Error).message };
   }
 };
+
+/**
+ * Filters out medical quests that are not available to the user.
+ *
+ * @param quests - The quests to filter.
+ * @param user - The user to filter for.
+ * @returns The filtered quests and the medical rank that was used.
+ */
+export const fallbackQuestsFilter = (
+  quests: Quest[],
+  user: NonNullable<UserWithRelations>,
+  questType: QuestType,
+) => {
+  // Calculate user's medical rank
+  const userMedicalRank = calcMedninRank({
+    medicalExperience: user.medicalExperience,
+    rank: user.rank,
+  });
+  let filtered: Quest[] = [];
+  let rankInfo = "";
+
+  if (questType === "medical") {
+    const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
+    // Try each rank from user's rank down to NONE
+    for (let i = userMedicalRankIndex; i >= 0; i--) {
+      const currentRank = MEDNIN_RANKS[i];
+      if (!currentRank) continue;
+
+      // Filter for available quests
+      const availableMissions = quests.filter(
+        (e) =>
+          e.questType === questType &&
+          (!e.medicalRank || e.medicalRank === currentRank) &&
+          isAvailableUserQuests(e, user).check,
+      );
+
+      // If we found any available quests, break out of the loop
+      if (availableMissions.length > 0) {
+        filtered = availableMissions;
+        if (userMedicalRank !== currentRank) {
+          rankInfo = ` (using ${capitalizeFirstLetter(currentRank)} rank missions)`;
+        }
+        break;
+      }
+    }
+  } else {
+    filtered = quests;
+  }
+  return { filtered, rankInfo };
+};

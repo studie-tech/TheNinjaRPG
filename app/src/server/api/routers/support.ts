@@ -133,6 +133,7 @@ export const supportRouter = createTRPCRouter({
           content: input.description,
           isStaffAvailable: true,
           convoId,
+          isPublic: input.isPublic,
         }),
         createSupportTicketActivity(ctx.drizzle, ticketId, ctx.userId, "CREATED"),
       ]);
@@ -168,7 +169,8 @@ export const supportRouter = createTRPCRouter({
         );
       }
       if (
-        updateData?.assignedToUserId !== ticket.assignedToUserId &&
+        updateData?.assignedToUserId &&
+        updateData.assignedToUserId !== ticket.assignedToUserId &&
         !canAssignSupportTicket(user.role)
       ) {
         return errorResponse("No permission to assign tickets");
@@ -313,6 +315,7 @@ export const supportRouter = createTRPCRouter({
         totalResult,
         openResult,
         resolvedResult,
+        assignedToCurrentUserResult,
         categoryResult,
         priorityResult,
         statusResult,
@@ -341,6 +344,16 @@ export const supportRouter = createTRPCRouter({
           .where(
             and(
               eq(supportTicket.status, "RESOLVED"),
+              ...(baseConds.length > 0 ? [and(...baseConds)] : []),
+            ),
+          ),
+        // Tickets assigned to current user
+        ctx.drizzle
+          .select({ count: sql<number>`count(*)` })
+          .from(supportTicket)
+          .where(
+            and(
+              eq(supportTicket.assignedToUserId, ctx.userId),
               ...(baseConds.length > 0 ? [and(...baseConds)] : []),
             ),
           ),
@@ -379,6 +392,7 @@ export const supportRouter = createTRPCRouter({
       const totalTickets = totalResult[0]?.count ?? 0;
       const openTickets = openResult[0]?.count ?? 0;
       const resolvedTickets = resolvedResult[0]?.count ?? 0;
+      const assignedToCurrentUser = assignedToCurrentUserResult[0]?.count ?? 0;
       const ticketsByCategory = reduceByKey(categoryResult, "category");
       const ticketsByPriority = reduceByKey(priorityResult, "priority");
       const ticketsByStatus = reduceByKey(statusResult, "status");
@@ -388,6 +402,7 @@ export const supportRouter = createTRPCRouter({
         totalTickets,
         openTickets,
         resolvedTickets,
+        assignedToCurrentUser,
         ticketsByCategory,
         ticketsByPriority,
         ticketsByStatus,
@@ -881,7 +896,7 @@ export const calculateSupportMetrics = async (
 
   for (const ticket of tickets) {
     // Calculate first response time
-    const firstStaffResponse = ticket.conversation.comments.find(
+    const firstStaffResponse = ticket.conversation?.comments.find(
       (comment) => comment.user.role !== "USER",
     );
 

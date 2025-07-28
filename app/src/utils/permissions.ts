@@ -506,7 +506,11 @@ export const canEditSupportTicket = (
 ) => {
   if (userRole !== "USER") return true;
   if (ticket.assignedToUserId === userId) return true;
-  if (ticket.createdByUserId === userId && ticket.status === "OPEN") return true;
+  if (
+    ticket.createdByUserId === userId &&
+    (ticket.status === "OPEN" || ticket.status === "WAITING_FOR_USER")
+  )
+    return true;
   return false;
 };
 
@@ -570,5 +574,13 @@ export const canEditCannedResponses = (userRole: UserRole) => {
 };
 
 export const canAwardExperience = (user: UserData) => {
-  return ["CODING-ADMIN","CODER"].includes(user.role);
+  return ["CODING-ADMIN", "CODER"].includes(user.role);
+};
+
+export const canRollPrimaryElement = (user: UserData) => {
+  return !["STUDENT", "NONE"].includes(user.rank);
+};
+
+export const canRollSecondaryElement = (user: UserData) => {
+  return !["STUDENT", "GENIN", "NONE"].includes(user.rank);
 };

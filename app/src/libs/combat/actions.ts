@@ -63,6 +63,13 @@ export const availableUserActions = (
     basicCleanse: current?.find((ba) => ba.id == "cleanse") || base.basicCleanse,
     basicFlee: current?.find((ba) => ba.id == "flee") || base.basicFlee,
   };
+  // Always set battleDescriptions back to base values
+  basicActions.basicAttack.battleDescription = base.basicAttack.battleDescription;
+  basicActions.basicHeal.battleDescription = base.basicHeal.battleDescription;
+  basicActions.basicMove.battleDescription = base.basicMove.battleDescription;
+  basicActions.basicClear.battleDescription = base.basicClear.battleDescription;
+  basicActions.basicCleanse.battleDescription = base.basicCleanse.battleDescription;
+  basicActions.basicFlee.battleDescription = base.basicFlee.battleDescription;
   // Concatenate all actions
   let availableActions = [
     ...(basicMoves && !isStealth ? [basicActions.basicAttack] : []),
@@ -626,7 +633,7 @@ export const insertAction = (info: {
       if (action.battleDescription === "") {
         action.battleDescription = `%user uses ${action.name}`;
       }
-      action.battleDescription = `${action.name}: ${action.battleDescription}`;
+      action.battleDescription = `${action.name}: ${action.battleDescription} ${targetTile?.name ? `on <b>${targetTile.name}</b>` : ""}`;
       action.battleDescription = action.battleDescription.replaceAll(
         "%user_subject",
         user.gender === "Male" ? "he" : "she",

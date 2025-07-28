@@ -97,12 +97,32 @@ const SupportTicketFiltering: React.FC<SupportTicketFilteringProps> = (props) =>
     return () => clearTimeout(delayDebounceFn);
   }, [watchSearch, setSearch]);
 
+  // Count applied filters
+  const getAppliedFiltersCount = () => {
+    let count = 0;
+    if (search && search.trim() !== "") count++;
+    if (status.length > 0) count += status.length;
+    if (category.length > 0) count += category.length;
+    if (priority.length > 0) count += priority.length;
+    if (assignedToUserId !== "None") count++;
+    if (createdByUserId !== "None") count++;
+    if (isPublic !== undefined) count++;
+    return count;
+  };
+
+  const appliedFiltersCount = getAppliedFiltersCount();
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button id="filter-support-tickets">
+        <Button id="filter-support-tickets" className="relative">
           <Filter className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
           <p className="hidden sm:block">Filter</p>
+          {appliedFiltersCount > 0 && (
+            <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+              {appliedFiltersCount}
+            </span>
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="min-w-96">
@@ -139,7 +159,7 @@ const SupportTicketFiltering: React.FC<SupportTicketFilteringProps> = (props) =>
                 value: status,
                 label: status.replace("_", " "),
               }))}
-              onChange={setStatus}
+              onChange={(value) => setStatus(value as SupportTicketStatus[])}
             />
           </div>
 
@@ -152,7 +172,7 @@ const SupportTicketFiltering: React.FC<SupportTicketFilteringProps> = (props) =>
                 value: category,
                 label: category.replace("_", " "),
               }))}
-              onChange={setCategory}
+              onChange={(value) => setCategory(value as SupportTicketCategory[])}
             />
           </div>
 
@@ -165,7 +185,7 @@ const SupportTicketFiltering: React.FC<SupportTicketFilteringProps> = (props) =>
                 value: priority,
                 label: priority,
               }))}
-              onChange={setPriority}
+              onChange={(value) => setPriority(value as SupportTicketPriority[])}
             />
           </div>
 
@@ -249,16 +269,9 @@ export default SupportTicketFiltering;
 export const getFilter = (state: SupportTicketFilteringState) => {
   return {
     search: state.search || undefined,
-    status:
-      state.status.length > 0 ? (state.status as SupportTicketStatus[]) : undefined,
-    category:
-      state.category.length > 0
-        ? (state.category as SupportTicketCategory[])
-        : undefined,
-    priority:
-      state.priority.length > 0
-        ? (state.priority as SupportTicketPriority[])
-        : undefined,
+    status: state.status.length > 0 ? state.status : undefined,
+    category: state.category.length > 0 ? state.category : undefined,
+    priority: state.priority.length > 0 ? state.priority : undefined,
     assignedToUserId:
       state.assignedToUserId === "None"
         ? undefined
@@ -279,9 +292,13 @@ export const getFilter = (state: SupportTicketFilteringState) => {
 export const useFiltering = () => {
   // State variables
   const [search, setSearch] = useState<string>("");
-  const [status, setStatus] = useState<string[]>([]);
-  const [category, setCategory] = useState<string[]>([]);
-  const [priority, setPriority] = useState<string[]>([]);
+  const [status, setStatus] = useState<SupportTicketStatus[]>([
+    "OPEN",
+    "IN_PROGRESS",
+    "WAITING_FOR_STAFF",
+  ]);
+  const [category, setCategory] = useState<SupportTicketCategory[]>([]);
+  const [priority, setPriority] = useState<SupportTicketPriority[]>([]);
   const [assignedToUserId, setAssignedToUserId] = useState<string>("None");
   const [createdByUserId, setCreatedByUserId] = useState<string>("None");
   const [isPublic, setIsPublic] = useState<boolean | undefined>(undefined);

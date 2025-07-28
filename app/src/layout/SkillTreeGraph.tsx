@@ -438,6 +438,7 @@ export default function SkillTreeGraph({
   const { maxX, maxY } = getContentBounds();
   const svgWidth = Math.max(800, maxX + 100);
   const svgHeight = Math.max(400, maxY + 100);
+  console.log("svgWidth", svgWidth, "svgHeight", svgHeight);
 
   return (
     <TooltipProvider>
@@ -494,7 +495,10 @@ export default function SkillTreeGraph({
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onWheel={handleWheel}
-          style={{ cursor: isDragging ? "grabbing" : "grab" }}
+          style={{
+            cursor: isDragging ? "grabbing" : "grab",
+            height: "300px",
+          }}
         >
           <svg ref={svgRef} width={svgWidth} height={svgHeight} className="w-full">
             <g

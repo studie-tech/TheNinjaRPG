@@ -3,22 +3,18 @@ import Link from "next/link";
 import StatusBar from "@/layout/StatusBar";
 import AvatarImage from "@/layout/Avatar";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import ElementImage from "@/layout/ElementImage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dna, Link2, Gem } from "lucide-react";
 import { useUserData } from "@/utils/UserContext";
 import { useAtomValue } from "jotai";
-import { userBattleAtom, combatActionIdAtom } from "@/utils/UserContext";
-import { availableUserActions } from "@/libs/combat/actions";
+import { userBattleAtom } from "@/utils/UserContext";
 import { SideBannerTitle } from "@/components/layout/core4_default";
+import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 
 const MenuBoxCombat: React.FC = () => {
   // State
   const { data: userData, timeDiff } = useUserData();
   const battle = useAtomValue(userBattleAtom);
-  const selectedActionId = useAtomValue(combatActionIdAtom);
-  const actions = availableUserActions(battle, userData?.userId);
-  const action = actions.find((a) => a.id === selectedActionId);
 
   // Battle user state
   const battleUser = battle?.usersState.find(
@@ -128,43 +124,10 @@ const MenuBoxCombat: React.FC = () => {
           </PopoverContent>
         </Popover>
       )}
-      <hr className="my-2" />
-      {action && (
-        <div>
-          <SideBannerTitle>{action.name}</SideBannerTitle>
-          <div className="px-1">
-            <div className="flex flex-col gap-2">
-              {action.effects
-                .map((e) => ({
-                  ...e,
-                  effectStats: [
-                    ...("statTypes" in e && e.statTypes ? e.statTypes : []),
-                    ...("generalTypes" in e && e.generalTypes ? e.generalTypes : []),
-                    ...("elements" in e && e.elements ? e.elements : []),
-                  ],
-                }))
-                .sort((a, b) => b.effectStats.length - a.effectStats.length)
-                .map((e, i) => {
-                  return (
-                    <div key={`combatmenu-${i}`} className="flex flex-col gap-1">
-                      <span>
-                        <b>Effect {i + 1}:</b> <i>{e.type}</i>
-                      </span>
-                      <div className="flex flex-row gap-1">
-                        {e.effectStats.map((stat, j) => (
-                          <ElementImage
-                            key={`combatmenu-${i}-${j}`}
-                            element={stat}
-                            className="w-8 h-8"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-          <hr className="my-2" />
+      {/* Active Effects on opponent */}
+      {battle?.usersEffects && (
+        <div className="mt-2">
+          <VisualizeEffects effects={battle.usersEffects} userId={battleUser.userId} />
         </div>
       )}
     </>

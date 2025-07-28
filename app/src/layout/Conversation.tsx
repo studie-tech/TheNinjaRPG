@@ -38,6 +38,7 @@ interface ConversationProps {
   subtitle: string;
   initialBreak?: boolean;
   topRightContent?: React.ReactNode;
+  onCommentPosted?: () => void;
   onBack?: () => void;
 }
 
@@ -391,6 +392,9 @@ const Conversation: React.FC<ConversationProps> = (props) => {
         if (data.success) {
           if (conversation) reset({ object_id: conversation.id, comment: "" });
           setEditorKey((prev) => prev + 1);
+          if (props.onCommentPosted) {
+            props.onCommentPosted();
+          }
           if (data.commentId) {
             // Update the ID of the latest message without a current ID
             if (!context?.old) return;
