@@ -391,9 +391,9 @@ export default function SkillTreeGraph({
     const containerHeight = containerRect.height;
 
     // Calculate scale to fit content with some padding
-    const scaleX = (containerWidth - 40) / contentWidth;
-    const scaleY = (containerHeight - 40) / contentHeight;
-    const scale = Math.min(scaleX, scaleY, 1); // Don't scale up beyond 1x
+    const scaleX = (containerWidth - 20) / contentWidth;
+    const scaleY = (containerHeight - 20) / contentHeight;
+    const scale = Math.min(scaleX, scaleY, 1.5); // Allow scaling up to 1.5x to fill space better
 
     // Center the content
     const scaledWidth = contentWidth * scale;

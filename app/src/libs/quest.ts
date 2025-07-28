@@ -192,7 +192,7 @@ export const getReward = (
       }
     });
     // Scale rewards
-    const missionLike = ["mission", "crime", "medical"].includes(
+    const missionLike = ["mission", "crime"].includes(
       userQuest.quest.questType,
     );
     const factor =
