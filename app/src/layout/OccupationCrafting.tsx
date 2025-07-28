@@ -9,7 +9,8 @@ import { ActionSelector } from "@/layout/CombatActions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Hammer, Star, Info, Gem } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Hammer, Star, Info, Gem, Zap } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { showMutationToast } from "@/libs/toast";
@@ -19,6 +20,7 @@ import {
   CRAFTING_MAX_IMBUED_ITEMS,
 } from "@/drizzle/constants";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { canChangeContent } from "@/utils/permissions";
 import {
   getCurrentCraftingStatus,
   getCraftingRankProgress,
@@ -70,6 +72,20 @@ export default function OccupationCrafting() {
       setIsImbueModalOpen(false);
       setSelectedImbuableItem(undefined);
       setSelectedCrystalUserItem(undefined);
+      await utils.item.getUserItems.invalidate();
+    },
+  });
+
+  const finishCraftingImmediatelyMutation = api.occupation.finishCraftingImmediately.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      await utils.item.getUserItems.invalidate();
+    },
+  });
+
+  const finishImbuingImmediatelyMutation = api.occupation.finishImbuingImmediately.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
       await utils.item.getUserItems.invalidate();
     },
   });
@@ -174,7 +190,7 @@ export default function OccupationCrafting() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col ">
+              <div className="flex flex-col gap-4">
                 {craftingStatus.currentCraftingItem && (
                   <ItemWithEffects item={craftingStatus.currentCraftingItem} />
                 )}
@@ -182,6 +198,27 @@ export default function OccupationCrafting() {
                   new Date(craftingStatus.craftingFinishedAt) <= new Date() && (
                     <div className="text-sm text-green-600 font-medium">Finished!</div>
                   )}
+                {/* Find the currently crafting userItem to get its ID */}
+                {userItems && (() => {
+                  const currentlyCraftingUserItem = userItems.find(
+                    (ui) =>
+                      ui.craftingFinishedAt &&
+                      new Date(ui.craftingFinishedAt) > new Date()
+                  );
+                  return currentlyCraftingUserItem && canChangeContent(userData?.role || "USER") ? (
+                    <Button
+                      onClick={() => finishCraftingImmediatelyMutation.mutate({ userItemId: currentlyCraftingUserItem.id })}
+                      disabled={finishCraftingImmediatelyMutation.isPending}
+                      loading={finishCraftingImmediatelyMutation.isPending}
+                      variant="outline"
+                      size="sm"
+                      className="w-fit"
+                    >
+                      <Zap className="h-4 w-4 mr-2" />
+                      Instant Finish (Staff)
+                    </Button>
+                  ) : null;
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -359,13 +396,28 @@ export default function OccupationCrafting() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ItemWithEffects
-                item={{
-                  ...activeImbuingItem.item,
-                  imbuements: activeImbuingItem.imbuements.map((i) => i.item),
-                }}
-                key={activeImbuingItem.id}
-              />
+              <div className="flex flex-col gap-4">
+                <ItemWithEffects
+                  item={{
+                    ...activeImbuingItem.item,
+                    imbuements: activeImbuingItem.imbuements.map((i) => i.item),
+                  }}
+                  key={activeImbuingItem.id}
+                />
+                {canChangeContent(userData?.role || "USER") && activeImbuement && (
+                  <Button
+                    onClick={() => finishImbuingImmediatelyMutation.mutate({ userItemImbuementId: activeImbuement.id })}
+                    disabled={finishImbuingImmediatelyMutation.isPending}
+                    loading={finishImbuingImmediatelyMutation.isPending}
+                    variant="outline"
+                    size="sm"
+                    className="w-fit"
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    Instant Finish (Staff)
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
