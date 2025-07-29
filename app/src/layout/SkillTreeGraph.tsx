@@ -373,7 +373,7 @@ export default function SkillTreeGraph({
     const minX = Math.min(...skillNodes.map((n) => n.x)) - 30;
     const minY = Math.min(...skillNodes.map((n) => n.y)) - 0;
     const maxX = Math.max(...skillNodes.map((n) => n.x + 200)) + 30;
-    const maxY = Math.max(...skillNodes.map((n) => n.y + 100)) + 20;
+    const maxY = Math.max(...skillNodes.map((n) => n.y + 100)) + 50;
 
     return { minX, minY, maxX, maxY };
   }, [skillNodes]);
