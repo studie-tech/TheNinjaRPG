@@ -390,10 +390,10 @@ export default function SkillTreeGraph({
     const containerWidth = containerRect.width;
     const containerHeight = containerRect.height;
 
-    // Calculate scale to fit content with some padding
-    const scaleX = (containerWidth - 20) / contentWidth;
-    const scaleY = (containerHeight - 20) / contentHeight;
-    const scale = Math.min(scaleX, scaleY, 1.5); // Allow scaling up to 1.5x to fill space better
+    // Calculate scale to fit content with minimal padding
+    const scaleX = (containerWidth - 10) / contentWidth;
+    const scaleY = (containerHeight - 10) / contentHeight;
+    const scale = Math.min(scaleX, scaleY, 1.2); // Reduced max scale to prevent too much zoom
 
     // Center the content
     const scaledWidth = contentWidth * scale;
@@ -434,10 +434,12 @@ export default function SkillTreeGraph({
     }));
   }, []);
 
-  // SVG dimensions
-  const { maxX, maxY } = getContentBounds();
-  const svgWidth = Math.max(800, maxX + 25); // Reduced from 50
-  const svgHeight = Math.max(400, maxY + 25); // Reduced from 50
+  // SVG dimensions - make them tightly bound to content
+  const { minX, minY, maxX, maxY } = getContentBounds();
+  const contentWidth = maxX - minX;
+  const contentHeight = maxY - minY;
+  const svgWidth = Math.max(800, contentWidth + 50); // Add minimal padding
+  const svgHeight = Math.max(400, contentHeight + 50); // Add minimal padding
 
   return (
     <TooltipProvider>
@@ -639,8 +641,9 @@ export default function SkillTreeGraph({
                     />
                     <text
                       x={centerX - 50} // Reduced from 60
-                      y={centerY - 35} // Adjusted from 45
+                      y={centerY - 45} // Adjusted for proper vertical centering
                       textAnchor="middle"
+                      dominantBaseline="middle"
                       className="fill-white dark:fill-slate-800 text-2xl font-bold pointer-events-none" // Reduced from text-3xl
                     >
                       {skill.tier}
@@ -655,8 +658,9 @@ export default function SkillTreeGraph({
                     />
                     <text
                       x={centerX + 50} // Reduced from 60
-                      y={centerY - 35} // Adjusted from 45
+                      y={centerY - 45} // Adjusted for proper vertical centering
                       textAnchor="middle"
+                      dominantBaseline="middle"
                       className="fill-white dark:fill-slate-900 text-2xl font-bold pointer-events-none" // Reduced from text-3xl
                     >
                       {skill.costSkillPoints}
