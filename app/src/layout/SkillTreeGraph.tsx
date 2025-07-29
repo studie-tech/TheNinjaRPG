@@ -370,10 +370,10 @@ export default function SkillTreeGraph({
   const getContentBounds = useCallback(() => {
     if (!skillNodes.length) return { minX: 0, minY: 0, maxX: 800, maxY: 400 };
 
-    const minX = Math.min(...skillNodes.map((n) => n.x)) - 15; // Reduced from 30
-    const minY = Math.min(...skillNodes.map((n) => n.y)) - 15; // Reduced from 30
-    const maxX = Math.max(...skillNodes.map((n) => n.x + 200)) + 15; // Reduced from 30
-    const maxY = Math.max(...skillNodes.map((n) => n.y + 240)) + 15; // Reduced from 30
+    const minX = Math.min(...skillNodes.map((n) => n.x)) - 10; // Reduced from 15
+    const minY = Math.min(...skillNodes.map((n) => n.y)) - 10; // Reduced from 15
+    const maxX = Math.max(...skillNodes.map((n) => n.x + 200)) + 10; // Reduced from 15
+    const maxY = Math.max(...skillNodes.map((n) => n.y + 240)) + 10; // Reduced from 15
 
     return { minX, minY, maxX, maxY };
   }, [skillNodes]);
@@ -391,9 +391,9 @@ export default function SkillTreeGraph({
     const containerHeight = containerRect.height;
 
     // Calculate scale to fit content with minimal padding
-    const scaleX = (containerWidth - 10) / contentWidth;
-    const scaleY = (containerHeight - 10) / contentHeight;
-    const scale = Math.min(scaleX, scaleY, 1.2); // Reduced max scale to prevent too much zoom
+    const scaleX = (containerWidth - 5) / contentWidth;
+    const scaleY = (containerHeight - 5) / contentHeight;
+    const scale = Math.min(scaleX, scaleY, 1.0); // Reduced max scale to prevent too much zoom
 
     // Center the content
     const scaledWidth = contentWidth * scale;
@@ -438,8 +438,8 @@ export default function SkillTreeGraph({
   const { minX, minY, maxX, maxY } = getContentBounds();
   const contentWidth = maxX - minX;
   const contentHeight = maxY - minY;
-  const svgWidth = Math.max(800, contentWidth + 50); // Add minimal padding
-  const svgHeight = Math.max(400, contentHeight + 50); // Add minimal padding
+  const svgWidth = Math.max(600, contentWidth + 20); // Much tighter padding
+  const svgHeight = Math.max(300, contentHeight + 20); // Much tighter padding
 
   return (
     <TooltipProvider>

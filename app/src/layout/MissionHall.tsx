@@ -121,14 +121,6 @@ export default function MissionHall({ userData }: MissionHallProps) {
       {!currentQuest && !isPending && (
         <div className="grid grid-cols-3 italic p-3 gap-4 text-center">
           {getMissionHallSettings(userData.isOutlaw).map((setting, i) => {
-            // Check is user rank is high enough for this quest
-            const isErrand = setting.type === "errand";
-            const isMedical = setting.type === "medical";
-            const capped = isErrand
-              ? errandsLeft <= 0
-              : isMedical
-                ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY
-                : userData.dailyMissions >= MISSIONS_PER_DAY;
             // Count how many of this type and rank are available
             const { filtered, rankInfo } = fallbackQuestsFilter(
               hallData || [],
@@ -137,6 +129,14 @@ export default function MissionHall({ userData }: MissionHallProps) {
             );
             const count =
               filtered?.filter((q) => q.questRank === setting.rank)?.length ?? 0;
+            // Check is user rank is high enough for this quest
+            const isErrand = setting.type === "errand";
+            const isMedical = setting.type === "medical";
+            const capped = isErrand
+              ? errandsLeft <= 0
+              : isMedical
+                ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY || filtered.length === 0
+                : userData.dailyMissions >= MISSIONS_PER_DAY;
             // Checks
             const rankCheck = availableUserRanks.includes(setting.rank) || isErrand;
             const medicalCheck = isMedical
@@ -182,7 +182,9 @@ export default function MissionHall({ userData }: MissionHallProps) {
                                 <p className="font-bold text-xs text-center">
                                   {mission.name}
                                 </p>
-                                {userData.dailyMissions >= 9 &&
+                                {!isErrand &&
+                                  !isMedical &&
+                                  userData.dailyMissions >= 9 &&
                                   userData.dailyMissions < MISSIONS_PER_DAY && (
                                     <p className="text-sm text-yellow-500">
                                       40% Rewards
@@ -277,6 +279,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           )}
                         </p>
                         {!isErrand &&
+                          !isMedical &&
                           userData.dailyMissions >= 9 &&
                           userData.dailyMissions < MISSIONS_PER_DAY && (
                             <p className="text-sm text-yellow-500">40% Rewards</p>
