@@ -2,7 +2,7 @@ import { eq, ne, and, or, sql, lt, gt } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
 import { userData, dailyBankInterest } from "@/drizzle/schema";
 import { lockWithDailyTimer, updateGameSetting } from "@/libs/gamesettings";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { calcBankInterest } from "@/utils/village";
 import { RYO_CAP } from "@/drizzle/constants";
 import { FED_NORMAL_BANK_INTEREST } from "@/drizzle/constants";
@@ -35,7 +35,7 @@ export async function GET() {
     // Process each village
     const promises = villages.map(async (village) => {
       // Calculations
-      const boost = structureBoost("bankInterestPerLvl", village.structures);
+      const boost = getStrucBoost("bankInterestPerLvl", village.structures);
       const baseFactor = calcBankInterest(boost) / 100;
       const factorNormal = baseFactor + FED_NORMAL_BANK_INTEREST / 100;
       const factorSilver = baseFactor + FED_SILVER_BANK_INTEREST / 100;

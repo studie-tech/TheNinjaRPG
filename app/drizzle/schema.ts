@@ -1644,6 +1644,7 @@ export const userData = mysqlTable(
     isAi: boolean("isAi").default(false).notNull(),
     isSummon: boolean("isSummon").default(false).notNull(),
     isEvent: boolean("isEvent").default(false).notNull(),
+    inShrines: boolean("inShrines").default(false).notNull(),
     inArena: boolean("inArena").default(false).notNull(),
     inboxNews: int("inboxNews").default(0).notNull(),
     regenAt: datetime("regenAt", { mode: "date", fsp: 3 })
@@ -1696,7 +1697,9 @@ export const userData = mysqlTable(
       .notNull(),
     dailyMissions: smallint("dailyMissions", { unsigned: true }).default(0).notNull(),
     dailyErrands: smallint("dailyErrands", { unsigned: true }).default(0).notNull(),
-    dailyMedicalMissions: smallint("dailyMedicalMissions", { unsigned: true }).default(0).notNull(),
+    dailyMedicalMissions: smallint("dailyMedicalMissions", { unsigned: true })
+      .default(0)
+      .notNull(),
     dailyTrainings: smallint("dailyTrainings", { unsigned: true }).default(0).notNull(),
     movedTooFastCount: int("movedTooFastCount").default(0).notNull(),
     extraItemSlots: smallint("extraItemSlots", { unsigned: true }).default(0).notNull(),
@@ -1724,6 +1727,7 @@ export const userData = mysqlTable(
       isAiIdx: index("UserData_isAi_idx").on(table.isAi),
       isEventIdx: index("UserData_isEvent_idx").on(table.isEvent),
       inArenaIdx: index("UserData_inArena_idx").on(table.inArena),
+      inShrinesIdx: index("UserData_inShrines_idx").on(table.inShrines),
       isSummonIdx: index("UserData_isSummon_idx").on(table.isSummon),
       rankIdx: index("UserData_rank_idx").on(table.rank),
       roleIdx: index("UserData_role_idx").on(table.role),
@@ -2276,6 +2280,8 @@ export const sector = mysqlTable(
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
+    shrineLevel: tinyint("shrineLevel").default(1).notNull(),
+    capturedAt: datetime("capturedAt", { mode: "date", fsp: 3 }),
   },
   (table) => {
     return {
@@ -2283,6 +2289,7 @@ export const sector = mysqlTable(
     };
   },
 );
+export type SectorType = InferSelectModel<typeof sector>;
 
 export const sectorRelations = relations(sector, ({ one, many }) => ({
   village: one(village, {
@@ -2347,6 +2354,15 @@ export const village = mysqlTable(
     wallpaperOverwrite: varchar("wallpaperOverwrite", { length: 191 }),
     warExhaustionEndedAt: datetime("warExhaustionEndedAt", { mode: "date", fsp: 3 }),
     lastWarEndedAt: datetime("lastWarEndedAt", { mode: "date", fsp: 3 }),
+    shrineSettings: json("shrineSettings")
+      .$type<{
+        unlockedAiIds: string[];
+        activeBoosts: Record<string, string>; // boost type -> expiry ISO string
+        activeAiIds: string[];
+        nextMaintainanceDueDate?: string; // ISO string
+      }>()
+      .default({ unlockedAiIds: [], activeBoosts: {}, activeAiIds: [] })
+      .notNull(),
   },
   (table) => {
     return {
@@ -2369,6 +2385,7 @@ export const villageRelations = relations(village, ({ many, one }) => ({
     fields: [village.id],
     references: [userNindo.userId],
   }),
+  sectors: many(sector),
   declaredWars: many(war, { relationName: "attackerVillage" }),
   receivedWars: many(war, { relationName: "defenderVillage" }),
 }));
@@ -3016,7 +3033,10 @@ export const war = mysqlTable(
     status: mysqlEnum("status", consts.WAR_STATES).notNull(),
     type: mysqlEnum("type", consts.WAR_TYPES).notNull(),
     sector: smallint("sector").default(0).notNull(),
-    shrineHp: smallint("shrineHp").default(consts.WAR_SHRINE_HP).notNull(),
+    shrineHp: smallint("shrineHp").default(consts.SHRINE_HP_BY_LEVEL[1]).notNull(),
+    shrineMaxHp: smallint("shrineMaxHp")
+      .default(consts.SHRINE_HP_BY_LEVEL[1])
+      .notNull(),
     dailyTokenReduction: int("dailyTokenReduction").default(1000).notNull(),
     lastTokenReductionAt: datetime("lastTokenReductionAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)

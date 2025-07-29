@@ -9,7 +9,7 @@ import type {
 import { USER_CAPS, HP_PER_LVL, SP_PER_LVL, CP_PER_LVL } from "@/drizzle/constants";
 import { CLAN_MAX_REGEN_BOOST } from "@/drizzle/constants";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { getReducedGainsDays } from "@/libs/train";
 import { getGameSettingBoost } from "@/libs/gamesettings";
 import { HomeTypeDetails } from "@/drizzle/constants";
@@ -202,9 +202,9 @@ export const calcActiveUserRegen = (
   }
 
   // // Calculate percentage boost
-  let boost = structureBoost("regenIncreasePerLvl", user?.village?.structures);
+  let boost = getStrucBoost("regenIncreasePerLvl", user?.village?.structures);
   if (user.status === "ASLEEP") {
-    boost += structureBoost("sleepRegenPerLvl", user.village?.structures);
+    boost += getStrucBoost("sleepRegenPerLvl", user.village?.structures);
   }
   regeneration *= (100 + boost) / 100;
 

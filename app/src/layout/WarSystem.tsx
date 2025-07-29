@@ -26,7 +26,7 @@ import { WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_7_DAYS } from "@/drizzle/constants
 import { WAR_VICTORY_TOKEN_BONUS } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { WAR_ALLY_OFFER_MIN } from "@/drizzle/constants";
-import { WAR_SHRINE_IMAGE, WAR_SHRINE_HP } from "@/drizzle/constants";
+import { WAR_SHRINE_IMAGE } from "@/drizzle/constants";
 import { WAR_PURCHASE_SHRINE_TOKEN_COST } from "@/drizzle/constants";
 import { MAP_RESERVED_SECTORS } from "@/drizzle/constants";
 import { useForm } from "react-hook-form";
@@ -574,7 +574,7 @@ export const SectorWar: React.FC<{
                   showText={true}
                   status="AWAKE"
                   current={war.shrineHp}
-                  total={WAR_SHRINE_HP}
+                  total={war.shrineMaxHp}
                 />
               )}
             </div>

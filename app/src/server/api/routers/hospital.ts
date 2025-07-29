@@ -8,7 +8,7 @@ import { calcHealFinish } from "@/libs/hospital/hospital";
 import { calcHealCost } from "@/libs/hospital/hospital";
 import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
 import { fetchStructures } from "@/routers/village";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { getNewTrackers } from "@/libs/quest";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { calcHealthToChakra } from "@/libs/hospital/hospital";
@@ -227,7 +227,7 @@ export const hospitalRouter = createTRPCRouter({
         return errorResponse("You are not in this village");
       }
       // Calc finish
-      const boost = structureBoost("hospitalSpeedupPerLvl", structures);
+      const boost = getStrucBoost("hospitalSpeedupPerLvl", structures);
       const finishAt = calcHealFinish({ user, boost });
       // Mutate w. validation
       let result: ExecutedQuery;

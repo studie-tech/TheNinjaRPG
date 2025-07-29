@@ -8,7 +8,7 @@ import { api } from "@/app/_trpc/client";
 import { getRamenHealPercentage, calcRamenCost } from "@/utils/ramen";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { useAwake } from "@/utils/routing";
 import {
   IMG_RAMEN_WELCOME,
@@ -115,7 +115,7 @@ const MenuEntry: React.FC<MenuEntryProps> = (props) => {
   );
 
   // Get structure discount
-  const discount = structureBoost("ramenDiscountPerLvl", sectorVillage?.structures);
+  const discount = getStrucBoost("ramenDiscountPerLvl", sectorVillage?.structures);
 
   // Convenience
   const factor = (100 - discount) / 100;

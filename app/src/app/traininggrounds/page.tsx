@@ -398,7 +398,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
 
   // Form handlers
   const onSubmit = captchaForm.handleSubmit((data) => {
-    stopTraining(data);
+    stopTraining({ ...data, villageId: userData.villageId });
   });
 
   const isPending = isStarting || isStopping || isChaning;
@@ -522,7 +522,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               {!showCaptcha && (
                 <XCircle
                   className="w-10 h-10 m-auto mt-5 fill-red-500 cursor-pointer hover:text-orange-500"
-                  onClick={() => stopTraining({})}
+                  onClick={() => stopTraining({ villageId: userData.villageId })}
                 />
               )}
               {showCaptcha && !captcha && <Loader explanation="Loading captcha" />}

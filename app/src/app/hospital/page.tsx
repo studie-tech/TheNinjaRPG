@@ -9,7 +9,7 @@ import StatusBar, { calcCurrent } from "@/layout/StatusBar";
 import Image from "next/image";
 import { hasRequiredRank } from "@/libs/train";
 import { Button } from "@/components/ui/button";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { calcIsInVillage } from "@/libs/travel/controls";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
@@ -34,7 +34,7 @@ export default function Hospital() {
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
   // Current interest
-  const boost = structureBoost("hospitalSpeedupPerLvl", userData?.village?.structures);
+  const boost = getStrucBoost("hospitalSpeedupPerLvl", userData?.village?.structures);
 
   // Mutations
   const { mutate: heal, isPending } = api.hospital.npcHeal.useMutation({

@@ -14,7 +14,7 @@ import { UncontrolledSliderField } from "@/layout/SliderField";
 import { useAwake } from "@/utils/routing";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
@@ -93,7 +93,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   });
 
   // Discount factors
-  const sDiscount = structureBoost("itemDiscountPerLvl", userData.village?.structures);
+  const sDiscount = getStrucBoost("itemDiscountPerLvl", userData.village?.structures);
   const aDiscount = userData.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
   const hDiscount = item?.effects?.find((e) => e.type === "heal")
     ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC

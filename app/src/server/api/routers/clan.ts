@@ -118,6 +118,8 @@ export const clanRouter = createTRPCRouter({
         ctx.drizzle.insert(sector).values({
           sector: input.sector,
           villageId: hideoutId,
+          shrineLevel: 1,
+          capturedAt: new Date(),
         }),
         ctx.drizzle.insert(village).values({
           id: hideoutId,

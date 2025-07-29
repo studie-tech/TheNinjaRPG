@@ -10,7 +10,7 @@ import { KAGE_PRESTIGE_COST, FRIENDLY_PRESTIGE_COST } from "@/drizzle/constants"
 import { KAGE_CHALLENGE_WIN_PRESTIGE } from "@/drizzle/constants";
 import { calcIsInVillage } from "@/libs/travel/controls";
 import { toOffenceStat, toDefenceStat } from "@/libs/stats";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { calcActiveUserRegen } from "@/libs/profile";
 import { DecreaseDamageTakenTag } from "@/libs/combat/types";
 import { StatTypes, GeneralTypes } from "@/drizzle/constants";
@@ -28,6 +28,7 @@ import { findWarsWithUser } from "@/libs/war";
 import { STREAK_LEVEL_DIFF } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { REGEN_SECONDS } from "@/drizzle/constants";
+import { getShrineBoost } from "@/utils/village";
 import {
   SHARED_COOLDOWN_TAGS,
   WAR_TOWNHALL_HP_REMOVE,
@@ -573,6 +574,11 @@ export const calcBattleResult = (
       const didWin = user.curHealth > 0 && !user.fledBattle;
       const maxGain = 32;
 
+      // Check if we have a shrine boost, add it to reward scaling in case
+      const sectors = user.village?.sectors?.length || 0;
+      const shrineBoost = getShrineBoost(sectors, "PVP", user.village);
+      const shrineBoostFactor = shrineBoost ? 1 + shrineBoost : 1;
+
       // Experience boost
       let expBoost = 1;
       if (battleType === "ARENA") {
@@ -615,7 +621,7 @@ export const calcBattleResult = (
       }
 
       // Scale experience based on reward scaling
-      experience *= battle.rewardScaling;
+      experience *= battle.rewardScaling * shrineBoostFactor;
 
       // Find users who did not leave battle yet
       const friendsUsers = friends.filter((u) => !u.isAi);
@@ -1491,7 +1497,7 @@ export const processUsersForBattle = (info: {
     const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
     const excludedBattleTypes = ["ARENA", "RANKED_PVP", "SPARRING", "RANKED_SPARRING"];
     if (ownSector && inVillage && !excludedBattleTypes.includes(battleType)) {
-      const boost = structureBoost("villageDefencePerLvl", user.village?.structures);
+      const boost = getStrucBoost("villageDefencePerLvl", user.village?.structures);
       const effect = DecreaseDamageTakenTag.parse({
         target: "SELF",
         statTypes: StatTypes,

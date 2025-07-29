@@ -25,8 +25,14 @@ import {
   WAR_FACTION_MAX_SECTORS,
   WAR_EXHAUSTION_DURATION_DAYS,
   WAR_MINIMUM_TOKENS_FOR_BEING_ATTACKABLE,
+  SHRINE_MAX_PER_VILLAGE,
 } from "@/drizzle/constants";
-import { handleWarEnd, canJoinWar, resetStructuresWhenNotInWar } from "@/libs/war";
+import {
+  handleWarEnd,
+  canJoinWar,
+  resetStructuresWhenNotInWar,
+  getShrineHpByLevel,
+} from "@/libs/war";
 import { sql } from "drizzle-orm";
 import {
   insertRequest,
@@ -185,7 +191,7 @@ export const warRouter = createTRPCRouter({
         attackerVillage?.id || "",
         defenderVillageId,
       );
-      const activeSectorWar = activeWars.find(
+      const activeSectorWars = activeWars.filter(
         (w) =>
           (w.attackerVillageId === user?.village?.id ||
             w.defenderVillageId === user?.village?.id) &&
@@ -240,9 +246,14 @@ export const warRouter = createTRPCRouter({
       ) {
         return errorResponse("You are already at war for this sector");
       }
-      if (activeSectorWar) {
+      if (activeSectorWars.length > 0) {
         return errorResponse(
-          `You are already in a sector war for sector ${activeSectorWar.sector}`,
+          `You are already in a sector war for sector ${activeSectorWars.map((w) => w.sector).join(", ")}`,
+        );
+      }
+      if (activeSectorWars.length >= SHRINE_MAX_PER_VILLAGE) {
+        return errorResponse(
+          `You can only own ${SHRINE_MAX_PER_VILLAGE} sectors at a time`,
         );
       }
       if (user.isOutlaw && sectorCount >= WAR_FACTION_MAX_SECTORS) {
@@ -286,6 +297,8 @@ export const warRouter = createTRPCRouter({
           status: "ACTIVE",
           type: "SECTOR_WAR",
           sector: input.sectorId,
+          shrineHp: getShrineHpByLevel(targetSector?.shrineLevel),
+          shrineMaxHp: getShrineHpByLevel(targetSector?.shrineLevel),
           dailyTokenReduction: 1000,
         }),
         ...(!targetSector

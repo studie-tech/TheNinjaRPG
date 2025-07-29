@@ -20,7 +20,7 @@ import { ItemValidator } from "@/libs/combat/types";
 import { canChangeContent } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/discord";
 import { effectFilters } from "@/libs/train";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { calcItemSellingPrice } from "@/libs/item";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
@@ -674,7 +674,7 @@ export const itemRouter = createTRPCRouter({
         useritems?.filter((ui) => !ui.item.isEventItem && !ui.storedAtHome).length || 0;
       const eventItemsCount =
         useritems?.filter((ui) => ui.item.isEventItem && !ui.storedAtHome).length || 0;
-      const sDiscount = structureBoost("itemDiscountPerLvl", structures);
+      const sDiscount = getStrucBoost("itemDiscountPerLvl", structures);
       const aDiscount = user.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
       const hDiscount = info?.effects.find((e) => e.type === "heal")
         ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC

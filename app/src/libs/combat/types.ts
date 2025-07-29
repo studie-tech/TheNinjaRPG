@@ -17,6 +17,8 @@ import type {
   Clan,
   War,
   UserItemImbuement,
+  VillageStructure,
+  Village,
 } from "@/drizzle/schema";
 import type { UserJutsu, UserItem, UserData, AiProfile } from "@/drizzle/schema";
 import type { AnbuSquad } from "@/drizzle/schema";
@@ -42,6 +44,12 @@ export type BattleUserState = Omit<NonNullable<UserWithRelations>, "items"> & {
     lastUsedRound: number;
     originalCooldown: number;
   })[];
+  village?:
+    | (Village & {
+        structures?: VillageStructure[];
+        sectors?: { sector: number }[];
+      })
+    | null;
   basicActions: CombatAction[];
   items: (UserItem & {
     item: Item;

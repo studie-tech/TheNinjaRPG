@@ -1695,6 +1695,7 @@ export const fetchUpdatedUser = async (props: {
             structures: true,
             relationshipA: true,
             relationshipB: true,
+            sectors: { columns: { sector: true } },
           },
         },
         anbuSquad: {
@@ -2018,6 +2019,9 @@ export const fetchPublicUsers = async (
         ...(input.isSummon && input.isAi
           ? [eq(userData.isSummon, true)]
           : [eq(userData.isSummon, false)]),
+        ...(input.inShrines && input.isAi
+          ? [eq(userData.inShrines, true)]
+          : [eq(userData.inShrines, false)]),
       ),
       columns: {
         avatar: true,
@@ -2025,6 +2029,7 @@ export const fetchPublicUsers = async (
         avatarLight: true,
         experience: true,
         inArena: true,
+        inShrines: true,
         isAi: true,
         isEvent: true,
         isOutlaw: true,
@@ -2114,6 +2119,7 @@ export type UserWithRelations =
             structures?: VillageStructure[];
             relationshipA?: VillageAlliance[];
             relationshipB?: VillageAlliance[];
+            sectors?: { sector: number }[];
           })
         | null;
       loadout?: { jutsuIds: string[] } | null;

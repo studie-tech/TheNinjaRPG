@@ -25,7 +25,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { structureBoost, calcBankInterest } from "@/utils/village";
+import { getStrucBoost, calcBankInterest } from "@/utils/village";
 import GraphBankLedger from "@/layout/GraphBankLedger";
 import { Waypoints } from "lucide-react";
 import {
@@ -56,7 +56,7 @@ export default function Bank() {
   const bank = userData?.bank ?? 0;
 
   // Current interest
-  const boost = structureBoost("bankInterestPerLvl", userData?.village?.structures);
+  const boost = getStrucBoost("bankInterestPerLvl", userData?.village?.structures);
   const interest = calcBankInterest(boost);
 
   // Pending interest query

@@ -121,6 +121,7 @@ export const useAiEditForm = (
     { id: "speed", label: "Speed Focus", type: "number" },
     { id: "isSummon", type: "boolean" },
     { id: "inArena", type: "boolean" },
+    { id: "inShrines", type: "boolean" },
     {
       id: "primaryElement",
       type: "str_array",

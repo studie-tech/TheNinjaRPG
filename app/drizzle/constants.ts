@@ -895,7 +895,6 @@ export const WAR_PURCHASE_SHRINE_TOKEN_COST = 100000; // Cost in village tokens 
 export const WAR_DECLARATION_COST = 15000; // Cost in village tokens to declare war
 export const WAR_DAILY_TOKEN_REDUCTION = 1000; // Daily token reduction during war
 export const WAR_ALLY_OFFER_MIN = 1000; // Minimum token offer for allies
-export const WAR_SHRINE_HP = 3000; // Shrine hp
 export const WAR_SECTORWAR_AI_SHRINE_REDUCE = 3; // KIlling AI shrine hp decrease
 export const WAR_SECTORWAR_AI_SHRINE_RECOVER = 3; // Shrine hp recover per day
 export const WAR_SECTORWAR_PVP_SHRINE_REDUCE = 5; // Killing a player in a sector war shrine hp decrease
@@ -910,7 +909,22 @@ export const WAR_STATES = [
   "DEFENDER_VICTORY",
   "DRAW",
 ] as const;
+export const WAR_SHRINE_MAINTENANCE_DAYS = 7;
 export const WAR_TYPES = ["VILLAGE_WAR", "SECTOR_WAR", "WAR_RAID"] as const;
+export const SHRINE_MAX_PER_VILLAGE = 4;
+export const SHRINE_BOOST_COST = 15_000;
+export const SHRINE_BOOST_PERC = 2;
+export const SHRINE_UPGRADE_COST = 5_000;
+export const SHRINE_BOOST_DURATION_HOURS = 2;
+export const SHRINE_AI_UNLOCK_COST = 10_000;
+export const SHRINE_WEEKLY_MAINTENANCE_COST = 5_000;
+export const SHRINE_MAX_AI_ASSIGNMENTS = 3;
+export const SHRINE_HP_BY_LEVEL = { 1: 3000, 2: 4000, 3: 5000 } as const;
+export const SHRINE_MAX_LEVEL = Math.max(
+  ...Object.keys(SHRINE_HP_BY_LEVEL).map(Number),
+);
+export const SHRINE_BOOST_TYPES = ["Training", "PVP", "Mission", "Errands"] as const;
+export type SHRINE_BOOST_TYPE = (typeof SHRINE_BOOST_TYPES)[number];
 export type WarType = (typeof WAR_TYPES)[number];
 export type WarState = (typeof WAR_STATES)[number];
 

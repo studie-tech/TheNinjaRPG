@@ -128,6 +128,7 @@ export const getPublicUsersSchema = z.object({
   inArena: z.boolean().optional(),
   isEvent: z.boolean().optional(),
   isSummon: z.boolean().optional(),
+  inShrines: z.boolean().optional(),
 });
 export type GetPublicUsersSchema = z.infer<typeof getPublicUsersSchema>;
 

@@ -12,11 +12,13 @@ import { UserStatNames } from "@/drizzle/constants";
 import { TrainingSpeeds } from "@/drizzle/constants";
 import { getGameSettingBoost } from "@/libs/gamesettings";
 import { showTrainingCapcha } from "@/libs/captcha";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { validateCaptcha } from "@/routers/misc";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { QuestTracker } from "@/validators/objectives";
+import { countVillageSectors } from "@/routers/village";
 import { MAX_DAILY_TRAININGS } from "@/drizzle/constants";
+import { getShrineBoost } from "@/utils/village";
 
 export const trainRouter = createTRPCRouter({
   // Start training of a specific attribute
@@ -77,7 +79,7 @@ export const trainRouter = createTRPCRouter({
     }),
   // Stop training
   stopTraining: protectedProcedure
-    .input(z.object({ guess: z.string().optional() }))
+    .input(z.object({ guess: z.string().optional(), villageId: z.string().nullable() }))
     .output(
       baseServerResponse.extend({
         data: z
@@ -91,11 +93,14 @@ export const trainRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query
-      const { user, settings } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        forceRegen: true,
-      });
+      const [{ user, settings }, sectors] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          forceRegen: true,
+        }),
+        countVillageSectors(ctx.drizzle, input.villageId),
+      ]);
       // Guard
       if (!user) throw serverError("NOT_FOUND", "User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
@@ -109,13 +114,14 @@ export const trainRouter = createTRPCRouter({
         }
       }
       // Derived training gain
+      const shrineBoost = getShrineBoost(sectors, "Training", user.village);
       const trainSetting = getGameSettingBoost("trainingGainMultiplier", settings);
       const warSetting = getGameSettingBoost(`war-${user.villageId}-train`, settings);
       const gameFactor = trainSetting?.value ?? 1;
       const warFactor = (100 + (warSetting?.value ?? 0)) / 100;
-      const boost = structureBoost("trainBoostPerLvl", user.village?.structures);
-      const clanBoost = user?.clan?.trainingBoost ?? 0;
-      const factor = gameFactor * (1 + boost / 100 + clanBoost / 100) * warFactor;
+      const boost = getStrucBoost("trainBoostPerLvl", user.village?.structures) / 100;
+      const clanBoost = (user?.clan?.trainingBoost ?? 0) / 100;
+      const factor = gameFactor * (1 + boost + clanBoost + shrineBoost) * warFactor;
       const seconds = (Date.now() - user.trainingStartedAt.getTime()) / 1000;
       const minutes = seconds / 60;
       const energySpent = Math.min(

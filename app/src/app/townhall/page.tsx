@@ -48,12 +48,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { WarRoom } from "@/layout/WarSystem";
+import { ShrineHall } from "@/layout/ShrineHall";
 
 export default function TownHall() {
   const { data: userData } = useRequiredUserData();
   const availableTabs = userData?.isOutlaw
-    ? ["Alliance", "Wars"]
-    : ["Alliance", "Kage", "Elders", "Wars"];
+    ? ["Alliance", "Wars", "Shrines"]
+    : ["Alliance", "Kage", "Elders", "Wars", "Shrines"];
   const [tab, setTab] = useState<(typeof availableTabs)[number] | null>(null);
 
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -76,6 +77,8 @@ export default function TownHall() {
     return <ElderHall user={userData} navTabs={NavBarBlock} />;
   } else if (tab === "Wars") {
     return <WarRoom user={userData} navTabs={NavBarBlock} />;
+  } else if (tab === "Shrines") {
+    return <ShrineHall user={userData} navTabs={NavBarBlock} />;
   }
 }
 
@@ -432,10 +435,13 @@ const KageChallenge: React.FC<{
   // Derived
   const isKage = user.userId === user.village?.kageId;
 
-  const { data: dailyLockedTimeData } = api.kage.getDailyLockedTime.useQuery(undefined, {
-    staleTime: 30000, // Cache for 30 seconds since this is calculated from actionLog
-    enabled: isKage, // Only fetch if user is kage
-  });
+  const { data: dailyLockedTimeData } = api.kage.getDailyLockedTime.useQuery(
+    undefined,
+    {
+      staleTime: 30000, // Cache for 30 seconds since this is calculated from actionLog
+      enabled: isKage, // Only fetch if user is kage
+    },
+  );
 
   // Derived
   const activeVillageWars = activeWars?.filter((w) => w.type === "VILLAGE_WAR");
@@ -563,19 +569,26 @@ const KageChallenge: React.FC<{
             <div className="p-3 text-sm text-gray-600">
               <p>
                 <span className="font-bold">Daily Lock Time Used: </span>
-                <span className={dailyLockedTimeSeconds >= maxDailySeconds ? "text-red-500 font-bold" : ""}>
+                <span
+                  className={
+                    dailyLockedTimeSeconds >= maxDailySeconds
+                      ? "text-red-500 font-bold"
+                      : ""
+                  }
+                >
                   {usedHours}h {usedMinutes}m / {KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS}h
                 </span>
               </p>
               {dailyLockedTimeSeconds >= maxDailySeconds ? (
                 <p className="text-red-500 font-bold">
-                  Daily limit reached! Challenges will be automatically unlocked at the start of the next day.
+                  Daily limit reached! Challenges will be automatically unlocked at the
+                  start of the next day.
                 </p>
               ) : (
                 <p>
                   <span className="font-bold">Remaining Lock Time: </span>
-                  <Countdown 
-                    targetDate={new Date(new Date().setHours(24, 0, 0, 0))} 
+                  <Countdown
+                    targetDate={new Date(new Date().setHours(24, 0, 0, 0))}
                     className="font-mono"
                   />
                 </p>

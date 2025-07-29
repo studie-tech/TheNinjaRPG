@@ -39,8 +39,9 @@ const UserFiltering: React.FC<UserFilteringProps> = (props) => {
 
   // Destructure the state
   const { setUsername, setBloodline, setVillage, setIp } = props.state;
-  const { username, bloodline, village, ip, inArena, isEvent, isSummon } = props.state;
-  const { setInArena, setIsEvent, setIsSummon } = props.state;
+  const { username, bloodline, village, ip, inArena, isEvent, isSummon, inShrines } =
+    props.state;
+  const { setInArena, setIsEvent, setIsSummon, setInShrines } = props.state;
 
   // Query
   const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
@@ -200,6 +201,19 @@ const UserFiltering: React.FC<UserFilteringProps> = (props) => {
                   labelAll="All Arena"
                 />
               </div>
+              {/* Shrine AI */}
+              <div className="mt-1">
+                <Label htmlFor="toggle-shrine-only">Shrine Status</Label>
+                <TriStateToggle
+                  verticalLayout
+                  id="toggle-shrine-only"
+                  value={inShrines}
+                  setShowActive={setInShrines}
+                  labelActive="Shrine Only"
+                  labelInactive="Non-Shrine Only"
+                  labelAll="All Shrines"
+                />
+              </div>
             </>
           )}
         </div>
@@ -220,6 +234,7 @@ export const getFilter = (state: UserFilteringState) => {
     isSummon: state.isSummon,
     isEvent: state.isEvent,
     inArena: state.inArena,
+    inShrines: state.inShrines,
   };
 };
 
@@ -233,16 +248,19 @@ export const useFiltering = () => {
   const [isSummon, setIsSummon] = useState<boolean | undefined>(undefined);
   const [isEvent, setIsEvent] = useState<boolean | undefined>(undefined);
   const [inArena, setInArena] = useState<boolean | undefined>(undefined);
+  const [inShrines, setInShrines] = useState<boolean | undefined>(undefined);
 
   // Return all
   return {
     bloodline,
     inArena,
+    inShrines,
     ip,
     isEvent,
     isSummon,
     setBloodline,
     setInArena,
+    setInShrines,
     setIp,
     setIsEvent,
     setIsSummon,

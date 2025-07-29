@@ -407,14 +407,22 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Village</b>: {item.village.name}
                 </p>
               )}
-            {"inArena" in item && "isSummon" in item && "isEvent" in item && (
-              <p>
-                <b>Classification:</b>
-                {(item.inArena as boolean) && "Arena"}
-                {(item.isSummon as boolean) && "Summon"}
-                {(item.isEvent as boolean) && "Event"}
-              </p>
-            )}
+            {"inArena" in item &&
+              "isSummon" in item &&
+              "isEvent" in item &&
+              "inShrines" in item && (
+                <p>
+                  <b>Classification:</b>
+                  {[
+                    item.inArena && "Arena",
+                    item.isSummon && "Summon",
+                    item.isEvent && "Event",
+                    item.inShrines && "Shrine",
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              )}
             {"stackSize" in item && item.stackSize > 0 && (
               <p>
                 <b>Stackable</b>: {item.stackSize}
@@ -680,7 +688,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                       {"rank" in parsedEffect && (
                         <span>
                           <b>Rank: </b>
-                          {parsedEffect.rank}
+                          {capitalizeFirstLetter(parsedEffect.rank)}
                         </span>
                       )}
                       {"aiHp" in parsedEffect && (

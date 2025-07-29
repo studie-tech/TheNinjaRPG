@@ -17,7 +17,7 @@ import {
   HomeTypeDetails,
 } from "@/drizzle/constants";
 import { api } from "@/app/_trpc/client";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { showMutationToast } from "@/libs/toast";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { Button } from "@/components/ui/button";
@@ -98,7 +98,7 @@ export default function HomePage() {
   if (!access) return <Loader explanation="Accessing Residence" />;
   if (userData.isBanned) return <BanInfo />;
 
-  const boost = 1 + structureBoost("sleepRegenPerLvl", sectorVillage?.structures);
+  const boost = 1 + getStrucBoost("sleepRegenPerLvl", sectorVillage?.structures);
 
   const homeName = homeData ? HomeTypeDetails[homeData.homeType].name : "No Home";
   const homeRegen = homeData ? homeData.regen : 0;

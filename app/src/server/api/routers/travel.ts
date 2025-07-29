@@ -19,7 +19,7 @@ import { fetchUser } from "@/routers/profile";
 import { initiateBattle } from "@/routers/combat";
 import { fetchSectorVillage } from "@/routers/village";
 import { findRelationship } from "@/utils/alliance";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { groupBy } from "@/utils/grouping";
 import {
   ROBBING_SUCCESS_CHANCE,
@@ -501,7 +501,7 @@ export const travelRouter = createTRPCRouter({
           const relation = findRelationship(relations, userVillage, sectorVillage.id);
           if (relation?.status === "ENEMY") {
             // Chance of getting attacked by village protector
-            const chance = structureBoost("patrolsPerLvl", sectorVillage.structures);
+            const chance = getStrucBoost("patrolsPerLvl", sectorVillage.structures);
             if (Math.random() < (travelLength * chance) / 100) {
               // Chance of ANBU squad avoiding attack
               const anbuChance = user?.anbuId

@@ -928,6 +928,8 @@ const RightSideBar: React.FC<{
 
   // Derived data
   const inBattle = userData?.status === "BATTLE";
+  // Current pathname to determine if user is on the combat route
+  const pathname = usePathname();
 
   // Helper to render the default sidebar content (without MenuBoxCombat)
   const renderDefaultSidebar = () => (
@@ -1001,7 +1003,7 @@ const RightSideBar: React.FC<{
   );
 
   // Render
-  if (inBattle) {
+  if (inBattle && pathname === "/combat") {
     return (
       <Tabs defaultValue="battle" className="w-full">
         <TabsContent value="menu">{renderDefaultSidebar()}</TabsContent>
@@ -1016,7 +1018,7 @@ const RightSideBar: React.FC<{
     );
   }
 
-  // Default (not in battle)
+  // Default (either not in battle or not on combat route)
   return renderDefaultSidebar();
 };
 

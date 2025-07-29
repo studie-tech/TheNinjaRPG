@@ -6,7 +6,7 @@ import { FED_EVENT_ITEMS_NORMAL } from "@/drizzle/constants";
 import { FED_EVENT_ITEMS_SILVER } from "@/drizzle/constants";
 import { FED_EVENT_ITEMS_GOLD } from "@/drizzle/constants";
 import { FED_EVENT_ITEMS_DEFAULT } from "@/drizzle/constants";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
@@ -104,7 +104,7 @@ export const calcItemSellingPrice = (
 ) => {
   if (!useritem) return 0;
   const bDiscount = 80;
-  const sDiscount = structureBoost("itemDiscountPerLvl", structures);
+  const sDiscount = getStrucBoost("itemDiscountPerLvl", structures);
   const aDiscount = user.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
   const hDiscount = useritem.item.effects.find((e) => e.type === "heal")
     ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC

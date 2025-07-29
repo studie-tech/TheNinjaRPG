@@ -905,7 +905,7 @@ export const initiateBattle = async (
     client.query.userData.findMany({
       with: {
         bloodline: true,
-        village: { with: { structures: true } },
+        village: { with: { structures: true, sectors: { columns: { sector: true } } } },
         loadout: { columns: { jutsuIds: true } },
         clan: true,
         anbuSquad: true,

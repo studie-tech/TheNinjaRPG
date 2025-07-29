@@ -14,7 +14,7 @@ import { fetchRequests } from "@/routers/sparring";
 import { insertRequest, updateRequestState } from "@/routers/sparring";
 import { createConvo } from "@/routers/comments";
 import { canAccessStructure } from "@/utils/village";
-import { structureBoost } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 import { isKage } from "@/utils/kage";
 import { findRelationship } from "@/utils/alliance";
 import { canAlly, canEnemy, canSurrender } from "@/utils/alliance";
@@ -177,7 +177,7 @@ export const villageRouter = createTRPCRouter({
       );
       const structures = await fetchStructures(ctx.drizzle, sectorVillage?.id);
       // Calculate cost
-      const discount = structureBoost("ramenDiscountPerLvl", structures);
+      const discount = getStrucBoost("ramenDiscountPerLvl", structures);
       const factor = (100 - discount) / 100;
       const healPercentage = getRamenHealPercentage(input.ramen);
       const cost = calcRamenCost(input.ramen, user) * factor;
@@ -856,7 +856,12 @@ export const countVillageSectors = async (
  */
 export const fetchSector = async (client: DrizzleClient, sectorId: number) => {
   return await client.query.sector.findFirst({
-    columns: { sector: true, villageId: true },
+    columns: {
+      sector: true,
+      villageId: true,
+      shrineLevel: true,
+      capturedAt: true,
+    },
     with: { village: { columns: { name: true, id: true } } },
     where: eq(sector.sector, sectorId),
   });

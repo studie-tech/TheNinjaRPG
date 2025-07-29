@@ -10,6 +10,7 @@ import {
   WAR_WINNING_BOOST_DAYS,
   WAR_WINNING_BOOST_REGEN_PERC,
   WAR_WINNING_BOOST_TRAINING_PERC,
+  SHRINE_HP_BY_LEVEL,
 } from "@/drizzle/constants";
 import { getUnique } from "@/utils/grouping";
 import type { WarState } from "@/drizzle/constants";
@@ -225,8 +226,17 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
       ? [
           drizzleDB
             .update(sector)
-            .set({ villageId: winnerVillageId })
-            .where(eq(sector.sector, activeWar.sector)),
+            .set({
+              villageId: winnerVillageId,
+              shrineLevel: 1,
+              capturedAt: endedAt,
+            })
+            .where(
+              and(
+                eq(sector.sector, activeWar.sector),
+                ne(sector.villageId, winnerVillageId),
+              ),
+            ),
           drizzleDB
             .update(war)
             .set({ status: "DEFENDER_VICTORY", endedAt })
@@ -313,4 +323,16 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
 
   // Return updated war
   return { ...activeWar, status, endedAt } as FetchActiveWarsReturnType;
+};
+
+/**
+ * Get the shrine hp for a given level
+ * @param level - The level of the shrine
+ * @returns The shrine hp
+ */
+export const getShrineHpByLevel = (level?: number | null) => {
+  const idx = (
+    [1, 2, 3].includes(level || 1) ? level : 1
+  ) as keyof typeof SHRINE_HP_BY_LEVEL;
+  return SHRINE_HP_BY_LEVEL[idx];
 };

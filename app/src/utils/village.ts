@@ -2,7 +2,8 @@ import { findVillageUserRelationship } from "@/utils/alliance";
 import { calcIsInVillage } from "@/libs/travel/controls";
 import type { UserWithRelations } from "@/routers/profile";
 import type { Village, VillageStructure, VillageAlliance } from "@/drizzle/schema";
-import type { StructureRoute } from "@/drizzle/constants";
+import type { StructureRoute, SHRINE_BOOST_TYPE } from "@/drizzle/constants";
+import { SHRINE_BOOST_PERC } from "@/drizzle/constants";
 
 /**
  * Checks if a user can access a specific structure in a village.
@@ -72,11 +73,31 @@ export type StructureAttribute =
  * @param structures - An optional array of village structures.
  * @returns The total boost for the given attribute.
  */
-export const structureBoost = (
+export const getStrucBoost = (
   attribute: StructureAttribute,
   structures?: VillageStructure[],
 ) => {
   return structures?.reduce((a, b) => a + b[attribute] * b.level, 0) ?? 0;
+};
+
+/**
+ * Calculates the boost factor for a given shrine boost type.
+ * @param village - The village to calculate the boost for.
+ * @param sectors - The number of sectors in the village.
+ * @param boostType - The type of boost to calculate.
+ * @returns The boost factor for the given shrine boost type.
+ */
+export const getShrineBoost = (
+  sectors: number,
+  boostType: SHRINE_BOOST_TYPE,
+  village?: Village | null,
+) => {
+  const now = new Date();
+  const shrineBoost = village?.shrineSettings?.activeBoosts?.[boostType];
+  const expiry = shrineBoost ? new Date(shrineBoost) : now;
+  if (expiry < now) return 0;
+  const shrineBoostFactor = shrineBoost ? (sectors * SHRINE_BOOST_PERC) / 100 : 0;
+  return shrineBoostFactor;
 };
 
 /**

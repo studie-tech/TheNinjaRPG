@@ -1,0 +1,704 @@
+"use client";
+
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { showMutationToast } from "@/libs/toast";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import StatusBar from "@/layout/StatusBar";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Clock, Shield, Coins, AlertTriangle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { getShrineHpByLevel } from "@/libs/war";
+import type { UserWithRelations } from "@/server/api/routers/profile";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import {
+  SHRINE_MAX_LEVEL,
+  SHRINE_MAX_PER_VILLAGE,
+  SHRINE_BOOST_COST,
+  SHRINE_BOOST_TYPES,
+  SHRINE_BOOST_PERC,
+  SHRINE_WEEKLY_MAINTENANCE_COST,
+  SHRINE_AI_UNLOCK_COST,
+} from "@/drizzle/constants";
+import { getTimeLeftStr, getDaysHoursMinutesSeconds } from "@/utils/time";
+import { cn } from "src/libs/shadui";
+
+/**
+ * ShrineHall
+ * Parent component – handles ONLY tab-switching logic.
+ * Each tab lives in its own sub-component further below. Queries are gated by the
+ * `isActive` prop so that they only execute while the corresponding tab is shown.
+ */
+interface ShrineHallProps {
+  user: UserWithRelations;
+  navTabs: React.ReactNode;
+}
+
+export const ShrineHall = ({ user, navTabs }: ShrineHallProps) => {
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "boosts" | "defenders" | "maintenance"
+  >("overview");
+
+  if (!user) return <Loader explanation="Loading user data" />;
+
+  return (
+    <div className="space-y-6">
+      <ContentBox
+        title="Shrines"
+        subtitle={`${user.village?.name} Shrines`}
+        back_href="/village"
+        topRightContent={navTabs}
+        padding={false}
+      >
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) =>
+            setActiveTab(v as "overview" | "boosts" | "defenders" | "maintenance")
+          }
+          className="w-full"
+        >
+          <div className="p-2">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="boosts">Boosts</TabsTrigger>
+              <TabsTrigger value="defenders">Defenders</TabsTrigger>
+              <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="overview">
+            <OverviewTab user={user} isActive={activeTab === "overview"} />
+          </TabsContent>
+          <TabsContent value="boosts">
+            <BoostsTab user={user} isActive={activeTab === "boosts"} />
+          </TabsContent>
+          <TabsContent value="defenders">
+            <DefendersTab user={user} isActive={activeTab === "defenders"} />
+          </TabsContent>
+          <TabsContent value="maintenance">
+            <MaintenanceTab user={user} isActive={activeTab === "maintenance"} />
+          </TabsContent>
+        </Tabs>
+      </ContentBox>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*                                   Types                                    */
+/* -------------------------------------------------------------------------- */
+
+interface TabProps {
+  user: NonNullable<UserWithRelations>;
+  isActive: boolean;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Overview Tab                                  */
+/* -------------------------------------------------------------------------- */
+
+const OverviewTab = ({ user, isActive }: TabProps) => {
+  // Utils
+  const utils = api.useUtils();
+
+  // Queries
+  const { data: shrineData } = api.travel.getSectorData.useQuery(
+    { sector: user.sector ?? 0 },
+    {
+      enabled: isActive,
+      refetchInterval: isActive ? 30_000 : false,
+    },
+  );
+  const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
+    { villageId: user.villageId || "" },
+    { enabled: isActive && !!user.villageId },
+  );
+
+  // Mutations
+  const { mutate: upgradeShrine, isPending: isUpgrading } =
+    api.shrine.upgradeShrine.useMutation({
+      onSuccess: (res) => {
+        showMutationToast(res);
+        void utils.travel.getSectorData.invalidate();
+        void utils.shrine.getCapturedSectors.invalidate();
+      },
+    });
+
+  const isKage = user.userId === user.village?.kageId;
+
+  // Fetch all active wars for this village once – used for shrine HP display
+  const { data: activeWars } = api.war.getActiveWars.useQuery(
+    { villageId: user.villageId || "" },
+    {
+      enabled: isActive && !!user.villageId,
+      refetchInterval: isActive ? 10_000 : false,
+    },
+  );
+
+  if (!shrineData) return <Loader explanation="Loading shrine data" />;
+
+  const activeShrines = (capturedSectors || []).filter(
+    (s) => s.shrineLevel && s.shrineLevel > 0,
+  );
+
+  type CapturedShrineRow = {
+    sector: number;
+    shrineLevel: number;
+    health: React.ReactNode;
+    capturedAt: Date;
+    action?: React.ReactNode;
+  };
+
+  const capturedShrineColumns: ColumnDefinitionType<
+    CapturedShrineRow,
+    keyof CapturedShrineRow
+  >[] = [
+    { key: "sector", header: "Sector", type: "number" },
+    { key: "shrineLevel", header: "Level", type: "number" },
+    { key: "health", header: "HP", type: "jsx" },
+    { key: "capturedAt", header: "Captured", type: "time_passed" },
+  ];
+
+  if (isKage) {
+    capturedShrineColumns.push({ key: "action", header: "", type: "jsx" });
+  }
+
+  const capturedShrineRows: CapturedShrineRow[] = activeShrines.map((shrine) => {
+    // All sector wars for the relevant sector
+    const sectorWars =
+      activeWars?.filter(
+        (war) => war.type === "SECTOR_WAR" && war.sector === shrine.sector,
+      ) ?? [];
+
+    return {
+      sector: shrine.sector,
+      shrineLevel: shrine.shrineLevel,
+      health:
+        sectorWars.length === 0 ? (
+          <StatusBar
+            key={`${shrine.sector}-${shrine.shrineLevel}`}
+            title="HP"
+            tooltip="Shrine Health"
+            color="bg-green-500"
+            showText
+            status="AWAKE"
+            current={getShrineHpByLevel(shrine.shrineLevel)}
+            total={getShrineHpByLevel(shrine.shrineLevel)}
+          />
+        ) : (
+          <div className="space-y-1">
+            {sectorWars.map((war) => (
+              <StatusBar
+                key={war.id}
+                title="HP"
+                tooltip={`Shrine Health – ${war.attackerVillage.name} vs ${war.defenderVillage.name}`}
+                color="bg-red-500"
+                showText
+                status="AWAKE"
+                current={Math.max(0, war.shrineHp)}
+                total={war.shrineMaxHp}
+              />
+            ))}
+          </div>
+        ),
+      capturedAt: shrine.capturedAt ? new Date(shrine.capturedAt) : new Date(),
+      action: isKage ? (
+        shrine.shrineLevel < SHRINE_MAX_LEVEL ? (
+          <Button
+            size="sm"
+            disabled={isUpgrading}
+            onClick={(e) => {
+              e.stopPropagation();
+              upgradeShrine({ sectorNumber: shrine.sector });
+            }}
+          >
+            Upgrade to L{shrine.shrineLevel + 1}
+          </Button>
+        ) : (
+          <Badge variant="secondary">Max</Badge>
+        )
+      ) : undefined,
+    };
+  });
+
+  return (
+    <div className="flex flex-col">
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3 p-3">
+        <StatsCard
+          icon={Coins}
+          label="Village Tokens"
+          value={user.village?.tokens?.toLocaleString() ?? 0}
+        />
+        <StatsCard
+          icon={Shield}
+          label="Active Shrines"
+          value={`${activeShrines.length}/${SHRINE_MAX_PER_VILLAGE}`}
+        />
+      </div>
+
+      {/* Captured Shrines List */}
+      <div className="space-y-4">
+        {activeShrines.length === 0 ? (
+          <Card>
+            <CardContent className="pt-6 text-center">
+              <p className="text-muted-foreground">No shrines currently captured</p>
+              <p className="text-sm mt-2">
+                Defeat enemy shrines in combat to capture sectors for your village!
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Table data={capturedShrineRows} columns={capturedShrineColumns} />
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*                               Boosts Tab                                   */
+/* -------------------------------------------------------------------------- */
+
+const BoostsTab = ({ user, isActive }: TabProps) => {
+  // Utils
+  const utils = api.useUtils();
+
+  // Query
+  const { data: sectorData } = api.travel.getSectorData.useQuery(
+    { sector: user.sector ?? 0 },
+    { enabled: isActive && typeof user.sector === "number" },
+  );
+  const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
+    { villageId: user.villageId || "" },
+    { enabled: isActive && !!user.villageId },
+  );
+
+  // Mutation
+  const { mutate: activateBoost, isPending: isActivatingBoost } =
+    api.shrine.activateBoost.useMutation({
+      onSuccess: (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          void utils.profile.getUser.invalidate();
+        }
+      },
+    });
+
+  // Guard
+  if (!sectorData) return <Loader explanation="Loading shrine data" />;
+
+  const isKage = user.userId === user.village?.kageId;
+  const level3Shrines = (capturedSectors || []).filter(
+    (s) => s.shrineLevel === 3,
+  ).length;
+  const activeBoosts = user.village?.shrineSettings?.activeBoosts;
+  const boostPercentage = level3Shrines * SHRINE_BOOST_PERC;
+
+  return (
+    <div className={cn("grid grid-cols-1 gap-4 p-3")}>
+      {/* Active Boosts */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Active Boosts</CardTitle>
+          <CardDescription>Currently active village-wide bonuses</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {activeBoosts && Object.keys(activeBoosts).length > 0 ? (
+            <div className="space-y-2">
+              {Object.entries(activeBoosts).map(([boostType, expiry]) => {
+                const secondsLeft = expiry
+                  ? new Date(expiry).getTime() - new Date().getTime()
+                  : 0;
+                const timeLeft = getTimeLeftStr(
+                  ...getDaysHoursMinutesSeconds(secondsLeft),
+                );
+                return (
+                  <div
+                    key={boostType}
+                    className="flex justify-between items-center p-2 bg-muted rounded"
+                  >
+                    <div>
+                      <div className="font-medium">{boostType}</div>
+                      <div className="text-sm text-muted-foreground">
+                        +{boostPercentage}% bonus
+                      </div>
+                    </div>
+                    <div className="text-sm text-muted-foreground">{timeLeft} left</div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No active boosts</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Boost Activation */}
+      {user.villageId && isKage && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Activate Boost</CardTitle>
+            <CardDescription>
+              Requires Level 3 shrine • Cost: {SHRINE_BOOST_COST.toLocaleString()}{" "}
+              tokens
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!level3Shrines ? (
+              <p className="text-sm text-muted-foreground">
+                Need at least one Level 3 shrine to activate boosts
+              </p>
+            ) : (
+              SHRINE_BOOST_TYPES.map((boostType) => {
+                const currentlyActive =
+                  !!activeBoosts?.[boostType] &&
+                  new Date(activeBoosts[boostType]).getTime() > Date.now();
+
+                return (
+                  <Button
+                    key={boostType}
+                    className="w-full justify-between"
+                    variant={currentlyActive ? "secondary" : "default"}
+                    disabled={isActivatingBoost || currentlyActive}
+                    onClick={() =>
+                      activateBoost({ boostType, villageId: user.villageId! })
+                    }
+                  >
+                    <span>
+                      {boostType} [+{boostPercentage}%]
+                    </span>
+                  </Button>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*                              Defenders Tab                                 */
+/* -------------------------------------------------------------------------- */
+
+const DefendersTab = ({ user, isActive }: TabProps) => {
+  const [selectedAiId, setSelectedAiId] = useState<string>("");
+
+  // Utils
+  const utils = api.useUtils();
+
+  // Queries
+  const { data: aiData } = api.shrine.getShrineAis.useQuery(undefined, {
+    enabled: isActive,
+  });
+  const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
+    { villageId: user.villageId || "" },
+    { enabled: isActive && !!user.villageId },
+  );
+
+  // Mutations
+  const { mutate: unlockAi, isPending: isUnlockingAi } =
+    api.shrine.unlockAiDefender.useMutation({
+      onSuccess: (res) => {
+        showMutationToast(res);
+        void utils.profile.getUser.invalidate();
+      },
+    });
+
+  const { mutate: setVillageAi, isPending: isSettingAi } =
+    api.shrine.setVillageAiDefender.useMutation({
+      onSuccess: (res) => {
+        showMutationToast(res);
+        void utils.profile.getUser.invalidate();
+      },
+    });
+
+  if (!aiData || !capturedSectors)
+    return <Loader explanation="Loading defender data" />;
+  if (!user.village) return <Loader explanation="Looking for village data" />;
+
+  const isKage = user.userId === user.village?.kageId;
+  const activeShrines = capturedSectors.filter(
+    (s) => s.shrineLevel && s.shrineLevel > 0,
+  );
+
+  // Get shrine settings from user data
+  const shrineSettings = user.village.shrineSettings;
+  const unlockedAiIds = shrineSettings?.unlockedAiIds || [];
+  const currentVillageAiIds = shrineSettings?.activeAiIds || [];
+
+  // Get assigned AI data for display
+  const assignedAis =
+    currentVillageAiIds.length > 0
+      ? aiData.filter((ai) => currentVillageAiIds.includes(ai.userId))
+      : [];
+
+  // Available AIs for unlocking (those not yet unlocked)
+  const availableToUnlock = aiData.filter((ai) => !unlockedAiIds.includes(ai.userId));
+
+  // Unlocked AIs that can be assigned
+  const unlockedAis = aiData.filter((ai) => unlockedAiIds.includes(ai.userId));
+
+  return (
+    <div className="flex flex-col gap-4 p-3">
+      {/* Currently Assigned AI - for everyone */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Current Village Defender</CardTitle>
+          <CardDescription>
+            {activeShrines.length > 0
+              ? `Defending ${activeShrines.length} active shrine${activeShrines.length === 1 ? "" : "s"}`
+              : "No active shrines to defend"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {assignedAis?.map((ai) => (
+            <ItemWithEffects
+              key={ai.userId}
+              item={{
+                id: ai.userId,
+                name: ai.username,
+                description: `Level ${ai.level} AI Defender`,
+                image: ai.avatar || undefined,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                attacks: ai.jutsus?.map((jutsu) =>
+                  "jutsu" in jutsu ? jutsu.jutsu?.name : "Unknown",
+                ),
+                ...ai,
+              }}
+            />
+          ))}
+          {assignedAis?.length === 0 && (
+            <div className="text-center py-4">
+              <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+              <p className="text-muted-foreground">Using default AI defender</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Kage-only sections */}
+      {isKage && (
+        <>
+          {/* Unlock New AI Defenders */}
+          {availableToUnlock.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Unlock AI Defender</CardTitle>
+                <CardDescription>
+                  Cost: {SHRINE_AI_UNLOCK_COST.toLocaleString()} tokens each •{" "}
+                  {unlockedAiIds.length} already unlocked
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Select value={selectedAiId} onValueChange={setSelectedAiId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select AI to unlock" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableToUnlock.map((ai) => (
+                      <SelectItem key={ai.userId} value={ai.userId}>
+                        {ai.username} (Level {ai.level})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  className="w-full"
+                  disabled={!selectedAiId || isUnlockingAi}
+                  onClick={() => {
+                    if (selectedAiId) {
+                      unlockAi({ aiId: selectedAiId });
+                      setSelectedAiId("");
+                    }
+                  }}
+                >
+                  {isUnlockingAi ? "Unlocking..." : "Unlock AI Defender"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Assign AI Defender */}
+          {activeShrines.length > 0 && unlockedAis.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Assign Village Defender</CardTitle>
+                <CardDescription>
+                  Choose from your unlocked AI defenders
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Select value={selectedAiId} onValueChange={setSelectedAiId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select AI to assign" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unlockedAis
+                      .filter((ai) => !currentVillageAiIds.includes(ai.userId))
+                      .map((ai) => (
+                        <SelectItem key={ai.userId} value={ai.userId}>
+                          {ai.username} (Level {ai.level})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex flex-row gap-2">
+                  {assignedAis && assignedAis.length > 0 && (
+                    <Button
+                      className="w-full"
+                      disabled={isSettingAi}
+                      onClick={() => {
+                        setVillageAi({ aiId: null });
+                        setSelectedAiId("");
+                      }}
+                    >
+                      Reset Defenders
+                    </Button>
+                  )}
+                  <Button
+                    className="w-full"
+                    disabled={isSettingAi}
+                    onClick={() => {
+                      setVillageAi({ aiId: selectedAiId });
+                      setSelectedAiId("");
+                    }}
+                  >
+                    {isSettingAi ? "Assigning..." : "Assign Defender"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*                              Maintenance Tab                               */
+/* -------------------------------------------------------------------------- */
+
+const MaintenanceTab = ({ user }: TabProps) => {
+  // Utils
+  const utils = api.useUtils();
+
+  // Mutations
+  const { mutate: payMaintenance, isPending: isPaying } =
+    api.shrine.payWeeklyMaintenance.useMutation({
+      onSuccess: (res) => {
+        showMutationToast(res);
+        if (res.success) {
+          void utils.profile.getUser.invalidate();
+        }
+      },
+    });
+
+  const isKage = user.userId === user.village?.kageId;
+  const dueDate = user.village?.shrineSettings.nextMaintainanceDueDate
+    ? new Date(user.village.shrineSettings.nextMaintainanceDueDate)
+    : new Date();
+  const isOverdue = dueDate <= new Date();
+  const secondsToNextPayment = dueDate ? dueDate.getTime() - new Date().getTime() : 0;
+  const nextPaymentAt = getTimeLeftStr(
+    ...getDaysHoursMinutesSeconds(secondsToNextPayment),
+  );
+
+  return (
+    <div className="p-3">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" /> Weekly Maintenance
+          </CardTitle>
+          <CardDescription>
+            Keep your shrines maintained to prevent level degradation. You can pay in
+            advance to avoid overdue payments.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex justify-between items-center p-3 bg-muted rounded">
+              <span>Maintenance Cost</span>
+              <span className="font-semibold">
+                {SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center p-3 bg-muted rounded">
+              <span>Next Payment Due</span>
+              <span className={isOverdue ? "text-red-500 font-semibold" : ""}>
+                {isOverdue ? `Payment overdue` : nextPaymentAt}
+              </span>
+            </div>
+
+            {isOverdue && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                <span className="text-sm text-red-700">
+                  Maintenance overdue! Shrines may lose levels without payment, and
+                  eventually be destroyed. Pay quickly to avoid this!
+                </span>
+              </div>
+            )}
+
+            {isKage && (
+              <Button
+                className="w-full"
+                variant={isOverdue ? "destructive" : "default"}
+                disabled={isPaying}
+                onClick={() => payMaintenance({ villageId: user.villageId! })}
+              >
+                Pay Weekly Maintenance (
+                {SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens)
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*                           Helper Components                                */
+/* -------------------------------------------------------------------------- */
+
+interface StatsCardProps {
+  icon: LucideIcon;
+  label: string;
+  value: React.ReactNode;
+}
+
+const StatsCard = ({ icon: Icon, label, value }: StatsCardProps) => (
+  <div className="flex items-center justify-between rounded-md border bg-card p-3">
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-lg font-semibold leading-tight">{value}</p>
+    </div>
+    <Icon className="h-4 w-4 text-muted-foreground" />
+  </div>
+);

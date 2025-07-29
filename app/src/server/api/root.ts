@@ -39,6 +39,7 @@ import { staffRouter } from "./routers/staff";
 import { backgroundSchemaRouter } from "./routers/backgroundSchema";
 import { linkPromotionRouter } from "./routers/linkpromotion";
 import { warRouter } from "./routers/war";
+import { shrineRouter } from "./routers/shrine";
 import { pvpRankRouter } from "./routers/pvprank";
 import { bountyRouter } from "./routers/bounty";
 import { skillTreeRouter } from "./routers/skillTree";
@@ -92,6 +93,7 @@ export const appRouter = createTRPCRouter({
   staff: staffRouter,
   linkPromotion: linkPromotionRouter,
   war: warRouter,
+  shrine: shrineRouter,
   pvpRank: pvpRankRouter,
   bounty: bountyRouter,
   skillTree: skillTreeRouter,

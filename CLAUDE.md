@@ -6,6 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     Claude code should never (!) run git commands or github CLI!
 </important>
 
+## Before Starting Work
+
+- Always make a plan in "plan mode"
+- After you make the plan, write the plan to .claude/tasks/TASK_NAME.md
+- The plan should be a detailed implementation plan and the reasoning behind them, as well as the tasks broken down.
+- If the task requires external knowledge, research to retrieve this knowledge (use Task tool for research)
+- Do not over plan, always try to find the simplest solution
+- Once you have the plan, first ask me to review it, and do not continue untill I approve the plan.
+
+## While Implementing
+
+- You should update the task plan .md-file as you work
+- After you complete tasks in the plan, also update and append information on the changes made to the task .md-file
+
 ## Development Commands
 
 All make commands should be run from the root directory `/`, not from `/app`.
@@ -134,24 +148,3 @@ The combat system is the most complex feature, with dedicated files:
 ## Permission System
 
 Centralized permission logic in `/app/src/utils/permissions.ts`.
-
-## External Services
-
-- **Clerk** - Authentication (required for local dev)
-- **UploadThing** - File uploads (optional)
-- **Replicate** - AI inference (optional)
-- **Sentry** - Error monitoring
-- **Pusher** - Real-time features
-
-## Development Setup Notes
-
-- Copy `app/.env.example` to `app/.env` and configure service keys
-- Database runs in Docker via `make setup`
-- Admin panel at http://127.0.0.1:3001 for database management
-- Use `make help` to see all available commands
-
-## Testing
-
-- Unit tests with Vitest
-- Test files alongside source files
-- Run tests with `make test`

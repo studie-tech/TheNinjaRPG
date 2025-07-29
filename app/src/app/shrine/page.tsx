@@ -11,11 +11,7 @@ import Loader from "@/layout/Loader";
 import { Swords } from "lucide-react";
 import Image from "next/image";
 import StatusBar from "@/layout/StatusBar";
-import {
-  WAR_SHRINE_HP,
-  WAR_SHRINE_IMAGE,
-  VILLAGE_SYNDICATE_ID,
-} from "@/drizzle/constants";
+import { WAR_SHRINE_IMAGE, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import RamenShop from "@/layout/RamenShop";
 import { type War } from "@/drizzle/schema";
 
@@ -59,7 +55,7 @@ export default function Shrine() {
     return (
       <>
         <ContentBox
-          title="Shrine"
+          title={`Lvl. ${sectorData.sectorData?.shrineLevel || 1} Shrine`}
           subtitle={sectorData.sectorData ? "Sector is Claimed" : "Unclaimed Sector"}
           back_href="/travel"
         >
@@ -211,7 +207,7 @@ const WarCard = ({
                   showText={true}
                   status="AWAKE"
                   current={war.shrineHp > 0 ? war.shrineHp : 0}
-                  total={WAR_SHRINE_HP}
+                  total={war.shrineMaxHp}
                 />
               )}
             </div>

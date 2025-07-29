@@ -12,8 +12,8 @@ import {
   mpvpBattleQueue,
   villageStructure,
   warKill,
-  war,
   bounty,
+  war,
 } from "@/drizzle/schema";
 import { kageDefendedChallenges, village, clan, anbuSquad } from "@/drizzle/schema";
 import { dataBattleAction } from "@/drizzle/schema";
@@ -23,7 +23,6 @@ import { updateUserOnMap } from "@/libs/pusher";
 import { JUTSU_XP_TO_LEVEL } from "@/drizzle/constants";
 import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { WAR_SHRINE_HP } from "@/drizzle/constants";
 import { findWarsWithUser } from "@/libs/war";
 import type { PusherClient } from "@/libs/pusher";
 import type { BattleTypes, BattleDataEntryType } from "@/drizzle/constants";
@@ -332,13 +331,13 @@ export const updateWars = async (
                     }),
                   ]
                 : []),
-              // Update shrine if we're in a sector war
+              // Update shrine HP in war table for sector wars
               ...(result.shrineChangeHp !== 0 && w.type === "SECTOR_WAR"
                 ? [
                     client
                       .update(war)
                       .set({
-                        shrineHp: sql`GREATEST(LEAST(shrineHp + ${result.shrineChangeHp}, ${WAR_SHRINE_HP}), 0)`,
+                        shrineHp: sql`GREATEST(LEAST(shrineHp + ${result.shrineChangeHp}, shrineMaxHp), 0)`,
                       })
                       .where(eq(war.id, w.id)),
                   ]

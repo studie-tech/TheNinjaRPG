@@ -25,6 +25,7 @@ import {
   SENSEI_MAX_STUDENT_LEVEL,
   HUNTING_RANKS,
 } from "@/drizzle/constants";
+import { getShrineBoost } from "@/utils/village";
 import { SECTOR_WIDTH, SECTOR_HEIGHT } from "@/libs/travel/constants";
 import { getUnique } from "@/utils/grouping";
 import { isQuestComplete, findCompletedPredecessor } from "@/libs/objectives";
@@ -123,7 +124,20 @@ export const getReward = (
   const userQuest = user.userQuests.find((uq) => uq.questId === questId);
   let resolved = false;
   // Start mutating
-  if (userQuest && !userQuest.completed) {
+  if (userQuest && !userQuest.completed && userQuest?.quest) {
+    // See if we have a shrine boost
+    const sectors = user.village?.sectors?.length || 0;
+    const errandsBoost = getShrineBoost(sectors, "Errands", user.village);
+    const missionBoost = getShrineBoost(sectors, "Mission", user.village);
+    let boostFactor = 1;
+    if (userQuest?.quest.questType) {
+      if (["missions", "crimes"].includes(userQuest.quest.questType)) {
+        boostFactor = 1 + missionBoost;
+      } else if (userQuest.quest.questType === "errand") {
+        boostFactor = 1 + errandsBoost;
+      }
+    }
+    // Get rewards
     const tracker = trackers.find((q) => q.id === userQuest.quest.id);
     const goals = tracker?.goals ?? [];
     resolved = !tracker || isQuestComplete(userQuest.quest, tracker);
@@ -196,7 +210,9 @@ export const getReward = (
       userQuest.quest.questType,
     );
     const factor =
-      missionLike && user.dailyMissions > 9 ? ADDITIONAL_MISSION_REWARD_MULTIPLIER : 1;
+      missionLike && user.dailyMissions > 9
+        ? ADDITIONAL_MISSION_REWARD_MULTIPLIER
+        : boostFactor;
     rawRewards.reward_money = Math.floor(rawRewards.reward_money * factor);
     rawRewards.reward_clanpoints = Math.floor(rawRewards.reward_clanpoints * factor);
     rawRewards.reward_anbupoints = Math.floor(rawRewards.reward_anbupoints * factor);
