@@ -373,7 +373,7 @@ export default function SkillTreeGraph({
     const minX = Math.min(...skillNodes.map((n) => n.x)) - 30;
     const minY = Math.min(...skillNodes.map((n) => n.y)) - 0;
     const maxX = Math.max(...skillNodes.map((n) => n.x + 200)) + 30;
-    const maxY = Math.max(...skillNodes.map((n) => n.y + 100)) + 75;
+    const maxY = Math.max(...skillNodes.map((n) => n.y + 100)) + 100;
 
     return { minX, minY, maxX, maxY };
   }, [skillNodes]);
@@ -438,8 +438,8 @@ export default function SkillTreeGraph({
   const { minX, minY, maxX, maxY } = getContentBounds();
   const contentWidth = maxX - minX;
   const contentHeight = maxY - minY;
-  const svgWidth = Math.max(600, contentWidth + 100); // Increased from 20 to 100
-  const svgHeight = Math.max(300, contentHeight - 50); // Remove padding to make SVG tighter
+  const svgWidth = Math.max(800, contentWidth + 100); // Increased minimum width for filtered views
+  const svgHeight = Math.max(600, contentHeight - 50); // Increased minimum height for filtered views
 
   return (
     <TooltipProvider>
@@ -706,7 +706,7 @@ export default function SkillTreeGraph({
                     {/* Skill name (below the node) */}
                     <text
                       x={centerX}
-                      y={centerY + 120} // Adjusted from 140
+                      y={centerY + 100}
                       textAnchor="middle"
                       className="text-xl font-medium fill-foreground pointer-events-none" // Reduced from text-2xl
                     >
