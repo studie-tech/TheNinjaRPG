@@ -80,7 +80,7 @@ export default function SkillTreeGraph({
     // Calculate layout - positioning tier 2 skills next to their tier 1 prerequisites
     const tierWidth = 300; // Space between columns
     const skillHeight = 240; // Space between skills in a column
-    const padding = 60;
+    const padding = 30; // Reduced from 60
 
     // First, position all tier 1 skills
     const tier1Skills = skillsByTier[1] || [];
@@ -370,10 +370,10 @@ export default function SkillTreeGraph({
   const getContentBounds = useCallback(() => {
     if (!skillNodes.length) return { minX: 0, minY: 0, maxX: 800, maxY: 400 };
 
-    const minX = Math.min(...skillNodes.map((n) => n.x)) - 60; // Doubled from 30
-    const minY = Math.min(...skillNodes.map((n) => n.y)) - 60; // Doubled from 30
-    const maxX = Math.max(...skillNodes.map((n) => n.x + 200)) + 60; // 200 is node width (reduced from 240)
-    const maxY = Math.max(...skillNodes.map((n) => n.y + 240)) + 60; // 240 is node height (increased from 240)
+    const minX = Math.min(...skillNodes.map((n) => n.x)) - 15; // Reduced from 30
+    const minY = Math.min(...skillNodes.map((n) => n.y)) - 15; // Reduced from 30
+    const maxX = Math.max(...skillNodes.map((n) => n.x + 200)) + 15; // Reduced from 30
+    const maxY = Math.max(...skillNodes.map((n) => n.y + 240)) + 15; // Reduced from 30
 
     return { minX, minY, maxX, maxY };
   }, [skillNodes]);
@@ -436,8 +436,8 @@ export default function SkillTreeGraph({
 
   // SVG dimensions
   const { maxX, maxY } = getContentBounds();
-  const svgWidth = Math.max(800, maxX + 100);
-  const svgHeight = Math.max(400, maxY + 100);
+  const svgWidth = Math.max(800, maxX + 25); // Reduced from 50
+  const svgHeight = Math.max(400, maxY + 25); // Reduced from 50
 
   return (
     <TooltipProvider>

@@ -69,7 +69,7 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
         <div className="flex flex-row items-center gap-2">
           {battle && (
             <ActionTimer
-              user={{ userId: userId, actionPoints: 0 }}
+              user={{ userId: userId, actionPoints: battle.usersState.find(u => u.userId === userId)?.actionPoints ?? 0 }}
               battle={battle}
               isPending={battleState.isPending}
             />
