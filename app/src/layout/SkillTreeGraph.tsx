@@ -80,14 +80,14 @@ export default function SkillTreeGraph({
     // Calculate layout - positioning tier 2 skills next to their tier 1 prerequisites
     const tierWidth = 300; // Space between columns
     const skillHeight = 240; // Space between skills in a column
-    const padding = 30; // Reduced from 60
+    const padding = 10; // Reduced from 30
 
     // First, position all tier 1 skills
     const tier1Skills = skillsByTier[1] || [];
     const tier1Positions: Record<string, { x: number; y: number }> = {};
 
     tier1Skills.forEach((skill, skillIndex) => {
-      const x = padding + 150;
+      const x = padding + 50; // Reduced from 150
       const y = skillIndex * skillHeight + padding;
       
       tier1Positions[skill.id] = { x, y };
@@ -165,7 +165,7 @@ export default function SkillTreeGraph({
     
     // Position tier 2 skills without tier 1 prerequisites at the bottom of second column
     tier2WithoutPrereqs.forEach((skill, skillIndex) => {
-      const x = padding + 150 + tierWidth;
+      const x = padding + 50 + tierWidth; // Reduced from 150
       const y = (tier1Skills.length + skillIndex) * skillHeight + padding;
 
       // Check if skill can be purchased
@@ -193,7 +193,7 @@ export default function SkillTreeGraph({
       const tierSkills = skillsByTier[tier];
       if (!tierSkills) return;
 
-      const tierX = (tierIndex + 2) * tierWidth + padding + 150;
+      const tierX = (tierIndex + 2) * tierWidth + padding + 50; // Reduced from 150
 
       // Separate skills into those with and without prerequisites from previous tiers
       const tierWithPrereqs: SkillTree[] = [];
@@ -373,7 +373,7 @@ export default function SkillTreeGraph({
     const minX = Math.min(...skillNodes.map((n) => n.x)) - 10; // Reduced from 15
     const minY = Math.min(...skillNodes.map((n) => n.y)) - 10; // Reduced from 15
     const maxX = Math.max(...skillNodes.map((n) => n.x + 200)) + 10; // Reduced from 15
-    const maxY = Math.max(...skillNodes.map((n) => n.y + 240)) + 10; // Reduced from 15
+    const maxY = Math.max(...skillNodes.map((n) => n.y + 140)) + 10; // Reduced from 240 to 140 (actual skill node height)
 
     return { minX, minY, maxX, maxY };
   }, [skillNodes]);
@@ -438,8 +438,8 @@ export default function SkillTreeGraph({
   const { minX, minY, maxX, maxY } = getContentBounds();
   const contentWidth = maxX - minX;
   const contentHeight = maxY - minY;
-  const svgWidth = Math.max(600, contentWidth + 20); // Much tighter padding
-  const svgHeight = Math.max(300, contentHeight + 20); // Much tighter padding
+  const svgWidth = Math.max(600, contentWidth + 100); // Increased from 20 to 100
+  const svgHeight = Math.max(300, contentHeight); // Reduced from 100 to 50
 
   return (
     <TooltipProvider>
