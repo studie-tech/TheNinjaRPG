@@ -370,10 +370,10 @@ export default function SkillTreeGraph({
   const getContentBounds = useCallback(() => {
     if (!skillNodes.length) return { minX: 0, minY: 0, maxX: 800, maxY: 400 };
 
-    const minX = Math.min(...skillNodes.map((n) => n.x)) - 10; // Reduced from 15
-    const minY = Math.min(...skillNodes.map((n) => n.y)) - 10; // Reduced from 15
-    const maxX = Math.max(...skillNodes.map((n) => n.x + 200)) + 10; // Reduced from 15
-    const maxY = Math.max(...skillNodes.map((n) => n.y + 140)) + 10; // Reduced from 240 to 140 (actual skill node height)
+    const minX = Math.min(...skillNodes.map((n) => n.x)) - 15;
+    const minY = Math.min(...skillNodes.map((n) => n.y)) - 15;
+    const maxX = Math.max(...skillNodes.map((n) => n.x + 200)) + 15;
+    const maxY = Math.max(...skillNodes.map((n) => n.y + 100)) + 15;
 
     return { minX, minY, maxX, maxY };
   }, [skillNodes]);
@@ -439,7 +439,7 @@ export default function SkillTreeGraph({
   const contentWidth = maxX - minX;
   const contentHeight = maxY - minY;
   const svgWidth = Math.max(600, contentWidth + 100); // Increased from 20 to 100
-  const svgHeight = Math.max(300, contentHeight); // Reduced from 100 to 50
+  const svgHeight = Math.max(300, contentHeight - 50); // Remove padding to make SVG tighter
 
   return (
     <TooltipProvider>
