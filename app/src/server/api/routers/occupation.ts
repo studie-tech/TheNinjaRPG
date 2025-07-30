@@ -2,7 +2,8 @@ import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { createTRPCRouter, protectedProcedure, errorResponse } from "@/server/api/trpc";
 import { userData, userItem, item, userItemImbuement } from "@/drizzle/schema";
-import { fetchUser } from "@/server/api/routers/profile";
+import { fetchUser, fetchUpdatedUser } from "@/server/api/routers/profile";
+import { getShrineBoost } from "@/utils/village";
 import {
   fetchItemWithCraftingRequirements,
   fetchUserItems,
@@ -73,9 +74,9 @@ export const occupationRouter = createTRPCRouter({
     .input(z.object({ itemId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Run all initial queries in parallel
-      const [user, itemWithRequirements, useritems] = await Promise.all([
+      const [{ user }, itemWithRequirements, useritems] = await Promise.all([
         // Get user data
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         // Get item to craft with its requirements
         fetchItemWithCraftingRequirements(ctx.drizzle, input.itemId),
         // Check if user is already crafting something
@@ -89,6 +90,7 @@ export const occupationRouter = createTRPCRouter({
           item.craftingFinishedAt > new Date(),
       );
       // Guards
+      if (!user) return errorResponse("User not found");
       if (user.occupation !== "CRAFTING") {
         return errorResponse("You must have the Crafting occupation to craft items");
       }
@@ -133,8 +135,14 @@ export const occupationRouter = createTRPCRouter({
         }
       }
 
+      // See if we have a shrine boost, add it to crafting time in case
+      const sectors = user.village?.sectors?.length || 0;
+      const shrineBoost = getShrineBoost(sectors, "Crafting", user.village);
+      const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
+      const craftSeconds = craftingTime * 60 * shrineBoostFactor;
+
       // Calculate crafting finish time
-      const finishTime = new Date(Date.now() + craftingTime * 60 * 1000);
+      const finishTime = new Date(Date.now() + craftSeconds * 1000);
 
       // Execute crafting: consume materials and create crafting item
       // Calculate consumption for each requirement
@@ -187,7 +195,7 @@ export const occupationRouter = createTRPCRouter({
 
       return {
         success: true,
-        message: `Started crafting ${itemWithRequirements.name}. It will be ready in ${craftingTime} minutes.`,
+        message: `Started crafting ${itemWithRequirements.name}. It will be ready in ${craftSeconds} seconds.`,
         finishTime: finishTime.toISOString(),
       };
     }),

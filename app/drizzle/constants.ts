@@ -923,7 +923,13 @@ export const SHRINE_HP_BY_LEVEL = { 1: 3000, 2: 4000, 3: 5000 } as const;
 export const SHRINE_MAX_LEVEL = Math.max(
   ...Object.keys(SHRINE_HP_BY_LEVEL).map(Number),
 );
-export const SHRINE_BOOST_TYPES = ["Training", "PVP", "Mission", "Errands"] as const;
+export const SHRINE_BOOST_TYPES = [
+  "Training",
+  "PVP",
+  "Mission",
+  "Errands",
+  "Crafting",
+] as const;
 export type SHRINE_BOOST_TYPE = (typeof SHRINE_BOOST_TYPES)[number];
 export type WarType = (typeof WAR_TYPES)[number];
 export type WarState = (typeof WAR_STATES)[number];
