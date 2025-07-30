@@ -4,10 +4,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Check, Lock, X } from "lucide-react";
+import { Check, Lock, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Modal2 from "@/layout/Modal2";
 import type { SkillTree } from "@/drizzle/schema";
+import { MultiSelect } from "@/components/ui/multi-select";
+import type { OptionType } from "@/components/ui/multi-select";
 
 interface SkillTreeGraphProps {
   skills: SkillTree[];
@@ -40,6 +42,7 @@ export default function SkillTreeGraph({
   const [skillNodes, setSkillNodes] = useState<SkillNode[]>([]);
   const [selectedSkill, setSelectedSkill] = useState<SkillNode | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   // Viewport state for panning and zooming
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -47,115 +50,130 @@ export default function SkillTreeGraph({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
 
+  // Get all unique effect types from skills
+  const allEffectTypes = Array.from(
+    new Set(
+      skills.flatMap((skill) => skill.effects?.map((effect) => effect.type) || []),
+    ),
+  ).sort();
+
+  // Filter skills based on selected categories (OR logic)
+  const filteredSkills =
+    selectedCategories.length > 0
+      ? skills.filter((skill) =>
+          skill.effects?.some((effect) => selectedCategories.includes(effect.type)),
+        )
+      : skills;
+
   // Layout skills in a tree structure
   useEffect(() => {
-    if (!skills.length) return;
+    if (!filteredSkills.length) return;
 
-    // Group skills by tier
-    const skillsByTier = skills.reduce(
-      (acc, skill) => {
-        if (!acc[skill.tier]) acc[skill.tier] = [];
-        acc[skill.tier]!.push(skill);
-        return acc;
-      },
-      {} as Record<number, SkillTree[]>,
-    );
+    /* -------------------------------------------------------------------------- */
+    /*                        BASIC LAYOUT CONSTANTS                              */
+    /* -------------------------------------------------------------------------- */
+    const tierWidth = 300; // Horizontal spacing between tier columns
+    const skillHeight = 240; // Vertical spacing between rows
+    const padding = 10; // Top-left padding
+
+    /* -------------------------------------------------------------------------- */
+    /*                          GROUP SKILLS BY TIER                              */
+    /* -------------------------------------------------------------------------- */
+    const skillsByTier: Record<number, SkillTree[]> = {};
+    filteredSkills.forEach((skill) => {
+      if (!skillsByTier[skill.tier]) skillsByTier[skill.tier] = [];
+      skillsByTier[skill.tier]!.push(skill);
+    });
 
     const tiers = Object.keys(skillsByTier)
       .map(Number)
       .sort((a, b) => a - b);
+
+    /* -------------------------------------------------------------------------- */
+    /*               GENERIC BARYCENTER-BASED LAYOUT ENGINE (n-tiers)             */
+    /* -------------------------------------------------------------------------- */
+
+    /** Map skillId → row index (integer). */
+    const rowAssignment: Record<string, number> = {};
+
+    /** Track occupied rows per tier so we avoid collisions. */
+    const rowsUsedByTier: Record<number, Set<number>> = {};
+
+    /** Helper that returns the nearest free row ≥ desiredRow for a tier. */
+    const getNearestFreeRow = (tier: number, desiredRow: number): number => {
+      if (!rowsUsedByTier[tier]) rowsUsedByTier[tier] = new Set();
+      let row = desiredRow;
+      // Always search upward until we find a free slot.
+      while (rowsUsedByTier[tier].has(row)) row += 1;
+      rowsUsedByTier[tier].add(row);
+      return row;
+    };
+
+    /** Pushes the node with final coordinates + metadata. */
     const nodes: SkillNode[] = [];
+    const pushNode = (skill: SkillTree, tier: number, row: number) => {
+      const x = padding + 50 + (tier - 1) * tierWidth;
+      const y = padding + row * skillHeight;
 
-    // Calculate layout - using circular nodes now
-    const tierWidth = 150; // Reduced for circular design
-    const skillHeight = 120; // Space for image + tier badge + cost
-    const padding = 30;
+      const isOwned = userSkillIds.includes(skill.id);
+      const hasPrereqs = skill.requiredSkillIds.every((reqId) =>
+        userSkillIds.includes(reqId),
+      );
+      const hasPoints = userSkillPoints >= skill.costSkillPoints;
+      const canPurchase = !isOwned && hasPrereqs && hasPoints && !adminMode;
 
-    // 1) Track x-positions of skills that have already been laid out so later tiers
-    //    can reference their prerequisite positions.
-    const prevTierX: Record<string, number> = {};
-
-    // 2) Build a map of how many other skills depend on a given skill.  This will
-    //    let us push completely isolated skills (no prereqs, no dependents) to
-    //    the end of a tier, reducing edge crossings.
-    const dependentsCount: Record<string, number> = {};
-    skills.forEach((s) => {
-      s.requiredSkillIds.forEach((reqId) => {
-        dependentsCount[reqId] = (dependentsCount[reqId] || 0) + 1;
-      });
-    });
-
-    tiers.forEach((tier, tierIndex) => {
-      const tierSkills = skillsByTier[tier];
-      if (!tierSkills) return;
-
-      // Vertical position of this tier
-      const tierY = tierIndex * (skillHeight + 80) + padding;
-
-      // Sort the skills inside this tier.  The sort key is the average x-position
-      // of its prerequisites (if any) that have already been positioned.  This
-      // tends to place a child directly below / above its parent(s) and thus
-      // reduces edge crossings.  Skills with no prerequisites fall back to
-      // their original order.
-      const sortedTierSkills = tierSkills.slice().sort((a, b) => {
-        const avgPos = (skill: SkillTree) => {
-          const prereqXs = skill.requiredSkillIds
-            .map((id) => prevTierX[id])
-            .filter((x): x is number => x !== undefined);
-          if (prereqXs.length === 0) return Number.POSITIVE_INFINITY;
-          return prereqXs.reduce((sum, x) => sum + x, 0) / prereqXs.length;
-        };
-
-        const aAvg = avgPos(a);
-        const bAvg = avgPos(b);
-
-        // Prefer skills with finite average (i.e. those with positioned parents)
-        const aFinite = Number.isFinite(aAvg);
-        const bFinite = Number.isFinite(bAvg);
-
-        if (aFinite && bFinite) return aAvg - bAvg;
-        if (aFinite) return -1;
-        if (bFinite) return 1;
-
-        // Both averages are Infinity => neither has prerequisites already placed.
-        // Use dependents count so parent-like nodes come first; isolated nodes last.
-        const depA = dependentsCount[a.id] || 0;
-        const depB = dependentsCount[b.id] || 0;
-        if (depA !== depB) return depB - depA; // more dependents earlier
-
-        return 0; // fallback to original order if all else equal
+      nodes.push({
+        ...skill,
+        x,
+        y,
+        tier,
+        canPurchase,
+        isOwned,
+        hasPrereqs,
+        hasPoints,
       });
 
-      sortedTierSkills.forEach((skill, skillIndex) => {
-        // Basic horizontal spacing – the *order* comes from the sort above
-        const skillX = skillIndex * tierWidth + padding + 150;
+      rowAssignment[skill.id] = row;
+    };
 
-        // Check if skill can be purchased
-        const isOwned = userSkillIds.includes(skill.id);
-        const hasPrereqs = skill.requiredSkillIds.every((reqId) =>
-          userSkillIds.includes(reqId),
-        );
-        const hasPoints = userSkillPoints >= skill.costSkillPoints;
-        const canPurchase = !isOwned && hasPrereqs && hasPoints && !adminMode;
+    /* --------------------------- LAYER-BY-LAYER PASS --------------------------- */
 
-        nodes.push({
-          ...skill,
-          x: skillX,
-          y: tierY,
-          tier,
-          canPurchase,
-          isOwned,
-          hasPrereqs,
-          hasPoints,
-        });
+    tiers.forEach((tier) => {
+      const tierSkills = skillsByTier[tier] || [];
 
-        // Store the x-position so deeper tiers can align with it
-        prevTierX[skill.id] = skillX;
+      // Compute barycenter (average parent row) for each skill.
+      type WithBary = { skill: SkillTree; bary: number };
+      const withBary: WithBary[] = tierSkills.map((skill) => {
+        const parentRows = skill.requiredSkillIds
+          .map((req) => rowAssignment[req])
+          .filter((r) => r !== undefined);
+        const bary = parentRows.length
+          ? parentRows.reduce((a, b) => a + b, 0) / parentRows.length
+          : Infinity; // No parents yet => push to bottom later
+        return { skill, bary };
+      });
+
+      // Sort by barycenter (Infinity last), then alphabetically for stability.
+      withBary.sort((a, b) => {
+        if (a.bary === b.bary) return a.skill.name.localeCompare(b.skill.name);
+        if (a.bary === Infinity) return 1;
+        if (b.bary === Infinity) return -1;
+        return a.bary - b.bary;
+      });
+
+      // Place skills in the determined order.
+      withBary.forEach(({ skill, bary }) => {
+        // Desired row = rounded barycenter or next available below existing rows.
+        const occupied = rowsUsedByTier[tier] ?? new Set<number>();
+        const currentMaxRow = occupied.size ? Math.max(...occupied) : -1;
+        const desired = Number.isFinite(bary) ? Math.round(bary) : currentMaxRow + 1;
+        const finalRow = getNearestFreeRow(tier, Math.max(0, desired));
+        pushNode(skill, tier, finalRow);
       });
     });
 
     setSkillNodes(nodes);
-  }, [skills, userSkillIds, userSkillPoints, adminMode]);
+  }, [filteredSkills, userSkillIds, userSkillPoints, adminMode]);
 
   const handleSkillClick = (skill: SkillNode, e: React.MouseEvent) => {
     // Prevent click during drag
@@ -242,9 +260,9 @@ export default function SkillTreeGraph({
     if (!skillNodes.length) return { minX: 0, minY: 0, maxX: 800, maxY: 400 };
 
     const minX = Math.min(...skillNodes.map((n) => n.x)) - 30;
-    const minY = Math.min(...skillNodes.map((n) => n.y)) - 30;
-    const maxX = Math.max(...skillNodes.map((n) => n.x + 120)) + 30; // 120 is node width
-    const maxY = Math.max(...skillNodes.map((n) => n.y + 120)) + 30; // 120 is node height
+    const minY = Math.min(...skillNodes.map((n) => n.y)) - 0;
+    const maxX = Math.max(...skillNodes.map((n) => n.x + 200)) + 30;
+    const maxY = Math.max(...skillNodes.map((n) => n.y + 100)) + 100;
 
     return { minX, minY, maxX, maxY };
   }, [skillNodes]);
@@ -261,10 +279,10 @@ export default function SkillTreeGraph({
     const containerWidth = containerRect.width;
     const containerHeight = containerRect.height;
 
-    // Calculate scale to fit content with some padding
-    const scaleX = (containerWidth - 40) / contentWidth;
-    const scaleY = (containerHeight - 40) / contentHeight;
-    const scale = Math.min(scaleX, scaleY, 1); // Don't scale up beyond 1x
+    // Calculate scale to fit content with minimal padding
+    const scaleX = (containerWidth - 5) / contentWidth;
+    const scaleY = (containerHeight - 5) / contentHeight;
+    const scale = Math.min(scaleX, scaleY, 1.0); // Do not upscale beyond 1
 
     // Center the content
     const scaledWidth = contentWidth * scale;
@@ -272,16 +290,25 @@ export default function SkillTreeGraph({
     const offsetX = (containerWidth - scaledWidth) / 2 - minX * scale;
     const offsetY = (containerHeight - scaledHeight) / 2 - minY * scale;
 
+    // Dynamically resize the container to fit the entire tree vertically
+    if (containerRef.current) {
+      // Add a tiny margin so the bottom nodes aren't cut off
+      containerRef.current.style.height = `${Math.ceil(scaledHeight + 20)}px`;
+    }
+
     setTransform({ x: offsetX, y: offsetY, scale });
   }, [skillNodes, getContentBounds]);
 
-  // Auto-fit when skill nodes change
+  // Auto-fit (and size container) when skill nodes are first ready or change
   useEffect(() => {
-    if (skillNodes.length > 0) {
-      // Small delay to ensure container is rendered
-      const timer = setTimeout(fitToView, 100);
-      return () => clearTimeout(timer);
-    }
+    if (skillNodes.length === 0) return;
+
+    // Run once immediately (synchronous update after mount)
+    fitToView();
+
+    // Run again shortly after to account for any late-rendered DOM sizing
+    const timer = setTimeout(fitToView, 100);
+    return () => clearTimeout(timer);
   }, [skillNodes, fitToView]);
 
   // Reset zoom and pan (now uses fit-to-view)
@@ -289,24 +316,64 @@ export default function SkillTreeGraph({
     fitToView();
   }, [fitToView]);
 
-  // SVG dimensions
-  const { maxX, maxY } = getContentBounds();
-  const svgWidth = Math.max(800, maxX + 100);
-  const svgHeight = Math.max(400, maxY + 100);
-  console.log("svgWidth", svgWidth, "svgHeight", svgHeight);
+  // Recenter view whenever the category filter changes
+  useEffect(() => {
+    if (containerRef.current) {
+      // Allow container to shrink before recalculating
+      containerRef.current.style.height = "auto";
+    }
+    resetView();
+  }, [selectedCategories, resetView]);
+
+  // Zoom in function
+  const zoomIn = useCallback(() => {
+    setTransform((prev) => ({
+      ...prev,
+      scale: Math.min(3, prev.scale * 1.2),
+    }));
+  }, []);
+
+  // Zoom out function
+  const zoomOut = useCallback(() => {
+    setTransform((prev) => ({
+      ...prev,
+      scale: Math.max(0.1, prev.scale * 0.8),
+    }));
+  }, []);
+
+  // SVG dimensions - make them tightly bound to content
+  const { minX, minY, maxX, maxY } = getContentBounds();
+  const contentWidth = maxX - minX;
+  const contentHeight = maxY - minY;
+  const svgWidth = Math.max(800, contentWidth + 100); // Increased minimum width for filtered views
+  const svgHeight = Math.max(600, contentHeight - 50); // Increased minimum height for filtered views
 
   return (
     <TooltipProvider>
       <div className="w-full">
         {/* Controls */}
-        <div className="mb-2 flex gap-2">
-          <Button size="sm" variant="outline" onClick={resetView}>
+        <div className="mb-2 flex gap-2 items-center">
+          <Button variant="outline" onClick={resetView}>
             Fit to View
           </Button>
-          <div className="text-sm text-muted-foreground flex items-center">
-            Drag to pan • Scroll to zoom
+          <Button variant="outline" onClick={zoomOut}>
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={zoomIn}>
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+          <div className="grow"></div>
+          <div className="ml-5 w-40 max-w-40 ">
+            <MultiSelect
+              options={allEffectTypes.map<OptionType>((t) => ({ label: t, value: t }))}
+              selected={selectedCategories}
+              onChange={setSelectedCategories}
+              placeholder="Filter"
+            />
           </div>
         </div>
+
+        {/* Category Filters */}
 
         <div
           ref={containerRef}
@@ -316,10 +383,7 @@ export default function SkillTreeGraph({
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onWheel={handleWheel}
-          style={{
-            cursor: isDragging ? "grabbing" : "grab",
-            height: "300px",
-          }}
+          style={{ cursor: isDragging ? "grabbing" : "grab" }}
         >
           <svg ref={svgRef} width={svgWidth} height={svgHeight} className="w-full">
             <g
@@ -331,10 +395,10 @@ export default function SkillTreeGraph({
                   const prereqSkill = skillNodes.find((s) => s.id === reqId);
                   if (!prereqSkill) return null;
 
-                  const startX = prereqSkill.x + 60; // Center of 120px wide node
-                  const startY = prereqSkill.y + 60; // Center of 120px tall node
-                  const endX = skill.x + 60;
-                  const endY = skill.y + 60;
+                  const startX = prereqSkill.x + 100; // Center of 200px wide node (reduced from 120)
+                  const startY = prereqSkill.y + 100; // Center of 200px tall node (reduced from 120)
+                  const endX = skill.x + 100;
+                  const endY = skill.y + 100;
 
                   return (
                     <line
@@ -394,9 +458,9 @@ export default function SkillTreeGraph({
 
               {/* Draw skill nodes */}
               {skillNodes.map((skill) => {
-                const centerX = skill.x + 60;
-                const centerY = skill.y + 60;
-                const badgeRadius = 12; // Same size for all badges
+                const centerX = skill.x + 100;
+                const centerY = skill.y + 100;
+                const badgeRadius = 20;
 
                 // Determine skill status for styling
                 const isLocked = !skill.isOwned && !skill.hasPrereqs;
@@ -414,7 +478,7 @@ export default function SkillTreeGraph({
                     <circle
                       cx={centerX}
                       cy={centerY}
-                      r="38"
+                      r="64"
                       className={`
                         cursor-pointer transition-all duration-200
                         ${
@@ -434,16 +498,17 @@ export default function SkillTreeGraph({
                     <defs>
                       <clipPath id={`skillClip-${skill.id}`}>
                         {/* Use slightly larger radius so image meets the outer stroke */}
-                        <circle cx={centerX} cy={centerY} r="36" />
+                        <circle cx={centerX} cy={centerY} r="60" />{" "}
+                        {/* Reduced from 72 */}
                       </clipPath>
                     </defs>
 
                     <image
                       href={skill.image}
-                      x={centerX - 40}
-                      y={centerY - 40}
-                      width="80"
-                      height="80"
+                      x={centerX - 64}
+                      y={centerY - 64}
+                      width="128"
+                      height="128"
                       clipPath={`url(#skillClip-${skill.id})`}
                       preserveAspectRatio="xMidYMid slice"
                       className={`transition-all duration-200 ${
@@ -457,32 +522,34 @@ export default function SkillTreeGraph({
 
                     {/* Tier badge */}
                     <circle
-                      cx={centerX - 30}
-                      cy={centerY - 30}
+                      cx={centerX - 50}
+                      cy={centerY - 50}
                       r={badgeRadius}
                       className="fill-slate-700 dark:fill-slate-300 stroke-card stroke-2"
                     />
                     <text
-                      x={centerX - 30}
-                      y={centerY - 25}
+                      x={centerX - 50}
+                      y={centerY - 45} // Adjusted for proper vertical centering
                       textAnchor="middle"
-                      className="fill-white dark:fill-slate-800 text-md font-bold pointer-events-none"
+                      dominantBaseline="middle"
+                      className="fill-white dark:fill-slate-800 text-2xl font-bold pointer-events-none"
                     >
                       {skill.tier}
                     </text>
 
                     {/* Cost badge */}
                     <circle
-                      cx={centerX + 30}
-                      cy={centerY - 30}
+                      cx={centerX + 50}
+                      cy={centerY - 50}
                       r={badgeRadius}
                       className="fill-yellow-500 dark:fill-yellow-400 stroke-card stroke-2"
                     />
                     <text
-                      x={centerX + 30}
-                      y={centerY - 25}
+                      x={centerX + 50}
+                      y={centerY - 45} // Adjusted for proper vertical centering
                       textAnchor="middle"
-                      className="fill-white dark:fill-slate-900 text-md font-bold pointer-events-none"
+                      dominantBaseline="middle"
+                      className="fill-white dark:fill-slate-900 text-2xl font-bold pointer-events-none"
                     >
                       {skill.costSkillPoints}
                     </text>
@@ -490,8 +557,8 @@ export default function SkillTreeGraph({
                     {/* Status icon */}
                     {!adminMode && skill.isOwned && (
                       <foreignObject
-                        x={centerX + 30 - badgeRadius}
-                        y={centerY + 30 - badgeRadius}
+                        x={centerX + 50 - badgeRadius}
+                        y={centerY + 50 - badgeRadius}
                         width={badgeRadius * 2}
                         height={badgeRadius * 2}
                         className="pointer-events-none"
@@ -502,8 +569,8 @@ export default function SkillTreeGraph({
 
                     {!adminMode && isLocked && (
                       <foreignObject
-                        x={centerX + 30 - badgeRadius}
-                        y={centerY + 30 - badgeRadius}
+                        x={centerX + 50 - badgeRadius}
+                        y={centerY + 50 - badgeRadius}
                         width={badgeRadius * 2}
                         height={badgeRadius * 2}
                         className="pointer-events-none"
@@ -514,8 +581,8 @@ export default function SkillTreeGraph({
 
                     {!adminMode && isUnaffordable && (
                       <foreignObject
-                        x={centerX + 30 - badgeRadius}
-                        y={centerY + 30 - badgeRadius}
+                        x={centerX + 50 - badgeRadius}
+                        y={centerY + 50 - badgeRadius}
                         width={badgeRadius * 2}
                         height={badgeRadius * 2}
                         className="pointer-events-none"
@@ -527,21 +594,19 @@ export default function SkillTreeGraph({
                     {/* Skill name (below the node) */}
                     <text
                       x={centerX}
-                      y={centerY + 55}
+                      y={centerY + 100}
                       textAnchor="middle"
-                      className="text-xs font-medium fill-foreground pointer-events-none"
+                      className="text-xl font-medium fill-foreground pointer-events-none"
                     >
-                      {skill.name.length > 15
-                        ? `${skill.name.substring(0, 12)}...`
-                        : skill.name}
+                      {skill.name}
                     </text>
 
                     {adminMode && (
                       <text
                         x={centerX}
-                        y={centerY + 70}
+                        y={centerY + 150} // Adjusted from 170
                         textAnchor="middle"
-                        className="text-[10px] fill-muted-foreground pointer-events-none"
+                        className="text-lg fill-muted-foreground pointer-events-none"
                       >
                         {skill.hidden ? "Hidden" : "Visible"}
                       </text>

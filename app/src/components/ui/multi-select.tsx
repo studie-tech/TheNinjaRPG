@@ -27,6 +27,7 @@ interface MultiSelectProps {
   isDirty?: boolean;
   allowAddNew?: boolean;
   onAddNewOption?: (newOption: OptionType) => void;
+  placeholder?: string;
 }
 
 function MultiSelect({
@@ -37,6 +38,7 @@ function MultiSelect({
   isDirty,
   allowAddNew,
   onAddNewOption,
+  placeholder,
   ...props
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
@@ -72,34 +74,40 @@ function MultiSelect({
           onClick={() => setOpen(!open)}
         >
           <div className="flex gap-1 flex-wrap">
-            {selected.map((item, i) => {
-              const option = options.find((o) => o.value === item);
-              return (
-                <Badge
-                  variant="secondary"
-                  key={`${item}-${i}`}
-                  className="mr-1 mb-1"
-                  onClick={() => handleUnselect(item)}
-                >
-                  {option?.label ?? item}
-                  <div
-                    className="ml-1 ring-offset-background rounded-full outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleUnselect(item);
-                      }
-                    }}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
+            {selected.length > 0 ? (
+              selected.map((item, i) => {
+                const option = options.find((o) => o.value === item);
+                return (
+                  <Badge
+                    variant="secondary"
+                    key={`${item}-${i}`}
+                    className="mr-1 mb-1"
                     onClick={() => handleUnselect(item)}
                   >
-                    <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                  </div>
-                </Badge>
-              );
-            })}
+                    {option?.label ?? item}
+                    <div
+                      className="ml-1 ring-offset-background rounded-full outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleUnselect(item);
+                        }
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onClick={() => handleUnselect(item)}
+                    >
+                      <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                    </div>
+                  </Badge>
+                );
+              })
+            ) : (
+              <span className="text-muted-foreground">
+                {placeholder || "Select options..."}
+              </span>
+            )}
           </div>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
