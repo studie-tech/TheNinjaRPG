@@ -1821,6 +1821,13 @@
       "when": 1753456125832,
       "tag": "0259_glamorous_maddog",
       "breakpoints": false
+    },
+    {
+      "idx": 260,
+      "version": "5",
+      "when": 1753879963365,
+      "tag": "0260_amused_scorpion",
+      "breakpoints": false
     }
   ]
 }

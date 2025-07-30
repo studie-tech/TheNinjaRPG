@@ -1,11 +1,10 @@
 import { drizzleDB } from "@/server/db";
-import { sector, village } from "@/drizzle/schema";
-import { eq, gte } from "drizzle-orm";
+import { sector } from "@/drizzle/schema";
+import { eq, lte } from "drizzle-orm";
 import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
 import { updateGameSetting } from "@/libs/gamesettings";
 import { cookies } from "next/headers";
-import { WAR_SHRINE_MAINTENANCE_DAYS } from "@/drizzle/constants";
-import { secondsFromNow } from "@/utils/time";
+import { GSP_NO_RETURNED_VALUE } from "next/dist/lib/constants";
 
 const ENDPOINT_NAME = "shrine-maintenance";
 
@@ -18,73 +17,48 @@ export async function GET() {
   if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
   try {
-    // Find all villages that need maintenance checks
-    const [villages, sectors] = await Promise.all([
-      drizzleDB.query.village.findMany({
-        columns: {
-          id: true,
-          name: true,
-          shrineSettings: true,
+    const now = new Date();
+
+    // Find all sectors with overdue maintenance
+    const overdueSectors = await drizzleDB.query.sector.findMany({
+      where: lte(sector.nextMaintainanceDueDate, now),
+      with: {
+        village: {
+          columns: {
+            name: true,
+          },
         },
-      }),
-      drizzleDB.query.sector.findMany(),
-    ]);
+      },
+    });
 
-    let maintenanceChecked = 0;
+    const sectorsChecked = overdueSectors.length;
     let shrinesDowngraded = 0;
+    let shrinesDestroyed = 0;
 
-    for (const villageData of villages) {
-      const settings = villageData.shrineSettings;
-      const nextMaintainanceDueDate = settings.nextMaintainanceDueDate
-        ? new Date(settings.nextMaintainanceDueDate)
-        : new Date();
-      const now = new Date();
-      const isOverdue = nextMaintainanceDueDate <= now;
+    if (overdueSectors.length > 0) {
+      // Process each overdue sector
+      const downgradePromises = overdueSectors.map((sectorData) => {
+        const newLevel = sectorData.shrineLevel - 1;
 
-      // Get all sectors belonging to this village that have shrines
-      const villageSectors = sectors.filter((s) => s.villageId === villageData.id);
+        if (newLevel < 1) {
+          shrinesDestroyed++;
+          return drizzleDB.delete(sector).where(eq(sector.id, sectorData.id));
+        } else {
+          shrinesDowngraded++;
+          return drizzleDB
+            .update(sector)
+            .set({ shrineLevel: newLevel })
+            .where(eq(sector.id, sectorData.id));
+        }
+      });
 
-      if (isOverdue) {
-        console.log(villageData.name, villageSectors);
-      }
-
-      // Downgrade each shrine in parallel
-      const [downgradeResults] = await Promise.all([
-        isOverdue
-          ? await Promise.all(
-              villageSectors.map((sectorData) => {
-                const newLevel = sectorData.shrineLevel - 1;
-                if (newLevel < 1) {
-                  return drizzleDB.delete(sector).where(eq(sector.id, sectorData.id));
-                } else {
-                  return drizzleDB
-                    .update(sector)
-                    .set({ shrineLevel: newLevel })
-                    .where(eq(sector.id, sectorData.id));
-                }
-              }),
-            )
-          : Promise.resolve([]),
-        drizzleDB
-          .update(village)
-          .set({
-            shrineSettings: {
-              nextMaintainanceDueDate: secondsFromNow(
-                WAR_SHRINE_MAINTENANCE_DAYS * 24 * 60 * 60,
-              ).toISOString(),
-              ...settings,
-            },
-          })
-          .where(eq(village.id, villageData.id)),
-      ]);
-      shrinesDowngraded += downgradeResults.length;
-      maintenanceChecked++;
+      // Execute all downgrades in parallel
+      await Promise.all(downgradePromises);
     }
 
-    return new Response(
-      `Shrine maintenance completed: ${maintenanceChecked} villages checked, ${shrinesDowngraded} shrines downgraded`,
-      { status: 200 },
-    );
+    const message = `Shrine maintenance completed: ${sectorsChecked} sectors checked, ${shrinesDowngraded} shrines downgraded, ${shrinesDestroyed} shrines destroyed`;
+
+    return new Response(message, { status: 200 });
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);

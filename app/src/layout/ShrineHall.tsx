@@ -271,14 +271,16 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
       {/* Captured Shrines List */}
       <div className="space-y-4">
         {activeShrines.length === 0 ? (
-          <Card>
-            <CardContent className="pt-6 text-center">
-              <p className="text-muted-foreground">No shrines currently captured</p>
-              <p className="text-sm mt-2">
-                Defeat enemy shrines in combat to capture sectors for your village!
-              </p>
-            </CardContent>
-          </Card>
+          <div className="px-3 pb-3">
+            <Card>
+              <CardContent className="pt-6 text-center">
+                <p className="text-muted-foreground">No shrines currently captured</p>
+                <p className="text-sm mt-2">
+                  Defeat enemy shrines in combat to capture sectors for your village!
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         ) : (
           <Table data={capturedShrineRows} columns={capturedShrineColumns} />
         )}
@@ -635,6 +637,12 @@ const MaintenanceTab = ({ user }: TabProps) => {
   // Utils
   const utils = api.useUtils();
 
+  // Query for captured sectors
+  const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
+    { villageId: user.villageId! },
+    { enabled: !!user.villageId },
+  );
+
   // Mutations
   const { mutate: payMaintenance, isPending: isPaying } =
     api.shrine.payWeeklyMaintenance.useMutation({
@@ -642,69 +650,114 @@ const MaintenanceTab = ({ user }: TabProps) => {
         showMutationToast(res);
         if (res.success) {
           void utils.profile.getUser.invalidate();
+          void utils.shrine.getCapturedSectors.invalidate();
         }
       },
     });
 
   const isKage = user.userId === user.village?.kageId;
-  const dueDate = user.village?.shrineSettings.nextMaintainanceDueDate
-    ? new Date(user.village.shrineSettings.nextMaintainanceDueDate)
-    : new Date();
-  const isOverdue = dueDate <= new Date();
-  const secondsToNextPayment = dueDate ? dueDate.getTime() - new Date().getTime() : 0;
-  const nextPaymentAt = getTimeLeftStr(
-    ...getDaysHoursMinutesSeconds(secondsToNextPayment),
-  );
+
+  if (!capturedSectors) {
+    return <Loader explanation="Loading sector maintenance information..." />;
+  }
 
   return (
     <div className="p-3">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" /> Weekly Maintenance
+            <Clock className="h-5 w-5" /> Shrine Maintenance
           </CardTitle>
           <CardDescription>
-            Keep your shrines maintained to prevent level degradation. You can pay in
-            advance to avoid overdue payments.
+            Keep your shrines maintained to prevent level degradation. Each sector
+            requires individual maintenance payments.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 bg-muted rounded">
-              <span>Maintenance Cost</span>
+            <div className="flex justify-between items-center p-3 bg-poppopover rounded">
+              <span>Maintenance Cost (per shrine)</span>
               <span className="font-semibold">
                 {SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens
               </span>
             </div>
 
-            <div className="flex justify-between items-center p-3 bg-muted rounded">
-              <span>Next Payment Due</span>
-              <span className={isOverdue ? "text-red-500 font-semibold" : ""}>
-                {isOverdue ? `Payment overdue` : nextPaymentAt}
-              </span>
+            <div className="space-y-3">
+              <h4 className="font-semibold">Captured Sectors</h4>
+              {capturedSectors.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  No captured sectors. Capture sectors to build shrines that require
+                  maintenance.
+                </p>
+              ) : (
+                capturedSectors.map((sector) => {
+                  const dueDate = sector.nextMaintainanceDueDate
+                    ? new Date(sector.nextMaintainanceDueDate)
+                    : new Date();
+                  const isOverdue = dueDate <= new Date();
+                  const secondsToNextPayment = dueDate
+                    ? dueDate.getTime() - new Date().getTime()
+                    : 0;
+                  const nextPaymentAt = getTimeLeftStr(
+                    ...getDaysHoursMinutesSeconds(secondsToNextPayment),
+                  );
+
+                  return (
+                    <div
+                      key={sector.id}
+                      className={cn(
+                        "p-4 border rounded-lg space-y-3",
+                        isOverdue
+                          ? "border-red-200 bg-red-50"
+                          : "border-border bg-card",
+                      )}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h5 className="font-medium">Sector {sector.sector}</h5>
+                          <p className="text-sm text-muted-foreground">
+                            Shrine Level {sector.shrineLevel}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">Next Payment</p>
+                          <p
+                            className={cn(
+                              "text-sm font-medium",
+                              isOverdue && "text-red-600",
+                            )}
+                          >
+                            {isOverdue ? "Payment overdue" : nextPaymentAt}
+                          </p>
+                        </div>
+                      </div>
+
+                      {isOverdue && (
+                        <div className="flex items-center gap-2 p-2 bg-red-100 border border-red-200 rounded">
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                          <span className="text-xs text-red-700">
+                            Maintenance overdue! This shrine may lose levels without
+                            payment.
+                          </span>
+                        </div>
+                      )}
+
+                      {isKage && (
+                        <Button
+                          size="sm"
+                          variant={isOverdue ? "destructive" : "default"}
+                          disabled={isPaying}
+                          onClick={() => payMaintenance({ sectorId: sector.id })}
+                        >
+                          Pay Maintenance (
+                          {SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens)
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
-
-            {isOverdue && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded">
-                <AlertTriangle className="h-4 w-4 text-red-500" />
-                <span className="text-sm text-red-700">
-                  Maintenance overdue! Shrines may lose levels without payment, and
-                  eventually be destroyed. Pay quickly to avoid this!
-                </span>
-              </div>
-            )}
-
-            {isKage && (
-              <Button
-                className="w-full"
-                variant={isOverdue ? "destructive" : "default"}
-                disabled={isPaying}
-                onClick={() => payMaintenance({ villageId: user.villageId! })}
-              >
-                Pay Weekly Maintenance (
-                {SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens)
-              </Button>
-            )}
           </div>
         </CardContent>
       </Card>

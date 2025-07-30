@@ -2282,6 +2282,10 @@ export const sector = mysqlTable(
       .notNull(),
     shrineLevel: tinyint("shrineLevel").default(1).notNull(),
     capturedAt: datetime("capturedAt", { mode: "date", fsp: 3 }),
+    nextMaintainanceDueDate: datetime("nextMaintainanceDueDate", {
+      mode: "date",
+      fsp: 3,
+    }),
   },
   (table) => {
     return {
@@ -2359,7 +2363,6 @@ export const village = mysqlTable(
         unlockedAiIds: string[];
         activeBoosts: Record<string, string>; // boost type -> expiry ISO string
         activeAiIds: string[];
-        nextMaintainanceDueDate?: string; // ISO string
       }>()
       .default({ unlockedAiIds: [], activeBoosts: {}, activeAiIds: [] })
       .notNull(),

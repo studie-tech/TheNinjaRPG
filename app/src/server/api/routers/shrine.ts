@@ -303,15 +303,21 @@ export const shrineRouter = createTRPCRouter({
       return { success: true, message };
     }),
 
-  // Weekly maintenance payment
+  // Weekly maintenance payment per sector
   payWeeklyMaintenance: protectedProcedure
-    .input(z.object({ villageId: z.string() }))
+    .input(z.object({ sectorId: z.number() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }] = await Promise.all([
+      const [{ user }, targetSector] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
+        }),
+        ctx.drizzle.query.sector.findFirst({
+          where: eq(sector.id, input.sectorId),
+          with: {
+            village: true,
+          },
         }),
       ]);
 
@@ -322,43 +328,54 @@ export const shrineRouter = createTRPCRouter({
       if (!user.village || !user.villageId) {
         return errorResponse("You must be in a village");
       }
+      if (!targetSector) {
+        return errorResponse("Sector not found");
+      }
+      if (targetSector.villageId !== user.villageId) {
+        return errorResponse(
+          "You can only pay maintenance for your own village's sectors",
+        );
+      }
       if (user.village.kageId !== user.userId) {
-        return errorResponse("Only the Kage can unlock AI defenders");
+        return errorResponse("Only the Kage can pay shrine maintenance");
       }
       if (user.village.tokens < SHRINE_WEEKLY_MAINTENANCE_COST) {
         return errorResponse(
           `Need ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens for maintenance`,
         );
       }
-      const currentNextMaintainanceDueDate = user.village.shrineSettings
-        .nextMaintainanceDueDate
-        ? new Date(user.village.shrineSettings.nextMaintainanceDueDate)
-        : new Date();
+
+      const currentNextMaintainanceDueDate =
+        targetSector.nextMaintainanceDueDate || new Date();
       const nextNextMaintainanceDueDate = secondsFromDate(
         WAR_SHRINE_MAINTENANCE_DAYS * 24 * 60 * 60,
         currentNextMaintainanceDueDate,
       );
 
-      // Update payment and maintenance date
-      await ctx.drizzle
-        .update(village)
-        .set({
-          tokens: sql`${village.tokens} - ${SHRINE_WEEKLY_MAINTENANCE_COST}`,
-          shrineSettings: {
-            ...user.village.shrineSettings,
-            nextMaintainanceDueDate: nextNextMaintainanceDueDate.toISOString(),
-          },
-        })
-        .where(
-          and(
-            eq(village.id, input.villageId),
-            gte(village.tokens, SHRINE_WEEKLY_MAINTENANCE_COST),
+      // Update payment and maintenance date for the specific sector
+      await Promise.all([
+        ctx.drizzle
+          .update(village)
+          .set({
+            tokens: sql`${village.tokens} - ${SHRINE_WEEKLY_MAINTENANCE_COST}`,
+          })
+          .where(
+            and(
+              eq(village.id, user.villageId),
+              gte(village.tokens, SHRINE_WEEKLY_MAINTENANCE_COST),
+            ),
           ),
-        );
+        ctx.drizzle
+          .update(sector)
+          .set({
+            nextMaintainanceDueDate: nextNextMaintainanceDueDate,
+          })
+          .where(eq(sector.id, input.sectorId)),
+      ]);
 
       return {
         success: true,
-        message: `Weekly maintenance paid: ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens`,
+        message: `Weekly maintenance paid for sector ${targetSector.sector}: ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens`,
       };
     }),
 });
