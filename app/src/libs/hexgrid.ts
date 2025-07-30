@@ -108,6 +108,7 @@ export const getPossibleActionTiles = (
       action.method === "SINGLE" ||
       action.method === "AOE_LINE_SHOOT" ||
       action.method === "AOE_WALL_SHOOT" ||
+      action.method === "AOE_LARGE_WALL_SHOOT" ||
       action.method === "AOE_CIRCLE_SHOOT" ||
       action.method === "AOE_SPIRAL_SHOOT" ||
       action.method === "AOE_CIRCLE_SPAWN"

@@ -20,6 +20,8 @@ import {
   getEffectiveMaxImbuements,
 } from "@/libs/crafting";
 import { nanoid } from "nanoid";
+import { baseServerResponse } from "@/server/api/trpc";
+import { canChangeContent } from "@/utils/permissions";
 
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure.query(async ({ ctx }) => {
@@ -47,7 +49,10 @@ export const occupationRouter = createTRPCRouter({
           (Date.now() - user.occupationSignupAt.getTime()) / (1000 * 60 * 60 * 24),
         );
 
-        if (daysSinceSignup < OCCUPATION_CHANGE_COOLDOWN_DAYS) {
+        if (
+          daysSinceSignup < OCCUPATION_CHANGE_COOLDOWN_DAYS &&
+          !canChangeContent(user.role)
+        ) {
           const daysRemaining = OCCUPATION_CHANGE_COOLDOWN_DAYS - daysSinceSignup;
           return errorResponse(
             `You must wait ${daysRemaining} more day(s) before changing occupations`,
@@ -300,6 +305,85 @@ export const occupationRouter = createTRPCRouter({
         success: true,
         message: `Started imbuing ${targetUserItem.item.name} with ${crystalItem.name}. It will be ready in ${imbuingTime} minutes.`,
         finishTime: finishTime.toISOString(),
+      };
+    }),
+
+  finishCraftingImmediately: protectedProcedure
+    .input(z.object({ userItemId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Queries
+      const [user, userItems] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+      ]);
+      // Find the crafting item
+      const craftingItem = userItems.find((ui) => ui.id === input.userItemId);
+      // Guards
+      if (!canChangeContent(user.role)) {
+        return errorResponse(
+          "You do not have permission to finish crafting immediately",
+        );
+      }
+      if (!craftingItem) {
+        return errorResponse("Crafting item not found");
+      }
+      if (!craftingItem.craftingFinishedAt) {
+        return errorResponse("This item is not being crafted");
+      }
+      if (craftingItem.craftingFinishedAt <= new Date()) {
+        return errorResponse("This item has already finished crafting");
+      }
+      // Immediately finish the crafting by setting the finish time to now
+      await ctx.drizzle
+        .update(userItem)
+        .set({ craftingFinishedAt: new Date() })
+        .where(eq(userItem.id, input.userItemId));
+      return {
+        success: true,
+        message: `Immediately finished crafting ${craftingItem.item.name}`,
+      };
+    }),
+
+  finishImbuingImmediately: protectedProcedure
+    .input(z.object({ userItemImbuementId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Queries
+      const [user, userItems] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+      ]);
+      // Find the imbuing item
+      const imbuingItem = userItems.find((ui) =>
+        ui.imbuements.some((imbuement) => imbuement.id === input.userItemImbuementId),
+      );
+      const imbuingImbuement = imbuingItem?.imbuements.find(
+        (imbuement) => imbuement.id === input.userItemImbuementId,
+      );
+      // Guards
+      if (!canChangeContent(user.role)) {
+        return errorResponse(
+          "You do not have permission to finish imbuing immediately",
+        );
+      }
+      if (!imbuingItem || !imbuingImbuement) {
+        return errorResponse("Imbuing item not found");
+      }
+      if (!imbuingImbuement.craftingFinishedAt) {
+        return errorResponse("This item is not being imbued");
+      }
+      if (imbuingImbuement.craftingFinishedAt <= new Date()) {
+        return errorResponse("This item has already finished imbuing");
+      }
+      // Immediately finish the imbuing by setting the finish time to now
+      await ctx.drizzle
+        .update(userItemImbuement)
+        .set({ craftingFinishedAt: new Date() })
+        .where(eq(userItemImbuement.id, input.userItemImbuementId));
+      return {
+        success: true,
+        message: `Immediately finished imbuing ${imbuingItem.item.name}`,
       };
     }),
 });

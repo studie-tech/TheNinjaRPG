@@ -18,6 +18,7 @@ import {
   MEDNIN_HEAL_TO_EXP,
   SENSEI_GENIN_MED_EXP_SHARE_PERC,
   SENSEI_MAX_STUDENT_LEVEL,
+  MEDNIN_EXP_CAP,
 } from "@/drizzle/constants";
 import { MEDNIN_HEALABLE_STATES } from "@/drizzle/constants";
 import type { ExecutedQuery } from "@planetscale/database";
@@ -108,7 +109,9 @@ export const hospitalRouter = createTRPCRouter({
       // Derived
       const { toHeal, pools } = calcHowMuchToHeal(u, t, input.healPercentage);
       const chakraCost = calcHealthToChakra(u, toHeal);
-      const expGain = t.userId !== u.userId ? MEDNIN_HEAL_TO_EXP * toHeal : 0;
+      // Calculate experience gain, capped at 4 million
+      const rawExpGain = t.userId !== u.userId ? MEDNIN_HEAL_TO_EXP * toHeal : 0;
+      const expGain = rawExpGain > 0 ? Math.min(rawExpGain, MEDNIN_EXP_CAP - u.medicalExperience) : 0;
       // Guard
       if (u.isBanned) return errorResponse("You are banned");
       if (t.isBanned) return errorResponse("Target is banned");

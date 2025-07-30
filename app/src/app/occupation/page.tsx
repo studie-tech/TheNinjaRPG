@@ -27,6 +27,7 @@ import {
   IMG_OCCUPATION_CRAFTING,
   OCCUPATION_CHANGE_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
+import { canChangeContent } from "@/utils/permissions";
 
 /**
  * Occupation data
@@ -110,7 +111,7 @@ export default function Occupations() {
   };
 
   const topRightContent =
-    userData?.occupation && changeStatusData?.canChange ? (
+    userData?.occupation && (changeStatusData?.canChange || canChangeContent(userData?.role || "USER")) ? (
       <Dialog open={changeDialogOpen} onOpenChange={setChangeDialogOpen}>
         <DialogTrigger asChild>
           <Button>
@@ -159,7 +160,7 @@ export default function Occupations() {
                   </span>
                 </div>
               )}
-              {changeStatusData && !changeStatusData.canChange && (
+              {changeStatusData && !changeStatusData.canChange && !canChangeContent(userData?.role || "USER") && (
                 <div className="flex items-center gap-1.5 text-xs sm:text-sm text-orange-600 font-medium">
                   <span>You can change occupations in</span>
                   {userData.occupationSignupAt && (

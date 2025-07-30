@@ -56,7 +56,7 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { SENSEI_STUDENT_RYO_PER_MISSION } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
-import { ERRANDS_PER_DAY, MEDICAL_MISSIONS_PER_DAY } from "@/drizzle/constants";
+import { ERRANDS_PER_DAY, MEDICAL_MISSIONS_PER_DAY, MEDNIN_EXP_CAP } from "@/drizzle/constants";
 import { questFilteringSchema } from "@/validators/quest";
 import type { QuestConsequence } from "@/libs/quest";
 import {
@@ -1236,6 +1236,13 @@ export const updateRewards = async (info: {
 
   // Update userdata
   const getNewRank = rewards.reward_rank !== "NONE";
+  
+  // Cap medical experience at 4 million
+  const cappedMedicalExp = Math.min(
+    user.medicalExperience + rewards.reward_medical_experience,
+    MEDNIN_EXP_CAP
+  );
+  
   const updatedUserData: Record<string, unknown> = {
     questData: user.questData,
     money: user.money + rewards.reward_money,
@@ -1244,7 +1251,7 @@ export const updateRewards = async (info: {
     villagePrestige: user.villagePrestige + rewards.reward_prestige,
     reputationPoints: user.reputationPoints + rewards.reward_reputation,
     reputationPointsTotal: user.reputationPointsTotal + rewards.reward_reputation,
-    medicalExperience: user.medicalExperience + rewards.reward_medical_experience,
+    medicalExperience: cappedMedicalExp,
     huntingExperience: user.huntingExperience + rewards.reward_hunting_experience,
     craftingExperience: user.craftingExperience + rewards.reward_crafting_experience,
     gatheringExperience: user.gatheringExperience + rewards.reward_gathering_experience,

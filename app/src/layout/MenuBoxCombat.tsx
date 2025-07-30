@@ -105,9 +105,24 @@ const MenuBoxCombat: React.FC = () => {
         </Popover>
       )}
       {battleUser?.keystoneName && (
-        <div className="flex flex-row items-center">
-          <Gem className="h-6 w-6 mr-2" /> {battleUser.keystoneName}
-        </div>
+        <Popover>
+          <PopoverTrigger>
+            <div className="flex flex-row items-center hover:text-orange-500 hover:cursor-pointer">
+              <Gem className="h-6 w-6 mr-2" /> {battleUser.keystoneName}
+            </div>
+          </PopoverTrigger>
+          <PopoverContent className="w-[320px]">
+            <div className="p-4">
+              {battleUser.keystoneItem && (
+                <ItemWithEffects
+                  item={battleUser.keystoneItem}
+                  key={battleUser.keystoneItem.id}
+                  hideDetails
+                />
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       )}
       {/* Active Effects on opponent */}
       {battle?.usersEffects && (

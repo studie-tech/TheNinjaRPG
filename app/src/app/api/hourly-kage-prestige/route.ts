@@ -11,6 +11,7 @@ import {
 } from "@/drizzle/constants";
 import { cookies } from "next/headers";
 import { calculateDailyLockedTime } from "@/utils/kage";
+import { fetchActiveWars } from "@/server/api/routers/war";
 
 const ENDPOINT_NAME = "hourly-kage-prestige";
 
@@ -26,21 +27,27 @@ export async function GET() {
     const now = new Date();
 
     // Single query to fetch villages with closed challenges and their kage user data
-    const kages = await drizzleDB
-      .select({
-        villageId: village.id,
-        userId: userData.userId,
-        villagePrestige: userData.villagePrestige,
-      })
-      .from(village)
-      .innerJoin(userData, eq(userData.userId, village.kageId))
-      .where(and(eq(village.openForChallenges, false), eq(userData.isAi, false)));
+    const [kages, activeWars] = await Promise.all([
+      drizzleDB
+        .select({
+          villageId: village.id,
+          userId: userData.userId,
+          villagePrestige: userData.villagePrestige,
+        })
+        .from(village)
+        .innerJoin(userData, eq(userData.userId, village.kageId))
+        .where(and(eq(village.openForChallenges, false), eq(userData.isAi, false))),
+      fetchActiveWars(drizzleDB),
+    ]);
 
     const kageIds = kages.map((k) => k.userId);
 
     if (kageIds.length > 0) {
       // Calculate daily locked time for all kages in bulk
       const lockedTimeRecord = await calculateDailyLockedTime(drizzleDB, kageIds);
+
+      // Fetch all active wars to check for war status
+      const activeVillageWars = activeWars.filter((w) => w.type === "VILLAGE_WAR");
 
       const updatePromises: Promise<unknown>[] = [];
       const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
@@ -49,8 +56,15 @@ export async function GET() {
       for (const kage of kages) {
         const dailyLockedTimeSeconds = lockedTimeRecord?.[kage.userId] ?? 0;
 
-        if (dailyLockedTimeSeconds >= maxDailySeconds) {
-          // Auto-unlock challenges
+        // Check if this village is involved in an active village war
+        const isVillageAtWar = activeVillageWars.some(
+          (w) =>
+            w.attackerVillageId === kage.villageId ||
+            w.defenderVillageId === kage.villageId,
+        );
+
+        if (dailyLockedTimeSeconds >= maxDailySeconds || isVillageAtWar) {
+          // Auto-unlock challenges due to daily limit or active war
           updatePromises.push(
             drizzleDB
               .update(village)
@@ -61,9 +75,6 @@ export async function GET() {
               .where(eq(village.id, kage.villageId)),
           );
 
-          console.log(
-            `Auto-unlocked challenges for village ${kage.villageId} after kage ${kage.userId} reached daily limit`,
-          );
           continue; // Skip prestige penalty for this kage
         }
 

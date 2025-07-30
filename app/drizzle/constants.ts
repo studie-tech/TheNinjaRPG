@@ -291,6 +291,7 @@ export const AttackMethods = [
   "AOE_CIRCLE_SPAWN",
   "AOE_LINE_SHOOT",
   "AOE_WALL_SHOOT",
+  "AOE_LARGE_WALL_SHOOT",
   "AOE_CIRCLE_SHOOT",
   "AOE_SPIRAL_SHOOT",
 ] as const;
@@ -628,6 +629,10 @@ export const MEDNIN_REQUIRED_EXP: Record<MEDNIN_RANK, number> = {
   MASTER: 400000,
   LEGENDARY: 600000,
 };
+export const MEDNIN_EXP_CAP = 4000000; // 4 million medical experience cap
+export const MEDNIN_EXP_PER_IMPROVEMENT = 340000; // 340k exp per improvement
+export const MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT = 0.01; // 0.01 reduction per improvement
+export const MEDNIN_MIN_CHAKRA_FACTOR = 0.05; // Minimum chakra factor
 
 // Hunting config
 export const HUNTING_RANKS = [
@@ -968,16 +973,16 @@ export const KAGE_CHALLENGE_SECS = KAGE_CHALLENGE_MINS * 60; // 10 minutes for a
 export const KAGE_CHALLENGE_TIMEOUT_MINS = 30; // Timeout for PvP kage battle
 export const KAGE_DAILY_PRESTIGE_LOSS = 500; // Kage prestige loss
 export const KAGE_DEFAULT_PRESTIGE = 5000; // Starting prestige of kage
-export const KAGE_DELAY_SECS = 5 * 24 * 3600; // Delay before kage can perform actions (5 days)
+export const KAGE_DELAY_SECS = 3 * 24 * 3600; // Delay before kage can perform actions (3 days)
 export const KAGE_ELDER_MIN_DAYS = 100; // minimum days in village to be elder
 export const KAGE_REQUESTS_SHOW_SECONDS = 24 * 60 * 60; // Show requests for 24 hours
 export const KAGE_MAX_DAILIES = 3;
 export const KAGE_MAX_ELDERS = 3;
 export const KAGE_MAX_WEEKLY_PRESTIGE_SEND = 6000; // Maximum weekly prestige send from elders
-export const KAGE_MIN_DAYS_IN_VILLAGE = 40; // minimum days in village to become kage
+export const KAGE_MIN_DAYS_IN_VILLAGE = 20; // minimum days in village to become kage
 export const KAGE_MIN_PRESTIGE = 10000; // Remove kage if below
 export const KAGE_PRESTIGE_COST = 10000; // Cost of failed challenge
-export const KAGE_PRESTIGE_REQUIREMENT = 30000; // To challeng kage
+export const KAGE_PRESTIGE_REQUIREMENT = 100000; // To challeng kage
 export const KAGE_RANK_REQUIREMENT = "JONIN";
 export const KAGE_WAR_DECLARE_COST = 10000; // Declare war cost
 export const KAGE_CHALLENGE_REJECT_COST = 10000; // Cost of rejecting a challenge
