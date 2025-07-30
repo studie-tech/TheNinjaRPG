@@ -156,7 +156,7 @@ export const copy = (
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
-      const excludedFromTypes = ["bloodline", "armor", "item", "village"];
+      const excludedFromTypes = ["bloodline", "armor", "item", "village", "skill"];
       
       const positiveEffects = usersEffects.filter(
         (e) => e.targetId === target.userId && 

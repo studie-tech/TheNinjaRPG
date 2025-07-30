@@ -591,7 +591,7 @@ export default function OccupationCrafting() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
                     <Badge variant="outline" className="mb-2">
-                      Novice (0-{CRAFTING_REQUIRED_EXP.APPRENTICE.toLocaleString()} exp)
+                      Novice (0-{(CRAFTING_REQUIRED_EXP.APPRENTICE - 1).toLocaleString()} exp)
                     </Badge>
                     <ul className="space-y-1 text-muted-foreground">
                       <li>• Common: {CRAFTING_TIMES_MINS.NOVICE.COMMON} minutes</li>
@@ -601,7 +601,7 @@ export default function OccupationCrafting() {
                   <div>
                     <Badge variant="outline" className="mb-2">
                       Apprentice ({CRAFTING_REQUIRED_EXP.APPRENTICE.toLocaleString()}-
-                      {CRAFTING_REQUIRED_EXP.MASTER.toLocaleString()} exp)
+                      {(CRAFTING_REQUIRED_EXP.MASTER - 1).toLocaleString()} exp)
                     </Badge>
                     <ul className="space-y-1 text-muted-foreground">
                       <li>• Common: {CRAFTING_TIMES_MINS.APPRENTICE.COMMON} minutes</li>
@@ -612,7 +612,7 @@ export default function OccupationCrafting() {
                   <div>
                     <Badge variant="outline" className="mb-2">
                       Master ({CRAFTING_REQUIRED_EXP.MASTER.toLocaleString()}-
-                      {CRAFTING_REQUIRED_EXP.FORGEMASTER.toLocaleString()} exp)
+                      {(CRAFTING_REQUIRED_EXP.FORGEMASTER - 1).toLocaleString()} exp)
                     </Badge>
                     <ul className="space-y-1 text-muted-foreground">
                       <li>• Common: {CRAFTING_TIMES_MINS.MASTER.COMMON} minutes</li>
