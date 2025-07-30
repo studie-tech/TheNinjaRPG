@@ -38,6 +38,7 @@ import {
   SHRINE_BOOST_PERC,
   SHRINE_WEEKLY_MAINTENANCE_COST,
   SHRINE_AI_UNLOCK_COST,
+  SHRINE_UPGRADE_COST,
   SHRINE_MAX_AI_ASSIGNMENTS,
 } from "@/drizzle/constants";
 import { getTimeLeftStr, getDaysHoursMinutesSeconds } from "@/utils/time";
@@ -141,6 +142,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
         showMutationToast(res);
         void utils.travel.getSectorData.invalidate();
         void utils.shrine.getCapturedSectors.invalidate();
+        void utils.profile.getUser.invalidate();
       },
     });
 
@@ -176,7 +178,6 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
     { key: "sector", header: "Sector", type: "number" },
     { key: "shrineLevel", header: "Level", type: "number" },
     { key: "health", header: "HP", type: "jsx" },
-    { key: "capturedAt", header: "Captured", type: "time_passed" },
   ];
 
   if (isKage) {
@@ -224,16 +225,26 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
       capturedAt: shrine.capturedAt ? new Date(shrine.capturedAt) : new Date(),
       action: isKage ? (
         shrine.shrineLevel < SHRINE_MAX_LEVEL ? (
-          <Button
-            size="sm"
-            disabled={isUpgrading}
-            onClick={(e) => {
-              e.stopPropagation();
-              upgradeShrine({ sectorNumber: shrine.sector });
-            }}
-          >
-            Upgrade to L{shrine.shrineLevel + 1}
-          </Button>
+          user.village?.tokens !== undefined &&
+          user.village.tokens < SHRINE_UPGRADE_COST ? (
+            <div>
+              <Badge variant="destructive">Insufficient</Badge>
+              <p className="text-sm text-muted-foreground">
+                {SHRINE_UPGRADE_COST.toLocaleString()} tokens
+              </p>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              disabled={isUpgrading}
+              onClick={(e) => {
+                e.stopPropagation();
+                upgradeShrine({ sectorNumber: shrine.sector });
+              }}
+            >
+              Upgrade to L{shrine.shrineLevel + 1}
+            </Button>
+          )
         ) : (
           <Badge variant="secondary">Max</Badge>
         )

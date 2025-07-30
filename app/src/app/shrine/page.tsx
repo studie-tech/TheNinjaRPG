@@ -160,8 +160,7 @@ const WarCard = ({
 }) => {
   const isUserWar =
     war.attackerVillageId === villageId || war.defenderVillageId === villageId;
-  const canAttack =
-    isUserWar && war.shrineHp > 0 && war.defenderVillageId === VILLAGE_SYNDICATE_ID;
+  const canAttack = isUserWar && war.shrineHp > 0;
 
   return (
     <div className="flex flex-col items-center gap-4 p-4">
@@ -265,6 +264,12 @@ const WarCard = ({
             <Link href="/travel">
               <Button>Travel to Village</Button>
             </Link>
+          </div>
+        )}
+        {canAttack && (
+          <div className="space-y-4 mt-4 text-muted-foreground">
+            In order to attack the shrine, you can either attack it directly, or kill
+            villages of the defending village.
           </div>
         )}
       </div>

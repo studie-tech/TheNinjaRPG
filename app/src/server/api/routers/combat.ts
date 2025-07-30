@@ -49,10 +49,10 @@ import { canAccessStructure } from "@/utils/village";
 import { fetchSectorVillage } from "@/routers/village";
 import { fetchAiProfileById } from "@/routers/ai";
 import { getBattleGrid } from "@/libs/combat/util";
-import { BATTLE_ARENA_DAILY_LIMIT, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { BATTLE_ARENA_DAILY_LIMIT } from "@/drizzle/constants";
 import { BattleTypes } from "@/drizzle/constants";
 import { PvpBattleTypes } from "@/drizzle/constants";
-import { backgroundSchema } from "@/drizzle/schema";
+import { backgroundSchema, sector } from "@/drizzle/schema";
 import type { RankedLoadout } from "@/drizzle/schema";
 import type { BattleType } from "@/drizzle/constants";
 import type { BattleUserState, StatSchemaType } from "@/libs/combat/types";
@@ -61,7 +61,6 @@ import type { ActionEffect } from "@/libs/combat/types";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
 import { IMG_BG_FOREST } from "@/drizzle/constants";
-import { flushSafe } from "@/app/api/trpc/[trpc]/route";
 import type { ZodBgSchemaType } from "@/validators/backgroundSchema";
 
 // Debug flag when testing battle
@@ -693,7 +692,7 @@ export const combatRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information
-      const [{ user }, warData] = await Promise.all([
+      const [{ user }, warData, sectorData, shrineAis] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -702,8 +701,16 @@ export const combatRouter = createTRPCRouter({
           where: and(
             eq(war.sector, input.sector),
             eq(war.status, "ACTIVE"),
-            eq(war.defenderVillageId, VILLAGE_SYNDICATE_ID),
+            eq(war.type, "SECTOR_WAR"),
           ),
+        }),
+        ctx.drizzle.query.sector.findFirst({
+          where: eq(sector.sector, input.sector),
+          with: { village: true },
+        }),
+        ctx.drizzle.query.userData.findMany({
+          where: and(eq(userData.isAi, true), eq(userData.inShrines, true)),
+          columns: { userId: true },
         }),
       ]);
 
@@ -713,17 +720,26 @@ export const combatRouter = createTRPCRouter({
       // Check that user was found
       if (!user) return errorResponse("User not found");
       if (user.isBanned) return errorResponse("Cannot attack shrine while banned");
+      if (!sectorData) return errorResponse("Sector data could not be found");
       if (user.sector !== input.sector)
         return errorResponse("Not in the correct sector");
-      if (!userWar)
-        return errorResponse("You are not in an AI shrine war in this sector");
+      if (!userWar) return errorResponse("There is no sector war for this sector");
+
+      // Determine AIs to defend the shrine
+      const assignedAis = sectorData.village?.shrineSettings?.activeAiIds || [];
+      const validAis = shrineAis.filter((ai) => assignedAis.includes(ai.userId));
+      const targetIds =
+        validAis.length > 0
+          ? validAis.map((ai) => ai.userId)
+          : ["MJMzOE67Cx2YP3NX8SAbh"];
 
       // Return battle
       return await initiateBattle(
         {
           sector: input.sector,
           userIds: [user.userId],
-          targetIds: ["MJMzOE67Cx2YP3NX8SAbh"],
+          targetIds: targetIds,
+          forceDefenderVillageId: userWar.defenderVillageId,
           client: ctx.drizzle,
           asset: "arena",
         },
@@ -839,6 +855,7 @@ export const initiateBattle = async (
     targetStatDistribution?: StatSchemaType;
     scaleTarget?: boolean;
     forceLoadouts?: RankedLoadout[];
+    forceDefenderVillageId?: string;
     asset?: "ocean" | "ground" | "dessert" | "ice" | "arena" | "default";
     forceKeepPools?: boolean;
   },
@@ -1062,6 +1079,11 @@ export const initiateBattle = async (
     // If user is banned
     if (user.isBanned) return { success: false, message: `${user.username} is banned` };
 
+    // Force defender village id
+    if (info?.forceDefenderVillageId && targetIds.includes(user.userId)) {
+      user.villageId = info.forceDefenderVillageId;
+    }
+
     // Check if user is asleep
     const QUEUED_BATTLES = ["RANKED_PVP", "CLAN_BATTLE"];
     if (
@@ -1154,6 +1176,7 @@ export const initiateBattle = async (
     hide: false,
     leftSideUserIds: userIds,
   });
+  usersState.forEach((u) => (u.isSummon = false));
 
   // Set attacker to be the agressor
   if (usersState[0]) usersState[0].isAggressor = true;
