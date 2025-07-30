@@ -85,6 +85,7 @@ import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { capUserStats } from "@/libs/profile";
 import { calcActiveUserRegen } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
+import { getShrineBoost } from "@/utils/village";
 import { RYO_CAP } from "@/drizzle/constants";
 import { USER_CAPS } from "@/drizzle/constants";
 import { getReducedGainsDays } from "@/libs/train";
@@ -92,6 +93,7 @@ import { calculateContentDiff } from "@/utils/diff";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { ACTIVE_VOTING_SITES } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { SHRINE_BOOST_TYPES } from "@/drizzle/constants";
 import { KAGE_MIN_PRESTIGE } from "@/drizzle/constants";
 import { KAGE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
 import { ALLIANCEHALL_LONG, ALLIANCEHALL_LAT } from "@/libs/travel/constants";
@@ -375,16 +377,18 @@ export const profileRouter = createTRPCRouter({
     if (trainingBoost) {
       notifications.push({
         href: "/traininggrounds",
-        name: `${trainingBoost.value}X gains | ${trainingBoost.daysLeft} days`,
+        name: `Global: ${trainingBoost.value}X gains | ${trainingBoost.daysLeft} days`,
         color: "green",
+        group: "Active boosts",
       });
     }
     const regenBoost = getGameSettingBoost("regenGainMultiplier", settings);
     if (regenBoost) {
       notifications.push({
         href: "/profile",
-        name: `${regenBoost.value}X regen | ${regenBoost.daysLeft} days`,
+        name: `Global: ${regenBoost.value}X regen | ${regenBoost.daysLeft} days`,
         color: "green",
+        group: "Active boosts",
       });
     }
     // User specific
@@ -396,8 +400,9 @@ export const profileRouter = createTRPCRouter({
       if (warRegenBoost) {
         notifications.push({
           href: "/profile",
-          name: `+${warRegenBoost.value}% regen | ${warRegenBoost.daysLeft} days`,
+          name: `War: +${warRegenBoost.value}% regen | ${warRegenBoost.daysLeft} days`,
           color: "green",
+          group: "Active boosts",
         });
       }
       if (!warRegenSetting) {
@@ -416,8 +421,9 @@ export const profileRouter = createTRPCRouter({
       if (warTrainingBoost) {
         notifications.push({
           href: "/profile",
-          name: `+${warTrainingBoost.value}% gains | ${warTrainingBoost.daysLeft} days`,
+          name: `War: +${warTrainingBoost.value}% gains | ${warTrainingBoost.daysLeft} days`,
           color: "green",
+          group: "Active boosts",
         });
       }
       if (!warTrainingSetting) {
@@ -426,6 +432,23 @@ export const profileRouter = createTRPCRouter({
           name: warTrainingName,
           value: 0,
           time: new Date(),
+        });
+      }
+
+      // Shrine boosts
+      const shrineBoosts = user.village?.shrineSettings?.activeBoosts;
+      if (shrineBoosts) {
+        const sectors = user.village?.sectors?.length ?? 0;
+        SHRINE_BOOST_TYPES.forEach((boostType) => {
+          const boost = getShrineBoost(sectors, boostType, user.village) * 100;
+          if (boost > 0) {
+            notifications.push({
+              href: "/shrine",
+              name: `Shrine: +${boost}% ${boostType} gains`,
+              color: "green",
+              group: "Active boosts",
+            });
+          }
         });
       }
 

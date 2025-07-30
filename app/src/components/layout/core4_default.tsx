@@ -38,6 +38,8 @@ import {
 import { SiGithub, SiDiscord } from "@icons-pack/react-simple-icons";
 import { api } from "@/app/_trpc/client";
 import { useUser } from "@clerk/nextjs";
+import { groupBy } from "@/utils/grouping";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getCurrentSeason } from "@/utils/time";
 import { showMutationToast } from "@/libs/toast";
 import Tutorial from "@/layout/Tutorial";
@@ -762,27 +764,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
 
           {/* MOBILE NOTIFICATIONS */}
           <div className="absolute top-[75px] right-0 left-0 flex flex-row justify-end md:hidden p-1 gap-2">
-            {pathname !== "/combat" &&
-              shownNotifications?.map((notification, i) => (
-                <Link key={i} href={notification.href}>
-                  <div
-                    className={`flex flex-row text-xs items-center rounded-lg border-2 border-slate-800 py-[1px] px-3 hover:opacity-70 ${
-                      notification.color
-                        ? `bg-${notification.color}-600`
-                        : "bg-slate-500"
-                    }`}
-                  >
-                    {notification.color === "red" && (
-                      <ShieldAlert className="mr-1 h-5 w-5" />
-                    )}
-                    {notification.color === "blue" && <Info className="mr-1 h-5 w-5" />}
-                    {notification.color === "green" && (
-                      <ShieldCheck className="mr-1 h-5 w-5" />
-                    )}
-                    {notification.name}
-                  </div>
-                </Link>
-              ))}
+            {pathname !== "/combat" && (
+              <NotificationList notifications={shownNotifications} layout="mobile" />
+            )}
           </div>
           {/* <div className="p-3 pt-24 min-h-[1200px] bg-background bg-opacity-50">
           {props.children}
@@ -792,8 +776,118 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
     </>
   );
 };
-
 export default LayoutCore4;
+
+/**
+ * Reusable component for rendering notifications with grouping support
+ */
+interface NotificationListProps {
+  notifications?: NavBarDropdownLink[];
+  layout: "desktop" | "mobile";
+  className?: string;
+}
+
+const NotificationList: React.FC<NotificationListProps> = ({
+  notifications,
+  layout,
+  className = "",
+}) => {
+  if (!notifications || notifications.length === 0) return null;
+
+  // Separate grouped and ungrouped notifications
+  const grouped = notifications.filter((n) => n.group);
+  const ungrouped = notifications.filter((n) => !n.group);
+
+  // Group the grouped notifications by their group field
+  const groupedByCategory = groupBy(grouped, "group");
+
+  // Render individual notification
+  const renderNotification = (
+    notification: NavBarDropdownLink,
+    key: string,
+    isInPopover = false,
+  ) => (
+    <Link key={key} href={notification.href}>
+      <div
+        className={`flex flex-row items-center rounded-lg border-2 border-slate-800 hover:opacity-70 ${
+          layout === "mobile"
+            ? "text-xs py-[1px] px-3"
+            : "text-xs lg:text-base py-[1px] pl-3"
+        } ${notification.color ? `bg-${notification.color}-600` : "bg-slate-500"} ${
+          isInPopover ? "border border-slate-600 py-2 px-3" : ""
+        }`}
+      >
+        {notification.color === "red" && (
+          <ShieldAlert className={`mr-1 ${isInPopover ? "h-4 w-4 mr-2" : "h-5 w-5"}`} />
+        )}
+        {notification.color === "blue" && (
+          <Info className={`mr-1 ${isInPopover ? "h-4 w-4 mr-2" : "h-5 w-5"}`} />
+        )}
+        {notification.color === "green" && (
+          <ShieldCheck className={`mr-1 ${isInPopover ? "h-4 w-4 mr-2" : "h-5 w-5"}`} />
+        )}
+        <span className={isInPopover ? "text-white" : ""}>{notification.name}</span>
+      </div>
+    </Link>
+  );
+
+  // Render ungrouped notifications
+  const ungroupedElements = ungrouped.map((notification, i) =>
+    renderNotification(notification, `ungrouped-${i}`),
+  );
+
+  // Render grouped notifications
+  const groupedElements = Array.from(groupedByCategory.entries())
+    .map(([group, groupNotifications]) => {
+      const firstNotification = groupNotifications[0];
+      const count = groupNotifications.length;
+
+      if (!firstNotification) return null;
+
+      // For desktop, show popover with all notifications
+      return (
+        <Popover key={`group-${group}`}>
+          <PopoverTrigger asChild>
+            <div
+              className={`flex flex-row text-xs lg:text-base items-center rounded-lg border-2 border-slate-800 py-[1px] pl-3 hover:opacity-70 cursor-pointer ${
+                firstNotification.color
+                  ? `bg-${firstNotification.color}-600`
+                  : "bg-slate-500"
+              }`}
+            >
+              {firstNotification.color === "red" && (
+                <ShieldAlert className="mr-1 h-5 w-5" />
+              )}
+              {firstNotification.color === "blue" && <Info className="mr-1 h-5 w-5" />}
+              {firstNotification.color === "green" && (
+                <ShieldCheck className="mr-1 h-5 w-5" />
+              )}
+              {group} ({count})
+            </div>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 p-0">
+            <div className="p-4">
+              <h4 className="font-semibold text-sm mb-3">{group}</h4>
+              <div className="flex flex-col gap-1">
+                {groupNotifications.map((notification, i) =>
+                  renderNotification(notification, `${group}-${i}`, true),
+                )}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+      );
+    })
+    .filter(Boolean);
+
+  const allElements = [...ungroupedElements, ...groupedElements];
+
+  if (layout === "mobile") {
+    return <>{allElements}</>;
+  }
+
+  return <ul className={`grid grid-cols-1 gap-[1px] ${className}`}>{allElements}</ul>;
+};
 
 /**
  * Show strongest users
@@ -938,26 +1032,7 @@ const RightSideBar: React.FC<{
       {userData && notifications && notifications.length > 0 && (
         <>
           <SideBannerTitle>Notifications</SideBannerTitle>
-          <ul className="grid grid-cols-1 gap-[1px]">
-            {notifications.map((notification, i) => (
-              <Link key={i} href={notification.href}>
-                <div
-                  className={`flex flex-row text-xs lg:text-base items-center rounded-lg border-2 border-slate-800 py-[1px] pl-3 hover:opacity-70 ${
-                    notification.color ? `bg-${notification.color}-600` : "bg-slate-500"
-                  }`}
-                >
-                  {notification.color === "red" && (
-                    <ShieldAlert className="mr-1 h-5 w-5" />
-                  )}
-                  {notification.color === "blue" && <Info className="mr-1 h-5 w-5" />}
-                  {notification.color === "green" && (
-                    <ShieldCheck className="mr-1 h-5 w-5" />
-                  )}
-                  {notification.name}
-                </div>
-              </Link>
-            ))}
-          </ul>
+          <NotificationList notifications={notifications} layout="desktop" />
         </>
       )}
       <SideBannerTitle break={userData && notifications && notifications.length > 0}>

@@ -310,7 +310,15 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const level3Shrines = (capturedSectors || []).filter(
     (s) => s.shrineLevel === 3,
   ).length;
-  const activeBoosts = user.village?.shrineSettings?.activeBoosts;
+  const boostSettings = user.village?.shrineSettings?.activeBoosts;
+  const activeBoosts = Object.entries(boostSettings || {})
+    .map(([boostType, expiry]) => {
+      const secondsLeft = expiry
+        ? new Date(expiry).getTime() - new Date().getTime()
+        : 0;
+      return { boostType, secondsLeft };
+    })
+    .filter(({ secondsLeft }) => secondsLeft > 0);
   const boostPercentage = level3Shrines * SHRINE_BOOST_PERC;
 
   return (
@@ -322,12 +330,9 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
           <CardDescription>Currently active village-wide bonuses</CardDescription>
         </CardHeader>
         <CardContent>
-          {activeBoosts && Object.keys(activeBoosts).length > 0 ? (
+          {activeBoosts && activeBoosts.length > 0 ? (
             <div className="space-y-2">
-              {Object.entries(activeBoosts).map(([boostType, expiry]) => {
-                const secondsLeft = expiry
-                  ? new Date(expiry).getTime() - new Date().getTime()
-                  : 0;
+              {activeBoosts.map(({ boostType, secondsLeft }) => {
                 const timeLeft = getTimeLeftStr(
                   ...getDaysHoursMinutesSeconds(secondsLeft),
                 );
@@ -370,9 +375,9 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
               </p>
             ) : (
               SHRINE_BOOST_TYPES.map((boostType) => {
-                const currentlyActive =
-                  !!activeBoosts?.[boostType] &&
-                  new Date(activeBoosts[boostType]).getTime() > Date.now();
+                const currentlyActive = activeBoosts.some(
+                  ({ boostType: activeBoostType }) => activeBoostType === boostType,
+                );
 
                 return (
                   <Button

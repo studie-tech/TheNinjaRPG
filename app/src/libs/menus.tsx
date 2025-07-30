@@ -21,6 +21,7 @@ export interface NavBarDropdownLink {
   color?: "default" | "red" | "green" | "blue" | "toast" | "hidden";
   icon?: ReactNode;
   onClick?: () => Promise<void>;
+  group?: string;
   notificationCount?: number;
 }
 
