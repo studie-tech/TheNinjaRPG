@@ -99,11 +99,11 @@ export default function MissionHall({ userData }: MissionHallProps) {
             className="w-full"
             priority={true}
           />
-          <p className="text-center text-xl font-bold mb-4 p-3">
+          <p className="text-center text-base font-bold p-3">
             Missions are special assignments that advance the game&apos;s narrative.
             They can only be started here at the Mission Hall.
           </p>
-          <p className="text-center p-3 text-xl font-bold">
+          <p className="text-center p-3 text-md font-bold">
             Errands [{userData.dailyErrands} / {ERRANDS_PER_DAY}] -{" "}
             {capitalizeFirstLetter(classifier)}s [{userData.dailyMissions} /{" "}
             {MISSIONS_PER_DAY}] - Medical [{userData.dailyMedicalMissions} /{" "}
@@ -135,7 +135,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
             const capped = isErrand
               ? errandsLeft <= 0
               : isMedical
-                ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY || filtered.length === 0
+                ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY ||
+                  filtered.length === 0
                 : userData.dailyMissions >= MISSIONS_PER_DAY;
             // Checks
             const rankCheck = availableUserRanks.includes(setting.rank) || isErrand;

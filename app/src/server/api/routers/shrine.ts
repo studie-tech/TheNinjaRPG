@@ -10,6 +10,7 @@ import {
   SHRINE_MAX_LEVEL,
   SHRINE_WEEKLY_MAINTENANCE_COST,
   SHRINE_BOOST_TYPES,
+  SHRINE_BOOST_COST,
   WAR_SHRINE_MAINTENANCE_DAYS,
 } from "@/drizzle/constants";
 import { sector, village, userData } from "@/drizzle/schema";
@@ -141,6 +142,11 @@ export const shrineRouter = createTRPCRouter({
       if (level3Shrines.length === 0) {
         return errorResponse("Need at least one Level 3 shrine to activate boosts");
       }
+      if (user.village.tokens < SHRINE_BOOST_COST) {
+        return errorResponse(
+          `Need ${SHRINE_BOOST_COST.toLocaleString()} tokens to activate boosts`,
+        );
+      }
 
       // Check if boost is already active
       const currentBoosts = user.village.shrineSettings.activeBoosts || {};
@@ -160,6 +166,7 @@ export const shrineRouter = createTRPCRouter({
       await ctx.drizzle
         .update(village)
         .set({
+          tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
           shrineSettings: {
             ...user.village.shrineSettings,
             activeBoosts: updatedBoosts,

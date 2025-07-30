@@ -801,6 +801,16 @@ const NotificationList: React.FC<NotificationListProps> = ({
   // Group the grouped notifications by their group field
   const groupedByCategory = groupBy(grouped, "group");
 
+  // Mapping object for notification colors to prevent Tailwind purging
+  const notificationColorMap = {
+    default: "bg-slate-600",
+    red: "bg-red-600",
+    green: "bg-green-600",
+    blue: "bg-blue-600",
+    toast: "bg-orange-600",
+    hidden: "bg-gray-600",
+  } as const;
+
   // Render individual notification
   const renderNotification = (
     notification: NavBarDropdownLink,
@@ -813,7 +823,7 @@ const NotificationList: React.FC<NotificationListProps> = ({
           layout === "mobile"
             ? "text-xs py-[1px] px-3"
             : "text-xs lg:text-base py-[1px] pl-3"
-        } ${notification.color ? `bg-${notification.color}-600` : "bg-slate-500"} ${
+        } ${notification.color ? notificationColorMap[notification.color] : "bg-slate-500"} ${
           isInPopover ? "border border-slate-600 py-2 px-3" : ""
         }`}
       >

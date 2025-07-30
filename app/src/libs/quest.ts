@@ -206,13 +206,12 @@ export const getReward = (
       }
     });
     // Scale rewards
-    const missionLike = ["mission", "crime"].includes(
-      userQuest.quest.questType,
-    );
+    const missionLike = ["mission", "crime"].includes(userQuest.quest.questType);
     const factor =
       missionLike && user.dailyMissions > 9
         ? ADDITIONAL_MISSION_REWARD_MULTIPLIER
         : boostFactor;
+
     rawRewards.reward_money = Math.floor(rawRewards.reward_money * factor);
     rawRewards.reward_clanpoints = Math.floor(rawRewards.reward_clanpoints * factor);
     rawRewards.reward_anbupoints = Math.floor(rawRewards.reward_anbupoints * factor);

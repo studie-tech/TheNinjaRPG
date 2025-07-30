@@ -4,7 +4,6 @@ import { eq, lte } from "drizzle-orm";
 import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
 import { updateGameSetting } from "@/libs/gamesettings";
 import { cookies } from "next/headers";
-import { GSP_NO_RETURNED_VALUE } from "next/dist/lib/constants";
 
 const ENDPOINT_NAME = "shrine-maintenance";
 
