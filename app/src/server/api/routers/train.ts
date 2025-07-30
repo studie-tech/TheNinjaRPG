@@ -93,13 +93,12 @@ export const trainRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user, settings }, sectors] = await Promise.all([
+      const [{ user, settings }] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
           forceRegen: true,
         }),
-        countVillageSectors(ctx.drizzle, input.villageId),
       ]);
       // Guard
       if (!user) throw serverError("NOT_FOUND", "User not found");
@@ -114,6 +113,7 @@ export const trainRouter = createTRPCRouter({
         }
       }
       // Derived training gain
+      const sectors = user?.village?.sectors.length ?? 0;
       const shrineBoost = getShrineBoost(sectors, "Training", user.village);
       const trainSetting = getGameSettingBoost("trainingGainMultiplier", settings);
       const warSetting = getGameSettingBoost(`war-${user.villageId}-train`, settings);

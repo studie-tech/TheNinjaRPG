@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
+import Image from "next/image";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import StatusBar from "@/layout/StatusBar";
@@ -37,6 +38,7 @@ import {
   SHRINE_BOOST_PERC,
   SHRINE_WEEKLY_MAINTENANCE_COST,
   SHRINE_AI_UNLOCK_COST,
+  SHRINE_MAX_AI_ASSIGNMENTS,
 } from "@/drizzle/constants";
 import { getTimeLeftStr, getDaysHoursMinutesSeconds } from "@/utils/time";
 import { cn } from "src/libs/shadui";
@@ -431,8 +433,8 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
       },
     });
 
-  const { mutate: setVillageAi, isPending: isSettingAi } =
-    api.shrine.setVillageAiDefender.useMutation({
+  const { mutate: toggleVillageAi, isPending: isTogglingAi } =
+    api.shrine.toggleVillageAiDefender.useMutation({
       onSuccess: (res) => {
         showMutationToast(res);
         void utils.profile.getUser.invalidate();
@@ -470,7 +472,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
       {/* Currently Assigned AI - for everyone */}
       <Card>
         <CardHeader>
-          <CardTitle>Current Village Defender</CardTitle>
+          <CardTitle>Current Village Defenders</CardTitle>
           <CardDescription>
             {activeShrines.length > 0
               ? `Defending ${activeShrines.length} active shrine${activeShrines.length === 1 ? "" : "s"}`
@@ -546,54 +548,65 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
             </Card>
           )}
 
-          {/* Assign AI Defender */}
+          {/* Manage AI Defenders */}
           {activeShrines.length > 0 && unlockedAis.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Assign Village Defender</CardTitle>
+                <CardTitle>Manage Village Defenders</CardTitle>
                 <CardDescription>
-                  Choose from your unlocked AI defenders
+                  Toggle your unlocked AI defenders on/off
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Select value={selectedAiId} onValueChange={setSelectedAiId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select AI to assign" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {unlockedAis
-                      .filter((ai) => !currentVillageAiIds.includes(ai.userId))
-                      .map((ai) => (
-                        <SelectItem key={ai.userId} value={ai.userId}>
-                          {ai.username} (Level {ai.level})
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex flex-row gap-2">
-                  {assignedAis && assignedAis.length > 0 && (
-                    <Button
-                      className="w-full"
-                      disabled={isSettingAi}
-                      onClick={() => {
-                        setVillageAi({ aiId: null });
-                        setSelectedAiId("");
-                      }}
-                    >
-                      Reset Defenders
-                    </Button>
-                  )}
-                  <Button
-                    className="w-full"
-                    disabled={isSettingAi}
-                    onClick={() => {
-                      setVillageAi({ aiId: selectedAiId });
-                      setSelectedAiId("");
-                    }}
-                  >
-                    {isSettingAi ? "Assigning..." : "Assign Defender"}
-                  </Button>
+                <div className="grid gap-2">
+                  {unlockedAis.map((ai) => {
+                    const isAssigned = currentVillageAiIds.includes(ai.userId);
+                    const canAssign =
+                      !isAssigned &&
+                      currentVillageAiIds.length < SHRINE_MAX_AI_ASSIGNMENTS;
+
+                    return (
+                      <div
+                        key={ai.userId}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex-shrink-0">
+                            {ai.avatar && (
+                              <Image
+                                src={ai.avatar}
+                                alt={ai.username}
+                                width={32}
+                                height={32}
+                                className="w-8 h-8 rounded-full"
+                              />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium">{ai.username}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Level {ai.level}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant={isAssigned ? "default" : "outline"}
+                          size="sm"
+                          disabled={isTogglingAi || (!isAssigned && !canAssign)}
+                          onClick={() => toggleVillageAi({ aiId: ai.userId })}
+                        >
+                          {isTogglingAi ? "..." : isAssigned ? "Remove" : "Assign"}
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
+                {currentVillageAiIds.length >= SHRINE_MAX_AI_ASSIGNMENTS && (
+                  <p className="text-sm text-muted-foreground text-center">
+                    Maximum defenders assigned ({SHRINE_MAX_AI_ASSIGNMENTS}). Remove one
+                    to assign another.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}

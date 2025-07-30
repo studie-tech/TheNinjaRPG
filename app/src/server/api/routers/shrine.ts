@@ -236,9 +236,9 @@ export const shrineRouter = createTRPCRouter({
       };
     }),
 
-  // Set village-wide AI defender
-  setVillageAiDefender: protectedProcedure
-    .input(z.object({ aiId: z.string().nullable() }))
+  // Toggle village-wide AI defender
+  toggleVillageAiDefender: protectedProcedure
+    .input(z.object({ aiId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
@@ -247,8 +247,9 @@ export const shrineRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        input.aiId ? fetchUser(ctx.drizzle, input.aiId) : null,
+        fetchUser(ctx.drizzle, input.aiId),
       ]);
+
       // Guards
       if (!user) {
         return errorResponse("User not found");
@@ -257,32 +258,35 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("You must be in a village");
       }
       if (user.village.kageId !== user.userId) {
-        return errorResponse("Only the Kage can unlock AI defenders");
+        return errorResponse("Only the Kage can manage AI defenders");
       }
-      if (user.village.tokens < SHRINE_AI_UNLOCK_COST) {
-        return errorResponse(
-          `Need ${SHRINE_AI_UNLOCK_COST.toLocaleString()} tokens to unlock AI defender`,
-        );
+      if (!ai) {
+        return errorResponse("AI not found");
       }
+
       const currentUnlocks = user.village.shrineSettings.unlockedAiIds || [];
       const currentAssigns = user.village.shrineSettings.activeAiIds || [];
-      const newAssigns = [];
-      if (input.aiId) {
-        if (!ai) {
-          return errorResponse("AI not found");
-        }
-        if (!currentUnlocks.includes(input.aiId)) {
-          return errorResponse("AI defender not unlocked");
-        }
-        if (currentAssigns.includes(input.aiId)) {
-          return errorResponse("AI defender already assigned");
-        }
-        newAssigns.push(...currentAssigns, input.aiId);
-        if (newAssigns.length > SHRINE_MAX_AI_ASSIGNMENTS) {
+
+      if (!currentUnlocks.includes(input.aiId)) {
+        return errorResponse("AI defender not unlocked");
+      }
+
+      let newAssigns: string[];
+      let message: string;
+
+      if (currentAssigns.includes(input.aiId)) {
+        // Remove AI defender (deselect)
+        newAssigns = currentAssigns.filter((id) => id !== input.aiId);
+        message = `AI defender ${ai.username} removed from active defenders`;
+      } else {
+        // Add AI defender (select)
+        if (currentAssigns.length >= SHRINE_MAX_AI_ASSIGNMENTS) {
           return errorResponse(
             `Can only assign up to ${SHRINE_MAX_AI_ASSIGNMENTS} AI defenders`,
           );
         }
+        newAssigns = [...currentAssigns, input.aiId];
+        message = `AI defender ${ai.username} added to active defenders`;
       }
 
       // Run update mutation
@@ -296,7 +300,7 @@ export const shrineRouter = createTRPCRouter({
         })
         .where(eq(village.id, user.villageId));
 
-      return { success: true, message: "Village AI defender set successfully" };
+      return { success: true, message };
     }),
 
   // Weekly maintenance payment
