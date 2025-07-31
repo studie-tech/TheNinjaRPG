@@ -1122,7 +1122,7 @@ export const initiateBattle = async (
     }
 
     // If PvP rank, set pools to max & level to 100
-    if (battleType === "RANKED_PVP") {
+    if (battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING") {
       user.maxHealth = calcHP(100);
       user.maxChakra = calcSP(100);
       user.maxStamina = calcCP(100);
