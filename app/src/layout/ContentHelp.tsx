@@ -186,6 +186,15 @@ const renderHuntingTips = (quest: DeepPartial<ZodCombinedQuest>) => {
             <code className="bg-green-100 px-1 rounded">reward_hunter_items</code>{" "}
             either on the quest or objective to reward random drops based on hunting
             rank.
+            <br />
+            <br />
+            You can also set the{" "}
+            <code className="bg-green-100 px-1 rounded">
+              reward_hunter_items_ids
+            </code>{" "}
+            to reward randomly from a list of specific items. If{" "}
+            <code className="bg-green-100 px-1 rounded">reward_hunter_items_ids</code>{" "}
+            is not set, items will be selected from all hunter materials.
           </p>
         </div>
 
@@ -247,6 +256,17 @@ const renderGatheringTips = (quest: DeepPartial<ZodCombinedQuest>) => {
             <code className="bg-green-100 px-1 rounded">reward_gathering_items</code>{" "}
             either on the quest or objective to reward random drops based on gathering
             rank.
+            <br />
+            <br />
+            You can also set the{" "}
+            <code className="bg-green-100 px-1 rounded">
+              reward_gathering_items_ids
+            </code>{" "}
+            to reward randomly from a list of specific items. If{" "}
+            <code className="bg-green-100 px-1 rounded">
+              reward_gathering_items_ids
+            </code>{" "}
+            is not set, items will be selected from all gathering materials.
           </p>
         </div>
 

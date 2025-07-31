@@ -431,10 +431,18 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
     rewards.push(`${questReward.reward_gathering_experience} gathering experience`);
   }
   if (questReward.reward_hunter_items) {
-    rewards.push(`drop hunter materials`);
+    if (questReward.reward_hunter_items_ids.length > 0) {
+      rewards.push(`drop specific hunter materials`);
+    } else {
+      rewards.push(`drop any hunter materials`);
+    }
   }
   if (questReward.reward_gathering_items) {
-    rewards.push(`drop gathering materials`);
+    if (questReward.reward_gathering_items_ids.length > 0) {
+      rewards.push(`drop specific gathering materials`);
+    } else {
+      rewards.push(`drop any gathering materials`);
+    }
   }
   return rewards;
 };

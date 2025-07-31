@@ -84,11 +84,16 @@ type DroppedItem = { id: string; name: string; rarity: ItemRarity };
 export const getHuntingItemDrops = (
   huntingExperience: number,
   items: DroppedItem[],
+  validIds: string[] = [],
 ) => {
   const currentRank = getHuntingRank(huntingExperience);
   const rankChances = HUNTING_ITEM_DROP_CHANCES[currentRank];
   const drops: DroppedItem[] = [];
-  for (const item of items) {
+  const filteredItems =
+    validIds && validIds.length > 0
+      ? items.filter((item) => validIds.includes(item.id))
+      : items;
+  for (const item of filteredItems) {
     const chance = rankChances[item.rarity] / 100;
     if (chance > 0 && Math.random() < chance) {
       drops.push(item);

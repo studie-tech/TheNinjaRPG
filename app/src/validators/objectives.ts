@@ -77,7 +77,9 @@ export const idsWithNumberField = z
 
 export const rewardFields = {
   reward_hunter_items: z.boolean().default(false),
+  reward_hunter_items_ids: z.array(z.string()).default([]),
   reward_gathering_items: z.boolean().default(false),
+  reward_gathering_items_ids: z.array(z.string()).default([]),
   reward_seichi_silver: z.coerce.number().default(0),
   reward_money: z.coerce.number().default(0),
   reward_clanpoints: z.coerce.number().default(0),

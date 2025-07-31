@@ -301,6 +301,8 @@ export const collapseRewards = (
     reward_rank: "NONE",
     reward_hunter_items: false,
     reward_gathering_items: false,
+    reward_hunter_items_ids: [],
+    reward_gathering_items_ids: [],
   };
 
   rewards.forEach((reward) => {
@@ -327,6 +329,10 @@ export const collapseRewards = (
     if (reward.reward_gathering_items) {
       collapsed.reward_gathering_items = true;
     }
+
+    // Concatenate valid ids
+    collapsed.reward_hunter_items_ids.push(...reward.reward_hunter_items_ids);
+    collapsed.reward_gathering_items_ids.push(...reward.reward_gathering_items_ids);
 
     // Concatenate array rewards
     collapsed.reward_items.push(...reward.reward_items);

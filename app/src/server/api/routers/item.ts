@@ -48,7 +48,13 @@ import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/objectiv
 export const itemRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
     return await ctx.drizzle.query.item.findMany({
-      columns: { id: true, name: true, image: true },
+      columns: {
+        id: true,
+        name: true,
+        image: true,
+        canBeHunted: true,
+        canBeGathered: true,
+      },
       orderBy: (table, { asc }) => [asc(table.name)],
     });
   }),

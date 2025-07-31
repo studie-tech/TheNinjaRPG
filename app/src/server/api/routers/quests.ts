@@ -56,7 +56,11 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { SENSEI_STUDENT_RYO_PER_MISSION } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
-import { ERRANDS_PER_DAY, MEDICAL_MISSIONS_PER_DAY, MEDNIN_EXP_CAP } from "@/drizzle/constants";
+import {
+  ERRANDS_PER_DAY,
+  MEDICAL_MISSIONS_PER_DAY,
+  MEDNIN_EXP_CAP,
+} from "@/drizzle/constants";
 import { questFilteringSchema } from "@/validators/quest";
 import type { QuestConsequence } from "@/libs/quest";
 import {
@@ -816,6 +820,8 @@ export const questsRouter = createTRPCRouter({
             reward_rank: "NONE",
             reward_hunter_items: false,
             reward_gathering_items: false,
+            reward_hunter_items_ids: [],
+            reward_gathering_items_ids: [],
           },
         },
       });
@@ -1221,10 +1227,12 @@ export const updateRewards = async (info: {
   const droppedHunterItems = getHuntingItemDrops(
     user.huntingExperience,
     hunterItems || [],
+    rewards.reward_hunter_items_ids,
   );
   const droppedGatheringItems = getGatheringItemDrops(
     user.gatheringExperience,
     gatheringItems || [],
+    rewards.reward_gathering_items_ids,
   );
 
   // Total items to insert
@@ -1236,13 +1244,13 @@ export const updateRewards = async (info: {
 
   // Update userdata
   const getNewRank = rewards.reward_rank !== "NONE";
-  
+
   // Cap medical experience at 4 million
   const cappedMedicalExp = Math.min(
     user.medicalExperience + rewards.reward_medical_experience,
-    MEDNIN_EXP_CAP
+    MEDNIN_EXP_CAP,
   );
-  
+
   const updatedUserData: Record<string, unknown> = {
     questData: user.questData,
     money: user.money + rewards.reward_money,

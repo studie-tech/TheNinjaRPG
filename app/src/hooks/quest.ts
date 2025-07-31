@@ -147,7 +147,9 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
             reward_badges: data.reward_badges,
             reward_items: data.reward_items,
             reward_hunter_items: data.reward_hunter_items,
+            reward_hunter_items_ids: data.reward_hunter_items_ids,
             reward_gathering_items: data.reward_gathering_items,
+            reward_gathering_items_ids: data.reward_gathering_items_ids,
             reward_rank: data.reward_rank,
             reward_bloodlines: data.reward_bloodlines,
           },
@@ -258,6 +260,20 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   // Rewards
   formData.push({ id: "reward_hunter_items", type: "boolean" });
   formData.push({ id: "reward_gathering_items", type: "boolean" });
+  formData.push({
+    id: "reward_hunter_items_ids",
+    type: "db_values",
+    values: items?.filter((i) => i.canBeHunted) ?? [],
+    multiple: true,
+    label: "Valid Reward Hunter Items",
+  });
+  formData.push({
+    id: "reward_gathering_items_ids",
+    type: "db_values",
+    values: items?.filter((i) => i.canBeGathered) ?? [],
+    multiple: true,
+    label: "Valid Reward Gathering Items",
+  });
   formData.push({ id: "reward_money", type: "number" });
   formData.push({ id: "reward_seichi_silver", type: "number" });
   formData.push({ id: "reward_clanpoints", type: "number" });
