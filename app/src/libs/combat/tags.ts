@@ -157,16 +157,18 @@ export const copy = (
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
       const excludedFromTypes = ["bloodline", "armor", "item", "village", "skill"];
+      const allowedEffectTypes = ["increasedamagegiven", "increasestat", "decreasedamagetaken"];
       
       const positiveEffects = usersEffects.filter(
         (e) => e.targetId === target.userId && 
                isPositiveUserEffect(e) && 
-               !excludedFromTypes.includes(e.fromType || ""),
+               !excludedFromTypes.includes(e.fromType || "") &&
+               allowedEffectTypes.includes(e.type),
       );
       
       if (positiveEffects.length === 0) {
         return {
-          txt: `${user.username} tries to copy positive effects from ${target.username} but finds no positive effects to copy.`,
+          txt: `${user.username} tries to copy positive effects from ${target.username} but finds no copyable effects.`,
           color: "blue",
         };
       }
@@ -185,6 +187,10 @@ export const copy = (
           copiedEffect.targetId = user.userId;
           copiedEffect.creatorId = user.userId;
           copiedEffect.rounds = effect.rounds;
+          // Reset timing properties to make the copied effect behave as newly cast
+          copiedEffect.isNew = true;
+          copiedEffect.castThisRound = true;
+          copiedEffect.createdRound = effect.createdRound;
           usersEffects.push(copiedEffect);
           copiedCount++;
           
@@ -256,6 +262,10 @@ export const mirror = (
           mirroredEffect.targetId = target.userId;
           mirroredEffect.creatorId = user.userId;
           mirroredEffect.rounds = effect.rounds;
+          // Reset timing properties to make the mirrored effect behave as newly cast
+          mirroredEffect.isNew = true;
+          mirroredEffect.castThisRound = true;
+          mirroredEffect.createdRound = effect.createdRound;
           usersEffects.push(mirroredEffect);
           mirroredCount++;
           
