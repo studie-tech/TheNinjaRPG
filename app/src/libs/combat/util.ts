@@ -357,7 +357,20 @@ export const sortEffects = (
     "visual",
   ];
   if (ordered.includes(a.type) && ordered.includes(b.type)) {
-    return ordered.indexOf(a.type) > ordered.indexOf(b.type) ? 1 : -1;
+    const aIndex = ordered.indexOf(a.type);
+    const bIndex = ordered.indexOf(b.type);
+    
+    // If they're the same type, handle special ordering
+    if (aIndex === bIndex) {
+      // For decreasedamagetaken, sort static before percentage
+      if (a.type === "decreasedamagetaken" && b.type === "decreasedamagetaken") {
+        if (a.calculation === "static" && b.calculation === "percentage") return -1;
+        if (a.calculation === "percentage" && b.calculation === "static") return 1;
+      }
+      return 0; // Same type, same calculation, maintain original order
+    }
+    
+    return aIndex > bIndex ? 1 : -1;
   }
   return 0;
 };
