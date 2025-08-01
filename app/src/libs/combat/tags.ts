@@ -1403,7 +1403,12 @@ export const afterburn = (
                   ? consequence.damage
                   : power,
             ) * ratio;
-          consequence.afterburn = convert;
+          
+          // Add to existing afterburn damage (stacking) with 60% limit
+          const currentAfterburn = consequence.afterburn || 0;
+          const maxAfterburn = Math.floor(consequence.damage * 0.6); // 60% limit
+          const newAfterburn = Math.min(currentAfterburn + convert, maxAfterburn);
+          consequence.afterburn = newAfterburn;
         }
       }
     });
