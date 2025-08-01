@@ -1416,7 +1416,10 @@ export const processUsersForBattle = (info: {
     user.iAmHere = false;
 
     // Update user level to the effective level if he had leveled up (to combat level-holding, as some things are scaled based on level)
-    user.level = calcLevel(user.experience);
+    // Skip for ranked battles as they have their level set to 100
+    if (battleType !== "RANKED_SPARRING") {
+      user.level = calcLevel(user.experience);
+    }
 
     // Remember how much money this user had
     user.originalMoney = user.money;
