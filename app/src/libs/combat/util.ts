@@ -362,12 +362,38 @@ export const sortEffects = (
     
     // If they're the same type, handle special ordering
     if (aIndex === bIndex) {
-      // For decreasedamagetaken, sort static before percentage
+      // For damage reduction effects, sort static before percentage
       if (a.type === "decreasedamagetaken" && b.type === "decreasedamagetaken") {
         if (a.calculation === "static" && b.calculation === "percentage") return -1;
         if (a.calculation === "percentage" && b.calculation === "static") return 1;
       }
+      if (a.type === "decreasedamagegiven" && b.type === "decreasedamagegiven") {
+        if (a.calculation === "static" && b.calculation === "percentage") return -1;
+        if (a.calculation === "percentage" && b.calculation === "static") return 1;
+      }
       return 0; // Same type, same calculation, maintain original order
+    }
+    
+    // Special handling for damage reduction effects to ensure proper ordering
+    // We want: decreasedamagetaken(static) -> decreasedamagegiven(static) -> decreasedamagegiven(percentage) -> decreasedamagetaken(percentage)
+    if ((a.type === "decreasedamagetaken" && b.type === "decreasedamagegiven") ||
+        (a.type === "decreasedamagegiven" && b.type === "decreasedamagetaken")) {
+      
+      // If both are static, decreasedamagetaken comes first
+      if (a.calculation === "static" && b.calculation === "static") {
+        if (a.type === "decreasedamagetaken") return -1;
+        if (b.type === "decreasedamagetaken") return 1;
+      }
+      
+      // If both are percentage, decreasedamagegiven comes first
+      if (a.calculation === "percentage" && b.calculation === "percentage") {
+        if (a.type === "decreasedamagegiven") return -1;
+        if (b.type === "decreasedamagegiven") return 1;
+      }
+      
+      // If one is static and one is percentage, static comes first
+      if (a.calculation === "static" && b.calculation === "percentage") return -1;
+      if (a.calculation === "percentage" && b.calculation === "static") return 1;
     }
     
     return aIndex > bIndex ? 1 : -1;
