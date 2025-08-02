@@ -727,6 +727,7 @@ export const combatRouter = createTRPCRouter({
           battleType: userBattle.battleType,
           hide: false,
           isSummon: false,
+          processSummons: false,
         });
 
       // Mutate
@@ -1303,6 +1304,7 @@ export const initiateBattle = async (
     hide: false,
     leftSideUserIds: userIds,
     isSummon: false,
+    processSummons: false,
   });
 
   // Set attacker to be the agressor
@@ -1500,6 +1502,7 @@ export const processUsersForBattle = async (
     hide: boolean;
     leftSideUserIds?: string[];
     isSummon: boolean;
+    processSummons?: boolean;
   },
 ) => {
   // Destructure
@@ -1963,7 +1966,7 @@ export const processUsersForBattle = async (
 
   // If there are any summonAIs defined, then add them to usersState, but disable them
   const summonsToProcess = [...new Set(allSummons)];
-  if (summonsToProcess.length > 0) {
+  if ((info.processSummons !== false) && summonsToProcess.length > 0) {
     const summons = await client.query.userData.findMany({
       with: {
         bloodline: true,
@@ -1999,8 +2002,9 @@ export const processUsersForBattle = async (
           villages: info.villages,
           defaultProfile: info.defaultProfile,
           battleType: info.battleType,
-          hide: true,
+          hide: false,
           isSummon: true,
+          processSummons: false, // prevent infinite recursion
         });
       summonState.map((u) => (u.iAmHere = true));
       userEffects.push(...summonEffects);

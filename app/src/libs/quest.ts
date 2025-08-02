@@ -131,7 +131,7 @@ export const getReward = (
     const missionBoost = getShrineBoost(sectors, "Mission", user.village);
     let boostFactor = 1;
     if (userQuest?.quest.questType) {
-      if (["missions", "crimes"].includes(userQuest.quest.questType)) {
+      if (["mission", "crime", "medical"].includes(userQuest.quest.questType)) {
         boostFactor = 1 + missionBoost;
       } else if (userQuest.quest.questType === "errand") {
         boostFactor = 1 + errandsBoost;
@@ -210,10 +210,12 @@ export const getReward = (
     });
     // Scale rewards
     const missionLike = ["mission", "crime"].includes(userQuest.quest.questType);
-    const factor =
-      missionLike && user.dailyMissions > 9
-        ? ADDITIONAL_MISSION_REWARD_MULTIPLIER
-        : boostFactor;
+    let factor = boostFactor; // Start with shrine boost factor
+    
+    // Apply daily mission limit penalty if applicable (after 9 missions), but keep shrine boost
+    if (missionLike && user.dailyMissions > 9) {
+      factor = ADDITIONAL_MISSION_REWARD_MULTIPLIER * boostFactor;
+    }
 
     rawRewards.reward_money = Math.floor(rawRewards.reward_money * factor);
     rawRewards.reward_clanpoints = Math.floor(rawRewards.reward_clanpoints * factor);
