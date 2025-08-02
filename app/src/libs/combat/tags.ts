@@ -655,7 +655,16 @@ export const adjustDamageTaken = (
             effect.calculation === "percentage"
               ? (power / 100) * consequence.damage
               : power;
-          consequence.damage = consequence.damage + change * ratio;
+          
+          // Apply 60% cap for damage reduction (decreasedamagetaken)
+          if (effect.type === "decreasedamagetaken" && change < 0) {
+            const originalDamage = consequence.damage - change * ratio; // Calculate original damage before this effect
+            const maxReduction = originalDamage * 0.6; // 60% cap
+            const cappedChange = Math.max(change * ratio, -maxReduction);
+            consequence.damage = consequence.damage + cappedChange;
+          } else {
+            consequence.damage = consequence.damage + change * ratio;
+          }
         }
       }
     });
