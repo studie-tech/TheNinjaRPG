@@ -954,14 +954,19 @@ export const selectItemLoadout = async (
   // Then equip valid items from loadout
   const equipPromises = [];
   for (const itemEntry of validItemData) {
-    equipPromises.push(
-      client
-        .update(userItem)
-        .set({ equipped: itemEntry.slot })
-        .where(
-          and(eq(userItem.userId, user.userId), eq(userItem.itemId, itemEntry.itemId)),
-        ),
-    );
+    // Find the first available item with this itemId
+    const userItemToEquip = useritems.find(
+      (ui) => ui.itemId === itemEntry.itemId && ui.equipped === "NONE"
+    ) || useritems.find((ui) => ui.itemId === itemEntry.itemId);
+    
+    if (userItemToEquip) {
+      equipPromises.push(
+        client
+          .update(userItem)
+          .set({ equipped: itemEntry.slot })
+          .where(eq(userItem.id, userItemToEquip.id)),
+      );
+    }
   }
   // Execute all updates
   await Promise.all([
