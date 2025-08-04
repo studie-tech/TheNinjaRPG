@@ -14,7 +14,7 @@ import type { BattleType, LetterRank, StatType } from "@/drizzle/constants";
  * STATE HOOK
  */
 export const useFiltering = () => {
-  const [battleTypes, setBattleTypes] = useState<BattleType[]>([]);
+  const [battleTypes, setBattleTypes] = useState<BattleType[]>(["COMBAT", "SPARRING"]);
   const [minCount, setMinCount] = useState<number>(1);
   const [bloodlineRanks, setBloodlineRanks] = useState<LetterRank[]>([]);
   const [statClassifications, setStatClassifications] = useState<StatType[]>([]);
@@ -52,10 +52,18 @@ const BloodlineBalanceFiltering: React.FC<BloodlineBalanceFilteringProps> = (pro
     setStatClassifications,
   } = props.state;
 
+  // Count filters
+  const numBattleTypes = battleTypes.length;
+  const numBloodlineRanks = bloodlineRanks.length;
+  const numStatClassifications = statClassifications.length;
+  const numMinCount = minCount > 1 ? 1 : 0;
+  const numFilters =
+    numBattleTypes + numBloodlineRanks + numStatClassifications + numMinCount;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button>
+        <Button count={numFilters}>
           <Filter className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
           <p className="hidden sm:block">Filter</p>
         </Button>

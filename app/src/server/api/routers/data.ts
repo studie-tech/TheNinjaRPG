@@ -12,11 +12,16 @@ import {
   baseServerResponse,
   errorResponse,
 } from "../trpc";
-import { fetchJutsu } from "./jutsu";
-import { fetchBloodline } from "./bloodline";
-import { fetchItem } from "./item";
+import { fetchJutsu, jutsuDatabaseFilter } from "./jutsu";
+import { fetchBloodline, bloodlineDatabaseFilter } from "./bloodline";
+import { fetchItem, itemDatabaseFilter } from "./item";
 import { fetchUser } from "./profile";
 import { BattleTypes } from "@/drizzle/constants";
+import { jutsuFilteringSchema } from "@/validators/jutsu";
+import { itemFilteringSchema } from "@/validators/item";
+import { bloodlineFilteringSchema } from "@/validators/bloodline";
+import { fetchPublicUsers } from "@/routers/profile";
+import { getPublicUsersSchema } from "@/validators/user";
 import type {
   ItemType,
   LetterRank,
@@ -180,6 +185,7 @@ export const dataRouter = createTRPCRouter({
         battleTypes: z.array(z.enum(BattleTypes)).optional(),
         minCount: z.number().min(1).default(1),
         jutsuEffects: z.array(z.string()).optional(),
+        bloodlineIds: z.array(z.string()).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -203,6 +209,13 @@ export const dataRouter = createTRPCRouter({
                 sql`JSON_SEARCH(${jutsu.effects}, 'one', ${effect}, NULL, '$[*].type') IS NOT NULL`,
             ),
           ),
+        );
+      }
+
+      // Build bloodline filter if needed
+      if (input.bloodlineIds && input.bloodlineIds.length > 0) {
+        whereConditions.push(
+          inArray(dataBattleAction.relatedBloodlineId, input.bloodlineIds),
         );
       }
 
@@ -248,12 +261,155 @@ export const dataRouter = createTRPCRouter({
         equippedCount: equippedCountMap.get(item.jutsuId) || 0,
       }));
     }),
+  getJutsuEffectsBalanceStatistics: publicProcedure
+    .input(jutsuFilteringSchema)
+    .query(async ({ ctx, input }) => {
+      // Guard
+      const effects = input.effect;
+      if (!effects || effects.length === 0) {
+        return [];
+      }
+      // Build where conditions
+      const baseFilters = jutsuDatabaseFilter(input);
+      // Fetch results
+      const results = await ctx.drizzle.query.jutsu.findMany({
+        where: and(...baseFilters),
+        with: {
+          bloodline: {
+            columns: {
+              name: true,
+            },
+          },
+        },
+        columns: {
+          id: true,
+          name: true,
+          jutsuType: true,
+          cooldown: true,
+          requiredRank: true,
+          effects: true,
+        },
+      });
+      return results.map((jutsu) => ({
+        ...jutsu,
+        effects: jutsu.effects.filter((effect) => effects.includes(effect.type)),
+      }));
+    }),
+  getItemEffectsBalanceStatistics: publicProcedure
+    .input(itemFilteringSchema.omit({ limit: true }))
+    .query(async ({ ctx, input }) => {
+      // Guard
+      const effects = input.effect;
+      if (!effects || effects.length === 0) {
+        return [];
+      }
+      // Build where conditions
+      const baseFilters = itemDatabaseFilter(input);
+      // Fetch results
+      const results = await ctx.drizzle.query.item.findMany({
+        where: and(...baseFilters),
+        columns: {
+          id: true,
+          name: true,
+          itemType: true,
+          rarity: true,
+          slot: true,
+          effects: true,
+        },
+      });
+      return results.map((item) => ({
+        ...item,
+        effects: item.effects.filter((effect) => effects.includes(effect.type)),
+      }));
+    }),
+  getBloodlineEffectsBalanceStatistics: publicProcedure
+    .input(bloodlineFilteringSchema)
+    .query(async ({ ctx, input }) => {
+      // Guard
+      const effects = input.effect;
+      if (!effects || effects.length === 0) {
+        return [];
+      }
+      // Build where conditions
+      const baseFilters = bloodlineDatabaseFilter(input);
+      // Fetch results
+      const results = await ctx.drizzle.query.bloodline.findMany({
+        where: and(...baseFilters),
+        with: {
+          village: {
+            columns: {
+              name: true,
+            },
+          },
+        },
+        columns: {
+          id: true,
+          name: true,
+          rank: true,
+          statClassification: true,
+          effects: true,
+        },
+      });
+      return results.map((bloodline) => ({
+        ...bloodline,
+        effects: bloodline.effects.filter((effect) => effects.includes(effect.type)),
+      }));
+    }),
+  getAiEffectsBalanceStatistics: publicProcedure
+    .input(getPublicUsersSchema.extend({ effect: z.array(z.string()) }))
+    .query(async ({ ctx, input }) => {
+      // Use the existing fetchPublicUsers function with AI-specific modifications
+      const aiUsers = await fetchPublicUsers({
+        client: ctx.drizzle,
+        input,
+        includeEffects: true,
+      });
+
+      // Process results to extract effects
+      const results = aiUsers.data
+        .map((ai) => {
+          const aiEffects = "effects" in ai && ai.effects ? ai.effects : [];
+          const jutsuEffects =
+            "jutsus" in ai && ai.jutsus
+              ? ai.jutsus.flatMap((uj) =>
+                  "jutsu" in uj ? (uj.jutsu?.effects ?? []) : [],
+                )
+              : [];
+          const itemEffects =
+            "items" in ai && ai.items
+              ? ai.items.flatMap((ui) => ("item" in ui ? (ui.item?.effects ?? []) : []))
+              : [];
+          const effects = [
+            ...aiEffects.map((e) => ({ ...e, origin: "ai" })),
+            ...jutsuEffects.map((e) => ({ ...e, origin: "jutsu" })),
+            ...itemEffects.map((e) => ({ ...e, origin: "item" })),
+          ];
+          return effects
+            .filter((effect) => input.effect.includes(effect.type))
+            .map((effect) => ({
+              id: ai.userId,
+              name: ai.username,
+              rank: ai.rank,
+              level: ai.level,
+              origin: effect.origin,
+              villageId: ai.villageId,
+              effect: effect.type,
+              power: effect.power,
+              rounds: effect.rounds,
+              powerPerLevel: effect.powerPerLevel,
+            }));
+        })
+        .flat();
+
+      return results;
+    }),
   getItemBalanceStatistics: publicProcedure
     .input(
       z.object({
         battleTypes: z.array(z.enum(BattleTypes)).optional(),
         minCount: z.number().min(1).default(1),
         itemTypes: z.array(z.string()).optional(),
+        bloodlineIds: z.array(z.string()).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -271,6 +427,13 @@ export const dataRouter = createTRPCRouter({
       // Build item type filter if needed
       if (input.itemTypes && input.itemTypes.length > 0) {
         whereConditions.push(inArray(item.itemType, input.itemTypes as ItemType[]));
+      }
+
+      // Build bloodline filter if needed
+      if (input.bloodlineIds && input.bloodlineIds.length > 0) {
+        whereConditions.push(
+          inArray(dataBattleAction.relatedBloodlineId, input.bloodlineIds),
+        );
       }
 
       // Run equippedCounts and usage queries in parallel for efficiency

@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
   AttackMethods,
   AttackTargets,
@@ -71,6 +72,40 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
   } = props.state;
   const { name, effect, hidden } = props.state;
 
+  // Calculate the number of applied filters
+  const nameFilter = name.length > 0 ? 1 : 0;
+  const effectFilter = effect.length;
+  const itemTypeFilter = itemType !== "ANY" ? 1 : 0;
+  const rarityFilter = itemRarity !== "ANY" ? 1 : 0;
+  const slotFilter = slot !== "ANY" ? 1 : 0;
+  const targetFilter = target !== "ANY" ? 1 : 0;
+  const methodFilter = method !== "ANY" ? 1 : 0;
+  const eventItemsFilter = eventItems !== undefined ? 1 : 0;
+  const onlyInShopFilter = onlyInShop !== undefined ? 1 : 0;
+  const canBeCraftedFilter = canBeCrafted !== undefined ? 1 : 0;
+  const canBeImbuedFilter = canBeImbued !== undefined ? 1 : 0;
+  const canBeHuntedFilter = canBeHunted !== undefined ? 1 : 0;
+  const canBeGatheredFilter = canBeGathered !== undefined ? 1 : 0;
+  const canBeTradedFilter = canBeTraded !== undefined ? 1 : 0;
+  const hiddenFilter = hidden !== undefined ? 1 : 0;
+
+  const totalFilters =
+    nameFilter +
+    effectFilter +
+    itemTypeFilter +
+    rarityFilter +
+    slotFilter +
+    targetFilter +
+    methodFilter +
+    eventItemsFilter +
+    onlyInShopFilter +
+    canBeCraftedFilter +
+    canBeImbuedFilter +
+    canBeHuntedFilter +
+    canBeGatheredFilter +
+    canBeTradedFilter +
+    hiddenFilter;
+
   // Name search schema
   const form = useForm<SearchJutsuSchema>({
     resolver: zodResolver(searchJutsuSchema),
@@ -89,12 +124,12 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button id="filter-item">
+        <Button id="filter-item" count={totalFilters}>
           <Filter className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
           <p className="hidden sm:block">Filter</p>
         </Button>
       </PopoverTrigger>
-      <PopoverContent>
+      <PopoverContent className="min-w-96">
         <div className="grid grid-cols-2 gap-1 gap-x-3">
           {/* item NAME */}
           <div>
@@ -128,22 +163,12 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
           </div> */}
           {/* Effect */}
           <div>
-            <Select onValueChange={(e) => setEffect(e as EffectType)}>
-              <Label htmlFor="rank">Effect</Label>
-              <SelectTrigger>
-                <SelectValue placeholder={effect} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem key={"Any-effect"} value={"ANY"}>
-                  ANY
-                </SelectItem>
-                {effectFilters.map((ef) => (
-                  <SelectItem key={ef} value={ef}>
-                    {ef}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Effects</Label>
+            <MultiSelect
+              selected={effect}
+              options={effectFilters.map((ef) => ({ value: ef, label: ef }))}
+              onChange={setEffect}
+            />
           </div>
           {/* Item Type */}
           <div>
@@ -356,6 +381,8 @@ export default ItemFiltering;
 
 /** tRPC filter to be used on api.item.getAll */
 export const getFilter = (state: ItemFilteringState) => {
+  const processArray = <T,>(arr: T[]) => (arr.length > 0 ? arr : undefined);
+
   return {
     name: state.name ? state.name : undefined,
     itemRarity: state.itemRarity !== "ANY" ? state.itemRarity : undefined,
@@ -365,7 +392,7 @@ export const getFilter = (state: ItemFilteringState) => {
     method: state.method !== "ANY" ? state.method : undefined,
     eventItems: state.eventItems,
     onlyInShop: state.onlyInShop,
-    effect: state.effect !== "ANY" ? state.effect : undefined,
+    effect: processArray(state.effect),
     hidden: state.hidden,
     canBeCrafted: state.canBeCrafted,
     canBeImbued: state.canBeImbued,
@@ -383,7 +410,7 @@ export const useFiltering = () => {
     "ANY",
   );
   const [itemType, setItemType] = useState<(typeof ItemTypes)[number] | "ANY">("ANY");
-  const [effect, setEffect] = useState<(typeof effectFilters)[number] | "ANY">("ANY");
+  const [effect, setEffect] = useState<string[]>([]);
   const [slot, setSlot] = useState<(typeof ItemSlotTypes)[number] | "ANY">("ANY");
   const [target, setTarget] = useState<(typeof AttackTargets)[number] | "ANY">("ANY");
   const [method, setMethod] = useState<(typeof AttackMethods)[number] | "ANY">("ANY");

@@ -37,6 +37,7 @@ type DataBattleAction = {
   contentId: string;
   battleType: (typeof BattleTypes)[number];
   battleWon: number;
+  relatedBloodlineId?: string;
 };
 
 /**
@@ -100,6 +101,8 @@ export const saveUsage = async (
   const user = curBattle.usersState.find((user) => user.userId === userId);
   const battleType = curBattle.battleType;
   if (result && user) {
+    // Bloodline ID of user
+    const relatedBloodlineId = user.bloodline?.id;
     // Get state, lost: 0, won: 1, flee: 2
     const outcome = result.outcome;
     const battleWon = outcome === "Won" ? 1 : outcome === "Fled" ? 2 : 0;
@@ -110,12 +113,23 @@ export const saveUsage = async (
     // Basic actions from this user
     const data: DataBattleAction[] = [];
     user.usedActions?.map((action) => {
-      data.push({ type: action.type, contentId: action.id, battleType, battleWon });
+      data.push({
+        type: action.type,
+        contentId: action.id,
+        battleType,
+        battleWon,
+        relatedBloodlineId,
+      });
     });
     // Bloodline actions from this user
     if (user.bloodline) {
       const bid = user.bloodline.id;
-      data.push({ type: "bloodline", contentId: bid, battleType, battleWon });
+      data.push({
+        type: "bloodline",
+        contentId: bid,
+        battleType,
+        battleWon,
+      });
     }
     // If battle is over, check for any AIs in the battle, and add these as well to the statistics
     curBattle.usersState

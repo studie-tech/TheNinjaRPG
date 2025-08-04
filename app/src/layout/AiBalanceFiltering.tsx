@@ -62,10 +62,25 @@ const AiBalanceFiltering: React.FC<AiBalanceFilteringProps> = (props) => {
     setMaxLevel,
   } = props.state;
 
+  // Count filters
+  const numBattleTypes = battleTypes.length;
+  const numUserRanks = userRanks.length;
+  const numVillages = villages.length;
+  const numMinCount = minCount > 1 ? 1 : 0;
+  const numMinLevel = minLevel > 1 ? 1 : 0;
+  const numMaxLevel = maxLevel < 100 ? 1 : 0;
+  const numFilters =
+    numBattleTypes +
+    numUserRanks +
+    numVillages +
+    numMinCount +
+    numMinLevel +
+    numMaxLevel;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button>
+        <Button count={numFilters}>
           <Filter className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
           <p className="hidden sm:block">Filter</p>
         </Button>

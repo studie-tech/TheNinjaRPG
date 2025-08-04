@@ -22,9 +22,9 @@ import { effectFilters } from "@/libs/train";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { searchJutsuSchema } from "@/validators/jutsu";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { Filter } from "lucide-react";
 import type { SearchJutsuSchema } from "@/validators/jutsu";
-import type { EffectType } from "@/libs/train";
 import type { ItemRarity, ItemSlotType, ItemType } from "@/drizzle/schema";
 
 interface ItemShopFilteringProps {
@@ -69,7 +69,7 @@ const ItemShopFiltering: React.FC<ItemShopFilteringProps> = (props) => {
           <p className="hidden sm:block">Filter</p>
         </Button>
       </PopoverTrigger>
-      <PopoverContent>
+      <PopoverContent className="min-w-96">
         <div className="grid grid-cols-2 gap-1 gap-x-3">
           {/* Item Type */}
           <div>
@@ -107,22 +107,12 @@ const ItemShopFiltering: React.FC<ItemShopFilteringProps> = (props) => {
           </div>
           {/* Effect */}
           <div>
-            <Select onValueChange={(e) => setEffect(e as EffectType)} value={effect}>
-              <Label htmlFor="effect">Effect</Label>
-              <SelectTrigger>
-                <SelectValue placeholder={effect} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem key={"Any-effect"} value={"ANY"}>
-                  ANY
-                </SelectItem>
-                {effectFilters.map((ef) => (
-                  <SelectItem key={ef} value={ef}>
-                    {ef}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Effects</Label>
+            <MultiSelect
+              selected={effect}
+              options={effectFilters.map((ef) => ({ value: ef, label: ef }))}
+              onChange={setEffect}
+            />
           </div>
           {/* Rarity */}
           <div>
@@ -179,7 +169,7 @@ export const getShopFilter = (state: ItemShopFilteringState) => {
     name: state.name ? state.name : undefined,
     itemRarity: state.itemRarity !== "ANY" ? state.itemRarity : undefined,
     slot: state.slot !== "ANY" ? state.slot : undefined,
-    effect: state.effect !== "ANY" ? state.effect : undefined,
+    effect: state.effect.length > 0 ? state.effect : undefined,
     itemType: state.itemType,
     onlyInShop: true, // Always ensure onlyInShop is true
   };
@@ -192,7 +182,7 @@ export const useShopFiltering = (defaultType: ItemType) => {
   const [itemRarity, setRarity] = useState<(typeof ItemRarities)[number] | "ANY">(
     "ANY",
   );
-  const [effect, setEffect] = useState<(typeof effectFilters)[number] | "ANY">("ANY");
+  const [effect, setEffect] = useState<string[]>([]);
   const [slot, setSlot] = useState<(typeof ItemSlotTypes)[number] | "ANY">("ANY");
   const [itemType, setItemType] = useState<ItemType>(defaultType);
 

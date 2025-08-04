@@ -11,6 +11,10 @@ SELECT * FROM UserData WHERE UserData.isAi = 1
 ```
 
 ```sql
+DELETE FROM UserJutsu WHERE userId IN (
+    SELECT UserData.userId FROM UserData WHERE UserData.isAi = 1
+)
+
 SELECT UserJutsu.* FROM UserJutsu INNER JOIN UserData ON UserData.userId = UserJutsu.userId WHERE UserData.isAi = 1
 ```
 

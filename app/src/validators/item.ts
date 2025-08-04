@@ -13,7 +13,7 @@ export const itemFilteringSchema = z.object({
   name: z.string().optional(),
   itemType: z.enum(ItemTypes).optional(),
   itemRarity: z.enum(ItemRarities).optional(),
-  effect: z.string().optional(),
+  effect: z.array(z.string()).optional(),
   stat: z.enum(statFilters).optional(),
   minCost: z.number().default(0),
   minRepsCost: z.number().default(0),

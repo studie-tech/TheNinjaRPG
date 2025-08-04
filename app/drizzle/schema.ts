@@ -2549,6 +2549,7 @@ export const dataBattleAction = mysqlTable(
     id: int("id").autoincrement().primaryKey().notNull(),
     type: mysqlEnum("type", consts.BattleDataEntryType).notNull(),
     contentId: varchar("contentId", { length: 191 }).notNull(),
+    relatedBloodlineId: varchar("relatedBloodlineId", { length: 191 }),
     battleType: mysqlEnum("battleType", consts.BattleTypes).notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
@@ -2563,6 +2564,7 @@ export const dataBattleAction = mysqlTable(
         table.contentId,
         table.battleType,
         table.battleWon,
+        table.relatedBloodlineId,
       ),
       createdAt: index("DataBattleActions_createdAt").on(table.createdAt),
     };

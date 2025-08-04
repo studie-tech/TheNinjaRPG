@@ -51,6 +51,26 @@ const BloodFiltering: React.FC<BloodFilteringProps> = (props) => {
   const { name, village, stat, effect, element } = props.state;
   const { rank, classification, hidden } = props.state;
 
+  // Calculate the number of applied filters
+  const nameFilter = name.length > 0 ? 1 : 0;
+  const villageFilter = village !== "None" ? 1 : 0;
+  const rankFilter = rank !== "None" ? 1 : 0;
+  const classificationFilter = classification !== "None" ? 1 : 0;
+  const elementFilter = element.length;
+  const effectFilter = effect.length;
+  const statFilter = stat.length;
+  const hiddenFilter = hidden !== undefined ? 1 : 0;
+
+  const totalFilters =
+    nameFilter +
+    villageFilter +
+    rankFilter +
+    classificationFilter +
+    elementFilter +
+    effectFilter +
+    statFilter +
+    hiddenFilter;
+
   // Get all villages
   const { data: villages } = api.village.getAllNames.useQuery(undefined);
 
@@ -75,7 +95,7 @@ const BloodFiltering: React.FC<BloodFilteringProps> = (props) => {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button id="filter-bloodline">
+        <Button id="filter-bloodline" count={totalFilters}>
           <Filter className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
           <p className="hidden sm:block">Filter</p>
         </Button>

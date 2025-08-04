@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, sql, gte, and, like, desc } from "drizzle-orm";
+import { eq, sql, gte, and, like, desc, or } from "drizzle-orm";
 import {
   item,
   userItem,
@@ -43,6 +43,8 @@ import type { ItemSlot } from "@/drizzle/constants";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
 import type { ItemLoadout } from "@/drizzle/schema";
+import type { ItemFilteringSchema } from "@/validators/item";
+import type { QueryCondition } from "@/utils/typeutils";
 import { postProcessRewards, type PostProcessedRewards } from "@/libs/quest";
 import { updateRewards } from "./quests";
 import { collapseRewards } from "@/libs/quest";
@@ -271,55 +273,16 @@ export const itemRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      if (input.effect && !(effectFilters as string[]).includes(input.effect)) {
-        throw serverError("PRECONDITION_FAILED", `Invalid filter: ${input.effect}`);
-      }
       const currentCursor = input.cursor ? input.cursor : 0;
       const skip = currentCursor * input.limit;
+
+      // Build where conditions using the generalized filter
+      const baseFilters = itemDatabaseFilter(input);
+
       const results = await ctx.drizzle.query.item.findMany({
         offset: skip,
         limit: input.limit,
-        where: and(
-          ...(input.name ? [like(item.name, `%${input.name}%`)] : []),
-          ...(input.itemRarity ? [eq(item.rarity, input.itemRarity)] : []),
-          ...(input.itemType ? [eq(item.itemType, input.itemType)] : []),
-          ...(input.slot ? [eq(item.slot, input.slot)] : []),
-          ...(input.method ? [eq(item.method, input.method)] : []),
-          ...(input.target ? [eq(item.target, input.target)] : []),
-          ...(input.effect
-            ? [sql`JSON_SEARCH(${item.effects},'one',${input.effect}) IS NOT NULL`]
-            : []),
-          ...(input.stat
-            ? [sql`JSON_SEARCH(${item.effects},'one',${input.stat}) IS NOT NULL`]
-            : []),
-          ...(input.eventItems !== undefined
-            ? [eq(item.isEventItem, input.eventItems)]
-            : []),
-          ...(input.onlyInShop !== undefined
-            ? [eq(item.inShop, input.onlyInShop)]
-            : []),
-          ...(input?.hidden !== undefined
-            ? [eq(item.hidden, input.hidden)]
-            : [eq(item.hidden, false)]),
-          ...(input?.canBeCrafted !== undefined
-            ? [eq(item.canBeCrafted, input.canBeCrafted)]
-            : []),
-          ...(input?.canBeImbued !== undefined
-            ? [eq(item.canBeImbued, input.canBeImbued)]
-            : []),
-          ...(input?.canBeHunted !== undefined
-            ? [eq(item.canBeHunted, input.canBeHunted)]
-            : []),
-          ...(input?.canBeGathered !== undefined
-            ? [eq(item.canBeGathered, input.canBeGathered)]
-            : []),
-          ...(input?.canBeTraded !== undefined
-            ? [eq(item.canBeTraded, input.canBeTraded)]
-            : []),
-          gte(item.cost, input.minCost),
-          gte(item.repsCost, input.minRepsCost),
-          gte(item.seichiSilverCost, input.minSeichiSilverCost),
-        ),
+        where: and(...baseFilters),
         orderBy: (table, { asc }) => [asc(table.cost), asc(table.repsCost)],
       });
       const nextCursor = results.length < input.limit ? null : currentCursor + 1;
@@ -328,6 +291,7 @@ export const itemRouter = createTRPCRouter({
         nextCursor: nextCursor,
       };
     }),
+
   // Get counts of user items grouped by item ID
   getUserItemCounts: protectedProcedure.query(async ({ ctx }) => {
     const counts = await ctx.drizzle
@@ -955,10 +919,11 @@ export const selectItemLoadout = async (
   const equipPromises = [];
   for (const itemEntry of validItemData) {
     // Find the first available item with this itemId
-    const userItemToEquip = useritems.find(
-      (ui) => ui.itemId === itemEntry.itemId && ui.equipped === "NONE"
-    ) || useritems.find((ui) => ui.itemId === itemEntry.itemId);
-    
+    const userItemToEquip =
+      useritems.find(
+        (ui) => ui.itemId === itemEntry.itemId && ui.equipped === "NONE",
+      ) || useritems.find((ui) => ui.itemId === itemEntry.itemId);
+
     if (userItemToEquip) {
       equipPromises.push(
         client
@@ -1153,4 +1118,91 @@ export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) =
     where: eq(itemLoadout.userId, userId),
     orderBy: (table) => desc(table.createdAt),
   });
+};
+
+/**
+ * Build database filters for item queries based on filtering schema
+ */
+export const itemDatabaseFilter = (
+  input?: Partial<ItemFilteringSchema>,
+): QueryCondition[] => {
+  return [
+    // Name filter
+    ...(input?.name ? [like(item.name, `%${input.name}%`)] : []),
+
+    // Item type filter
+    ...(input?.itemType ? [eq(item.itemType, input.itemType)] : []),
+
+    // Rarity filter
+    ...(input?.itemRarity ? [eq(item.rarity, input.itemRarity)] : []),
+
+    // Slot filter
+    ...(input?.slot ? [eq(item.slot, input.slot)] : []),
+
+    // Method filter
+    ...(input?.method ? [eq(item.method, input.method)] : []),
+
+    // Target filter
+    ...(input?.target ? [eq(item.target, input.target)] : []),
+
+    // Effect filter
+    ...(input?.effect && input.effect.length > 0
+      ? [
+          or(
+            ...input.effect.map(
+              (effect: string) =>
+                sql`JSON_SEARCH(${item.effects},'one',${effect}) IS NOT NULL`,
+            ),
+          ),
+        ]
+      : []),
+
+    // Stat filter
+    ...(input?.stat
+      ? [sql`JSON_SEARCH(${item.effects},'one',${input.stat}) IS NOT NULL`]
+      : []),
+
+    // Event items filter
+    ...(input?.eventItems !== undefined
+      ? [eq(item.isEventItem, input.eventItems)]
+      : []),
+
+    // Shop filter
+    ...(input?.onlyInShop !== undefined ? [eq(item.inShop, input.onlyInShop)] : []),
+
+    // Hidden filter (default to false if not specified)
+    ...(input?.hidden !== undefined
+      ? [eq(item.hidden, input.hidden)]
+      : [eq(item.hidden, false)]),
+
+    // Crafting filter
+    ...(input?.canBeCrafted !== undefined
+      ? [eq(item.canBeCrafted, input.canBeCrafted)]
+      : []),
+
+    // Imbuing filter
+    ...(input?.canBeImbued !== undefined
+      ? [eq(item.canBeImbued, input.canBeImbued)]
+      : []),
+
+    // Hunting filter
+    ...(input?.canBeHunted !== undefined
+      ? [eq(item.canBeHunted, input.canBeHunted)]
+      : []),
+
+    // Gathering filter
+    ...(input?.canBeGathered !== undefined
+      ? [eq(item.canBeGathered, input.canBeGathered)]
+      : []),
+
+    // Trading filter
+    ...(input?.canBeTraded !== undefined
+      ? [eq(item.canBeTraded, input.canBeTraded)]
+      : []),
+
+    // Cost filters
+    gte(item.cost, input?.minCost ?? 0),
+    gte(item.repsCost, input?.minRepsCost ?? 0),
+    gte(item.seichiSilverCost, input?.minSeichiSilverCost ?? 0),
+  ];
 };

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useState, useEffect } from "react";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { groupBy } from "@/utils/grouping";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -11,18 +12,42 @@ import AiBalanceFiltering, {
   useFiltering,
   getFilter,
 } from "@/layout/AiBalanceFiltering";
+import UserFiltering, {
+  useFiltering as useUserFiltering,
+  getFilter as getUserFilter,
+} from "@/layout/UserFiltering";
 import Link from "next/link";
-import { BarChart3, Trash2 } from "lucide-react";
+import NavTabs from "@/layout/NavTabs";
+import { BarChart3, Trash2, Pencil } from "lucide-react";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import Confirm2 from "@/layout/Confirm2";
 import { showMutationToast } from "@/libs/toast";
 
 export default function ManualAIsBalance() {
   // State
+  const availableTabs = ["Usage", "Power"];
+  type Tab = (typeof availableTabs)[number];
+  const [tab, setTab] = useLocalStorage<Tab>("aiBalanceTab", "Usage");
+
+  const NavBarBlock = (
+    <NavTabs current={tab} options={availableTabs} setValue={setTab} />
+  );
+
+  return (
+    <>
+      {tab === "Usage" && <AiUsageBalance navTabs={NavBarBlock} />}
+      {tab === "Power" && <AiEffectsBalance navTabs={NavBarBlock} />}
+    </>
+  );
+}
+
+// AiUsageBalance Component
+const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => {
+  // State
   const filterState = useFiltering();
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useUserData();
 
   // Get filter object
   const filter = getFilter(filterState);
@@ -67,19 +92,19 @@ export default function ManualAIsBalance() {
 
         // Extract AI ID from the name or use the aiUserId
         const aiUserId = entries[0]?.aiUserId;
-        const nameWithIcon = aiUserId ? (
-          <div className="flex items-center gap-2">
-            <span>{name}</span>
-            <Link href={`/manual/ai/statistics/${aiUserId}`}>
-              <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-            </Link>
-          </div>
-        ) : (
-          name
-        );
 
         return {
-          name: nameWithIcon,
+          name,
+          links: (
+            <div className="flex items-center gap-2">
+              <Link href={`/manual/ai/statistics/${aiUserId}`}>
+                <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+              </Link>
+              <Link href={`/manual/ai/edit/${aiUserId}`}>
+                <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
+              </Link>
+            </div>
+          ),
           totalUsage,
           wins,
           flees,
@@ -95,18 +120,15 @@ export default function ManualAIsBalance() {
   // Table columns
   type AiBalanceRow = ArrayElement<typeof tableData>;
   const columns: ColumnDefinitionType<AiBalanceRow, keyof AiBalanceRow>[] = [
-    {
-      key: "name",
-      header: "AI",
-      type: "jsx",
-    },
-    { key: "totalUsage", header: "Total Usage", type: "number" },
+    { key: "name", header: "AI", type: "string" },
+    { key: "links", header: "Link", type: "jsx" },
+    { key: "totalUsage", header: "Usage#", type: "number" },
     { key: "wins", header: "Wins", type: "number" },
     { key: "flees", header: "Flees", type: "number" },
     { key: "losses", header: "Losses", type: "number" },
     {
       key: "winRate",
-      header: "Win Rate",
+      header: "WinRate",
       type: "string",
     },
   ];
@@ -115,51 +137,141 @@ export default function ManualAIsBalance() {
   const canDelete = canChangeContent(userData?.role ?? "USER");
 
   return (
+    <ContentBox
+      title="AI Balance"
+      subtitle="Data since last reset"
+      back_href="/manual/ai"
+      padding={false}
+      topRightContent={
+        <div className="flex items-center gap-2">
+          {navTabs}
+          <AiBalanceFiltering state={filterState} />
+          {canDelete && (
+            <Confirm2
+              title="Clear All AI Battle Data"
+              button={
+                <Button size="icon">
+                  <Trash2 className="h-5 w-5 cursor-pointer" />
+                </Button>
+              }
+              proceed_label="Clear Data"
+              confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onAccept={(e) => {
+                e.preventDefault();
+                deleteAllData({ type: "ai" });
+              }}
+            >
+              {isDeleting ? (
+                <Loader explanation="Deleting data" />
+              ) : (
+                <>
+                  Are you sure you want to clear all AI battle action data? This action
+                  cannot be undone and will reset all AI usage statistics. This action
+                  will be logged for future audit and review.
+                </>
+              )}
+            </Confirm2>
+          )}
+        </div>
+      }
+    >
+      <p className="p-3">
+        Here we aim to give an overview of AI usage & win-statistics, so as to make it
+        transparent if any AI is over/under-powered and in need of balance adjustment.
+      </p>
+      {isPending && <Loader explanation="Loading data" />}
+      {!isPending && tableData && <Table data={tableData} columns={columns} />}
+    </ContentBox>
+  );
+};
+
+// AiEffectsBalance Component
+const AiEffectsBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => {
+  // State
+  const filterState = useUserFiltering();
+  const { data: userData } = useUserData();
+
+  // Set default effect filter on mount
+  useEffect(() => {
+    if (!filterState.effect || filterState.effect.length === 0) {
+      filterState.setEffect(["damage"]);
+    }
+  }, [filterState]);
+
+  // Queries
+  const { data, isPending } = api.data.getAiEffectsBalanceStatistics.useQuery({
+    ...getUserFilter(filterState),
+    isAi: true,
+    effect: filterState.effect,
+    limit: 100,
+    orderBy: "Strongest",
+  });
+
+  // Check permissions
+  const canEdit = canChangeContent(userData?.role ?? "USER");
+
+  // Process data for table
+  const tableData = data?.map((row) => ({
+    name: row.name,
+    rank: row.rank,
+    level: row.level,
+    origin: row.origin,
+    effect: row.effect,
+    power: row.power,
+    rounds: row.rounds,
+    powerPerLevel: row.powerPerLevel,
+    links: (
+      <div className="flex items-center gap-2">
+        <Link href={`/manual/ai/statistics/${row.id}`}>
+          <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+        </Link>
+        {canEdit && (
+          <Link href={`/manual/ai/edit/${row.id}`}>
+            <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
+          </Link>
+        )}
+      </div>
+    ),
+  }));
+
+  // Table columns
+  type AiEffectsRow = ArrayElement<typeof tableData>;
+  const columns: ColumnDefinitionType<AiEffectsRow, keyof AiEffectsRow>[] = [
+    {
+      key: "name",
+      header: "AI",
+      type: "jsx",
+    },
+    { key: "links", header: "Link", type: "jsx" },
+    { key: "level", header: "Level", type: "number" },
+    { key: "origin", header: "Origin", type: "string" },
+    { key: "effect", header: "Effect", type: "string" },
+    { key: "power", header: "Power", type: "number" },
+    { key: "rounds", header: "Rounds", type: "number" },
+    { key: "powerPerLevel", header: "Power/Level", type: "string" },
+  ];
+
+  return (
     <>
       <ContentBox
-        title="AI Balance"
-        subtitle="Data since last reset"
+        title="AI Effects Balance"
+        subtitle="Effect-based power analysis"
         back_href="/manual/ai"
         padding={false}
         topRightContent={
           <div className="flex items-center gap-2">
-            <AiBalanceFiltering state={filterState} />
-            {canDelete && (
-              <Confirm2
-                title="Clear All AI Battle Data"
-                button={
-                  <Button size="icon">
-                    <Trash2 className="h-5 w-5 cursor-pointer" />
-                  </Button>
-                }
-                proceed_label="Clear Data"
-                confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onAccept={(e) => {
-                  e.preventDefault();
-                  deleteAllData({ type: "ai" });
-                }}
-              >
-                {isDeleting ? (
-                  <Loader explanation="Deleting data" />
-                ) : (
-                  <>
-                    Are you sure you want to clear all AI battle action data? This
-                    action cannot be undone and will reset all AI usage statistics. This
-                    action will be logged for future audit and review.
-                  </>
-                )}
-              </Confirm2>
-            )}
+            {navTabs}
+            <UserFiltering state={filterState} aiToggles={true} />
           </div>
         }
       >
         <p className="p-3">
-          Here we aim to give an overview of AI usage & win-statistics, so as to make it
-          transparent if any AI is over/under-powered and in need of balance adjustment.
+          Here we analyze AI power based on their jutsu and item effects, helping to
+          identify imbalances in effect distribution and power scaling.
         </p>
         {isPending && <Loader explanation="Loading data" />}
         {!isPending && tableData && <Table data={tableData} columns={columns} />}
       </ContentBox>
     </>
   );
-}
+};

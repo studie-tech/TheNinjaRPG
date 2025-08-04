@@ -13,7 +13,7 @@ import { IMG_LAYOUT_BUTTONDECOR } from "@/drizzle/constants";
 import { cn } from "src/libs/shadui";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
+  "relative inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
   {
     variants: {
       variant: {
@@ -81,6 +81,11 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {children}
         {loading && <Loader size={20} />}
+        {count !== undefined && count > 0 && (
+          <div className="absolute top-0 right-[-3] flex items-center justify-center text-xs text-orange-100 bg-orange-500 rounded-full w-5 h-5 z-50">
+            {count}
+          </div>
+        )}
       </Comp>
     );
     if (hoverText) {
@@ -116,11 +121,6 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
               height={25}
             ></Image>
           </>
-        )}
-        {count !== undefined && count > 0 && (
-          <div className="absolute top-0 right-[-3] flex items-center justify-center text-xs text-orange-100 bg-orange-500 rounded-full w-5 h-5 z-50">
-            {count}
-          </div>
         )}
       </div>
     );

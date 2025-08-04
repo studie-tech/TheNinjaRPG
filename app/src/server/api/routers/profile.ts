@@ -1341,7 +1341,7 @@ export const profileRouter = createTRPCRouter({
   getPublicUsers: publicProcedure
     .input(getPublicUsersSchema)
     .query(async ({ ctx, input }) => {
-      return fetchPublicUsers(ctx.drizzle, input, ctx.userId);
+      return fetchPublicUsers({ client: ctx.drizzle, input, userId: ctx.userId });
     }),
   // Toggle deletion of user
   toggleDeletionTimer: protectedProcedure
@@ -1988,11 +1988,13 @@ export const fetchUpdatedUser = async (props: {
   return { user, settings, toastMessages, hasUnvotedPolls };
 };
 
-export const fetchPublicUsers = async (
-  client: DrizzleClient,
-  input: GetPublicUsersSchema,
-  userId?: string | null,
-) => {
+export const fetchPublicUsers = async (info: {
+  client: DrizzleClient;
+  input: GetPublicUsersSchema;
+  userId?: string | null;
+  includeEffects?: boolean;
+}) => {
+  const { client, input, userId, includeEffects } = info;
   const currentCursor = input.cursor ? input.cursor : 0;
   const skip = currentCursor * input.limit;
   const getOrder = () => {
@@ -2074,6 +2076,7 @@ export const fetchPublicUsers = async (
         updatedAt: true,
         userId: true,
         username: true,
+        villageId: true,
         craftingExperience: true,
         medicalExperience: true,
         villagePrestige: true,
@@ -2081,20 +2084,32 @@ export const fetchPublicUsers = async (
         dailyArenaFights: true,
         dailyMissions: true,
         dailyErrands: true,
+        effects: true,
       },
       // If AI, also include relations information
       with: {
         village: { columns: { name: true } },
-        ...(input.isAi
+        ...(input.isAi && includeEffects
           ? {
               jutsus: {
-                columns: {
-                  level: true,
-                },
+                columns: { level: true },
                 with: {
                   jutsu: {
                     columns: {
                       name: true,
+                      effects: true,
+                    },
+                  },
+                },
+              },
+              items: {
+                columns: {
+                  itemId: true,
+                },
+                with: {
+                  item: {
+                    columns: {
+                      effects: true,
                     },
                   },
                 },

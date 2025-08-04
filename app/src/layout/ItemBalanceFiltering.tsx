@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Filter } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { api } from "@/app/_trpc/client";
 
 import { BattleTypes, ItemTypes } from "@/drizzle/constants";
 import type { BattleType, ItemType } from "@/drizzle/constants";
@@ -14,17 +15,25 @@ import type { BattleType, ItemType } from "@/drizzle/constants";
  * STATE HOOK
  */
 export const useFiltering = () => {
-  const [battleTypes, setBattleTypes] = useState<BattleType[]>([]);
+  const [battleTypes, setBattleTypes] = useState<BattleType[]>([
+    "RANKED_PVP",
+    "COMBAT",
+    "RANKED_SPARRING",
+    "SPARRING",
+  ]);
   const [minCount, setMinCount] = useState<number>(1);
   const [itemTypes, setItemTypes] = useState<ItemType[]>([]);
+  const [bloodlineIds, setBloodlineIds] = useState<string[]>([]);
 
   return {
     battleTypes,
     minCount,
     itemTypes,
+    bloodlineIds,
     setBattleTypes,
     setMinCount,
     setItemTypes,
+    setBloodlineIds,
   };
 };
 
@@ -42,15 +51,27 @@ const ItemBalanceFiltering: React.FC<ItemBalanceFilteringProps> = (props) => {
     battleTypes,
     minCount,
     itemTypes,
+    bloodlineIds,
     setBattleTypes,
     setMinCount,
     setItemTypes,
+    setBloodlineIds,
   } = props.state;
+
+  // Fetch bloodline names for filtering
+  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
+
+  // Count filters
+  const numBattleTypes = battleTypes.length;
+  const numItemTypes = itemTypes.length;
+  const numBloodlineIds = bloodlineIds.length;
+  const numMinCount = minCount > 1 ? 1 : 0;
+  const numFilters = numBattleTypes + numItemTypes + numBloodlineIds + numMinCount;
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button>
+        <Button count={numFilters}>
           <Filter className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
           <p className="hidden sm:block">Filter</p>
         </Button>
@@ -92,6 +113,21 @@ const ItemBalanceFiltering: React.FC<ItemBalanceFilteringProps> = (props) => {
               onChange={(e) => setItemTypes(e as ItemType[])}
             />
           </div>
+
+          {/* Bloodlines */}
+          <div>
+            <Label>Bloodlines</Label>
+            <MultiSelect
+              selected={bloodlineIds}
+              options={
+                bloodlines?.map((bloodline) => ({
+                  value: bloodline.id,
+                  label: bloodline.name,
+                })) || []
+              }
+              onChange={(e) => setBloodlineIds(e as string[])}
+            />
+          </div>
         </div>
       </PopoverContent>
     </Popover>
@@ -108,5 +144,6 @@ export const getFilter = (state: ItemBalanceFilteringState) => {
     battleTypes: state.battleTypes.length > 0 ? state.battleTypes : undefined,
     minCount: state.minCount,
     itemTypes: state.itemTypes.length > 0 ? state.itemTypes : undefined,
+    bloodlineIds: state.bloodlineIds.length > 0 ? state.bloodlineIds : undefined,
   };
 };

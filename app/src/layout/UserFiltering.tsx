@@ -26,11 +26,14 @@ import { getPublicUsersSchema } from "@/validators/user";
 import { Filter } from "lucide-react";
 import { useUserData } from "@/utils/UserContext";
 import { TriStateToggle } from "@/components/control/Toggle";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { effectFilters } from "@/libs/train";
 import type { GetPublicUsersSchema } from "@/validators/user";
 
 interface UserFilteringProps {
   state: UserFilteringState;
   aiToggles?: boolean;
+  showEffects?: boolean;
 }
 
 const UserFiltering: React.FC<UserFilteringProps> = (props) => {
@@ -38,9 +41,18 @@ const UserFiltering: React.FC<UserFilteringProps> = (props) => {
   const { data: userData } = useUserData();
 
   // Destructure the state
-  const { setUsername, setBloodline, setVillage, setIp } = props.state;
-  const { username, bloodline, village, ip, inArena, isEvent, isSummon, inShrines } =
-    props.state;
+  const { setUsername, setBloodline, setVillage, setIp, setEffect } = props.state;
+  const {
+    username,
+    bloodline,
+    village,
+    ip,
+    inArena,
+    isEvent,
+    isSummon,
+    inShrines,
+    effect,
+  } = props.state;
   const { setInArena, setIsEvent, setIsSummon, setInShrines } = props.state;
 
   // Query
@@ -70,10 +82,32 @@ const UserFiltering: React.FC<UserFilteringProps> = (props) => {
     return () => clearTimeout(delayDebounceFn);
   }, [watchIp, setIp]);
 
+  // Calculate the number of applied filters
+  const usernameFilter = username.length > 0 ? 1 : 0;
+  const ipFilter = ip.length > 0 ? 1 : 0;
+  const bloodlineFilter = bloodline !== "None" ? 1 : 0;
+  const villageFilter = village !== "None" ? 1 : 0;
+  const isSummonFilter = isSummon !== undefined ? 1 : 0;
+  const isEventFilter = isEvent !== undefined ? 1 : 0;
+  const inArenaFilter = inArena !== undefined ? 1 : 0;
+  const inShrinesFilter = inShrines !== undefined ? 1 : 0;
+  const effectFilter = effect.length;
+
+  const totalFilters =
+    usernameFilter +
+    ipFilter +
+    bloodlineFilter +
+    villageFilter +
+    isSummonFilter +
+    isEventFilter +
+    inArenaFilter +
+    inShrinesFilter +
+    effectFilter;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button id="filter-bloodline">
+        <Button id="filter-bloodline" count={totalFilters}>
           <Filter className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
           <p className="hidden sm:block">Filter</p>
         </Button>
@@ -160,6 +194,17 @@ const UserFiltering: React.FC<UserFilteringProps> = (props) => {
               </SelectContent>
             </Select>
           </div>
+          {/* Effects */}
+          {props.showEffects && (
+            <div>
+              <Label>Effects</Label>
+              <MultiSelect
+                selected={effect}
+                options={effectFilters.map((ef) => ({ value: ef, label: ef }))}
+                onChange={setEffect}
+              />
+            </div>
+          )}
           {props.aiToggles && (
             <>
               {/* Event AI */}
@@ -235,10 +280,11 @@ export const getFilter = (state: UserFilteringState) => {
     isEvent: state.isEvent,
     inArena: state.inArena,
     inShrines: state.inShrines,
+    effect: state.effect.length > 0 ? state.effect : undefined,
   };
 };
 
-/** State for the Jutsu Filtering component */
+/** State for the User Filtering component */
 export const useFiltering = () => {
   // State variables
   const [username, setUsername] = useState<string>("");
@@ -249,16 +295,19 @@ export const useFiltering = () => {
   const [isEvent, setIsEvent] = useState<boolean | undefined>(undefined);
   const [inArena, setInArena] = useState<boolean | undefined>(undefined);
   const [inShrines, setInShrines] = useState<boolean | undefined>(undefined);
+  const [effect, setEffect] = useState<string[]>([]);
 
   // Return all
   return {
     bloodline,
+    effect,
     inArena,
     inShrines,
     ip,
     isEvent,
     isSummon,
     setBloodline,
+    setEffect,
     setInArena,
     setInShrines,
     setIp,

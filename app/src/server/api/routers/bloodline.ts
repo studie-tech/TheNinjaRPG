@@ -27,6 +27,7 @@ import { getTimeLeftStr, getDaysHoursMinutesSeconds } from "@/utils/time";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { BloodlineRank, Bloodline, UserData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import type { BloodlineFilteringSchema } from "@/validators/bloodline";
 
 export const bloodlineRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
@@ -44,49 +45,13 @@ export const bloodlineRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const currentCursor = input.cursor ? input.cursor : 0;
       const skip = currentCursor * input.limit;
+
+      // Build where conditions using the abstracted filter function
+      const baseFilters = bloodlineDatabaseFilter(input);
+
       const results = await ctx.drizzle.query.bloodline.findMany({
         with: { village: { columns: { name: true } } },
-        where: and(
-          ...(input.name ? [like(bloodline.name, `%${input.name}%`)] : []),
-          ...(input.classification
-            ? [eq(bloodline.statClassification, input.classification)]
-            : []),
-          ...(input.village ? [eq(bloodline.villageId, input.village)] : []),
-          ...(input.stat && input.stat.length > 0
-            ? [
-                and(
-                  ...input.stat.map(
-                    (s) =>
-                      sql`JSON_SEARCH(${bloodline.effects},'one',${s}) IS NOT NULL`,
-                  ),
-                ),
-              ]
-            : []),
-          ...(input.effect && input.effect.length > 0
-            ? [
-                or(
-                  ...input.effect.map(
-                    (e) =>
-                      sql`JSON_SEARCH(${bloodline.effects},'one',${e}) IS NOT NULL`,
-                  ),
-                ),
-              ]
-            : []),
-          ...[input.rank ? eq(bloodline.rank, input.rank) : isNotNull(bloodline.rank)],
-          ...(input.element && input.element.length > 0
-            ? [
-                and(
-                  ...input.element.map(
-                    (e) =>
-                      sql`JSON_SEARCH(${bloodline.effects},'one',${e},NULL,'$[*].elements') IS NOT NULL`,
-                  ),
-                ),
-              ]
-            : []),
-          ...(input?.hidden !== undefined
-            ? [eq(bloodline.hidden, input.hidden)]
-            : [eq(bloodline.hidden, false)]),
-        ),
+        where: and(...baseFilters),
         offset: skip,
         limit: input.limit,
       });
@@ -646,4 +611,64 @@ export const fetchBloodline = async (client: DrizzleClient, bloodlineId: string)
 
 export const fetchBloodlines = async (client: DrizzleClient) => {
   return await client.query.bloodline.findMany({ where: eq(bloodline.hidden, false) });
+};
+
+/**
+ * Build database filters for bloodline queries based on filtering schema
+ */
+export const bloodlineDatabaseFilter = (input?: BloodlineFilteringSchema) => {
+  return [
+    // Name filter
+    ...(input?.name ? [like(bloodline.name, `%${input.name}%`)] : []),
+
+    // Classification filter
+    ...(input?.classification
+      ? [eq(bloodline.statClassification, input.classification)]
+      : []),
+
+    // Village filter
+    ...(input?.village ? [eq(bloodline.villageId, input.village)] : []),
+
+    // Stat filter
+    ...(input?.stat && input.stat.length > 0
+      ? [
+          and(
+            ...input.stat.map(
+              (s) => sql`JSON_SEARCH(${bloodline.effects},'one',${s}) IS NOT NULL`,
+            ),
+          ),
+        ]
+      : []),
+
+    // Effect filter
+    ...(input?.effect && input.effect.length > 0
+      ? [
+          or(
+            ...input.effect.map(
+              (e) => sql`JSON_SEARCH(${bloodline.effects},'one',${e}) IS NOT NULL`,
+            ),
+          ),
+        ]
+      : []),
+
+    // Rank filter
+    ...(input?.rank ? [eq(bloodline.rank, input.rank)] : [isNotNull(bloodline.rank)]),
+
+    // Element filter
+    ...(input?.element && input.element.length > 0
+      ? [
+          and(
+            ...input.element.map(
+              (e) =>
+                sql`JSON_SEARCH(${bloodline.effects},'one',${e},NULL,'$[*].elements') IS NOT NULL`,
+            ),
+          ),
+        ]
+      : []),
+
+    // Hidden filter (default to false if not specified)
+    ...(input?.hidden !== undefined
+      ? [eq(bloodline.hidden, input.hidden)]
+      : [eq(bloodline.hidden, false)]),
+  ];
 };

@@ -509,10 +509,47 @@ const JutsuFiltering: React.FC<JutsuFilteringProps> = (props) => {
     }
   };
 
+  // Get the number of filters applied
+  const nameFilter = watchName.length > 0 ? 1 : 0;
+  const requiredLevelFilter = watchRequiredLevel && watchRequiredLevel > 1 ? 1 : 0;
+  const requiredRankFilter = rank !== "NONE" ? 1 : 0;
+  const classificationFilter = classification !== "None" ? 1 : 0;
+  const rarityFilter = rarity !== "ALL" ? 1 : 0;
+  const bloodlineFilter = bloodline !== "None" ? 1 : 0;
+  const appearAnimFilter = appearAnim !== "None" ? 1 : 0;
+  const removeAnimFilter = removeAnim !== "None" ? 1 : 0;
+  const staticAnimFilter = staticAnim !== "None" ? 1 : 0;
+  const elementFilter = element.length;
+  const effectFilter = effect.length;
+  const statFilter = stat.length;
+  const methodFilter = method !== "None" ? 1 : 0;
+  const jutsuTypeFilter = jutsuType.length;
+  const targetFilter = target !== "None" ? 1 : 0;
+  const visibilityFilter = hidden !== undefined ? 1 : 0;
+  const villageFilter = villageId !== "None" ? 1 : 0;
+  const totalFilters =
+    nameFilter +
+    requiredLevelFilter +
+    requiredRankFilter +
+    classificationFilter +
+    rarityFilter +
+    bloodlineFilter +
+    appearAnimFilter +
+    removeAnimFilter +
+    staticAnimFilter +
+    elementFilter +
+    effectFilter +
+    statFilter +
+    methodFilter +
+    jutsuTypeFilter +
+    targetFilter +
+    visibilityFilter +
+    villageFilter;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button>
+        <Button count={totalFilters}>
           <Filter className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
           <p className="hidden sm:block">Filter</p>
         </Button>
@@ -579,7 +616,7 @@ const JutsuFiltering: React.FC<JutsuFilteringProps> = (props) => {
 
           {/* Animations */}
           <FilterSelect
-            label="Appear‎ ‎ ‎ ‎Animation"
+            label="Appear Animation"
             value={appearAnim}
             onValueChange={setAppearAnim}
             options={

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState } from "react";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { groupBy } from "@/utils/grouping";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -12,17 +13,178 @@ import JutsuBalanceFiltering, {
   getFilter,
 } from "@/layout/JutsuBalanceFiltering";
 import Link from "next/link";
-import { BarChart3, Trash2 } from "lucide-react";
+import NavTabs from "@/layout/NavTabs";
+import JutsuFiltering, {
+  useFiltering as useJutsuFiltering,
+  getFilter as getJutsuFilter,
+} from "@/layout/JutsuFiltering";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import { BarChart3, Trash2, InfoIcon, Pencil } from "lucide-react";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import Confirm2 from "@/layout/Confirm2";
+import Modal2 from "@/layout/Modal2";
 import { showMutationToast } from "@/libs/toast";
 
 export default function ManualJutsusBalance() {
   // State
+  const availableTabs = ["Usage", "Power"];
+  type Tab = (typeof availableTabs)[number];
+  const [tab, setTab] = useLocalStorage<Tab>("jutsuBalanceTab", "Usage");
+
+  const NavBarBlock = (
+    <NavTabs current={tab} options={availableTabs} setValue={setTab} />
+  );
+
+  return (
+    <>
+      {tab === "Usage" && <JutsuUsageBalance navTabs={NavBarBlock} />}
+      {tab === "Power" && <JutsuEffectsBalance navTabs={NavBarBlock} />}
+    </>
+  );
+}
+
+/**
+ * Jutsu Effects Balance
+ */
+interface JutsuEffectsBalanceProps {
+  navTabs: React.ReactNode;
+}
+
+const JutsuEffectsBalance: React.FC<JutsuEffectsBalanceProps> = (props) => {
+  // Two-level filtering
+  const state = useJutsuFiltering();
+  const { data: userData } = useUserData();
+
+  // Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedJutsuId, setSelectedJutsuId] = useState<string>("");
+
+  // Queries
+  const { data, isPending } = api.data.getJutsuEffectsBalanceStatistics.useQuery(
+    getJutsuFilter(state),
+  );
+
+  // Jutsu details query for modal
+  const { data: jutsuDetails, isPending: isJutsuDetailsPending } =
+    api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
+
+  // Set default effect to be damage
+  useEffect(() => {
+    if (state.effect.length === 0) {
+      state.setEffect(["damage"]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Can edit jutsu
+  const canEdit = canChangeContent(userData?.role ?? "USER");
+
+  const tableData = data
+    ?.map((jutsu) => {
+      return jutsu.effects.map((effect) => {
+        return {
+          name: jutsu.name,
+          links: (
+            <div className="flex items-center gap-2">
+              <Link href={`/manual/jutsu/statistics/${jutsu.id}`}>
+                <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+              </Link>
+              {canEdit && (
+                <Link href={`/manual/jutsu/edit/${jutsu.id}`}>
+                  <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                </Link>
+              )}
+              <InfoIcon
+                className="h-4 w-4 text-muted-foreground hover:text-primary"
+                onClick={() => {
+                  setSelectedJutsuId(jutsu.id);
+                  setIsModalOpen(true);
+                }}
+              />
+            </div>
+          ),
+          rank: jutsu.requiredRank,
+          jutsuType: jutsu.jutsuType,
+          bloodline: jutsu.bloodline?.name || "None",
+          effect: effect.type,
+          power: effect.power,
+          rounds: effect.rounds ?? "N/A",
+          powerPerLevel: effect.powerPerLevel,
+        };
+      });
+    })
+    .flat()
+    .sort((a, b) => b.power - a.power);
+
+  // Table columns
+  type JutsuBalanceRow = ArrayElement<typeof tableData>;
+  const columns: ColumnDefinitionType<JutsuBalanceRow, keyof JutsuBalanceRow>[] = [
+    { key: "name", header: "Jutsu", type: "string" },
+    { key: "links", header: "Links", type: "jsx" },
+    { key: "jutsuType", header: "Type", type: "capitalized" },
+    { key: "effect", header: "Effect", type: "string" },
+    { key: "rank", header: "Rank", type: "capitalized" },
+    { key: "power", header: "Power", type: "number" },
+    { key: "rounds", header: "Rounds", type: "number" },
+    { key: "powerPerLevel", header: "PowerPerLvl", type: "number" },
+  ];
+
+  return (
+    <ContentBox
+      title="Jutsu Effects Balance"
+      subtitle="Review Jutsu Power Balance"
+      padding={false}
+      back_href="/manual/jutsu"
+      topRightContent={
+        <div className="flex flex-row items-center">
+          {props.navTabs}
+          <JutsuFiltering state={state} />
+        </div>
+      }
+    >
+      <p className="p-3">Get an overview of the power of each jutsu effect</p>
+      {isPending && <Loader explanation="Loading data" />}
+      {!isPending && tableData && <Table data={tableData} columns={columns} />}
+      {!isPending && tableData && tableData.length === 0 && (
+        <div className="px-3 pb-3">
+          No data found. You must select at least one effect type in the filter!
+        </div>
+      )}
+
+      {/* Jutsu Details Modal */}
+      <Modal2
+        title="Jutsu Details"
+        isOpen={isModalOpen}
+        setIsOpen={setIsModalOpen}
+        proceed_label={null}
+      >
+        {isJutsuDetailsPending ? (
+          <Loader explanation="Loading jutsu details" />
+        ) : (
+          jutsuDetails && <ItemWithEffects item={jutsuDetails} showStatistic="jutsu" />
+        )}
+      </Modal2>
+    </ContentBox>
+  );
+};
+
+/**
+ * Jutsu Usage Balance
+ */
+interface JutsuUsageBalanceProps {
+  navTabs: React.ReactNode;
+}
+
+const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
+  // State
   const filterState = useFiltering();
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useUserData();
+
+  // Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedJutsuId, setSelectedJutsuId] = useState<string>("");
 
   // Get filter object
   const filter = getFilter(filterState);
@@ -30,6 +192,8 @@ export default function ManualJutsusBalance() {
   // Queries
   const { data, isPending } = api.data.getJutsuBalanceStatistics.useQuery(filter);
   const { data: jutsuNames } = api.jutsu.getAllNames.useQuery();
+  const { data: jutsuDetails, isPending: isJutsuDetailsPending } =
+    api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
 
   // Mutations
   const { mutate: deleteAllData, isPending: isDeleting } =
@@ -44,6 +208,10 @@ export default function ManualJutsusBalance() {
     });
 
   const utils = api.useUtils();
+
+  // Check if user can change content
+  const canDelete = canChangeContent(userData?.role ?? "USER");
+  const canEdit = canChangeContent(userData?.role ?? "USER");
 
   // Create mapping from jutsu names to IDs
   const jutsuNameToId = useMemo(() => {
@@ -77,19 +245,28 @@ export default function ManualJutsusBalance() {
         const equippedCount = entries[0]?.equippedCount || 0;
 
         const jutsuId = jutsuNameToId.get(name);
-        const nameWithIcon = jutsuId ? (
-          <div className="flex items-center gap-2">
-            <span>{name}</span>
-            <Link href={`/manual/jutsu/statistics/${jutsuId}`}>
-              <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-            </Link>
-          </div>
-        ) : (
-          name
-        );
 
         return {
-          name: nameWithIcon,
+          name,
+          links: (
+            <div className="flex items-center gap-2">
+              <Link href={`/manual/jutsu/statistics/${jutsuId}`}>
+                <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+              </Link>
+              {canEdit && (
+                <Link href={`/manual/jutsu/edit/${jutsuId}`}>
+                  <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                </Link>
+              )}
+              <InfoIcon
+                className="h-4 w-4 text-muted-foreground hover:text-primary"
+                onClick={() => {
+                  setSelectedJutsuId(jutsuId ?? "");
+                  setIsModalOpen(true);
+                }}
+              />
+            </div>
+          ),
           totalUsage,
           equippedCount,
           wins,
@@ -106,73 +283,80 @@ export default function ManualJutsusBalance() {
   // Table columns
   type JutsuBalanceRow = ArrayElement<typeof tableData>;
   const columns: ColumnDefinitionType<JutsuBalanceRow, keyof JutsuBalanceRow>[] = [
-    {
-      key: "name",
-      header: "Jutsu",
-      type: "jsx",
-    },
-    { key: "totalUsage", header: "Total Usage", type: "number" },
+    { key: "name", header: "Jutsu", type: "string" },
+    { key: "links", header: "Links", type: "jsx" },
+    { key: "totalUsage", header: "Uses", type: "number" },
     { key: "equippedCount", header: "Equipped", type: "number" },
     { key: "wins", header: "Wins", type: "number" },
     { key: "flees", header: "Flees", type: "number" },
     { key: "losses", header: "Losses", type: "number" },
     {
       key: "winRate",
-      header: "Win Rate",
+      header: "WinRate",
       type: "string",
     },
   ];
 
-  // Check if user can change content
-  const canDelete = canChangeContent(userData?.role ?? "USER");
-
   return (
-    <>
-      <ContentBox
-        title="Jutsu Balance"
-        subtitle="Data since last reset"
-        back_href="/manual/jutsu"
-        padding={false}
-        topRightContent={
-          <div className="flex items-center gap-2">
-            <JutsuBalanceFiltering state={filterState} />
-            {canDelete && (
-              <Confirm2
-                title="Clear All Jutsu Battle Data"
-                button={
-                  <Button size="icon">
-                    <Trash2 className="h-5 w-5 cursor-pointer" />
-                  </Button>
-                }
-                proceed_label="Clear Data"
-                confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onAccept={(e) => {
-                  e.preventDefault();
-                  deleteAllData({ type: "jutsu" });
-                }}
-              >
-                {isDeleting ? (
-                  <Loader explanation="Deleting data" />
-                ) : (
-                  <>
-                    Are you sure you want to clear all jutsu battle action data? This
-                    action cannot be undone and will reset all jutsu usage statistics.
-                    This action will be logged for future audit and review.
-                  </>
-                )}
-              </Confirm2>
-            )}
-          </div>
-        }
+    <ContentBox
+      title="Jutsu Balance"
+      subtitle="Data since last reset"
+      back_href="/manual/jutsu"
+      padding={false}
+      topRightContent={
+        <div className="flex items-center gap-2">
+          {props.navTabs}
+          <JutsuBalanceFiltering state={filterState} />
+          {canDelete && (
+            <Confirm2
+              title="Clear All Jutsu Battle Data"
+              button={
+                <Button size="icon">
+                  <Trash2 className="h-5 w-5 cursor-pointer" />
+                </Button>
+              }
+              proceed_label="Clear Data"
+              confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onAccept={(e) => {
+                e.preventDefault();
+                deleteAllData({ type: "jutsu" });
+              }}
+            >
+              {isDeleting ? (
+                <Loader explanation="Deleting data" />
+              ) : (
+                <>
+                  Are you sure you want to clear all jutsu battle action data? This
+                  action cannot be undone and will reset all jutsu usage statistics.
+                  This action will be logged for future audit and review.
+                </>
+              )}
+            </Confirm2>
+          )}
+        </div>
+      }
+    >
+      <p className="p-3">
+        Here we aim to give an overview of jutsu usage & win-statistics, so as to make
+        it transparent if any jutsu or combination of jutsus is over/under-powered and
+        in need of balance adjustment.
+      </p>
+      {isPending && <Loader explanation="Loading data" />}
+      {!isPending && tableData && <Table data={tableData} columns={columns} />}
+
+      {/* Jutsu Details Modal */}
+      <Modal2
+        title="Jutsu Details"
+        isOpen={isModalOpen}
+        setIsOpen={setIsModalOpen}
+        proceed_label={null}
       >
-        <p className="p-3">
-          Here we aim to give an overview of jutsu usage & win-statistics, so as to make
-          it transparent if any jutsu or combination of jutsus is over/under-powered and
-          in need of balance adjustment.
-        </p>
-        {isPending && <Loader explanation="Loading data" />}
-        {!isPending && tableData && <Table data={tableData} columns={columns} />}
-      </ContentBox>
-    </>
+        {isJutsuDetailsPending ? (
+          <Loader explanation="Loading jutsu details" />
+        ) : (
+          jutsuDetails && <ItemWithEffects item={jutsuDetails} showStatistic="jutsu" />
+        )}
+      </Modal2>
+    </ContentBox>
   );
-}
+};
