@@ -1,4 +1,5 @@
 import type { ExecutedQuery } from "@planetscale/database";
+import type { SQL } from "drizzle-orm";
 
 export type ArrayElement<A> = A extends readonly (infer T)[] ? T : never;
 
@@ -63,3 +64,8 @@ export type DeepPartial<T> = {
  * A promise that returns a database query result or void
  */
 export type DatabasePromiseReturn = ExecutedQuery<any[] | Record<string, any>> | void;
+
+/**
+ * A condition for a database query
+ */
+export type QueryCondition = SQL<unknown> | undefined;

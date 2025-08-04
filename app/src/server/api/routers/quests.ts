@@ -70,12 +70,12 @@ import {
 import { QuestTypes } from "@/drizzle/constants";
 import { QuestTracker } from "@/validators/objectives";
 import type { QuestCounterFieldName } from "@/validators/user";
-import type { SQL } from "drizzle-orm";
 import type { QuestType } from "@/drizzle/constants";
 import type { UserData, Quest } from "@/drizzle/schema";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import type { GetRewardResult } from "@/libs/quest";
+import type { QueryCondition } from "@/utils/typeutils";
 import { canEditQuests } from "@/utils/permissions";
 
 export const questsRouter = createTRPCRouter({
@@ -1455,7 +1455,7 @@ export const fetchUncompletedQuests = async (
 export const upsertQuestEntries = async (
   client: DrizzleClient,
   quest: Quest,
-  updateSelector: SQL<unknown> | undefined,
+  updateSelector: QueryCondition,
 ) => {
   // Users to insert for
   const users = await client

@@ -39,9 +39,9 @@ export default function ItemStatistics(props: { params: Promise<{ itemid: string
     <>
       {!userData && item && "name" in item && (
         <ContentBox
-          title="Jutsu Statistics"
+          title="Item Statistics"
           subtitle={item.name}
-          back_href="/manual/jutsu"
+          back_href="/manual/item"
         >
           {itemText(item.name)}
         </ContentBox>

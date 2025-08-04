@@ -92,15 +92,16 @@ export const SHARED_COOLDOWN_TAGS = [
 
 export const LOG_TYPES = [
   "ai",
-  "user",
-  "jutsu",
-  "userjutsu",
-  "bloodline",
-  "item",
   "badge",
+  "battleAction",
+  "bloodline",
   "clan",
-  "war",
+  "item",
+  "jutsu",
   "poll",
+  "user",
+  "userjutsu",
+  "war",
 ] as const;
 export type LogType = (typeof LOG_TYPES)[number];
 

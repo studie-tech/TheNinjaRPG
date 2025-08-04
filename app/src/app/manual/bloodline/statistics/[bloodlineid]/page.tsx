@@ -46,7 +46,7 @@ export default function BloodlineStatistics(props: {
         <ContentBox
           title="Bloodline Statistics"
           subtitle={bloodline.name}
-          back_href="/manual/jutsu"
+          back_href="/manual/bloodline"
         >
           {bloodlineText(bloodline.name)}
         </ContentBox>

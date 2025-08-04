@@ -103,6 +103,10 @@ export const saveUsage = async (
     // Get state, lost: 0, won: 1, flee: 2
     const outcome = result.outcome;
     const battleWon = outcome === "Won" ? 1 : outcome === "Fled" ? 2 : 0;
+    const oppositeOutcome =
+      outcome === "Won" ? "Lost" : outcome === "Lost" ? "Won" : "Fled";
+    const oppositeBattleWon =
+      oppositeOutcome === "Won" ? 1 : oppositeOutcome === "Lost" ? 2 : 0;
     // Basic actions from this user
     const data: DataBattleAction[] = [];
     user.usedActions?.map((action) => {
@@ -115,9 +119,14 @@ export const saveUsage = async (
     }
     // If battle is over, check for any AIs in the battle, and add these as well to the statistics
     curBattle.usersState
-      .filter((u) => u.isAi && u.userId === u.controllerId)
+      .filter((u) => u.isAi && !u.isSummon)
       .map((ai) => {
-        data.push({ type: "ai", contentId: ai.userId, battleType, battleWon });
+        data.push({
+          type: "ai",
+          contentId: ai.controllerId,
+          battleType,
+          battleWon: ai.controllerId === userId ? battleWon : oppositeBattleWon,
+        });
       });
     // Reduce data to only have unique type-contentId pairs
     const uniqueData = data.reduce((a, c) => {
