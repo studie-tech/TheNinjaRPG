@@ -274,6 +274,11 @@ export const mirror = (
           mirroredEffect.isNew = true;
           mirroredEffect.castThisRound = true;
           mirroredEffect.createdRound = effect.createdRound;
+          // Cut drain effects in half when mirrored
+          if (negEffect.type === "drain") {
+            mirroredEffect.power = Math.floor(mirroredEffect.power / (effect.rounds || 1));
+            mirroredEffect.powerPerLevel = Math.floor(mirroredEffect.powerPerLevel / (effect.rounds || 1));
+          }
           usersEffects.push(mirroredEffect);
           mirroredCount++;
 

@@ -170,6 +170,7 @@ export default function CombatPage() {
                   showBgColor={true}
                   showLabels={true}
                   selectedId={actionId}
+                  combatMode={true}
                   onClick={(id) => {
                     if (id === actionId) {
                       setActionId(undefined);
@@ -217,6 +218,7 @@ export default function CombatPage() {
                     showBgColor={true}
                     showLabels={true}
                     selectedId={actionId}
+                    combatMode={true}
                     onClick={(id) => {
                       if (id === actionId) {
                         setActionId(undefined);

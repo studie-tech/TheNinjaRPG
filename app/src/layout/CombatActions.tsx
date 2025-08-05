@@ -62,6 +62,8 @@ interface ActionSelectorProps {
   ) => React.ReactNode;
   /** When true, display a help icon on each item that shows details in a pop-over */
   showInfoIcon?: boolean;
+  /** When true, jutsu names will be displayed in black text */
+  combatMode?: boolean;
 }
 
 export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
@@ -141,6 +143,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                     txt={props.showLabels ? item.name : ""}
                     count={props.counts?.find((c) => c.id === item.id)?.quantity}
                     labelSingles={props.labelSingles}
+                    combatMode={props.combatMode}
                     onClick={() => {
                       props.onClick(item.id);
                     }}
@@ -226,11 +229,12 @@ interface ActionOptionProps {
   currentRound?: number;
   lastUsedRound?: number;
   aspectRatioClass?: string;
+  combatMode?: boolean;
   onClick?: () => void;
 }
 
 export const ActionOption: React.FC<ActionOptionProps> = (props) => {
-  const { cooldown, currentRound, lastUsedRound } = props;
+  const { cooldown, currentRound, lastUsedRound, combatMode } = props;
   const cooldownPerc = Math.max(
     cooldown && currentRound && lastUsedRound
       ? 100 - (100 * (currentRound - lastUsedRound)) / cooldown
@@ -240,7 +244,8 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   return (
     <div
       className={cn(
-        "relative text-center flex cursor-pointer flex-col items-center justify-start text-black",
+        "relative text-center flex cursor-pointer flex-col items-center justify-start",
+        combatMode ? "text-black" : "text-foreground",
         props.isGreyed ? "hover:opacity-80" : "hover:opacity-90",
         props.className,
       )}

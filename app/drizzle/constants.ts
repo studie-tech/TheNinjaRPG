@@ -328,10 +328,10 @@ export const UserStatNames = [
   "taijutsuDefence",
   "genjutsuDefence",
   "bukijutsuDefence",
-  "strength",
-  "speed",
   "intelligence",
+  "speed",
   "willpower",
+  "strength",
 ] as const;
 export type UserStatName = (typeof UserStatNames)[number];
 
