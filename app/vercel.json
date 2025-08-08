@@ -71,6 +71,10 @@
     {
       "path": "/api/shrine-maintenance",
       "schedule": "0/5 0 * * *"
+    },
+    {
+      "path": "/api/hourly-bounty-expire",
+      "schedule": "0 * * * *"
     }
   ],
   "functions": {

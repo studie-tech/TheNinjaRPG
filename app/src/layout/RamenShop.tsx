@@ -127,13 +127,12 @@ const MenuEntry: React.FC<MenuEntryProps> = (props) => {
   const dSP = (100 * (userData.maxStamina - userData.curStamina)) / userData.maxStamina;
   const dCP = (100 * (userData.maxChakra - userData.curChakra)) / userData.maxChakra;
   const noDiff = dSP === 0 && dCP === 0;
-  const healTooMuch = healPerc > dSP + 10 && healPerc > dCP + 10;
 
   // Click handler
   const onClick = () => {
     if (!canAfford) {
       showMutationToast({ success: false, message: "You don't have enough money" });
-    } else if (noDiff || healTooMuch) {
+    } else if (noDiff) {
       showMutationToast({ success: false, message: "You don't need to eat that much" });
     } else {
       onPurchase();
@@ -147,7 +146,7 @@ const MenuEntry: React.FC<MenuEntryProps> = (props) => {
         src={image}
         width={256}
         height={256}
-        className={`hover:opacity-30 ${!canAfford || healTooMuch || noDiff ? "grayscale opacity-50 cursor-not-allowed" : ""}`}
+        className={`hover:opacity-30 ${!canAfford || noDiff ? "grayscale opacity-50 cursor-not-allowed" : ""}`}
       />
       <p>{title}</p>
       <p className="text-green-700">+{healPerc.toFixed()}% SP/CP</p>

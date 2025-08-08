@@ -97,24 +97,19 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
   }, [selectedUsers, form]);
 
   // Query
-  const {
-    data,
-    isLoading,
-    isFetching,
-    hasNextPage,
-    fetchNextPage,
-  } = api.bounty.board.useInfiniteQuery(
-    {
-      limit: 20,
-      status: bountyStatus,
-    },
-    {
-      getNextPageParam: (lastPage) => lastPage.nextCursor,
-    }
-  );
+  const { data, isLoading, isFetching, hasNextPage, fetchNextPage } =
+    api.bounty.board.useInfiniteQuery(
+      {
+        limit: 20,
+        status: bountyStatus,
+      },
+      {
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+      },
+    );
 
   // Flatten all pages data
-  const allBounties = data?.pages.flatMap(page => page.data) ?? [];
+  const allBounties = data?.pages.flatMap((page) => page.data) ?? [];
 
   // Use infinite pagination hook
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
@@ -456,9 +451,13 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
           actionButton: (() => {
             // Create an array to hold multiple buttons
             const buttons: ReactElement[] = [];
-            
-            // Staff can remove all trackers from open bounties
-            if (isStaff && b.status === "OPEN" && b.huntersCount > 0) {
+
+            // Staff can remove all trackers from open and claimed bounties
+            if (
+              isStaff &&
+              (b.status === "OPEN" || b.status === "CLAIMED") &&
+              b.huntersCount > 0
+            ) {
               buttons.push(
                 <Button
                   key="removeAll"
@@ -469,7 +468,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 >
                   <Users className="h-4 w-4 mr-2" />
                   Remove All Trackers ({b.huntersCount})
-                </Button>
+                </Button>,
               );
             }
             // User can retract if they created the bounty and it's still open
@@ -488,7 +487,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 >
                   <X className="h-4 w-4 mr-2" />
                   Retract
-                </Button>
+                </Button>,
               );
             }
             // User can collect if they're tracking and bounty is claimed but not yet collected
@@ -502,11 +501,16 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 >
                   <Trophy className="h-4 w-4 mr-2" />
                   Collect
-                </Button>
+                </Button>,
               );
             }
             // User can track if not signed up, not the creator, and bounty is open with space
-            if (!b.youSignedUp && b.huntersCount < 3 && b.status === "OPEN" && b.creatorUserId !== userData?.userId) {
+            if (
+              !b.youSignedUp &&
+              b.huntersCount < 3 &&
+              b.status === "OPEN" &&
+              b.creatorUserId !== userData?.userId
+            ) {
               buttons.push(
                 <Button
                   key="track"
@@ -518,7 +522,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 >
                   <Eye className="h-4 w-4 mr-2" />
                   Track
-                </Button>
+                </Button>,
               );
             }
             // User is tracking an open bounty
@@ -533,10 +537,10 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 >
                   <Eye className="h-4 w-4 mr-2" />
                   Stop Tracking
-                </Button>
+                </Button>,
               );
             }
-            
+
             if (b.status === "CLAIMED" && b.collectedAt) {
               return (
                 <Badge className="p-2" variant="outline">
@@ -548,16 +552,12 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 </Badge>
               );
             }
-            
+
             // Return multiple buttons if we have them, otherwise null
             if (buttons.length > 0) {
-              return (
-                <div className="flex flex-col gap-2">
-                  {buttons}
-                </div>
-              );
+              return <div className="flex flex-col gap-2">{buttons}</div>;
             }
-            
+
             // Bounty is full or closed
             return null;
           })(),
@@ -572,7 +572,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
         ]}
         setLastElement={setLastElement}
       />
-      
+
       {/* Show loading indicator when fetching more data */}
       {isFetching && (
         <div className="flex justify-center p-4">

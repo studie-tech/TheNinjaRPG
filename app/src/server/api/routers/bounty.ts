@@ -1,6 +1,12 @@
 import { nanoid } from "nanoid";
 import { and, eq, sql, gte, desc, inArray, or, isNull } from "drizzle-orm";
-import { bounty, bountySignup, bountyContribution, userData, actionLog } from "@/drizzle/schema";
+import {
+  bounty,
+  bountySignup,
+  bountyContribution,
+  userData,
+  actionLog,
+} from "@/drizzle/schema";
 import {
   BOUNTY_MAX_HUNTERS,
   RANKS_RESTRICTED_FROM_PVP,
@@ -126,15 +132,13 @@ export const bountyRouter = createTRPCRouter({
             return true;
           }
 
-          // For other users, hide bounties from the same village
+          // For other users, hide bounties where the target is from the same village
           const targetVillageId = bountyItem.target?.villageId;
-          const creatorVillageId = bountyItem.creator?.villageId;
           const userVillageId = currentUser?.villageId;
+          const isCreator = bountyItem.creatorUserId === userId;
 
-          // Hide if target or creator is from the same village
-          return (
-            targetVillageId !== userVillageId && creatorVillageId !== userVillageId
-          );
+          // Show if user is the creator, or if target is from a different village
+          return isCreator || targetVillageId !== userVillageId;
         })
         .map((bountyItem) => ({
           ...bountyItem,
@@ -143,7 +147,7 @@ export const bountyRouter = createTRPCRouter({
             bountyItem.hunters?.some((h) => h.hunterUserId === userId) ?? false,
           targetUser: bountyItem.target,
           creatorUser: canSeeHiddenInfo ? bountyItem.creator : undefined,
-          creatorUserId: canSeeHiddenInfo ? bountyItem.creatorUserId : undefined,
+          creatorUserId: bountyItem.creatorUserId,
           huntingUsers: canSeeHiddenInfo
             ? bountyItem.hunters
                 ?.map((h) => ("hunter" in h ? h.hunter : null))
@@ -480,21 +484,27 @@ export const bountyRouter = createTRPCRouter({
         }),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
-      
+
       // Guards
       if (!curBountyWithHunters) return errorResponse("Bounty not found");
-      if (!canSeeHiddenBountyInfo(user.role)) return errorResponse("Staff access required");
-      if (curBountyWithHunters.status !== "OPEN") return errorResponse("Bounty not open");
-      
+      if (!canSeeHiddenBountyInfo(user.role))
+        return errorResponse("Staff access required");
+      if (
+        curBountyWithHunters.status !== "OPEN" &&
+        curBountyWithHunters.status !== "CLAIMED"
+      ) {
+        return errorResponse("Bounty must be open or claimed");
+      }
+
       const hunters = curBountyWithHunters.hunters;
-      
+
       // Execute deletion and logging in parallel (no transaction to avoid PlanetScale deadlocks)
       await Promise.all([
         // Remove all hunter signups for this bounty
         ctx.drizzle
           .delete(bountySignup)
           .where(eq(bountySignup.bountyId, input.bountyId)),
-        
+
         // Log the action
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
@@ -505,10 +515,10 @@ export const bountyRouter = createTRPCRouter({
           relatedMsg: `Staff removed all trackers from bounty: ${hunters.length} hunters removed`,
         }),
       ]);
-      
-      return { 
-        success: true, 
-        message: `Removed ${hunters.length} hunters from bounty tracking` 
+
+      return {
+        success: true,
+        message: `Removed ${hunters.length} hunters from bounty tracking`,
       };
     }),
 

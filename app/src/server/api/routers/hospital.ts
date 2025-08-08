@@ -111,7 +111,8 @@ export const hospitalRouter = createTRPCRouter({
       const chakraCost = calcHealthToChakra(u, toHeal);
       // Calculate experience gain, capped at 4 million
       const rawExpGain = t.userId !== u.userId ? MEDNIN_HEAL_TO_EXP * toHeal : 0;
-      const expGain = rawExpGain > 0 ? Math.min(rawExpGain, MEDNIN_EXP_CAP - u.medicalExperience) : 0;
+      const expGain =
+        rawExpGain > 0 ? Math.min(rawExpGain, MEDNIN_EXP_CAP - u.medicalExperience) : 0;
       // Guard
       if (u.isBanned) return errorResponse("You are banned");
       if (t.isBanned) return errorResponse("Target is banned");
@@ -129,6 +130,9 @@ export const hospitalRouter = createTRPCRouter({
       }
       if (u.sector !== t.sector) {
         return errorResponse("You can only heal users in the same sector as you");
+      }
+      if (u.villageId !== t.villageId) {
+        return errorResponse("You can only heal users from the same village as you");
       }
       if (chakraCost > u.curChakra) {
         return errorResponse("You don't have enough chakra to heal this much");

@@ -171,7 +171,7 @@ squash: # Squash the last N commits into one, usage: make squash N
 .PHONE: git-branch-uncommit
 git-branch-uncommit: # Undo the last N commits (keeping changes staged), usage: make uncommit N
 	@echo "${YELLOW}Uncommitting branch commits${RESET}"
-	git diff main..HEAD > branch.patch
+	git diff origin/main...HEAD > branch.patch
 	git reset --hard origin/main
 	git apply branch.patch
 	rm -rf branch.patch

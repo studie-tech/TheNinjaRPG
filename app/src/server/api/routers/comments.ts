@@ -960,10 +960,10 @@ export const createConvo = async (info: {
       id: messageId,
       content: sanitized,
       userId: senderUserId,
-      conversationId: convoId,
+      conversationId: insertId,
     }),
   ]);
-  return convoId;
+  return insertId;
 };
 
 /**
