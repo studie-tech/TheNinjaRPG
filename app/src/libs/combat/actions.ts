@@ -128,7 +128,15 @@ export const availableUserActions = (
       : []),
     ...(user?.items && !isStealth
       ? user.items
-          .filter((useritem) => useritem.quantity > 0)
+          .filter((useritem) => {
+            if (useritem.quantity <= 0) return false;
+            // Weapons with low durability cannot be used in combat
+            if (useritem.item?.itemType === "WEAPON") {
+              const cur = useritem.durability ?? useritem.maxDurability ?? 100;
+              return cur > 20;
+            }
+            return true;
+          })
           .map((useritem) => userItemToAction(useritem, user))
       : []),
   ];
@@ -910,6 +918,23 @@ export const performBattleAction = (props: {
   const check = insertAction({ battle, grid, action, actorId, longitude, latitude });
   if (!check) {
     throw new Error(`Action ${action.name} no longer possible for ${user.username}`);
+  }
+
+  // Track weapon durability usage
+  if (action.type === "item") {
+    const used = user.items.find((i) => i.item.id === action.id);
+    if (used && used.item.itemType === "WEAPON") {
+      // Decrease durability in-battle by 3 per use
+      used.durability = Math.max(0, (used.durability ?? used.maxDurability ?? 100) - 3);
+      // Track total uses for DB persistence
+      if (!user.weaponUseCounts) user.weaponUseCounts = {};
+      user.weaponUseCounts[action.id] = (user.weaponUseCounts[action.id] || 0) + 1;
+      // Auto-block further usage if at threshold
+      if (used.durability <= 20) {
+        // Optional: mark unequipped to reflect state
+        used.equipped = "NONE" as const;
+      }
+    }
   }
 
   // Update the action state, so as keep state for technique cooldowns

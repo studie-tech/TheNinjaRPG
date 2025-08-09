@@ -365,6 +365,10 @@ export const applyEffects = (
             color: "red",
             types: c.types,
           });
+          // Reduce armor durability by 1 when hit
+          // Track hits for DB persistence (armor durability -1 per hit)
+          const t = newUsersState.find((u) => u.userId === target.userId);
+          if (t) t.armorHits = (t.armorHits || 0) + 1;
         }
         if (c.residual !== undefined && c.residual >= 0) {
           target.curHealth -= c.residual;
@@ -374,6 +378,9 @@ export const applyEffects = (
             color: "red",
             types: c.types,
           });
+          // Track armor hits from residual damage as well
+          const t2 = newUsersState.find((u) => u.userId === target.userId);
+          if (t2) t2.armorHits = (t2.armorHits || 0) + 1;
         }
         if (c.heal_hp !== undefined && c.heal_hp >= 0 && target.curHealth > 0) {
           target.curHealth += c.heal_hp;

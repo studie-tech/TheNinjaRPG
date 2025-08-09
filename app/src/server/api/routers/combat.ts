@@ -1921,21 +1921,27 @@ export const processUsersForBattle = async (
           itemType === "KEYSTONE"
         ) {
           if (useritem.item.effects && useritem.equipped !== "NONE") {
-            // Add item effects to user
-            effects.forEach((effect) => {
-              const realized = realizeTag({
-                tag: effect,
-                user: user,
-                actionId: useritem.itemId,
-                target: user,
-                level: user.level,
+            // If armor durability is 20 or less, cannot be used in combat -> unequip
+            const cur = (useritem as UserItem).durability ?? (useritem as UserItem).maxDurability ?? 100;
+            if (cur <= 20) {
+              useritem.equipped = "NONE" as const;
+            } else {
+              // Add item effects to user
+              effects.forEach((effect) => {
+                const realized = realizeTag({
+                  tag: effect,
+                  user: user,
+                  actionId: useritem.itemId,
+                  target: user,
+                  level: user.level,
+                });
+                realized.isNew = false;
+                realized.fromType = "armor";
+                realized.castThisRound = false;
+                realized.targetId = user.userId;
+                userEffects.push(realized);
               });
-              realized.isNew = false;
-              realized.fromType = "armor";
-              realized.castThisRound = false;
-              realized.targetId = user.userId;
-              userEffects.push(realized);
-            });
+            }
           }
         } else {
           useritem.lastUsedRound = -useritem.item.cooldown;
