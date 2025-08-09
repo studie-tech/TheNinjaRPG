@@ -92,6 +92,9 @@ export type BattleUserState = Omit<NonNullable<UserWithRelations>, "items"> & {
   usedGenerals: Record<(typeof GenNames)[number], number>;
   usedStats: Record<(typeof StatNames)[number], number>;
   usedActions: { id: string; type: "jutsu" | "item" | "basic" | "bloodline" }[];
+  // Durability tracking during battle
+  armorHits?: number;
+  weaponUseCounts?: Record<string, number>;
   hex?: TerrainHex;
   clan?: Clan | null;
   anbuSquad?: AnbuSquad | null;

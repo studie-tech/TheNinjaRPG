@@ -2064,6 +2064,9 @@ export const userItem = mysqlTable(
     itemId: varchar("itemId", { length: 191 }).notNull(),
     quantity: int("quantity").default(1).notNull(),
     equipped: mysqlEnum("equipped", consts.ItemSlots).default("NONE").notNull(),
+    // Durability tracking for equipment
+    durability: smallint("durability", { unsigned: true }).default(100).notNull(),
+    maxDurability: smallint("maxDurability", { unsigned: true }).default(100).notNull(),
     storedAtHome: boolean("storedAtHome").default(false).notNull(),
     craftingFinishedAt: datetime("craftingFinishedAt", { mode: "date", fsp: 3 }),
     isInAuction: boolean("isInAuction").default(false).notNull(),
