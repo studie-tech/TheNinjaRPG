@@ -1081,6 +1081,7 @@ export const initiateBattle = async (
         },
         userSkills: {
           with: { skill: true },
+          where: (userSkills) => eq(userSkills.activated, true),
         },
         userQuests: {
           where: or(

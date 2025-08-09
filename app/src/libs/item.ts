@@ -40,6 +40,8 @@ export const nonCombatConsume = (item: Item, userData: UserData): boolean => {
       return true;
     } else if (effect.type === "noncombatconsumereward") {
       return true;
+    } else if (effect.type === "noncombatgainskill") {
+      return true;
     }
   }
 

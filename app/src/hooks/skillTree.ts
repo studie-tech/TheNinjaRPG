@@ -6,7 +6,7 @@ import { api } from "@/app/_trpc/client";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import type { SkillTree } from "@/drizzle/schema";
 import type { ZodAllTags } from "@/libs/combat/types";
-import { SkillTreeTargets } from "@/drizzle/constants";
+import { SkillTreeTargets, SkillTreeEntryTypes } from "@/drizzle/constants";
 import type { FormEntry } from "@/layout/EditContent";
 import type { ZodSkillTreeType } from "@/libs/combat/types";
 
@@ -96,6 +96,7 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
     { id: "tier", type: "number" },
     { id: "costSkillPoints", type: "number", label: "Skill Points Cost" },
     { id: "hidden", type: "boolean" },
+    { id: "skillType", type: "str_array", values: SkillTreeEntryTypes },
     { id: "description", type: "richinput", doubleWidth: true },
     {
       id: "requiredSkillIds",

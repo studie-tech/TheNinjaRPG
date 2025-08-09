@@ -6,7 +6,7 @@ import { BloodlineDifficultyRatings } from "@/drizzle/constants";
 import { ElementNames } from "@/drizzle/constants";
 import { DateTimeRegExp } from "@/utils/regex";
 import { StatTypes, GeneralTypes, PoolTypes } from "@/drizzle/constants";
-import { SkillTreeTargets } from "@/drizzle/constants";
+import { SkillTreeTargets, SkillTreeEntryTypes } from "@/drizzle/constants";
 import {
   MAX_STATS_CAP,
   MAX_GENS_CAP,
@@ -891,6 +891,13 @@ export const InjectJutsusTag = z.object({
   jutsuIds: z.array(z.string()).default([]),
 });
 
+export const NonCombatGainSkill = z.object({
+  ...BaseAttributes,
+  type: z.literal("noncombatgainskill").default("noncombatgainskill"),
+  description: msg("Grants access to a special skill tree entry"),
+  skillId: z.string().default(""),
+});
+
 /******************** */
 /** UNIONS OF TAGS   **/
 /******************** */
@@ -934,6 +941,7 @@ export const AllTags = z.union([
   MovePreventTag.default({}),
   MoveTag.default({}),
   NonCombatConsumeRewardTag.default({}),
+  NonCombatGainSkill.default({}),
   OneHitKillPreventTag.default({}),
   OneHitKillTag.default({}),
   PierceTag.default({}),
@@ -1308,6 +1316,7 @@ export const SkillTreeValidator = z.object({
   requiredSkillIds: z.array(z.string()),
   costSkillPoints: z.coerce.number().int().min(1),
   hidden: z.coerce.boolean().optional(),
+  skillType: z.enum(SkillTreeEntryTypes).default("DEFAULT"),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
 });
 export type ZodSkillTreeType = z.infer<typeof SkillTreeValidator>;

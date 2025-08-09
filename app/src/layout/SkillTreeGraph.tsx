@@ -7,13 +7,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Check, Lock, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Modal2 from "@/layout/Modal2";
-import type { SkillTree } from "@/drizzle/schema";
+import type { SkillTree, UserSkill } from "@/drizzle/schema";
 import { MultiSelect } from "@/components/ui/multi-select";
 import type { OptionType } from "@/components/ui/multi-select";
 
 interface SkillTreeGraphProps {
   skills: SkillTree[];
-  userSkillIds?: string[];
+  userSkills?: (UserSkill & { skill: SkillTree })[];
   userSkillPoints?: number;
   adminMode?: boolean;
   onPurchaseSkill?: (skillId: string) => void;
@@ -25,13 +25,14 @@ interface SkillNode extends SkillTree {
   tier: number;
   canPurchase: boolean;
   isOwned: boolean;
+  isActivated: boolean;
   hasPrereqs: boolean;
   hasPoints: boolean;
 }
 
 export default function SkillTreeGraph({
   skills,
-  userSkillIds = [],
+  userSkills = [],
   userSkillPoints = 0,
   adminMode = false,
   onPurchaseSkill,
@@ -57,13 +58,25 @@ export default function SkillTreeGraph({
     ),
   ).sort();
 
-  // Filter skills based on selected categories (OR logic)
+  // Get activated skill IDs for easier lookup
+  const activatedSkillIds = userSkills
+    .filter((us) => us.activated)
+    .map((us) => us.skillId);
+
+  // Get all owned skill IDs (activated or not)
+  const ownedSkillIds = userSkills.map((us) => us.skillId);
+
+  // Hide SPECIAL skills unless user owns them (only in non-admin mode),
+  // then filter by selected categories (OR logic)
+  const visibleSkills = adminMode
+    ? skills
+    : skills.filter((s) => s.skillType !== "SPECIAL" || ownedSkillIds.includes(s.id));
   const filteredSkills =
     selectedCategories.length > 0
-      ? skills.filter((skill) =>
+      ? visibleSkills.filter((skill) =>
           skill.effects?.some((effect) => selectedCategories.includes(effect.type)),
         )
-      : skills;
+      : visibleSkills;
 
   // Layout skills in a tree structure
   useEffect(() => {
@@ -115,12 +128,18 @@ export default function SkillTreeGraph({
       const x = padding + 50 + (tier - 1) * tierWidth;
       const y = padding + row * skillHeight;
 
-      const isOwned = userSkillIds.includes(skill.id);
+      const isOwned = ownedSkillIds.includes(skill.id);
+      const isActivated = activatedSkillIds.includes(skill.id);
       const hasPrereqs = skill.requiredSkillIds.every((reqId) =>
-        userSkillIds.includes(reqId),
+        activatedSkillIds.includes(reqId),
       );
       const hasPoints = userSkillPoints >= skill.costSkillPoints;
-      const canPurchase = !isOwned && hasPrereqs && hasPoints && !adminMode;
+      // Can purchase if: not owned OR owned but not activated
+      const canPurchase =
+        (!isOwned || (isOwned && !isActivated)) &&
+        hasPrereqs &&
+        hasPoints &&
+        !adminMode;
 
       nodes.push({
         ...skill,
@@ -129,6 +148,7 @@ export default function SkillTreeGraph({
         tier,
         canPurchase,
         isOwned,
+        isActivated,
         hasPrereqs,
         hasPoints,
       });
@@ -173,7 +193,7 @@ export default function SkillTreeGraph({
     });
 
     setSkillNodes(nodes);
-  }, [filteredSkills, userSkillIds, userSkillPoints, adminMode]);
+  }, [filteredSkills, activatedSkillIds, ownedSkillIds, userSkillPoints, adminMode]);
 
   const handleSkillClick = (skill: SkillNode, e: React.MouseEvent) => {
     // Prevent click during drag
@@ -463,11 +483,13 @@ export default function SkillTreeGraph({
                 const badgeRadius = 20;
 
                 // Determine skill status for styling
-                const isLocked = !skill.isOwned && !skill.hasPrereqs;
+                // Treat unactivated skills as if they're not owned
+                const effectivelyOwned = skill.isOwned && skill.isActivated;
+                const isLocked = !effectivelyOwned && !skill.hasPrereqs;
                 const isUnaffordable =
-                  !skill.isOwned && skill.hasPrereqs && !skill.hasPoints;
+                  !effectivelyOwned && skill.hasPrereqs && !skill.hasPoints;
                 const isAvailable =
-                  !skill.isOwned && skill.hasPrereqs && skill.hasPoints;
+                  !effectivelyOwned && skill.hasPrereqs && skill.hasPoints;
 
                 return (
                   <g
@@ -482,7 +504,7 @@ export default function SkillTreeGraph({
                       className={`
                         cursor-pointer transition-all duration-200
                         ${
-                          skill.isOwned
+                          effectivelyOwned
                             ? "fill-green-500/10 stroke-green-500 stroke-[3] dark:fill-green-500/20"
                             : isAvailable
                               ? "fill-blue-500/10 stroke-blue-500 stroke-[3] dark:fill-blue-500/20"
@@ -555,7 +577,7 @@ export default function SkillTreeGraph({
                     </text>
 
                     {/* Status icon */}
-                    {!adminMode && skill.isOwned && (
+                    {!adminMode && effectivelyOwned && (
                       <foreignObject
                         x={centerX + 50 - badgeRadius}
                         y={centerY + 50 - badgeRadius}
@@ -625,7 +647,7 @@ export default function SkillTreeGraph({
             isOpen={isModalOpen}
             setIsOpen={setIsModalOpen}
             proceed_label={
-              selectedSkill.isOwned
+              selectedSkill.isOwned && selectedSkill.isActivated
                 ? null
                 : selectedSkill.canPurchase
                   ? `Purchase for ${selectedSkill.costSkillPoints} SP`
@@ -644,10 +666,16 @@ export default function SkillTreeGraph({
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Badge variant="secondary">Tier {selectedSkill.tier}</Badge>
-                {selectedSkill.isOwned && (
+                {selectedSkill.isOwned && selectedSkill.isActivated && (
                   <Badge className="flex items-center gap-1 bg-green-100 text-green-800">
                     <Check className="w-3 h-3" />
-                    Owned
+                    Activated
+                  </Badge>
+                )}
+                {selectedSkill.isOwned && !selectedSkill.isActivated && (
+                  <Badge className="flex items-center gap-1 bg-yellow-100 text-yellow-800">
+                    <Lock className="w-3 h-3" />
+                    Owned (Inactive)
                   </Badge>
                 )}
               </div>
@@ -667,9 +695,15 @@ export default function SkillTreeGraph({
                   <ul className="list-disc list-inside mt-1">
                     {selectedSkill.requiredSkillIds.map((reqId) => {
                       const prereq = skillNodes.find((s) => s.id === reqId);
+                      const isPrereqActivated = activatedSkillIds.includes(reqId);
                       return (
-                        <li key={reqId} className="text-gray-600">
-                          {prereq?.name || reqId}
+                        <li
+                          key={reqId}
+                          className={
+                            isPrereqActivated ? "text-green-600" : "text-gray-600"
+                          }
+                        >
+                          {prereq?.name || reqId} {isPrereqActivated ? "✓" : "✗"}
                         </li>
                       );
                     })}
@@ -677,16 +711,18 @@ export default function SkillTreeGraph({
                 </div>
               )}
 
-              {!selectedSkill.isOwned && !selectedSkill.canPurchase && (
-                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                  <Lock className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    {userSkillPoints < selectedSkill.costSkillPoints
-                      ? "Not enough skill points"
-                      : "Prerequisites not met"}
-                  </span>
-                </div>
-              )}
+              {!selectedSkill.isOwned &&
+                !selectedSkill.isActivated &&
+                !selectedSkill.canPurchase && (
+                  <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                    <Lock className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {userSkillPoints < selectedSkill.costSkillPoints
+                        ? "Not enough skill points"
+                        : "Prerequisites not met"}
+                    </span>
+                  </div>
+                )}
             </div>
           </Modal2>
         )}

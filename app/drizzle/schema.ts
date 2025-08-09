@@ -418,6 +418,9 @@ export const skillTree = mysqlTable(
     requiredSkillIds: json("requiredSkillIds").$type<string[]>().default([]).notNull(),
     costSkillPoints: int("costSkillPoints").default(1).notNull(),
     hidden: boolean("hidden").default(false).notNull(),
+    skillType: mysqlEnum("skillType", consts.SkillTreeEntryTypes)
+      .default("DEFAULT")
+      .notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -430,6 +433,7 @@ export const skillTree = mysqlTable(
       nameKey: uniqueIndex("SkillTree_name_key").on(table.name),
       tierIdx: index("SkillTree_tier_idx").on(table.tier),
       hiddenIdx: index("SkillTree_hidden_idx").on(table.hidden),
+      skillTypeIdx: index("SkillTree_skillType_idx").on(table.skillType),
     };
   },
 );
@@ -448,6 +452,7 @@ export const userSkill = mysqlTable(
     purchasedAt: datetime("purchasedAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
+    activated: boolean("activated").default(true).notNull(),
   },
   (table) => {
     return {

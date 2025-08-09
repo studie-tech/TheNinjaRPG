@@ -10,6 +10,7 @@ import {
   bloodlineRolls,
   craftingRequirement,
   itemLoadout,
+  userSkill,
 } from "@/drizzle/schema";
 import { ItemTypes, ItemSlots } from "@/drizzle/constants";
 import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
@@ -32,7 +33,8 @@ import { getRandomElement } from "@/utils/array";
 import { calcMaxItems, calcMaxEventItems } from "@/libs/item";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { calculateContentDiff } from "@/utils/diff";
-import { HealTag } from "@/libs/combat/types";
+import { fetchUserSkills } from "@/routers/skillTree";
+import { HealTag, NonCombatGainSkill } from "@/libs/combat/types";
 import { itemFilteringSchema } from "@/validators/item";
 import { filterRollableBloodlines } from "@/libs/bloodline";
 import { fetchBloodlines } from "@/routers/bloodline";
@@ -445,16 +447,18 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ userItemId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [updatedUser, useritem, allBloodlines, previousRolls] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          forceRegen: true,
-        }),
-        fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
-        fetchBloodlines(ctx.drizzle),
-        fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
-      ]);
+      const [updatedUser, useritem, allBloodlines, previousRolls, userSkills] =
+        await Promise.all([
+          fetchUpdatedUser({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            forceRegen: true,
+          }),
+          fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
+          fetchBloodlines(ctx.drizzle),
+          fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
+          fetchUserSkills(ctx.drizzle, ctx.userId),
+        ]);
       const { user } = updatedUser;
 
       // Guard
@@ -532,6 +536,24 @@ export const itemRouter = createTRPCRouter({
           }
         } else if (effect.type === "noncombatconsumereward") {
           rewards.push(ObjectiveReward.parse(effect));
+        } else if (effect.type === "noncombatgainskill") {
+          const parsedEffect = NonCombatGainSkill.parse(effect);
+          if (parsedEffect.skillId) {
+            const skill = userSkills.find((s) => s.skill.id === parsedEffect.skillId);
+            if (!skill) {
+              promises.push(
+                ctx.drizzle.insert(userSkill).values({
+                  id: nanoid(),
+                  userId: ctx.userId,
+                  skillId: parsedEffect.skillId,
+                  activated: false,
+                }),
+              );
+              messages.push("You unlocked a special skill!");
+            } else {
+              messages.push(`You already have the skill ${skill.skill.name}.`);
+            }
+          }
         } else if (effect.type === "removebloodline") {
           if (Math.random() * 100 < effect.power) {
             updates.bloodlineId = null;

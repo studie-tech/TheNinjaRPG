@@ -224,7 +224,13 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       if (data.success && "rewards" in data && data.rewards) {
         showRewardToast(data.notifications, data.rewards, data.message, false);
       } else {
-        showMutationToast(data);
+        let message = data.message || "Consume failed";
+        if ("notifications" in data && data.notifications) {
+          for (const notification of data.notifications || []) {
+            message += `\n${notification}`;
+          }
+        }
+        showMutationToast({ success: true, message });
       }
       if (data.success) {
         await utils.profile.getUser.invalidate();

@@ -957,11 +957,18 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   });
 
   const { data: itemData } = api.item.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("items") || fields.includes("reward_items"),
+    enabled:
+      fields.includes("items") ||
+      fields.includes("reward_items") ||
+      fields.includes("skillId"),
   });
 
   const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined, {
     enabled: fields.includes("reward_bloodlines"),
+  });
+
+  const { data: skillsData } = api.skillTree.getAllNames.useQuery(undefined, {
+    enabled: fields.includes("skillId"),
   });
 
   const { data: badgeData } = api.badge.getAll.useQuery(undefined, {
@@ -1085,6 +1092,40 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   // Create the form data dynamically based on the tag type
   const formData: FormEntry<Attribute>[] = attributes
     .filter((value) => !ignore.includes(value))
+    .filter((value) => {
+      return (
+        !["noncombatconsumereward", "noncombatgainskill"].includes(watchType) ||
+        ![
+          "staticAnimation",
+          "staticAssetPath",
+          "appearAnimation",
+          "disappearAnimation",
+          "rounds",
+          "target",
+          "friendlyFire",
+          "calculation",
+          "power",
+          "powerPerLevel",
+        ].includes(value)
+      );
+    })
+    .filter((value) => {
+      return (
+        !["rollbloodline", "removebloodline", "marriageslotincrease"].includes(
+          watchType,
+        ) ||
+        ![
+          "staticAnimation",
+          "staticAssetPath",
+          "appearAnimation",
+          "disappearAnimation",
+          "rounds",
+          "target",
+          "friendlyFire",
+          "calculation",
+        ].includes(value)
+      );
+    })
     .map((value) => {
       const innerType = getInner(tagSchema.shape[value]);
       if ((value as string) === "aiId" && aiData) {
@@ -1121,6 +1162,16 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           id: value,
           values: jutsuData.filter((j) => j.injectableInBattle),
           multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values",
+        };
+      } else if ((value as string) === "skillId" && skillsData) {
+        return {
+          id: value,
+          values: skillsData
+            .filter((s) => s.skillType === "SPECIAL")
+            .map((i) => ({ id: i.id, name: i.name })),
+          multiple: false,
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values",
         };
@@ -1671,4 +1722,5 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   attackers_scaled_to_user: "Scale random encounter to user lvl",
   attackers_scale_gains: "Scale random encounter combat gains",
   attackers_max_per_battle: "Max number of AI in random encounter",
+  skillId: "Skill Unlocked by Consumption",
 };

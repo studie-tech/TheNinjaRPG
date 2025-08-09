@@ -394,10 +394,10 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
 
   // Skill tree derived data
   const allSkillsData = allSkills?.data ?? [];
-  const userSkillIds = userSkills?.map((us) => us.skillId) || [];
   const ownedSkills = userSkills || [];
+  const activatedSkills = ownedSkills.filter((us) => us.activated);
   const totalSkillPoints = userData?.skillPoints || 0;
-  const usedSkillPoints = ownedSkills.reduce(
+  const usedSkillPoints = activatedSkills.reduce(
     (total, userSkill) => total + userSkill.skill.costSkillPoints,
     0,
   );
@@ -424,8 +424,10 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
       {/* Skill Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-600">{ownedSkills.length}</div>
-          <div className="text-sm text-green-700">Skills Owned</div>
+          <div className="text-2xl font-bold text-green-600">
+            {activatedSkills.length}
+          </div>
+          <div className="text-sm text-green-700">Skills Activated</div>
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
@@ -443,7 +445,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
       <div className="mb-6">
         <SkillTreeGraph
           skills={allSkillsData}
-          userSkillIds={userSkillIds}
+          userSkills={userSkills}
           userSkillPoints={totalSkillPoints - usedSkillPoints}
           onPurchaseSkill={(skillId) => purchaseSkill({ skillId })}
         />

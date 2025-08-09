@@ -26,6 +26,13 @@ import type { UserData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 export const skillTreeRouter = createTRPCRouter({
+  // Get all skill names for selectors
+  getAllNames: publicProcedure.query(async ({ ctx }) => {
+    return await ctx.drizzle.query.skillTree.findMany({
+      columns: { id: true, name: true, skillType: true },
+      orderBy: (table, { asc }) => [asc(table.name)],
+    });
+  }),
   // Get single skill by ID
   get: publicProcedure
     .input(z.object({ id: z.string() }))
@@ -71,13 +78,10 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Get user's purchased skills
   getUserSkills: protectedProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle.query.userSkill.findMany({
-      where: eq(userSkill.userId, ctx.userId),
-      with: { skill: true },
-    });
+    return await fetchUserSkills(ctx.drizzle, ctx.userId);
   }),
 
-  // Purchase a skill
+  // Purchase a skill or activate an unlocked skill
   purchaseSkill: protectedProcedure
     .input(z.object({ skillId: z.string() }))
     .output(baseServerResponse)
@@ -91,26 +95,29 @@ export const skillTreeRouter = createTRPCRouter({
         ctx.drizzle.query.skillTree.findFirst({
           where: and(eq(skillTree.id, input.skillId), eq(skillTree.hidden, false)),
         }),
-        ctx.drizzle.query.userSkill.findMany({
-          where: eq(userSkill.userId, ctx.userId),
-          with: { skill: true },
-        }),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
 
       if (!user) return errorResponse("User not found");
       if (!skill) return errorResponse("Skill not found");
 
-      // Check if skill is already purchased
-      const purchasedSkillIds = userSkills.map((us) => us.skillId);
-      if (purchasedSkillIds.includes(input.skillId)) {
-        return errorResponse("Skill already purchased");
+      // Get activated skill IDs (shared logic)
+      const activatedSkillIds = userSkills
+        .filter((us) => us.activated)
+        .map((us) => us.skillId);
+
+      // Check prerequisites (shared logic)
+      const hasAllPrereqs = skill.requiredSkillIds.every((reqId) =>
+        activatedSkillIds.includes(reqId),
+      );
+      if (!hasAllPrereqs) {
+        return errorResponse("Prerequisites not met");
       }
 
-      // Calculate total used skill points
-      const totalUsedSkillPoints = userSkills.reduce(
-        (total, userSkill) => total + userSkill.skill.costSkillPoints,
-        0,
-      );
+      // Calculate total used skill points (only activated skills count)
+      const totalUsedSkillPoints = userSkills
+        .filter((us) => us.activated)
+        .reduce((total, userSkill) => total + userSkill.skill.costSkillPoints, 0);
 
       // Check if user has enough skill points (available = total - used)
       const availableSkillPoints = user.skillPoints - totalUsedSkillPoints;
@@ -118,19 +125,32 @@ export const skillTreeRouter = createTRPCRouter({
         return errorResponse("Not enough skill points");
       }
 
-      // Check prerequisites
-      const hasAllPrereqs = skill.requiredSkillIds.every((reqId) =>
-        purchasedSkillIds.includes(reqId),
-      );
-      if (!hasAllPrereqs) {
-        return errorResponse("Prerequisites not met");
+      // For special skills, the user should already have it
+      const existingUserSkill = userSkills.find((us) => us.skillId === input.skillId);
+      if (skill.skillType === "SPECIAL" && !existingUserSkill) {
+        return errorResponse(
+          "You cannot activate this special skill without unlocking it first",
+        );
       }
 
-      // Purchase the skill (just add to userSkill table)
+      // Check if skill is already owned
+      if (existingUserSkill) {
+        if (existingUserSkill.activated) {
+          return errorResponse("Skill already activated");
+        }
+        await ctx.drizzle
+          .update(userSkill)
+          .set({ activated: true })
+          .where(eq(userSkill.id, existingUserSkill.id));
+        return { success: true, message: `Successfully activated ${skill.name}!` };
+      }
+
+      // Purchase the skill (add to userSkill table, activated by default)
       await ctx.drizzle.insert(userSkill).values({
         id: nanoid(),
         userId: ctx.userId,
         skillId: input.skillId,
+        activated: true,
       });
 
       return { success: true, message: `Successfully purchased ${skill.name}!` };
@@ -159,6 +179,7 @@ export const skillTreeRouter = createTRPCRouter({
       requiredSkillIds: [],
       costSkillPoints: 1,
       hidden: true,
+      skillType: "DEFAULT",
     });
 
     await callDiscordContent(user.username, `Created skill: New Skill - ${id}`, [
@@ -203,6 +224,7 @@ export const skillTreeRouter = createTRPCRouter({
         requiredSkillIds: input.data.requiredSkillIds,
         costSkillPoints: input.data.costSkillPoints,
         hidden: input.data.hidden,
+        skillType: input.data.skillType,
       };
 
       const diff = calculateContentDiff(skill, {
@@ -487,4 +509,17 @@ export const getFreeResetAmount = (user: UserData) => {
     default:
       return 0;
   }
+};
+
+/**
+ * Fetch the user's skills
+ * @param client - The database client
+ * @param userId - The user ID
+ * @returns The user's skills
+ */
+export const fetchUserSkills = async (client: DrizzleClient, userId: string) => {
+  return await client.query.userSkill.findMany({
+    where: eq(userSkill.userId, userId),
+    with: { skill: true },
+  });
 };
