@@ -30,7 +30,6 @@ import type { BattleTypes, BattleDataEntryType } from "@/drizzle/constants";
 import type { DrizzleClient } from "@/server/db";
 import type { Battle } from "@/drizzle/schema";
 import type { CombatResult } from "@/libs/combat/types";
-import type { DroppedItem } from "@/libs/combat/types";
 import type { ActionEffect } from "@/libs/combat/types";
 import type { CompleteBattle } from "@/libs/combat/types";
 

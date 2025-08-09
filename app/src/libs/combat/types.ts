@@ -1290,8 +1290,8 @@ export const BloodlineValidator = z.object({
   statClassification: z.enum(StatTypes),
   villageId: z.string().nullable(),
   hidden: z.coerce.boolean().optional(),
-  difficulty: z.enum(BloodlineDifficultyRatings).optional(),
-  traits: z.string().max(256).optional(),
+  difficulty: z.enum(BloodlineDifficultyRatings).nullable().optional(),
+  traits: z.string().max(256).nullable().optional(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
 });
 export type ZodBloodlineType = z.infer<typeof BloodlineValidator>;

@@ -78,8 +78,8 @@ export default function CombatPage() {
 
   // Collect all possible actions for action selector
   const actions = useMemo(() => {
-    console.log(">>>>>>>>>>>>>>>");
     return availableUserActions(battleState?.battle, userData?.userId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [versionId]);
 
   // Battle scene

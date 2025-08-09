@@ -8,11 +8,7 @@ import { fetchUpdatedUser } from "@/routers/profile";
 import { canChangeContent } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/discord";
 import { calculateContentDiff } from "@/utils/diff";
-import {
-  IMG_AVATAR_DEFAULT,
-  COST_SKILL_RESET,
-  FederalStatus,
-} from "@/drizzle/constants";
+import { IMG_AVATAR_DEFAULT, COST_SKILL_RESET } from "@/drizzle/constants";
 import { SkillTreeValidator } from "@/libs/combat/types";
 import { canUnequipAllUsers } from "@/utils/permissions";
 import { actionLog } from "@/drizzle/schema";
@@ -26,7 +22,7 @@ import {
   SKILL_TREE_RESET_FREE_NORMAL,
   SKILL_TREE_RESET_FREE_SILVER,
 } from "@/drizzle/constants";
-import type { ActionLog, UserData } from "@/drizzle/schema";
+import type { UserData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 export const skillTreeRouter = createTRPCRouter({
