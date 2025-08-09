@@ -2475,8 +2475,20 @@ export const village = mysqlTable(
         unlockedAiIds: string[];
         activeBoosts: Record<string, string>; // boost type -> expiry ISO string
         activeAiIds: string[];
+        // Optional list of scheduled boosts to auto-activate
+        boostSchedule?: {
+          id: string;
+          boostType: string; // one of SHRINE_BOOST_TYPES
+          startAt: string; // ISO timestamp (UTC)
+          processed?: boolean; // whether this schedule has been processed
+        }[];
       }>()
-      .default({ unlockedAiIds: [], activeBoosts: {}, activeAiIds: [] })
+      .default({
+        unlockedAiIds: [],
+        activeBoosts: {},
+        activeAiIds: [],
+        boostSchedule: [],
+      })
       .notNull(),
   },
   (table) => {

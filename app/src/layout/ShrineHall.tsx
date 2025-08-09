@@ -10,6 +10,7 @@ import StatusBar from "@/layout/StatusBar";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -58,7 +59,7 @@ interface ShrineHallProps {
 export const ShrineHall = ({ user, navTabs }: ShrineHallProps) => {
   const [activeTab, setActiveTab] = useState<
     "overview" | "boosts" | "defenders" | "maintenance"
-  >("overview");
+  >("boosts");
 
   if (!user) return <Loader explanation="Loading user data" />;
 
@@ -350,6 +351,79 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
               {activeBoosts.map(({ boostType, secondsLeft }) => {
                 const timeLeft = getTimeLeftStr(
                   ...getDaysHoursMinutesSeconds(secondsLeft),
+
+      {/* Schedule Boosts */}
+      {user.villageId && isKage && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Schedule Boost</CardTitle>
+            <CardDescription>
+              Set a future UTC time to automatically activate a boost
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {SHRINE_BOOST_TYPES.map((boostType) => (
+              <ScheduleBoostRow
+                key={boostType}
+                user={user}
+                boostType={boostType}
+                disabled={!level3Shrines}
+              />
+            ))}
+
+const ScheduleBoostRow = ({ user, boostType, disabled }: { user: NonNullable<UserWithRelations>; boostType: (typeof SHRINE_BOOST_TYPES)[number]; disabled?: boolean; }) => {
+  const utils = api.useUtils();
+  const [dateStr, setDateStr] = useState("");
+  const [timeStr, setTimeStr] = useState("");
+
+  const { mutate: scheduleBoost, isPending } = api.shrine.scheduleBoost.useMutation({
+    onSuccess: (res) => {
+      showMutationToast(res);
+      if (res.success) void utils.profile.getUser.invalidate();
+      setDateStr("");
+      setTimeStr("");
+    },
+  });
+
+  const onSchedule = () => {
+    if (!user.villageId) return;
+    const iso = `${dateStr}T${timeStr}:00.000Z`;
+    const when = new Date(iso);
+    scheduleBoost({ boostType, villageId: user.villageId, startAt: when });
+  };
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+      <div className="flex-1">
+        <div className="text-sm font-medium mb-1">{boostType}</div>
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            type="date"
+            value={dateStr}
+            onChange={(e) => setDateStr(e.target.value)}
+          />
+          <Input
+            type="time"
+            value={timeStr}
+            onChange={(e) => setTimeStr(e.target.value)}
+            step={60}
+          />
+        </div>
+      </div>
+      <Button
+        disabled={disabled || isPending || !dateStr || !timeStr}
+        onClick={onSchedule}
+      >
+        {isPending ? "Scheduling..." : "Schedule"}
+      </Button>
+    </div>
+  );
+};
+
+          </CardContent>
+        </Card>
+      )}
+
                 );
                 return (
                   <div

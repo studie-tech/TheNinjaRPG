@@ -16,6 +16,7 @@ import {
 import { sector, village, userData } from "@/drizzle/schema";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
+import { nanoid } from "nanoid";
 
 export const shrineRouter = createTRPCRouter({
   // Get all AI names
@@ -193,6 +194,7 @@ export const shrineRouter = createTRPCRouter({
         }),
         fetchUser(ctx.drizzle, input.aiId),
       ]);
+
 
       // Guards
       if (!user) {
