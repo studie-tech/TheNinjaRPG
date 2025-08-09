@@ -359,6 +359,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 <b>Class</b>: {capitalizeFirstLetter(item.statClassification)}
               </p>
             )}
+            {"difficulty" in item && item.difficulty && (
+              <p>
+                <b>Difficulty</b>: {item.difficulty}
+              </p>
+            )}
+
             {"level" in item && item.level !== undefined && item.level > 0 && (
               <p>
                 <b>Level</b>: {item.level}
@@ -551,6 +557,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             {"healthCostReducePerLvl" in item && item.healthCostReducePerLvl > 0 && (
               <p className="col-span-2">
                 <b>Health Usage Reduction Per Lvl</b>: {item.healthCostReducePerLvl}
+              </p>
+            )}
+            {"traits" in item && item.traits && (
+              <p className="col-span-2">
+                <b>Traits</b>: {item.traits}
               </p>
             )}
           </div>

@@ -24,6 +24,7 @@ import { getUnique } from "@/utils/grouping";
 import { canSwapBloodline } from "@/utils/permissions";
 import { secondsFromDate, secondsPassed } from "@/utils/time";
 import { getTimeLeftStr, getDaysHoursMinutesSeconds } from "@/utils/time";
+import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { BloodlineRank, Bloodline, UserData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
@@ -206,6 +207,8 @@ export const bloodlineRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const entry = await fetchBloodline(ctx.drizzle, input.id);
       if (entry && canChangeContent(user.role)) {
+        // Prepare data: convert empty strings to null for optional fields
+        setEmptyStringsToNulls(input.data as unknown as Record<string, unknown>);
         // Calculate diff
         const newData = {
           ...input.data,

@@ -1898,6 +1898,13 @@
       "when": 1754717601570,
       "tag": "0270_deep_millenium_guard",
       "breakpoints": false
+    },
+    {
+      "idx": 271,
+      "version": "5",
+      "when": 1754749641511,
+      "tag": "0271_adorable_sentinels",
+      "breakpoints": false
     }
   ]
 }

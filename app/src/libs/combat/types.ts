@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AttackMethods, AttackTargets, ItemRarities } from "@/drizzle/constants";
 import { ItemSlotTypes, ItemTypes, JutsuTypes } from "@/drizzle/constants";
 import { LetterRanks, UserRanks, WeaponTypes } from "@/drizzle/constants";
+import { BloodlineDifficultyRatings } from "@/drizzle/constants";
 import { ElementNames } from "@/drizzle/constants";
 import { DateTimeRegExp } from "@/utils/regex";
 import { StatTypes, GeneralTypes, PoolTypes } from "@/drizzle/constants";
@@ -1289,6 +1290,8 @@ export const BloodlineValidator = z.object({
   statClassification: z.enum(StatTypes),
   villageId: z.string().nullable(),
   hidden: z.coerce.boolean().optional(),
+  difficulty: z.enum(BloodlineDifficultyRatings).optional(),
+  traits: z.string().max(256).optional(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
 });
 export type ZodBloodlineType = z.infer<typeof BloodlineValidator>;

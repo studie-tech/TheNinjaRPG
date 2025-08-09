@@ -425,6 +425,10 @@ export type TrainingSpeed = (typeof TrainingSpeeds)[number];
 export const JUTSU_MAX_RESIDUAL_EQUIPPED = 4;
 export const JUTSU_MAX_PIERCE_EQUIPPED = 9999;
 
+// Content difficulty ratings
+export const BloodlineDifficultyRatings = ["Easy", "Medium", "Hard", "Expert"] as const;
+export type BloodlineDifficultyRating = (typeof BloodlineDifficultyRatings)[number];
+
 export const UserAssociations = ["MARRIAGE", "DIVORCED"] as const;
 
 export type UserAssociation = (typeof UserAssociations)[number];

@@ -381,6 +381,8 @@ export const bloodline = mysqlTable(
       .notNull(),
     rank: mysqlEnum("rank", consts.LetterRanks).notNull(),
     hidden: boolean("hidden").default(false).notNull(),
+    difficulty: mysqlEnum("difficulty", consts.BloodlineDifficultyRatings),
+    traits: varchar("traits", { length: 256 }),
   },
   (table) => {
     return {
@@ -388,6 +390,7 @@ export const bloodline = mysqlTable(
       imageKey: index("Bloodline_image_key").on(table.image),
       villageIdx: index("Bloodline_village_idx").on(table.villageId),
       rankIdx: index("Bloodline_rank_idx").on(table.rank),
+      difficultyIdx: index("Bloodline_difficulty_idx").on(table.difficulty),
     };
   },
 );

@@ -6,6 +6,7 @@ import { api } from "@/app/_trpc/client";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import { LetterRanks } from "@/drizzle/constants";
 import { StatTypes } from "@/drizzle/constants";
+import { BloodlineDifficultyRatings } from "@/drizzle/constants";
 import type { Bloodline } from "@/drizzle/schema";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { FormEntry } from "@/layout/EditContent";
@@ -80,6 +81,14 @@ export const useBloodlineEditForm = (data: Bloodline, refetch: () => void) => {
     { id: "villageId", type: "db_values", values: villages, resetButton: true },
     { id: "rank", type: "str_array", values: LetterRanks },
     { id: "statClassification", type: "str_array", values: StatTypes },
+    {
+      id: "difficulty",
+      label: "Difficulty Rating",
+      type: "str_array",
+      values: BloodlineDifficultyRatings,
+      resetButton: true,
+    },
+    { id: "traits", type: "text", doubleWidth: true, label: "Traits" },
     { id: "description", type: "richinput", doubleWidth: true },
   ];
 
