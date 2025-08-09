@@ -5,6 +5,7 @@ export const mutateCommentSchema = z
     comment: z.string().min(4).max(5000),
     object_id: z.string(),
     quoteIds: z.array(z.string()).optional().nullable(),
+    senderId: z.string().optional().nullable(),
   })
   .strict()
   .required();
@@ -25,6 +26,7 @@ export const createConversationSchema = z
     title: z.string().min(4).max(100),
     comment: z.string().min(4).max(5000),
     users: z.array(z.string()).min(1).max(5),
+    senderId: z.string().optional().nullable(),
   })
   .strict()
   .required();

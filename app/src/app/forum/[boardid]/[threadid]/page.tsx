@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { parseHtml } from "@/utils/parse";
 import Loader from "@/layout/Loader";
@@ -16,6 +16,10 @@ import { useUserData } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
 import { mutateCommentSchema } from "@/validators/comments";
 import { type MutateCommentSchema } from "@/validators/comments";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { getSearchValidator } from "@/validators/register";
+import { canSubmitNotification } from "@/utils/permissions";
+import type { z } from "zod";
 
 export default function Thread(props: { params: Promise<{ threadid: string }> }) {
   const params = use(props.params);
@@ -46,6 +50,24 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
     resolver: zodResolver(mutateCommentSchema),
   });
 
+  // Staff as AI sender selection
+  const maxUsers = 1;
+  const userSearchSchema = getSearchValidator({ max: maxUsers });
+  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
+    resolver: zodResolver(userSearchSchema),
+    defaultValues: { username: "", users: [] },
+  });
+  const watchedUsers = useWatch({
+    control: userSearchMethods.control,
+    name: "users",
+    defaultValue: [],
+  });
+  useEffect(() => {
+    if (userData && userData.username && watchedUsers.length === 0) {
+      userSearchMethods.setValue("users", [userData]);
+    }
+  }, [userData, userSearchMethods, watchedUsers]);
+
   useEffect(() => {
     if (thread) {
       setValue("object_id", thread.id);
@@ -68,7 +90,14 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
     });
 
   const handleSubmitComment = handleSubmit(
-    (data) => createComment(data),
+    (data) => {
+      const selected = watchedUsers?.[0];
+      if (selected && selected.userId !== userData?.userId) {
+        createComment({ ...data, senderId: selected.userId });
+      } else {
+        createComment(data);
+      }
+    },
     (errors) => console.error(errors),
   );
 
@@ -110,6 +139,18 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
             !userData.isBanned &&
             !userData.isSilenced && (
               <div className="mb-3 relative">
+                {userData && canSubmitNotification(userData.role) && (
+                  <div className="mb-2">
+                    <UserSearchSelect
+                      useFormMethods={userSearchMethods}
+                      label="Post as (AI or yourself)"
+                      selectedUsers={[]}
+                      showYourself={true}
+                      inline={true}
+                      maxUsers={maxUsers}
+                    />
+                  </div>
+                )}
                 <RichInput
                   id="comment"
                   height="200"

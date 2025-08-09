@@ -10,6 +10,7 @@ import { errorResponse, baseServerResponse } from "@/server/api/trpc";
 import { eq, sql, desc, asc } from "drizzle-orm";
 import { forumBoardSchema } from "@/validators/forum";
 import { canModerate, canCreateNews } from "@/utils/permissions";
+import { canSubmitNotification } from "@/utils/permissions";
 import { callDiscordNews } from "@/libs/discord";
 import { fetchUser } from "@/routers/profile";
 import { nanoid } from "nanoid";
@@ -73,6 +74,18 @@ export const forumRouter = createTRPCRouter({
       if (isNews) {
         await callDiscordNews(user.username, input.title, input.content, user.avatar);
       }
+
+      // Determine posting user (allow staff to post as AI)
+      let postingUserId = ctx.userId;
+      if (input.senderId && input.senderId !== ctx.userId) {
+        const asUser = await fetchUser(ctx.drizzle, input.senderId);
+        if (!(asUser?.isAi)) return errorResponse("You or an AI must be marked as sender");
+        if (!canCreateNews(user.role) && !canSubmitNotification(user.role)) {
+          return errorResponse("Not allowed");
+        }
+        postingUserId = asUser.userId;
+      }
+
       // Mutate
       const sanitized = sanitize(input.content);
       const postId = nanoid();
@@ -80,7 +93,7 @@ export const forumRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         moderateContent(ctx.drizzle, {
           content: sanitized,
-          userId: ctx.userId,
+          userId: postingUserId,
           relationType: "forumPost",
           relationId: postId,
         }),
@@ -88,13 +101,13 @@ export const forumRouter = createTRPCRouter({
           id: threadId,
           title: input.title,
           boardId: input.board_id,
-          userId: ctx.userId,
+          userId: postingUserId,
         }),
         ctx.drizzle.insert(forumPost).values({
           id: postId,
           content: sanitized,
           threadId: threadId,
-          userId: ctx.userId,
+          userId: postingUserId,
         }),
         ctx.drizzle
           .update(forumBoard)

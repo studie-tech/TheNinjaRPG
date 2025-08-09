@@ -30,6 +30,7 @@ import { canSeeReport } from "@/utils/permissions";
 import { canDeleteComment } from "@/utils/permissions";
 import { canModerateRoles } from "@/utils/permissions";
 import { canSeeSecretData } from "@/utils/permissions";
+import { canSubmitNotification } from "@/utils/permissions";
 import { createConversationSchema } from "@/validators/comments";
 import { getServerPusher } from "@/libs/pusher";
 import { fetchUserReport } from "@/routers/reports";
@@ -199,20 +200,30 @@ export const commentsRouter = createTRPCRouter({
       }
       const moderationResult = await checkForBadWords(user, input.comment);
       if (!moderationResult.success) return moderationResult;
+
+      // Determine posting user (allow staff to post as AI)
+      let postingUserId = ctx.userId;
+      if (input.senderId && input.senderId !== ctx.userId) {
+        const asUser = await fetchUser(ctx.drizzle, input.senderId);
+        if (!(asUser?.isAi)) return errorResponse("You or an AI must be marked as sender");
+        if (!canSubmitNotification(user.role)) return errorResponse("Not allowed");
+        postingUserId = asUser.userId;
+      }
+
       // Mutate
       const sanitized = sanitize(input.comment);
       const createdId = nanoid();
       await Promise.all([
         moderateContent(ctx.drizzle, {
           content: sanitized,
-          userId: ctx.userId,
+          userId: postingUserId,
           relationType: "forumPost",
           relationId: createdId,
           contextId: thread.id,
         }),
         ctx.drizzle.insert(forumPost).values({
           id: createdId,
-          userId: ctx.userId,
+          userId: postingUserId,
           threadId: thread.id,
           content: sanitized,
         }),
@@ -353,9 +364,19 @@ export const commentsRouter = createTRPCRouter({
       if (user.isBanned || user.isSilenced) {
         throw serverError("UNAUTHORIZED", "You are banned");
       }
+
+      // Determine posting user (allow staff to create convo as AI)
+      let postingUserId = ctx.userId;
+      if (input.senderId && input.senderId !== ctx.userId) {
+        const asUser = await fetchUser(ctx.drizzle, input.senderId);
+        if (!(asUser?.isAi)) return errorResponse("You or an AI must be marked as sender");
+        if (!canSubmitNotification(user.role)) return errorResponse("Not allowed");
+        postingUserId = asUser.userId;
+      }
+
       const convoId = await createConvo({
         client: ctx.drizzle,
-        senderUserId: ctx.userId,
+        senderUserId: postingUserId,
         receiverUserIds: input.users,
         title: input.title,
         content: input.comment,
@@ -623,6 +644,15 @@ export const commentsRouter = createTRPCRouter({
         }
       });
 
+      // Determine posting user (allow staff to post as AI)
+      let postingUserId = ctx.userId;
+      if (input.senderId && input.senderId !== ctx.userId) {
+        const asUser = await fetchUser(ctx.drizzle, input.senderId);
+        if (!(asUser?.isAi)) return errorResponse("You or an AI must be marked as sender");
+        if (!canSubmitNotification(user.role)) return errorResponse("Not allowed");
+        postingUserId = asUser.userId;
+      }
+
       // Update conversation & update user notifications
       const commentId = nanoid();
       const pusher = getServerPusher();
@@ -676,7 +706,7 @@ export const commentsRouter = createTRPCRouter({
         // Trigger new comment event
         pusher.trigger(convo.id, "event", {
           message: "new",
-          fromId: ctx.userId,
+          fromId: postingUserId,
           commentId: commentId,
         }),
         // Inbox news
@@ -687,7 +717,7 @@ export const commentsRouter = createTRPCRouter({
                 .set({ inboxNews: sql`${userData.inboxNews} + 1` })
                 .where(inArray(userData.userId, usersIdsInConvo)),
               ...usersIdsInConvo
-                .filter((id) => id !== ctx.userId)
+                .filter((id) => id !== postingUserId)
                 .map((userId) => pusher.trigger(userId, "event", { type: "newInbox" })),
             ]
           : []),
@@ -696,7 +726,7 @@ export const commentsRouter = createTRPCRouter({
           ? [
               moderateContent(ctx.drizzle, {
                 content: sanitized,
-                userId: ctx.userId,
+                userId: postingUserId,
                 relationType: "comment",
                 relationId: commentId,
                 contextId: convo.id,
@@ -704,14 +734,14 @@ export const commentsRouter = createTRPCRouter({
               ctx.drizzle
                 .update(userData)
                 .set({ tavernMessages: sql`${userData.tavernMessages} + 1` })
-                .where(eq(userData.userId, ctx.userId)),
+                .where(eq(userData.userId, postingUserId)),
             ]
           : []),
         // Insert into DB
         ctx.drizzle.insert(conversationComment).values({
           id: commentId,
           content: sanitized,
-          userId: ctx.userId,
+          userId: postingUserId,
           conversationId: convo.id,
         }),
         // Update conversation

@@ -274,8 +274,12 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
 
   const onSubmit = create.handleSubmit(
     (data) => {
-      console.log(data);
-      createConversation.mutate(data);
+      const selected = users?.[0];
+      if (selected && selected.userId !== userData?.userId) {
+        createConversation.mutate({ ...data, senderId: selected.userId });
+      } else {
+        createConversation.mutate(data);
+      }
     },
     (error) => console.error(error),
   );

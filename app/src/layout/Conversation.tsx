@@ -26,6 +26,9 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { z } from "zod";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { getSearchValidator } from "@/validators/register";
+import { canSubmitNotification } from "@/utils/permissions";
 import type { MutateCommentSchema } from "@/validators/comments";
 import type { ArrayElement } from "@/utils/typeutils";
 
@@ -273,6 +276,24 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     resolver: zodResolver(mutateCommentSchema),
   });
 
+  // Staff as AI sender selection
+  const maxUsers = 1;
+  const userSearchSchema = getSearchValidator({ max: maxUsers });
+  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
+    resolver: zodResolver(userSearchSchema),
+    defaultValues: { username: "", users: [] },
+  });
+  const watchedUsers = useWatch({
+    control: userSearchMethods.control,
+    name: "users",
+    defaultValue: [],
+  });
+  useEffect(() => {
+    if (userData && watchedUsers.length === 0) {
+      userSearchMethods.setValue("users", [userData]);
+    }
+  }, [userData, userSearchMethods, watchedUsers]);
+
   // Current quote ID
   const quoteIds = useWatch({
     control,
@@ -335,6 +356,8 @@ const Conversation: React.FC<ConversationProps> = (props) => {
         processedContent = processed;
       }
 
+      const selected = watchedUsers?.[0];
+      const postAsSelected = selected && selected.userId !== userData?.userId;
       const next =
         "id" in newMessage
           ? newMessage
@@ -350,9 +373,9 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               villageName: userData.village?.name ?? null,
               villageHexColor: userData.village?.hexColor ?? null,
               villageKageId: userData.village?.kageId ?? null,
-              userId: userData.userId,
-              username: userData.username,
-              avatar: userData.avatar,
+              userId: postAsSelected ? selected.userId : userData.userId,
+              username: postAsSelected ? selected.username : userData.username,
+              avatar: postAsSelected ? selected.avatar ?? null : userData.avatar,
               rank: userData.rank,
               isOutlaw: userData.isOutlaw,
               level: userData.level,
@@ -481,7 +504,13 @@ const Conversation: React.FC<ConversationProps> = (props) => {
       });
       return;
     }
-    createComment(data);
+    const selected = watchedUsers?.[0];
+    if (selected && selected.userId !== userData?.userId) {
+      // attach senderId to allow posting as AI
+      createComment({ ...data, senderId: selected.userId });
+    } else {
+      createComment(data);
+    }
   });
 
   /**
@@ -556,6 +585,18 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                       ""
                     );
                   })}
+                {userData && canSubmitNotification(userData.role) && (
+                  <div className="mb-2">
+                    <UserSearchSelect
+                      useFormMethods={userSearchMethods}
+                      label="Post as (AI or yourself)"
+                      selectedUsers={[]}
+                      showYourself={true}
+                      inline={true}
+                      maxUsers={maxUsers}
+                    />
+                  </div>
+                )}
                 <div className="relative">
                   <RichInput
                     id="comment"

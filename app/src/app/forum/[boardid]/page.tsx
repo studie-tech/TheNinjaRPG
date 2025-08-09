@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import Image from "next/image";
@@ -25,6 +25,10 @@ import { showMutationToast } from "@/libs/toast";
 import { Bookmark, Lock, Unlock, Trash2 } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { forumBoardSchema, type ForumBoardSchema } from "@/validators/forum";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { getSearchValidator } from "@/validators/register";
+import { canSubmitNotification } from "@/utils/permissions";
+import type { z } from "zod";
 import { useUserData } from "@/utils/UserContext";
 import { secondsPassed } from "@/utils/time";
 import { useInfinitePagination } from "@/libs/pagination";
@@ -71,6 +75,24 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
     },
   });
 
+  // Staff sender selection for thread creation
+  const maxUsers = 1;
+  const userSearchSchema = getSearchValidator({ max: maxUsers });
+  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
+    resolver: zodResolver(userSearchSchema),
+    defaultValues: { username: "", users: [] },
+  });
+  const watchedUsers = useWatch({
+    control: userSearchMethods.control,
+    name: "users",
+    defaultValue: [],
+  });
+  useEffect(() => {
+    if (userData && watchedUsers.length === 0) {
+      userSearchMethods.setValue("users", [userData]);
+    }
+  }, [userData, userSearchMethods, watchedUsers]);
+
   const { mutate: pinThread, isPending: l2 } = api.forum.pinThread.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
@@ -99,7 +121,12 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
   }, [board, form]);
 
   const onSubmit = form.handleSubmit((data) => {
-    createThread(data);
+    const selected = watchedUsers?.[0];
+    if (selected && selected.userId !== userData?.userId) {
+      createThread({ ...data, senderId: selected.userId });
+    } else {
+      createThread(data);
+    }
   });
 
   if (!board) return <Loader explanation="Loading..."></Loader>;
@@ -146,6 +173,18 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
                           </FormItem>
                         )}
                       />
+                      {userData && canSubmitNotification(userData.role) && (
+                        <div className="-mt-2">
+                          <UserSearchSelect
+                            useFormMethods={userSearchMethods}
+                            label="Post as (AI or yourself)"
+                            selectedUsers={[]}
+                            showYourself={true}
+                            inline={true}
+                            maxUsers={maxUsers}
+                          />
+                        </div>
+                      )}
                       <RichInput
                         id="content"
                         label="Contents of your thread"
