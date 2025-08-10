@@ -305,7 +305,7 @@ export const EditContent = <
             // Render
             return (
               <>
-                {includeSpacer && <div />}
+                {includeSpacer && <div key={`spacer-${id}`} />}
                 <div
                   key={`formEntry-${id}`}
                   className={cn(
@@ -528,18 +528,18 @@ export const EditContent = <
                                         )}
 
                                         <CommandList>
-                                          <CommandEmpty>
-                                            No framework found.
-                                          </CommandEmpty>
+                                          <CommandEmpty>No entries found.</CommandEmpty>
                                           <CommandGroup>
                                             {dynamicOptions.map((option) => (
                                               <CommandItem
                                                 value={option.label}
                                                 key={option.value}
+                                                keywords={[option.label]}
                                                 onSelect={() => {
                                                   form.setValue(
                                                     id,
                                                     option.value as PathValue<S, K>,
+                                                    { shouldDirty: true },
                                                   );
                                                 }}
                                               >
@@ -708,6 +708,7 @@ export const EditContent = <
                                                 <CommandItem
                                                   key={oid}
                                                   value={oid}
+                                                  keywords={[oid]}
                                                   onSelect={() => {
                                                     const updated = [...dialogOptions];
                                                     updated[idx] = {
@@ -816,6 +817,7 @@ export const EditContent = <
                                               <CommandItem
                                                 key={option.value}
                                                 value={option.value}
+                                                keywords={[option.label]}
                                                 onSelect={() => {
                                                   const updated = [...valueArr];
                                                   const ids = entry.ids.includes(

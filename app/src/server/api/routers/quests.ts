@@ -82,6 +82,7 @@ export const questsRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
     const results = await ctx.drizzle.query.quest.findMany({
       columns: { id: true, name: true },
+      orderBy: (table, { asc }) => [asc(table.name)],
     });
     return results;
   }),

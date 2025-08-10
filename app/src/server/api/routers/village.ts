@@ -42,6 +42,7 @@ export const villageRouter = createTRPCRouter({
     return await ctx.drizzle.query.village.findMany({
       columns: { id: true, name: true },
       where: inArray(village.type, ["VILLAGE", "OUTLAW", "SAFEZONE"]),
+      orderBy: (table, { asc }) => [asc(table.name)],
     });
   }),
   // Get all villages

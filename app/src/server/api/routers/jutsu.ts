@@ -185,6 +185,7 @@ export const jutsuRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
     return await ctx.drizzle.query.jutsu.findMany({
       columns: { id: true, name: true, image: true, injectableInBattle: true },
+      orderBy: (table, { asc }) => [asc(table.name)],
     });
   }),
 

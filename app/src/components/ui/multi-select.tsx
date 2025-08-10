@@ -115,11 +115,13 @@ function MultiSelect({
       <PopoverContent className="w-full p-0">
         <Command className={className}>
           <CommandInput placeholder="Search ..." />
-          <CommandEmpty>No item found.</CommandEmpty>
+          <CommandEmpty>No items found.</CommandEmpty>
           <CommandGroup className="max-h-64 overflow-auto">
             {options.map((option, i) => (
               <CommandItem
                 key={`${option.value}-${i}`}
+                value={option.label}
+                keywords={[option.label]}
                 onSelect={() => {
                   onChange(
                     selected.includes(option.value)

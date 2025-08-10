@@ -34,6 +34,7 @@ export const bloodlineRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
     return await ctx.drizzle.query.bloodline.findMany({
       columns: { id: true, name: true, image: true },
+      orderBy: (table, { asc }) => [asc(table.name)],
     });
   }),
   getAll: publicProcedure

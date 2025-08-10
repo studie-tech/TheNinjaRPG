@@ -18,6 +18,7 @@ export const badgeRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
     return await ctx.drizzle.query.badge.findMany({
       columns: { id: true, name: true, image: true },
+      orderBy: (table, { asc }) => [asc(table.name)],
     });
   }),
   getAll: publicProcedure

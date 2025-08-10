@@ -18,6 +18,12 @@ const Command = React.forwardRef<
       "flex h-full w-full flex-col overflow-hidden rounded-md bg-white text-black",
       className,
     )}
+    shouldFilter={true}
+    filter={(value, search, keywords) => {
+      if (keywords?.some((k) => k.toLowerCase().includes(search.toLowerCase())))
+        return 1;
+      return 0;
+    }}
     {...props}
   />
 ));
