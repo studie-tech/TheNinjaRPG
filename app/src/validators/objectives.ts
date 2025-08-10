@@ -244,6 +244,7 @@ export const MoveToObjective = z.object({
 export const EncountersAtLocation = z.object({
   ...baseObjectiveFields,
   ...complexObjectiveFields,
+  locationType: z.enum(LOCATION_TYPES).default("random"),
   task: z.literal("win_encounter_at_location").default("win_encounter_at_location"),
 });
 

@@ -1450,12 +1450,6 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     )
     .filter((value) => {
       return (
-        watchTask !== "win_encounter_at_location" ||
-        !["latitude", "longitude", "locationType"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
         !(SimpleTasks as unknown as string[]).includes(watchTask) ||
         !["latitude", "longitude", "sector"].includes(value)
       );
