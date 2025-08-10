@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { findBannedWordInUsername } from "@/utils/bannedWords";
+
 import { FederalStatuses } from "@/drizzle/constants";
 
 // List of possible attributes
@@ -38,7 +40,10 @@ export const usernameSchema = z
     message: "Alphanumeric, no spaces",
   })
   .min(2)
-  .max(12);
+  .max(12)
+  .refine((name) => !findBannedWordInUsername(name), {
+    message: "Username contains banned word",
+  });
 
 export const registrationSchema = z
   .object({

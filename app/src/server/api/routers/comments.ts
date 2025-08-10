@@ -1066,7 +1066,7 @@ const checkForBadWords = async (user: UserData, content: string) => {
  * List of potentially offensive words
  * Taken from: https://potentiallyoffensive.com/
  */
-export const OFFENSIVE_WORDS = [
+export const OFFENSIVE_WORDS = [ // TODO: deduplicate with src/utils/bannedWords.ts if desired
   "assfuck",
   "A-rab",
   "Abbie",
