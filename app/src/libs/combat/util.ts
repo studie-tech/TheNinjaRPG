@@ -919,31 +919,32 @@ export const calcBattleResult = (
       });
 
       // Adjust shrine & townhall datamage based on level different
-      const maxTargetLevel = Math.max(...targets.map((t) => t.level), 0);
+      const maxTargetLevel = Math.max(...targetUsers.map((t) => t.level), 0);
       if (Math.abs(user.level - maxTargetLevel) > STREAK_LEVEL_DIFF) {
         // Check if any kage was killed in this battle
-        const wasKageKilled = targets.some(
-          (target) => target.village?.kageId === target.userId,
-        );
-
-        if (shrineChangeHp !== 0) shrineChangeHp /= Math.abs(shrineChangeHp);
-        // Only reduce townhallChangeHP if no kage was killed
-        if (townhallChangeHP !== 0 && !wasKageKilled) {
-          townhallChangeHP /= Math.abs(townhallChangeHP);
-        }
-        Object.keys(shrineInfo).forEach((sector) => {
-          const abs = Math.abs(shrineInfo[sector as unknown as number]!);
-          if (abs !== 0) shrineInfo[sector as unknown as number]! /= abs;
-        });
-        Object.keys(townhallInfo).forEach((name) => {
-          const abs = Math.abs(townhallInfo[name]!);
-          if (abs !== 0) {
-            // If a kage was killed, preserve all war damage at full value
-            if (!wasKageKilled) {
-              townhallInfo[name]! /= abs;
-            }
+        const targetKageLost =
+          targets.some((target) => target.village?.kageId === target.userId) && didWin;
+        const userKageLost = user.village?.kageId === user.userId && !didWin;
+        const kageLost = targetKageLost || userKageLost;
+        const strongestWon = user.level > maxTargetLevel && didWin;
+        const weakestLost = user.level < maxTargetLevel && !didWin;
+        // If kage was killed, we preserve all war damage, otherwise reduce all changes to 1/abs(change) if we're the stronger player
+        if (!kageLost && (strongestWon || weakestLost)) {
+          if (shrineChangeHp !== 0) {
+            shrineChangeHp /= Math.abs(shrineChangeHp);
           }
-        });
+          if (townhallChangeHP !== 0) {
+            townhallChangeHP /= Math.abs(townhallChangeHP);
+          }
+          Object.keys(shrineInfo).forEach((sector) => {
+            const abs = Math.abs(shrineInfo[sector as unknown as number]!);
+            if (abs !== 0) shrineInfo[sector as unknown as number]! /= abs;
+          });
+          Object.keys(townhallInfo).forEach((name) => {
+            const abs = Math.abs(townhallInfo[name]!);
+            if (abs !== 0) townhallInfo[name]! /= abs;
+          });
+        }
       }
 
       // Determine if pvpStreak should be adjusted
@@ -997,10 +998,9 @@ export const calcBattleResult = (
       const droppedItems: DroppedItem[] = [];
       if (didWin) {
         targets
-          .filter((t) => !t.isSummon)
+          .filter((t) => !t.isSummon && t.isAi)
           .forEach((t) => {
             t.items.forEach((ui) => {
-              console.log("CHECKING: ", ui.dropChancePerc, ui.item?.name);
               const chance = ui.dropChancePerc ?? 0;
               if (chance > 0 && Math.random() * 100 < chance) {
                 droppedItems.push({
