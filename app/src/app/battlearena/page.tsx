@@ -6,6 +6,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import BanInfo from "@/layout/BanInfo";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
+import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import {
   Select,
   SelectContent,
@@ -120,16 +121,40 @@ export default function Arena() {
         }
       >
         {tab === "Arena" && <ChallengeAI aiId={aiId} />}
-        {tab === "Sparring" && <ChallengeUser />}
+        {tab === "Sparring" && (
+          <ContentBox
+            title="Challenge Player"
+            subtitle="Configure your loadout and challenge other players"
+            topRightContent={
+              <div className="flex gap-2">
+                <JutsuLoadoutSelector size="small" label="Jutsu" />
+                <ItemLoadoutSelector size="small" label="Items" />
+              </div>
+            }
+          >
+            <ChallengeUser />
+          </ContentBox>
+        )}
         {tab === "PVP Rank" && <RankedArenaMain />}
         {tab === "Training" && (
-          <div className="flex flex-col items-center">
-            <p className="m-2">
-              The arena is a fairly basic circular and raw battleground, where you can
-              train your skills as a ninja. Opponent is an invicible training dummy who
-              will self destruct. Test and hone your skills for future battles.
-            </p>
-          </div>
+          <ContentBox
+            title="Training Grounds"
+            subtitle="Configure your loadout and test your skills"
+            topRightContent={
+              <div className="flex gap-2">
+                <JutsuLoadoutSelector size="small" label="Jutsu" />
+                <ItemLoadoutSelector size="small" label="Items" />
+              </div>
+            }
+          >
+            <div className="flex flex-col items-center">
+              <p className="m-2">
+                The arena is a fairly basic circular and raw battleground, where you can
+                train your skills as a ninja. Opponent is an invicible training dummy who
+                will self destruct. Test and hone your skills for future battles.
+              </p>
+            </div>
+          </ContentBox>
         )}
         {tab === "Battle Pyramid" && <BattlePyramid />}
       </ContentBox>
@@ -203,7 +228,12 @@ const SelectAI: React.FC<SelectAIProps> = (props) => {
       title="Configure"
       subtitle="Choose opponent and jutsu loadout"
       initialBreak={true}
-      topRightContent={<JutsuLoadoutSelector size="small" />}
+      topRightContent={
+        <div className="flex gap-2">
+          <JutsuLoadoutSelector size="small" label="Jutsu" />
+          <ItemLoadoutSelector size="small" label="Items" />
+        </div>
+      }
     >
       <div className="flex flex-col items-center">
         {canDoArena && (
