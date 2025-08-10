@@ -13,6 +13,7 @@ import Modal2 from "@/layout/Modal2";
 import Countdown from "@/layout/Countdown";
 import Confirm2 from "@/layout/Confirm2";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
+import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   UserRoundSearch,
@@ -513,7 +514,10 @@ export default function Travel() {
         )}
       </ContentBox>
       <div className="flex flex-row p-1 justify-between items-center">
-        {showSector && <JutsuLoadoutSelector size="small" />}
+        <div className="flex gap-2">
+          {showSector && <JutsuLoadoutSelector size="small" label="Jutsu" />}
+          {showSector && <ItemLoadoutSelector size="small" label="Items" />}
+        </div>
         {showSector && userData?.anbuId && autoAttackMode && (
           <div className="text-red-500 text-sm font-semibold flex items-center">
             <Zap className="h-4 w-4 mr-1" />
