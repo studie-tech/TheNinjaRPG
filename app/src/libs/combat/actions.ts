@@ -129,17 +129,18 @@ export const availableUserActions = (
       : []),
     ...(user?.items && !isStealth
       ? user.items
-          .filter((ui) => ui.quantity > 0 && !ui.item.preventBattleUsage)
-          .filter((ui) => !NonActionItemTypes.includes(ui.item.itemType))
-          .filter((ui) => {
+          .filter((useritem) => {
+            if (useritem.quantity <= 0) return false;
+            if (useritem.item.preventBattleUsage) return false;
+            if (NonActionItemTypes.includes(useritem.item.itemType)) return false;
             // Weapons with low durability cannot be used in combat
-            if (ui.item?.itemType === "WEAPON") {
-              const cur = ui.durability ?? ui.maxDurability ?? 100;
+            if (useritem.item?.itemType === "WEAPON") {
+              const cur = useritem.durability ?? useritem.maxDurability ?? 100;
               return cur > 20;
             }
             return true;
           })
-          .map((ui) => userItemToAction(ui, user))
+          .map((useritem) => userItemToAction(useritem, user))
       : []),
   ];
   // If we only have move & end turn action, also add basic attack
