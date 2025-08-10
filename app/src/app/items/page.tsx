@@ -18,7 +18,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
-import { calcMaxItems, calcMaxEventItems } from "@/libs/item";
+import { calcMaxItems, calcMaxEventItems, calcMaxMaterials } from "@/libs/item";
 import { CircleFadingArrowUp, Shirt } from "lucide-react";
 import { COST_EXTRA_ITEM_SLOT, IMG_EQUIP_SILHOUETTE } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -26,7 +26,7 @@ import type { Item, UserItemWithRelations, UserItem, ItemSlot } from "@/drizzle/
 
 export default function MyItems() {
   // State
-  const availableTabs = ["normal", "event"];
+  const availableTabs = ["normal", "event", "materials"];
   const { data: userData } = useRequiredUserData();
   const [activeTab, setActiveTab] = useState<(typeof availableTabs)[number]>("normal");
 
@@ -70,12 +70,14 @@ export default function MyItems() {
         (i) => !i.craftingFinishedAt || i.craftingFinishedAt < new Date(),
       ),
     }));
-  const normalItems = availableItems?.filter((ui) => !ui.item.isEventItem);
-  const eventItems = availableItems?.filter((ui) => ui.item.isEventItem);
+  const normalItems = availableItems?.filter((ui) => !ui.item.isEventItem && ui.item.itemType !== "MATERIAL");
+  const eventItems = availableItems?.filter((ui) => ui.item.isEventItem && ui.item.itemType !== "MATERIAL");
+  const materialsItems = availableItems?.filter((ui) => ui.item.itemType === "MATERIAL");
 
   // Calculate inventory limits
   const maxNormalItems = userData ? calcMaxItems(userData) : 0;
   const maxEventItems = userData ? calcMaxEventItems(userData) : 0;
+  const maxMaterials = userData ? calcMaxMaterials(userData) : 0;
 
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -92,7 +94,9 @@ export default function MyItems() {
         subtitle={
           activeTab === "normal"
             ? `Normal Inventory ${normalItems?.length}/${maxNormalItems}`
-            : `Event Inventory ${eventItems?.length}/${maxEventItems}`
+            : activeTab === "event"
+            ? `Event Inventory ${eventItems?.length}/${maxEventItems}`
+            : `Materials Inventory ${materialsItems?.length}/${maxMaterials}`
         }
         padding={false}
         topRightContent={
@@ -145,7 +149,9 @@ export default function MyItems() {
                 useritems={
                   activeTab === "normal"
                     ? normalItems?.filter((ui) => ui.equipped === "NONE")
-                    : eventItems?.filter((ui) => ui.equipped === "NONE")
+                    : activeTab === "event"
+                    ? eventItems?.filter((ui) => ui.equipped === "NONE")
+                    : materialsItems?.filter((ui) => ui.equipped === "NONE")
                 }
               />
             </div>
