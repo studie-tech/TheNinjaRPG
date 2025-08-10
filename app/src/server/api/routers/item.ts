@@ -283,7 +283,11 @@ export const itemRouter = createTRPCRouter({
         offset: skip,
         limit: input.limit,
         where: and(...baseFilters),
-        orderBy: (table, { asc }) => [asc(table.cost), asc(table.repsCost)],
+        orderBy: (table, { asc }) => [
+          asc(table.cost),
+          asc(table.repsCost),
+          asc(table.id),
+        ],
       });
       const nextCursor = results.length < input.limit ? null : currentCursor + 1;
       return {

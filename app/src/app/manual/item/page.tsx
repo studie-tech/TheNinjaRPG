@@ -40,7 +40,6 @@ export default function ManualItems() {
     },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
-      placeholderData: (previousData) => previousData,
     },
   );
   const allItems = items?.pages.map((page) => page.data).flat();
