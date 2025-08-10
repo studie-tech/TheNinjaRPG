@@ -8,6 +8,7 @@ import { FED_NORMAL_ITEM_LOADOUTS } from "@/drizzle/constants";
 import { FED_SILVER_ITEM_LOADOUTS } from "@/drizzle/constants";
 import { FED_GOLD_ITEM_LOADOUTS } from "@/drizzle/constants";
 import { PAYPAL_DISCOUNT_PERCENT } from "@/drizzle/constants";
+import { MAX_REPS_PER_MONTH, MAX_REPS_EXTRA_PER_MONTH } from "@/drizzle/constants";
 import type { FederalStatus } from "@/drizzle/schema";
 import type { UserData } from "@/drizzle/schema";
 
@@ -47,6 +48,23 @@ export const fedItemLoadouts = (user?: UserData) => {
       return base + FED_GOLD_ITEM_LOADOUTS;
   }
   return base;
+};
+
+// Returns the monthly reputation cap for a user, scaling with account age.
+// Formula: MAX_REPS_PER_MONTH + MAX_REPS_EXTRA_PER_MONTH * months_active
+export const dynamicMonthlyRepCap = (user?: UserData): number => {
+  if (!user?.createdAt) return MAX_REPS_PER_MONTH;
+  const created =
+    typeof user.createdAt === "string" ? new Date(user.createdAt) : user.createdAt;
+  const now = new Date();
+  // Calculate full months between created and now
+  const monthsActive =
+    (now.getFullYear() - created.getFullYear()) * 12 +
+    (now.getMonth() - created.getMonth()) +
+    (now.getDate() >= created.getDate() ? 0 : -1);
+  const months = Math.max(0, monthsActive);
+  console.log("months", created, months);
+  return MAX_REPS_PER_MONTH + MAX_REPS_EXTRA_PER_MONTH * months;
 };
 
 export const reps2dollars = (reps: number) => {

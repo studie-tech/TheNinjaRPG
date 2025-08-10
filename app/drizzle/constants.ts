@@ -869,6 +869,7 @@ export const PITY_SYSTEM_ENABLED = true;
 
 // Reputation purchase config
 export const MAX_REPS_PER_MONTH = 4000;
+export const MAX_REPS_EXTRA_PER_MONTH = 250;
 
 // Federal config
 export const FED_NORMAL_REPS_COST = 15;

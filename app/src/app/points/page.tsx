@@ -29,7 +29,7 @@ import { nanoid } from "nanoid";
 import { Check, ChevronsUp, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { sendGTMEvent } from "@next/third-parties/google";
-import { MAX_REPS_PER_MONTH } from "@/drizzle/constants";
+import { dynamicMonthlyRepCap } from "@/utils/paypal";
 import { FED_NORMAL_INVENTORY_SLOTS } from "@/drizzle/constants";
 import { FED_SILVER_INVENTORY_SLOTS } from "@/drizzle/constants";
 import { FED_GOLD_INVENTORY_SLOTS } from "@/drizzle/constants";
@@ -109,7 +109,7 @@ export default function PaypalShop() {
         >
           <ContentBox
             title={activeTab}
-            subtitle={`Monthly Reps [${purchasedReps ?? 0} / ${MAX_REPS_PER_MONTH}]`}
+            subtitle={`Monthly Reps [${purchasedReps ?? 0} / ${dynamicMonthlyRepCap(userData)}]`}
             padding={activeTab === "Log" ? false : true}
             topRightContent={
               <>
@@ -199,9 +199,8 @@ const ReputationStore = (props: { currency: string }) => {
   if (userData?.isBanned) return <BanInfo />;
 
   // Set the maximum number of purchaseable points
-  const maxPoints = purchasedReps
-    ? MAX_REPS_PER_MONTH - purchasedReps
-    : MAX_REPS_PER_MONTH;
+  const dynamicLimit = dynamicMonthlyRepCap(userData);
+  const maxPoints = purchasedReps ? dynamicLimit - purchasedReps : dynamicLimit;
 
   return (
     <>
