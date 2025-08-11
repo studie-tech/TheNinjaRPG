@@ -9,6 +9,8 @@ import { calcHealCost } from "@/libs/hospital/hospital";
 import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
 import { fetchStructures } from "@/routers/village";
 import { getStrucBoost } from "@/utils/village";
+import { findRelationship } from "@/utils/alliance";
+import { fetchAlliances } from "@/routers/village";
 import { getNewTrackers } from "@/libs/quest";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { calcHealthToChakra } from "@/libs/hospital/hospital";
@@ -88,7 +90,7 @@ export const hospitalRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query for fetching latest user & target
-      const [updatedUser, updatedTarget] = await Promise.all([
+      const [updatedUser, updatedTarget, relationships] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -100,6 +102,7 @@ export const hospitalRouter = createTRPCRouter({
           userId: input.userId,
           forceRegen: true,
         }),
+        fetchAlliances(ctx.drizzle),
       ]);
       // Extract user & target to shorthand variables
       const { user: u } = updatedUser;
@@ -132,7 +135,12 @@ export const hospitalRouter = createTRPCRouter({
         return errorResponse("You can only heal users in the same sector as you");
       }
       if (u.villageId !== t.villageId) {
-        return errorResponse("You can only heal users from the same village as you");
+        const relationship = findRelationship(relationships, u.villageId, t.villageId);
+        if (relationship?.status !== "ALLY") {
+          return errorResponse(
+            "You can only heal users from the same or allied village as you",
+          );
+        }
       }
       if (chakraCost > u.curChakra) {
         return errorResponse("You don't have enough chakra to heal this much");
