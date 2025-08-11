@@ -406,11 +406,7 @@ export default function HomePage() {
                 </TabsContent>
 
                 <TabsContent value="materials">
-                  <div className="space-y-4">
-                    <div className="text-sm text-muted-foreground text-center">
-                      Materials stored: {storedMaterials.length}
-                    </div>
-                    
+                  <div className="space-y-4">                    
                     <div>
                       <h4 className="font-semibold mb-2">Stored Materials</h4>
                       {storedMaterials.length === 0 ? (

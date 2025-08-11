@@ -164,9 +164,15 @@ export const homeRouter = createTRPCRouter({
         return { success: true, message: `Upgraded to ${targetHome.name}` };
       } else {
         const storedNormalItems = storedItems.filter((ui) => ui.item.itemType !== "MATERIAL").length || 0;
+        const storedMaterialItems = storedItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
         if (storedNormalItems > targetHome.storage) {
           return errorResponse(
             `You need to remove some items from storage first (max ${targetHome.storage})`,
+          );
+        }
+        if (storedMaterialItems > calcMaxHouseMaterials(user, targetHome.storage)) {
+          return errorResponse(
+            `You need to remove some materials from storage first (max ${calcMaxHouseMaterials(user, targetHome.storage)})`,
           );
         }
         await ctx.drizzle

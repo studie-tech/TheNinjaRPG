@@ -126,7 +126,7 @@ export default function Arena() {
             title="Challenge Player"
             subtitle="Configure your loadout and challenge other players"
             topRightContent={
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
                 <JutsuLoadoutSelector size="small" label="Jutsu" />
                 <ItemLoadoutSelector size="small" label="Items" />
               </div>
@@ -141,7 +141,7 @@ export default function Arena() {
             title="Training Grounds"
             subtitle="Configure your loadout and test your skills"
             topRightContent={
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
                 <JutsuLoadoutSelector size="small" label="Jutsu" />
                 <ItemLoadoutSelector size="small" label="Items" />
               </div>
@@ -229,7 +229,7 @@ const SelectAI: React.FC<SelectAIProps> = (props) => {
       subtitle="Choose opponent and jutsu loadout"
       initialBreak={true}
       topRightContent={
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
           <JutsuLoadoutSelector size="small" label="Jutsu" />
           <ItemLoadoutSelector size="small" label="Items" />
         </div>
