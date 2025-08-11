@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import ContentImage from "@/layout/ContentImage";
 import Confirm2 from "@/layout/Confirm2";
+import DurabilityBar from "@/layout/DurabilityBar";
 import { parseHtml } from "@/utils/parse";
 import ElementImage from "@/layout/ElementImage";
 import { canChangeContent } from "@/utils/permissions";
@@ -142,22 +143,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             "curDurability" in item &&
             item.maxDurability !== undefined &&
             item.curDurability !== undefined && (
-              <div className="absolute top-1 right-1 h-16 w-2 bg-gray-800 rounded-sm border border-gray-600">
-                <div
-                  className={`w-full rounded-sm transition-all duration-300 ${
-                    item.curDurability / item.maxDurability > 0.6
-                      ? "bg-green-500"
-                      : item.curDurability / item.maxDurability > 0.3
-                        ? "bg-yellow-500"
-                        : "bg-red-500"
-                  }`}
-                  style={{
-                    height: `${Math.max(0, Math.min(100, (item.curDurability / item.maxDurability) * 100))}%`,
-                    position: "absolute",
-                    bottom: 0,
-                  }}
-                />
-              </div>
+              <DurabilityBar
+                currentDurability={item.curDurability}
+                maxDurability={item.maxDurability}
+                position="top-right"
+                size="large"
+              />
             )}
         </div>
         {props.imageExtra}

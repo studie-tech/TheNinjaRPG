@@ -1,5 +1,6 @@
 import React from "react";
 import ContentImage from "./ContentImage";
+import DurabilityBar from "@/layout/DurabilityBar";
 import { useUserData } from "@/utils/UserContext";
 import { Info, HelpCircle, Star } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -83,7 +84,6 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
     <>
       <div className={cn(base, grid, bgColor, props.className)}>
         {filtered?.map((item, i) => {
-          console.log(item);
           let bgColor = "";
           if (item.type === "jutsu") {
             bgColor = "bg-blue-100";
@@ -206,22 +206,12 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                 {item.durability !== undefined &&
                   item.maxDurability !== undefined &&
                   item.maxDurability > 0 && (
-                    <div className="absolute top-1 left-1 h-12 w-1.5 bg-gray-800 rounded-sm border border-gray-600">
-                      <div
-                        className={`w-full rounded-sm transition-all duration-300 ${
-                          item.durability / item.maxDurability > 0.6
-                            ? "bg-green-500"
-                            : item.durability / item.maxDurability > 0.3
-                              ? "bg-yellow-500"
-                              : "bg-red-500"
-                        }`}
-                        style={{
-                          height: `${Math.max(0, Math.min(100, (item.durability / item.maxDurability) * 100))}%`,
-                          position: "absolute",
-                          bottom: 0,
-                        }}
-                      />
-                    </div>
+                    <DurabilityBar
+                      currentDurability={item.durability}
+                      maxDurability={item.maxDurability}
+                      position="top-left"
+                      size="medium"
+                    />
                   )}
 
                 {/* Favorite indicator */}

@@ -10,6 +10,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Modal2 from "@/layout/Modal2";
 import Confirm2 from "@/layout/Confirm2";
 import ContentImage from "@/layout/ContentImage";
+import DurabilityBar from "@/layout/DurabilityBar";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import { nonCombatConsume } from "@/libs/item";
 import { Button } from "@/components/ui/button";
@@ -539,7 +540,7 @@ const Equip: React.FC<EquipProps> = (props) => {
       onClick={() => props.act(props.slot)}
     >
       {item ? (
-        <>
+        <div className="relative w-full h-full">
           <ContentImage
             image={item.image}
             hideBorder={true}
@@ -547,12 +548,24 @@ const Equip: React.FC<EquipProps> = (props) => {
             rarity={item.rarity}
             className=""
           />
+          {/* Durability bar */}
+          {item.maxDurability !== undefined &&
+            item.durability !== undefined &&
+            item.maxDurability > 0 &&
+            typeof item.durability === "number" && (
+              <DurabilityBar
+                currentDurability={item.durability}
+                maxDurability={item.maxDurability}
+                position="top-right"
+                size="medium"
+              />
+            )}
           {item.quantity > 1 && (
             <div className="absolute bottom-0 right-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 text-black text-base font-bold">
               {item.quantity}
             </div>
           )}
-        </>
+        </div>
       ) : (
         <p className="opacity-100">{props.txt}</p>
       )}

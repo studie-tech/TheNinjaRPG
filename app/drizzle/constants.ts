@@ -319,6 +319,7 @@ export type SkillTreeTarget = (typeof SkillTreeTargets)[number];
 // Durability config
 export const DURABILITY_MAX_DEFAULT = 100;
 export const DURABILITY_USABILITY_THR = 20;
+export const DURABILITY_POINT_PRICE_PERCENT = 0.1;
 
 // Skill Tree Entry Types
 export const SkillTreeEntryTypes = ["DEFAULT", "SPECIAL"] as const;
