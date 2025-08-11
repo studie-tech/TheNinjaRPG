@@ -475,6 +475,8 @@ export const userItemToAction = (
     effects: useritem.item.effects,
     quantity: useritem.quantity,
     data: useritem.item,
+    durability: useritem.durability,
+    maxDurability: useritem.item.maxDurability,
   };
 };
 

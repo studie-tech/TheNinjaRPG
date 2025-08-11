@@ -128,14 +128,38 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   let image =
     "image" in item ? (
       <div className="relative flex flex-col items-center justify-center">
-        <ContentImage
-          image={item.image}
-          frames={"frames" in item ? item.frames : undefined}
-          speed={"speed" in item ? item.speed : undefined}
-          rarity={"rarity" in item ? item.rarity : undefined}
-          alt={item.name}
-          className=""
-        />
+        <div className="relative">
+          <ContentImage
+            image={item.image}
+            frames={"frames" in item ? item.frames : undefined}
+            speed={"speed" in item ? item.speed : undefined}
+            rarity={"rarity" in item ? item.rarity : undefined}
+            alt={item.name}
+            className=""
+          />
+          {/* Durability bar */}
+          {"maxDurability" in item &&
+            "curDurability" in item &&
+            item.maxDurability !== undefined &&
+            item.curDurability !== undefined && (
+              <div className="absolute top-1 right-1 h-16 w-2 bg-gray-800 rounded-sm border border-gray-600">
+                <div
+                  className={`w-full rounded-sm transition-all duration-300 ${
+                    item.curDurability / item.maxDurability > 0.6
+                      ? "bg-green-500"
+                      : item.curDurability / item.maxDurability > 0.3
+                        ? "bg-yellow-500"
+                        : "bg-red-500"
+                  }`}
+                  style={{
+                    height: `${Math.max(0, Math.min(100, (item.curDurability / item.maxDurability) * 100))}%`,
+                    position: "absolute",
+                    bottom: 0,
+                  }}
+                />
+              </div>
+            )}
+        </div>
         {props.imageExtra}
       </div>
     ) : null;
