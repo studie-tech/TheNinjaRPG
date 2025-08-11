@@ -1161,6 +1161,7 @@ export const initiateBattle = async (
             isInAuction: false,
             imbuements: [],
             dropChancePerc: 0,
+            durability: 100,
           }));
         user.jutsus = loadoutJutsus
           .filter((jutsu) => userLoadout.loadout.jutsuIds.includes(jutsu.id))
@@ -1913,23 +1914,32 @@ export const processUsersForBattle = async (
           .filter((e) => e.type === "summon")
           .forEach((e) => "aiId" in e && allSummons.push(e.aiId));
         // Add item effects to user
-        if (NonActionItemTypes.includes(itemType)) {
+        if (
+          itemType === "ARMOR" ||
+          itemType === "ACCESSORY" ||
+          itemType === "KEYSTONE"
+        ) {
           if (ui.item.effects && ui.equipped !== "NONE") {
-            // Add item effects to user
-            effects.forEach((effect) => {
-              const realized = realizeTag({
-                tag: effect,
-                user: user,
-                actionId: ui.itemId,
-                target: user,
-                level: user.level,
+            const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
+            if (currentDurability <= 20) {
+              ui.equipped = "NONE" as const;
+            } else {
+              // Add item effects to user
+              effects.forEach((effect) => {
+                const realized = realizeTag({
+                  tag: effect,
+                  user: user,
+                  actionId: ui.itemId,
+                  target: user,
+                  level: user.level,
+                });
+                realized.isNew = false;
+                realized.fromType = "armor";
+                realized.castThisRound = false;
+                realized.targetId = user.userId;
+                userEffects.push(realized);
               });
-              realized.isNew = false;
-              realized.fromType = "armor";
-              realized.castThisRound = false;
-              realized.targetId = user.userId;
-              userEffects.push(realized);
-            });
+            }
           }
         }
         // If droppable or action type, keep in battle row

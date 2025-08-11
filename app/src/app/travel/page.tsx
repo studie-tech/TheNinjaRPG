@@ -549,7 +549,10 @@ export default function Travel() {
               isValid={false}
             >
               <ItemWithEffects
-                item={useritem.item}
+                item={{
+                  ...useritem.item,
+                  curDurability: useritem.durability,
+                }}
                 key={useritem.id}
                 showStatistic="item"
               />

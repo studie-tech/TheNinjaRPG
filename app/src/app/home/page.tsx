@@ -443,7 +443,10 @@ export default function HomePage() {
                 }}
               >
                 <ItemWithEffects
-                  item={selectedItem.item}
+                  item={{
+                    ...selectedItem.item,
+                    curDurability: selectedItem.durability,
+                  }}
                   key={selectedItem.id}
                   showStatistic="item"
                 />

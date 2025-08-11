@@ -603,7 +603,7 @@ export const updateUser = async (
         ? updateItems.map((ui) =>
             client
               .update(userItem)
-              .set({ quantity: ui.quantity })
+              .set({ quantity: ui.quantity, durability: ui.durability })
               .where(eq(userItem.id, ui.id)),
           )
         : []),

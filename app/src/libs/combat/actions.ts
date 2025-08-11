@@ -129,8 +129,17 @@ export const availableUserActions = (
       : []),
     ...(user?.items && !isStealth
       ? user.items
-          .filter((ui) => ui.quantity > 0 && !ui.item.preventBattleUsage)
-          .filter((ui) => !NonActionItemTypes.includes(ui.item.itemType))
+          .filter((ui) => {
+            if (ui.quantity <= 0) return false;
+            if (ui.item.preventBattleUsage) return false;
+            if (NonActionItemTypes.includes(ui.item.itemType)) return false;
+            if (ui.equipped === "NONE") return false;
+            if (ui.item?.itemType === "WEAPON") {
+              const current = Math.min(ui.durability, ui.item.maxDurability);
+              return current > 20;
+            }
+            return true;
+          })
           .map((ui) => userItemToAction(ui, user))
       : []),
   ];
@@ -912,6 +921,18 @@ export const performBattleAction = (props: {
   const check = insertAction({ battle, grid, action, actorId, longitude, latitude });
   if (!check) {
     throw new Error(`Action ${action.name} no longer possible for ${user.username}`);
+  }
+
+  // Track weapon durability usage
+  if (action.type === "item") {
+    const used = user.items.find((i) => i.item.id === action.id);
+    if (used && used.item.itemType === "WEAPON") {
+      const currentDurability = Math.min(used.durability, used.item.maxDurability);
+      used.durability = Math.max(0, currentDurability - 3);
+      if (used.durability <= 20) {
+        used.equipped = "NONE" as const;
+      }
+    }
   }
 
   // Update the action state, so as keep state for technique cooldowns

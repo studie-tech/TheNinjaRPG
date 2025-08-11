@@ -365,6 +365,17 @@ export const applyEffects = (
             color: "red",
             types: c.types,
           });
+          // Reduce armor durability by 1 when hit
+          const t = newUsersState.find((u) => u.userId === target.userId);
+          t?.items.forEach((ui) => {
+            if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
+              const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
+              ui.durability = Math.max(0, currentDurability - 1);
+              if (ui.durability <= 20) {
+                ui.equipped = "NONE" as const;
+              }
+            }
+          });
         }
         if (c.residual !== undefined && c.residual >= 0) {
           target.curHealth -= c.residual;
@@ -373,6 +384,17 @@ export const applyEffects = (
             txt: `${target.username} takes ${c.residual.toFixed(2)} residual damage`,
             color: "red",
             types: c.types,
+          });
+          // Track armor hits from residual damage as well
+          const t = newUsersState.find((u) => u.userId === target.userId);
+          t?.items.forEach((ui) => {
+            if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
+              const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
+              ui.durability = Math.max(0, currentDurability - 1);
+              if (ui.durability <= 20) {
+                ui.equipped = "NONE" as const;
+              }
+            }
           });
         }
         if (c.heal_hp !== undefined && c.heal_hp >= 0 && target.curHealth > 0) {

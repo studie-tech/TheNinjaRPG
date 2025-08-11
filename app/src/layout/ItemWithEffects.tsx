@@ -39,7 +39,7 @@ export type GenericObject = {
 export interface ItemWithEffectsProps {
   item:
     | Bloodline
-    | (Item & { imbuements?: Item[] })
+    | (Item & { imbuements?: Item[]; curDurability?: number })
     | Jutsu
     | Quest
     | BackgroundSchema
@@ -497,6 +497,15 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             {"weaponType" in item && item.weaponType && (
               <p>
                 <b>Weapon</b>: {item.weaponType.toLowerCase()}
+              </p>
+            )}
+            {"maxDurability" in item && item.maxDurability !== undefined && (
+              <p>
+                <b>Durability</b>:{" "}
+                {"curDurability" in item && item.curDurability !== undefined
+                  ? item.curDurability
+                  : item.maxDurability}{" "}
+                / {item.maxDurability}
               </p>
             )}
             {"slot" in item && item.slot && (
