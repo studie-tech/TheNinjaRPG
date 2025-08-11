@@ -316,6 +316,10 @@ export type AttackTarget = (typeof AttackTargets)[number];
 export const SkillTreeTargets = ["SELF", "ENEMIES", "ALLIES"] as const;
 export type SkillTreeTarget = (typeof SkillTreeTargets)[number];
 
+// Durability config
+export const DURABILITY_MAX_DEFAULT = 100;
+export const DURABILITY_USABILITY_THR = 20;
+
 // Skill Tree Entry Types
 export const SkillTreeEntryTypes = ["DEFAULT", "SPECIAL"] as const;
 export type SkillTreeEntryType = (typeof SkillTreeEntryTypes)[number];

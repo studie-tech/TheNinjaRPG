@@ -31,7 +31,11 @@ import { seal, sealPrevent, sealCheck, rob, robPrevent, stealth } from "./tags";
 import { clear, cleanse, summon, summonPrevent, buffPrevent, weakness } from "./tags";
 import { cleansePrevent, clearPrevent, healPrevent, debuffPrevent } from "./tags";
 import { updateStatUsage, injectjutsus, elementalseal } from "./tags";
-import { BATTLE_TAG_STACKING, ID_ANIMATION_SMOKE } from "@/drizzle/constants";
+import {
+  BATTLE_TAG_STACKING,
+  ID_ANIMATION_SMOKE,
+  DURABILITY_USABILITY_THR,
+} from "@/drizzle/constants";
 import type { BattleUserState, ReturnedUserState } from "./types";
 import type { GroundEffect, UserEffect, ActionEffect, BattleEffect } from "./types";
 import type { CompleteBattle, Consequence, CombatAction } from "./types";
@@ -371,7 +375,7 @@ export const applyEffects = (
             if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
               const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
               ui.durability = Math.max(0, currentDurability - 1);
-              if (ui.durability <= 20) {
+              if (ui.durability <= DURABILITY_USABILITY_THR) {
                 ui.equipped = "NONE" as const;
               }
             }
@@ -391,7 +395,7 @@ export const applyEffects = (
             if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
               const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
               ui.durability = Math.max(0, currentDurability - 1);
-              if (ui.durability <= 20) {
+              if (ui.durability <= DURABILITY_USABILITY_THR) {
                 ui.equipped = "NONE" as const;
               }
             }

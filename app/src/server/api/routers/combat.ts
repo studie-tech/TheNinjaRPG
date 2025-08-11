@@ -15,7 +15,7 @@ import { COMBAT_HEIGHT, COMBAT_WIDTH } from "@/libs/combat/constants";
 import { SECTOR_HEIGHT, SECTOR_WIDTH } from "@/libs/travel/constants";
 import { COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
 import { RANKS_RESTRICTED_FROM_PVP, AutoBattleTypes } from "@/drizzle/constants";
-import { NonActionItemTypes } from "@/drizzle/constants";
+import { NonActionItemTypes, DURABILITY_USABILITY_THR } from "@/drizzle/constants";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
 import { calcBattleResult, maskBattle, alignBattle } from "@/libs/combat/util";
 import { createAction, saveUsage } from "@/libs/combat/database";
@@ -1921,7 +1921,7 @@ export const processUsersForBattle = async (
         ) {
           if (ui.item.effects && ui.equipped !== "NONE") {
             const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
-            if (currentDurability <= 20) {
+            if (currentDurability <= DURABILITY_USABILITY_THR) {
               ui.equipped = "NONE" as const;
             } else {
               // Add item effects to user

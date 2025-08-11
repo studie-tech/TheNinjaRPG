@@ -220,7 +220,7 @@ export type CombatAction = {
   level?: number;
   quantity?: number;
   hidden?: boolean;
-  curDurability?: number;
+  durability?: number;
   maxDurability?: number;
 };
 

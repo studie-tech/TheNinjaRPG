@@ -1047,7 +1047,9 @@ export const item = mysqlTable(
       .notNull(),
     canStack: boolean("canStack").default(false).notNull(),
     maxImbueNumber: int("maxImbueNumber").default(1).notNull(),
-    maxDurability: smallint("maxDurability", { unsigned: true }).default(100).notNull(),
+    maxDurability: smallint("maxDurability", { unsigned: true })
+      .default(consts.DURABILITY_MAX_DEFAULT)
+      .notNull(),
     inShop: boolean("inShop").default(true).notNull(),
     isEventItem: boolean("isEventItem").default(false).notNull(),
     hidden: boolean("hidden").default(false).notNull(),
@@ -2065,7 +2067,9 @@ export const userItem = mysqlTable(
     itemId: varchar("itemId", { length: 191 }).notNull(),
     quantity: int("quantity").default(1).notNull(),
     equipped: mysqlEnum("equipped", consts.ItemSlots).default("NONE").notNull(),
-    durability: smallint("durability", { unsigned: true }).default(100).notNull(),
+    durability: smallint("durability", { unsigned: true })
+      .default(consts.DURABILITY_MAX_DEFAULT)
+      .notNull(),
     storedAtHome: boolean("storedAtHome").default(false).notNull(),
     craftingFinishedAt: datetime("craftingFinishedAt", { mode: "date", fsp: 3 }),
     isInAuction: boolean("isInAuction").default(false).notNull(),

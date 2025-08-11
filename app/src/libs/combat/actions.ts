@@ -39,6 +39,7 @@ import {
   IMG_BASIC_MOVE,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
+  DURABILITY_USABILITY_THR,
   NonActionItemTypes,
 } from "@/drizzle/constants";
 import type { AttackTargets, ElementName } from "@/drizzle/constants";
@@ -931,7 +932,7 @@ export const performBattleAction = (props: {
     if (used && used.item.itemType === "WEAPON") {
       const currentDurability = Math.min(used.durability, used.item.maxDurability);
       used.durability = Math.max(0, currentDurability - 3);
-      if (used.durability <= 20) {
+      if (used.durability <= DURABILITY_USABILITY_THR) {
         used.equipped = "NONE" as const;
       }
     }
