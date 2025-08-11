@@ -10,6 +10,7 @@ import { getStrucBoost } from "@/utils/village";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
+  DURABILITY_POINT_PRICE_PERCENT,
 } from "@/drizzle/constants";
 import type {
   Item,
@@ -116,4 +117,28 @@ export const calcItemSellingPrice = (
   const isEventItem = useritem.item.isEventItem;
   const cost = isEventItem ? 0 : useritem.item.cost * useritem.quantity * factor;
   return Math.floor(cost);
+};
+
+/**
+ * Calculates the repair cost for an item based on its durability and cost.
+ * @param useritem - The user's item data, including the item details.
+ * @returns The calculated repair cost.
+ */
+export const calcItemRepairCost = (useritem: UserItemWithItem) => {
+  const curDurability = useritem.durability;
+  const maxDurability = useritem.item.maxDurability;
+  const pointsToRepair = maxDurability - curDurability;
+  const factor = pointsToRepair * DURABILITY_POINT_PRICE_PERCENT;
+  switch (useritem.item.rarity) {
+    case "COMMON":
+      return Math.ceil(50 * factor);
+    case "RARE":
+      return Math.ceil(200 * factor);
+    case "EPIC":
+      return Math.ceil(400 * factor);
+    case "LEGENDARY":
+      return Math.ceil(800 * factor);
+    default:
+      return 0;
+  }
 };

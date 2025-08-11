@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Merge, CircleDollarSign, Cookie, ArrowDownToLine, Zap } from "lucide-react";
+import {
+  Merge,
+  CircleDollarSign,
+  Cookie,
+  ArrowDownToLine,
+  Zap,
+  Wrench,
+} from "lucide-react";
 import Image from "next/image";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -19,7 +26,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
-import { calcMaxItems, calcMaxEventItems } from "@/libs/item";
+import { calcMaxItems, calcMaxEventItems, calcItemRepairCost } from "@/libs/item";
 import { CircleFadingArrowUp, Shirt } from "lucide-react";
 import { COST_EXTRA_ITEM_SLOT, IMG_EQUIP_SILHOUETTE } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -262,9 +269,20 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     onSettled,
   });
 
+  const { mutate: repair, isPending: isRepairing } = api.item.repair.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.item.getUserItems.invalidate();
+        await utils.profile.getUser.invalidate();
+      }
+    },
+    onSettled,
+  });
+
   // Derived
   const structures = userData?.village?.structures;
-  const isLoading = isMerging || isConsuming || isSelling || isEquipping;
+  const isLoading = isMerging || isConsuming || isSelling || isEquipping || isRepairing;
   const items = useritems?.map((useritem) => ({ ...useritem.item, ...useritem }));
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
 
@@ -312,6 +330,15 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                 >
                   <Shirt className="mr-2 h-5 w-5" />
                   Equip
+                </Button>
+              )}
+              {useritem.durability < useritem.item.maxDurability && (
+                <Button
+                  variant="info"
+                  onClick={() => repair({ userItemId: useritem.id })}
+                >
+                  <Wrench className="mr-2 h-5 w-5" />
+                  Repair ({calcItemRepairCost(useritem)} ryo)
                 </Button>
               )}
               {useritem.item.canStack && (
@@ -420,6 +447,22 @@ const Character: React.FC<CharacterProps> = (props) => {
     },
   });
 
+  const { mutate: repairEquipped, isPending: isRepairingEquipped } =
+    api.item.repair.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.item.getUserItems.invalidate();
+          await utils.profile.getUser.invalidate();
+        }
+      },
+      onSettled: () => {
+        document.body.style.cursor = "default";
+        setShowItemDetails(false);
+        setUserItem(undefined);
+      },
+    });
+
   // Placement of equip boxes
   const l = "left-[10%] ";
   const r = "right-[10%] ";
@@ -507,8 +550,24 @@ const Character: React.FC<CharacterProps> = (props) => {
               key={useritem.id}
               showStatistic="item"
             />
-            {isEquipping && (
-              <Loader explanation={`Unequipping ${useritem.item.name}`} />
+            {!isEquipping && !isRepairingEquipped && (
+              <div className="flex flex-row gap-1 mt-2">
+                {useritem.durability < useritem.item.maxDurability && (
+                  <Button
+                    variant="info"
+                    onClick={() => repairEquipped({ userItemId: useritem.id })}
+                  >
+                    <Wrench className="mr-2 h-5 w-5" />
+                    Repair ({calcItemRepairCost(useritem)} ryo)
+                  </Button>
+                )}
+                <div className="grow"></div>
+              </div>
+            )}
+            {(isEquipping || isRepairingEquipped) && (
+              <Loader
+                explanation={`${isEquipping ? "Unequipping" : "Repairing"} ${useritem.item.name}`}
+              />
             )}
           </Modal2>
         )}

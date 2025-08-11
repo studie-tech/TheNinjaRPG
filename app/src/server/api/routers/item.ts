@@ -21,9 +21,8 @@ import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
 import { ItemValidator } from "@/libs/combat/types";
 import { canChangeContent } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/discord";
-
 import { getStrucBoost } from "@/utils/village";
-import { calcItemSellingPrice } from "@/libs/item";
+import { calcItemSellingPrice, calcItemRepairCost } from "@/libs/item";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
@@ -665,6 +664,47 @@ export const itemRouter = createTRPCRouter({
         message: `You used ${useritem.item.name}`,
         notifications: messages,
         rewards: processedRewards,
+      };
+    }),
+  // Repair user item
+  repair: protectedProcedure
+    .input(z.object({ userItemId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, useritem] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
+      ]);
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (!useritem) return errorResponse("User item not found");
+      if (useritem.userId !== user.userId) return errorResponse("Not yours to repair");
+      if (user.status !== "AWAKE") {
+        return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
+      }
+      if (useritem.durability >= useritem.item.maxDurability) {
+        return errorResponse("Item is already at full durability");
+      }
+      // Calculate repair cost
+      const repairCost = calcItemRepairCost(useritem);
+      if (user.money < repairCost) {
+        return errorResponse(`Insufficient funds. Repair costs ${repairCost} ryo`);
+      }
+      // Mutate
+      await Promise.all([
+        ctx.drizzle
+          .update(userData)
+          .set({ money: sql`${userData.money} - ${repairCost}` })
+          .where(eq(userData.userId, ctx.userId)),
+        ctx.drizzle
+          .update(userItem)
+          .set({ durability: useritem.item.maxDurability })
+          .where(eq(userItem.id, input.userItemId)),
+      ]);
+      return {
+        success: true,
+        message: `Repaired ${useritem.item.name} for ${repairCost} ryo`,
       };
     }),
   // Buy user item
