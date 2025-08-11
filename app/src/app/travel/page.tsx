@@ -550,6 +550,10 @@ export default function Travel() {
             >
               <ItemWithEffects
                 item={useritem.item}
+                userItem={{
+                  durability: useritem.durability,
+                  maxDurability: useritem.maxDurability,
+                }}
                 key={useritem.id}
                 showStatistic="item"
               />

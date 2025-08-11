@@ -360,6 +360,10 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             ...listing.userItem.item,
             imbuements: listing.userItem.imbuements.map((imbuement) => imbuement.item),
           }}
+          userItem={{
+            durability: listing.userItem.durability,
+            maxDurability: listing.userItem.maxDurability,
+          }}
           showStatistic="item"
         />
 

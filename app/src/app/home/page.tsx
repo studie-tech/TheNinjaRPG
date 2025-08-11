@@ -444,6 +444,10 @@ export default function HomePage() {
               >
                 <ItemWithEffects
                   item={selectedItem.item}
+                  userItem={{
+                    durability: selectedItem.durability,
+                    maxDurability: selectedItem.maxDurability,
+                  }}
                   key={selectedItem.id}
                   showStatistic="item"
                 />

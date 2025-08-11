@@ -298,6 +298,10 @@ const Backpack: React.FC<BackpackProps> = (props) => {
               ...useritem.item,
               imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
             }}
+            userItem={{
+              durability: useritem.durability,
+              maxDurability: useritem.maxDurability,
+            }}
             key={useritem.id}
             showStatistic="item"
           />
@@ -500,6 +504,10 @@ const Character: React.FC<CharacterProps> = (props) => {
               item={{
                 ...useritem.item,
                 imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
+              }}
+              userItem={{
+                durability: useritem.durability,
+                maxDurability: useritem.maxDurability,
               }}
               key={useritem.id}
               showStatistic="item"

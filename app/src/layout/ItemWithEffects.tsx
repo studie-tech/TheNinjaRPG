@@ -45,6 +45,10 @@ export interface ItemWithEffectsProps {
     | BackgroundSchema
     | GameAsset
     | GenericObject;
+  userItem?: {
+    durability?: number;
+    maxDurability?: number;
+  };
   hideDetails?: boolean;
   imageBorder?: boolean;
   imageExtra?: React.ReactNode;
@@ -69,6 +73,7 @@ export interface ItemWithEffectsProps {
 const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   const {
     item,
+    userItem,
     showEdit,
     showStatistic,
     showCopy,
@@ -497,6 +502,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             {"weaponType" in item && item.weaponType && (
               <p>
                 <b>Weapon</b>: {item.weaponType.toLowerCase()}
+              </p>
+            )}
+            {userItem?.durability !== undefined && userItem?.maxDurability !== undefined && (
+              <p>
+                <b>Durability</b>: {userItem.durability} / {userItem.maxDurability}
               </p>
             )}
             {"slot" in item && item.slot && (
