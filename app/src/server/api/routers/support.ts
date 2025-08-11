@@ -105,10 +105,12 @@ export const supportRouter = createTRPCRouter({
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guards
-      if ((user.isBanned || user.isSilenced) && input.isPublic) {
-        return errorResponse(
-          "You cannot create public tickets while banned or silenced",
-        );
+      if (user.isBanned || user.isSilenced) {
+        if (input.isPublic || input.category !== "MODERATION_SUPPORT") {
+          return errorResponse(
+            "You cannot create public tickets while banned or silenced, you can only create private moderation support tickets",
+          );
+        }
       }
       // Mutate
       const ticketId = nanoid(10);
@@ -897,7 +899,7 @@ export const calculateSupportMetrics = async (
   for (const ticket of tickets) {
     // Calculate first response time
     const firstStaffResponse = ticket.conversation?.comments.find(
-      (comment) => comment.user.role !== "USER",
+      (comment) => comment.user && comment.user.role !== "USER",
     );
 
     if (firstStaffResponse) {

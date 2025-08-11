@@ -474,7 +474,10 @@ const Conversation: React.FC<ConversationProps> = (props) => {
    * Submit comment
    */
   const handleSubmitComment = handleSubmit((data) => {
-    if (userData?.isSilenced) {
+    if (
+      (userData?.isSilenced || userData?.isBanned) &&
+      !conversation?.isStaffAvailable
+    ) {
       showMutationToast({
         success: false,
         message: "You are silenced and cannot send a message.",
@@ -531,8 +534,8 @@ const Conversation: React.FC<ConversationProps> = (props) => {
           {conversation &&
             !conversation.isLocked &&
             userData &&
-            !userData.isBanned &&
-            !userData.isSilenced && (
+            ((!userData.isBanned && !userData.isSilenced) ||
+              conversation.isStaffAvailable) && (
               <div className="relative mb-2">
                 {quoteIds &&
                   quoteIds.length > 0 &&

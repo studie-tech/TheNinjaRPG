@@ -611,8 +611,8 @@ export const commentsRouter = createTRPCRouter({
         fetchComments(ctx.drizzle, input.quoteIds || []),
       ]);
       // Guard
-      if (user.isBanned || user.isSilenced) {
-        throw serverError("UNAUTHORIZED", "You are banned");
+      if ((user.isBanned || user.isSilenced) && !convo.isStaffAvailable) {
+        return errorResponse("You are banned");
       }
       if (!canViewConversation(convo, ctx.userId, user.role)) {
         return errorResponse("You are not allowed to view this conversation");

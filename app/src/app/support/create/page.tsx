@@ -76,14 +76,13 @@ export default function CreateSupportTicket() {
   // Create ticket mutation
   const createTicket = api.support.createTicket.useMutation({
     onSuccess: (data) => {
-      showMutationToast({
-        success: true,
-        message: "Support ticket created successfully!",
-      });
-      if (data.data?.ticketId) {
-        router.push(`/support/${data.data.ticketId}`);
-      } else {
-        router.push("/support");
+      showMutationToast(data);
+      if (data.success) {
+        if (data.data?.ticketId) {
+          router.push(`/support/${data.data.ticketId}`);
+        } else {
+          router.push("/support");
+        }
       }
     },
   });

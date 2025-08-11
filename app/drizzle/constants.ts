@@ -1646,6 +1646,7 @@ export const SupportTicketCategories = [
   "GAMEPLAY_QUESTION",
   "PAYMENT_ISSUE",
   "TECHNICAL_SUPPORT",
+  "MODERATION_SUPPORT",
   "OTHER",
 ] as const;
 export type SupportTicketCategory = (typeof SupportTicketCategories)[number];
@@ -1725,6 +1726,7 @@ export const SUPPORT_TICKET_COLORS = {
     GAMEPLAY_QUESTION: "bg-green-100 text-green-800",
     PAYMENT_ISSUE: "bg-purple-100 text-purple-800",
     TECHNICAL_SUPPORT: "bg-gray-100 text-gray-800",
+    MODERATION_SUPPORT: "bg-orange-100 text-orange-800",
     OTHER: "bg-indigo-100 text-indigo-800",
   },
   PRIORITY: {
@@ -1754,6 +1756,7 @@ export const SUPPORT_TICKET_CATEGORY_DESCRIPTIONS: Record<
   GAMEPLAY_QUESTION: "Questions about game mechanics, rules, or strategies",
   PAYMENT_ISSUE: "Problems with purchases, subscriptions, or payments",
   TECHNICAL_SUPPORT: "Technical problems or performance issues",
+  MODERATION_SUPPORT: "Moderation-related issues or questions",
   OTHER: "Any other questions or concerns",
 } as const;
 

@@ -576,9 +576,8 @@ export const canViewConversation = (
   const isPublic = conversation.isPublic;
   const inConversation = conversation.users.some((u) => u.userId === userId);
   const isStaffAvailable = conversation.isStaffAvailable;
-  if (isPublic || inConversation || (userRole !== "USER" && isStaffAvailable)) {
-    return true;
-  }
+  if (isPublic || inConversation) return true;
+  if (isStaffAvailable && canModerate(userRole)) return true;
   return false;
 };
 
