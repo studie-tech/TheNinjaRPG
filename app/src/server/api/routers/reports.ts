@@ -7,6 +7,8 @@ import { historicalAvatar, reportLog } from "@/drizzle/schema";
 import { forumPost, conversationComment, userNindo } from "@/drizzle/schema";
 import { userReport, userReportComment, userData, userReview } from "@/drizzle/schema";
 import { automatedModeration } from "@/drizzle/schema";
+import { battle, battleAction } from "@/drizzle/schema";
+import { secondsFromNow } from "@/utils/time";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { serverError, baseServerResponse, errorResponse } from "../trpc";
 import { userReportSchema } from "@/validators/reports";
@@ -430,6 +432,21 @@ export const reportsRouter = createTRPCRouter({
               infraction: await fetchImage(ctx.drizzle, input.system_id, ""),
               context: [],
             };
+          case "battle_log": {
+            await ctx.drizzle
+              .update(battleAction)
+              .set({ updatedAt: secondsFromNow(72 * 3600) })
+              .where(eq(battleAction.id, input.system_id));
+            return {
+              infraction: {
+                content:
+                  '<br /><a href="/battlelog/' +
+                  input.system_id +
+                  '"><b>Link to Battle Log (available for 72h)<b></a>',
+              },
+              context: [],
+            };
+          }
           default:
             throw serverError("INTERNAL_SERVER_ERROR", "Invalid report system");
         }

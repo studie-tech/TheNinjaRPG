@@ -289,6 +289,39 @@ export const combatRouter = createTRPCRouter({
 
       return topFights;
     }),
+  getBattleHistoryEntry: protectedProcedure
+    .input(z.object({ battleId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return await ctx.drizzle.query.battleHistory.findFirst({
+        where: eq(battleHistory.battleId, input.battleId),
+        with: {
+          attacker: {
+            columns: {
+              username: true,
+              userId: true,
+              avatar: true,
+              level: true,
+              rank: true,
+              isOutlaw: true,
+              role: true,
+              federalStatus: true,
+            },
+          },
+          defender: {
+            columns: {
+              username: true,
+              userId: true,
+              avatar: true,
+              level: true,
+              rank: true,
+              isOutlaw: true,
+              role: true,
+              federalStatus: true,
+            },
+          },
+        },
+      });
+    }),
   getBattleHistory: protectedProcedure
     .input(
       z.object({

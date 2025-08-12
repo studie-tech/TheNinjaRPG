@@ -11,6 +11,14 @@ import type { BattleState } from "@/libs/combat/types";
 import { Button } from "@/components/ui/button";
 import { LayoutGrid } from "lucide-react";
 import { useLocalStorage } from "@/hooks/localstorage";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import ReportUser from "@/layout/Report";
+import { Flag } from "lucide-react";
 
 const Combat = dynamic(() => import("@/layout/Combat"));
 
@@ -30,6 +38,14 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
     { battleId: battleId },
     { enabled: !!battleId },
   );
+  const { data: battleHistory } = api.combat.getBattleHistoryEntry.useQuery(
+    { battleId: battleId },
+    { enabled: !!battleId },
+  );
+  const otherUser =
+    battleHistory?.attacker?.userId === userData?.userId
+      ? battleHistory?.defender
+      : battleHistory?.attacker;
 
   // Derived variables
   const battle = battleState?.battle;
@@ -62,7 +78,7 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
   return (
     <ContentBox
       title="Spectate"
-      subtitle="Available for 3h!"
+      subtitle="Available for 3h! "
       defaultBackHref="/profile"
       padding={false}
       topRightContent={
@@ -78,14 +94,39 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
               isPending={battleState.isPending}
             />
           )}
-          <Button
-            variant={showGridNumbers ? "default" : "outline"}
-            size="icon"
-            onClick={() => setShowGridNumbers(!showGridNumbers)}
-            className="h-8 w-8 min-w-8 min-h-8"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
+          {otherUser && (
+            <ReportUser
+              button={
+                <TooltipProvider delayDuration={50}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Flag className="h-6 w-6 cursor-pointer hover:text-orange-500" />
+                    </TooltipTrigger>
+                    <TooltipContent>Report User</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              }
+              system="battle_log"
+              user={otherUser}
+              content={{
+                id: battleId,
+                title: "Report Battle Log",
+                content:
+                  "Reporting this battle log will cause it to not be deleted the next 72 hours, so that a moderator may review it",
+              }}
+            />
+          )}
+
+          {battle && (
+            <Button
+              variant={showGridNumbers ? "default" : "outline"}
+              size="icon"
+              onClick={() => setShowGridNumbers(!showGridNumbers)}
+              className="h-8 w-8 min-w-8 min-h-8"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       }
     >
