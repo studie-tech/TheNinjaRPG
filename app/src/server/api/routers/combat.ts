@@ -750,18 +750,15 @@ export const combatRouter = createTRPCRouter({
         });
       }
 
-      const { userEffects: newUsersEffects, usersState: newUsersState } =
-        await processUsersForBattle(ctx.drizzle, {
-          users: userBattle.usersState.filter((u) => !u.isSummon),
-          settings: data.settings,
-          relations: data.relations,
-          wars: data.activeWars,
-          villages: data.villages,
-          defaultProfile: data.defaultProfile,
-          battleType: userBattle.battleType,
-          hide: false,
-          isSummon: false,
-        });
+      // Since loadouts only affect the calling user prior to combat start, avoid
+      // re-processing all users which previously caused other users to lose their
+      // equipped items / skill trees (see support ticket 5EiF_KKaEh).
+      // Instead, update only the current user and keep the rest of the battle
+      // state untouched.
+
+      // Keep other players' state intact to avoid unintended unequips.
+      const newUsersState = userBattle.usersState;
+      const newUsersEffects = userBattle.usersEffects;
 
       // Mutate
       const result = await ctx.drizzle
