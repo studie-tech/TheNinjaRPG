@@ -1,4 +1,6 @@
 import { UserRoles } from "@/drizzle/constants";
+// Permission helpers – keep sorted alphabetically where possible
+
 import type { UserData, UserRank, UserReport } from "@/drizzle/schema";
 import type { UserRole } from "@/drizzle/constants";
 import type { SupportTicket } from "@/drizzle/schema";
@@ -39,6 +41,15 @@ export const canSubmitNotification = (role: UserRole) => {
 export const canTransferJutsu = (user?: UserData) => {
   if (!user) return false;
   return user.role !== "USER" || user.staffAccount;
+};
+
+export const canBackupControl = (role: UserRole) => {
+  return [
+    "CODING-ADMIN",
+    "CONTENT-ADMIN",
+    "EVENT-ADMIN",
+    "MODERATOR-ADMIN",
+  ].includes(role);
 };
 
 export const canUseMonitoringTests = (role: UserRole) => {
