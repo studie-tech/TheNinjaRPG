@@ -201,6 +201,7 @@ jobs:
           LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
           LLM_API_VERSION: ${{ vars.LLM_API_VERSION || '2025-01-01-preview' }}
           OPENHANDS_SETTINGS_DIR: "/tmp/.openhands"
+          MAX_BUDGET_PER_TASK: 50
           PYTHONPATH: ""
           # Ensure OpenHands repo settings are available in the working dir used by resolver (\n# the resolver runs from /tmp)
         run: |
