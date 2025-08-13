@@ -5,6 +5,7 @@ import { errorResponse, baseServerResponse } from "@/server/api/trpc";
 import { registrationSchema } from "@/validators/register";
 import { historicalIp } from "@/drizzle/schema";
 import { secondsFromNow } from "@/utils/time";
+import { checkForBadWords } from "@/utils/profanity";
 import {
   bloodline,
   bloodlineRolls,
@@ -20,6 +21,9 @@ export const registerRouter = createTRPCRouter({
     .input(registrationSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      // Check for bad words
+      const moderationResult = await checkForBadWords(input.username);
+      if (!moderationResult.success) return moderationResult;
       // Query
       const [villageData, user, reminder, selectedBloodline, currentIp] =
         await Promise.all([
