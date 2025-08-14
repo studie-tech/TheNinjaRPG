@@ -5,6 +5,7 @@ export const forumBoardSchema = z
     board_id: z.string(),
     title: z.string().trim().min(10).max(88),
     content: z.string().min(10).max(10000),
+    senderId: z.string().optional().nullable(),
   })
   .strict()
   .required();

@@ -11,6 +11,7 @@ import { eq, sql, desc, asc } from "drizzle-orm";
 import { forumBoardSchema } from "@/validators/forum";
 import { canModerate, canCreateNews } from "@/utils/permissions";
 import { callDiscordNews } from "@/libs/discord";
+import { resolveSenderId } from "@/libs/comments";
 import { fetchUser } from "@/routers/profile";
 import { nanoid } from "nanoid";
 import { moderateContent } from "@/libs/moderator";
@@ -55,10 +56,13 @@ export const forumRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       const threadId = nanoid();
-      const [board, user] = await Promise.all([
+      const [board, user, sender] = await Promise.all([
         fetchBoard(ctx.drizzle, input.board_id),
         fetchUser(ctx.drizzle, ctx.userId),
+        input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
       ]);
+      // Resolve effective poster (allow staff to post as AI)
+      const effectiveUserId = resolveSenderId(user, sender);
       // Guard
       const isNews = board.name === "News";
       if (isNews && !canCreateNews(user.role)) {
@@ -88,13 +92,14 @@ export const forumRouter = createTRPCRouter({
           id: threadId,
           title: input.title,
           boardId: input.board_id,
-          userId: ctx.userId,
+          userId: effectiveUserId,
         }),
         ctx.drizzle.insert(forumPost).values({
           id: postId,
           content: sanitized,
           threadId: threadId,
-          userId: ctx.userId,
+          userId: effectiveUserId,
+          authorId: ctx.userId,
         }),
         ctx.drizzle
           .update(forumBoard)

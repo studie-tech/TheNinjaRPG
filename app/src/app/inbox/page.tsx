@@ -30,8 +30,9 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import { createConversationSchema } from "@/validators/comments";
 import { type CreateConversationSchema } from "@/validators/comments";
 import { getSearchValidator } from "@/validators/register";
-import type { FederalStatus } from "@/drizzle/schema";
+import type { FederalStatus, UserRank } from "@/drizzle/schema";
 import { showMutationToast } from "@/libs/toast";
+import { canPostAsAi } from "@/utils/permissions";
 
 export default function Inbox() {
   const { data: userData } = useRequiredUserData();
@@ -222,7 +223,7 @@ export interface NewConversationPromptProps {
   preSelectedUser?: {
     userId: string;
     username: string;
-    rank: string;
+    rank: UserRank;
     level: number;
     avatar?: string | null;
     federalStatus: FederalStatus;
@@ -248,6 +249,21 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
       users: [props.preSelectedUser],
     },
   });
+
+  // User search for sender selection (AI posting)
+  const maxSenderUsers = 1;
+  const senderSearchSchema = getSearchValidator({ max: maxSenderUsers });
+  const senderSearchMethods = useForm<z.infer<typeof senderSearchSchema>>({
+    resolver: zodResolver(senderSearchSchema),
+    defaultValues: { username: "", users: [] },
+  });
+  const watchedSenderUsers = useWatch({
+    control: senderSearchMethods.control,
+    name: "users",
+    defaultValue: [],
+  });
+  const senderUser = watchedSenderUsers?.[0];
+  const canPostAsAI = userData && canPostAsAi(userData.role);
 
   const users = useWatch({
     control: userSearchMethods.control,
@@ -275,7 +291,10 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   const onSubmit = create.handleSubmit(
     (data) => {
       console.log(data);
-      createConversation.mutate(data);
+      createConversation.mutate({
+        ...data,
+        ...(senderUser?.userId ? { senderId: senderUser.userId } : {}),
+      });
     },
     (error) => console.error(error),
   );
@@ -298,13 +317,30 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
           onAccept={onSubmit}
         >
           <Form {...create}>
-            <UserSearchSelect
-              useFormMethods={userSearchMethods}
-              label="Users to send to"
-              showAi={false}
-              showYourself={false}
-              maxUsers={maxUsers}
-            />
+            {canPostAsAI && (
+              <div className="mb-3">
+                <FormLabel>Sender</FormLabel>
+                <UserSearchSelect
+                  useFormMethods={senderSearchMethods}
+                  label="Post as (leave empty to post as yourself)"
+                  selectedUsers={[]}
+                  showYourself={true}
+                  showAi={true}
+                  inline={true}
+                  maxUsers={maxSenderUsers}
+                />
+              </div>
+            )}
+            <div>
+              <FormLabel>Receivers</FormLabel>
+              <UserSearchSelect
+                useFormMethods={userSearchMethods}
+                label="Users to send to"
+                showAi={false}
+                showYourself={false}
+                maxUsers={maxUsers}
+              />
+            </div>
             <FormField
               control={create.control}
               name="title"

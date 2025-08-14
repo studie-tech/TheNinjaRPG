@@ -72,6 +72,7 @@ export async function GET() {
         const now = new Date();
         await createConvo({
           client: drizzleDB,
+          authorUserId: TERR_BOT_ID,
           senderUserId: TERR_BOT_ID,
           receiverUserIds: [user.userId],
           title: `Staff Review: ${now.toLocaleString()}`,

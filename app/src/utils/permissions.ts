@@ -36,6 +36,10 @@ export const canSubmitNotification = (role: UserRole) => {
   ].includes(role);
 };
 
+export const canPostAsAi = (role: UserRole) => {
+  return ["EVENT", "CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
+};
+
 export const canTransferJutsu = (user?: UserData) => {
   if (!user) return false;
   return user.role !== "USER" || user.staffAccount;

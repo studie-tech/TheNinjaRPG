@@ -643,6 +643,7 @@ export const anbuRouter = createTRPCRouter({
       const squadMemberIds = userSquad.members.map((member) => member.userId);
       await createConvo({
         client: ctx.drizzle,
+        authorUserId: ctx.userId,
         senderUserId: ctx.userId,
         receiverUserIds: squadMemberIds.filter((id) => id !== ctx.userId),
         title: `🕵️ Espionage Report: ${targetVillage.name}`,

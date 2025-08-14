@@ -28,8 +28,12 @@ import { forumBoardSchema, type ForumBoardSchema } from "@/validators/forum";
 import { useUserData } from "@/utils/UserContext";
 import { secondsPassed } from "@/utils/time";
 import { useInfinitePagination } from "@/libs/pagination";
-import { canModerate } from "@/utils/permissions";
+import { canModerate, canPostAsAi } from "@/utils/permissions";
 import { IMG_ICON_FORUM } from "@/drizzle/constants";
+import { getSearchValidator } from "@/validators/register";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { useWatch } from "react-hook-form";
+import type { z } from "zod";
 
 export default function Board(props: { params: Promise<{ boardid: string }> }) {
   const params = use(props.params);
@@ -62,6 +66,21 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
   const form = useForm<ForumBoardSchema>({
     resolver: zodResolver(forumBoardSchema),
   });
+
+  // User search for sender selection (AI posting)
+  const maxUsers = 1;
+  const userSearchSchema = getSearchValidator({ max: maxUsers });
+  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
+    resolver: zodResolver(userSearchSchema),
+    defaultValues: { username: "", users: [] },
+  });
+  const watchedUsers = useWatch({
+    control: userSearchMethods.control,
+    name: "users",
+    defaultValue: [],
+  });
+  const senderUser = watchedUsers?.[0];
+  const canPostAsAI = userData && canPostAsAi(userData.role);
 
   const { mutate: createThread, isPending: l1 } = api.forum.createThread.useMutation({
     onSuccess: async (data) => {
@@ -99,7 +118,10 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
   }, [board, form]);
 
   const onSubmit = form.handleSubmit((data) => {
-    createThread(data);
+    createThread({
+      ...data,
+      ...(senderUser?.userId ? { senderId: senderUser.userId } : {}),
+    });
   });
 
   if (!board) return <Loader explanation="Loading..."></Loader>;
@@ -133,6 +155,20 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
                 >
                   <Form {...form}>
                     <form className="space-y-2" onSubmit={onSubmit}>
+                      {canPostAsAI && (
+                        <div>
+                          <FormLabel>Sender</FormLabel>
+                          <UserSearchSelect
+                            useFormMethods={userSearchMethods}
+                            label="Post as (leave empty to post as yourself)"
+                            selectedUsers={[]}
+                            showYourself={true}
+                            showAi={true}
+                            inline={true}
+                            maxUsers={maxUsers}
+                          />
+                        </div>
+                      )}
                       <FormField
                         control={form.control}
                         name="title"

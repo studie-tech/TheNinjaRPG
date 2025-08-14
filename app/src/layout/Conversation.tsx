@@ -28,6 +28,9 @@ import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { z } from "zod";
 import type { MutateCommentSchema } from "@/validators/comments";
 import type { ArrayElement } from "@/utils/typeutils";
+import { getSearchValidator } from "@/validators/register";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { canPostAsAi } from "@/utils/permissions";
 
 interface ConversationProps {
   convo_title?: string;
@@ -273,6 +276,21 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     resolver: zodResolver(mutateCommentSchema),
   });
 
+  // User search for sender selection (AI posting)
+  const maxUsers = 1;
+  const userSearchSchema = getSearchValidator({ max: maxUsers });
+  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
+    resolver: zodResolver(userSearchSchema),
+    defaultValues: { username: "", users: [] },
+  });
+  const watchedUsers = useWatch({
+    control: userSearchMethods.control,
+    name: "users",
+    defaultValue: [],
+  });
+  const senderUser = watchedUsers?.[0];
+  const canPostAsAI = userData && canPostAsAi(userData.role);
+
   // Current quote ID
   const quoteIds = useWatch({
     control,
@@ -350,10 +368,11 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               villageName: userData.village?.name ?? null,
               villageHexColor: userData.village?.hexColor ?? null,
               villageKageId: userData.village?.kageId ?? null,
-              userId: userData.userId,
-              username: userData.username,
-              avatar: userData.avatar,
-              rank: userData.rank,
+              userId: senderUser ? senderUser.userId : userData.userId,
+              authorId: userData.userId,
+              username: senderUser?.username ?? userData.username,
+              avatar: senderUser?.avatar ?? userData.avatar,
+              rank: senderUser?.rank ?? userData.rank,
               isOutlaw: userData.isOutlaw,
               level: userData.level,
               role: userData.role,
@@ -484,7 +503,10 @@ const Conversation: React.FC<ConversationProps> = (props) => {
       });
       return;
     }
-    createComment(data);
+    createComment({
+      ...data,
+      ...(senderUser?.userId ? { senderId: senderUser.userId } : {}),
+    });
   });
 
   /**
@@ -500,7 +522,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   const unique = new Set();
 
   return (
-    <div key={props.refreshKey}>
+    <div key={`${props.refreshKey}-${senderUser?.userId}`}>
       {isPending && <ConversationSkeleton {...props} />}
       {!isPending && (
         <ContentBox
@@ -537,6 +559,19 @@ const Conversation: React.FC<ConversationProps> = (props) => {
             ((!userData.isBanned && !userData.isSilenced) ||
               conversation.isStaffAvailable) && (
               <div className="relative mb-2">
+                {canPostAsAI && (
+                  <div className="mb-3">
+                    <UserSearchSelect
+                      useFormMethods={userSearchMethods}
+                      label="Post as (leave empty to post as yourself)"
+                      selectedUsers={[]}
+                      showYourself={true}
+                      showAi={true}
+                      inline={true}
+                      maxUsers={maxUsers}
+                    />
+                  </div>
+                )}
                 {quoteIds &&
                   quoteIds.length > 0 &&
                   quoteIds.map((quoteId) => {

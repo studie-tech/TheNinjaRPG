@@ -7,7 +7,6 @@ import { format } from "date-fns";
 import { Plus, X, Vote, Eye, User, Type, Trash2, Pencil } from "lucide-react";
 import { useUserData } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
-
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
@@ -26,7 +25,7 @@ import {
   type UpdatePollSchema,
   type AddPollOptionSchema,
 } from "@/validators/poll";
-import type { Poll, PollOption, FederalStatus } from "@/drizzle/schema";
+import type { Poll, PollOption } from "@/drizzle/schema";
 import type { PollOptionType } from "@/drizzle/constants";
 import {
   canAddNonCustomPollOptions,
@@ -55,7 +54,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { getSearchValidator } from "@/validators/register";
 import { parseHtml } from "@/utils/parse";
+import type { z } from "zod";
 
 type PollUser = {
   userId: string;
@@ -346,7 +347,7 @@ function PollContent({
         if (data.success) {
           void utils.poll.getPolls.invalidate();
           setCustomOption("");
-          userSearchForm.reset({ username: "", users: [] });
+          userSearchMethods.reset({ username: "", users: [] });
         }
       },
     });
@@ -387,25 +388,15 @@ function PollContent({
   };
 
   // User search form for adding user options
-  const userSearchForm = useForm<{
-    username: string;
-    users: {
-      userId: string;
-      username: string;
-      rank: string;
-      level: number;
-      avatar?: string | null;
-      federalStatus: FederalStatus;
-    }[];
-  }>({
-    defaultValues: {
-      username: "",
-      users: [],
-    },
+  const maxUsers = 1;
+  const userSearchSchema = getSearchValidator({ max: maxUsers });
+  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
+    resolver: zodResolver(userSearchSchema),
+    defaultValues: { username: "", users: [] },
   });
 
   const selectedUsers = useWatch({
-    control: userSearchForm.control,
+    control: userSearchMethods.control,
     name: "users",
     defaultValue: [],
   });
@@ -658,7 +649,7 @@ function PollContent({
                         <div className="flex gap-2">
                           <div className="flex-1">
                             <UserSearchSelect
-                              useFormMethods={userSearchForm}
+                              useFormMethods={userSearchMethods}
                               showYourself={true}
                               label="Search for a user to add as an option"
                               maxUsers={1}
@@ -740,21 +731,11 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
   });
 
   // Form for user search
-  const userSearchForm = useForm<{
-    username: string;
-    users: {
-      userId: string;
-      username: string;
-      rank: string;
-      level: number;
-      avatar?: string | null;
-      federalStatus: FederalStatus;
-    }[];
-  }>({
-    defaultValues: {
-      username: "",
-      users: [],
-    },
+  const maxUsers = 1;
+  const userSearchSchema = getSearchValidator({ max: maxUsers });
+  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
+    resolver: zodResolver(userSearchSchema),
+    defaultValues: { username: "", users: [] },
   });
 
   const utils = api.useUtils();
@@ -797,7 +778,7 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
 
   // Watch for changes in the user search form
   useEffect(() => {
-    const subscription = userSearchForm.watch((value, { name }) => {
+    const subscription = userSearchMethods.watch((value, { name }) => {
       if (name?.includes("users")) {
         // Convert selected users to poll options
         const userOptions: PollOptionSchema[] = value.users
@@ -822,7 +803,7 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [userSearchForm, form, options]);
+  }, [userSearchMethods, form, options]);
 
   // Ensure options state and form options are always in sync
   useEffect(() => {
@@ -985,7 +966,7 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
             // User options
             <div className="space-y-4">
               <UserSearchSelect
-                useFormMethods={userSearchForm}
+                useFormMethods={userSearchMethods}
                 showYourself={true}
                 label="Search for users to add as options"
               />

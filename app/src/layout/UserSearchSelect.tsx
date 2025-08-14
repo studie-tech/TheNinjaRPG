@@ -12,7 +12,7 @@ import {
 import { X } from "lucide-react";
 import { getUnique } from "@/utils/grouping";
 import { api } from "@/app/_trpc/client";
-import type { FederalStatus } from "../../drizzle/schema";
+import type { FederalStatus, UserRank } from "@/drizzle/schema";
 import type { UseFormReturn } from "react-hook-form";
 import { useWatch } from "react-hook-form";
 
@@ -30,7 +30,7 @@ interface UserSearchSelectProps {
       users: {
         userId: string;
         username: string;
-        rank: string;
+        rank: UserRank;
         level: number;
         avatar?: string | null;
         federalStatus: FederalStatus;
@@ -94,7 +94,7 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
           priority
         />
       </div>
-      {user.username}
+      <p className="whitespace-nowrap">{user.username}</p>
       <X
         className="ml-2 h-6 w-6 rounded-full hover:bg-gray-300"
         onClick={(e) => {

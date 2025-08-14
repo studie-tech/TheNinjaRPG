@@ -7,7 +7,7 @@ import { historicalAvatar, reportLog } from "@/drizzle/schema";
 import { forumPost, conversationComment, userNindo } from "@/drizzle/schema";
 import { userReport, userReportComment, userData, userReview } from "@/drizzle/schema";
 import { automatedModeration } from "@/drizzle/schema";
-import { battle, battleAction } from "@/drizzle/schema";
+import { battleAction } from "@/drizzle/schema";
 import { secondsFromNow } from "@/utils/time";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { serverError, baseServerResponse, errorResponse } from "../trpc";
@@ -463,10 +463,17 @@ export const reportsRouter = createTRPCRouter({
       if ("isReported" in infraction && infraction.isReported) {
         return errorResponse("This infraction has already been reported");
       }
+      // Figure out who was reported. If there is an authorId, use that first, otherwise infraction userId, otherwise input
+      const reportedUserId =
+        "authorId" in infraction
+          ? infraction.authorId
+          : "userId" in infraction
+            ? infraction.userId
+            : input.reported_userId;
       // Mutate
       await insertUserReport(ctx.drizzle, {
         userId: ctx.userId,
-        reportedUserId: input.reported_userId,
+        reportedUserId: reportedUserId,
         system: input.system,
         infraction: infraction,
         reason: input.reason,

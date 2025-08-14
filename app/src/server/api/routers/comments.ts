@@ -41,6 +41,7 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize from "@/utils/sanitize";
 import type { DrizzleClient } from "../../db";
+import { resolveSenderId } from "@/libs/comments";
 
 export const commentsRouter = createTRPCRouter({
   /**
@@ -186,10 +187,13 @@ export const commentsRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, thread] = await Promise.all([
+      const [user, thread, sender] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchThread(ctx.drizzle, input.object_id),
+        input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
       ]);
+      // Resolve effective poster (allow staff to post as AI)
+      const effectiveUserId = resolveSenderId(user, sender);
       // Guard
       if (user.isBanned || user.isSilenced) {
         return errorResponse("You are banned");
@@ -212,9 +216,10 @@ export const commentsRouter = createTRPCRouter({
         }),
         ctx.drizzle.insert(forumPost).values({
           id: createdId,
-          userId: ctx.userId,
+          userId: effectiveUserId,
           threadId: thread.id,
           content: sanitized,
+          authorId: ctx.userId,
         }),
         ctx.drizzle
           .update(forumThread)
@@ -349,13 +354,21 @@ export const commentsRouter = createTRPCRouter({
     .use(hasUserMiddleware)
     .input(createConversationSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Query
+      const [user, sender] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
+      ]);
+      // Guard
       if (user.isBanned || user.isSilenced) {
         throw serverError("UNAUTHORIZED", "You are banned");
       }
+      const effectiveUserId = resolveSenderId(user, sender);
+      // Mutate
       const convoId = await createConvo({
         client: ctx.drizzle,
-        senderUserId: ctx.userId,
+        authorUserId: ctx.userId,
+        senderUserId: effectiveUserId,
         receiverUserIds: input.users,
         title: input.title,
         content: input.comment,
@@ -408,6 +421,7 @@ export const commentsRouter = createTRPCRouter({
           createdAt: conversationComment.createdAt,
           content: conversationComment.content,
           conversationId: conversationComment.conversationId,
+          authorId: conversationComment.authorId,
           isPinned: conversationComment.isPinned,
           isReported: conversationComment.isReported,
           reactions: conversationComment.reactions,
@@ -528,6 +542,7 @@ export const commentsRouter = createTRPCRouter({
             createdAt: conversationComment.createdAt,
             content: conversationComment.content,
             conversationId: conversationComment.conversationId,
+            authorId: conversationComment.authorId,
             reactions: conversationComment.reactions,
             isPinned: conversationComment.isPinned,
             isReported: conversationComment.isReported,
@@ -601,7 +616,7 @@ export const commentsRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ commentId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch data
-      const [convo, user, quotes] = await Promise.all([
+      const [convo, user, quotes, sender] = await Promise.all([
         fetchConversation({
           client: ctx.drizzle,
           id: input.object_id,
@@ -609,7 +624,13 @@ export const commentsRouter = createTRPCRouter({
         }),
         fetchUser(ctx.drizzle, ctx.userId),
         fetchComments(ctx.drizzle, input.quoteIds || []),
+        input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
       ]);
+
+      // Resolve effective poster (allow staff to post as AI)
+      const effectiveUserId = resolveSenderId(user, sender);
+      const effectiveUsername =
+        sender && effectiveUserId === sender.userId ? sender.username : user.username;
       // Guard
       if ((user.isBanned || user.isSilenced) && !convo.isStaffAvailable) {
         return errorResponse("You are banned");
@@ -670,13 +691,13 @@ export const commentsRouter = createTRPCRouter({
         ...notifiedUserIds.map(({ userId, type }) =>
           pusher.trigger(userId, "event", {
             type: "pinged",
-            message: `${user.username} ${type === "mentioned" ? "pinged" : "quoted"} you in ${convo.title}`,
+            message: `${effectiveUsername} ${type === "mentioned" ? "pinged" : "quoted"} you in ${convo.title}`,
           }),
         ),
         // Trigger new comment event
         pusher.trigger(convo.id, "event", {
           message: "new",
-          fromId: ctx.userId,
+          fromId: effectiveUserId,
           commentId: commentId,
         }),
         // Inbox news
@@ -687,7 +708,7 @@ export const commentsRouter = createTRPCRouter({
                 .set({ inboxNews: sql`${userData.inboxNews} + 1` })
                 .where(inArray(userData.userId, usersIdsInConvo)),
               ...usersIdsInConvo
-                .filter((id) => id !== ctx.userId)
+                .filter((id) => id !== effectiveUserId)
                 .map((userId) => pusher.trigger(userId, "event", { type: "newInbox" })),
             ]
           : []),
@@ -704,14 +725,15 @@ export const commentsRouter = createTRPCRouter({
               ctx.drizzle
                 .update(userData)
                 .set({ tavernMessages: sql`${userData.tavernMessages} + 1` })
-                .where(eq(userData.userId, ctx.userId)),
+                .where(eq(userData.userId, effectiveUserId)),
             ]
           : []),
         // Insert into DB
         ctx.drizzle.insert(conversationComment).values({
           id: commentId,
           content: sanitized,
-          userId: ctx.userId,
+          userId: effectiveUserId,
+          authorId: ctx.userId,
           conversationId: convo.id,
         }),
         // Update conversation
@@ -906,6 +928,7 @@ export const fetchConversation = async (params: FetchConvoOptions) => {
  */
 export const createConvo = async (info: {
   client: DrizzleClient;
+  authorUserId: string;
   senderUserId: string;
   receiverUserIds: string[];
   title: string;
@@ -916,6 +939,7 @@ export const createConvo = async (info: {
 }) => {
   const {
     client,
+    authorUserId,
     senderUserId,
     receiverUserIds,
     title,
@@ -929,6 +953,8 @@ export const createConvo = async (info: {
   receiverUserIds.forEach(
     (userId) => void pusher.trigger(userId, "event", { type: "newInbox" }),
   );
+  // Unique users to insert in conversation
+  const uniqueUserIds = [...new Set([...receiverUserIds, senderUserId, authorUserId])];
   // Update DB concurrently
   const insertId = convoId ?? nanoid();
   const messageId = nanoid();
@@ -942,7 +968,7 @@ export const createConvo = async (info: {
       isLocked: 0,
       isStaffAvailable: isStaffAvailable,
     }),
-    ...[...receiverUserIds, senderUserId].map((user) =>
+    ...uniqueUserIds.map((user) =>
       client.insert(user2conversation).values({
         conversationId: insertId,
         userId: user,
@@ -960,6 +986,7 @@ export const createConvo = async (info: {
       id: messageId,
       content: sanitized,
       userId: senderUserId,
+      authorId: authorUserId,
       conversationId: insertId,
     }),
   ]);

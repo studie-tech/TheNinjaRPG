@@ -445,6 +445,7 @@ export const villageRouter = createTRPCRouter({
         insertRequest(ctx.drizzle, user.userId, target.kageId, input.type),
         createConvo({
           client: ctx.drizzle,
+          authorUserId: ctx.userId,
           senderUserId: ctx.userId,
           receiverUserIds: [target.kageId],
           title,

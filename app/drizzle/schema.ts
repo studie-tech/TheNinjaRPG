@@ -834,6 +834,7 @@ export const conversationComment = mysqlTable(
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
+    authorId: varchar("authorId", { length: 191 }).notNull(),
     conversationId: varchar("conversationId", { length: 191 }),
     reactions: json("reactions")
       .$type<Record<string, string[]>>()
@@ -922,6 +923,7 @@ export const forumPost = mysqlTable(
       .notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     threadId: varchar("threadId", { length: 191 }).notNull(),
+    authorId: varchar("authorId", { length: 191 }).notNull(),
     isReported: boolean("isReported").default(false).notNull(),
   },
   (table) => {

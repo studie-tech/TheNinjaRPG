@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FederalStatuses } from "@/drizzle/constants";
+import { FederalStatuses, UserRanks } from "@/drizzle/constants";
 
 // List of possible attributes
 export const attributes = [
@@ -98,7 +98,7 @@ export const getSearchValidator = (props: { max: number }) => {
           userId: z.string(),
           username: usernameSchema,
           avatar: z.string().url().optional().nullish(),
-          rank: z.string(),
+          rank: z.enum(UserRanks),
           level: z.number(),
           federalStatus: z.enum(FederalStatuses),
         }),

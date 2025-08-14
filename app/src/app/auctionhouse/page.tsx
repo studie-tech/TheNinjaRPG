@@ -13,6 +13,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import AvatarImage from "@/layout/Avatar";
 import Modal2 from "@/layout/Modal2";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { getSearchValidator } from "@/validators/register";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +48,7 @@ import {
 } from "@/components/ui/form";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
+import type { z } from "zod";
 
 export default function AuctionHousePage() {
   // Settings
@@ -550,21 +552,11 @@ export const NewAuctionListingDialog: React.FC = () => {
   });
 
   // User search form for DIRECT auctions
-  const userSearchForm = useForm<{
-    username: string;
-    users: {
-      userId: string;
-      username: string;
-      rank: string;
-      level: number;
-      avatar?: string | null;
-      federalStatus: "NONE" | "NORMAL" | "SILVER" | "GOLD";
-    }[];
-  }>({
-    defaultValues: {
-      username: "",
-      users: [],
-    },
+  const maxUsers = 1;
+  const userSearchSchema = getSearchValidator({ max: maxUsers });
+  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
+    resolver: zodResolver(userSearchSchema),
+    defaultValues: { username: "", users: [] },
   });
 
   // Queries
@@ -578,7 +570,7 @@ export const NewAuctionListingDialog: React.FC = () => {
         if (data.success) {
           setIsOpen(false);
           createForm.reset();
-          userSearchForm.reset();
+          userSearchMethods.reset();
           await Promise.all([
             utils.auction.getAuctionListings.invalidate(),
             utils.item.getUserItems.invalidate(),
@@ -594,7 +586,7 @@ export const NewAuctionListingDialog: React.FC = () => {
   });
 
   const onCreateSubmit = (data: CreateAuctionListingSchema) => {
-    const userSearchData = userSearchForm.getValues();
+    const userSearchData = userSearchMethods.getValues();
     const submissionData: CreateAuctionListingSchema = {
       ...data,
       targetUserId:
@@ -767,7 +759,7 @@ export const NewAuctionListingDialog: React.FC = () => {
               <div>
                 <Label>Target User</Label>
                 <UserSearchSelect
-                  useFormMethods={userSearchForm}
+                  useFormMethods={userSearchMethods}
                   showYourself={false}
                   label="Search for user to sell to"
                   maxUsers={1}

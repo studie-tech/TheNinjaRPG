@@ -129,6 +129,7 @@ export const supportRouter = createTRPCRouter({
         }),
         createConvo({
           client: ctx.drizzle,
+          authorUserId: ctx.userId,
           senderUserId: ctx.userId,
           receiverUserIds: [],
           title: input.title,
