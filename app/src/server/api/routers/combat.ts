@@ -19,6 +19,7 @@ import { NonActionItemTypes, DURABILITY_USABILITY_THR } from "@/drizzle/constant
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
 import { calcBattleResult, maskBattle, alignBattle } from "@/libs/combat/util";
 import { createAction, saveUsage } from "@/libs/combat/database";
+import { fetchUserSkills } from "@/server/api/routers/skillTree";
 import { updateUser, updateBattle } from "@/libs/combat/database";
 import { calcHP, calcSP, calcCP, calcLevelRequirements } from "@/libs/profile";
 import { controlShownQuestLocationInformation } from "@/libs/quest";
@@ -689,15 +690,23 @@ export const combatRouter = createTRPCRouter({
       // Queries
       const jId = input.jutsuLoadoutId;
       const iId = input.itemLoadoutId;
-      const [data, userBattle, jutsuLoadouts, itemLoadouts, useritems, userjutsus] =
-        await Promise.all([
-          fetchBattleEssentials(ctx.drizzle),
-          fetchBattle(ctx.drizzle, input.battleId),
-          fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
-          fetchItemLoadouts(ctx.drizzle, ctx.userId),
-          fetchUserItems(ctx.drizzle, ctx.userId),
-          fetchUserJutsus(ctx.drizzle, ctx.userId),
-        ]);
+      const [
+        data,
+        userBattle,
+        jutsuLoadouts,
+        itemLoadouts,
+        useritems,
+        userjutsus,
+        userSkills,
+      ] = await Promise.all([
+        fetchBattleEssentials(ctx.drizzle),
+        fetchBattle(ctx.drizzle, input.battleId),
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+        fetchItemLoadouts(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchUserJutsus(ctx.drizzle, ctx.userId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
+      ]);
 
       // Derived
       const user = userBattle?.usersState.find((u) => u.userId === ctx.userId);
@@ -749,19 +758,32 @@ export const combatRouter = createTRPCRouter({
           };
         });
       }
+      user.userSkills = userSkills.filter((us) => us.activated);
 
-      const { userEffects: newUsersEffects, usersState: newUsersState } =
-        await processUsersForBattle(ctx.drizzle, {
-          users: userBattle.usersState.filter((u) => !u.isSummon),
-          settings: data.settings,
-          relations: data.relations,
-          wars: data.activeWars,
-          villages: data.villages,
-          defaultProfile: data.defaultProfile,
-          battleType: userBattle.battleType,
-          hide: false,
-          isSummon: false,
-        });
+      // Split out user from current usersState & usersEffects
+      const otherUserState = userBattle.usersState.filter(
+        (u) => u.controllerId !== ctx.userId,
+      );
+      const otherUserEffects = userBattle.usersEffects.filter(
+        (e) => e.creatorId !== ctx.userId,
+      );
+
+      // Process only the single user for
+      const { userEffects, usersState } = await processUsersForBattle(ctx.drizzle, {
+        users: [user],
+        settings: data.settings,
+        relations: data.relations,
+        wars: data.activeWars,
+        villages: data.villages,
+        defaultProfile: data.defaultProfile,
+        battleType: userBattle.battleType,
+        hide: false,
+        isSummon: false,
+      });
+
+      // Merge the user's state with the other user's state
+      const newUsersState = [...otherUserState, ...usersState];
+      const newUsersEffects = [...otherUserEffects, ...userEffects];
 
       // Mutate
       const result = await ctx.drizzle
