@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, sql, gte, and, like, desc, or } from "drizzle-orm";
+import { eq, sql, gte, and, like, desc, or, ne } from "drizzle-orm";
 import {
   item,
   userItem,
@@ -11,6 +11,7 @@ import {
   craftingRequirement,
   itemLoadout,
   userSkill,
+  quest,
 } from "@/drizzle/schema";
 import { ItemTypes, ItemSlots } from "@/drizzle/constants";
 import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
@@ -81,6 +82,12 @@ export const itemRouter = createTRPCRouter({
         throw serverError("NOT_FOUND", "Item not found");
       }
       return result;
+    }),
+  getItemRelations: publicProcedure
+    .input(z.object({ itemId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const results = await getItemRelations(ctx.drizzle, input.itemId);
+      return results;
     }),
   getUserItem: protectedProcedure
     .input(z.object({ id: z.string() }))
@@ -1272,3 +1279,35 @@ export const itemDatabaseFilter = (
     gte(item.seichiSilverCost, input?.minSeichiSilverCost ?? 0),
   ];
 };
+
+/**
+ * Relations for Item usage across content
+ */
+export const getItemRelations = async (client: DrizzleClient, itemId: string) => {
+  const [questsUsingItem, aiEquippedItem] = await Promise.all([
+    // Quests referencing this item in rewards or objectives
+    client.query.quest.findMany({
+      columns: { id: true, name: true },
+      where: sql`
+        JSON_SEARCH(${quest.content}, 'one', ${itemId}, NULL, '$.reward.reward_items[*].ids[*]') IS NOT NULL
+        OR JSON_SEARCH(${quest.content}, 'one', ${itemId}, NULL, '$.objectives[*].reward_items[*].ids[*]') IS NOT NULL
+        OR JSON_SEARCH(${quest.content}, 'one', ${itemId}, NULL, '$.objectives[*].collectItemIds[*]') IS NOT NULL
+        OR JSON_SEARCH(${quest.content}, 'one', ${itemId}, NULL, '$.objectives[*].deliverItemIds[*]') IS NOT NULL
+      `,
+    }),
+    // AI who currently have this item equipped
+    client
+      .select({
+        id: userData.userId,
+        name: userData.username,
+      })
+      .from(userItem)
+      .innerJoin(userData, eq(userItem.userId, userData.userId))
+      .where(and(eq(userItem.itemId, itemId), ne(userItem.equipped, "NONE"), eq(userData.isAi, true)))
+      .groupBy(userData.userId),
+  ]);
+
+  return { questsUsingItem, aiEquippedItem };
+};
+export type ItemRelations = Awaited<ReturnType<typeof getItemRelations>>;
+

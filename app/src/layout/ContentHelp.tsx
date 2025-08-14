@@ -25,6 +25,9 @@ import type { AllObjectivesType } from "@/validators/objectives";
 import { api } from "@/app/_trpc/client";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { JutsuRelations } from "@/server/api/routers/jutsu";
+import type { ItemRelations } from "@/server/api/routers/item";
+
+import type { AiWithRelations } from "@/routers/profile";
 
 export interface QuestHelperProps {
   quest: DeepPartial<ZodCombinedQuest>;
@@ -36,6 +39,10 @@ export interface ItemHelperProps {
 
 export interface JutsuHelperProps {
   jutsu: DeepPartial<ZodJutsuType>;
+}
+
+export interface AiHelperProps {
+  ai: AiWithRelations;
 }
 
 export interface SkillTreeHelperProps {
@@ -136,6 +143,14 @@ export const ItemHelper: React.FC<ItemHelperProps> = (props) => {
     return () => window.removeEventListener("resize", checkScreenSize);
   }, []);
 
+  // Load relations for item
+  const itemId = (item as { id?: string })?.id ?? "";
+  const { data: itemRels } = api.item.getItemRelations.useQuery(
+    { itemId },
+    { enabled: !!itemId },
+  );
+  const itemRelations = itemRels;
+
   return (
     <div className="inline-block">
       <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
@@ -169,6 +184,7 @@ export const ItemHelper: React.FC<ItemHelperProps> = (props) => {
               </p>
             </div>
             {renderItemTips(item)}
+            {itemRelations && renderItemRelations(item, itemRelations)}
             {item.effects && renderEffectsTips(item.effects as ZodAllTags[])}
           </div>
         </SheetContent>
@@ -243,6 +259,156 @@ export const JutsuHelper: React.FC<JutsuHelperProps> = ({ jutsu }) => {
           </div>
         </SheetContent>
       </Sheet>
+    </div>
+  );
+};
+
+export const AiHelper: React.FC<AiHelperProps> = ({ ai }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const { data: userData } = useRequiredUserData();
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      const isDesktop = window.innerWidth >= 768;
+      setIsOpen(isDesktop);
+    };
+    checkScreenSize();
+    window.addEventListener("resize", checkScreenSize);
+    return () => window.removeEventListener("resize", checkScreenSize);
+  }, []);
+
+  const aiId = ai.userId;
+  const { data: relations } = api.ai.getAiRelations.useQuery(
+    { aiId },
+    { enabled: !!aiId },
+  );
+
+  if (!userData) return null;
+  if (!canChangeContent(userData.role)) return null;
+
+  return (
+    <div className="inline-block">
+      <Sheet open={isOpen} onOpenChange={setIsOpen} modal={false}>
+        <SheetTrigger asChild>
+          <Button className="flex items-center gap-2" variant={isOpen ? "default" : "outline"}>
+            <HelpCircle className="h-6 w-6" />
+          </Button>
+        </SheetTrigger>
+        <SheetContent
+          side="right"
+          className="w-80 sm:w-96"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <HelpCircle className="h-5 w-5" />
+              AI Helper
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-4">
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <h3 className="font-medium text-gray-900 mb-2">AI: {ai.username}</h3>
+              <p className="text-sm text-gray-600 capitalize">
+                User ID: <span className="font-medium">{ai.userId}</span>
+              </p>
+            </div>
+
+            {relations && (
+              <div className="space-y-3 text-sm">
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <h4 className="font-medium text-blue-900 mb-2">Quests Using This AI ({relations.questsUsingAi.length})</h4>
+                  <div className="space-y-1">
+                    {relations.questsUsingAi.map((q) => (
+                      <div key={q.id} className="flex items-center justify-between">
+                        <span>{q.name}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => window.open(`/manual/quest/edit/${q.id}`, "_blank")}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                    {relations.questsUsingAi.length === 0 && (
+                      <p className="text-gray-700">No quests reference this AI.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+};
+
+const renderItemRelations = (item: DeepPartial<ZodItemType>, relations: ItemRelations) => {
+  const { questsUsingItem, aiEquippedItem } = relations;
+  const sections = [
+    { name: "Quests Using Item", data: questsUsingItem, route: "/manual/quest/edit" },
+    { name: "AI Equipped", data: aiEquippedItem, route: "/manual/ai/edit" },
+  ];
+  const total = sections.reduce((s, x) => s + x.data.length, 0);
+  if (total === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <h4 className="font-medium text-gray-900">Item Relations</h4>
+      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="flex items-center gap-2">
+          <span>
+            Total relations found: <span className="font-medium">{total}</span>
+          </span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                <Info className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+              <div className="space-y-3">
+                <h4 className="font-medium">Related Content</h4>
+                {sections.map((sec) =>
+                  sec.data.length > 0 ? (
+                    <div key={sec.name}>
+                      <h5 className="text-sm font-medium text-gray-700 mb-1">
+                        {sec.name} ({sec.data.length})
+                      </h5>
+                      <div className="space-y-1">
+                        {sec.data.map((ref) => (
+                          <div key={ref.id} className="flex items-center justify-between text-sm">
+                            <span>{ref.name}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => window.open(`${sec.route}/${ref.id}`, "_blank")}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="mt-1 text-xs text-gray-700 space-y-0.5">
+          {sections.map((sec) =>
+            sec.data.length > 0 ? (
+              <p key={sec.name}>• {sec.name}: {sec.data.length}</p>
+            ) : null,
+          )}
+        </div>
+      </div>
     </div>
   );
 };
@@ -958,10 +1124,15 @@ const renderJutseRelations = (
     skillInjectors,
     itemInjectors,
     aiUsingJutsu,
+    questsUsingJutsu,
   } = relations;
 
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+const safeQuestsUsingJutsu = questsUsingJutsu as { id: string; name: string }[];
+
   // Define relation configurations with their specific routes
-  const relationConfigs = [
+  const relationConfigs: { name: string; data: { id: string; name: string }[]; route: string }[] = [
     {
       name: "Injector Jutsus",
       data: jutsuInjectors,
@@ -987,8 +1158,12 @@ const renderJutseRelations = (
       data: aiUsingJutsu,
       route: "/manual/ai/edit",
     },
+    {
+      name: "Quests Using Jutsu",
+      data: safeQuestsUsingJutsu,
+      route: "/manual/quest/edit",
+    },
   ];
-
   const totalRelations = relationConfigs.reduce(
     (sum, config) => sum + config.data.length,
     0,

@@ -4,6 +4,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import StatusBar from "@/layout/StatusBar";
+import { AiHelper } from "@/layout/ContentHelp";
 import NindoChange from "@/layout/NindoChange";
 import { useEffect, use } from "react";
 import { useRouter } from "next/navigation";
@@ -108,6 +109,7 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
         title="Content Panel"
         subtitle="Note: stats scaled by level!"
         defaultBackHref="/manual/ai"
+        topRightContent={<AiHelper ai={props.user} />}
       >
         {!processedUser && <p>Could not find this AI</p>}
         {!loading && processedUser && (

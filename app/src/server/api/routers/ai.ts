@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
-import { eq, inArray } from "drizzle-orm";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { eq, inArray, sql } from "drizzle-orm";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { baseServerResponse, errorResponse } from "../trpc";
-import { aiProfile, userData, jutsu, item } from "@/drizzle/schema";
+import { aiProfile, userData, jutsu, item, quest } from "@/drizzle/schema";
 import { fetchUser } from "@/routers/profile";
 import { canChangeContent, canChangeDefaultAiProfile } from "@/utils/permissions";
 import { AiRule } from "@/validators/ai";
@@ -155,6 +155,13 @@ export const aiRouter = createTRPCRouter({
       }
       return { success: true, message: "AiProfile updated" };
     }),
+
+  getAiRelations: publicProcedure
+    .input(z.object({ aiId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return await getAiRelations(ctx.drizzle, input.aiId);
+    }),
+
 });
 
 /**
@@ -188,3 +195,17 @@ export const fetchAiProfileByUserId = async (client: DrizzleClient, userId: stri
   });
   return profile;
 };
+
+/**
+ * Relations for AI usage across content
+ */
+export const getAiRelations = async (client: DrizzleClient, aiId: string) => {
+  const questsUsingAi = await client.query.quest.findMany({
+    columns: { id: true, name: true },
+    where: sql`
+      JSON_SEARCH(${quest.content}, 'one', ${aiId}, NULL, '$.objectives[*].opponentAIs[*].ids[*]') IS NOT NULL
+    `,
+  });
+  return { questsUsingAi };
+};
+export type AiRelations = Awaited<ReturnType<typeof getAiRelations>>;
