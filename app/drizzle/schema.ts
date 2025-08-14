@@ -659,6 +659,73 @@ export const mpvpBattleUserRelations = relations(mpvpBattleUser, ({ one }) => ({
   }),
 }));
 
+// Shrine battle queue (MPVP Shrine Wars)
+export const shrineBattleQueue = mysqlTable(
+  "ShrineBattleQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    sector: int("sector").notNull(),
+    attackerVillageId: varchar("attackerVillageId", { length: 191 }).notNull(),
+    defenderVillageId: varchar("defenderVillageId", { length: 191 }).notNull(),
+    battleId: varchar("battleId", { length: 191 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      sectorIdx: index("ShrineBattleQueue_sector_idx").on(table.sector),
+      attVillIdx: index("ShrineBattleQueue_attackerVillageId_idx").on(
+        table.attackerVillageId,
+      ),
+      defVillIdx: index("ShrineBattleQueue_defenderVillageId_idx").on(
+        table.defenderVillageId,
+      ),
+      battleIdIdx: index("ShrineBattleQueue_battleId_idx").on(table.battleId),
+    };
+  },
+);
+
+export const shrineBattleUser = mysqlTable(
+  "ShrineBattleUser",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    shrineBattleId: varchar("shrineBattleId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    role: mysqlEnum("role", ["ATTACKER", "DEFENDER"]).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      shrineBattleIdIdx: index("ShrineBattleUser_shrineBattleId_idx").on(
+        table.shrineBattleId,
+      ),
+      userIdIdx: index("ShrineBattleUser_userId_idx").on(table.userId),
+      roleIdx: index("ShrineBattleUser_role_idx").on(table.role),
+    };
+  },
+);
+
+export const shrineBattleQueueRelations = relations(shrineBattleQueue, ({ one, many }) => ({
+  battle: one(battle, {
+    fields: [shrineBattleQueue.battleId],
+    references: [battle.id],
+  }),
+  queue: many(shrineBattleUser),
+}));
+
+export const shrineBattleUserRelations = relations(shrineBattleUser, ({ one }) => ({
+  shrineBattle: one(shrineBattleQueue, {
+    fields: [shrineBattleUser.shrineBattleId],
+    references: [shrineBattleQueue.id],
+  }),
+  user: one(userData, {
+    fields: [shrineBattleUser.userId],
+    references: [userData.userId],
+  }),
+}));
 export const tournament = mysqlTable(
   "Tournament",
   {

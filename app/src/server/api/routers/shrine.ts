@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { baseServerResponse, errorResponse } from "../trpc";
+import { nanoid } from "nanoid";
 import { eq, and, gte, sql, asc } from "drizzle-orm";
 import {
   SHRINE_UPGRADE_COST,
@@ -13,7 +14,8 @@ import {
   SHRINE_BOOST_COST,
   WAR_SHRINE_MAINTENANCE_DAYS,
 } from "@/drizzle/constants";
-import { sector, village, userData } from "@/drizzle/schema";
+import { sector, village, userData, war, shrineBattleQueue, shrineBattleUser } from "@/drizzle/schema";
+import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
 
@@ -384,5 +386,249 @@ export const shrineRouter = createTRPCRouter({
         success: true,
         message: `Weekly maintenance paid for sector ${targetSector.sector}: ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens`,
       };
+    }),
+
+  // Shrine battle queue: attackers queue to challenge a shrine with up to 3 players.
+  // Defenders (village owning the shrine) can optionally queue to defend with up to 3 players.
+  queueForShrineAttack: protectedProcedure
+    .input(z.object({ sector: z.number().int() }))
+    .output(baseServerResponse.extend({ shrineBattleId: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const [{ user }, activeWar, sectorData] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        ctx.drizzle.query.war.findFirst({
+          where: and(eq(war.sector, input.sector), eq(war.status, "ACTIVE"), eq(war.type, "SECTOR_WAR")),
+        }),
+        ctx.drizzle.query.sector.findFirst({ where: eq(sector.sector, input.sector), with: { village: true } }),
+      ]);
+
+      if (!user) return errorResponse("User not found");
+      if (!activeWar) return errorResponse("No active sector war here");
+      if (!sectorData) return errorResponse("Sector not found");
+      if (user.sector !== input.sector) return errorResponse("Not in the correct sector");
+      if (user.isBanned) return errorResponse("User is banned");
+      if (user.villageId !== activeWar.attackerVillageId)
+        return errorResponse("Only attackers can queue here");
+
+      // Find or create shrine battle queue for this sector/war pairing
+      let shrineBattle = await ctx.drizzle.query.shrineBattleQueue.findFirst({
+        where: and(
+          eq(shrineBattleQueue.sector, input.sector),
+          eq(shrineBattleQueue.attackerVillageId, activeWar.attackerVillageId),
+          eq(shrineBattleQueue.defenderVillageId, activeWar.defenderVillageId),
+        ),
+        with: { queue: true },
+      });
+
+      if (!shrineBattle) {
+        const id = nanoid();
+        await ctx.drizzle.insert(shrineBattleQueue).values({
+          id,
+          sector: input.sector,
+          attackerVillageId: activeWar.attackerVillageId,
+          defenderVillageId: activeWar.defenderVillageId,
+          createdAt: new Date(),
+        });
+        shrineBattle = await ctx.drizzle.query.shrineBattleQueue.findFirst({
+          where: eq(shrineBattleQueue.id, id),
+          with: { queue: true },
+        });
+      }
+
+      if (!shrineBattle) return errorResponse("Failed to create shrine queue");
+
+      const alreadyQueued = shrineBattle.queue.some((q) => q.userId === user.userId);
+      if (alreadyQueued) return errorResponse("Already in shrine queue");
+
+      const attackers = shrineBattle.queue.filter((q) => q.role === "ATTACKER");
+      if (attackers.length >= 3) return errorResponse("Attacker queue is full (max 3)");
+
+      await ctx.drizzle.insert(shrineBattleUser).values({
+        id: nanoid(),
+        shrineBattleId: shrineBattle.id,
+        userId: user.userId,
+        role: "ATTACKER",
+        createdAt: new Date(),
+      });
+
+      return { success: true, message: "Joined shrine attack queue", shrineBattleId: shrineBattle.id };
+    }),
+
+  queueForShrineDefense: protectedProcedure
+    .input(z.object({ sector: z.number().int() }))
+    .output(baseServerResponse.extend({ shrineBattleId: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const [{ user }, activeWar, sectorData] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        ctx.drizzle.query.war.findFirst({
+          where: and(eq(war.sector, input.sector), eq(war.status, "ACTIVE"), eq(war.type, "SECTOR_WAR")),
+        }),
+        ctx.drizzle.query.sector.findFirst({ where: eq(sector.sector, input.sector), with: { village: true } }),
+      ]);
+
+      if (!user) return errorResponse("User not found");
+      if (!activeWar) return errorResponse("No active sector war here");
+      if (!sectorData) return errorResponse("Sector not found");
+      if (user.sector !== input.sector) return errorResponse("Not in the correct sector");
+      if (user.isBanned) return errorResponse("User is banned");
+      if (user.villageId !== activeWar.defenderVillageId)
+        return errorResponse("Only defenders can queue here");
+
+      // Find or create shrine battle queue
+      let shrineBattle = await ctx.drizzle.query.shrineBattleQueue.findFirst({
+        where: and(
+          eq(shrineBattleQueue.sector, input.sector),
+          eq(shrineBattleQueue.attackerVillageId, activeWar.attackerVillageId),
+          eq(shrineBattleQueue.defenderVillageId, activeWar.defenderVillageId),
+        ),
+        with: { queue: true },
+      });
+
+      if (!shrineBattle) {
+        const id = nanoid();
+        await ctx.drizzle.insert(shrineBattleQueue).values({
+          id,
+          sector: input.sector,
+          attackerVillageId: activeWar.attackerVillageId,
+          defenderVillageId: activeWar.defenderVillageId,
+          createdAt: new Date(),
+        });
+        shrineBattle = await ctx.drizzle.query.shrineBattleQueue.findFirst({
+          where: eq(shrineBattleQueue.id, id),
+          with: { queue: true },
+        });
+      }
+
+      if (!shrineBattle) return errorResponse("Failed to create shrine queue");
+
+      const alreadyQueued = shrineBattle.queue.some((q) => q.userId === user.userId);
+      if (alreadyQueued) return errorResponse("Already in shrine queue");
+
+      const defenders = shrineBattle.queue.filter((q) => q.role === "DEFENDER");
+      if (defenders.length >= 3) return errorResponse("Defender queue is full (max 3)");
+
+      await ctx.drizzle.insert(shrineBattleUser).values({
+        id: nanoid(),
+        shrineBattleId: shrineBattle.id,
+        userId: user.userId,
+        role: "DEFENDER",
+        createdAt: new Date(),
+      });
+
+      return { success: true, message: "Joined shrine defense queue", shrineBattleId: shrineBattle.id };
+    }),
+
+  leaveShrineQueue: protectedProcedure
+    .input(z.object({ sector: z.number().int() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [{ user }, shrineBattle] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        ctx.drizzle.query.shrineBattleQueue.findFirst({
+          where: eq(shrineBattleQueue.sector, input.sector),
+          with: { queue: true },
+        }),
+      ]);
+
+      if (!user) return errorResponse("User not found");
+      if (!shrineBattle) return errorResponse("No shrine queue here");
+
+      const queued = shrineBattle.queue.find((q) => q.userId === user.userId);
+      if (!queued) return errorResponse("Not in the shrine queue");
+
+      await ctx.drizzle
+        .delete(shrineBattleUser)
+        .where(and(eq(shrineBattleUser.shrineBattleId, shrineBattle.id), eq(shrineBattleUser.userId, user.userId)));
+
+      // Cleanup empty queue
+      const remaining = await ctx.drizzle.query.shrineBattleUser.findMany({
+        where: eq(shrineBattleUser.shrineBattleId, shrineBattle.id),
+      });
+      if (remaining.length === 0) {
+        await ctx.drizzle.delete(shrineBattleQueue).where(eq(shrineBattleQueue.id, shrineBattle.id));
+      }
+
+      return { success: true, message: "Left shrine queue" };
+    }),
+
+  // Attempt to start a shrine battle if minimum attackers are present.
+  // If no human defenders queued, use AI defenders assigned to the shrine.
+  initiateShrineBattle: protectedProcedure
+    .input(z.object({ sector: z.number().int() }))
+    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const [{ user }, activeWar, sectorData, shrineBattle, shrineAis] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        ctx.drizzle.query.war.findFirst({
+          where: and(eq(war.sector, input.sector), eq(war.status, "ACTIVE"), eq(war.type, "SECTOR_WAR")),
+        }),
+        ctx.drizzle.query.sector.findFirst({
+          where: eq(sector.sector, input.sector),
+          with: { village: true },
+        }),
+        ctx.drizzle.query.shrineBattleQueue.findFirst({
+          where: eq(shrineBattleQueue.sector, input.sector),
+          with: {
+            queue: {
+              columns: { userId: true, role: true, createdAt: true },
+              with: { user: { columns: { status: true } } },
+            },
+          },
+        }),
+        ctx.drizzle.query.userData.findMany({
+          where: and(eq(userData.isAi, true), eq(userData.inShrines, true)),
+          columns: { userId: true },
+        }),
+      ]);
+
+      if (!user) return errorResponse("User not found");
+      if (!activeWar) return errorResponse("No active sector war here");
+      if (!sectorData) return errorResponse("Sector not found");
+      if (user.sector !== input.sector) return errorResponse("Not in the correct sector");
+
+      // Determine attacker/defender grouping
+      const attackers = (shrineBattle?.queue ?? [])
+        .filter((q) => q.role === "ATTACKER")
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map((q) => q.userId);
+
+      if (attackers.length < 2) return { success: false, message: "Need at least 2 attackers to start" };
+
+      const maxTeam = 3;
+      const attackerIds = attackers.slice(0, Math.min(maxTeam, attackers.length));
+
+      const defenders = (shrineBattle?.queue ?? [])
+        .filter((q) => q.role === "DEFENDER")
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map((q) => q.userId);
+
+      const assignedAis = sectorData.village?.shrineSettings?.activeAiIds || [];
+      const validAis = shrineAis.filter((ai) => assignedAis.includes(ai.userId));
+      const fallbackAi = ["MJMzOE67Cx2YP3NX8SAbh"];
+
+      const needCount = attackerIds.length;
+      const defenderIds =
+        defenders.length > 0 ? defenders.slice(0, needCount) : (validAis.length > 0 ? validAis.map((a) => a.userId) : fallbackAi).slice(0, needCount);
+
+      const result = await initiateBattle(
+        {
+          sector: input.sector,
+          userIds: attackerIds,
+          targetIds: defenderIds,
+          forceDefenderVillageId: activeWar.defenderVillageId,
+          client: ctx.drizzle,
+          asset: "arena",
+        },
+        "SHRINE_WAR",
+      );
+
+      if (result.success && result.battleId && shrineBattle) {
+        await ctx.drizzle
+          .update(shrineBattleQueue)
+          .set({ battleId: result.battleId })
+          .where(eq(shrineBattleQueue.id, shrineBattle.id));
+      }
+
+      return { success: result.success, message: result.message, battleId: result.battleId };
     }),
 });
