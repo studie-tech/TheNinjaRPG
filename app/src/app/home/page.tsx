@@ -20,6 +20,7 @@ import { api } from "@/app/_trpc/client";
 import { getStrucBoost } from "@/utils/village";
 import { showMutationToast } from "@/libs/toast";
 import { useRequireInVillage } from "@/utils/UserContext";
+import { calcMaxHouseMaterials } from "@/libs/item";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -30,6 +31,7 @@ import {
   PlusCircle,
   MinusCircle,
   ShoppingBag,
+  Hammer,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { UserItemWithItem } from "@/drizzle/schema";
@@ -107,12 +109,26 @@ export default function HomePage() {
     (useritem) =>
       !useritem.craftingFinishedAt || useritem.craftingFinishedAt < new Date(),
   );
-  const storedItems = filteredItems?.filter((useritem) => useritem.storedAtHome) ?? [];
+  // Filter normal items (non-materials)
+  const storedItems = filteredItems?.filter((useritem) => useritem.storedAtHome && useritem.item.itemType !== "MATERIAL") ?? [];
   const nonStoredItems =
     filteredItems
       ?.filter((useritem) => !useritem.storedAtHome)
-      .filter((useritem) => useritem.equipped === "NONE") ?? [];
+      .filter((useritem) => useritem.equipped === "NONE")
+      .filter((useritem) => useritem.item.itemType !== "MATERIAL") ?? [];
+  
+  // Filter materials separately
+  const storedMaterials = filteredItems?.filter((useritem) => useritem.storedAtHome && useritem.item.itemType === "MATERIAL") ?? [];
+  const nonStoredMaterials = filteredItems
+    ?.filter((useritem) => !useritem.storedAtHome)
+    .filter((useritem) => useritem.equipped === "NONE")
+    .filter((useritem) => useritem.item.itemType === "MATERIAL") ?? [];
+  
   const canStoreMoreItems = storedItems.length < homeStorage;
+  const canStoreMoreMaterials = storedMaterials.length < (userData && homeData ? calcMaxHouseMaterials(userData, homeData.storage) : 0);
+  
+  // Calculate total stored items (excluding materials)
+  const totalStoredItems = filteredItems?.filter((useritem) => useritem.storedAtHome && useritem.item.itemType !== "MATERIAL").length ?? 0;
 
   // Filter upgrades and downgrades
   const upgrades = availableUpgrades?.filter((upgrade) => upgrade.isUpgrade) || [];
@@ -197,6 +213,9 @@ export default function HomePage() {
                           {homeRegen > 0 && <span>+{homeRegen} Regeneration</span>}
                           {homeStorage > 0 && (
                             <span className="ml-2">+{homeStorage} Item Storage</span>
+                          )}
+                          {userData && homeData && calcMaxHouseMaterials(userData, homeData.storage) > 0 && (
+                            <span className="ml-2">+{calcMaxHouseMaterials(userData, homeData.storage)} Material Storage</span>
                           )}
                         </div>
                       </div>
@@ -327,7 +346,7 @@ export default function HomePage() {
 
           <ContentBox
             title="Item Storage"
-            subtitle={`Items in home (${storedItems.length}/${homeStorage} slots used)`}
+            subtitle={`Items in home (${totalStoredItems}/${homeStorage} slots used) | Materials in home (${storedMaterials.length}/${userData && homeData ? calcMaxHouseMaterials(userData, homeData.storage) : 0} slots used)`}
             initialBreak={true}
           >
             {isHomeLoading || isItemsLoading ? (
@@ -338,9 +357,12 @@ export default function HomePage() {
               </div>
             ) : (
               <Tabs defaultValue="stored" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="stored">
                     <Package className="mr-2 h-5 w-5" /> Stored Items
+                  </TabsTrigger>
+                  <TabsTrigger value="materials">
+                    <Hammer className="mr-2 h-5 w-5" /> Materials
                   </TabsTrigger>
                   <TabsTrigger value="inventory">
                     <ShoppingBag className="mr-2 h-5 w-5" /> Inventory
@@ -348,7 +370,7 @@ export default function HomePage() {
                 </TabsList>
 
                 <TabsContent value="stored">
-                  {storedItems.length === 0 ? (
+                  {totalStoredItems === 0 ? (
                     <div className="text-center p-4">
                       You don&apos;t have any items stored in your home.
                     </div>
@@ -383,43 +405,125 @@ export default function HomePage() {
                   )}
                 </TabsContent>
 
+                <TabsContent value="materials">
+                  <div className="space-y-4">                    
+                    <div>
+                      <h4 className="font-semibold mb-2">Stored Materials</h4>
+                      {storedMaterials.length === 0 ? (
+                        <div className="text-center p-4 text-muted-foreground">
+                          No materials stored in your home.
+                        </div>
+                      ) : (
+                        <div className="p-3">
+                          <ActionSelector
+                            items={storedMaterials?.map((useritem) => ({
+                              ...useritem.item,
+                              ...useritem,
+                            }))}
+                            counts={storedMaterials?.map((useritem) => ({
+                              ...useritem.item,
+                              ...useritem,
+                            }))}
+                            selectedId={selectedItem?.id}
+                            showBgColor={false}
+                            showLabels={false}
+                            onClick={(id) => {
+                              if (id === selectedItem?.id) {
+                                setSelectedItem(undefined);
+                                setIsModalOpen(false);
+                              } else {
+                                const item = storedMaterials?.find((item) => item.id === id);
+                                if (item) {
+                                  setSelectedItem(item as UserItemWithItem);
+                                  setIsModalOpen(true);
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+
                 <TabsContent value="inventory">
-                  {nonStoredItems.length === 0 ? (
+                  {nonStoredItems.length === 0 && nonStoredMaterials.length === 0 ? (
                     <div className="text-center p-4">
                       You don&apos;t have any items in your inventory.
                     </div>
                   ) : (
                     <div className="p-3">
-                      <ActionSelector
-                        items={nonStoredItems?.map((useritem) => ({
-                          ...useritem.item,
-                          ...useritem,
-                        }))}
-                        counts={nonStoredItems?.map((useritem) => ({
-                          ...useritem.item,
-                          ...useritem,
-                        }))}
-                        selectedId={selectedItem?.id}
-                        showBgColor={false}
-                        showLabels={false}
-                        greyedIds={
-                          !canStoreMoreItems
-                            ? nonStoredItems?.map((useritem) => useritem.id)
-                            : undefined
-                        }
-                        onClick={(id) => {
-                          if (id === selectedItem?.id) {
-                            setSelectedItem(undefined);
-                            setIsModalOpen(false);
-                          } else {
-                            const item = userItems?.find((item) => item.id === id);
-                            if (item) {
-                              setSelectedItem(item as UserItemWithItem);
-                              setIsModalOpen(true);
+                      {nonStoredItems.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="font-semibold mb-2">Items</h4>
+                          <ActionSelector
+                            items={nonStoredItems?.map((useritem) => ({
+                              ...useritem.item,
+                              ...useritem,
+                            }))}
+                            counts={nonStoredItems?.map((useritem) => ({
+                              ...useritem.item,
+                              ...useritem,
+                            }))}
+                            selectedId={selectedItem?.id}
+                            showBgColor={false}
+                            showLabels={false}
+                            greyedIds={
+                              !canStoreMoreItems
+                                ? nonStoredItems?.map((useritem) => useritem.id)
+                                : undefined
                             }
-                          }
-                        }}
-                      />
+                            onClick={(id) => {
+                              if (id === selectedItem?.id) {
+                                setSelectedItem(undefined);
+                                setIsModalOpen(false);
+                              } else {
+                                const item = userItems?.find((item) => item.id === id);
+                                if (item) {
+                                  setSelectedItem(item as UserItemWithItem);
+                                  setIsModalOpen(true);
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
+                      
+                      {nonStoredMaterials.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold mb-2">Materials</h4>
+                          <ActionSelector
+                            items={nonStoredMaterials?.map((useritem) => ({
+                              ...useritem.item,
+                              ...useritem,
+                            }))}
+                            counts={nonStoredMaterials?.map((useritem) => ({
+                              ...useritem.item,
+                              ...useritem,
+                            }))}
+                            selectedId={selectedItem?.id}
+                            showBgColor={false}
+                            showLabels={false}
+                            greyedIds={
+                              !canStoreMoreMaterials
+                                ? nonStoredMaterials?.map((useritem) => useritem.id)
+                                : undefined
+                            }
+                            onClick={(id) => {
+                              if (id === selectedItem?.id) {
+                                setSelectedItem(undefined);
+                                setIsModalOpen(false);
+                              } else {
+                                const item = userItems?.find((item) => item.id === id);
+                                if (item) {
+                                  setSelectedItem(item as UserItemWithItem);
+                                  setIsModalOpen(true);
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </TabsContent>

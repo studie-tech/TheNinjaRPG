@@ -1077,7 +1077,7 @@ export const WAR_FUNDS_COST = 10000; // Prestige cost of declaring war
 // Ranked PVP config
 export const RANKED_REQUIRED_RANK: UserRank = "CHUNIN";
 export const RANKED_ENTRY_COST = 40000;
-export const RANKED_STREAK_BONUS = 10;
+export const RANKED_STREAK_BONUS = 2;
 export const RANKED_SANNIN_TOP_PLAYERS = 10;
 export const RANKED_RANKS = [
   "Unranked",
@@ -1770,3 +1770,9 @@ export const SUPPORT_TICKET_PRIORITY_DESCRIPTIONS: Record<
   HIGH: "Important issue that significantly affects gameplay",
   URGENT: "Critical issue that prevents gameplay",
 } as const;
+
+// Materials inventory config
+export const MATERIALS_BASE_SLOTS = 25;
+export const FED_MATERIALS_NORMAL_SLOTS = 5;
+export const FED_MATERIALS_SILVER_SLOTS = 10;
+export const FED_MATERIALS_GOLD_SLOTS = 15;

@@ -687,9 +687,12 @@ export const calcBattleResult = (
 
       // If ranked PVP, add benefits
       if (battleType === "RANKED_PVP") {
-        moneyDelta *= 1.5;
-        deltaTokens += 10;
-        deltaPrestige += 10;
+        if (didWin) {
+          moneyDelta = 3000; // Fixed 3000 Ryo reward
+          deltaTokens += 400; // 400 village tokens
+          deltaPrestige += 400; // 400 prestige
+          experience += 100; // 100 exp
+        }
       }
 
       // Include money stolen during combat

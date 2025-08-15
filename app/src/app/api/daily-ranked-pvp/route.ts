@@ -29,10 +29,18 @@ export async function GET() {
     if (endedSeason) {
       await endRankedSeason(drizzleDB, endedSeason.id);
     } else {
+      // Apply LP decay only to Legend rank users (900+ LP)
       await drizzleDB
         .update(userData)
         .set({
-          rankedLp: sql`${userData.rankedLp} * 0.95`,
+          rankedLp: sql`${userData.rankedLp} * 0.98`,
+        })
+        .where(gt(userData.rankedLp, 899));
+
+      // Reset streaks for all users (not just Legend/Sannin)
+      await drizzleDB
+        .update(userData)
+        .set({
           rankedStreak: 0,
         })
         .where(gt(userData.rankedLp, 0));

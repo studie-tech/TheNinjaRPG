@@ -66,7 +66,7 @@ import {
   Award,
 } from "lucide-react";
 import { updateUserSchema } from "@/validators/user";
-import { canSeeSecretData, canSeeIps } from "@/utils/permissions";
+import { canSeeSecretData, canSeeIps, canSeeRankedHistory } from "@/utils/permissions";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
@@ -827,6 +827,9 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 {enableBloodlineHistory && (
                   <TabsTrigger value="bloodlineHistory">Bloodlines</TabsTrigger>
                 )}
+                {userData && canSeeRankedHistory(userData.role) && (
+                  <TabsTrigger value="ranked">Ranked</TabsTrigger>
+                )}
               </TabsList>
             </div>
           )}
@@ -975,6 +978,15 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               <BloodlineHistoryTab
                 userId={profile.userId}
                 isActive={showActive === "bloodlineHistory"}
+              />
+            </TabsContent>
+          )}
+          {/* USER RANKED MATCHES */}
+          {userData && canSeeRankedHistory(userData.role) && (
+            <TabsContent value="ranked">
+              <RankedMatchesTab
+                userId={profile.userId}
+                isActive={showActive === "ranked"}
               />
             </TabsContent>
           )}
@@ -1947,6 +1959,47 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
             </div>
           ))}
         </div>
+      )}
+    </ContentBox>
+  );
+};
+
+// ---------------- Ranked Matches Tab ----------------
+
+const RankedMatchesTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
+  const { data: currentUser } = useUserData();
+  const canSeeRanked = currentUser && canSeeRankedHistory(currentUser.role);
+
+  const { data: rankedMatches, isPending } = api.combat.getRankedMatchHistory.useQuery(
+    { userId },
+    { enabled: isActive && !!canSeeRanked },
+  );
+
+  if (!canSeeRanked) return null;
+
+  return (
+    <ContentBox
+      title="Ranked Match History"
+      subtitle="All ranked PvP matches for this user"
+      initialBreak={true}
+      padding={false}
+    >
+      {isPending && <Loader explanation="Loading ranked matches..." />}
+      {(!rankedMatches || rankedMatches.length === 0) && (
+        <p className="p-3">No ranked matches found</p>
+      )}
+      {rankedMatches && rankedMatches.length > 0 && (
+        <Table
+          data={rankedMatches}
+          columns={[
+            { key: "attackerAvatar", header: "Attacker", type: "avatar" },
+            { key: "defenderAvatar", header: "Defender", type: "avatar" },
+            { key: "battleId", header: "Battle ID", type: "string" },
+            { key: "createdAt", header: "Date", type: "date" },
+          ]}
+          linkPrefix="/battlelog/"
+          linkColumn={"battleId"}
+        />
       )}
     </ContentBox>
   );

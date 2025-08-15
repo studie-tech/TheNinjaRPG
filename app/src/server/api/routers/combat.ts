@@ -87,7 +87,7 @@ import type { GroundEffect, UserEffect } from "@/libs/combat/types";
 import type { ActionEffect } from "@/libs/combat/types";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
-import { IMG_BG_FOREST } from "@/drizzle/constants";
+import { IMG_BG_FOREST, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import type { ZodBgSchemaType } from "@/validators/backgroundSchema";
 import type {
   VillageAlliance,
@@ -353,6 +353,42 @@ export const combatRouter = createTRPCRouter({
         orderBy: [desc(battleHistory.createdAt)],
       });
       return results;
+    }),
+  getRankedMatchHistory: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const results = await ctx.drizzle.query.battleHistory.findMany({
+        where: and(
+          or(
+            eq(battleHistory.attackedId, input.userId),
+            eq(battleHistory.defenderId, input.userId),
+          ),
+          eq(battleHistory.battleType, "RANKED_PVP"),
+        ),
+        with: {
+          attacker: { columns: { username: true, userId: true, avatar: true } },
+          defender: { columns: { username: true, userId: true, avatar: true } },
+        },
+        orderBy: [desc(battleHistory.createdAt)],
+      });
+
+      // Transform the data to match the expected format for the table
+      const transformedResults = results.map((battle) => ({
+        attackerUsername: battle.attacker.username,
+        attackerUserId: battle.attacker.userId,
+        attackerAvatar: battle.attacker.avatar,
+        defenderUsername: battle.defender?.username || "Deleted User",
+        defenderUserId: battle.defender?.userId || "Deleted User",
+        defenderAvatar: battle.defender?.avatar || IMG_AVATAR_DEFAULT,
+        battleId: battle.battleId,
+        createdAt: battle.createdAt,
+      }));
+
+      return transformedResults;
     }),
   performAction: protectedProcedure
     .use(ratelimitMiddleware)

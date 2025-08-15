@@ -485,12 +485,7 @@ export const jutsuRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, ctx.userId, input),
       ]);
-      return results.filter((userjutsu) => {
-        return (
-          userjutsu.jutsu?.bloodlineId === "" ||
-          user?.bloodlineId === userjutsu.jutsu?.bloodlineId
-        );
-      });
+      return results;
     }),
   // Get jutsus of public user
   getPublicUserJutsus: protectedProcedure
@@ -765,6 +760,12 @@ export const jutsuRouter = createTRPCRouter({
         );
       }
       if (!userjutsuObj) return errorResponse("Jutsu not found");
+      
+      // Check if jutsu can be equipped (including bloodline check)
+      if (!isEquipped && !canTrainJutsu(userjutsuObj.jutsu, user)) {
+        return errorResponse("You cannot equip this jutsu due to missing requirements");
+      }
+      
       if (!isEquipped && curEquip >= maxEquip) {
         return errorResponse("You cannot equip more jutsu");
       }
