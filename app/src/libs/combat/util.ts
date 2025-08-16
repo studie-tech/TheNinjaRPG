@@ -687,9 +687,12 @@ export const calcBattleResult = (
 
       // If ranked PVP, add benefits
       if (battleType === "RANKED_PVP") {
-        moneyDelta *= 1.5;
-        deltaTokens += 10;
-        deltaPrestige += 10;
+        if (didWin) {
+          moneyDelta = 3000;
+          deltaTokens += 400;
+          deltaPrestige += 400;
+          experience += 100;
+        }
       }
 
       // Include money stolen during combat

@@ -110,6 +110,10 @@ export const canSeeSecretData = (role: UserRole) => {
   ].includes(role);
 };
 
+export const canSeeRankedHistory = (role: UserRole) => {
+  return role !== "USER";
+};
+
 export const canSeeIps = (role: UserRole) => {
   return ["HEAD_MODERATOR", "CODING-ADMIN", "MODERATOR-ADMIN"].includes(role);
 };

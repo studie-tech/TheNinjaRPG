@@ -1088,7 +1088,7 @@ export const WAR_FUNDS_COST = 10000; // Prestige cost of declaring war
 // Ranked PVP config
 export const RANKED_REQUIRED_RANK: UserRank = "CHUNIN";
 export const RANKED_ENTRY_COST = 40000;
-export const RANKED_STREAK_BONUS = 10;
+export const RANKED_STREAK_BONUS = 2;
 export const RANKED_SANNIN_TOP_PLAYERS = 10;
 export const RANKED_RANKS = [
   "Unranked",
