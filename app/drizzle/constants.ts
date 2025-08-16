@@ -1781,3 +1781,9 @@ export const SUPPORT_TICKET_PRIORITY_DESCRIPTIONS: Record<
   HIGH: "Important issue that significantly affects gameplay",
   URGENT: "Critical issue that prevents gameplay",
 } as const;
+
+// Materials inventory config
+export const MATERIALS_BASE_SLOTS = 25;
+export const FED_MATERIALS_NORMAL_SLOTS = 5;
+export const FED_MATERIALS_SILVER_SLOTS = 10;
+export const FED_MATERIALS_GOLD_SLOTS = 15;

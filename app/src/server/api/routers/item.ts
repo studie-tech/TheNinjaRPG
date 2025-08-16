@@ -29,7 +29,7 @@ import {
 } from "@/drizzle/constants";
 import { nonCombatConsume } from "@/libs/item";
 import { getRandomElement } from "@/utils/array";
-import { calcMaxItems, calcMaxEventItems } from "@/libs/item";
+import { calcMaxItems, calcMaxEventItems, calcMaxMaterials } from "@/libs/item";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { calculateContentDiff } from "@/utils/diff";
 import { fetchUserSkills } from "@/routers/skillTree";
@@ -732,6 +732,8 @@ export const itemRouter = createTRPCRouter({
         useritems?.filter((ui) => !ui.item.isEventItem && !ui.storedAtHome).length || 0;
       const eventItemsCount =
         useritems?.filter((ui) => ui.item.isEventItem && !ui.storedAtHome).length || 0;
+      const materialsCount =
+        useritems?.filter((ui) => ui.item.itemType === "MATERIAL" && !ui.storedAtHome).length || 0;
       const sDiscount = getStrucBoost("itemDiscountPerLvl", structures);
       const aDiscount = user.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
       const hDiscount = info?.effects.find((e) => e.type === "heal")
@@ -754,6 +756,9 @@ export const itemRouter = createTRPCRouter({
       }
       if (info.isEventItem && eventItemsCount >= calcMaxEventItems(user)) {
         return errorResponse("Event item inventory is full");
+      }
+      if (info.itemType === "MATERIAL" && materialsCount >= calcMaxMaterials(user)) {
+        return errorResponse("Materials inventory is full");
       }
       if (info.expireFromStoreAt && new Date(info.expireFromStoreAt) < new Date()) {
         return errorResponse("Item has expired");

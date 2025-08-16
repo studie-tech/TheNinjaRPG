@@ -9,7 +9,12 @@ import { calcIsInVillage } from "@/libs/travel/controls";
 import { fetchSectorVillage } from "@/routers/village";
 import { HomeTypes, HomeTypeDetails } from "@/drizzle/constants";
 import { fetchUserItems } from "@/routers/item";
-import { calcMaxItems, calcMaxEventItems } from "@/libs/item";
+import {
+  calcMaxItems,
+  calcMaxEventItems,
+  calcMaxMaterials,
+  calcMaxHouseMaterials,
+} from "@/libs/item";
 import type { UserStatus } from "@/drizzle/constants";
 
 export const homeRouter = createTRPCRouter({
@@ -163,9 +168,18 @@ export const homeRouter = createTRPCRouter({
           .where(eq(userData.userId, ctx.userId));
         return { success: true, message: `Upgraded to ${targetHome.name}` };
       } else {
-        if (storedItems.length > targetHome.storage) {
+        const storedNormalItems =
+          storedItems.filter((ui) => ui.item.itemType !== "MATERIAL").length || 0;
+        const storedMaterialItems =
+          storedItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
+        if (storedNormalItems > targetHome.storage) {
           return errorResponse(
             `You need to remove some items from storage first (max ${targetHome.storage})`,
+          );
+        }
+        if (storedMaterialItems > calcMaxHouseMaterials(user, targetHome.storage)) {
+          return errorResponse(
+            `You need to remove some materials from storage first (max ${calcMaxHouseMaterials(user, targetHome.storage)})`,
           );
         }
         await ctx.drizzle
@@ -207,11 +221,19 @@ export const homeRouter = createTRPCRouter({
           nonStoredItems.filter((ui) => !ui.item.isEventItem).length || 0;
         const nEventItems =
           nonStoredItems.filter((ui) => ui.item.isEventItem).length || 0;
+        const nMaterials =
+          nonStoredItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
         if (!userItemResult.item.isEventItem && nRegularItems >= calcMaxItems(user)) {
           return errorResponse("Inventory is full");
         }
         if (userItemResult.item.isEventItem && nEventItems >= calcMaxEventItems(user)) {
           return errorResponse("Event item inventory is full");
+        }
+        if (
+          userItemResult.item.itemType === "MATERIAL" &&
+          nMaterials >= calcMaxMaterials(user)
+        ) {
+          return errorResponse("Materials inventory is full");
         }
         await ctx.drizzle
           .update(userItem)
@@ -219,8 +241,24 @@ export const homeRouter = createTRPCRouter({
           .where(eq(userItem.id, input.userItemId));
         return { success: true, message: "Item retrieved from your home." };
       } else {
-        if (storedItems.length >= HomeTypeDetails[user.homeType].storage) {
-          return errorResponse("Your home storage is full");
+        // Check storage limits based on item type
+        if (userItemResult.item.itemType === "MATERIAL") {
+          // For materials, check materials storage limit
+          const storedMaterials =
+            storedItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
+          if (
+            storedMaterials >=
+            calcMaxHouseMaterials(user, HomeTypeDetails[user.homeType].storage)
+          ) {
+            return errorResponse("Your home materials storage is full");
+          }
+        } else {
+          // For normal items, check normal item storage limit
+          const storedNormalItems =
+            storedItems.filter((ui) => ui.item.itemType !== "MATERIAL").length || 0;
+          if (storedNormalItems >= HomeTypeDetails[user.homeType].storage) {
+            return errorResponse("Your home storage is full");
+          }
         }
         await ctx.drizzle
           .update(userItem)

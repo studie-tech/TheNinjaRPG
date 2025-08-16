@@ -6,6 +6,10 @@ import { FED_EVENT_ITEMS_NORMAL } from "@/drizzle/constants";
 import { FED_EVENT_ITEMS_SILVER } from "@/drizzle/constants";
 import { FED_EVENT_ITEMS_GOLD } from "@/drizzle/constants";
 import { FED_EVENT_ITEMS_DEFAULT } from "@/drizzle/constants";
+import { MATERIALS_BASE_SLOTS } from "@/drizzle/constants";
+import { FED_MATERIALS_NORMAL_SLOTS } from "@/drizzle/constants";
+import { FED_MATERIALS_SILVER_SLOTS } from "@/drizzle/constants";
+import { FED_MATERIALS_GOLD_SLOTS } from "@/drizzle/constants";
 import { getStrucBoost } from "@/utils/village";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
@@ -67,6 +71,38 @@ export const calcMaxEventItems = (user: UserData) => {
     default:
       return FED_EVENT_ITEMS_DEFAULT + user.extraItemSlots;
   }
+};
+
+/**
+ * Calculates the maximum number of materials for a user.
+ *
+ * @param user - The user data.
+ * @returns The maximum number of materials.
+ */
+export const calcMaxMaterials = (user: UserData) => {
+  const status = getUserFederalStatus(user);
+  switch (status) {
+    case "NORMAL":
+      return MATERIALS_BASE_SLOTS + FED_MATERIALS_NORMAL_SLOTS + user.extraItemSlots;
+    case "SILVER":
+      return MATERIALS_BASE_SLOTS + FED_MATERIALS_SILVER_SLOTS + user.extraItemSlots;
+    case "GOLD":
+      return MATERIALS_BASE_SLOTS + FED_MATERIALS_GOLD_SLOTS + user.extraItemSlots;
+    default:
+      return MATERIALS_BASE_SLOTS + user.extraItemSlots;
+  }
+};
+
+/**
+ * Calculates the maximum number of materials that can be stored in a house.
+ * Based on home storage capacity - 10, minimum 0.
+ *
+ * @param user - The user data.
+ * @param homeStorage - The storage capacity of the home.
+ * @returns The maximum number of materials that can be stored in house.
+ */
+export const calcMaxHouseMaterials = (user: UserData, homeStorage: number) => {
+  return Math.max(0, homeStorage - 10);
 };
 
 /**

@@ -6,6 +6,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import BanInfo from "@/layout/BanInfo";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
+import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import {
   Select,
   SelectContent,
@@ -100,7 +101,13 @@ export default function Arena() {
         defaultBackHref="/village"
         padding={tab === "Arena"}
         topRightContent={
-          <div className="w-48">
+          <div className="flex flex-row gap-4 items-center">
+            {(tab === "Sparring" || tab === "Training" || tab === "Arena") && (
+              <div className="flex flex-row gap-2">
+                <JutsuLoadoutSelector size="small" label="Jutsu" />
+                <ItemLoadoutSelector size="small" label="Items" />
+              </div>
+            )}
             <Select
               value={tab || "Arena"}
               onValueChange={(value) => setTab(value as TabType)}
@@ -203,7 +210,6 @@ const SelectAI: React.FC<SelectAIProps> = (props) => {
       title="Configure"
       subtitle="Choose opponent and jutsu loadout"
       initialBreak={true}
-      topRightContent={<JutsuLoadoutSelector size="small" />}
     >
       <div className="flex flex-col items-center">
         {canDoArena && (
