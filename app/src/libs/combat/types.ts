@@ -166,6 +166,7 @@ export type CombatResult = {
   eloDiff: number;
   lpDiff: number;
   experience: number;
+  earnedExperience: number;
   pvpStreak: number;
   curHealth: number;
   curStamina: number;

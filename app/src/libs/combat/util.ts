@@ -630,6 +630,7 @@ export const calcBattleResult = (
           "KAGE_PVP",
           "TRAINING",
           "VILLAGE_PROTECTOR",
+          "RANKED_PVP",
         ].includes(battleType)
       ) {
         experience = 0;
@@ -675,6 +676,7 @@ export const calcBattleResult = (
       let deltaPrestige = 0;
       let deltaAnbuPoints = 0;
       let clanPoints = 0;
+      let deltaEarnedExperience = 0;
 
       // Money/ryo calculation
       const moneyBoost = user?.clan?.ryoBoost ? 1 + user.clan.ryoBoost / 100 : 1;
@@ -687,9 +689,12 @@ export const calcBattleResult = (
 
       // If ranked PVP, add benefits
       if (battleType === "RANKED_PVP") {
-        moneyDelta *= 1.5;
-        deltaTokens += 10;
-        deltaPrestige += 10;
+        if (didWin) {
+          moneyDelta = 3000;
+          deltaTokens += 400;
+          deltaPrestige += 400;
+          deltaEarnedExperience += 100;
+        }
       }
 
       // Include money stolen during combat
@@ -1021,6 +1026,7 @@ export const calcBattleResult = (
         eloDiff: eloDiff,
         lpDiff: lpDiff,
         experience: 0.01,
+        earnedExperience: 0,
         pvpStreak: calculatePvpStreak(battleType, user, targets, didWin),
         curHealth: user.curHealth,
         curStamina: user.curStamina,
@@ -1115,12 +1121,21 @@ export const calcBattleResult = (
           );
         });
 
-        // Experience
-        result.experience = Math.floor(assignedExp * 100) / 100;
-      }
+              // Experience
+      result.experience = Math.floor(assignedExp * 100) / 100;
+    }
 
-      // Return results
-      return result;
+    // Ensure Ranked PvP winner rewards are applied despite noRewardBattles gating
+    if (battleType === "RANKED_PVP" && didWin) {
+      // Money (respect global reward scaling)
+      result.money = moneyDelta;
+      result.earnedExperience = deltaEarnedExperience;
+      result.villageTokens = deltaTokens;
+      result.villagePrestige = deltaPrestige;
+    }
+
+    // Return results
+    return result;
     }
   }
   return null;

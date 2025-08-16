@@ -107,6 +107,11 @@ export const kageRouter = createTRPCRouter({
       // Mutate
       await Promise.all([
         insertRequest(ctx.drizzle, user.userId, kage.userId, "KAGE"),
+        // Set challenger status to QUEUED while waiting for kage response
+        ctx.drizzle
+          .update(userData)
+          .set({ status: "QUEUED" })
+          .where(eq(userData.userId, ctx.userId)),
         pusher.trigger(input.kageId, "event", {
           type: "userMessage",
           message: "Your position as kage is being challenged",
@@ -208,6 +213,11 @@ export const kageRouter = createTRPCRouter({
             villagePrestige: sql`${userData.villagePrestige} - ${KAGE_CHALLENGE_REJECT_COST}`,
           })
           .where(eq(userData.userId, ctx.userId)),
+        // Set challenger status back to AWAKE when challenge is rejected
+        ctx.drizzle
+          .update(userData)
+          .set({ status: "AWAKE" })
+          .where(eq(userData.userId, challenge.senderId)),
         updateRequestState(ctx.drizzle, input.id, "REJECTED", "KAGE"),
       ]);
       return { success: true, message: "Challenge rejected" };
@@ -244,6 +254,11 @@ export const kageRouter = createTRPCRouter({
               villagePrestige: sql`${userData.villagePrestige} - ${KAGE_UNACCEPTED_CHALLENGE_COST}`,
             })
             .where(eq(userData.userId, challenge.receiverId)),
+          // Set challenger status back to AWAKE when challenge expires
+          ctx.drizzle
+            .update(userData)
+            .set({ status: "AWAKE" })
+            .where(eq(userData.userId, challenge.senderId)),
           pusher.trigger(challenge.senderId, "event", {
             type: "userMessage",
             message:
@@ -255,7 +270,15 @@ export const kageRouter = createTRPCRouter({
         ]);
         return result;
       } else {
-        return await updateRequestState(ctx.drizzle, input.id, "CANCELLED", "KAGE");
+        // Set challenger status back to AWAKE when challenge is cancelled
+        await Promise.all([
+          updateRequestState(ctx.drizzle, input.id, "CANCELLED", "KAGE"),
+          ctx.drizzle
+            .update(userData)
+            .set({ status: "AWAKE" })
+            .where(eq(userData.userId, ctx.userId)),
+        ]);
+        return { success: true, message: "Challenge cancelled" };
       }
     }),
   /**

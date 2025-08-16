@@ -720,6 +720,9 @@ const Combat: React.FC<CombatProps> = (props) => {
               {result.experience > 0 && (
                 <p>Experience Points: {result.experience.toFixed(2)}</p>
               )}
+              {result.earnedExperience > 0 && (
+                <p>Unassigned Experience: {result.earnedExperience.toFixed(2)}</p>
+              )}
               {result.ninjutsuOffence > 0 && (
                 <p>Offensive Ninjutsu: {result.ninjutsuOffence.toFixed(2)}</p>
               )}

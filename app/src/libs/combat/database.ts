@@ -639,6 +639,7 @@ export const updateUser = async (
         .update(userData)
         .set({
           experience: sql`experience + ${result.experience}`,
+          earnedExperience: sql`earnedExperience + ${result.earnedExperience}`,
           pvpStreak: result.pvpStreak,
           ...(curBattle.battleType !== "RANKED_PVP"
             ? {
@@ -669,7 +670,7 @@ export const updateUser = async (
           regenAt: new Date(),
           ...(curBattle.battleType === "RANKED_PVP"
             ? {
-                rankedLp: sql`GREATEST(rankedLp + ${result.lpDiff}, 0)`,
+                rankedLp: sql`GREATEST(rankedLp + ${result.lpDiff}, 1)`,
                 rankedStreak: result.didWin ? sql`${userData.rankedStreak} + 1` : 0,
                 rankedWins: sql`rankedWins + ${result.didWin ? 1 : 0}`,
                 rankedBattles: sql`rankedBattles + 1`,

@@ -345,7 +345,7 @@ export const pvpRankRouter = createTRPCRouter({
       // Mutation
       await ctx.drizzle
         .update(userData)
-        .set({ rankedLp: 1, villagePrestige: user.villagePrestige - RANKED_ENTRY_COST })
+        .set({ rankedLp: 150, villagePrestige: user.villagePrestige - RANKED_ENTRY_COST })
         .where(eq(userData.userId, ctx.userId));
       return { success: true, message: "Ranked season entered successfully" };
     }),

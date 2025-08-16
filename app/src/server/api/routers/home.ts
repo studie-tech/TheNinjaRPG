@@ -52,6 +52,7 @@ export const homeRouter = createTRPCRouter({
       if (user.sector !== user.village?.sector && !user.isOutlaw) {
         return errorResponse("Wrong sector");
       }
+      
       // Mutate
       const newStatus: UserStatus = user.status === "ASLEEP" ? "AWAKE" : "ASLEEP";
       if (user.status === "ASLEEP") {
