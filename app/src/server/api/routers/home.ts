@@ -217,10 +217,13 @@ export const homeRouter = createTRPCRouter({
       }
       // Mutate
       if (userItemResult.storedAtHome) {
+        const nonStoredNonMaterials = nonStoredItems.filter(
+          (ui) => ui.item.itemType !== "MATERIAL",
+        );
         const nRegularItems =
-          nonStoredItems.filter((ui) => !ui.item.isEventItem).length || 0;
+          nonStoredNonMaterials.filter((ui) => !ui.item.isEventItem).length || 0;
         const nEventItems =
-          nonStoredItems.filter((ui) => ui.item.isEventItem).length || 0;
+          nonStoredNonMaterials.filter((ui) => ui.item.isEventItem).length || 0;
         const nMaterials =
           nonStoredItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
         if (!userItemResult.item.isEventItem && nRegularItems >= calcMaxItems(user)) {
