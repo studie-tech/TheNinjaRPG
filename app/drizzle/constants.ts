@@ -1082,7 +1082,7 @@ export const KAGE_CHALLENGE_LOSE_PRESTIGE_MIN = 1500; // Minimum prestige cost p
 export const KAGE_CHALLENGE_LOSE_PRESTIGE_PERCENTAGE = 0.04; // 4% of current prestige for closed challenges (current implementation)
 export const KAGE_CHALLENGE_OPEN_FOR_SECONDS = 60 * 60; // Time in between being able to toggle challenges
 export const KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS = 12; // Maximum hours per day that challenges can be locked
-export const KAGE_UNACCEPTED_CHALLENGE_COST = 15000; // Cost of unaccepted challenge, i.e. going to Ai vs Ai
+export const KAGE_UNACCEPTED_CHALLENGE_COST = 5000; // Cost of unaccepted challenge, i.e. going to Ai vs Ai
 export const WAR_FUNDS_COST = 10000; // Prestige cost of declaring war
 
 // Ranked PVP config
