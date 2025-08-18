@@ -1595,6 +1595,9 @@ export const IMG_BATTLEFIELD_TOMBSTONE =
 export const IMG_BATTLEFIELD_STAR =
   "https://utfs.io/f/Hzww9EQvYURJuGvcEjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
 
+export const IMG_COLLAB_NSRP =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJrmQoZChuJPmdY8zI2ptZXAoEj1c6BMKvrQOx";
+
 export const MUSIC_DEFAULT =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQCH0mJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
 
