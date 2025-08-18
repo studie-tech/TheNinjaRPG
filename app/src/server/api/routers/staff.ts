@@ -69,6 +69,7 @@ import {
   canRestoreActivityStreak,
   canUseMonitoringTests,
   canDeleteReferral,
+  canControlBackups,
 } from "@/utils/permissions";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { canCloneUser, canClearSectors } from "@/utils/permissions";
@@ -76,10 +77,146 @@ import { TRPCError } from "@trpc/server";
 import * as Sentry from "@sentry/nextjs";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { UserStatus } from "@/drizzle/constants";
+
+import { Client as PlanetScaleClient } from "@planetscale/database";
+import { contentBackup } from "@/drizzle/schema";
+
 import type { DrizzleClient } from "@/server/db";
 import { fetchSector } from "./village";
 
 export const staffRouter = createTRPCRouter({
+  // Content Backups
+  getBackups: protectedProcedure.query(async ({ ctx }) => {
+    const user = await fetchUser(ctx.drizzle, ctx.userId);
+    if (!canControlBackups(user.role)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed for you" });
+    }
+    return ctx.drizzle.query.contentBackup.findMany({
+      orderBy: (table, { desc }) => [desc(table.createdAt)],
+      limit: 200,
+    });
+  }),
+  createBackup: protectedProcedure
+    .input(z.object({ type: z.enum(["bloodline", "jutsu", "item", "ai"]) }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+
+      // Guard
+      if (!canControlBackups(user.role)) {
+        return errorResponse("Not allowed for you");
+      }
+
+      // Create backup SQL
+      const tableMap: Record<typeof input.type, string> = {
+        bloodline: "Bloodline",
+        jutsu: "Jutsu",
+        item: "Item",
+        ai: "UserData",
+      };
+
+      const tableName = tableMap[input.type];
+
+      // Build SELECT query
+      const selectSql =
+        input.type === "ai"
+          ? sql`SELECT * FROM ${sql.raw(tableName)} WHERE isAi = true`
+          : sql`SELECT * FROM ${sql.raw(tableName)}`;
+
+      const result = (await ctx.drizzle.execute(selectSql)) as unknown as {
+        rows: Record<string, unknown>[];
+      };
+
+      const rows: Record<string, unknown>[] = result?.rows ?? [];
+      if (rows.length === 0) {
+        await ctx.drizzle.insert(contentBackup).values({
+          id: nanoid(),
+          type: input.type,
+          sqlText: `/* Empty backup for ${tableName} at ${new Date().toISOString()} */`,
+        });
+        return { success: true, message: "Backup created (empty dataset)" };
+      }
+
+      const columns = Object.keys(rows[0] ?? {});
+      const esc = (v: string) =>
+        v.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n");
+      const toSqlVal = (val: unknown): string => {
+        if (val === null || val === undefined) return "NULL";
+        if (typeof val === "number" || typeof val === "bigint") return String(val);
+        if (typeof val === "boolean") return val ? "1" : "0";
+        if (val instanceof Date)
+          return `'${esc(val.toISOString().slice(0, 19).replace("T", " "))}'`;
+        if (typeof val === "string") return `'${esc(val)}'`;
+        return `'${esc(JSON.stringify(val))}'`;
+      };
+
+      const valuesSql = rows
+        .map((r) => `(${columns.map((c) => toSqlVal(r[c])).join(", ")})`)
+        .join(",\n");
+
+      const insertSql = `INSERT INTO \`${tableName}\` (${columns
+        .map((c) => `\`${c}\``)
+        .join(", ")}) VALUES\n${valuesSql};`;
+
+      await ctx.drizzle.insert(contentBackup).values({
+        id: nanoid(),
+        type: input.type,
+        sqlText: insertSql,
+      });
+
+      return { success: true, message: "Backup created" };
+    }),
+
+  pushBackupToDev: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, backup] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.contentBackup.findFirst({
+          where: eq(contentBackup.id, input.id),
+        }),
+      ]);
+      // Derived
+      const devUrl = process.env.DEV_DATABASE_URL;
+
+      // Guard
+      if (!canControlBackups(user.role)) {
+        return errorResponse("Not allowed for you");
+      }
+      if (!backup) return errorResponse("Backup not found");
+      if (!devUrl) return errorResponse("DEV database URL not configured");
+      if (!backup.sqlText || backup.sqlText.startsWith("/* Empty backup")) {
+        return errorResponse("Backup is empty");
+      }
+
+      // Setup client
+      const dev_client = new PlanetScaleClient({ url: devUrl });
+
+      // Derived
+      const tableMap: Record<typeof backup.type, string> = {
+        bloodline: "Bloodline",
+        jutsu: "Jutsu",
+        item: "Item",
+        ai: "UserData",
+      };
+      const tableName = tableMap[backup.type];
+
+      // Clear dev table content
+      if (backup.type === "ai") {
+        await dev_client.execute(`DELETE FROM \`${tableName}\` WHERE isAi = 1`);
+      } else {
+        await dev_client.execute(`DELETE FROM \`${tableName}\``);
+      }
+
+      if (backup.sqlText && !backup.sqlText.startsWith("/* Empty backup")) {
+        await dev_client.execute(backup.sqlText);
+      }
+
+      return { success: true, message: "Backup pushed to dev" };
+    }),
   throwError: protectedProcedure
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {

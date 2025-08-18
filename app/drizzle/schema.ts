@@ -15,6 +15,7 @@ import {
   index,
   float,
   text,
+  mediumtext,
   tinyint,
   double,
   primaryKey,
@@ -121,6 +122,28 @@ export const contentTag = mysqlTable(
     };
   },
 );
+
+export const contentBackup = mysqlTable(
+  "ContentBackup",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    type: mysqlEnum("type", ["bloodline", "jutsu", "item", "ai"]).notNull(),
+    sqlText: mediumtext("sqlText").notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      typeIdx: index("ContentBackup_type_idx").on(table.type),
+      createdAtIdx: index("ContentBackup_createdAt_idx").on(table.createdAt),
+    };
+  },
+);
+export type ContentBackup = InferSelectModel<typeof contentBackup>;
 
 export const aiProfile = mysqlTable(
   "AiProfile",

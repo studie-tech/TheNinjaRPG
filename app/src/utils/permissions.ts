@@ -18,6 +18,10 @@ export const canChangeContent = (role: UserRole) => {
   ].includes(role);
 };
 
+export const canControlBackups = (role: UserRole) => {
+  return ["CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
+};
+
 export const canPlayHiddenQuests = (role: UserRole) => {
   return ["CONTENT", "EVENT", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
 };

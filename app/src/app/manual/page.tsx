@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -18,11 +20,17 @@ import {
   IMG_MANUAL_RANKED,
   IMG_MANUAL_SKILLTREE,
   IMG_MANUAL_BALANCE,
+  IMG_MANUAL_BACKUP,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import { useUserData } from "@/utils/UserContext";
+import { canControlBackups } from "@/utils/permissions";
 
 export default function ManualMain() {
-  const entries = [
+  const { data: userData } = useUserData();
+  const hasBackupAccess = canControlBackups(userData?.role ?? "USER");
+
+  const baseEntries = [
     { name: "combat", img: IMG_MANUAL_COMBAT },
     { name: "travel", img: IMG_MANUAL_TRAVEL },
     { name: "bloodline", img: IMG_MANUAL_BLOODLINE },
@@ -41,29 +49,36 @@ export default function ManualMain() {
     { name: "pvp_rank", img: IMG_MANUAL_RANKED },
     { name: "balance", img: IMG_MANUAL_BALANCE },
   ];
+
+  const entries = hasBackupAccess
+    ? [{ name: "content_backups", img: IMG_MANUAL_BACKUP }, ...baseEntries]
+    : baseEntries;
+
   return (
     <ContentBox
       title="Game Data & Manual"
       subtitle="Learn about the game & look up data"
     >
       <div className="grid grid-cols-4 gap-4 text-center font-bold">
-        {entries.map((page) => (
-          <Link
-            key={page.name}
-            href={`/manual/${page.name}`}
-            className="flex flex-col items-center"
-          >
-            <Image
-              className="rounded-2xl border-2 border-black hover:cursor-pointer hover:opacity-50"
-              src={page.img}
-              alt={page.name}
-              width={125}
-              height={125}
-              priority={true}
-            />
-            <p>{page.name}</p>
-          </Link>
-        ))}
+        {entries
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((page) => (
+            <Link
+              key={page.name}
+              href={`/manual/${page.name}`}
+              className="flex flex-col items-center"
+            >
+              <Image
+                className="rounded-2xl border-2 border-black hover:cursor-pointer hover:opacity-50"
+                src={page.img}
+                alt={page.name}
+                width={125}
+                height={125}
+                priority={true}
+              />
+              <p>{page.name}</p>
+            </Link>
+          ))}
       </div>
     </ContentBox>
   );

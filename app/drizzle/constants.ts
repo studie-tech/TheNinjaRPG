@@ -1338,6 +1338,8 @@ export const IMG_MANUAL_SKILLTREE =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQB2gVJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
 export const IMG_MANUAL_BALANCE =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJunxMxUaCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8";
+export const IMG_MANUAL_BACKUP =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJctH7DQSnxBpQqGNDcTHbLmYz8uXAl3oa54ti";
 export const IMG_MANUAL_ITEM =
   "https://utfs.io/f/Hzww9EQvYURJb59vlYAtYUndMi56GkX19q0A4PzyeIloBrEa";
 export const IMG_MANUAL_AI =
