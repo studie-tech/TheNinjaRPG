@@ -4,7 +4,6 @@ import { baseServerResponse, errorResponse } from "@/server/api/trpc";
 import { eq, gte, and, sql } from "drizzle-orm";
 import { userData, userItem } from "@/drizzle/schema";
 import { fetchUpdatedUser } from "@/routers/profile";
-import { fetchRequests } from "@/routers/sparring";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { calcIsInVillage } from "@/libs/travel/controls";
 import { fetchSectorVillage } from "@/routers/village";
@@ -52,13 +51,6 @@ export const homeRouter = createTRPCRouter({
       }
       if (user.sector !== user.village?.sector && !user.isOutlaw) {
         return errorResponse("Wrong sector");
-      }
-      
-      // Check if user is part of a kage battle request
-      const kageRequests = await fetchRequests(ctx.drizzle, ["KAGE"], undefined, ctx.userId);
-      const hasPendingKageRequest = kageRequests.some(request => request.status === "PENDING");
-      if (hasPendingKageRequest) {
-        return errorResponse("You cannot sleep while you have a pending kage battle request");
       }
       
       // Mutate

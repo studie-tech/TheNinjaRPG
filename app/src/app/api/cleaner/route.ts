@@ -209,9 +209,13 @@ export async function GET() {
       sql`DELETE FROM ${mpvpBattleUser} a WHERE NOT EXISTS (SELECT id FROM ${mpvpBattleQueue} b WHERE b.id = a.clanBattleId)`,
     );
 
-    // Step 25: Set status to AWAKE for users who are QUEUED if they do not have any mpvpBattleUser entries
+    // Step 25: Set status to AWAKE for users who are QUEUED if they are not in any active battle systems
+    // This covers mpvp battles, kage challenges, and ranked PVP
     await drizzleDB.execute(
-      sql`UPDATE ${userData} a SET a.status="AWAKE" WHERE a.status="QUEUED" AND NOT EXISTS (SELECT id FROM ${mpvpBattleUser} b WHERE b.userId = a.userId)`,
+      sql`UPDATE ${userData} a SET a.status="AWAKE" WHERE a.status="QUEUED" 
+          AND NOT EXISTS (SELECT id FROM ${mpvpBattleUser} b WHERE b.userId = a.userId)
+          AND NOT EXISTS (SELECT id FROM ${userRequest} c WHERE c.senderId = a.userId AND c.type = 'KAGE' AND c.status = 'PENDING')
+          AND NOT EXISTS (SELECT id FROM ${rankedPvpQueue} d WHERE d.userId = a.userId)`,
     );
 
     // Step 26: Update the population of each village
