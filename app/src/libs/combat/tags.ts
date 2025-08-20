@@ -168,6 +168,8 @@ export const copy = (
         "increasedamagegiven",
         "increasestat",
         "decreasedamagetaken",
+        "reflect",
+        "shield",
       ];
 
       const positiveEffects = usersEffects.filter(
@@ -245,8 +247,8 @@ export const mirror = (
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
-      const excludedFromTypes = ["bloodline", "armor", "item", "village"];
-      const excludedEffectTypes = ["damage", "pierce", "clear"];
+      const excludedFromTypes = ["bloodline", "armor", "item", "village", "skill"];
+      const excludedEffectTypes = ["damage", "pierce", "clear", "buffprevent", "cleanseprevent"];
 
       const negativeEffects = usersEffects.filter(
         (e) =>
