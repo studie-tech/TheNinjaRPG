@@ -44,6 +44,24 @@ export default function Shrine() {
       },
     });
 
+  // Mutation for starting a Raid (PvE, optional 3-man cross-village)
+  const { mutate: startRaid, isPending: isStartingRaid } =
+    api.combat.startRaidBattle.useMutation({
+      onSuccess: async (result) => {
+        if (result.success && result.battleId) {
+          await updateUser({
+            status: "BATTLE",
+            battleId: result.battleId,
+            updatedAt: new Date(),
+          });
+          router.push("/combat");
+          showMutationToast({ ...result, message: "Starting Raid" });
+        } else {
+          showMutationToast(result);
+        }
+      },
+    });
+
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!sectorData) return <Loader explanation="Loading sector data" />;
@@ -75,6 +93,26 @@ export default function Shrine() {
               </p>
             )}
           </div>
+
+              {/* New: Open Raid option (PvE, cross-village, up to 3 players) */}
+              <div className="w-full max-w-md mt-6">
+                <Button
+                  size="xl"
+                  decoration="gold"
+                  animation="pulse"
+                  className="font-fontasia text-3xl w-full"
+                  onClick={() => startRaid({ sector: userData.sector })}
+                  disabled={isStartingRaid}
+                >
+                  <Swords className="h-8 w-8 mr-3" />
+                  {isStartingRaid ? "Starting Raid..." : "Start Raid (PvE)"}
+                </Button>
+                <p className="mt-2 text-sm text-muted-foreground text-center">
+                  Start an Open Raid against the local shrine guardian. You can invite up
+                  to 2 allies from any village to join. This is PvE only.
+                </p>
+              </div>
+
         </ContentBox>
         <RamenShop initialBreak />
       </>

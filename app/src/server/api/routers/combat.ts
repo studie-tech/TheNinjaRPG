@@ -948,6 +948,65 @@ export const combatRouter = createTRPCRouter({
         "SHRINE_WAR",
       );
     }),
+
+  // Start a PvE Raid battle (3-man allowed, cross-village)
+  startRaidBattle: protectedProcedure
+    .use(ratelimitMiddleware)
+    .use(hasUserMiddleware)
+    .input(
+      z.object({
+        sector: z.number().int(),
+        aiId: z.string().optional(),
+        partyUserIds: z.array(z.string()).max(2).optional(), // up to 2 extra allies beside the caller
+      }),
+    )
+    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      // Fetch caller and sector/village shrine settings and available shrine AIs
+      const [{ user }, sectorData, shrineAis] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        ctx.drizzle.query.sector.findFirst({
+          where: eq(sector.sector, input.sector),
+          with: { village: true },
+        }),
+        ctx.drizzle.query.userData.findMany({
+          where: and(eq(userData.isAi, true), eq(userData.inShrines, true)),
+          columns: { userId: true },
+        }),
+      ]);
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (user.isBanned) return errorResponse("Cannot start raid while banned");
+
+      // Party assembly: allow cross-village, any users up to 3 total including self
+      const party = Array.from(
+        new Set([user.userId, ...(input.partyUserIds ?? [])]),
+      ).slice(0, 3);
+
+      // Determine raid boss target(s)
+      const assignedAis = sectorData?.village?.shrineSettings?.activeAiIds || [];
+      const availableBossIds = shrineAis.map((a) => a.userId);
+      const preferredBossId = input.aiId && availableBossIds.includes(input.aiId)
+        ? input.aiId
+        : assignedAis.find((id) => availableBossIds.includes(id)) ||
+          availableBossIds[0] ||
+          "MJMzOE67Cx2YP3NX8SAbh";
+
+      const targetIds = [preferredBossId];
+
+      // Start PvE RAID battle immediately (non-PvP)
+      return await initiateBattle(
+        {
+          sector: input.sector,
+          userIds: party,
+          targetIds,
+          client: ctx.drizzle,
+          asset: "arena",
+        },
+        "RAID",
+      );
+    }),
   /**
    * List all ongoing battles, optionally filtered by battleType.
    * Defaults to RANKED_PVP if not specified.

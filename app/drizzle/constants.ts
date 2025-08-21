@@ -376,6 +376,7 @@ export const BattleTypes = [
   "CLAN_CHALLENGE",
   "CLAN_BATTLE",
   "SHRINE_WAR",
+  "RAID",
   "TOURNAMENT",
   "QUEST",
   "RANDOM_ENCOUNTER",
