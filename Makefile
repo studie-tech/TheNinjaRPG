@@ -72,11 +72,20 @@ bun: install ## Execute bun command in local development.
 	@echo $(DATABASE_URL)
 	cd app && bun $(ARGS)
 
+# Note: The start target below may crash due to Bun libuv compatibility issues with NAPI modules
+# Use 'make start-npm' instead if you encounter crashes
 .PHONY: start
 start: loadEnv # Run Next.js server, access at http://127.0.0.1:3000
 	@echo "${GREEN}start${RESET}"
 	rm -rf app/.next
 	@make bun -- OPENAI_API_KEY=$(OPENAI_API_KEY) dev
+
+.PHONY: start-npm
+start-npm: loadEnv # Run Next.js server with npm (avoids Bun libuv issues), access at http://127.0.0.1:3000
+	@echo "${GREEN}start-npm${RESET}"
+	rm -rf app/.next
+	@echo "Using npm to avoid Bun libuv compatibility issues"
+	cd app && npm run dev
 
 .PHONY: build
 build: # Build Next.js app
