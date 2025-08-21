@@ -310,6 +310,18 @@ export const applyEffects = (
               }
             }
           });
+        } else if (effectTypes?.includes("pierce")) {
+          // Pierce effects destroy shields instead of absorbing damage
+          targetShields.forEach((shield) => {
+            if (shield.power && shield.power > 0) {
+              actionEffects.push({
+                txt: `${target.username}'s shield was pierced and destroyed!`,
+                color: "red",
+              });
+              shield.power = 0;
+              shield.rounds = 0;
+            }
+          });
         }
 
         // Apply final stand if active
