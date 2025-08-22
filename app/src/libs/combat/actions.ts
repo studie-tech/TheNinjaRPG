@@ -20,7 +20,7 @@ import {
   IncreaseCooldownTag,
   DecreaseCooldownTag,
 } from "@/libs/combat/types";
-import { isUserStealthed, isUserImmobilized } from "@/libs/combat/util";
+import { isUserStealthed, isUserImmobilized, isUserSummonPrevented } from "@/libs/combat/util";
 import { getUserElementalSeal, isEffectActive } from "@/libs/combat/util";
 import { getPower } from "@/libs/combat/tags";
 import { realizeTag, updateStatUsage } from "@/libs/combat/tags";
@@ -64,6 +64,7 @@ export const availableUserActions = (
   const user = usersState?.find((u) => u.userId === userId);
   const { availableActionPoints } = actionPointsAfterAction(user, battle);
   const isStealth = isUserStealthed(userId, battle?.usersEffects);
+  const isSummonPrevented = isUserSummonPrevented(userId, battle?.usersEffects);
   const isImmobilized = isUserImmobilized(userId, battle?.usersEffects);
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
   const basicActions = getActiveBasicActions(battle, user);
@@ -113,6 +114,11 @@ export const availableUserActions = (
                 offensiveTags.has(e.type),
               );
               if (hasOffensiveTag) return false;
+            }
+            // Filter out summon jutsu when summonPrevent is active
+            if (isSummonPrevented) {
+              const hasSummonTag = userjutsu.jutsu.effects.some((e) => e.type === "summon");
+              if (hasSummonTag) return false;
             }
             // Filter out jutsus removed by elemental seal
             if (!elementalSeal?.elements?.length) return true;

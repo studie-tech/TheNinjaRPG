@@ -140,6 +140,21 @@ export const isUserStealthed = (
   );
 };
 
+export const isUserSummonPrevented = (
+  userId: string | undefined,
+  userEffects: UserEffect[] | undefined,
+) => {
+  return userEffects?.some(
+    (e) =>
+      e.type === "summonprevent" &&
+      e.targetId === userId &&
+      !e.castThisRound &&
+      "rounds" in e &&
+      e.rounds &&
+      e.rounds > 0,
+  );
+};
+
 export const getUserElementalSeal = (
   userId: string | undefined,
   userEffects: UserEffect[] | undefined,

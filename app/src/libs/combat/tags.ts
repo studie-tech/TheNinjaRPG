@@ -2178,6 +2178,7 @@ export const summon = (
   if (!("aiId" in effect)) {
     throw new Error("Summon effect must have aiId");
   }
+  
   if (effect.isNew && effect.castThisRound) {
     effect.isNew = false;
     if (user && "aiHp" in effect) {
@@ -2287,9 +2288,9 @@ export const summonPrevent = (
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
-    const info = getInfo(target, effect, "cannot summon companions");
+    // Set the effect to be active and hide summon jutsu
     effect.power = 100;
-    return info;
+    return getInfo(target, effect, "cannot summon companions");
   } else if (effect.isNew) {
     effect.rounds = 0;
     return {
