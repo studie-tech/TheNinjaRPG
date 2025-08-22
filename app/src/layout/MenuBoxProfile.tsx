@@ -547,7 +547,18 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           ? val.type.replace("increase", "").replace("decrease", "")
           : val.type;
         const sign = val.type.includes("decrease") ? -1 : 1;
-        const value = Math.abs(val.power + val.level * val.powerPerLevel) * sign;
+        
+        // Clean, targeted handling for wound effects only
+        let value: number;
+        
+        if (val.type === "wound" && val.timeTracker?.originalDamage) {
+          // Convert wound percentage to actual damage amount
+          const woundPower = Math.abs(val.power + val.level * val.powerPerLevel);
+          value = -Math.floor(val.timeTracker.originalDamage * (woundPower / 100));
+        } else {
+          // Standard processing for all other effects
+          value = Math.abs(val.power + val.level * val.powerPerLevel) * sign;
+        }
         cats.forEach((cat) => {
           const found = acc.find(
             (e) =>
@@ -575,10 +586,16 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
       }, [] as CollapsedEffect[]) || [];
 
   // ------------ UI helpers ------------
-  const valueTxt = (e: CollapsedEffect) =>
-    `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${
+  const valueTxt = (e: CollapsedEffect) => {
+    // Special handling for wound effects - show actual damage instead of percentage
+    if (e.type === "wound") {
+      return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}`;
+    }
+    // Standard handling for all other effects
+    return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${
       e.calculation === "percentage" ? "%" : ""
     }`;
+  };
   const roundsTxt = (e: CollapsedEffect) =>
     e.rounds.length > 0 ? `↻ ${Math.max(...e.rounds)}` : "";
 
@@ -648,7 +665,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   const damageGivenEffects = collapsedEffects.filter((e) => e.type === "damagegiven");
   const damageTakenEffects = collapsedEffects.filter((e) => e.type === "damagetaken");
   const statEffects = collapsedEffects.filter((e) => e.type === "stat");
-  const damageEffects = collapsedEffects.filter((e) => e.type === "damage");
+  const damageEffects = collapsedEffects.filter((e) => e.type === "damage" || e.type === "wound");
 
   const statusLabel: Record<string, string> = {
     reflect: "Reflect",
@@ -659,6 +676,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     drain: "Drain",
     poison: "Poison",
     lifesteal: "Lifesteal",
+    wound: "Wound",
     increaserange: "Increase Range",
     increasecooldown: "Increase Cooldown",
     decreasecooldown: "Decrease Cooldown",

@@ -257,6 +257,7 @@ export type Consequence = {
   rawDamage?: number;
   residual?: number;
   rawResidual?: number;
+  wound?: number;
   reflect?: number;
   recoil?: number;
   afterburn?: number;
@@ -722,6 +723,17 @@ export const ReflectTag = z.object({
   calculation: z.enum(["static", "percentage"]).default("percentage"),
 });
 
+export const WoundTag = z.object({
+  ...BaseAttributes,
+  ...IncludeStats,
+  ...PowerAttributes,
+  type: z.literal("wound").default("wound"),
+  description: msg("Applies wound damage over multiple turns based on damage dealt"),
+  calculation: z.enum(["percentage"]).default("percentage"),
+  rounds: z.coerce.number().int().min(1).max(20).default(1),
+});
+export type WoundTagType = z.infer<typeof WoundTag>;
+
 export const RemoveBloodline = z.object({
   ...BaseAttributes,
   type: z.literal("removebloodline").default("removebloodline"),
@@ -966,6 +978,7 @@ export const AllTags = z.union([
   UnknownTag.default({}),
   VisualTag.default({}),
   WeaknessTag.default({}),
+  WoundTag.default({}),
 ]);
 export type ZodAllTags = z.infer<typeof AllTags>;
 export const tagTypes = AllTags._def.options
@@ -1044,6 +1057,7 @@ export const isNegativeUserEffect = (tag: ZodAllTags) => {
       "seal",
       "summonprevent",
       "weakness",
+      "wound",
     ].includes(tag.type)
   ) {
     return true;

@@ -1457,6 +1457,66 @@ export const reflect = (
   return getInfo(target, effect, `will reflect ${qualifier} damage`);
 };
 
+/** Apply wound damage over multiple turns based on damage dealt */
+export const wound = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  consequences: Map<string, Consequence>,
+  target: BattleUserState,
+) => {
+  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
+  if (preventTag && preventTag.createdRound < effect.createdRound) {
+    if (!pass) return preventResponse(effect, target, "cannot be debuffed with wound damage");
+  }
+  
+  if (effect.isNew && effect.castThisRound) {
+    consequences.forEach((consequence, effectId) => {
+      const damageAmount = consequence.damage || consequence.rawDamage;
+      if (consequence.targetId === effect.targetId && damageAmount && damageAmount > 0) {
+        if (!effect.timeTracker) effect.timeTracker = {};
+        effect.timeTracker.originalDamage = damageAmount;
+        return;
+      }
+    });
+  }
+  
+  const shouldApply = !effect.isNew && !effect.castThisRound;
+  
+  // Calculate wound damage amount for display purposes
+  const originalDamage = effect.timeTracker?.originalDamage || 0;
+  const { power } = getPower(effect);
+  const woundDamage = originalDamage > 0 ? Math.floor(originalDamage * (power / 100)) : 0;
+  
+  if (shouldApply) {
+    // Only create wound damage when the target is the one taking an action
+    // This is the same logic used by other tags like residual damage
+    const isTargetsTurn = target.userId === effect.targetId;
+    
+    if (isTargetsTurn) {
+      if (originalDamage > 0) {
+        if (woundDamage > 0) {
+          // Find or create a consequence for this target
+          let targetConsequence = Array.from(consequences.values()).find(c => c.targetId === effect.targetId);
+          
+          if (!targetConsequence) {
+            targetConsequence = {
+              userId: effect.creatorId,
+              targetId: effect.targetId,
+              types: ["wound", ...(("statTypes" in effect && effect.statTypes) || ("generalTypes" in effect && effect.generalTypes) || ("elements" in effect && effect.elements) || [])],
+            };
+            consequences.set(`wound-${effect.id}`, targetConsequence);
+          }
+          
+          // Add to existing wound damage or create new
+          targetConsequence.wound = (targetConsequence.wound || 0) + woundDamage;
+        }
+      }
+    }
+  }
+  
+  return getInfo(target, effect, `will take ${woundDamage.toFixed(2)} wound damage for ${effect.rounds} rounds`);
+};
+
 /** Recoil damage back to attacker */
 export const recoil = (
   effect: UserEffect,

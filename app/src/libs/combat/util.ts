@@ -349,6 +349,7 @@ export const sortEffects = (
     "absorb",
     "recoil",
     "reflect",
+    "wound",
     "decreaseheal",
     "increaseheal",
     "copy",

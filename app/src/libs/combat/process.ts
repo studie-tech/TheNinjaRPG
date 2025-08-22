@@ -9,6 +9,7 @@ import { clone, move, heal, damageBarrier, damageUser, calcDmgModifier } from ".
 import {
   absorb,
   reflect,
+  wound,
   recoil,
   afterburn,
   lifesteal,
@@ -290,8 +291,8 @@ export const applyEffects = (
       ) => {
         // For negative changes, first reduce shields
         let remainingDamage = Math.abs(originalDamage);
-        // Bypass shield absorption for pierce effects
-        if (!effectTypes?.includes("pierce") && !effectTypes?.includes("reflect")) {
+        // Bypass shield absorption for pierce, reflect, and wound effects
+        if (!effectTypes?.includes("pierce") && !effectTypes?.includes("reflect") && !effectTypes?.includes("wound")) {
           targetShields.forEach((shield) => {
             if (remainingDamage > 0 && shield.power && shield.power > 0) {
               const absorbed = Math.min(remainingDamage, shield.power);
@@ -353,6 +354,9 @@ export const applyEffects = (
         if (c.residual && c.residual > 0) {
           c.residual = calcAdjustedDamage(target, c.residual, c.types);
         }
+        if (c.wound && c.wound > 0) {
+          c.wound = calcAdjustedDamage(target, c.wound, c.types);
+        }
         if (c.reflect && c.reflect > 0) {
           c.reflect = calcAdjustedDamage(user, c.reflect, c.types);
         }
@@ -402,6 +406,26 @@ export const applyEffects = (
             types: c.types,
           });
           // Track armor hits from residual damage as well
+          const t = newUsersState.find((u) => u.userId === target.userId);
+          t?.items.forEach((ui) => {
+            if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
+              const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
+              ui.durability = Math.max(0, currentDurability - 1);
+              if (ui.durability <= DURABILITY_USABILITY_THR) {
+                ui.equipped = "NONE" as const;
+              }
+            }
+          });
+        }
+        if (c.wound !== undefined && c.wound >= 0) {
+          target.curHealth -= c.wound;
+          target.curHealth = Math.max(0, target.curHealth);
+          actionEffects.push({
+            txt: `${target.username} takes ${c.wound.toFixed(2)} wound damage`,
+            color: "red",
+            types: c.types,
+          });
+          // Track armor hits from wound damage as well
           const t = newUsersState.find((u) => u.userId === target.userId);
           t?.items.forEach((ui) => {
             if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
@@ -705,6 +729,8 @@ export const applySingleEffect = (
             info = seal(effect, newUsersEffects, curTarget);
           } else if (effect.type === "stun") {
             info = stun(effect, newUsersEffects, curTarget);
+          } else if (effect.type === "wound") {
+            info = wound(effect, usersEffects, consequences, curTarget);
           }
         }
 
