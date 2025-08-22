@@ -303,7 +303,7 @@ export const skillTreeRouter = createTRPCRouter({
       // Determine if this reset should be free (GOLD supporters get first two per month free)
       const freeResets = getFreeResetAmount(user);
       const freeResetsUsed = monthlyResets.length;
-      const isFreeReset = freeResetsUsed < freeResets;
+      const isFreeReset = freeResetsUsed < freeResets || canChangeContent(user.role);
 
       // Guard: if not free, ensure user can afford
       if (!isFreeReset && user.reputationPoints < COST_SKILL_RESET) {
@@ -337,12 +337,16 @@ export const skillTreeRouter = createTRPCRouter({
           tableName: "skillReset",
           changes: [
             isFreeReset
-              ? "Skill tree reset (free GOLD monthly)"
+              ? canChangeContent(user.role)
+                ? "Skill tree reset (free for staff)"
+                : "Skill tree reset (free GOLD monthly)"
               : `Skill tree reset (-${COST_SKILL_RESET} reps)`,
           ],
           relatedId: null,
           relatedMsg: isFreeReset
-            ? "Free monthly reset for GOLD supporter"
+            ? canChangeContent(user.role)
+              ? "Free reset for staff member"
+              : "Free monthly reset for GOLD supporter"
             : `Charged ${COST_SKILL_RESET} reputation points`,
           relatedImage: user.avatarLight,
           relatedValue: isFreeReset ? 0 : COST_SKILL_RESET,
@@ -354,7 +358,13 @@ export const skillTreeRouter = createTRPCRouter({
 
       return {
         success: true,
-        message: `Skills points reset!${isFreeReset ? " (Free for GOLD supporter)" : ""}`,
+        message: `Skills points reset!${
+          isFreeReset 
+            ? canChangeContent(user.role)
+              ? " (Free for staff member)"
+              : " (Free for GOLD supporter)"
+            : ""
+        }`,
       };
     }),
 
@@ -374,7 +384,7 @@ export const skillTreeRouter = createTRPCRouter({
     const freeResets = getFreeResetAmount(user);
     const freeResetsUsed = monthlyResets.length;
     const freeResetsRemaining = freeResets - freeResetsUsed;
-    const isFree = freeResetsRemaining > 0;
+    const isFree = freeResetsRemaining > 0 || canChangeContent(user.role);
     // Return
     return { isFree, freeResetsUsed, freeResetsRemaining };
   }),

@@ -73,6 +73,7 @@ import { canSwapBloodline } from "@/utils/permissions";
 import { canSwapVillage, canUnequipAllUsers } from "@/utils/permissions";
 import { canClearSectors } from "@/utils/permissions";
 import { canAwardExperience } from "@/utils/permissions";
+import { canChangeContent } from "@/utils/permissions";
 import { useInfinitePagination } from "@/libs/pagination";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -212,8 +213,11 @@ export default function EditProfile() {
           title="Reset Skills"
           selectedTitle={activeElement}
           unselectedSubtitle="Reset all skill tree investments"
-          selectedSubtitle={`You can reset your skill tree and get all spent skill points back for ${COST_SKILL_RESET} reputation points. You
-          have ${userData.reputationPoints} reputation points.`}
+          selectedSubtitle={
+            canChangeContent(userData.role)
+              ? `You can reset your skill tree and get all spent skill points back for free as a staff member. You have ${userData.reputationPoints} reputation points.`
+              : `You can reset your skill tree and get all spent skill points back for ${COST_SKILL_RESET} reputation points. You have ${userData.reputationPoints} reputation points.`
+          }
           onClick={setActiveElement}
         >
           <ResetSkills />
@@ -1988,7 +1992,9 @@ const ResetSkills: React.FC = () => {
             {isPending ? (
               <Loader size={5} />
             ) : isFree ? (
-              `Reset Skills (${resetInfo?.freeResetsRemaining} free GOLD resets remaining)`
+              canChangeContent(userData.role)
+                ? "Reset Skills (Free for staff)"
+                : `Reset Skills (${resetInfo?.freeResetsRemaining} free GOLD resets remaining)`
             ) : canAffordPaid ? (
               `Reset Skills for ${COST_SKILL_RESET} Reps`
             ) : (
@@ -2004,7 +2010,9 @@ const ResetSkills: React.FC = () => {
         This will reset all your skill tree investments and refund all spent skill
         points
         {isFree
-          ? " (Free GOLD monthly reset)"
+          ? canChangeContent(userData.role)
+            ? " (Free for staff member)"
+            : " (Free GOLD monthly reset)"
           : ` for ${COST_SKILL_RESET} reputation points`}
         . This action cannot be undone. Are you sure you want to continue?
       </Confirm2>
