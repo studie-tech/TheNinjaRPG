@@ -77,7 +77,6 @@ export type LetterRank = (typeof LetterRanks)[number];
 export const SHARED_COOLDOWN_TAGS = [
   "stun",
   "summon",
-  "shield",
   "drain",
   "poison",
   "moveprevent",
