@@ -205,7 +205,7 @@ export const kageRouter = createTRPCRouter({
       await Promise.all([
         pusher.trigger(challenge.senderId, "event", {
           type: "userMessage",
-          message: "Your kage challenge has was rejected",
+          message: "Your kage challenge was rejected",
         }),
         ctx.drizzle
           .update(userData)

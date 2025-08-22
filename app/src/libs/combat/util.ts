@@ -542,6 +542,9 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
     if (val.poison) {
       current.poison = current.poison ? current.poison + val.poison : val.poison;
     }
+    if (val.wound) {
+      current.wound = current.wound ? current.wound + val.wound : val.wound;
+    }
   } else {
     acc.push(val);
   }

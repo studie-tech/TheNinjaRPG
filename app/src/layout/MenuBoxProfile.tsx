@@ -551,10 +551,14 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         // Clean, targeted handling for wound effects only
         let value: number;
         
-        if (val.type === "wound" && val.timeTracker?.originalDamage) {
+        if (
+          val.type === "wound" &&
+          val.timeTracker?.originalDamage !== undefined
+        ) {
           // Convert wound percentage to actual damage amount
           const woundPower = Math.abs(val.power + val.level * val.powerPerLevel);
-          value = -Math.floor(val.timeTracker.originalDamage * (woundPower / 100));
+          const od = val.timeTracker.originalDamage || 0;
+          value = -Math.floor(od * (woundPower / 100));
         } else {
           // Standard processing for all other effects
           value = Math.abs(val.power + val.level * val.powerPerLevel) * sign;

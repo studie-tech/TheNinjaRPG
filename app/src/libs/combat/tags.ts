@@ -1470,14 +1470,19 @@ export const wound = (
   }
   
   if (effect.isNew && effect.castThisRound) {
-    consequences.forEach((consequence, effectId) => {
-      const damageAmount = consequence.damage || consequence.rawDamage;
-      if (consequence.targetId === effect.targetId && damageAmount && damageAmount > 0) {
-        if (!effect.timeTracker) effect.timeTracker = {};
-        effect.timeTracker.originalDamage = damageAmount;
-        return;
+    let original = 0;
+    consequences.forEach((c) => {
+      if (
+        c.userId === effect.creatorId &&
+        c.targetId === effect.targetId &&
+        typeof c.damage === "number" &&
+        c.damage > 0
+      ) {
+        original += c.damage;
       }
     });
+    if (!effect.timeTracker) effect.timeTracker = {};
+    effect.timeTracker.originalDamage = original;
   }
   
   const shouldApply = !effect.isNew && !effect.castThisRound;
@@ -1502,7 +1507,12 @@ export const wound = (
             targetConsequence = {
               userId: effect.creatorId,
               targetId: effect.targetId,
-              types: ["wound", ...(("statTypes" in effect && effect.statTypes) || ("generalTypes" in effect && effect.generalTypes) || ("elements" in effect && effect.elements) || [])],
+              types: [
+                "wound",
+                ...("statTypes" in effect && effect.statTypes ? effect.statTypes : []),
+                ...("generalTypes" in effect && effect.generalTypes ? effect.generalTypes : []),
+                ...("elements" in effect && effect.elements ? effect.elements : []),
+              ],
             };
             consequences.set(`wound-${effect.id}`, targetConsequence);
           }
@@ -2145,7 +2155,7 @@ export const stun = (
   return info;
 };
 
-/** Prevent target from being stunned */
+/** Prevent summoning companions */
 export const stunPrevent = (
   effect: UserEffect,
   target: BattleUserState,

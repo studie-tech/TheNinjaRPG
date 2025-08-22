@@ -1252,6 +1252,16 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
   effects.forEach((e) => {
     if (e.type === "barrier" && e.staticAssetPath === "") {
       addIssue(ctx, "BarrierTag needs a staticAssetPath");
+    } else if (e.type === "wound") {
+      const hasDamageOrPierce = effects.some(
+        (x) => x.type === "damage" || x.type === "pierce",
+      );
+      if (!hasDamageOrPierce) {
+        addIssue(
+          ctx,
+          "WoundTag must be used together with a damage or pierce effect on the same action",
+        );
+      }
     } else if (e.type === "rollbloodline" && e.powerPerLevel > 0) {
       addIssue(ctx, "powerPerLevel must be 0 for rollbloodline effect");
     } else if (e.type === "removebloodline" && e.powerPerLevel > 0) {

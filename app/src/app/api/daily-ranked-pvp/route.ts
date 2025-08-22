@@ -1,6 +1,6 @@
 import { and, sql, eq, gt } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
-import { rankedSeason, userData, battleHistory } from "@/drizzle/schema";
+import { rankedSeason, userData } from "@/drizzle/schema";
 import { updateGameSetting } from "@/libs/gamesettings";
 import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
 import { cookies } from "next/headers";
