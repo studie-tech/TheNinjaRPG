@@ -49,7 +49,7 @@ import DeleteUserButton from "@/layout/DeleteUserButton";
 import { ActionSelector } from "@/layout/CombatActions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrainingSpeeds } from "@/drizzle/constants";
+import { TrainingSpeeds, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import GlowingBorder from "./GlowingBorder";
 import { TransactionHistory } from "src/app/points/page";
 import { EditContent } from "@/layout/EditContent";
@@ -66,7 +66,7 @@ import {
   Award,
 } from "lucide-react";
 import { updateUserSchema } from "@/validators/user";
-import { canSeeSecretData, canSeeIps, canSeeRankedHistory } from "@/utils/permissions";
+import { canSeeSecretData, canSeeIps } from "@/utils/permissions";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
@@ -827,9 +827,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 {enableBloodlineHistory && (
                   <TabsTrigger value="bloodlineHistory">Bloodlines</TabsTrigger>
                 )}
-                {userData && canSeeRankedHistory(userData.role) && (
-                  <TabsTrigger value="ranked">Ranked</TabsTrigger>
-                )}
+                <TabsTrigger value="ranked">Ranked</TabsTrigger>
               </TabsList>
             </div>
           )}
@@ -982,7 +980,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             </TabsContent>
           )}
           {/* USER RANKED MATCHES */}
-          {userData && canSeeRankedHistory(userData.role) && (
+          {userData && (
             <TabsContent value="ranked">
               <RankedMatchesTab
                 userId={profile.userId}
@@ -1968,14 +1966,21 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
 
 const RankedMatchesTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
   const { data: currentUser } = useUserData();
-  const canSeeRanked = currentUser && canSeeRankedHistory(currentUser.role);
 
-  const { data: rankedMatches, isPending } = api.combat.getRankedMatchHistory.useQuery(
-    { userId },
-    { enabled: isActive && !!canSeeRanked },
+  const { data: history, isPending } = api.combat.getBattleHistory.useQuery(
+    { userId, combatTypes: ["RANKED_PVP"] },
   );
-
-  if (!canSeeRanked) return null;
+  
+  const rankedMatches = history?.map((e) => ({
+    attackerUsername: e.attacker?.username || "Deleted User",
+    attackerUserId: e.attacker?.userId || "Deleted User",
+    attackerAvatar: e.attacker?.avatar || IMG_AVATAR_DEFAULT,
+    defenderUsername: e.defender?.username || "Deleted User",
+    defenderUserId: e.defender?.userId || "Deleted User",
+    defenderAvatar: e.defender?.avatar || IMG_AVATAR_DEFAULT,
+    battleId: e.battleId,
+    createdAt: e.createdAt,
+  }));
 
   return (
     <ContentBox

@@ -1140,7 +1140,7 @@ export const calcBattleResult = (
           );
         });
 
-              // Experience
+      // Experience
       result.experience = Math.floor(assignedExp * 100) / 100;
     }
 

@@ -58,7 +58,7 @@ import { manuallyAssignUserStats, scaleUserStats } from "@/libs/profile";
 import { capUserStats } from "@/libs/profile";
 import { mockAchievementHistoryEntries } from "@/libs/quest";
 import { canAccessStructure } from "@/utils/village";
-import { canSeeRankedHistory } from "@/utils/permissions";
+
 import { fetchSectorVillage } from "@/routers/village";
 import { fetchAiProfileById } from "@/routers/ai";
 import { getBattleGrid } from "@/libs/combat/util";
@@ -355,51 +355,7 @@ export const combatRouter = createTRPCRouter({
       });
       return results;
     }),
-  getRankedMatchHistory: protectedProcedure
-    .input(
-      z.object({
-        userId: z.string(),
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      // Authorization parity with UI
-      const me = await ctx.drizzle.query.userData.findFirst({
-        where: eq(userData.userId, ctx.userId),
-        columns: { role: true },
-      });
-      if (!me || !canSeeRankedHistory(me.role)) {
-        throw serverError("FORBIDDEN", "Not allowed to view ranked history");
-      }
 
-      const results = await ctx.drizzle.query.battleHistory.findMany({
-        where: and(
-          or(
-            eq(battleHistory.attackedId, input.userId),
-            eq(battleHistory.defenderId, input.userId),
-          ),
-          eq(battleHistory.battleType, "RANKED_PVP"),
-        ),
-        with: {
-          attacker: { columns: { username: true, userId: true, avatar: true } },
-          defender: { columns: { username: true, userId: true, avatar: true } },
-        },
-        orderBy: [desc(battleHistory.createdAt)],
-      });
-
-      // Transform the data to match the expected format for the table
-      const transformedResults = results.map((battle) => ({
-        attackerUsername: battle.attacker?.username || "Deleted User",
-        attackerUserId: battle.attacker?.userId || "Deleted User",
-        attackerAvatar: battle.attacker?.avatar || IMG_AVATAR_DEFAULT,
-        defenderUsername: battle.defender?.username || "Deleted User",
-        defenderUserId: battle.defender?.userId || "Deleted User",
-        defenderAvatar: battle.defender?.avatar || IMG_AVATAR_DEFAULT,
-        battleId: battle.battleId,
-        createdAt: battle.createdAt,
-      }));
-
-      return transformedResults;
-    }),
   performAction: protectedProcedure
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
