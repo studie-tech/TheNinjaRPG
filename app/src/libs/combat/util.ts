@@ -1140,21 +1140,21 @@ export const calcBattleResult = (
           );
         });
 
-      // Experience
-      result.experience = Math.floor(assignedExp * 100) / 100;
-    }
+        // Experience
+        result.experience = Math.floor(assignedExp * 100) / 100;
+      }
 
-    // Ensure Ranked PvP winner rewards are applied despite noRewardBattles gating
-    if (battleType === "RANKED_PVP" && didWin) {
-      // Money (respect global reward scaling)
-      result.money = moneyDelta;
-      result.earnedExperience = deltaEarnedExperience;
-      result.villageTokens = deltaTokens;
-      result.villagePrestige = deltaPrestige;
-    }
+      // Ensure Ranked PvP winner rewards are applied despite noRewardBattles gating
+      if (battleType === "RANKED_PVP" && didWin) {
+        // Money (respect global reward scaling)
+        result.money = moneyDelta * battle.rewardScaling;
+        result.earnedExperience = deltaEarnedExperience * battle.rewardScaling;
+        result.villageTokens = deltaTokens * battle.rewardScaling;
+        result.villagePrestige = deltaPrestige * battle.rewardScaling;
+      }
 
-    // Return results
-    return result;
+      // Return results
+      return result;
     }
   }
   return null;
