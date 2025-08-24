@@ -291,9 +291,23 @@ export const profileRouter = createTRPCRouter({
     const { trackers } = getNewTrackers(user, [
       { task: "user_level", value: newLevel },
     ]);
-    // Calculate skill points reward for chunin+ ranks - only if under max
+    // Calculate skill points reward for chunin+ ranks - only if under leveling cap (20)
     const isChunin = UserRolesWithSkillTreeAccess.includes(user.rank);
-    const skillPointsGain = isChunin && user.skillPoints < MAX_SKILL_POINTS ? 1 : 0;
+    // Calculate how many skillpoints they should have from leveling (max 20)
+    // Chunin+ ranks get 1 skillpoint per level starting from level 20
+    const minLevelForSkillPoints = 20;
+    const expectedSkillPointsFromLeveling =
+      isChunin && user.level >= minLevelForSkillPoints
+        ? Math.min(user.level - minLevelForSkillPoints + 1, 20)
+        : 0;
+    // Only give skillpoints if they haven't received all their leveling skillpoints yet
+    const skillPointsGain = isChunin && expectedSkillPointsFromLeveling < 20 ? 1 : 0;
+
+    // Calculate new skillpoints with proper capping
+    const newSkillPoints =
+      skillPointsGain > 0
+        ? Math.min(user.skillPoints + skillPointsGain, MAX_SKILL_POINTS)
+        : user.skillPoints;
 
     const result = await ctx.drizzle
       .update(userData)
@@ -304,7 +318,9 @@ export const profileRouter = createTRPCRouter({
         maxChakra: calcCP(newLevel),
         questData: trackers,
         ...(skillPointsGain > 0
-          ? { skillPoints: sql`${userData.skillPoints} + ${skillPointsGain}` }
+          ? {
+              skillPoints: sql`LEAST(${userData.skillPoints} + 1, ${MAX_SKILL_POINTS})`,
+            }
           : {}),
         ...(newLevel > SENSEI_MAX_STUDENT_LEVEL && user.senseiId
           ? { senseiId: null }

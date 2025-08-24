@@ -145,6 +145,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
             reward_tokens: data.reward_tokens,
             reward_prestige: data.reward_prestige,
             reward_reputation: data.reward_reputation,
+            reward_skillpoints: data.reward_skillpoints,
             reward_jutsus: data.reward_jutsus,
             reward_badges: data.reward_badges,
             reward_items: data.reward_items,
@@ -251,6 +252,17 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     });
   }
 
+  // Add bloodlines if they exist
+  if (bloodlines) {
+    formData.push({
+      id: "requiredBloodlineId",
+      type: "db_values",
+      values: bloodlines,
+      resetButton: true,
+      label: "Required Bloodline",
+    });
+  }
+
   formData.push({ id: "description", type: "richinput", doubleWidth: true });
   formData.push({ id: "successDescription", type: "richinput", doubleWidth: true });
 
@@ -288,6 +300,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   formData.push({ id: "reward_tokens", type: "number" });
   formData.push({ id: "reward_prestige", type: "number" });
   formData.push({ id: "reward_reputation", type: "number" });
+  formData.push({ id: "reward_skillpoints", type: "number" });
   formData.push({ id: "reward_medical_experience", type: "number" });
   formData.push({ id: "reward_hunting_experience", type: "number" });
   formData.push({ id: "reward_crafting_experience", type: "number" });

@@ -440,6 +440,44 @@ export const DecreasePoolCostTag = z.object({
   calculation: z.enum(["static", "percentage"]).default("percentage"),
 });
 
+export const TimeCompressionTag = z.object({
+  ...BaseAttributes,
+  ...IncludeStats,
+  ...PowerAttributes,
+  type: z.literal("timecompression").default("timecompression"),
+  description: msg("Increases AP cost of actions by 10"),
+  rounds: z.coerce.number().int().min(1).max(20).default(1),
+  calculation: z.enum(["static", "percentage"]).default("percentage"),
+});
+
+export type TimeCompressionTagType = z.infer<typeof TimeCompressionTag>;
+
+export const TimeDilationTag = z.object({
+  ...BaseAttributes,
+  ...IncludeStats,
+  ...PowerAttributes,
+  type: z.literal("timedilation").default("timedilation"),
+  description: msg("Decreases AP cost of actions by 10"),
+  rounds: z.coerce.number().int().min(1).max(20).default(1),
+  calculation: z.enum(["static", "percentage"]).default("percentage"),
+});
+
+export type TimeDilationTagType = z.infer<typeof TimeDilationTag>;
+
+export const RedirectionTag = z.object({
+  ...BaseAttributes,
+  ...IncludeStats,
+  ...PowerAttributes,
+  type: z.literal("redirection").default("redirection"),
+  description: msg(
+    "Redirects the target towards or away from the user by power number of spaces",
+  ),
+  rounds: z.coerce.number().int().min(0).max(0).default(0),
+  calculation: z.enum(["static"]).default("static"),
+  direction: z.enum(["push", "pull"]).default("pull"),
+});
+export type RedirectionTagType = z.infer<typeof RedirectionTag>;
+
 export const IncreaseRangeTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
@@ -962,6 +1000,7 @@ export const AllTags = z.union([
   PierceTag.default({}),
   PoisonTag.default({}),
   RecoilTag.default({}),
+  RedirectionTag.default({}),
   ReflectTag.default({}),
   RemoveBloodline.default({}),
   RobPreventTag.default({}),
@@ -975,6 +1014,8 @@ export const AllTags = z.union([
   StunTag.default({}),
   SummonPreventTag.default({}),
   SummonTag.default({}),
+  TimeCompressionTag.default({}),
+  TimeDilationTag.default({}),
   UnknownTag.default({}),
   VisualTag.default({}),
   WeaknessTag.default({}),
@@ -1015,6 +1056,7 @@ export const isPositiveUserEffect = (tag: ZodAllTags) => {
       "stealth",
       "stunprevent",
       "summon",
+      "timedilation",
       "injectjutsus",
     ].includes(tag.type)
   ) {
@@ -1053,9 +1095,11 @@ export const isNegativeUserEffect = (tag: ZodAllTags) => {
       "pierce",
       "poison",
       "recoil",
+      "redirection",
       "rob",
       "seal",
       "summonprevent",
+      "timecompression",
       "weakness",
       "wound",
     ].includes(tag.type)

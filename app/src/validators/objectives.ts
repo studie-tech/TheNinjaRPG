@@ -89,6 +89,7 @@ export const rewardFields = {
   reward_tokens: z.coerce.number().default(0),
   reward_prestige: z.coerce.number().default(0),
   reward_reputation: z.coerce.number().default(0),
+  reward_skillpoints: z.coerce.number().default(0),
   reward_rank: z.enum(UserRanks).default("NONE"),
   reward_village_membership: z.enum(STARTER_VILLAGES).default("NONE"),
   reward_items: idsWithNumberField,
@@ -114,6 +115,7 @@ export const hasReward = (reward: ObjectiveRewardType) => {
     parsedReward.reward_exp > 0 ||
     parsedReward.reward_prestige > 0 ||
     parsedReward.reward_reputation > 0 ||
+    parsedReward.reward_skillpoints > 0 ||
     parsedReward.reward_medical_experience > 0 ||
     parsedReward.reward_hunting_experience > 0 ||
     parsedReward.reward_crafting_experience > 0 ||
@@ -347,6 +349,7 @@ export const QuestValidatorRawSchema = z.object({
   maxAttempts: z.coerce.number().min(0).max(100).default(1),
   maxCompletes: z.coerce.number().min(0).max(100).default(1),
   requiredVillage: z.string().min(0).max(30).optional().nullish(),
+  requiredBloodlineId: z.string().min(0).max(191).optional().nullish(),
   prerequisiteQuestId: z.string().min(0).max(191).optional().nullish(),
   tierLevel: z.coerce.number().min(0).max(100).nullable(),
   questType: z.enum(QuestTypes),

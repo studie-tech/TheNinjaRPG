@@ -1648,7 +1648,7 @@ export const BOUNTY_MAX_HUNTERS = 3;
 export const BOUNTY_MIN_AMOUNT = 1000000;
 
 // Skill system constants
-export const MAX_SKILL_POINTS = 20;
+export const MAX_SKILL_POINTS = 30; // Total max skillpoints (20 from leveling + 10 from quests)
 
 // Support System Settings
 export const SupportTicketCategories = [

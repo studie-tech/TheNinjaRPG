@@ -62,6 +62,16 @@ const makeSchema = () =>
         filterOptions: (opts) => opts.sort((a, b) => a.label.localeCompare(b.label)),
       },
       {
+        id: "bloodline",
+        label: "Bloodline",
+        type: "single-select",
+        defaultValue: "None",
+        includeNone: true,
+        emptyValues: ["None"],
+        dataSource: "bloodlines",
+        filterOptions: (opts) => opts.sort((a, b) => a.label.localeCompare(b.label)),
+      },
+      {
         id: "hidden",
         label: "Visibility",
         type: "tri-state",
@@ -110,6 +120,7 @@ export const useFiltering = () => {
     setRank: cf.setters.rank,
     setUserLevel: cf.setters.userLevel,
     setVillage: cf.setters.village,
+    setBloodline: cf.setters.bloodline,
     setHidden: cf.setters.hidden,
   };
 };

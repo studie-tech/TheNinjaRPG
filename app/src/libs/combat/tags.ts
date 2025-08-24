@@ -7,10 +7,12 @@ import {
   IncreaseCooldownTag,
   DecreaseCooldownTag,
 } from "./types";
+import { isEffectActive } from "@/libs/combat/util";
 import { HealTag } from "@/libs/combat/types";
 import type { BattleUserState, Consequence } from "./types";
 import type { GroundEffect, UserEffect, ActionEffect } from "./types";
 import type { StatNames, GenNames, DmgConfig } from "./constants";
+import { COMBAT_WIDTH, COMBAT_HEIGHT } from "./constants";
 import type { WeaknessTagType } from "@/libs/combat/types";
 import type { ShieldTagType } from "@/libs/combat/types";
 import type { GeneralType } from "@/drizzle/constants";
@@ -248,7 +250,13 @@ export const mirror = (
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
       const excludedFromTypes = ["bloodline", "armor", "item", "village", "skill"];
-      const excludedEffectTypes = ["damage", "pierce", "clear", "buffprevent", "cleanseprevent"];
+      const excludedEffectTypes = [
+        "damage",
+        "pierce",
+        "clear",
+        "buffprevent",
+        "cleanseprevent",
+      ];
 
       const negativeEffects = usersEffects.filter(
         (e) =>
@@ -1466,9 +1474,10 @@ export const wound = (
 ) => {
   const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
   if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be debuffed with wound damage");
+    if (!pass)
+      return preventResponse(effect, target, "cannot be debuffed with wound damage");
   }
-  
+
   if (effect.isNew && effect.castThisRound) {
     let original = 0;
     consequences.forEach((c) => {
@@ -1484,25 +1493,28 @@ export const wound = (
     if (!effect.timeTracker) effect.timeTracker = {};
     effect.timeTracker.originalDamage = original;
   }
-  
+
   const shouldApply = !effect.isNew && !effect.castThisRound;
-  
+
   // Calculate wound damage amount for display purposes
   const originalDamage = effect.timeTracker?.originalDamage || 0;
   const { power } = getPower(effect);
-  const woundDamage = originalDamage > 0 ? Math.floor(originalDamage * (power / 100)) : 0;
-  
+  const woundDamage =
+    originalDamage > 0 ? Math.floor(originalDamage * (power / 100)) : 0;
+
   if (shouldApply) {
     // Only create wound damage when the target is the one taking an action
     // This is the same logic used by other tags like residual damage
     const isTargetsTurn = target.userId === effect.targetId;
-    
+
     if (isTargetsTurn) {
       if (originalDamage > 0) {
         if (woundDamage > 0) {
           // Find or create a consequence for this target
-          let targetConsequence = Array.from(consequences.values()).find(c => c.targetId === effect.targetId);
-          
+          let targetConsequence = Array.from(consequences.values()).find(
+            (c) => c.targetId === effect.targetId,
+          );
+
           if (!targetConsequence) {
             targetConsequence = {
               userId: effect.creatorId,
@@ -1510,21 +1522,27 @@ export const wound = (
               types: [
                 "wound",
                 ...("statTypes" in effect && effect.statTypes ? effect.statTypes : []),
-                ...("generalTypes" in effect && effect.generalTypes ? effect.generalTypes : []),
+                ...("generalTypes" in effect && effect.generalTypes
+                  ? effect.generalTypes
+                  : []),
                 ...("elements" in effect && effect.elements ? effect.elements : []),
               ],
             };
             consequences.set(`wound-${effect.id}`, targetConsequence);
           }
-          
+
           // Add to existing wound damage or create new
           targetConsequence.wound = (targetConsequence.wound || 0) + woundDamage;
         }
       }
     }
   }
-  
-  return getInfo(target, effect, `will take ${woundDamage.toFixed(2)} wound damage for ${effect.rounds} rounds`);
+
+  return getInfo(
+    target,
+    effect,
+    `will take ${woundDamage.toFixed(2)} wound damage for ${effect.rounds} rounds`,
+  );
 };
 
 /** Recoil damage back to attacker */
@@ -2155,7 +2173,266 @@ export const stun = (
   return info;
 };
 
-/** Prevent summoning companions */
+/**
+ * Time compression increases the AP cost of actions by 10 AP
+ */
+export const timeCompression = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+): ActionEffect | undefined => {
+  // Check if time compression is prevented
+  const { pass } = preventCheck(usersEffects, "debuffprevent", target, effect);
+  if (!pass)
+    return preventResponse(effect, target, "cannot be affected by time compression");
+
+  // Check if there's already an active time compression effect on the target
+  const existingTimeCompression = usersEffects.find(
+    (e) =>
+      e.type === "timecompression" &&
+      e.targetId === target.userId &&
+      e.id !== effect.id &&
+      isEffectActive(e),
+  );
+  if (existingTimeCompression) {
+    effect.rounds = 0;
+    return {
+      txt: `${target.username} already has time compression active`,
+      color: "blue",
+    };
+  }
+
+  // Calculate chance of success
+  const { power } = getPower(effect);
+  const primaryCheck = Math.random() < power / 100;
+  if (effect.isNew && effect.rounds && effect.castThisRound) {
+    if (primaryCheck) {
+      return {
+        txt: `${target.username} is affected by time compression, actions will cost 10 more AP`,
+        color: "red",
+      };
+    } else {
+      effect.rounds = 0;
+      return {
+        txt: `${target.username} resists the time compression effect`,
+        color: "blue",
+      };
+    }
+  }
+};
+
+/**
+ * Time dilation decreases the AP cost of actions by 10 AP
+ */
+export const timeDilation = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+): ActionEffect | undefined => {
+  // Check if time dilation is prevented
+  const { pass } = preventCheck(usersEffects, "buffprevent", target, effect);
+  if (!pass)
+    return preventResponse(effect, target, "cannot be affected by time dilation");
+
+  // Check if there's already an active time dilation effect on the target
+  const existingTimeDilation = usersEffects.find(
+    (e) =>
+      e.type === "timedilation" &&
+      e.targetId === target.userId &&
+      e.id !== effect.id &&
+      isEffectActive(e),
+  );
+  if (existingTimeDilation) {
+    effect.rounds = 0;
+    return {
+      txt: `${target.username} already has time dilation active`,
+      color: "blue",
+    };
+  }
+
+  // Calculate chance of success
+  const { power } = getPower(effect);
+  const primaryCheck = Math.random() < power / 100;
+  if (effect.isNew && effect.rounds && effect.castThisRound) {
+    if (primaryCheck) {
+      return {
+        txt: `${target.username} is affected by time dilation, actions will cost 10 less AP`,
+        color: "blue",
+      };
+    } else {
+      effect.rounds = 0;
+      return {
+        txt: `${target.username} resists the time dilation effect`,
+        color: "blue",
+      };
+    }
+  }
+};
+
+/**
+ * Pull target towards the user by power number of spaces
+ */
+export const redirection = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+  usersState: BattleUserState[],
+  groundEffects: GroundEffect[],
+): ActionEffect | undefined => {
+  // Check if redirection is prevented
+  const { pass } = preventCheck(usersEffects, "moveprevent", target, effect);
+  if (!pass) return preventResponse(effect, target, "cannot be redirected");
+
+  // Get power (number of spaces to move) and direction
+  const { power } = getPower(effect);
+  const direction = effect.direction || "pull";
+
+  // Only apply redirection if it's 0 rounds (instant)
+  if (!(effect.rounds === 0 && effect.isNew && effect.castThisRound)) {
+    return;
+  }
+
+  // Find the user who cast the effect
+  const caster = usersState.find((u) => u.userId === effect.creatorId);
+  if (!caster) {
+    return {
+      txt: `${target.username} cannot be pulled - caster not found`,
+      color: "red",
+    };
+  }
+
+  // Find the actual target user in the usersState array to update their position
+  const actualTarget = usersState.find((u) => u.userId === target.userId);
+  if (!actualTarget) {
+    return {
+      txt: `${target.username} cannot be redirected - target not found in battle state`,
+      color: "red",
+    };
+  }
+
+  // Check if target and caster are at the same position
+  if (
+    actualTarget.longitude === caster.longitude &&
+    actualTarget.latitude === caster.latitude
+  ) {
+    return {
+      txt: `${target.username} is already at the caster's location`,
+      color: "blue",
+    };
+  }
+
+  // Calculate how many spaces to move (based on power)
+  let moveDistance: number;
+
+  if (direction === "pull") {
+    // For pull, ensure we don't pull the target on top of the caster
+    // Calculate hex grid distance between target and caster
+    const hexDistance = Math.max(
+      Math.abs(actualTarget.longitude - caster.longitude),
+      Math.abs(actualTarget.latitude - caster.latitude),
+      Math.abs(
+        actualTarget.longitude +
+          actualTarget.latitude -
+          caster.longitude -
+          caster.latitude,
+      ),
+    );
+    moveDistance = Math.min(power, Math.max(0, hexDistance - 1));
+  } else {
+    // For push, use the full power
+    moveDistance = power;
+  }
+
+  if (moveDistance === 0) {
+    return {
+      txt: `${target.username} cannot be moved any further`,
+      color: "blue",
+    };
+  }
+
+  // Calculate new position using hex grid movement
+  let newLongitude: number, newLatitude: number;
+
+  if (direction === "push") {
+    // Push away from caster
+    // Calculate the direction vector from caster to target
+    const deltaX = actualTarget.longitude - caster.longitude;
+    const deltaY = actualTarget.latitude - caster.latitude;
+    const deltaZ = -deltaX - deltaY; // Hex grid constraint: q + r + s = 0
+
+    // Normalize the direction vector
+    const maxDelta = Math.max(Math.abs(deltaX), Math.abs(deltaY), Math.abs(deltaZ));
+    if (maxDelta === 0) {
+      return {
+        txt: `${target.username} cannot be pushed - no valid direction`,
+        color: "red",
+      };
+    }
+
+    // Move in the direction of the vector
+    newLongitude =
+      actualTarget.longitude + Math.round((deltaX / maxDelta) * moveDistance);
+    newLatitude =
+      actualTarget.latitude + Math.round((deltaY / maxDelta) * moveDistance);
+  } else {
+    // Pull towards caster
+    // Calculate the direction vector from target to caster
+    const deltaX = caster.longitude - actualTarget.longitude;
+    const deltaY = caster.latitude - actualTarget.latitude;
+    const deltaZ = -deltaX - deltaY; // Hex grid constraint: q + r + s = 0
+
+    // Normalize the direction vector
+    const maxDelta = Math.max(Math.abs(deltaX), Math.abs(deltaY), Math.abs(deltaZ));
+    if (maxDelta === 0) {
+      return {
+        txt: `${target.username} cannot be pulled - no valid direction`,
+        color: "red",
+      };
+    }
+
+    // Move in the direction of the vector
+    newLongitude =
+      actualTarget.longitude + Math.round((deltaX / maxDelta) * moveDistance);
+    newLatitude =
+      actualTarget.latitude + Math.round((deltaY / maxDelta) * moveDistance);
+  }
+
+  // Ensure we don't move the target outside the arena bounds
+  const maxLongitude = COMBAT_WIDTH - 1;
+  const maxLatitude = COMBAT_HEIGHT - 1;
+
+  const clampedLongitude = Math.max(0, Math.min(maxLongitude, newLongitude));
+  const clampedLatitude = Math.max(0, Math.min(maxLatitude, newLatitude));
+
+  // Update the actual target's position in the battle state
+  actualTarget.longitude = clampedLongitude;
+  actualTarget.latitude = clampedLatitude;
+
+  // Handle ground effect timeTracker updates (mirroring the move function logic)
+  groundEffects.forEach((g) => {
+    if (g.timeTracker && actualTarget.userId in g.timeTracker) {
+      delete g.timeTracker[actualTarget.userId];
+    }
+  });
+  groundEffects.forEach((g) => {
+    if (
+      g.timeTracker &&
+      g.longitude === clampedLongitude &&
+      g.latitude === clampedLatitude
+    ) {
+      g.timeTracker[actualTarget.userId] = effect.createdRound;
+    }
+  });
+
+  const actionText = direction === "push" ? "pushed away from" : "pulled towards";
+
+  return {
+    txt: `${target.username} is ${actionText} ${caster.username} by ${moveDistance} spaces`,
+    color: "blue",
+  };
+};
+
+/** Prevent target from being stunned */
 export const stunPrevent = (
   effect: UserEffect,
   target: BattleUserState,
@@ -2188,7 +2465,7 @@ export const summon = (
   if (!("aiId" in effect)) {
     throw new Error("Summon effect must have aiId");
   }
-  
+
   if (effect.isNew && effect.castThisRound) {
     effect.isNew = false;
     if (user && "aiHp" in effect) {

@@ -29,7 +29,17 @@ import { increasepoolcost, decreasepoolcost } from "./tags";
 import { flee, fleePrevent } from "./tags";
 import { stun, stunPrevent, onehitkill, onehitkillPrevent, movePrevent } from "./tags";
 import { seal, sealPrevent, sealCheck, rob, robPrevent, stealth } from "./tags";
-import { clear, cleanse, summon, summonPrevent, buffPrevent, weakness } from "./tags";
+import {
+  clear,
+  cleanse,
+  summon,
+  summonPrevent,
+  buffPrevent,
+  weakness,
+  timeCompression,
+  timeDilation,
+  redirection,
+} from "./tags";
 import { cleansePrevent, clearPrevent, healPrevent, debuffPrevent } from "./tags";
 import { updateStatUsage, injectjutsus, elementalseal } from "./tags";
 import {
@@ -292,7 +302,11 @@ export const applyEffects = (
         // For negative changes, first reduce shields
         let remainingDamage = Math.abs(originalDamage);
         // Bypass shield absorption for pierce, reflect, and wound effects
-        if (!effectTypes?.includes("pierce") && !effectTypes?.includes("reflect") && !effectTypes?.includes("wound")) {
+        if (
+          !effectTypes?.includes("pierce") &&
+          !effectTypes?.includes("reflect") &&
+          !effectTypes?.includes("wound")
+        ) {
           targetShields.forEach((shield) => {
             if (remainingDamage > 0 && shield.power && shield.power > 0) {
               const absorbed = Math.min(remainingDamage, shield.power);
@@ -803,6 +817,18 @@ export const applySingleEffect = (
           info = copy(effect, usersEffects, curUser, curTarget);
         } else if (effect.type === "mirror") {
           info = mirror(effect, usersEffects, curUser, curTarget);
+        } else if (effect.type === "timecompression") {
+          info = timeCompression(effect, usersEffects, curTarget);
+        } else if (effect.type === "timedilation") {
+          info = timeDilation(effect, usersEffects, curTarget);
+        } else if (effect.type === "redirection") {
+          info = redirection(
+            effect,
+            usersEffects,
+            curTarget,
+            newUsersState,
+            newGroundEffects,
+          );
         } else if (effect.type === "finalstand") {
           info = finalStand(effect, curTarget);
         }

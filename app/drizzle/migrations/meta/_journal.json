@@ -1961,6 +1961,13 @@
       "when": 1755504696957,
       "tag": "0279_nasty_lady_mastermind",
       "breakpoints": false
+    },
+    {
+      "idx": 280,
+      "version": "5",
+      "when": 1756029811340,
+      "tag": "0280_tired_chimera",
+      "breakpoints": false
     }
   ]
 }

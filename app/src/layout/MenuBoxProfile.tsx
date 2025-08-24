@@ -547,14 +547,11 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           ? val.type.replace("increase", "").replace("decrease", "")
           : val.type;
         const sign = val.type.includes("decrease") ? -1 : 1;
-        
+
         // Clean, targeted handling for wound effects only
         let value: number;
-        
-        if (
-          val.type === "wound" &&
-          val.timeTracker?.originalDamage !== undefined
-        ) {
+
+        if (val.type === "wound" && val.timeTracker?.originalDamage !== undefined) {
           // Convert wound percentage to actual damage amount
           const woundPower = Math.abs(val.power + val.level * val.powerPerLevel);
           const od = val.timeTracker.originalDamage || 0;
@@ -664,13 +661,18 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     "finalstand",
     "clear",
     "cleanse",
+    "timecompression",
+    "timedilation",
+    "redirection",
   ]);
 
   const statusEffects = collapsedEffects.filter((e) => STATUS_TYPES.has(e.type));
   const damageGivenEffects = collapsedEffects.filter((e) => e.type === "damagegiven");
   const damageTakenEffects = collapsedEffects.filter((e) => e.type === "damagetaken");
   const statEffects = collapsedEffects.filter((e) => e.type === "stat");
-  const damageEffects = collapsedEffects.filter((e) => e.type === "damage" || e.type === "wound");
+  const damageEffects = collapsedEffects.filter(
+    (e) => e.type === "damage" || e.type === "wound",
+  );
 
   const statusLabel: Record<string, string> = {
     reflect: "Reflect",
@@ -704,6 +706,9 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     clear: "Clear Positives",
     cleanse: "Cleanse Debuffs",
     injectjutsus: "Added Action",
+    timecompression: "Time Compression",
+    timedilation: "Time Dilation",
+    redirection: "Redirection",
   };
 
   const statusVisuals = statusEffects.map((e) => (

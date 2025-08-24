@@ -177,6 +177,11 @@ export const showRewardToast = (
               <b>Reputation points:</b> {rewards.reward_reputation}
             </span>
           )}
+          {rewards.reward_skillpoints > 0 && (
+            <span>
+              <b>Skill points:</b> {rewards.reward_skillpoints}
+            </span>
+          )}
           {rewards.reward_medical_experience > 0 && (
             <span>
               <b>Medical experience:</b> {rewards.reward_medical_experience}

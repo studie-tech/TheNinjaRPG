@@ -443,6 +443,9 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
   if (questReward.reward_reputation) {
     rewards.push(`${questReward.reward_reputation} reputation points`);
   }
+  if (questReward.reward_skillpoints) {
+    rewards.push(`${questReward.reward_skillpoints} skill points`);
+  }
   if (questReward.reward_medical_experience) {
     rewards.push(`${questReward.reward_medical_experience} medical experience`);
   }

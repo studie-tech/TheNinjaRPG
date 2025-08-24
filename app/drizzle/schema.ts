@@ -2745,6 +2745,7 @@ export const quest = mysqlTable(
     hidden: boolean("hidden").default(false).notNull(),
     consecutiveObjectives: boolean("consecutiveObjectives").default(true).notNull(),
     requiredVillage: varchar("requiredVillage", { length: 191 }),
+    requiredBloodlineId: varchar("requiredBloodlineId", { length: 191 }),
     maxLevel: int("maxLevel").default(100).notNull(),
     maxAttempts: int("maxAttempts").default(1).notNull(),
     maxCompletes: int("maxCompletes").default(1).notNull(),
@@ -2768,6 +2769,9 @@ export const quest = mysqlTable(
       requiredLevelIdx: index("Quest_requiredLevel_idx").on(table.requiredLevel),
       maxLevelIdx: index("Quest_maxLevel_idx").on(table.maxLevel),
       requiredVillageIdx: index("Quest_requiredVillage_idx").on(table.requiredVillage),
+      requiredBloodlineIdx: index("Quest_requiredBloodline_idx").on(
+        table.requiredBloodlineId,
+      ),
       endsAtIdx: index("Quest_endsAt_idx").on(table.endsAt),
       startsAtIdx: index("Quest_startsAt_idx").on(table.startsAt),
       prerequisiteQuestIdIdx: index("Quest_prerequisiteQuestId_idx").on(
@@ -2782,6 +2786,10 @@ export const questRelations = relations(quest, ({ one }) => ({
   village: one(village, {
     fields: [quest.requiredVillage],
     references: [village.id],
+  }),
+  bloodline: one(bloodline, {
+    fields: [quest.requiredBloodlineId],
+    references: [bloodline.id],
   }),
 }));
 

@@ -20,7 +20,11 @@ import {
   IncreaseCooldownTag,
   DecreaseCooldownTag,
 } from "@/libs/combat/types";
-import { isUserStealthed, isUserImmobilized, isUserSummonPrevented } from "@/libs/combat/util";
+import {
+  isUserStealthed,
+  isUserImmobilized,
+  isUserSummonPrevented,
+} from "@/libs/combat/util";
 import { getUserElementalSeal, isEffectActive } from "@/libs/combat/util";
 import { getPower } from "@/libs/combat/tags";
 import { realizeTag, updateStatUsage } from "@/libs/combat/tags";
@@ -117,7 +121,9 @@ export const availableUserActions = (
             }
             // Filter out summon jutsu when summonPrevent is active
             if (isSummonPrevented) {
-              const hasSummonTag = userjutsu.jutsu.effects.some((e) => e.type === "summon");
+              const hasSummonTag = userjutsu.jutsu.effects.some(
+                (e) => e.type === "summon",
+              );
               if (hasSummonTag) return false;
             }
             // Filter out jutsus removed by elemental seal
@@ -632,8 +638,8 @@ export const insertAction = (info: {
     if (user.curChakra < cpCost) throw new Error("Not enough chakra");
     if (user.curStamina < spCost) throw new Error("Not enough stamina");
     // How much time passed since last action
-    const { apAfter } = actionPointsAfterAction(user, battle, action);
-    if (apAfter < 0) return false;
+    const { apAvailableAfter, apAfter } = actionPointsAfterAction(user, battle, action);
+    if (apAvailableAfter < 0) return false;
     // Get the possible action squares
     const highlights = getPossibleActionTiles(action, userHex, grid);
     // Given this action, get the affected tiles
@@ -1052,13 +1058,75 @@ export const actionPointsAfterAction = (
   battle?: ReturnedBattle | null,
   action?: CombatAction,
 ) => {
-  if (!user || !battle) return { apAfter: 0, canAct: false, availableActionPoints: 0 };
+  if (!user || !battle)
+    return { apAfter: 0, apAvailableAfter: 0, canAct: false, availableActionPoints: 0 };
   const stunReduction = calcApReduction(battle, user.userId);
-  const availableActionPoints = user.actionPoints - stunReduction;
+
+  // Helper: count applicable temporal effects and get AP delta (10 per effect)
+  const getTemporalApDelta = (type: "timecompression" | "timedilation") => {
+    if (action?.id === "wait") return 0;
+    const effects = battle.usersEffects.filter((e): e is UserEffect => {
+      return (
+        e.type === type &&
+        e.targetId === user.userId &&
+        !e.castThisRound &&
+        isEffectActive(e)
+      );
+    });
+    const appliesByElements = (effect: UserEffect) => {
+      // No elements specified on the effect → applies to all actions
+      if (!("elements" in effect) || !effect.elements || effect.elements.length === 0) {
+        return true;
+      }
+      // Basic actions don't carry elements → always applies
+      if (action?.type === "basic") return true;
+      // For jutsu/items: apply only if there is an overlap with the action's elements
+      if (
+        (action?.type === "jutsu" || action?.type === "item") &&
+        action.data &&
+        "effects" in action.data
+      ) {
+        const actionElements = new Set(
+          action.data.effects.flatMap((eff) =>
+            "elements" in eff && eff.elements ? eff.elements : [],
+          ),
+        );
+        return actionElements.size === 0
+          ? false
+          : effect.elements.some((el) => actionElements.has(el));
+      }
+      return true;
+    };
+    const applicable = effects.filter(appliesByElements);
+    return applicable.length * 10;
+  };
+
+  const timeCompressionApIncrease = getTemporalApDelta("timecompression");
+  const timeDilationApDecrease = getTemporalApDelta("timedilation");
+
+  const availableActionPoints = Math.max(0, user.actionPoints - stunReduction);
+
+  // If no action is provided, just return current available AP
+  if (!action) {
+    return {
+      apAfter: user.actionPoints,
+      apAvailableAfter: availableActionPoints,
+      canAct: availableActionPoints > 0,
+      availableActionPoints,
+    };
+  }
+
+  const actionCost = Math.max(
+    0,
+    (action.actionCostPerc || 0) + timeCompressionApIncrease - timeDilationApDecrease,
+  );
+  const apAfter = Math.max(0, user.actionPoints - actionCost); // stored AP after spending
+  const apAvailableAfter = availableActionPoints - actionCost; // gating with stun etc.
   return {
-    apAfter: user.actionPoints - (action?.actionCostPerc || 0),
-    canAct: availableActionPoints - (action?.actionCostPerc || 0) >= 0,
-    availableActionPoints: availableActionPoints,
+    apAfter,
+    apAvailableAfter,
+    canAct: apAvailableAfter >= 0,
+    availableActionPoints,
   };
 };
 

@@ -1087,8 +1087,8 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   if (props.type === "bloodline") {
     ignore.push(...["rounds", "friendlyFire"]);
   }
-  // Add direction to ignore list if not increasestat or decreasestat
-  if (!["increasestat", "decreasestat"].includes(tag.type)) {
+  // Add direction to ignore list if not increasestat, decreasestat, or redirection
+  if (!["increasestat", "decreasestat", "redirection"].includes(tag.type)) {
     ignore.push("direction");
   }
 

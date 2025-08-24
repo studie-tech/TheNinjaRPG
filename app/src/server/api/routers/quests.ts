@@ -61,6 +61,7 @@ import {
   ERRANDS_PER_DAY,
   MEDICAL_MISSIONS_PER_DAY,
   MEDNIN_EXP_CAP,
+  MAX_SKILL_POINTS,
 } from "@/drizzle/constants";
 import { questFilteringSchema } from "@/validators/quest";
 import type { QuestConsequence } from "@/libs/quest";
@@ -113,6 +114,7 @@ export const questsRouter = createTRPCRouter({
           ...(input?.questType ? [eq(quest.questType, input.questType)] : []),
           ...(input?.rank ? [eq(quest.questRank, input.rank)] : []),
           ...(input?.village ? [eq(quest.requiredVillage, input.village)] : []),
+          ...(input?.bloodline ? [eq(quest.requiredBloodlineId, input.bloodline)] : []),
           ...(input?.userLevel
             ? [
                 gte(quest.maxLevel, input.userLevel),
@@ -287,12 +289,16 @@ export const questsRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch all data in parallel
-      const [updatedUser, sectorVillage, results] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      // Fetch user first
+      const updatedUser = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      const { user } = updatedUser;
+      if (!user) return errorResponse("User does not exist");
+
+      // Fetch remaining data in parallel
+      const [sectorVillage, results] = await Promise.all([
         fetchSectorVillage(ctx.drizzle, input.userSector),
         input.type === "medical"
           ? ctx.drizzle
@@ -326,6 +332,10 @@ export const questsRouter = createTRPCRouter({
                       quest.requiredVillage,
                       input.userVillageId ?? VILLAGE_SYNDICATE_ID,
                     ),
+                  ),
+                  or(
+                    isNull(quest.requiredBloodlineId),
+                    eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
                   ),
                 ),
               )
@@ -361,11 +371,13 @@ export const questsRouter = createTRPCRouter({
                       input.userVillageId ?? VILLAGE_SYNDICATE_ID,
                     ),
                   ),
+                  or(
+                    isNull(quest.requiredBloodlineId),
+                    eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
+                  ),
                 ),
               ),
       ]);
-
-      const { user } = updatedUser;
       if (!user) return errorResponse("User does not exist");
 
       // For certain quest types, we fallback to lower ranks if the user does not have the required rank
@@ -833,6 +845,7 @@ export const questsRouter = createTRPCRouter({
             reward_tokens: 0,
             reward_prestige: 0,
             reward_reputation: 0,
+            reward_skillpoints: 0,
             reward_jutsus: [],
             reward_bloodlines: [],
             reward_badges: [],
@@ -1281,6 +1294,12 @@ export const updateRewards = async (info: {
     MEDNIN_EXP_CAP,
   );
 
+  // Cap skillpoints at MAX_SKILL_POINTS
+  const cappedSkillPoints = Math.min(
+    user.skillPoints + rewards.reward_skillpoints,
+    MAX_SKILL_POINTS,
+  );
+
   const updatedUserData: Record<string, unknown> = {
     questData: user.questData,
     money: user.money + rewards.reward_money,
@@ -1289,6 +1308,7 @@ export const updateRewards = async (info: {
     villagePrestige: user.villagePrestige + rewards.reward_prestige,
     reputationPoints: user.reputationPoints + rewards.reward_reputation,
     reputationPointsTotal: user.reputationPointsTotal + rewards.reward_reputation,
+    skillPoints: cappedSkillPoints,
     medicalExperience: cappedMedicalExp,
     huntingExperience: user.huntingExperience + rewards.reward_hunting_experience,
     craftingExperience: user.craftingExperience + rewards.reward_crafting_experience,
@@ -1476,6 +1496,10 @@ export const fetchUncompletedQuests = async (
         or(
           isNull(quest.requiredVillage),
           eq(quest.requiredVillage, user.villageId ?? ""),
+        ),
+        or(
+          isNull(quest.requiredBloodlineId),
+          eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
         ),
       ),
     )

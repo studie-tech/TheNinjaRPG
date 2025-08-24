@@ -905,7 +905,8 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                       {"direction" in parsedEffect &&
                         parsedEffect.direction &&
                         (effect.type === "increasestat" ||
-                          effect.type === "decreasestat") && (
+                          effect.type === "decreasestat" ||
+                          effect.type === "redirection") && (
                           <span>
                             <b>Direction: </b>
                             {parsedEffect.direction.toLowerCase()}

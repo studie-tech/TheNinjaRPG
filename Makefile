@@ -173,5 +173,5 @@ git-branch-uncommit: # Undo the last N commits (keeping changes staged), usage: 
 	@echo "${YELLOW}Uncommitting branch commits${RESET}"
 	git diff --binary --ignore-space-at-eol origin/main...HEAD > branch.patch
 	git reset --hard origin/main
-	git apply --whitespace=nowarn branch.patch
+	git apply --reject --whitespace=fix branch.patch
 	rm -f branch.patch

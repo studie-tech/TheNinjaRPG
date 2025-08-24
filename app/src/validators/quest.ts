@@ -16,6 +16,7 @@ export const questFilteringSchema = z.object({
   rank: z.enum(LetterRanks).optional(),
   userLevel: z.coerce.number().min(0).max(150).optional(),
   village: z.string().optional(),
+  bloodline: z.string().optional(),
   hidden: z.boolean().optional(),
 });
 

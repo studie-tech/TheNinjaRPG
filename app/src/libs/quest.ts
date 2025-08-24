@@ -176,6 +176,9 @@ export const getReward = (
         if (objective.reward_reputation) {
           rawRewards.reward_reputation += objective.reward_reputation;
         }
+        if (objective.reward_skillpoints) {
+          rawRewards.reward_skillpoints += objective.reward_skillpoints;
+        }
         if (objective.reward_medical_experience) {
           rawRewards.reward_medical_experience += objective.reward_medical_experience;
         }
@@ -296,6 +299,7 @@ export const collapseRewards = (
     reward_tokens: 0,
     reward_prestige: 0,
     reward_reputation: 0,
+    reward_skillpoints: 0,
     reward_medical_experience: 0,
     reward_hunting_experience: 0,
     reward_crafting_experience: 0,
@@ -337,6 +341,9 @@ export const collapseRewards = (
     }
     if (reward.reward_reputation) {
       collapsed.reward_reputation += reward.reward_reputation;
+    }
+    if (reward.reward_skillpoints) {
+      collapsed.reward_skillpoints += reward.reward_skillpoints;
     }
     if (reward.reward_medical_experience) {
       collapsed.reward_medical_experience += reward.reward_medical_experience;
@@ -970,6 +977,7 @@ export const isAvailableUserQuests = (
     questType: QuestType;
     endsAt?: string | null;
     requiredVillage: string | null;
+    requiredBloodlineId?: string | null;
     prerequisiteQuestId?: string | null;
     previousAttempts?: number | null;
     previousCompletes?: number | null;
@@ -1006,6 +1014,9 @@ export const isAvailableUserQuests = (
     !questAndUserQuestInfo.requiredVillage ||
     questAndUserQuestInfo.requiredVillage === user.villageId ||
     (questAndUserQuestInfo.requiredVillage === VILLAGE_SYNDICATE_ID && user.isOutlaw);
+  const bloodlineCheck =
+    !questAndUserQuestInfo.requiredBloodlineId ||
+    questAndUserQuestInfo.requiredBloodlineId === user.bloodlineId;
 
   // Medical rank check for quests that require it
   const medicalRankCheck = !reqMedRankIdx || userMedRankIdx >= reqMedRankIdx;
@@ -1038,6 +1049,7 @@ export const isAvailableUserQuests = (
     eventCompletedCheck &&
     eventAttemptsCheck &&
     villageCheck &&
+    bloodlineCheck &&
     prerequisiteCheck &&
     medicalRankCheck &&
     huntingRankCheck;
@@ -1049,6 +1061,7 @@ export const isAvailableUserQuests = (
   if (!eventCompletedCheck) message += "Quest has been completed too many times\n";
   if (!eventAttemptsCheck) message += "Quest has been attempted too many times\n";
   if (!villageCheck) message += "Quest is not available in your village\n";
+  if (!bloodlineCheck) message += "Quest requires a specific bloodline\n";
   if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
   if (!medicalRankCheck)
     message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;

@@ -341,6 +341,7 @@ export const sortEffects = (
     "shield",
     "finalstand",
     "clone",
+    "redirection",
     "damage",
     "flee",
     "heal",
