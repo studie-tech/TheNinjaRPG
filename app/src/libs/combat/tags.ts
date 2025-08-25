@@ -251,11 +251,15 @@ export const mirror = (
     if (primaryCheck) {
       const excludedFromTypes = ["bloodline", "armor", "item", "village", "skill"];
       const excludedEffectTypes = [
-        "damage",
-        "pierce",
-        "clear",
-        "buffprevent",
-        "cleanseprevent",
+        "damage", 
+        "pierce", 
+        "clear", 
+        "buffprevent", 
+        "cleanseprevent", 
+        "moveprevent", 
+        "healPrevent",
+        "wound",
+        "timecompression"
       ];
 
       const negativeEffects = usersEffects.filter(

@@ -370,6 +370,9 @@ export const sortEffects = (
     "increaseheal",
     "copy",
     "mirror",
+    // Time effects
+    "timecompression",
+    "timedilation",
     // End-modifiers
     "move",
     "visual",
