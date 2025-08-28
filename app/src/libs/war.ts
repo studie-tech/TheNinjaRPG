@@ -11,6 +11,13 @@ import {
   WAR_WINNING_BOOST_REGEN_PERC,
   WAR_WINNING_BOOST_TRAINING_PERC,
   SHRINE_HP_BY_LEVEL,
+  WAR_SECTOR_CHANGE_TOWNHALL_SP_LOSER_DELTA,
+  WAR_SECTOR_CHANGE_TOWNHALL_SP_WINNER_DELTA,
+  WAR_ADDITIONAL_WINNER_TOKEN_BONUS,
+  WAR_DRAW_STRUCTURE_LEVEL_DECREASE,
+  WAR_LOSER_STRUCTURE_LEVEL_DECREASE,
+  WAR_WINNER_TEMP_STRUCTURE_LEVEL_INCREASE,
+  WAR_WINNER_TEMP_STRUCTURE_ROUTES,
 } from "@/drizzle/constants";
 import { getUnique } from "@/utils/grouping";
 import type { WarState } from "@/drizzle/constants";
@@ -237,6 +244,29 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
             .update(war)
             .set({ status: "DEFENDER_VICTORY", endedAt })
             .where(and(ne(war.id, activeWar.id), eq(war.sector, activeWar.sector))),
+          // Townhall HP adjustments on sector change
+          drizzleDB
+            .update(villageStructure)
+            .set({
+              curSp: sql`GREATEST(0, LEAST(maxSp, curSp - ${WAR_SECTOR_CHANGE_TOWNHALL_SP_LOSER_DELTA}))`,
+            })
+            .where(
+              and(
+                eq(villageStructure.villageId, loserVillageId),
+                eq(villageStructure.route, "/townhall"),
+              ),
+            ),
+          drizzleDB
+            .update(villageStructure)
+            .set({
+              curSp: sql`LEAST(maxSp, curSp + ${WAR_SECTOR_CHANGE_TOWNHALL_SP_WINNER_DELTA})`,
+            })
+            .where(
+              and(
+                eq(villageStructure.villageId, winnerVillageId),
+                eq(villageStructure.route, "/townhall"),
+              ),
+            ),
         ]
       : []),
     // Handle village wars
@@ -253,7 +283,7 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
             drizzleDB
               .update(villageStructure)
               .set({
-                level: sql`GREATEST(level - 1, 1)`,
+                level: sql`GREATEST(level - ${WAR_DRAW_STRUCTURE_LEVEL_DECREASE}, 1)`,
                 lastUpgradedAt: structureUpgradeBlock,
               })
               .where(
@@ -273,6 +303,11 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
                 tokens: sql`tokens + ${winningPoints}`,
               })
               .where(inArray(village.id, [...winningAllies, winnerVillageId])),
+            // Additional winner reward
+            drizzleDB
+              .update(village)
+              .set({ tokens: sql`tokens + ${WAR_ADDITIONAL_WINNER_TOKEN_BONUS}` })
+              .where(eq(village.id, winnerVillageId)),
             drizzleDB
               .update(gameSetting)
               .set({
@@ -302,15 +337,20 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
             drizzleDB
               .update(villageStructure)
               .set({
-                level: sql`GREATEST(level - 1, 1)`,
+                level: sql`GREATEST(level - ${WAR_LOSER_STRUCTURE_LEVEL_DECREASE}, 1)`,
                 lastUpgradedAt: structureUpgradeBlock,
+              })
+              .where(eq(villageStructure.villageId, loserVillageId)),
+            // Temporary winner boost: +3 levels to key structures for one week (revert handled by ops)
+            drizzleDB
+              .update(villageStructure)
+              .set({
+                level: sql`level + ${WAR_WINNER_TEMP_STRUCTURE_LEVEL_INCREASE}`,
               })
               .where(
                 and(
-                  eq(villageStructure.villageId, loserVillageId),
-                  ...(activeWar.type === "WAR_RAID"
-                    ? [eq(villageStructure.route, activeWar.targetStructureRoute)]
-                    : []),
+                  eq(villageStructure.villageId, winnerVillageId),
+                  inArray(villageStructure.route, WAR_WINNER_TEMP_STRUCTURE_ROUTES),
                 ),
               ),
           ]

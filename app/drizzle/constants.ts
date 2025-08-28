@@ -953,7 +953,7 @@ export const WAR_TOWNHALL_HP_KAGEDEATH_REMOVE = 50;
 export const WAR_WINNING_BOOST_DAYS = 3;
 export const WAR_WINNING_BOOST_REGEN_PERC = 40;
 export const WAR_WINNING_BOOST_TRAINING_PERC = 20;
-export const WAR_DAILY_STRUCTURE_HP_DRAIN = 100; // Structure hp drain per day
+export const WAR_DAILY_STRUCTURE_HP_DRAIN = 200; // Structure hp drain per day
 export const WAR_TOKEN_REDUCTION_INTERVAL_HOURS = 24; // How often tokens should be reduced
 export const WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_3_DAYS = 1.3; // 30% increase after 3 days
 export const WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_7_DAYS = 1.5; // 50% increase after 7 days
@@ -1002,6 +1002,21 @@ export const SHRINE_BOOST_TYPES = [
 export type SHRINE_BOOST_TYPE = (typeof SHRINE_BOOST_TYPES)[number];
 export type WarType = (typeof WAR_TYPES)[number];
 export type WarState = (typeof WAR_STATES)[number];
+
+// War structure and reward adjustments
+export const WAR_SECTOR_CHANGE_TOWNHALL_SP_LOSER_DELTA = 100; // Townhall SP reduced on sector loss
+export const WAR_SECTOR_CHANGE_TOWNHALL_SP_WINNER_DELTA = 50; // Townhall SP increased on sector claim
+export const WAR_ADDITIONAL_WINNER_TOKEN_BONUS = 300000; // Extra winner token bonus
+export const WAR_DRAW_STRUCTURE_LEVEL_DECREASE = 1; // Structure level decrease on draw
+export const WAR_LOSER_STRUCTURE_LEVEL_DECREASE = 3; // Structure level decrease for loser
+export const WAR_WINNER_TEMP_STRUCTURE_LEVEL_INCREASE = 3; // Temp increase to key structures for winner
+export const WAR_WINNER_TEMP_STRUCTURE_ROUTES: StructureRoute[] = [
+  "/traininggrounds",
+  "/ramenshop",
+  "/missionhall",
+  "/home",
+  "/battlearena",
+];
 
 // PvP Rewards
 export const PVP_KILL_TOKEN_REWARD = 300; // Base village tokens for PvP kill

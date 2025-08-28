@@ -27,7 +27,7 @@ export async function GET() {
     const now = new Date();
 
     let activeWars = await fetchActiveWars(drizzleDB);
-    activeWars = activeWars.filter((war) => war.type === "VILLAGE_WAR");
+    activeWars = activeWars.filter((w) => ["VILLAGE_WAR", "WAR_RAID"].includes(w.type));
 
     if (!activeWars || activeWars.length === 0) {
       return new Response("No active wars found", { status: 200 });
