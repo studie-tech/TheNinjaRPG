@@ -204,7 +204,7 @@ const AnimationsContent: React.FC = () => {
     api.gameAsset.getAnimationNameTags.useQuery({ selected: selectedTags });
 
   const { data: assets } = api.gameAsset.getAll.useInfiniteQuery(
-    { limit: 10, type: "ANIMATION", nameTokens: selectedTags },
+    { limit: 50, type: "ANIMATION", nameTokens: selectedTags },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,

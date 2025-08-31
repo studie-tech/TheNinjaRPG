@@ -442,7 +442,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
   return (
     <ContentBox
       title="Training"
-      subtitle={`Training (${efficiency}% efficiency) [${userData.dailyTrainings} / ${MAX_DAILY_TRAININGS}]`}
+      subtitle={`${efficiency}% efficiency [${userData.dailyTrainings} / ${MAX_DAILY_TRAININGS}]`}
       defaultBackHref="/village"
       topRightContent={
         <NavTabs

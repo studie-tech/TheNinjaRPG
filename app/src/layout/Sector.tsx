@@ -94,6 +94,7 @@ const Sector: React.FC<SectorProps> = (props) => {
   const minLevelDraw = useRef<number>(storedLvl);
   const showAllyAttack = useRef<boolean>(allyAttack);
   const userRef = useRef<UserWithRelations>(undefined);
+  const lastAutoAttackTime = useRef<number | null>(null);
   const mouse = new Vector2();
 
   // tRPC utility
@@ -410,6 +411,16 @@ const Sector: React.FC<SectorProps> = (props) => {
       !isMoving &&
       !isAttacking
     ) {
+      // Check if enough time has passed since last attack
+      const now = Date.now();
+      const lastAttackTime = lastAutoAttackTime.current;
+      const attackDelaySeconds = parseInt(localStorage.getItem("autoAttackDelay") || "5");
+      const attackDelayMs = attackDelaySeconds * 1000; // Convert seconds to milliseconds
+
+      if (lastAttackTime && (now - lastAttackTime) < attackDelayMs) {
+        return; // Not enough time has passed, wait
+      }
+
       // Find nearby enemies to attack
       const nearbyEnemies = users.current.filter((user) => {
         if (!user.userId || user.userId === userData.userId) return false;
@@ -423,6 +434,10 @@ const Sector: React.FC<SectorProps> = (props) => {
 
         // Check if user is in PvP restricted rank
         if (RANKS_RESTRICTED_FROM_PVP.includes(user.rank)) return false;
+
+        // Check minimum level requirement
+        const minLevel = parseInt(localStorage.getItem("autoAttackMinLevel") || "1");
+        if (user.level < minLevel) return false;
 
         return true;
       });
@@ -443,6 +458,8 @@ const Sector: React.FC<SectorProps> = (props) => {
           closestEnemy.longitude === origin.current.col &&
           closestEnemy.latitude === origin.current.row
         ) {
+          // Update last attack time and attack
+          lastAutoAttackTime.current = now;
           attack({
             userId: closestEnemy.userId,
             longitude: closestEnemy.longitude,

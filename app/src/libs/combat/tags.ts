@@ -257,7 +257,7 @@ export const mirror = (
         "buffprevent", 
         "cleanseprevent", 
         "moveprevent", 
-        "healPrevent",
+        "healprevent",
         "wound",
         "timecompression"
       ];
@@ -578,7 +578,17 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
       });
     }
   }
-  return getInfo(target, effect, `${affected} is ${adverb} by ${qualifier}`);
+  // Add direction information for increase/decrease stat effects
+  let directionText = "";
+  if ("direction" in effect && effect.direction &&
+      (effect.type === "increasestat" || effect.type === "decreasestat")) {
+    if (effect.direction === "both") {
+      directionText = " [offense and defense]";
+    } else {
+      directionText = ` [${effect.direction}]`;
+    }
+  }
+  return getInfo(target, effect, `${affected} is ${adverb} by ${qualifier}${directionText}`);
 };
 
 export const increaseStats = (
@@ -1476,12 +1486,6 @@ export const wound = (
   consequences: Map<string, Consequence>,
   target: BattleUserState,
 ) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass)
-      return preventResponse(effect, target, "cannot be debuffed with wound damage");
-  }
-
   if (effect.isNew && effect.castThisRound) {
     let original = 0;
     consequences.forEach((c) => {
@@ -1498,7 +1502,7 @@ export const wound = (
     effect.timeTracker.originalDamage = original;
   }
 
-  const shouldApply = !effect.isNew && !effect.castThisRound;
+  const shouldApply = !effect.isNew && !effect.castThisRound && (effect.rounds ?? 0) > 0;
 
   // Calculate wound damage amount for display purposes
   const originalDamage = effect.timeTracker?.originalDamage || 0;
@@ -1542,11 +1546,16 @@ export const wound = (
     }
   }
 
-  return getInfo(
-    target,
-    effect,
-    `will take ${woundDamage.toFixed(2)} wound damage for ${effect.rounds} rounds`,
-  );
+  // Only show the message when the effect is first applied
+  if (effect.isNew && effect.castThisRound) {
+    return getInfo(
+      target,
+      effect,
+      `will take ${woundDamage.toFixed(2)} wound damage`,
+    );
+  }
+
+  return undefined;
 };
 
 /** Recoil damage back to attacker */
@@ -1594,11 +1603,6 @@ export const afterburn = (
   consequences: Map<string, Consequence>,
   target: BattleUserState,
 ) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass)
-      return preventResponse(effect, target, "cannot be debuffed with afterburn");
-  }
   const { power, qualifier } = getPower(effect);
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
@@ -2211,8 +2215,16 @@ export const timeCompression = (
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
+      // Build element-specific message
+      let elementText = "";
+      if (effect.elements && effect.elements.length > 0) {
+        elementText = ` [${effect.elements.join(", ")} element jutsu]`;
+      } else {
+        elementText = " [all jutsu]";
+      }
+
       return {
-        txt: `${target.username} is affected by time compression, actions will cost 10 more AP`,
+        txt: `${target.username} is affected by time compression, actions will cost 10 more AP${elementText}`,
         color: "red",
       };
     } else {
@@ -2259,8 +2271,16 @@ export const timeDilation = (
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
+      // Build element-specific message
+      let elementText = "";
+      if (effect.elements && effect.elements.length > 0) {
+        elementText = ` [${effect.elements.join(", ")} element jutsu]`;
+      } else {
+        elementText = " [all jutsu]";
+      }
+
       return {
-        txt: `${target.username} is affected by time dilation, actions will cost 10 less AP`,
+        txt: `${target.username} is affected by time dilation, actions will cost 10 less AP${elementText}`,
         color: "blue",
       };
     } else {

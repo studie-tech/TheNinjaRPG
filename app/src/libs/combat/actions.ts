@@ -1065,6 +1065,8 @@ export const actionPointsAfterAction = (
   // Helper: count applicable temporal effects and get AP delta (10 per effect)
   const getTemporalApDelta = (type: "timecompression" | "timedilation") => {
     if (action?.id === "wait") return 0;
+    // Time dilation and time compression should not affect basic actions or items
+    if (action?.type === "basic" || action?.type === "item") return 0;
     const effects = battle.usersEffects.filter((e): e is UserEffect => {
       return (
         e.type === type &&
@@ -1078,11 +1080,9 @@ export const actionPointsAfterAction = (
       if (!("elements" in effect) || !effect.elements || effect.elements.length === 0) {
         return true;
       }
-      // Basic actions don't carry elements → always applies
-      if (action?.type === "basic") return true;
-      // For jutsu/items: apply only if there is an overlap with the action's elements
+      // For jutsu: apply only if there is an overlap with the action's elements
       if (
-        (action?.type === "jutsu" || action?.type === "item") &&
+        action?.type === "jutsu" &&
         action.data &&
         "effects" in action.data
       ) {

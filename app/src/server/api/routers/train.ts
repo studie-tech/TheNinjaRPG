@@ -142,57 +142,61 @@ export const trainRouter = createTRPCRouter({
           .set({
             trainingStartedAt: null,
             currentlyTraining: null,
-            experience: sql`experience + ${trainingAmount}`,
-            dailyTrainings: sql`dailyTrainings + 1`,
-            strength:
-              user.currentlyTraining === "strength"
-                ? sql`strength + ${trainingAmount}`
-                : sql`strength`,
-            intelligence:
-              user.currentlyTraining === "intelligence"
-                ? sql`intelligence + ${trainingAmount}`
-                : sql`intelligence`,
-            willpower:
-              user.currentlyTraining === "willpower"
-                ? sql`willpower + ${trainingAmount}`
-                : sql`willpower`,
-            speed:
-              user.currentlyTraining === "speed"
-                ? sql`speed + ${trainingAmount}`
-                : sql`speed`,
-            ninjutsuOffence:
-              user.currentlyTraining === "ninjutsuOffence"
-                ? sql`ninjutsuOffence + ${trainingAmount}`
-                : sql`ninjutsuOffence`,
-            ninjutsuDefence:
-              user.currentlyTraining === "ninjutsuDefence"
-                ? sql`ninjutsuDefence + ${trainingAmount}`
-                : sql`ninjutsuDefence`,
-            genjutsuOffence:
-              user.currentlyTraining === "genjutsuOffence"
-                ? sql`genjutsuOffence + ${trainingAmount}`
-                : sql`genjutsuOffence`,
-            genjutsuDefence:
-              user.currentlyTraining === "genjutsuDefence"
-                ? sql`genjutsuDefence + ${trainingAmount}`
-                : sql`genjutsuDefence`,
-            taijutsuOffence:
-              user.currentlyTraining === "taijutsuOffence"
-                ? sql`taijutsuOffence + ${trainingAmount}`
-                : sql`taijutsuOffence`,
-            taijutsuDefence:
-              user.currentlyTraining === "taijutsuDefence"
-                ? sql`taijutsuDefence + ${trainingAmount}`
-                : sql`taijutsuDefence`,
-            bukijutsuDefence:
-              user.currentlyTraining === "bukijutsuDefence"
-                ? sql`bukijutsuDefence + ${trainingAmount}`
-                : sql`bukijutsuDefence`,
-            bukijutsuOffence:
-              user.currentlyTraining === "bukijutsuOffence"
-                ? sql`bukijutsuOffence + ${trainingAmount}`
-                : sql`bukijutsuOffence`,
-            questData: user.questData,
+            ...(trainingAmount > 0
+              ? {
+                  experience: sql`experience + ${trainingAmount}`,
+                  dailyTrainings: sql`dailyTrainings + 1`,
+                  strength:
+                    user.currentlyTraining === "strength"
+                      ? sql`strength + ${trainingAmount}`
+                      : sql`strength`,
+                  intelligence:
+                    user.currentlyTraining === "intelligence"
+                      ? sql`intelligence + ${trainingAmount}`
+                      : sql`intelligence`,
+                  willpower:
+                    user.currentlyTraining === "willpower"
+                      ? sql`willpower + ${trainingAmount}`
+                      : sql`willpower`,
+                  speed:
+                    user.currentlyTraining === "speed"
+                      ? sql`speed + ${trainingAmount}`
+                      : sql`speed`,
+                  ninjutsuOffence:
+                    user.currentlyTraining === "ninjutsuOffence"
+                      ? sql`ninjutsuOffence + ${trainingAmount}`
+                      : sql`ninjutsuOffence`,
+                  ninjutsuDefence:
+                    user.currentlyTraining === "ninjutsuDefence"
+                      ? sql`ninjutsuDefence + ${trainingAmount}`
+                      : sql`ninjutsuDefence`,
+                  genjutsuOffence:
+                    user.currentlyTraining === "genjutsuOffence"
+                      ? sql`genjutsuOffence + ${trainingAmount}`
+                      : sql`genjutsuOffence`,
+                  genjutsuDefence:
+                    user.currentlyTraining === "genjutsuDefence"
+                      ? sql`genjutsuDefence + ${trainingAmount}`
+                      : sql`genjutsuDefence`,
+                  taijutsuOffence:
+                    user.currentlyTraining === "taijutsuOffence"
+                      ? sql`taijutsuOffence + ${trainingAmount}`
+                      : sql`taijutsuOffence`,
+                  taijutsuDefence:
+                    user.currentlyTraining === "taijutsuDefence"
+                      ? sql`taijutsuDefence + ${trainingAmount}`
+                      : sql`taijutsuDefence`,
+                  bukijutsuDefence:
+                    user.currentlyTraining === "bukijutsuDefence"
+                      ? sql`bukijutsuDefence + ${trainingAmount}`
+                      : sql`bukijutsuDefence`,
+                  bukijutsuOffence:
+                    user.currentlyTraining === "bukijutsuOffence"
+                      ? sql`bukijutsuOffence + ${trainingAmount}`
+                      : sql`bukijutsuOffence`,
+                  questData: user.questData,
+                }
+              : {}),
           })
           .where(
             and(
@@ -201,13 +205,17 @@ export const trainRouter = createTRPCRouter({
               eq(userData.status, "AWAKE"),
             ),
           ),
-        ctx.drizzle.insert(trainingLog).values({
-          userId: ctx.userId,
-          amount: trainingAmount,
-          stat: user.currentlyTraining,
-          speed: user.trainingSpeed,
-          trainingFinishedAt: new Date(),
-        }),
+        ...(trainingAmount > 0
+          ? [
+              ctx.drizzle.insert(trainingLog).values({
+                userId: ctx.userId,
+                amount: trainingAmount,
+                stat: user.currentlyTraining,
+                speed: user.trainingSpeed,
+                trainingFinishedAt: new Date(),
+              }),
+            ]
+          : []),
       ]);
       if (result.rowsAffected === 0) {
         return { success: false, message: "You are not training" };

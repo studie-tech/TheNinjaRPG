@@ -463,7 +463,7 @@ export type QuestTypeWithMaxAttempts = (typeof QuestTypesWithMaxAttempts)[number
 
 export const SmileyEmotions = ["like", "love", "laugh"] as const;
 
-export const TrainingSpeeds = ["15min", "1hr", "4hrs", "8hrs"] as const;
+export const TrainingSpeeds = ["15min", "1hr", "4hrs", "8hrs", "12hrs", "24hrs"] as const;
 export type TrainingSpeed = (typeof TrainingSpeeds)[number];
 
 export const JUTSU_MAX_RESIDUAL_EQUIPPED = 4;

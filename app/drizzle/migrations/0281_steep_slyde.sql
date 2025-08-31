@@ -1,0 +1,2 @@
+ALTER TABLE `TrainingLog` MODIFY COLUMN `speed` enum('15min','1hr','4hrs','8hrs','12hrs','24hrs');
+ALTER TABLE `UserData` MODIFY COLUMN `trainingSpeed` enum('15min','1hr','4hrs','8hrs','12hrs','24hrs') NOT NULL DEFAULT '15min';

@@ -18,36 +18,29 @@ import { type ItemRarity } from "@/drizzle/schema";
 import type { Item, Jutsu, Bloodline } from "@/drizzle/schema";
 import type { ZodAllTags } from "@/libs/combat/types";
 
-interface ActionSelectorProps {
+interface ActionItemProps {
+  id: string;
+  name: string;
+  image: string;
+  warning?: string;
+  rarity?: ItemRarity;
+  type?: "jutsu" | "item" | "basic" | "village" | "asset" | "bloodline";
+  effects?: ZodAllTags[];
+  highlight?: boolean;
+  isFavorite?: boolean;
+  hidden?: boolean | number;
+  cooldown?: number;
+  frames?: number;
+  speed?: number;
+  lastUsedRound?: number;
+  durability?: number;
+  maxDurability?: number;
+}
+
+interface ActionSelectorSettingsProps {
   className?: string;
   aspectRatioClass?: string;
   gridClassNameOverwrite?: string;
-  items?:
-    | {
-        id: string;
-        name: string;
-        image: string;
-        warning?: string;
-        rarity?: ItemRarity;
-        type?: "jutsu" | "item" | "basic" | "village" | "asset" | "bloodline";
-        effects?: ZodAllTags[];
-        highlight?: boolean;
-        isFavorite?: boolean;
-        hidden?: boolean | number;
-        cooldown?: number;
-        frames?: number;
-        speed?: number;
-        lastUsedRound?: number;
-        durability?: number;
-        maxDurability?: number;
-      }[]
-    | null;
-  counts?:
-    | {
-        id: string;
-        quantity: number;
-      }[]
-    | null;
   currentRound?: number;
   roundFull?: boolean;
   hideBorder?: boolean;
@@ -60,19 +53,27 @@ interface ActionSelectorProps {
   emptyText?: string;
   lastElement?: HTMLDivElement | null;
   setLastElement?: (el: HTMLDivElement | null) => void;
-  /** Optional custom renderer for each item */
+  showInfoIcon?: boolean;
+  combatMode?: boolean;
+}
+
+interface ActionSelectorProps extends ActionSelectorSettingsProps {
+  items?: ActionItemProps[] | null;
+  counts?:
+    | {
+        id: string;
+        quantity: number;
+      }[]
+    | null;
   renderItem?: (
     item: NonNullable<ActionSelectorProps["items"]>[number],
   ) => React.ReactNode;
-  /** When true, display a help icon on each item that shows details in a pop-over */
-  showInfoIcon?: boolean;
-  /** When true, jutsu names will be displayed in black text */
-  combatMode?: boolean;
 }
 
 export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
   const { data: userData } = useUserData();
-  const filtered = props.items?.filter(
+  const { items, counts, renderItem, ...settings } = props;
+  const filtered = items?.filter(
     (i) => !i.hidden || (userData && canChangeContent(userData.role)),
   );
   const base = "gap-1 text-xs";
@@ -106,11 +107,6 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
             (props.selectedId !== undefined && props.selectedId !== item.id) ||
             (props.greyedIds?.includes(item.id) ?? false);
           const isHighlight = item.highlight ?? false;
-          const elements = item.effects
-            ? item.effects.flatMap((e) =>
-                "elements" in e && e.elements ? e.elements : [],
-              )
-            : [];
 
           return (
             <div
@@ -119,11 +115,12 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
               className="relative flex items-start justify-center"
             >
               <div className="relative h-full w-full">
-                {props.renderItem ? (
-                  props.renderItem(item)
+                {renderItem ? (
+                  renderItem(item)
                 ) : (
                   <ActionOption
-                    aspectRatioClass={props.aspectRatioClass}
+                    item={item}
+                    settings={settings}
                     className={cn(
                       "h-full",
                       isHighlight
@@ -132,100 +129,16 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                       bgColor,
                       isGreyed ? "opacity-20" : "",
                     )}
-                    src={item.image}
                     isGreyed={isGreyed}
-                    alt={item.name}
-                    warning={item?.warning}
-                    roundFull={props.roundFull}
-                    hideBorder={props.hideBorder}
-                    rarity={item.rarity}
-                    cooldown={item.cooldown}
-                    frames={item.frames}
-                    speed={item.speed}
-                    lastUsedRound={item.lastUsedRound}
-                    currentRound={props.currentRound}
-                    txt={props.showLabels ? item.name : ""}
-                    count={props.counts?.find((c) => c.id === item.id)?.quantity}
-                    labelSingles={props.labelSingles}
-                    combatMode={props.combatMode}
-                    onClick={() => {
-                      props.onClick(item.id);
-                    }}
+                    count={counts?.find((c) => c.id === item.id)?.quantity}
                   />
-                )}
-
-                {/* Help / info icon */}
-                {props.showInfoIcon && (
-                  <Popover>
-                    <PopoverTrigger
-                      className="absolute top-1 right-1 z-10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                      }}
-                    >
-                      <HelpCircle className="h-5 w-5 cursor-pointer text-white hover:text-orange-500" />
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[300px] p-2">
-                      {item.type === "jutsu" ||
-                      item.type === "item" ||
-                      item.type === "bloodline" ||
-                      item.type === "basic" ? (
-                        <ItemWithEffects
-                          item={item as Item | Jutsu | Bloodline}
-                          hideImage
-                        />
-                      ) : (
-                        <div className="flex flex-col gap-2 text-sm">
-                          <span className="font-semibold">{item.name}</span>
-                          {item.effects && item.effects.length > 0 && (
-                            <div className="flex flex-col gap-1">
-                              {item.effects.map((e, idx) => (
-                                <span key={idx}>
-                                  Effect {idx + 1}: {e.type}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </PopoverContent>
-                  </Popover>
-                )}
-
-                {elements.map((element, i) => (
-                  <div
-                    key={i}
-                    className={`absolute top-[-5px]`}
-                    style={{ left: `${i * 10}px` }}
-                  >
-                    <ElementImage element={element} className="w-6" />
-                  </div>
-                ))}
-
-                {/* Durability bar */}
-                {item.durability !== undefined &&
-                  item.maxDurability !== undefined &&
-                  item.maxDurability > 0 && (
-                    <DurabilityBar
-                      currentDurability={item.durability}
-                      maxDurability={item.maxDurability}
-                      position="top-left"
-                      size="medium"
-                    />
-                  )}
-
-                {/* Favorite indicator */}
-                {item.isFavorite && (
-                  <div className="absolute top-[-5px] right-[-5px]">
-                    <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                  </div>
                 )}
               </div>
             </div>
           );
         })}
       </div>
-      {props.items?.length === 0 && (
+      {items?.length === 0 && (
         <span className="flex flex-row text-base">
           {props.emptyText ? props.emptyText : "Nothing Available"}
         </span>
@@ -235,73 +148,72 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
 };
 
 interface ActionOptionProps {
-  src: string;
-  alt: string;
-  txt: string;
-  warning?: string;
-  rarity?: ItemRarity;
-  count?: number;
-  frames?: number;
-  speed?: number;
-  isGreyed: boolean;
+  item: ActionItemProps;
+  settings: ActionSelectorSettingsProps;
   className?: string;
-  roundFull?: boolean;
-  hideBorder?: boolean;
-  labelSingles?: boolean;
-  cooldown?: number;
-  currentRound?: number;
-  lastUsedRound?: number;
-  aspectRatioClass?: string;
-  combatMode?: boolean;
-  onClick?: () => void;
+  count?: number;
+  isGreyed: boolean;
 }
 
 export const ActionOption: React.FC<ActionOptionProps> = (props) => {
-  const { cooldown, currentRound, lastUsedRound, combatMode } = props;
+  const { item, settings } = props;
+  const { cooldown, image, name, rarity, frames, speed, lastUsedRound, warning } = item;
+
+  // Derived values
   const cooldownPerc = Math.max(
-    cooldown && currentRound && lastUsedRound
-      ? 100 - (100 * (currentRound - lastUsedRound)) / cooldown
+    cooldown && settings.currentRound && lastUsedRound
+      ? 100 - (100 * (settings.currentRound - lastUsedRound)) / cooldown
       : 0,
     0,
   );
+  const elements = item.effects
+    ? item.effects.flatMap((e) => ("elements" in e && e.elements ? e.elements : []))
+    : [];
+
+  // Render
   return (
     <div
       className={cn(
         "relative text-center flex cursor-pointer flex-col items-center justify-start",
-        combatMode ? "text-black" : "text-foreground",
+        settings.combatMode ? "text-black" : "text-foreground",
         props.isGreyed ? "hover:opacity-80" : "hover:opacity-90",
         props.className,
       )}
     >
       <div className="relative w-full">
         <ContentImage
-          image={props.src}
-          alt={props.alt}
-          rarity={props.rarity}
-          className={cn(props.aspectRatioClass)}
-          roundFull={props.roundFull}
-          hideBorder={props.hideBorder}
-          frames={props.frames}
-          speed={props.speed}
-          onClick={props.onClick}
+          image={image}
+          alt={name}
+          rarity={rarity}
+          className={cn(settings.aspectRatioClass)}
+          roundFull={settings.roundFull}
+          hideBorder={settings.hideBorder}
+          frames={frames}
+          speed={speed}
+          onClick={() => {
+            settings.onClick(item.id);
+          }}
         />
-        {props.count !== undefined && (props.labelSingles || props.count > 1) && (
+        {/* Count overlay - bottom right corner */}
+        {props.count !== undefined && (settings.labelSingles || props.count > 1) && (
           <div className="absolute bottom-0 right-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 text-black text-base font-bold">
             {props.count}
           </div>
         )}
-        {props.warning !== undefined && props.warning && (
+        {/* Warning icon - top right corner */}
+        {warning !== undefined && warning && (
           <div className="absolute top-0 right-0">
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger>
                   <Info className="h-7 w-7 cursor-pointer hover:text-orange-500 fill-red-600 text-white" />
                 </TooltipTrigger>
-                <TooltipContent>{props.warning}</TooltipContent>
+                <TooltipContent>{warning}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
         )}
+        {/* Cooldown pie overlay */}
         {cooldownPerc > 0 && (
           <>
             <div
@@ -311,17 +223,78 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
               }}
             ></div>
             {cooldown &&
-              currentRound &&
+              settings.currentRound &&
               lastUsedRound &&
-              cooldown - (currentRound - lastUsedRound) > 0 && (
+              cooldown - (settings.currentRound - lastUsedRound) > 0 && (
                 <div className="absolute bottom-0 left-0 right-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-slate-400 bg-slate-300 text-black text-base font-bold z-10">
-                  {cooldown - (currentRound - lastUsedRound)}
+                  {cooldown - (settings.currentRound - lastUsedRound)}
                 </div>
               )}
           </>
         )}
+        {/* Help / info icon - bottom left corner */}
+        {settings.showInfoIcon && (
+          <Popover>
+            <PopoverTrigger
+              className="absolute bottom-1 left-1 z-10"
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              <HelpCircle className="h-5 w-5 cursor-pointer text-white hover:text-orange-500" />
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] p-2">
+              {item.type === "jutsu" ||
+              item.type === "item" ||
+              item.type === "bloodline" ||
+              item.type === "basic" ? (
+                <ItemWithEffects item={item as Item | Jutsu | Bloodline} hideImage />
+              ) : (
+                <div className="flex flex-col gap-2 text-sm">
+                  <span className="font-semibold">{item.name}</span>
+                  {item.effects && item.effects.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      {item.effects.map((e, idx) => (
+                        <span key={idx}>
+                          Effect {idx + 1}: {e.type}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
+        {/* Elements overlay */}
+        {elements.map((element, i) => (
+          <div
+            key={i}
+            className={`absolute top-[-5px]`}
+            style={{ left: `${i * 10}px` }}
+          >
+            <ElementImage element={element} className="w-6" />
+          </div>
+        ))}
+        {/* Durability bar */}
+        {item.durability !== undefined &&
+          item.maxDurability !== undefined &&
+          item.maxDurability > 0 && (
+            <DurabilityBar
+              currentDurability={item.durability}
+              maxDurability={item.maxDurability}
+              position="top-left"
+              size="medium"
+            />
+          )}
+        {/* Favorite indicator - top right corner */}
+        {item.isFavorite && (
+          <div className="absolute top-[-5px] right-[-5px]">
+            <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+          </div>
+        )}
       </div>
-      {props.txt}
+      {settings.showLabels ? name : ""}
     </div>
   );
 };

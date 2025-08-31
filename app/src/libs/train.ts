@@ -305,6 +305,10 @@ export const trainEfficiency = (user: UserData) => {
       return 80;
     case "8hrs":
       return 70;
+    case "12hrs":
+      return 60;
+    case "24hrs":
+      return 50;
     default:
       throw Error("Invalid training speed");
   }
@@ -325,6 +329,10 @@ export const trainingMultiplier = (user: UserData) => {
       return 0.16 * factor * getRankTrainingMultiplierBoost(user);
     case "8hrs":
       return 0.32 * factor * getRankTrainingMultiplierBoost(user);
+    case "12hrs":
+      return 0.48 * factor * getRankTrainingMultiplierBoost(user);
+    case "24hrs":
+      return 0.96 * factor * getRankTrainingMultiplierBoost(user);
     default:
       throw Error("Invalid training speed");
   }
@@ -353,6 +361,10 @@ export const trainingSpeedSeconds = (speed: TrainingSpeed) => {
       return 4 * 60 * 60;
     case "8hrs":
       return 8 * 60 * 60;
+    case "12hrs":
+      return 12 * 60 * 60;
+    case "24hrs":
+      return 24 * 60 * 60;
     default:
       throw Error("Invalid training speed");
   }
