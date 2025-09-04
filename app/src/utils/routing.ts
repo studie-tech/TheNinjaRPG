@@ -18,6 +18,9 @@ export const useAwake = (userData: UserWithRelations) => {
     } else if (userStatus === "TRAVEL" && pathname !== "/travel") {
       showMutationToast({ success: false, message: "Redirecting to travel" });
       void router.push("/travel");
+    } else if (userStatus === "KAGE_QUEUED") {
+      showMutationToast({ success: false, message: "Redirecting to town hall" });
+      void router.push("/townhall");
     } else if (userStatus === "ASLEEP") {
       showMutationToast({ success: false, message: "Redirecting to sleep" });
       void router.push("/home");

@@ -728,12 +728,20 @@ export const itemRouter = createTRPCRouter({
         fetchStructures(ctx.drizzle, input.villageId),
       ]);
       // Derived
-      const regularItemsCount =
-        useritems?.filter((ui) => !ui.item.isEventItem && !ui.storedAtHome).length || 0;
-      const eventItemsCount =
-        useritems?.filter((ui) => ui.item.isEventItem && !ui.storedAtHome).length || 0;
-      const materialsCount =
-        useritems?.filter((ui) => ui.item.itemType === "MATERIAL" && !ui.storedAtHome).length || 0;
+      const regularItems = useritems?.filter(
+        (ui) =>
+          !ui.item.isEventItem && !ui.storedAtHome && ui.item.itemType !== "MATERIAL",
+      );
+      const eventItems = useritems?.filter(
+        (ui) => ui.item.isEventItem && !ui.storedAtHome,
+      );
+      const materials = useritems?.filter(
+        (ui) =>
+          !ui.item.isEventItem && ui.item.itemType === "MATERIAL" && !ui.storedAtHome,
+      );
+      const regularItemsCount = regularItems?.length || 0;
+      const eventItemsCount = eventItems?.length || 0;
+      const materialsCount = materials?.length || 0;
       const sDiscount = getStrucBoost("itemDiscountPerLvl", structures);
       const aDiscount = user.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
       const hDiscount = info?.effects.find((e) => e.type === "heal")

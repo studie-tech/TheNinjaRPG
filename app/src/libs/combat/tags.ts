@@ -1608,6 +1608,10 @@ export const afterburn = (
     consequences.forEach((consequence, effectId) => {
       // Look for damage that the afterburn target is receiving
       if (consequence.targetId === effect.targetId && consequence.damage) {
+        // Skip if the damage is from a pierce effect
+        if (consequence.types?.includes("pierce")) {
+          return;
+        }
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);

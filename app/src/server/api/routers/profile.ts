@@ -416,6 +416,33 @@ export const profileRouter = createTRPCRouter({
         group: "Active boosts",
       });
     }
+    const battleExpBoost = getGameSettingBoost("battleExpMultiplier", settings);
+    if (battleExpBoost) {
+      notifications.push({
+        href: "/battlearena",
+        name: `Global: ${battleExpBoost.value}X battle exp | ${battleExpBoost.daysLeft} days`,
+        color: "green",
+        group: "Active boosts",
+      });
+    }
+    const missionExpBoost = getGameSettingBoost("missionExpMultiplier", settings);
+    if (missionExpBoost) {
+      notifications.push({
+        href: "/missionhall",
+        name: `Global: ${missionExpBoost.value}X mission exp | ${missionExpBoost.daysLeft} days`,
+        color: "green",
+        group: "Active boosts",
+      });
+    }
+    const jutsuExpBoost = getGameSettingBoost("jutsuExpMultiplier", settings);
+    if (jutsuExpBoost) {
+      notifications.push({
+        href: "/jutsus",
+        name: `Global: ${jutsuExpBoost.value}X jutsu exp | ${jutsuExpBoost.daysLeft} days`,
+        color: "green",
+        group: "Active boosts",
+      });
+    }
     // User specific
     if (user) {
       // War-time regen boost

@@ -142,7 +142,12 @@ export const combatRouter = createTRPCRouter({
           if (changedActor) userBattle.version = userBattle.version + 1;
 
           // Calculate if the battle is over for this user, and if so update user DB
-          const result = calcBattleResult(userBattle, ctx.userId);
+          // Fetch game settings for multipliers
+          const result = calcBattleResult(
+            userBattle,
+            ctx.userId,
+            userBattle.extraState.settings,
+          );
 
           // Check if the battle is over, or state was updated
           const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
@@ -493,7 +498,11 @@ export const combatRouter = createTRPCRouter({
           }
 
           // Calculate if the battle is over for this user, and if so update user DB
-          const result = calcBattleResult(newBattle, suid);
+          const result = calcBattleResult(
+            newBattle,
+            suid,
+            newBattle.extraState.settings,
+          );
 
           // Check if we should let the inner-loop continue
           if (
@@ -1276,8 +1285,20 @@ export const initiateBattle = async (
     }
 
     // Check if user is asleep
-    const QUEUED_BATTLES = ["RANKED_PVP", "CLAN_BATTLE"];
-    if (
+    const QUEUED_BATTLES = ["RANKED_PVP", "CLAN_BATTLE", "KAGE_PVP"];
+    // Special handling for KAGE_PVP battles
+    if (battleType === "KAGE_PVP") {
+      // For KAGE_PVP: challenger should be KAGE_QUEUED, kage should be AWAKE
+      if (userIds.includes(user.userId) && user.status !== "KAGE_QUEUED") {
+        return {
+          success: false,
+          message: `Challenger ${user.username} is not in kage queue`,
+        };
+      }
+      if (targetIds.includes(user.userId) && user.status !== "AWAKE") {
+        return { success: false, message: `Kage ${user.username} is not awake` };
+      }
+    } else if (
       ((user.status !== "QUEUED" && QUEUED_BATTLES.includes(battleType)) ||
         (user.status !== "AWAKE" && !QUEUED_BATTLES.includes(battleType))) &&
       !AutoBattleTypes.includes(battleType)
@@ -1433,7 +1454,7 @@ export const initiateBattle = async (
       usersState: usersState,
       usersEffects: userEffects,
       groundEffects: groundEffects,
-      extraState: { jutsus: injectableJutsus },
+      extraState: { jutsus: injectableJutsus, settings: settings },
       rewardScaling: rewardScaling,
       createdAt: startTime,
       updatedAt: startTime,
@@ -1478,7 +1499,11 @@ export const initiateBattle = async (
               ? [inArray(userData.userId, targetIds)]
               : []),
           ),
-          or(eq(userData.status, "AWAKE"), eq(userData.status, "QUEUED")),
+          or(
+            eq(userData.status, "AWAKE"),
+            eq(userData.status, "QUEUED"),
+            eq(userData.status, "KAGE_QUEUED"),
+          ),
           ...(battleType === "COMBAT"
             ? [
                 and(
@@ -2151,7 +2176,12 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
         },
       }),
       // Fetch game settings
-      client.select().from(gameSetting),
+      client
+        .select()
+        .from(gameSetting)
+        .where(
+          inArray(gameSetting.name, ["battleExpMultiplier", "regenGainMultiplier"]),
+        ),
       // Fetch villages
       client.select().from(village),
       // Fetch village alliances

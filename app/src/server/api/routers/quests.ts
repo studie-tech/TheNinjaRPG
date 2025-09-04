@@ -917,7 +917,7 @@ export const questsRouter = createTRPCRouter({
   checkRewards: protectedProcedure
     .input(z.object({ questId: z.string(), nextObjectiveId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const { user, toastMessages } = await fetchUpdatedUser({
+      const { user, toastMessages, settings } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
@@ -930,7 +930,7 @@ export const questsRouter = createTRPCRouter({
 
       // Figure out if any finished quests & get rewards
       const { rewards, trackers, userQuest, resolved, notifications, consequences } =
-        getReward(user, input.questId, input.nextObjectiveId);
+        getReward(user, input.questId, input.nextObjectiveId, settings);
       user.questData = trackers;
 
       // Post-reward consequences

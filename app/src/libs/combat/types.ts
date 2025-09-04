@@ -26,6 +26,7 @@ import type {
   UserItemImbuement,
   VillageStructure,
   Village,
+  GameSetting,
 } from "@/drizzle/schema";
 import type { UserJutsu, UserItem, UserData, AiProfile } from "@/drizzle/schema";
 import type { AnbuSquad } from "@/drizzle/schema";
@@ -116,6 +117,7 @@ export type BasicActions = {
 
 export type ExtraState = {
   jutsus?: Jutsu[];
+  settings?: GameSetting[];
 };
 
 // Create type for battle, which contains information on user current state

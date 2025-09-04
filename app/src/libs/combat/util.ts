@@ -1,6 +1,7 @@
 import { publicState, allState } from "./constants";
 import { getPower } from "./tags";
 import { randomInt } from "@/utils/math";
+import { secondsPassed } from "@/utils/time";
 import { availableUserActions } from "./actions";
 import { calcActiveUser } from "./actions";
 import { stillInBattle } from "./actions";
@@ -50,6 +51,7 @@ import type { CombatAction, BattleUserState } from "./types";
 import type { ZodAllTags } from "./types";
 import type { GroundEffect, UserEffect, BattleEffect } from "@/libs/combat/types";
 import type { Battle } from "@/drizzle/schema";
+import type { GameSetting } from "@/drizzle/schema";
 import type { DroppedItem } from "./types";
 
 /**
@@ -582,6 +584,7 @@ export const maskBattle = (battle: Battle, userId: string) => {
 export const calcBattleResult = (
   battle: CompleteBattle,
   userId: string,
+  settings?: GameSetting[],
 ): CombatResult | null => {
   const battleType = battle.battleType;
   const users = battle.usersState;
@@ -663,6 +666,17 @@ export const calcBattleResult = (
 
       // Scale experience based on reward scaling
       experience *= battle.rewardScaling * shrineBoostFactor;
+
+      // Apply battle arena exp multiplier if available
+      if (settings && (battleType === "ARENA" || battleType === "COMBAT")) {
+        const arenaSetting = settings.find((s) => s.name === "battleExpMultiplier");
+        if (arenaSetting) {
+          const secondsLeft = -secondsPassed(arenaSetting.time);
+          if (secondsLeft > 0 && arenaSetting.value > 0) {
+            experience *= arenaSetting.value;
+          }
+        }
+      }
 
       // Find users who did not leave battle yet
       const friendsUsers = friends.filter((u) => !u.isAi);
@@ -1279,6 +1293,14 @@ export const alignBattle = (battle: CompleteBattle, userId?: string) => {
         e.isNew = false;
         e.castThisRound = false;
       }
+    });
+
+    // Remove expired ground effects (including barriers) immediately
+    battle.groundEffects = battle.groundEffects.filter((e) => {
+      if (e.rounds !== undefined && e.rounds <= 0) {
+        return false; // Remove expired effects
+      }
+      return true; // Keep active effects
     });
   }
   // Update the active user on the battle

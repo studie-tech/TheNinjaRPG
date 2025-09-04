@@ -107,11 +107,11 @@ export const kageRouter = createTRPCRouter({
       // Mutate
       await Promise.all([
         insertRequest(ctx.drizzle, user.userId, kage.userId, "KAGE"),
-        // Set challenger status to QUEUED while waiting for kage response
+        // Set challenger status to KAGE_QUEUED while waiting for kage response
         ctx.drizzle
           .update(userData)
-          .set({ status: "QUEUED" })
-          .where(eq(userData.userId, ctx.userId)),
+          .set({ status: "KAGE_QUEUED" })
+          .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE"))),
         pusher.trigger(input.kageId, "event", {
           type: "userMessage",
           message: "Your position as kage is being challenged",
@@ -217,7 +217,10 @@ export const kageRouter = createTRPCRouter({
         ctx.drizzle
           .update(userData)
           .set({ status: "AWAKE" })
-          .where(eq(userData.userId, challenge.senderId)),
+          .where(and(
+            eq(userData.userId, challenge.senderId),
+            eq(userData.status, "KAGE_QUEUED")
+          )),
         updateRequestState(ctx.drizzle, input.id, "REJECTED", "KAGE"),
       ]);
       return { success: true, message: "Challenge rejected" };
@@ -258,7 +261,10 @@ export const kageRouter = createTRPCRouter({
           ctx.drizzle
             .update(userData)
             .set({ status: "AWAKE" })
-            .where(eq(userData.userId, challenge.senderId)),
+            .where(and(
+              eq(userData.userId, challenge.senderId),
+              eq(userData.status, "KAGE_QUEUED")
+            )),
           pusher.trigger(challenge.senderId, "event", {
             type: "userMessage",
             message:
@@ -276,7 +282,10 @@ export const kageRouter = createTRPCRouter({
           ctx.drizzle
             .update(userData)
             .set({ status: "AWAKE" })
-            .where(eq(userData.userId, ctx.userId)),
+            .where(and(
+              eq(userData.userId, ctx.userId),
+              eq(userData.status, "KAGE_QUEUED")
+            )),
         ]);
         return { success: true, message: "Challenge cancelled" };
       }

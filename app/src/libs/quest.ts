@@ -37,7 +37,7 @@ import type {
   ObjectiveRewardType,
 } from "@/validators/objectives";
 import { getHuntingRank } from "@/libs/hunting";
-import type { Quest, UserData, UserItem } from "@/drizzle/schema";
+import type { Quest, UserData, UserItem, GameSetting } from "@/drizzle/schema";
 import type { QuestTrackerType } from "@/validators/objectives";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 
@@ -114,6 +114,7 @@ export const getReward = (
   user: NonNullable<UserWithRelations>,
   questId: string,
   dialogNextObjectiveId?: string,
+  settings?: GameSetting[],
 ) => {
   // Derived
   let rawRewards = ObjectiveReward.parse({});
@@ -253,6 +254,17 @@ export const getReward = (
       rawRewards.reward_exp = Math.floor(
         rawRewards.reward_exp * (1 + SENSEI_STUDENT_MISSION_EXP_BOOST_PERC / 100),
       );
+    }
+
+    // Apply mission experience multiplier if available (for missions, crimes, and medical missions)
+    if (settings && (missionLike || userQuest.quest.questType === "medical")) {
+      const missionSetting = settings.find(s => s.name === "missionExpMultiplier");
+      if (missionSetting) {
+        const secondsLeft = -secondsPassed(missionSetting.time);
+        if (secondsLeft > 0 && missionSetting.value > 0) {
+          rawRewards.reward_exp = Math.floor(rawRewards.reward_exp * missionSetting.value);
+        }
+      }
     }
   }
   // Final rewards (some need a bit pose-processing)

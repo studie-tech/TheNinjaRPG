@@ -21,6 +21,7 @@ import type { TrainingSpeed, BattleType } from "@/drizzle/constants";
 import type { UserItemWithItem, Jutsu, JutsuRank } from "@/drizzle/schema";
 import type { UserData, UserRank } from "@/drizzle/schema";
 import type { ElementName } from "@/drizzle/constants";
+import type { GameSetting } from "@/drizzle/schema";
 
 export const availableJutsuLetterRanks = (userrank: UserRank): LetterRank[] => {
   switch (userrank) {
@@ -378,20 +379,55 @@ export const energyPerSecond = (speed: TrainingSpeed) => {
 };
 
 // Jutsu experience gain based on battle type
-export const battleJutsuExp = (battleType: BattleType, experienceGain: number) => {
+export const battleJutsuExp = (
+  battleType: BattleType,
+  experienceGain: number,
+  settings?: GameSetting[],
+) => {
+  let baseExp = 0;
+
   switch (battleType) {
     case "COMBAT":
-      return 100;
+      baseExp = 100;
+      break;
     case "SHRINE_WAR":
-      return experienceGain * 0.75;
+      baseExp = experienceGain * 0.75;
+      break;
     case "ARENA":
-      return experienceGain * 0.5;
+      baseExp = experienceGain * 0.5;
+      break;
     case "QUEST":
-      return experienceGain * 0.5;
+      baseExp = experienceGain * 0.5;
+      break;
     case "VILLAGE_PROTECTOR":
-      return experienceGain * 0.0;
+      baseExp = experienceGain * 0.0;
+      break;
     case "TRAINING":
-      return 10;
+      baseExp = 10;
+      break;
+    default:
+      baseExp = 0;
   }
-  return 0;
+
+  // Apply battle arena exp multiplier if available
+  if (settings) {
+    const arenaSetting = settings.find((s) => s.name === "battleExpMultiplier");
+    if (arenaSetting && (battleType === "ARENA" || battleType === "COMBAT")) {
+      const secondsLeft = -secondsPassed(arenaSetting.time);
+      if (secondsLeft > 0 && arenaSetting.value > 0) {
+        baseExp *= arenaSetting.value;
+      }
+    }
+
+    // Apply jutsu exp multiplier if available
+    const jutsuSetting = settings.find((s) => s.name === "jutsuExpMultiplier");
+    if (jutsuSetting) {
+      const secondsLeft = -secondsPassed(jutsuSetting.time);
+      if (secondsLeft > 0 && jutsuSetting.value > 0) {
+        baseExp *= jutsuSetting.value;
+      }
+    }
+  }
+
+  return Math.floor(baseExp);
 };

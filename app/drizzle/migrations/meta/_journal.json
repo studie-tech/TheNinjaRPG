@@ -2003,6 +2003,13 @@
       "when": 1756837447735,
       "tag": "0285_bright_sunfire",
       "breakpoints": false
+    },
+    {
+      "idx": 286,
+      "version": "5",
+      "when": 1756982638585,
+      "tag": "0286_cold_shocker",
+      "breakpoints": false
     }
   ]
 }

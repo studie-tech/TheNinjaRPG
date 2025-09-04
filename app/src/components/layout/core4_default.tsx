@@ -990,7 +990,7 @@ const NotificationList: React.FC<NotificationListProps> = ({
               {group} ({count})
             </div>
           </PopoverTrigger>
-          <PopoverContent className="w-80 p-0">
+          <PopoverContent className="w-96 p-0">
             <div className="p-4">
               <h4 className="font-semibold text-sm mb-3">{group}</h4>
               <div className="flex flex-col gap-1">

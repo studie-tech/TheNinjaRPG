@@ -66,7 +66,7 @@ export const canUseMonitoringTests = (role: UserRole) => {
 };
 
 export const canModifyEventGains = (role: UserRole) => {
-  return ["CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
+  return ["CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN", "CONTENT"].includes(role);
 };
 
 export const canChangeDefaultAiProfile = (role: UserRole) => {

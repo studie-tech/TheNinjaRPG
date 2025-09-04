@@ -561,7 +561,11 @@ export const updateUser = async (
     // Any jutsus to be updated
     const jUsage = user.usedActions.filter((a) => a.type === "jutsu").map((a) => a.id);
     const jUnique = [...new Set(jUsage)];
-    const jExp = battleJutsuExp(curBattle.battleType, result.eloDiff);
+    const jExp = battleJutsuExp(
+      curBattle.battleType,
+      result.eloDiff,
+      curBattle.extraState.settings,
+    );
     // If new prestige goes below 0, set allyVillage to false
     if (user.villagePrestige + result.villagePrestige < 0) {
       user.allyVillage = false;
@@ -641,7 +645,9 @@ export const updateUser = async (
           experience: sql`experience + ${result.experience}`,
           earnedExperience: sql`earnedExperience + ${result.earnedExperience}`,
           pvpStreak: result.pvpStreak,
-          ...(curBattle.battleType !== "RANKED_PVP"
+          ...(curBattle.battleType !== "RANKED_PVP" &&
+          curBattle.battleType !== "SPARRING" &&
+          curBattle.battleType !== "RANKED_SPARRING"
             ? {
                 curHealth: result.curHealth,
                 curStamina: result.curStamina,
