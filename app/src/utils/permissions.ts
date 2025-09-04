@@ -602,7 +602,7 @@ export const canViewConversation = (
   const inConversation = conversation.users.some((u) => u.userId === userId);
   const isStaffAvailable = conversation.isStaffAvailable;
   if (isPublic || inConversation) return true;
-  if (isStaffAvailable && canModerate(userRole)) return true;
+  if (isStaffAvailable && userRole !== "USER") return true;
   return false;
 };
 

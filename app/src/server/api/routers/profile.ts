@@ -542,6 +542,30 @@ export const profileRouter = createTRPCRouter({
           });
         }
       }
+      // Content and Coder (and any non-USER staff) should also see open ticket notifications
+      else if (user.role !== "USER") {
+        const [ticketCounts] = await Promise.all([
+          ctx.drizzle
+            .select({ count: sql<number>`count(*)`.mapWith(Number) })
+            .from(supportTicket)
+            .where(
+              inArray(supportTicket.status, [
+                "OPEN",
+                "IN_PROGRESS",
+                "WAITING_FOR_STAFF",
+              ]),
+            ),
+        ]);
+        const userTickets = ticketCounts?.[0]?.count ?? 0;
+        if (userTickets > 0) {
+          notifications.push({
+            href: "/support",
+            name: `${userTickets} waiting!`,
+            color: "hidden",
+            notificationCount: userTickets,
+          });
+        }
+      }
       // Check if user is banned
       if (user.isBanned) {
         notifications.push({
