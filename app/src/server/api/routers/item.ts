@@ -1020,6 +1020,15 @@ export const selectItemLoadout = async (
       .where(eq(userData.userId, user.userId)),
     ...equipPromises,
   ]);
+
+  // Refetch updated items so equipped slots reflect the selected loadout
+  const updatedUserItems = await fetchUserItems(client, user.userId);
+
+  // Only return items from the selected loadout that are actually equipped
+  const equippedItems = updatedUserItems.filter(
+    (ui) => validItemIds.includes(ui.itemId) && ui.equipped !== "NONE",
+  );
+
   // Return
   const message =
     invalidItems.length > 0
@@ -1029,7 +1038,7 @@ export const selectItemLoadout = async (
   return {
     success: true,
     message,
-    items: useritems.filter((ui) => validItemIds.includes(ui.itemId)),
+    items: equippedItems,
   };
 };
 
