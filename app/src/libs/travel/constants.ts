@@ -8,6 +8,8 @@ export const ALLIANCEHALL_LAT = 7;
 export const HOSPITAL_LONG = 12;
 export const HOSPITAL_LAT = 8;
 
+export const WAKE_ISLAND_SECTOR = 222;
+
 export const groundAssets = [
   {
     filepath: "https://utfs.io/f/6286b479-982f-473e-8c20-a9d7fbf3504b-aj4o7e.png",

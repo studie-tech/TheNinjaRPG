@@ -1,5 +1,5 @@
 import { type SectorPoint, type GlobalMapData } from "./types";
-import { SECTOR_HEIGHT, SECTOR_WIDTH } from "./constants";
+import { SECTOR_HEIGHT, SECTOR_WIDTH, WAKE_ISLAND_SECTOR } from "./constants";
 
 /**
  * Check if a given position is at the edge of a sector
@@ -29,14 +29,18 @@ export const calcGlobalTravelTime = (
   sectorB: number,
   map: GlobalMapData,
 ) => {
+  // Instant travel to Wake Island
+  if (sectorB === WAKE_ISLAND_SECTOR) return 0;
+
   const a = map?.tiles[sectorA]?.c;
   const b = map?.tiles[sectorB]?.c;
   const r = map?.radius;
   if (a && b && r) {
     const distance = r * Math.acos((a.x * b.x + a.y * b.y + a.z * b.z) / r ** 2);
-    return Math.floor(distance / 2) || 5;
+    const secs = Math.floor(distance / 2) || 5;
+    return Math.min(secs, 10); // Cap global travel to max 10s
   }
-  return 300;
+  return 10; // Fallback capped to 10s
 };
 
 // Calculate if we are in village or not.
