@@ -117,17 +117,6 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
     setIsClient(true);
   }, []);
 
-  // Detect A/B test variant (treatment/control) from cookie to control audio autoplay.
-  // Only evaluate on client to avoid SSR/CSR mismatches.
-  const [isWelcomeTreatment] = useState<boolean>(() => {
-    if (typeof document === "undefined") return false;
-    const value = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("ab_welcome_variantion="))
-      ?.split("=")[1];
-    return value === "treatment" || value === "new";
-  });
-
   // Light layout mode: hide desktop logo & navbar, use mobile side sheets (persisted)
   const [lightLayout, setLightLayout] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -151,9 +140,6 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   const getInitialAudioState = () => {
     // Respect explicit user preference when logged in
     if (userData) return userData.audioOn;
-
-    // Treatment visitors: default to disabled on first load
-    if (isWelcomeTreatment) return false;
 
     // Fallback to locally saved preference
     if (typeof window !== "undefined") {

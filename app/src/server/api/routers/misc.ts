@@ -66,7 +66,7 @@ export const miscRouter = createTRPCRouter({
           ? ctx.drizzle.insert(abEvent).values({
               id: nanoid(),
               userId: null,
-              experiment: "welcome_noaudio_ab",
+              experiment: "welcome_optimized_ab",
               variant: ctx.abWelcomeVariant,
               event: "loaded",
             })

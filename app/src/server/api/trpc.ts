@@ -52,7 +52,7 @@ export const createAppTRPCContext = async (opts: {
   // Get agent
   const userAgent = readHeaders.get("user-agent") ?? undefined;
   // AB testing cookies
-  const abWelcomeVariant = opts.readCookies.get("ab_welcome_variantion")?.value;
+  const abWelcomeVariant = opts.readCookies.get("ab_welcome_optimized_variant")?.value;
   return {
     drizzle: drizzleDB,
     userIp,
