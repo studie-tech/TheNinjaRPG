@@ -11,6 +11,7 @@ import {
   RANKED_LOADOUT_MAX_WEAPONS,
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
+  JUTSU_MAX_EVENT_EQUIPPED,
 } from "@/drizzle/constants";
 import type { Jutsu, UserData, Item } from "@/drizzle/schema";
 import type { RankedRank } from "@/drizzle/constants";
@@ -146,6 +147,13 @@ export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
   if (summonJutsus.length > RANKED_LOADOUT_MAX_SUMMON_JUTSUS) {
     check = false;
     message = `You can only equip up to ${RANKED_LOADOUT_MAX_SUMMON_JUTSUS} summon jutsu in ranked PvP`;
+  }
+
+  // Check event jutsu limit
+  const eventJutsus = jutsus.filter((jutsu) => jutsu.jutsuType === "EVENT");
+  if (eventJutsus.length > JUTSU_MAX_EVENT_EQUIPPED) {
+    check = false;
+    message = `You can only equip up to ${JUTSU_MAX_EVENT_EQUIPPED} event jutsu in ranked PvP`;
   }
 
   if (jutsus.length > RANKED_LOADOUT_MAX_JUTSUS) {

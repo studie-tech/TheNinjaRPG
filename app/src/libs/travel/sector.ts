@@ -790,6 +790,7 @@ export const createGenericStructure = (info: {
     longitude: info.longitude,
     latitude: info.latitude,
     hasPage: 1,
+    showInVillagePage: false,
     curSp: 100,
     maxSp: 100,
     allyAccess: 1,

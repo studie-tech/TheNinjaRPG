@@ -2591,6 +2591,7 @@ export const villageStructure = mysqlTable(
     curSp: int("curSp").default(100).notNull(),
     maxSp: int("maxSp").default(100).notNull(),
     allyAccess: tinyint("allyAccess").default(1).notNull(),
+    showInVillagePage: boolean("showInVillagePage").default(true).notNull(),
     // upgrade cust & current level
     baseCost: int("baseCost").default(10000).notNull(),
     level: int("level").default(1).notNull(),

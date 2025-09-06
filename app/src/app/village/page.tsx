@@ -203,6 +203,7 @@ export default function VillageOverview() {
         <div className="grid grid-cols-3 items-center sm:grid-cols-4">
           {villageData?.structures
             .filter((s) => s.hasPage !== 0)
+            .filter((s) => s.showInVillagePage)
             .filter((s) => ownSector || s.allyAccess)
             .map((structure, i) => (
               <div
