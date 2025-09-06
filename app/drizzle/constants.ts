@@ -152,6 +152,7 @@ export const ItemSlotTypes = [
 
 export const StructureRoutes = [
   "",
+  "/academy",
   "/adminbuilding",
   "/anbu",
   "/bank",
