@@ -32,7 +32,6 @@ import type { UserWithRelations } from "@/server/api/routers/profile";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import {
   SHRINE_MAX_LEVEL,
-  SHRINE_MAX_PER_VILLAGE,
   SHRINE_BOOST_COST,
   SHRINE_BOOST_TYPES,
   SHRINE_BOOST_PERC,
@@ -40,6 +39,8 @@ import {
   SHRINE_AI_UNLOCK_COST,
   SHRINE_UPGRADE_COST,
   SHRINE_MAX_AI_ASSIGNMENTS,
+  WAR_VILLAGE_MAX_SECTORS,
+  WAR_FACTION_MAX_SECTORS,
 } from "@/drizzle/constants";
 import { getTimeLeftStr, getDaysHoursMinutesSeconds } from "@/utils/time";
 import { cn } from "src/libs/shadui";
@@ -264,7 +265,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
         <StatsCard
           icon={Shield}
           label="Active Shrines"
-          value={`${activeShrines.length}/${SHRINE_MAX_PER_VILLAGE}`}
+          value={`${activeShrines.length}/${user.isOutlaw ? WAR_FACTION_MAX_SECTORS : WAR_VILLAGE_MAX_SECTORS}`}
         />
       </div>
 

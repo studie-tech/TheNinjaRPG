@@ -25,7 +25,6 @@ import {
   WAR_FACTION_MAX_SECTORS,
   WAR_EXHAUSTION_DURATION_DAYS,
   WAR_MINIMUM_TOKENS_FOR_BEING_ATTACKABLE,
-  SHRINE_MAX_PER_VILLAGE,
 } from "@/drizzle/constants";
 import {
   handleWarEnd,
@@ -251,11 +250,7 @@ export const warRouter = createTRPCRouter({
           `You are already in a sector war for sector ${activeSectorWars.map((w) => w.sector).join(", ")}`,
         );
       }
-      if (activeSectorWars.length >= SHRINE_MAX_PER_VILLAGE) {
-        return errorResponse(
-          `You can only own ${SHRINE_MAX_PER_VILLAGE} sectors at a time`,
-        );
-      }
+
       if (user.isOutlaw && sectorCount >= WAR_FACTION_MAX_SECTORS) {
         return errorResponse(
           `Your faction has too many sectors. Can max own ${WAR_FACTION_MAX_SECTORS} sectors`,
