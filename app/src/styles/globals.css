@@ -408,3 +408,39 @@
 ::-webkit-scrollbar-thumb {
   @apply rounded-full bg-border border-[1px] border-transparent border-solid bg-clip-padding;
 }
+
+@layer utilities {
+  /* Animated shine overlay derived from --tnr-glow (lighter tints) */
+  .tnr-shine {
+    background-image: linear-gradient(
+      110deg,
+      transparent 0%,
+      color-mix(in oklch, var(--tnr-glow) 60%, white) 20%,
+      color-mix(in oklch, var(--tnr-glow) 70%, white) 33%,
+      color-mix(in oklch, var(--tnr-glow) 80%, white) 50%,
+      color-mix(in oklch, var(--tnr-glow) 70%, white) 67%,
+      color-mix(in oklch, var(--tnr-glow) 60%, white) 80%,
+      transparent 100%
+    );
+    mix-blend-mode: screen;
+    opacity: 0.25;
+    mask-image: radial-gradient(60% 100% at 50% 0%, black 40%, transparent 100%);
+  }
+}
+@layer utilities {
+  /* Animated glow background derived from CSS var --tnr-glow */
+  .tnr-glow-bg {
+    background-image: linear-gradient(
+      45deg,
+      color-mix(in oklch, var(--tnr-glow) 90%, black) 0%,
+      color-mix(in oklch, var(--tnr-glow) 70%, black) 12.5%,
+      color-mix(in oklch, var(--tnr-glow) 60%, white) 25%,
+      color-mix(in oklch, var(--tnr-glow) 80%, white) 37.5%,
+      color-mix(in oklch, var(--tnr-glow) 60%, black) 50%,
+      color-mix(in oklch, var(--tnr-glow) 80%, black) 62.5%,
+      color-mix(in oklch, var(--tnr-glow) 70%, white) 75%,
+      color-mix(in oklch, var(--tnr-glow) 90%, white) 87.5%,
+      color-mix(in oklch, var(--tnr-glow) 90%, black) 100%
+    );
+  }
+}

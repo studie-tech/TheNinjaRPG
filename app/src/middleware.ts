@@ -49,7 +49,8 @@ export default clerkMiddleware(
       const cookie = request.cookies.get("ab_welcome_variantion");
       const variant = cookie?.value ?? (Math.random() < 0.5 ? "treatment" : "control");
       const url = request.nextUrl.clone();
-      url.pathname = variant === "new" ? "/welcome-new" : "/welcome-old";
+      url.pathname = variant === "treatment" ? "/welcome-new" : "/welcome-old";
+      console.log("variant", variant);
       const res = NextResponse.rewrite(url);
       if (!cookie) res.cookies.set("ab_welcome_variantion", variant, { path: "/" });
       return res;
