@@ -47,6 +47,7 @@ export const ContentTypes = [
   "bloodline",
   "item",
   "jutsu",
+  "jutsu_reskin",
   "quest",
   "user",
   "skillTree",
@@ -714,6 +715,10 @@ export const JUTSU_TRANSFER_FREE_AMOUNT = 2;
 export const JUTSU_TRANSFER_FREE_NORMAL = 3;
 export const JUTSU_TRANSFER_FREE_SILVER = 4;
 export const JUTSU_TRANSFER_FREE_GOLD = 5;
+
+// Jutsu reskin config
+export const RESKIN_LIMIT = 2;
+export const COST_RESKIN_JUTSU = 60;
 
 // Village config
 export const VILLAGE_LEAVE_REQUIRED_RANK = "CHUNIN";
@@ -1407,6 +1412,8 @@ export const IMG_MANUAL_BLOODLINE =
   "https://utfs.io/f/Hzww9EQvYURJaCMo8gYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk";
 export const IMG_MANUAL_JUTSU =
   "https://utfs.io/f/Hzww9EQvYURJMI7fE4tsO4cexqW2RDgkE3zZbNXSFGitmnar";
+export const IMG_MANUAL_JUTSU_RESKINS =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJEOTlPgLfKL5D7TAFe29bymSaPCIQ846MdzGg";
 export const IMG_MANUAL_SKILLTREE =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQB2gVJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
 export const IMG_MANUAL_BALANCE =

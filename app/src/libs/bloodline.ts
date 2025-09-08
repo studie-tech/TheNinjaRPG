@@ -1,5 +1,10 @@
 import { PITY_BLOODLINE_ROLLS } from "@/drizzle/constants";
-import type { Bloodline, BloodlineRolls, UserData } from "@/drizzle/schema";
+import type {
+  Bloodline,
+  BloodlineReskin,
+  BloodlineRolls,
+  UserData,
+} from "@/drizzle/schema";
 import type { LetterRank } from "@/drizzle/constants";
 
 /**
@@ -46,4 +51,22 @@ export const getPityRolls = (roll: BloodlineRolls) => {
   const unusedRolls = nNormalRolls - PITY_BLOODLINE_ROLLS * nPityRolls;
   const availablePityRolls = Math.floor(unusedRolls / PITY_BLOODLINE_ROLLS);
   return availablePityRolls;
+};
+
+/**
+ * Get the reskinned bloodline, generic version
+ * @param bloodline  Bloodline to reskin
+ * @param reskin  Reskin to apply to the bloodline
+ * @returns Reskinned bloodline
+ */
+export const getReskinnedBloodline = <T extends Bloodline>(
+  bloodline: T,
+  reskin: BloodlineReskin,
+): T => {
+  return {
+    ...bloodline,
+    ...(reskin.name && { name: reskin.name }),
+    ...(reskin.image && { image: reskin.image }),
+    ...(reskin.description && { description: reskin.description }),
+  };
 };

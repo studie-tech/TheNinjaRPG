@@ -11,6 +11,7 @@ export const updateUserSchema = z.object({
   username: usernameSchema,
   customTitle: z.string().min(0).max(199).optional(),
   bloodlineId: z.string().nullable(),
+  bloodlineReskinId: z.string().nullable().optional(),
   villageId: z.string().nullable(),
   role: z.enum(UserRoles),
   rank: z.enum(UserRanks),

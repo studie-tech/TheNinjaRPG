@@ -18,6 +18,10 @@ export const canChangeContent = (role: UserRole) => {
   ].includes(role);
 };
 
+export const canModerateReskin = (role: UserRole) => {
+  return role !== "USER";
+};
+
 export const canControlBackups = (role: UserRole) => {
   return ["CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
 };
@@ -518,6 +522,19 @@ export const canEditRankedLp = (role: UserRole) => {
 
 export const canSeeHiddenBountyInfo = (role: UserRole) => {
   return role !== "USER";
+};
+
+export const canReskinFreely = (role: UserRole) => {
+  return [
+    "CODER",
+    "CONTENT",
+    "EVENT",
+    "HEAD_MODERATOR",
+    "MODERATOR",
+    "CODING-ADMIN",
+    "MODERATOR-ADMIN",
+    "CONTENT-ADMIN",
+  ].includes(role);
 };
 
 /**

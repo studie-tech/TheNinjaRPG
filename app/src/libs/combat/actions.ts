@@ -596,6 +596,8 @@ export const handleInjectedJutsus = (
         lastUsedRound: -jutsu.cooldown,
         originalCooldown: jutsu.cooldown,
         jutsu,
+        reskinId: null,
+        activeReskin: null,
       })) ?? []),
   ];
   return activeJutsus;
@@ -1081,11 +1083,7 @@ export const actionPointsAfterAction = (
         return true;
       }
       // For jutsu: apply only if there is an overlap with the action's elements
-      if (
-        action?.type === "jutsu" &&
-        action.data &&
-        "effects" in action.data
-      ) {
+      if (action?.type === "jutsu" && action.data && "effects" in action.data) {
         const actionElements = new Set(
           action.data.effects.flatMap((eff) =>
             "elements" in eff && eff.elements ? eff.elements : [],

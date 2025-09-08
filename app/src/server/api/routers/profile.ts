@@ -105,8 +105,10 @@ import { createThumbnail } from "@/libs/replicate";
 import sanitize from "@/utils/sanitize";
 import { deleteUser } from "@/server/api/routers/staff";
 import { moderateContent } from "@/libs/moderator";
+import { getReskinnedBloodline } from "@/libs/bloodline";
 import { fetchKageReplacement } from "@/routers/kage";
 import { validateUserUpdateReason } from "@/libs/moderator";
+import type { BloodlineReskin } from "@/drizzle/schema";
 import type { UserVote } from "@/drizzle/schema";
 import type { GetPublicUsersSchema } from "@/validators/user";
 import type { UserJutsu, UserItem } from "@/drizzle/schema";
@@ -790,6 +792,12 @@ export const profileRouter = createTRPCRouter({
       if (bloodlineChanged && !canEditBloodline(user.role)) {
         return errorResponse("Not allowed to change bloodline");
       }
+      const bloodlineReskinChanged =
+        "bloodlineReskinId" in input.data &&
+        input.data.bloodlineReskinId !== target.bloodlineReskinId;
+      if (bloodlineReskinChanged && !canEditBloodline(user.role)) {
+        return errorResponse("Not allowed to change bloodline reskin");
+      }
 
       const villageChanged = village.id !== target.villageId;
       if (villageChanged && !canEditVillage(user.role)) {
@@ -891,6 +899,9 @@ export const profileRouter = createTRPCRouter({
             ...(bloodlineChanged ? { bloodlineId: input.data.bloodlineId } : {}),
             ...(villageChanged ? { villageId: input.data.villageId } : {}),
             ...(rankChanged ? { rank: input.data.rank } : {}),
+            ...(bloodlineReskinChanged
+              ? { bloodlineReskinId: input.data.bloodlineReskinId ?? null }
+              : {}),
             ...(staffAccountChanged ? { staffAccount: input.data.staffAccount } : {}),
             ...(rankedLpChanged ? { rankedLp: input.data.rankedLp } : {}),
             ...(roleChanged ? { role: input.data.role } : {}),
@@ -1299,6 +1310,7 @@ export const profileRouter = createTRPCRouter({
             villageId: true,
             tavernMessages: true,
             staffAccount: true,
+            bloodlineReskinId: true,
           },
           with: {
             village: true,
@@ -1308,6 +1320,7 @@ export const profileRouter = createTRPCRouter({
             jutsus: { with: { jutsu: { columns: { id: true, name: true } } } },
             items: { with: { item: { columns: { id: true, name: true } } } },
             badges: { with: { badge: true } },
+            activeReskin: true,
             recruitedUsers: {
               columns: {
                 userId: true,
@@ -1368,6 +1381,9 @@ export const profileRouter = createTRPCRouter({
       }
       if (!requester || !canSeeIps(requester.role)) {
         user.lastIp = "hidden";
+      }
+      if (user.bloodline && user.activeReskin) {
+        user.bloodline = getReskinnedBloodline(user.bloodline, user.activeReskin);
       }
       // Filter off entries that do not exist
       user.jutsus = user.jutsus.filter((j) => j.jutsu);
@@ -1814,6 +1830,7 @@ export const fetchUpdatedUser = async (props: {
       where: eq(userData.userId, userId),
       with: {
         bloodline: true,
+        activeReskin: true,
         clan: true,
         village: {
           with: {
@@ -1868,6 +1885,11 @@ export const fetchUpdatedUser = async (props: {
       )
       .limit(1),
   ]);
+
+  // Reskin bloodline if needed
+  if (user?.bloodline && user?.activeReskin) {
+    user.bloodline = getReskinnedBloodline(user.bloodline, user.activeReskin);
+  }
 
   // Add votes entry if it doesn't exist
   if (user && !user.votes) {
@@ -2270,6 +2292,7 @@ export const fetchAttributes = async (client: DrizzleClient, userId: string) => 
 export type UserWithRelations =
   | (UserData & {
       bloodline?: Bloodline | null;
+      activeReskin?: BloodlineReskin | null;
       anbuSquad?: { name: string } | null;
       clan?: Clan | null;
       items: UserItem[];

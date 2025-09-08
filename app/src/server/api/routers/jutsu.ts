@@ -8,6 +8,7 @@ import {
   actionLog,
   jutsuLoadout,
   bloodline,
+  jutsuReskin,
   skillTree,
   item,
 } from "@/drizzle/schema";
@@ -30,24 +31,39 @@ import {
   calcJutsuEquipLimit,
 } from "@/libs/train";
 import { DAY_S, secondsFromDate } from "@/utils/time";
-import { getFreeTransfers } from "@/libs/jutsu";
+import { getFreeTransfers, getReskinnedUserJutsu } from "@/libs/jutsu";
 import { JutsuValidator } from "@/libs/combat/types";
-import { canChangeContent, canEditJutsus, canTransferJutsu } from "@/utils/permissions";
+import {
+  canChangeContent,
+  canEditJutsus,
+  canTransferJutsu,
+  canReskinFreely,
+  canModerateReskin,
+} from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/discord";
 import { createTRPCRouter, errorResponse } from "@/server/api/trpc";
 import { protectedProcedure, publicProcedure } from "@/server/api/trpc";
 import { serverError, baseServerResponse } from "@/server/api/trpc";
 import { fedJutsuLoadouts } from "@/utils/paypal";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import {
+  IMG_AVATAR_DEFAULT,
+  RESKIN_LIMIT,
+  COST_RESKIN_JUTSU,
+} from "@/drizzle/constants";
 import { calculateContentDiff } from "@/utils/diff";
-import { jutsuFilteringSchema } from "@/validators/jutsu";
+import {
+  jutsuFilteringSchema,
+  jutsuReskinCreateSchema,
+  jutsuReskinUpdateSchema,
+} from "@/validators/jutsu";
 import { QuestTracker } from "@/validators/objectives";
 import type { JutsuFilteringSchema } from "@/validators/jutsu";
 import type { ZodAllTags } from "@/libs/combat/types";
-import type { UserData, JutsuLoadout, UserJutsu, Jutsu } from "@/drizzle/schema";
+import type { UserData, JutsuLoadout, UserJutsuWithRelations } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { TRPCError } from "@trpc/server";
 import { fetchStudents } from "@/routers/sensei";
+import { validateUserUpdateReason } from "@/libs/moderator";
 
 export const jutsuRouter = createTRPCRouter({
   getRecentTransfers: protectedProcedure.query(async ({ ctx }) => {
@@ -230,43 +246,8 @@ export const jutsuRouter = createTRPCRouter({
         limit: input.limit,
       });
 
-      // Post-filter to handle "must have these elements, stats, etc." all in the SAME effect
-      const filtered = results.filter((oneJutsu) => {
-        if (
-          input.stat ||
-          input.effect ||
-          input.element ||
-          input.appear ||
-          input.static ||
-          input.disappear
-        ) {
-          return oneJutsu.effects.some((e) => {
-            const asString = JSON.stringify(e);
-
-            // Merge statTypes + generalTypes if that's how your code works
-            const effectStats = [
-              ...("statTypes" in e && e.statTypes ? e.statTypes : []),
-              ...("generalTypes" in e && e.generalTypes ? e.generalTypes : []),
-            ];
-            const effectElements = [
-              ...("elements" in e && e.elements ? e.elements : []),
-            ] as string[];
-
-            // Return true if it matches the includes
-            return (
-              (!input.stat || input.stat.every((x) => effectStats.includes(x))) &&
-              (!input.effect || input.effect.some((x) => x === e.type)) &&
-              (!input.element ||
-                input.element.every((x) => effectElements.includes(x))) &&
-              (!input.appear || asString.includes(input.appear)) &&
-              (!input.static || asString.includes(input.static)) &&
-              (!input.disappear || asString.includes(input.disappear))
-            );
-          });
-        }
-        // If no arrays, keep it
-        return true;
-      });
+      // Post-filter to ensure constraints are satisfied within the same effect
+      const filtered = filterByEffectConstraints(results, input);
 
       // Next cursor if more rows
       const nextCursor = results.length < input.limit ? null : currentCursor + 1;
@@ -501,15 +482,32 @@ export const jutsuRouter = createTRPCRouter({
       // Return
       return results;
     }),
-  // Adjust jutsu level of public user
-  adjustJutsuLevel: protectedProcedure
-    .input(z.object({ userId: z.string(), jutsuId: z.string(), level: z.number() }))
+  // Adjust jutsu level of public user (and optionally reskin)
+  adjustUserJutsu: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        jutsuId: z.string(),
+        level: z.number(),
+        reskinId: z.string().nullable().optional(),
+      }),
+    )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, userjutsus] = await Promise.all([
+      const [user, userjutsus, reskin] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, input.userId),
+        ...(input.reskinId
+          ? [
+              ctx.drizzle.query.jutsuReskin.findFirst({
+                where: and(
+                  eq(jutsuReskin.id, input.reskinId),
+                  eq(jutsuReskin.jutsuId, input.jutsuId),
+                ),
+              }),
+            ]
+          : []),
       ]);
       // Guard)
       if (!canEditJutsus(user.role)) {
@@ -519,11 +517,32 @@ export const jutsuRouter = createTRPCRouter({
       if (!userjutsu) {
         return errorResponse("Jutsu not found for user");
       }
+      if (input.reskinId && !reskin) {
+        return errorResponse("Reskin not found for this jutsu");
+      }
+      // Action loggin
+      const prevReskinName = userjutsu.activeReskin?.name ?? null;
+      const newReskinName = reskin?.name ?? null;
+      const updateFields = {
+        level: input.level,
+        updatedAt: new Date(),
+        reskinId: input.reskinId,
+      };
+
+      const changes: string[] = [
+        `Jutsu ${userjutsu.jutsu.name} lvl ${userjutsu.level} -> ${input.level}`,
+      ];
+      if (input.reskinId !== undefined && prevReskinName !== newReskinName) {
+        changes.push(
+          `Jutsu ${userjutsu.jutsu.name} reskin ${prevReskinName ?? "None"} -> ${newReskinName ?? "None"}`,
+        );
+      }
+
       // Mutate
       await Promise.all([
         ctx.drizzle
           .update(userJutsu)
-          .set({ level: input.level })
+          .set(updateFields)
           .where(
             and(
               eq(userJutsu.userId, input.userId),
@@ -534,15 +553,13 @@ export const jutsuRouter = createTRPCRouter({
           id: nanoid(),
           userId: ctx.userId,
           tableName: "user",
-          changes: [
-            `Jutsu ${userjutsu.jutsu.name} lvl ${userjutsu.level} -> ${input.level}`,
-          ],
+          changes,
           relatedId: input.userId,
-          relatedMsg: `Update: ${userjutsu.jutsu.name} level ${userjutsu.level} -> ${input.level}`,
+          relatedMsg: `Update: ${userjutsu.jutsu.name}`,
           relatedImage: userjutsu.jutsu.image,
         }),
       ]);
-      return { success: true, message: `Jutsu level adjusted to ${input.level}` };
+      return { success: true, message: `Jutsu updated` };
     }),
   // Start training a given jutsu
   startTraining: protectedProcedure
@@ -846,6 +863,297 @@ export const jutsuRouter = createTRPCRouter({
 
       return { success: true, message: `Order updated` };
     }),
+
+  createReskin: protectedProcedure
+    .input(jutsuReskinCreateSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, jutsuData, userReskins] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchJutsu(ctx.drizzle, input.jutsuId),
+        fetchUserReskins(ctx.drizzle, ctx.userId),
+      ]);
+      // Derived
+      const curReskins = userReskins?.length || 0;
+      const maxReskins = user.extraReskinSlots + RESKIN_LIMIT;
+      const existingReskin = userReskins.find((r) => r.jutsuId === input.jutsuId);
+      // Guards
+      if (!jutsuData) {
+        return errorResponse("Original jutsu not found");
+      }
+      if (!existingReskin && curReskins >= maxReskins) {
+        return errorResponse(
+          `You have used all your reskins (${curReskins}/${maxReskins})`,
+        );
+      }
+      if (
+        !existingReskin &&
+        !canReskinFreely(user.role) &&
+        user.reputationPoints < COST_RESKIN_JUTSU
+      ) {
+        return errorResponse(
+          `Not enough reputation points. Required: ${COST_RESKIN_JUTSU}`,
+        );
+      }
+      // Default image fallback to original jutsu image if omitted
+      const resolvedImage = input.image ?? jutsuData.image;
+
+      // Run mutation (free update or new)
+      if (existingReskin) {
+        await Promise.all([
+          ctx.drizzle
+            .update(jutsuReskin)
+            .set({
+              name: input.name,
+              description: input.description,
+              battleDescription: input.battleDescription,
+              image: resolvedImage,
+              updatedAt: new Date(),
+            })
+            .where(eq(jutsuReskin.id, existingReskin.id)),
+          ctx.drizzle
+            .update(userJutsu)
+            .set({
+              reskinId: existingReskin.id,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(userJutsu.jutsuId, jutsuData.id),
+                eq(userJutsu.userId, ctx.userId),
+              ),
+            ),
+        ]);
+        return { success: true, message: "Jutsu reskin updated successfully" };
+      } else {
+        const reskinId = nanoid();
+        await Promise.all([
+          ctx.drizzle
+            .update(userJutsu)
+            .set({
+              reskinId: reskinId,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(userJutsu.jutsuId, jutsuData.id),
+                eq(userJutsu.userId, ctx.userId),
+              ),
+            ),
+          ctx.drizzle.insert(jutsuReskin).values({
+            id: reskinId,
+            userId: ctx.userId,
+            jutsuId: jutsuData.id,
+            name: input.name,
+            description: input.description,
+            battleDescription: input.battleDescription,
+            image: resolvedImage,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }),
+          ...(canReskinFreely(user.role)
+            ? []
+            : [
+                ctx.drizzle
+                  .update(userData)
+                  .set({
+                    reputationPoints: sql`${userData.reputationPoints} - ${COST_RESKIN_JUTSU}`,
+                  })
+                  .where(eq(userData.userId, ctx.userId)),
+              ]),
+        ]);
+
+        return { success: true, message: "Jutsu reskin created successfully" };
+      }
+    }),
+
+  updateReskin: protectedProcedure
+    .input(z.object({ reskinId: z.string(), data: jutsuReskinUpdateSchema }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Fetch current user and reskin
+      const [user, reskin] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserReskin(ctx.drizzle, ctx.userId, input.reskinId),
+      ]);
+      // Guards
+      if (!reskin) return errorResponse("Reskin not found");
+      if (!canModerateReskin(user.role)) {
+        return errorResponse("Unauthorized");
+      }
+      // Prepare old/new objects for diff (exclude reason from new)
+      const oldData = {
+        name: reskin.name,
+        description: reskin.description,
+        battleDescription: reskin.battleDescription,
+        image: reskin.image,
+      };
+      const { reason, ...rest } = input.data;
+      const newData = { ...rest };
+      const diff = calculateContentDiff(oldData, newData);
+
+      // AI moderation of reason
+      const aiCheck = await validateUserUpdateReason(diff.join(". "), reason);
+      if (!aiCheck.allowUpdate) {
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "jutsu",
+          changes: {},
+          relatedId: reskin.jutsuId,
+          relatedMsg: `Reskin update rejected by AI: ${reason}`,
+          relatedImage: reskin.image,
+        });
+        return errorResponse(aiCheck.comment);
+      }
+
+      // Update database and log
+      await Promise.all([
+        ctx.drizzle
+          .update(jutsuReskin)
+          .set({
+            name: newData.name,
+            description: newData.description,
+            battleDescription: newData.battleDescription,
+            image: newData.image ?? reskin.image,
+            updatedAt: new Date(),
+          })
+          .where(eq(jutsuReskin.id, reskin.id)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "jutsu",
+          changes: diff,
+          relatedId: reskin.jutsuId,
+          relatedMsg: `Reskin updated: ${reskin.jutsu?.name || reskin.name}`,
+          relatedImage: newData.image ?? reskin.image,
+        }),
+      ]);
+
+      return { success: true, message: "Jutsu reskin updated successfully" };
+    }),
+
+  getAllReskins: publicProcedure
+    .input(
+      jutsuFilteringSchema.extend({
+        cursor: z.number().nullish(),
+        limit: z.number().min(1).max(1000),
+        hideAi: z.boolean().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const currentCursor = input.cursor ?? 0;
+      const skip = currentCursor * input.limit;
+
+      // Build the base DB filter (on underlying jutsu)
+      const baseFilters = jutsuDatabaseFilter(input);
+
+      // Query reskins joined with jutsu to allow filtering via jutsuDatabaseFilter
+      const rows = await ctx.drizzle
+        .select({
+          reskin: jutsuReskin,
+          jutsu: jutsu,
+          bloodlineName: bloodline.name,
+          userUsername: userData.username,
+        })
+        .from(jutsuReskin)
+        .innerJoin(jutsu, eq(jutsuReskin.jutsuId, jutsu.id))
+        .leftJoin(bloodline, eq(jutsu.bloodlineId, bloodline.id))
+        .innerJoin(userData, eq(jutsuReskin.userId, userData.userId))
+        .where(
+          and(...baseFilters, ...(input.hideAi ? [ne(jutsu.jutsuType, "AI")] : [])),
+        )
+        .orderBy(desc(jutsuReskin.updatedAt))
+        .offset(skip)
+        .limit(input.limit);
+
+      // Map back to the previous shape used by the frontend consumer
+      const results = rows
+        .filter((row) => filterByEffectConstraints([row.jutsu], input).length > 0)
+        .map((row) => ({
+          ...row.reskin,
+          jutsu: {
+            ...row.jutsu,
+            bloodline: row.bloodlineName ? { name: row.bloodlineName } : null,
+          },
+          user: {
+            username: row.userUsername,
+          },
+        }));
+
+      const nextCursor = rows.length < input.limit ? null : currentCursor + 1;
+      return {
+        data: results,
+        nextCursor,
+      };
+    }),
+
+  getUserReskins: protectedProcedure.query(async ({ ctx }) => {
+    return await fetchUserReskins(ctx.drizzle, ctx.userId);
+  }),
+
+  // List all reskins available for a given base jutsu
+  getReskinsForJutsu: protectedProcedure
+    .input(z.object({ jutsuId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const reskins = await ctx.drizzle.query.jutsuReskin.findMany({
+        where: eq(jutsuReskin.jutsuId, input.jutsuId),
+        orderBy: (table, { desc }) => [desc(table.updatedAt)],
+        with: {
+          user: {
+            columns: { username: true },
+          },
+        },
+      });
+      return reskins;
+    }),
+
+  getReskin: protectedProcedure
+    .input(z.object({ reskinId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      // Query
+      const reskin = await fetchUserReskin(ctx.drizzle, ctx.userId, input.reskinId);
+
+      // Return
+      if (!reskin) {
+        return errorResponse("Reskin not found");
+      }
+      // Return
+      return reskin;
+    }),
+  removeReskin: protectedProcedure
+    .input(z.object({ userJutsuId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const userJutsuData = await ctx.drizzle.query.userJutsu.findFirst({
+        where: eq(userJutsu.id, input.userJutsuId),
+        with: { activeReskin: true },
+      });
+      // Guard
+      if (!userJutsuData) {
+        return errorResponse("User jutsu not found");
+      }
+      if (!userJutsuData.activeReskin) {
+        return errorResponse("No reskin found for this jutsu");
+      }
+      // Remove the reskin (but keep the record for history + free future updates)
+      await Promise.all([
+        ctx.drizzle
+          .update(userJutsu)
+          .set({
+            reskinId: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(userJutsu.id, input.userJutsuId)),
+      ]);
+      // Return
+      return {
+        success: true,
+        message: "Jutsu reskin removed successfully",
+      };
+    }),
+
   getJutsuRelations: publicProcedure
     .input(z.object({ jutsuId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -905,6 +1213,12 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
 };
 export type JutsuRelations = Awaited<ReturnType<typeof getJutsuRelations>>;
 
+/**
+ * Fetch all loadouts for a user
+ * @param client - The database client
+ * @param userId - The ID of the user to fetch loadouts for
+ * @returns A promise that resolves to the result of the select
+ */
 export const fetchJutsuLoadouts = async (client: DrizzleClient, userId: string) => {
   return await client.query.jutsuLoadout.findMany({
     where: eq(jutsuLoadout.userId, userId),
@@ -912,23 +1226,82 @@ export const fetchJutsuLoadouts = async (client: DrizzleClient, userId: string) 
   });
 };
 
+/**
+ * Fetch a jutsu by id (for reskin update)
+ * @param client - The database client
+ * @param id - The ID of the jutsu to fetch
+ * @returns A promise that resolves to the result of the select
+ */
 export const fetchJutsu = async (client: DrizzleClient, id: string) => {
   return await client.query.jutsu.findFirst({
     where: eq(jutsu.id, id),
   });
 };
 
+/**
+ * Fetch a reskin for a user
+ * @param client - The database client
+ * @param userId - The ID of the user to fetch the reskin for
+ * @param reskinId - The ID of the reskin to fetch
+ * @returns A promise that resolves to the result of the select
+ */
+export const fetchUserReskin = async (
+  client: DrizzleClient,
+  userId: string,
+  reskinId: string,
+) => {
+  return await client.query.jutsuReskin.findFirst({
+    where: and(eq(jutsuReskin.userId, userId), eq(jutsuReskin.id, reskinId)),
+    with: {
+      jutsu: {
+        with: {
+          bloodline: {
+            columns: {
+              name: true,
+            },
+          },
+        },
+      },
+      user: {
+        columns: {
+          username: true,
+        },
+      },
+    },
+  });
+};
+
+/**
+ * Fetch all reskins for a user
+ * @param client - The database client
+ * @param userId - The ID of the user to fetch reskins for
+ * @returns A promise that resolves to the result of the select
+ */
+export const fetchUserReskins = async (client: DrizzleClient, userId: string) => {
+  return await client.query.jutsuReskin.findMany({
+    where: eq(jutsuReskin.userId, userId),
+  });
+};
+
+/**
+ * Fetch all jutsus for a user
+ * @param client - The database client
+ * @param userId - The ID of the user to fetch jutsus for
+ * @param input - The input object
+ * @returns
+ */
 export const fetchUserJutsus = async (
   client: DrizzleClient,
   userId: string,
   input?: JutsuFilteringSchema,
 ) => {
-  // Grab all userJutsus with Jutsu data
+  // Grab all userJutsus with Jutsu data and reskin data
   const userjutsus = await client
     .select()
     .from(userJutsu)
     .innerJoin(jutsu, eq(userJutsu.jutsuId, jutsu.id))
     .leftJoin(bloodline, eq(jutsu.bloodlineId, bloodline.id))
+    .leftJoin(jutsuReskin, eq(userJutsu.reskinId, jutsuReskin.id))
     .where(
       and(
         eq(userJutsu.userId, userId),
@@ -937,14 +1310,17 @@ export const fetchUserJutsus = async (
       ),
     )
     .orderBy(desc(userJutsu.level));
-
-  return userjutsus.map((result) => ({
+  // First map to query-format
+  const unskinnedUserJutsus = userjutsus.map((result) => ({
     ...result.UserJutsu,
     jutsu: {
       ...result.Jutsu,
       bloodline: result.Bloodline,
     },
+    activeReskin: result.JutsuReskin,
   }));
+  // Then map to reskinned format
+  return unskinnedUserJutsus.map((userjutsu) => getReskinnedUserJutsu(userjutsu));
 };
 
 /**
@@ -955,7 +1331,9 @@ export const jutsuDatabaseFilter = (input?: JutsuFilteringSchema) => {
     // -----------------------------
     // Existing "include" conditions
     // -----------------------------
-    ...(input?.name ? [like(jutsu.name, `%${input.name}%`)] : []),
+    ...(input?.name
+      ? [like(sql`LOWER(${jutsu.name})`, `%${input.name.toLowerCase()}%`)]
+      : []),
     ...(input?.bloodline ? [eq(jutsu.bloodlineId, input.bloodline)] : []),
     ...(input?.jutsuType ? [inArray(jutsu.jutsuType, input.jutsuType)] : []),
     ...(input?.requiredLevel ? [gte(jutsu.requiredLevel, input.requiredLevel)] : []),
@@ -1147,6 +1525,47 @@ export const jutsuDatabaseFilter = (input?: JutsuFilteringSchema) => {
 };
 
 /**
+ * Utility: Post-filter jutsu-like rows to ensure includes are satisfied within the same effect
+ */
+const filterByEffectConstraints = <T extends { effects: ZodAllTags[] }>(
+  rows: T[],
+  input: JutsuFilteringSchema,
+) => {
+  return rows.filter((row) => {
+    if (
+      input.stat ||
+      input.effect ||
+      input.element ||
+      input.appear ||
+      input.static ||
+      input.disappear
+    ) {
+      return row.effects.some((e) => {
+        const asString = JSON.stringify(e);
+
+        const effectStats = [
+          ...("statTypes" in e && e.statTypes ? e.statTypes : []),
+          ...("generalTypes" in e && e.generalTypes ? e.generalTypes : []),
+        ];
+        const effectElements = [
+          ...("elements" in e && e.elements ? e.elements : []),
+        ] as string[];
+
+        return (
+          (!input.stat || input.stat.every((x) => effectStats.includes(x))) &&
+          (!input.effect || input.effect.some((x) => x === e.type)) &&
+          (!input.element || input.element.every((x) => effectElements.includes(x))) &&
+          (!input.appear || asString.includes(input.appear)) &&
+          (!input.static || asString.includes(input.static)) &&
+          (!input.disappear || asString.includes(input.disappear))
+        );
+      });
+    }
+    return true;
+  });
+};
+
+/**
  * @param client - The database client
  * @param loadoutId - The ID of the loadout to select
  * @param loadouts - The loadouts to select from
@@ -1157,7 +1576,7 @@ export const selectJutsuLoadout = async (
   client: DrizzleClient,
   loadoutId: string,
   loadouts: JutsuLoadout[],
-  userjutsus: (UserJutsu & { jutsu: Jutsu })[],
+  userjutsus: UserJutsuWithRelations[],
   user: UserData,
 ) => {
   const loadout = loadouts.find((l) => l.id === loadoutId);

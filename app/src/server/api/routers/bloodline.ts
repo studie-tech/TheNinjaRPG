@@ -1,9 +1,21 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { randomInt } from "crypto";
-import { eq, or, sql, gte, and, inArray, isNull, isNotNull, like } from "drizzle-orm";
+import {
+  eq,
+  or,
+  sql,
+  gte,
+  and,
+  inArray,
+  isNull,
+  isNotNull,
+  like,
+  desc,
+} from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
 import { bloodline, bloodlineRolls, actionLog } from "@/drizzle/schema";
+import { bloodlineReskin } from "@/drizzle/schema";
 import { userJutsu, jutsu } from "@/drizzle/schema";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/api/trpc";
 import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
@@ -16,6 +28,11 @@ import { ROLL_CHANCE, REMOVAL_COST, BLOODLINE_COST } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { calculateContentDiff } from "@/utils/diff";
 import { bloodlineFilteringSchema } from "@/validators/bloodline";
+import {
+  bloodlineReskinCreateSchema,
+  bloodlineReskinUpdateSchema,
+} from "@/validators/bloodline";
+import { validateUserUpdateReason } from "@/libs/moderator";
 import { filterRollableBloodlines, getPityRolls } from "@/libs/bloodline";
 import { LetterRanks, PITY_SYSTEM_ENABLED } from "@/drizzle/constants";
 import { COST_SWAP_BLOODLINE } from "@/drizzle/constants";
@@ -156,6 +173,184 @@ export const bloodlineRouter = createTRPCRouter({
         `Bloodline Swapped from ${user.bloodline?.name} to ${line.name}`,
       );
       return { success: true, message: "Bloodline swapped" };
+    }),
+  // Bloodline reskins (staff-only creation & moderation)
+  createReskin: protectedProcedure
+    .input(bloodlineReskinCreateSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, base] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchBloodline(ctx.drizzle, input.bloodlineId),
+      ]);
+      // Guard
+      if (!base) return errorResponse("Base bloodline not found");
+      if (!canChangeContent(user.role)) return errorResponse("Unauthorized");
+      // Mutate
+      const id = nanoid();
+      const resolvedImage = input.image ?? base.image;
+      await Promise.all([
+        ctx.drizzle.insert(bloodlineReskin).values({
+          id,
+          bloodlineId: base.id,
+          name: input.name,
+          description: input.description,
+          image: resolvedImage,
+          createdBy: ctx.userId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "bloodline",
+          changes: [`Reskin created for ${base.name}: ${input.name}`],
+          relatedId: base.id,
+          relatedMsg: `Reskin created: ${input.name}`,
+          relatedImage: resolvedImage,
+        }),
+      ]);
+      return { success: true, message: id };
+    }),
+  updateReskin: protectedProcedure
+    .input(z.object({ reskinId: z.string(), data: bloodlineReskinUpdateSchema }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, reskin] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchBloodlineReskin(ctx.drizzle, input.reskinId),
+      ]);
+      // Guard
+      if (!reskin) return errorResponse("Reskin not found");
+      if (!canChangeContent(user.role)) return errorResponse("Unauthorized");
+      // Prepare old/new objects for diff (exclude reason from new)
+      const oldData = {
+        name: reskin.name,
+        description: reskin.description,
+        image: reskin.image,
+      } as const;
+      const { reason, ...rest } = input.data;
+      const newData = { ...rest } as const;
+      const diff = calculateContentDiff(oldData, newData);
+      // AI moderation of reason
+      const aiCheck = await validateUserUpdateReason(diff.join(". "), reason);
+      if (!aiCheck.allowUpdate) {
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "bloodline",
+          changes: {},
+          relatedId: reskin.bloodlineId,
+          relatedMsg: `Reskin update rejected by AI: ${reason}`,
+          relatedImage: reskin.image,
+        });
+        return errorResponse(aiCheck.comment);
+      }
+      // Mutate
+      await Promise.all([
+        ctx.drizzle
+          .update(bloodlineReskin)
+          .set({
+            name: newData.name,
+            description: newData.description,
+            image: newData.image ?? reskin.image,
+            updatedAt: new Date(),
+          })
+          .where(eq(bloodlineReskin.id, reskin.id)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "bloodline",
+          changes: diff,
+          relatedId: reskin.bloodlineId,
+          relatedMsg: `Reskin updated: ${reskin.name}`,
+          relatedImage: newData.image ?? reskin.image,
+        }),
+      ]);
+
+      return { success: true, message: "Bloodline reskin updated" };
+    }),
+  deleteReskin: protectedProcedure
+    .input(z.object({ reskinId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, reskin] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchBloodlineReskin(ctx.drizzle, input.reskinId),
+      ]);
+      // Guard
+      if (!canChangeContent(user.role)) return errorResponse("Unauthorized");
+      if (!reskin) return errorResponse("Reskin not found");
+      // Mutate
+      await Promise.all([
+        ctx.drizzle
+          .update(userData)
+          .set({ bloodlineReskinId: null })
+          .where(eq(userData.bloodlineReskinId, input.reskinId)),
+        ctx.drizzle
+          .delete(bloodlineReskin)
+          .where(eq(bloodlineReskin.id, input.reskinId)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "bloodline",
+          changes: ["Reskin deleted"],
+          relatedId: reskin.bloodlineId,
+          relatedMsg: `Reskin deleted: ${reskin.name}`,
+          relatedImage: reskin.image,
+        }),
+      ]);
+      return { success: true, message: "Bloodline reskin deleted" };
+    }),
+  getReskin: protectedProcedure
+    .input(z.object({ reskinId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const res = await fetchBloodlineReskin(ctx.drizzle, input.reskinId);
+      return res ?? errorResponse("Reskin not found");
+    }),
+  getReskinsForBloodline: protectedProcedure
+    .input(z.object({ bloodlineId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.drizzle.query.bloodlineReskin.findMany({
+        where: eq(bloodlineReskin.bloodlineId, input.bloodlineId),
+        orderBy: (table, { desc }) => [desc(table.name)],
+      });
+      return rows;
+    }),
+  getAllReskins: publicProcedure
+    .input(
+      bloodlineFilteringSchema.extend({
+        cursor: z.number().nullish(),
+        limit: z.number().min(1).max(1000),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const currentCursor = input.cursor ?? 0;
+      const skip = currentCursor * input.limit;
+      const baseFilters = bloodlineDatabaseFilter(input);
+      const rows = await ctx.drizzle
+        .select({
+          reskin: bloodlineReskin,
+          base: bloodline,
+          userUsername: userData.username,
+        })
+        .from(bloodlineReskin)
+        .innerJoin(bloodline, eq(bloodlineReskin.bloodlineId, bloodline.id))
+        .innerJoin(userData, eq(bloodlineReskin.createdBy, userData.userId))
+        .where(and(...baseFilters))
+        .orderBy(desc(bloodlineReskin.updatedAt))
+        .offset(skip)
+        .limit(input.limit);
+      const results = rows.map((row) => ({
+        ...row.reskin,
+        userUsername: row.userUsername,
+        bloodline: row.base,
+      }));
+      const nextCursor = rows.length < input.limit ? null : currentCursor + 1;
+      return { data: results, nextCursor };
     }),
   // Delete a bloodline
   delete: protectedProcedure
@@ -548,6 +743,7 @@ export const updateBloodline = async (
       .update(userData)
       .set({
         bloodlineId: bloodline?.id || null,
+        bloodlineReskinId: null,
         reputationPoints: user.reputationPoints - repCost,
       })
       .where(
@@ -568,6 +764,20 @@ export const updateBloodline = async (
 /**
  * COMMON QUERIES WHICH ARE REUSED
  */
+
+export const fetchBloodlineReskin = async (client: DrizzleClient, reskinId: string) => {
+  return await client.query.bloodlineReskin.findFirst({
+    where: eq(bloodlineReskin.id, reskinId),
+    with: { bloodline: true },
+  });
+};
+
+/**
+ * Fetch natural bloodline roll of a user
+ * @param client Drizzle client
+ * @param userId User ID
+ * @returns Natural bloodline roll
+ */
 export const fetchNaturalBloodlineRoll = async (
   client: DrizzleClient,
   userId: string,
@@ -578,6 +788,12 @@ export const fetchNaturalBloodlineRoll = async (
   });
 };
 
+/**
+ * Fetch item bloodline rolls of a user
+ * @param client Drizzle client
+ * @param userId User ID
+ * @returns Item bloodline rolls
+ */
 export const fetchItemBloodlineRolls = async (
   client: DrizzleClient,
   userId: string,
@@ -588,6 +804,12 @@ export const fetchItemBloodlineRolls = async (
   });
 };
 
+/**
+ * Fetch user's historic bloodlines
+ * @param client Drizzle client
+ * @param userId User ID
+ * @returns User's historic bloodlines
+ */
 export const fetchUserHistoricBloodlines = async (
   client: DrizzleClient,
   userId: string,
@@ -607,12 +829,23 @@ export const fetchUserHistoricBloodlines = async (
   return userBloodlines;
 };
 
+/**
+ * Fetch a bloodline by ID
+ * @param client Drizzle client
+ * @param bloodlineId Bloodline ID
+ * @returns Bloodline
+ */
 export const fetchBloodline = async (client: DrizzleClient, bloodlineId: string) => {
   return await client.query.bloodline.findFirst({
     where: eq(bloodline.id, bloodlineId),
   });
 };
 
+/**
+ * Fetch all bloodlines
+ * @param client Drizzle client
+ * @returns All bloodlines
+ */
 export const fetchBloodlines = async (client: DrizzleClient) => {
   return await client.query.bloodline.findMany({ where: eq(bloodline.hidden, false) });
 };

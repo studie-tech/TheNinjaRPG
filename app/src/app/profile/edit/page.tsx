@@ -1992,9 +1992,11 @@ const ResetSkills: React.FC = () => {
             {isPending ? (
               <Loader size={5} />
             ) : isFree ? (
-              canChangeContent(userData.role)
-                ? "Reset Skills (Free for staff)"
-                : `Reset Skills (${resetInfo?.freeResetsRemaining} free GOLD resets remaining)`
+              canChangeContent(userData.role) ? (
+                "Reset Skills (Free for staff)"
+              ) : (
+                `Reset Skills (${resetInfo?.freeResetsRemaining} free GOLD resets remaining)`
+              )
             ) : canAffordPaid ? (
               `Reset Skills for ${COST_SKILL_RESET} Reps`
             ) : (

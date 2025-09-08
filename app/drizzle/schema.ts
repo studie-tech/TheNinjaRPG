@@ -420,11 +420,53 @@ export const bloodline = mysqlTable(
 export type Bloodline = InferSelectModel<typeof bloodline>;
 export type BloodlineRank = Bloodline["rank"];
 
+// Bloodline reskins are curated by staff and can be assigned to users
+export const bloodlineReskin = mysqlTable(
+  "BloodlineReskin",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    bloodlineId: varchar("bloodlineId", { length: 191 }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    description: text("description").notNull(),
+    image: varchar("image", { length: 191 }).notNull(),
+    createdBy: varchar("createdBy", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      bloodlineIdIdx: index("BloodlineReskin_bloodlineId_idx").on(table.bloodlineId),
+      createdByIdx: index("BloodlineReskin_createdBy_idx").on(table.createdBy),
+      bloodlineNameKey: uniqueIndex("BloodlineReskin_bloodlineId_name_key").on(
+        table.bloodlineId,
+        table.name,
+      ),
+    };
+  },
+);
+export type BloodlineReskin = InferSelectModel<typeof bloodlineReskin>;
+
 export const bloodlineRelations = relations(bloodline, ({ one, many }) => ({
   users: many(userData),
   village: one(village, {
     fields: [bloodline.villageId],
     references: [village.id],
+  }),
+  reskins: many(bloodlineReskin),
+}));
+
+export const bloodlineReskinRelations = relations(bloodlineReskin, ({ one }) => ({
+  bloodline: one(bloodline, {
+    fields: [bloodlineReskin.bloodlineId],
+    references: [bloodline.id],
+  }),
+  creator: one(userData, {
+    fields: [bloodlineReskin.createdBy],
+    references: [userData.userId],
   }),
 }));
 
@@ -1206,15 +1248,59 @@ export const jutsu = mysqlTable(
   },
 );
 
-export const jutsuRelations = relations(jutsu, ({ one }) => ({
+export const jutsuRelations = relations(jutsu, ({ one, many }) => ({
   bloodline: one(bloodline, {
     fields: [jutsu.bloodlineId],
     references: [bloodline.id],
   }),
+  reskins: many(jutsuReskin, { relationName: "jutsuReskins" }),
 }));
 
 export type Jutsu = InferSelectModel<typeof jutsu>;
 export type JutsuRank = Jutsu["jutsuRank"];
+
+export const jutsuReskin = mysqlTable(
+  "JutsuReskin",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    jutsuId: varchar("jutsuId", { length: 191 }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    description: text("description").notNull(),
+    battleDescription: text("battleDescription").notNull(),
+    image: varchar("image", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("JutsuReskin_userId_idx").on(table.userId),
+      jutsuIdIdx: index("JutsuReskin_jutsuId_idx").on(table.jutsuId),
+      userIdJutsuIdKey: uniqueIndex("JutsuReskin_userId_jutsuId_key").on(
+        table.userId,
+        table.jutsuId,
+      ),
+    };
+  },
+);
+
+export const jutsuReskinRelations = relations(jutsuReskin, ({ one }) => ({
+  user: one(userData, {
+    fields: [jutsuReskin.userId],
+    references: [userData.userId],
+  }),
+  jutsu: one(jutsu, {
+    fields: [jutsuReskin.jutsuId],
+    references: [jutsu.id],
+    relationName: "jutsuReskins",
+  }),
+}));
+
+export type JutsuReskin = InferSelectModel<typeof jutsuReskin>;
 
 export const jutsuLoadout = mysqlTable(
   "JutsuLoadout",
@@ -1755,6 +1841,7 @@ export const userData = mysqlTable(
     level: int("level").default(1).notNull(),
     villageId: varchar("villageId", { length: 191 }),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
+    bloodlineReskinId: varchar("bloodlineReskinId", { length: 191 }),
     status: mysqlEnum("status", consts.UserStatuses).default("AWAKE").notNull(),
     strength: double("strength").default(10).notNull(),
     intelligence: double("intelligence").default(10).notNull(),
@@ -1874,6 +1961,7 @@ export const userData = mysqlTable(
     movedTooFastCount: int("movedTooFastCount").default(0).notNull(),
     extraItemSlots: smallint("extraItemSlots", { unsigned: true }).default(0).notNull(),
     extraJutsuSlots: tinyint("extraJutsuSlots").default(0).notNull(),
+    extraReskinSlots: tinyint("extraReskinSlots").default(2).notNull(),
     customTitle: varchar("customTitle", { length: 191 }).default("").notNull(),
     marriageSlots: int("marriageSlots", { unsigned: true }).default(1).notNull(),
     aiProfileId: varchar("aiProfileId", { length: 191 }),
@@ -1910,6 +1998,9 @@ export const userData = mysqlTable(
       levelIdx: index("UserData_level_idx").on(table.level),
       usernameKey: uniqueIndex("UserData_username_key").on(table.username),
       bloodlineIdIdx: index("UserData_bloodlineId_idx").on(table.bloodlineId),
+      bloodlineReskinIdIdx: index("UserData_bloodlineReskinId_idx").on(
+        table.bloodlineReskinId,
+      ),
       villageIdIdx: index("UserData_villageId_idx").on(table.villageId),
       battleIdIdx: index("UserData_battleId_idx").on(table.battleId),
       statusIdx: index("UserData_status_idx").on(table.status),
@@ -1975,6 +2066,10 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   bloodline: one(bloodline, {
     fields: [userData.bloodlineId],
     references: [bloodline.id],
+  }),
+  activeReskin: one(bloodlineReskin, {
+    fields: [userData.bloodlineReskinId],
+    references: [bloodlineReskin.id],
   }),
   village: one(village, {
     fields: [userData.villageId],
@@ -2316,6 +2411,7 @@ export const userJutsu = mysqlTable(
     experience: int("experience").default(0).notNull(),
     equipped: tinyint("equipped").default(0).notNull(),
     finishTraining: datetime("finishTraining", { mode: "date", fsp: 3 }),
+    reskinId: varchar("reskinId", { length: 191 }),
   },
   (table) => {
     return {
@@ -2325,10 +2421,15 @@ export const userJutsu = mysqlTable(
       ),
       jutsuIdIdx: index("UserJutsu_jutsuId_idx").on(table.jutsuId),
       equippedIdx: index("Jutsu_equipped_idx").on(table.equipped),
+      reskinIdIdx: index("UserJutsu_reskinId_idx").on(table.reskinId),
     };
   },
 );
 export type UserJutsu = InferSelectModel<typeof userJutsu>;
+export type UserJutsuWithRelations = UserJutsu & {
+  jutsu: Jutsu;
+  activeReskin: JutsuReskin | null;
+};
 
 export const userJutsuRelations = relations(userJutsu, ({ one }) => ({
   jutsu: one(jutsu, {
@@ -2338,6 +2439,10 @@ export const userJutsuRelations = relations(userJutsu, ({ one }) => ({
   user: one(userData, {
     fields: [userJutsu.userId],
     references: [userData.userId],
+  }),
+  activeReskin: one(jutsuReskin, {
+    fields: [userJutsu.reskinId],
+    references: [jutsuReskin.id],
   }),
 }));
 

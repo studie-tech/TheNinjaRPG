@@ -58,3 +58,32 @@ export const jutsuFilteringSchema = z.object({
 });
 
 export type JutsuFilteringSchema = z.infer<typeof jutsuFilteringSchema>;
+
+/**
+ * Schema for creating or updating a jutsu reskin.
+ * Shared between client (react-hook-form) and server (tRPC input).
+ * - image is optional from the client; router defaults to the base jutsu image when omitted.
+ */
+export const jutsuReskinCreateSchema = z.object({
+  jutsuId: z.string(),
+  name: z.string().min(1).max(100),
+  description: z.string().min(1).max(1000),
+  battleDescription: z.string().min(1).max(1000),
+  image: z.string().min(1).max(100).optional(),
+});
+
+export type JutsuReskinCreateSchema = z.infer<typeof jutsuReskinCreateSchema>;
+
+/**
+ * Schema for editing an existing jutsu reskin by staff/content.
+ * Mirrors create fields, but includes a mandatory reason field for audit/AI validation.
+ */
+export const jutsuReskinUpdateSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().min(1).max(1000),
+  battleDescription: z.string().min(1).max(1000),
+  image: z.string().min(1).max(100).optional(),
+  reason: z.string().min(10),
+});
+
+export type JutsuReskinUpdateSchema = z.infer<typeof jutsuReskinUpdateSchema>;

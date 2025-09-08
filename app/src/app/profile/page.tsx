@@ -22,6 +22,8 @@ import { calcMedninRank } from "@/libs/hospital/hospital";
 import { calcLevelRequirements } from "@/libs/profile";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { differenceInDays, differenceInHours } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 
 export default function Profile() {
   // State
@@ -167,7 +169,23 @@ export default function Profile() {
           <div>
             <b>Associations</b>
             <p>Village: {userData.village?.name}</p>
-            <p>Bloodline: {userData.bloodline?.name || "None"}</p>
+            <p>
+              Bloodline:{" "}
+              {userData.bloodline ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <span className="font-bold cursor-pointer hover:text-orange-500">
+                      {userData.bloodline.name}
+                    </span>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[500px] max-w-[90vw] ">
+                    <ItemWithEffects item={userData.bloodline} />
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                "None"
+              )}
+            </p>
             <p>ANBU: {userData.anbuSquad?.name || "None"}</p>
             <p>
               {userData.isOutlaw ? "Faction" : "Clan"}: {userData.clan?.name || "None"}

@@ -670,9 +670,8 @@ export const ContentFiltering = <
   return (
     <Popover modal>
       <PopoverTrigger asChild>
-        <Button id={triggerButtonId} count={totalFilters}>
-          <Filter className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
-          <p className="hidden sm:block">Filter</p>
+        <Button id={triggerButtonId} count={totalFilters} hoverText="Filter">
+          <Filter className="h-6 w-6 hover:text-orange-500" />
         </Button>
       </PopoverTrigger>
 

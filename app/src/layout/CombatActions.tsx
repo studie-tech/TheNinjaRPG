@@ -2,7 +2,7 @@ import React from "react";
 import ContentImage from "./ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import { useUserData } from "@/utils/UserContext";
-import { Info, HelpCircle, Star } from "lucide-react";
+import { Info, HelpCircle, Star, Palette } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import ElementImage from "@/layout/ElementImage";
@@ -35,6 +35,7 @@ interface ActionItemProps {
   lastUsedRound?: number;
   durability?: number;
   maxDurability?: number;
+  isReskinned?: boolean;
 }
 
 interface ActionSelectorSettingsProps {
@@ -157,7 +158,17 @@ interface ActionOptionProps {
 
 export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   const { item, settings } = props;
-  const { cooldown, image, name, rarity, frames, speed, lastUsedRound, warning } = item;
+  const {
+    cooldown,
+    image,
+    name,
+    rarity,
+    frames,
+    speed,
+    lastUsedRound,
+    warning,
+    isReskinned,
+  } = item;
 
   // Derived values
   const cooldownPerc = Math.max(
@@ -209,6 +220,19 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
                   <Info className="h-7 w-7 cursor-pointer hover:text-orange-500 fill-red-600 text-white" />
                 </TooltipTrigger>
                 <TooltipContent>{warning}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        )}
+        {/* Warning icon - top right corner */}
+        {isReskinned && (
+          <div className="absolute bottom-0 right-1/2 translate-x-1/2">
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Palette className="h-7 w-7 cursor-pointer hover:text-orange-500  text-white" />
+                </TooltipTrigger>
+                <TooltipContent>Reskinned</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
@@ -266,7 +290,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
             </PopoverContent>
           </Popover>
         )}
-        {/* Elements overlay */}
+        {/* Elements overlay - top left */}
         {elements.map((element, i) => (
           <div
             key={i}

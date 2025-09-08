@@ -9,6 +9,7 @@ export interface TextareaProps
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, isDirty, value, ...props }, ref) => {
+    const isControlled = value !== undefined;
     return (
       <textarea
         className={cn(
@@ -17,7 +18,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           isDirty ? "border-orange-300" : "border-input",
         )}
         ref={ref}
-        value={value || ""}
+        {...(isControlled ? { value } : {})}
         {...props}
       />
     );

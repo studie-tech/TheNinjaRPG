@@ -23,6 +23,7 @@ import { fetchUserSkills } from "@/server/api/routers/skillTree";
 import { updateUser, updateBattle } from "@/libs/combat/database";
 import { calcHP, calcSP, calcCP, calcLevelRequirements } from "@/libs/profile";
 import { controlShownQuestLocationInformation } from "@/libs/quest";
+import { getReskinnedBloodline } from "@/libs/bloodline";
 import {
   selectJutsuLoadout,
   fetchJutsuLoadouts,
@@ -55,7 +56,7 @@ import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { getRandomElement } from "@/utils/array";
 import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
 import { manuallyAssignUserStats, scaleUserStats } from "@/libs/profile";
-import { capUserStats, getSoftCappedExperience } from "@/libs/profile";
+import { capUserStats } from "@/libs/profile";
 import { mockAchievementHistoryEntries } from "@/libs/quest";
 import { canAccessStructure } from "@/utils/village";
 import { fetchSectorVillage } from "@/routers/village";
@@ -80,6 +81,7 @@ import { findRelationship } from "@/utils/alliance";
 import { getDefaultBasicActions } from "@/libs/combat/actions";
 import { canTrainJutsu, checkJutsuItems } from "@/libs/train";
 import { toOffenceStat, toDefenceStat } from "@/libs/stats";
+import { getReskinnedUserJutsu } from "@/libs/jutsu";
 import type { RankedLoadout } from "@/drizzle/schema";
 import type { BattleType } from "@/drizzle/constants";
 import type { BattleUserState, StatSchemaType } from "@/libs/combat/types";
@@ -87,7 +89,7 @@ import type { GroundEffect, UserEffect } from "@/libs/combat/types";
 import type { ActionEffect } from "@/libs/combat/types";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
-import { IMG_BG_FOREST, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { IMG_BG_FOREST } from "@/drizzle/constants";
 import type { ZodBgSchemaType } from "@/validators/backgroundSchema";
 import type {
   VillageAlliance,
@@ -1141,7 +1143,10 @@ export const initiateBattle = async (
           orderBy: (table, { desc }) => [desc(table.quantity)],
         },
         jutsus: {
-          with: { jutsu: true },
+          with: {
+            jutsu: true,
+            activeReskin: true,
+          },
           where: (jutsus) => eq(jutsus.equipped, 1),
           orderBy: (table, { desc }) => [desc(table.level)],
         },
@@ -1241,6 +1246,8 @@ export const initiateBattle = async (
             equipped: 1,
             finishTraining: null,
             jutsu: jutsu,
+            reskinId: null,
+            activeReskin: null,
           }));
       }
     }
@@ -1642,6 +1649,11 @@ export const processUsersForBattle = async (
     user.curChakra = Math.min(user.curChakra + restored, user.maxChakra);
     user.curStamina = Math.min(user.curStamina + restored, user.maxStamina);
 
+    // Reskin bloodline if needed
+    if (user.bloodline && user.activeReskin) {
+      user.bloodline = getReskinnedBloodline(user.bloodline, user.activeReskin);
+    }
+
     // For kage challenges, set health/chakra/stamina to full
     if (["KAGE_AI", "KAGE_PVP"].includes(battleType)) {
       user.curHealth = user.maxHealth;
@@ -1917,6 +1929,7 @@ export const processUsersForBattle = async (
 
     // Set jutsus updatedAt to now (we use it for determining usage cooldowns)
     user.jutsus = user.jutsus
+      .map((userjutsu) => getReskinnedUserJutsu(userjutsu))
       .filter((userjutsu) => {
         // Not if no jutsu
         if (!userjutsu.jutsu) {

@@ -8,7 +8,13 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import BloodFiltering, { useFiltering, getFilter } from "@/layout/BloodlineFiltering";
 import { Button } from "@/components/ui/button";
-import { FilePlus, ChartCandlestick, ChartPie, ListChecks } from "lucide-react";
+import {
+  FilePlus,
+  ChartCandlestick,
+  ChartPie,
+  ListChecks,
+  Palette,
+} from "lucide-react";
 import { useInfinitePagination } from "@/libs/pagination";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
@@ -109,15 +115,20 @@ export default function ManualBloodlines() {
             {userData && canChangeContent(userData.role) && (
               <>
                 <Button id="create-bloodline" onClick={() => create()}>
-                  <FilePlus className="sm:mr-2 h-5 w-5" />
-                  New
+                  <FilePlus className="h-5 w-5" />
                 </Button>
                 <Link href="/manual/bloodline/mass_edit">
                   <Button id="mass-edit-bloodline">
-                    <ListChecks className="sm:mr-2 h-5 w-5" />
-                    Edit
+                    <ListChecks className="h-5 w-5" />
                   </Button>
                 </Link>
+                {userData && canChangeContent(userData.role) && (
+                  <Link href="/manual/bloodline/reskins">
+                    <Button id="bloodline-reskins" hoverText="Reskins (Staff)">
+                      <Palette className="h-6 w-6" />
+                    </Button>
+                  </Link>
+                )}
               </>
             )}
             <BloodFiltering state={state} />

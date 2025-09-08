@@ -206,6 +206,7 @@ export const EditContent = <
       return "scene";
     if (["nextObjectiveId", "failObjectiveId", "resetObjectiveId"].includes(id))
       return "graph";
+    if (id === "reason") return "xxx";
     return "default";
   };
 
@@ -633,20 +634,33 @@ export const EditContent = <
                     props.allowImageUpload &&
                     "href" in formEntry &&
                     props.type && (
-                      <ContentImageSelector
-                        label={formEntry.label ? formEntry.label : id}
-                        imageUrl={currentValues?.[id] ?? formEntry.href}
-                        id={props.relationId ?? nanoid()}
-                        allowImageUpload={props.allowImageUpload}
-                        prompt={prompt}
-                        type={props.type}
-                        onUploadComplete={(url) => {
-                          form.setValue(id, url as PathValue<S, K>, {
-                            shouldDirty: true,
-                          });
+                      <FormField
+                        control={form.control}
+                        name={id}
+                        render={({ field }) => {
+                          return props.type ? (
+                            <FormItem>
+                              <FormControl>
+                                <ContentImageSelector
+                                  label={formEntry.label ? formEntry.label : id}
+                                  imageUrl={(field.value as string) ?? formEntry.href}
+                                  id={props.relationId ?? nanoid()}
+                                  allowImageUpload={props.allowImageUpload}
+                                  prompt={prompt}
+                                  type={props.type}
+                                  onUploadComplete={(url) => {
+                                    field.onChange(url);
+                                  }}
+                                  size={formEntry.size ?? "square"}
+                                  maxDim={formEntry.maxDim ?? 256}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          ) : (
+                            <div>Missing content type</div>
+                          );
                         }}
-                        size={formEntry.size ?? "square"}
-                        maxDim={formEntry.maxDim ?? 256}
                       />
                     )}
                   {formEntry.type === "dialog_options" ? (
@@ -913,7 +927,13 @@ export const EditContent = <
             <Button
               id="create"
               className="w-full"
-              onClick={props.onAccept}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (props?.onAccept) {
+                  void props.onAccept(e);
+                }
+              }}
               disabled={submitDisabled}
             >
               {buttonTxt ?? "Save"}

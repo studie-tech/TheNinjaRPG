@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, CircleFadingArrowUp, ArrowRightLeft } from "lucide-react";
+import { Trash2, CircleFadingArrowUp, ArrowRightLeft, Palette } from "lucide-react";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import ContentBox from "@/layout/ContentBox";
 import Modal2 from "@/layout/Modal2";
@@ -37,7 +37,16 @@ import {
 import { getFreeTransfers } from "@/libs/jutsu";
 import JutsuFiltering, { useFiltering, getFilter } from "@/layout/JutsuFiltering";
 import { canTransferJutsu } from "@/utils/permissions";
-import type { Jutsu, UserJutsu } from "@/drizzle/schema";
+
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { COST_RESKIN_JUTSU, RESKIN_LIMIT } from "@/drizzle/constants";
+import { canReskinFreely } from "@/utils/permissions";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { jutsuReskinCreateSchema } from "@/validators/jutsu";
+import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
+import type { UserJutsuWithRelations } from "@/drizzle/schema";
 
 export default function MyJutsu() {
   // tRPC utility
@@ -50,14 +59,31 @@ export default function MyJutsu() {
   const now = new Date();
   const { data: userData, updateUser } = useRequiredUserData();
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [userjutsu, setUserJutsu] = useState<(Jutsu & UserJutsu) | undefined>(
+  const [isReskinOpen, setIsReskinOpen] = useState<boolean>(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [userjutsu, setUserJutsu] = useState<UserJutsuWithRelations | undefined>(
     undefined,
   );
-  const [transferTarget, setTransferTarget] = useState<(Jutsu & UserJutsu) | undefined>(
-    undefined,
-  );
+  const [transferTarget, setTransferTarget] = useState<
+    UserJutsuWithRelations | undefined
+  >(undefined);
   const transferCost = canTransferJutsu(userData) ? 0 : JUTSU_TRANSFER_COST;
   const [transferValue, setTransferValue] = useState<number>(1);
+  const [modalType, setModalType] = useState<string | null>(null);
+  const [reskinData, setReskinData] = useState<JutsuReskinCreateSchema | null>(null);
+
+  // Reskin form
+  const reskinForm = useForm<JutsuReskinCreateSchema>({
+    mode: "onChange",
+    resolver: zodResolver(jutsuReskinCreateSchema),
+    defaultValues: {
+      jutsuId: "",
+      name: "",
+      description: "",
+      battleDescription: "",
+      image: undefined,
+    },
+  });
 
   // User Jutsus & items
   const { data: userJutsus, isFetching: l1 } = api.jutsu.getUserJutsus.useQuery(
@@ -68,6 +94,9 @@ export default function MyJutsu() {
     undefined,
     { enabled: !!userData },
   );
+  const { data: userReskins } = api.jutsu.getUserReskins.useQuery(undefined, {
+    enabled: !!userData,
+  });
   const { data: recentTransfers } = api.jutsu.getRecentTransfers.useQuery(undefined, {
     enabled: !!userData,
   });
@@ -175,48 +204,82 @@ export default function MyJutsu() {
       onSettled,
     });
 
+  const { mutate: reskin, isPending: isReskinning } =
+    api.jutsu.createReskin.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.jutsu.getUserJutsus.invalidate();
+          setIsReskinOpen(false);
+          setUserJutsu(undefined);
+        }
+      },
+    });
+
+  const { mutate: removeReskin, isPending: isRemovingReskin } =
+    api.jutsu.removeReskin.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await Promise.all([
+            utils.jutsu.getUserJutsus.invalidate(),
+            utils.jutsu.getUserReskins.invalidate(),
+          ]);
+          setIsOpen(false);
+        }
+      },
+    });
+
   const isPending =
-    isToggling || isForgetting || isUpgrading || isUnequipping || isTransferring;
+    isToggling ||
+    isForgetting ||
+    isUpgrading ||
+    isUnequipping ||
+    isTransferring ||
+    isReskinning ||
+    isRemovingReskin;
   const isFetching = l1 || l2;
 
   // Collapse UserItem and Item
   const userElements = new Set(getUserElements(userData));
-  const allJutsu = userJutsus?.map((userjutsu) => {
+  const actionItems = userJutsus?.map((uj) => {
     let warning = "";
     if (userData) {
-      if (!checkJutsuItems(userjutsu.jutsu, userItems)) {
-        warning = `No ${userjutsu.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
+      if (!checkJutsuItems(uj.jutsu, userItems)) {
+        warning = `No ${uj.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
       }
-      if (!checkJutsuElements(userjutsu.jutsu, userElements)) {
+      if (!checkJutsuElements(uj.jutsu, userElements)) {
         warning = "You do not have the required elements to use this jutsu.";
       }
-      if (!hasRequiredRank(userData.rank, userjutsu.jutsu.requiredRank)) {
+      if (!hasRequiredRank(userData.rank, uj.jutsu.requiredRank)) {
         warning = "You do not have the required rank to use this jutsu.";
       }
-      if (!hasRequiredLevel(userData.level, userjutsu.jutsu.requiredLevel)) {
+      if (!hasRequiredLevel(userData.level, uj.jutsu.requiredLevel)) {
         warning = "You do not have the required level to use this jutsu.";
       }
-      if (!checkJutsuRank(userjutsu.jutsu.jutsuRank, userData.rank)) {
+      if (!checkJutsuRank(uj.jutsu.jutsuRank, userData.rank)) {
         warning = "You do not have the required rank to use this jutsu.";
       }
-      if (!checkJutsuVillage(userjutsu.jutsu, userData)) {
+      if (!checkJutsuVillage(uj.jutsu, userData)) {
         warning = "You do not have the required village to use this jutsu.";
       }
-      if (!checkJutsuBloodline(userjutsu.jutsu, userData)) {
+      if (!checkJutsuBloodline(uj.jutsu, userData)) {
         warning = "You do not have the required bloodline to use this jutsu.";
       }
     }
     return {
-      ...userjutsu.jutsu,
-      ...userjutsu,
-      highlight: userjutsu.equipped ? true : false,
-      warning: warning,
+      ...uj.jutsu,
+      ...uj,
+      type: "jutsu" as const,
+      highlight: !!uj.equipped,
+      warning,
+      isReskinned: !!uj.activeReskin,
     };
   });
 
   // Sort if we have a loadout
-  if (userData?.loadout?.jutsuIds && allJutsu) {
-    allJutsu.sort((a, b) => {
+  if (userData?.loadout?.jutsuIds && userJutsus) {
+    userJutsus.sort((a, b) => {
       const aIndex = userData?.loadout?.jutsuIds.indexOf(a.jutsuId) ?? -1;
       const bIndex = userData?.loadout?.jutsuIds.indexOf(b.jutsuId) ?? -1;
       if (aIndex === -1 && bIndex === -1) return 0;
@@ -234,6 +297,7 @@ export default function MyJutsu() {
     curEquip && maxEquip
       ? `Equipped ${curEquip}/${maxEquip}`
       : "Jutsus you want to use in combat";
+  const activeReskins = userJutsus?.filter((uj) => uj.activeReskin);
 
   // Ryo from forgetting
   const forgetRyo = 0;
@@ -243,6 +307,9 @@ export default function MyJutsu() {
 
   // Can afford removing
   const canUpgrade = userData.reputationPoints >= COST_EXTRA_JUTSU_SLOT;
+
+  // Calculate reskin cost based on permissions
+  const reskinCost = canReskinFreely(userData?.role) ? 0 : COST_RESKIN_JUTSU;
 
   return (
     <ContentBox
@@ -291,11 +358,11 @@ export default function MyJutsu() {
     >
       {isFetching && <Loader explanation="Loading Jutsu" />}
       <ActionSelector
-        items={allJutsu}
+        items={actionItems}
         counts={userJutsuCounts}
         labelSingles={true}
         onClick={(id) => {
-          setUserJutsu(allJutsu?.find((jutsu) => jutsu.id === id));
+          setUserJutsu(userJutsus?.find((uj) => uj.id === id));
           setIsOpen(true);
         }}
         showBgColor={false}
@@ -337,10 +404,21 @@ export default function MyJutsu() {
           {!isPending && (
             <>
               <ItemWithEffects
-                item={userjutsu}
+                item={userjutsu.jutsu}
                 key={userjutsu.id}
                 showStatistic="jutsu"
               />
+              {userReskins?.find((r) => r.jutsuId === userjutsu.jutsuId) &&
+                !userjutsu.activeReskin &&
+                !userjutsu.activeReskin && (
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700">
+                      <Palette className="h-4 w-4 inline mr-1" />
+                      This jutsu has been previously reskinned. You can create a new
+                      reskin for free.
+                    </p>
+                  </div>
+                )}
               <div className="flex flex-row gap-3 items-center">
                 {userData.loadout?.jutsuIds.includes(userjutsu.jutsuId) && (
                   <>
@@ -375,8 +453,8 @@ export default function MyJutsu() {
                       title="Transfer Level"
                       button={
                         <Button id="transfer" variant="secondary">
-                          <ArrowRightLeft className="h-6 w-6 mr-2" />
-                          Transfer Level
+                          <ArrowRightLeft className="h-6 w-6 sm:mr-2" />
+                          <p className="hidden sm:block">Transfer Level</p>
                         </Button>
                       }
                       proceed_label={transferTarget ? "Confirm Transfer" : null}
@@ -420,14 +498,15 @@ export default function MyJutsu() {
                                 padding: "2px 4px",
                               }}
                             />{" "}
-                            level(s) from {userjutsu.name} to {transferTarget.name}?
+                            level(s) from {userjutsu.jutsu.name} to{" "}
+                            {transferTarget.jutsu.name}?
                           </p>
                           <p>
                             This will subtract {transferValue} level
-                            {transferValue > 1 ? "s" : ""} from {userjutsu.name} (new
-                            level: {userjutsu.level - transferValue}) and add{" "}
+                            {transferValue > 1 ? "s" : ""} from {userjutsu.jutsu.name}{" "}
+                            (new level: {userjutsu.level - transferValue}) and add{" "}
                             {transferValue} level{transferValue > 1 ? "s" : ""} to{" "}
-                            {transferTarget.name} (new level:{" "}
+                            {transferTarget.jutsu.name} (new level:{" "}
                             {transferTarget.level + transferValue}).
                           </p>
                           <p>
@@ -441,32 +520,85 @@ export default function MyJutsu() {
                         <div className="flex flex-col gap-2">
                           <p>Select a jutsu to transfer the level to.</p>
                           <ActionSelector
-                            items={allJutsu?.filter(
-                              (jutsu) =>
-                                jutsu.jutsuType === userjutsu.jutsuType &&
-                                jutsu.jutsuRank === userjutsu.jutsuRank &&
-                                jutsu.id !== userjutsu.id,
-                            )}
+                            items={userJutsus
+                              ?.filter(
+                                (uj) =>
+                                  uj.jutsu.jutsuType === userjutsu.jutsu.jutsuType &&
+                                  uj.jutsu.jutsuRank === userjutsu.jutsu.jutsuRank &&
+                                  uj.id !== userjutsu.id,
+                              )
+                              ?.map((uj) => ({
+                                id: uj.id,
+                                name: uj.jutsu.name,
+                                image: uj.jutsu.image,
+                                effects: uj.jutsu.effects,
+                                type: "jutsu" as const,
+                              }))}
                             counts={userJutsuCounts}
                             labelSingles={true}
                             showBgColor={false}
                             showLabels={true}
                             onClick={(id) => {
-                              setTransferTarget(
-                                allJutsu?.find((jutsu) => jutsu.id === id),
-                              );
+                              setTransferTarget(userJutsus?.find((uj) => uj.id === id));
                             }}
                           />
                         </div>
                       )}
                     </Confirm2>
                   )}
+                {userjutsu.activeReskin ? (
+                  <Confirm2
+                    title="Remove Reskin"
+                    button={
+                      <Button id="remove-reskin" variant="destructive">
+                        <Palette className="h-6 w-6 sm:mr-2" />
+                        <p className="hidden sm:block">Remove Reskin</p>
+                      </Button>
+                    }
+                    onAccept={(e) => {
+                      e.preventDefault();
+                      removeReskin({ userJutsuId: userjutsu.id });
+                    }}
+                  >
+                    <p>
+                      Are you sure you want to remove the reskin for this jutsu? This
+                      will restore the original name and description.
+                    </p>
+                  </Confirm2>
+                ) : (
+                  <Button
+                    id="reskin"
+                    variant="outline"
+                    onClick={() => {
+                      // Pre-fill with current reskin data if it exists
+                      reskinForm.reset({
+                        jutsuId: userjutsu.jutsuId,
+                        name: userjutsu.activeReskin?.name || "",
+                        description: userjutsu.activeReskin?.description || "",
+                        battleDescription:
+                          userjutsu.activeReskin?.battleDescription || "",
+                        image: undefined,
+                      });
+                      setIsOpen(false);
+                      setIsReskinOpen(true);
+                      setModalType("reskin");
+                    }}
+                    disabled={
+                      isPending ||
+                      userjutsu.jutsu.jutsuType === "SPECIAL" ||
+                      userjutsu.jutsu.jutsuType === "BLOODLINE"
+                    }
+                  >
+                    <Palette className="h-6 w-6 sm:mr-2" />
+                    <p className="hidden sm:block">Reskin</p>
+                  </Button>
+                )}
                 <Confirm2
                   title="Forget Jutsu"
                   button={
                     <Button id="return" variant="destructive">
-                      <Trash2 className="h-6 w-6 mr-2" />
-                      Forget [${forgetRyo} ryo]
+                      <Trash2 className="h-6 w-6 sm:mr-2" />
+                      <p className="hidden sm:block">Forget [${forgetRyo} ryo]</p>
                     </Button>
                   }
                   onAccept={(e) => {
@@ -479,10 +611,167 @@ export default function MyJutsu() {
               </div>
             </>
           )}
-          {isPending && <Loader explanation={`Processing ${userjutsu.name}`} />}
+          {isPending && <Loader explanation={`Processing ${userjutsu.jutsu.name}`} />}
         </Modal2>
       )}
-      {isPending && <Loader explanation="Loading Jutsu" />}
+      {modalType === "reskin" && userjutsu && isReskinOpen && (
+        <Modal2
+          title={userjutsu.activeReskin ? "Update Jutsu Reskin" : "Create Jutsu Reskin"}
+          isOpen={isReskinOpen}
+          setIsOpen={setIsReskinOpen}
+          proceed_label={userjutsu.activeReskin ? "Update Reskin" : "Create Reskin"}
+          isValid={reskinForm.formState.isValid}
+          onAccept={() => {
+            if (!isReskinning && userjutsu) {
+              const data = reskinForm.getValues();
+              setReskinData(data);
+              setIsReskinOpen(false);
+              setIsConfirmOpen(true);
+            }
+          }}
+        >
+          <div className="space-y-4">
+            <div
+              className="reskin-rules"
+              style={{
+                maxWidth: "800px",
+                margin: "0 auto",
+                padding: "1rem",
+                fontFamily: "sans-serif",
+                lineHeight: "1.6",
+              }}
+            >
+              <p>
+                <strong className="text-red-500">
+                  {userjutsu.activeReskin
+                    ? "Updating a reskin is free."
+                    : `Creating a reskin costs ${reskinCost} reputation points!`}
+                </strong>
+                <br />
+                <br />
+                <strong>Reskin Usage:</strong>
+                <br />
+                You have used {activeReskins?.length || 0}/
+                {userData.extraReskinSlots + RESKIN_LIMIT} available reskins.
+                <br />
+                <br />
+                Reskins are a way to personalize your jutsu&apos;s name, description,
+                and in-combat flavor text. These are cosmetic only and must follow the
+                rules below (as well as the overall game rules)
+                <br />
+                <br />
+                <strong>What You Can Change:</strong>
+                <br />
+                You are allowed to modify only the following:
+                <br />
+                - Jutsu Name
+                <br />
+                - Jutsu Description (what shows outside of combat)
+                <br />
+                - Battle Description (what appears in combat, e.g., &quot;%user uses
+                %jutsu on %target&quot;)
+                <br />
+                <br />
+                <strong>Tone & Content Restrictions:</strong>
+                <br />
+                - No hostile, mocking, or negative wording toward other players, clans,
+                villages, bloodlines, or jutsu.
+                <br />
+                - No profanity, slurs, or real-world political/religious references.
+                <br />
+                - No inappropriate humor or immersion-breaking language.
+                <br />
+                - No subtle digs or sarcasm aimed at others. If it could be taken
+                negatively, it&apos;s not allowed.
+                <br />
+                <br />
+                <strong>Example:</strong>
+                <br />
+                Original Name: Fireball Jutsu
+                <br />
+                Reskin Name: Blazing Verdict
+                <br />
+                Original Description: A sphere of fire launched at the target.
+                <br />
+                Reskin Description: A judgment cast in searing flame, leaving no room
+                for appeal.
+                <br />
+                Original Battle Description: %user hurls a fireball at %target.
+                <br />
+                Reskin Battle Description: %user delivers the Blazing Verdict to
+                %target, flames roaring with finality.
+                <br />
+                <br />
+                <strong>Note:</strong> Violation of these rules may result in the
+                modification or removal of the reskinned jutsu.
+              </p>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (reskinForm.formState.isValid) {
+                  const data = reskinForm.getValues();
+                  setReskinData(data);
+                  setIsReskinOpen(false);
+                  setIsConfirmOpen(true);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <Input placeholder="New jutsu name" {...reskinForm.register("name")} />
+              </div>
+
+              <div>
+                <Textarea
+                  placeholder="New jutsu description"
+                  {...reskinForm.register("description")}
+                />
+              </div>
+
+              <div>
+                <Textarea
+                  placeholder="New battle description"
+                  {...reskinForm.register("battleDescription")}
+                />
+              </div>
+            </form>
+          </div>
+        </Modal2>
+      )}
+      {isConfirmOpen && reskinData && userjutsu && (
+        <Modal2
+          isOpen={isConfirmOpen}
+          setIsOpen={setIsConfirmOpen}
+          title={
+            userjutsu.activeReskin
+              ? "Confirm Jutsu Reskin Update"
+              : "Confirm Jutsu Reskin"
+          }
+          proceed_label={"Confirm"}
+          onAccept={() => {
+            if (reskinData && userjutsu) {
+              reskin(reskinData);
+              setIsConfirmOpen(false);
+            }
+          }}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              By clicking &quot;Confirm&quot;, you acknowledge that you are{" "}
+              {userjutsu.activeReskin ? "updating" : "creating"} a reskin{" "}
+              {userjutsu.activeReskin
+                ? ""
+                : `that costs ${reskinCost} reputation points`}{" "}
+              and that your reskin follows all the outlined rules.
+              <br />
+              <br />
+              <strong>Note:</strong> Violations may result in the modification or
+              removal of your reskin.
+            </p>
+          </div>
+        </Modal2>
+      )}
     </ContentBox>
   );
 }

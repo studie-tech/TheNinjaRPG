@@ -1,5 +1,5 @@
 import { calculateContentDiff } from "@/utils/diff";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { api } from "@/app/_trpc/client";
 import { UserRanks } from "@/drizzle/constants";
@@ -60,6 +60,11 @@ export const useUserEditForm = (
   const { data: lines, isPending: l3 } = api.bloodline.getAllNames.useQuery(undefined, {
     enabled: canEditBloodline,
   });
+  const selectedBloodlineId = useWatch({ control: form.control, name: "bloodlineId" });
+  const { data: lineReskins } = api.bloodline.getReskinsForBloodline.useQuery(
+    { bloodlineId: selectedBloodlineId || "" },
+    { enabled: canEditBloodline && !!selectedBloodlineId },
+  );
   const { data: villages, isPending: l5 } = api.village.getAllNames.useQuery(
     undefined,
     { enabled: canEditVillage },
@@ -117,6 +122,17 @@ export const useUserEditForm = (
       id: "bloodlineId",
       type: "db_values",
       values: lines || [],
+      resetButton: true,
+    });
+  if (canEditBloodline)
+    formData.push({
+      id: "bloodlineReskinId",
+      type: "db_values",
+      values:
+        [{ id: "", name: "None", image: "" }].concat(
+          (lineReskins ?? []).map((r) => ({ id: r.id, name: r.name, image: r.image })),
+        ) || [],
+      label: "Bloodline Reskin",
       resetButton: true,
     });
   if (canEditVillage)

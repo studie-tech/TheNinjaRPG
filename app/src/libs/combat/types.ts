@@ -23,12 +23,13 @@ import type {
   VillageAlliance,
   Clan,
   War,
-  UserItemImbuement,
   VillageStructure,
   Village,
   GameSetting,
+  UserJutsuWithRelations,
+  UserItemWithRelations,
 } from "@/drizzle/schema";
-import type { UserJutsu, UserItem, UserData, AiProfile } from "@/drizzle/schema";
+import type { UserData, AiProfile } from "@/drizzle/schema";
 import type { AnbuSquad } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type { BattleType } from "@/drizzle/constants";
@@ -47,8 +48,7 @@ export type BattleWar = War & {
  * BattleUserState is the data stored in the battle entry about a given user
  */
 export type BattleUserState = Omit<NonNullable<UserWithRelations>, "items"> & {
-  jutsus: (UserJutsu & {
-    jutsu: Jutsu;
+  jutsus: (UserJutsuWithRelations & {
     origin: "user" | "injected";
     lastUsedRound: number;
     originalCooldown: number;
@@ -60,9 +60,7 @@ export type BattleUserState = Omit<NonNullable<UserWithRelations>, "items"> & {
       })
     | null;
   basicActions: CombatAction[];
-  items: (UserItem & {
-    item: Item;
-    imbuements: (UserItemImbuement & { item: Item })[];
+  items: (UserItemWithRelations & {
     lastUsedRound: number;
     originalCooldown: number;
   })[];
@@ -935,6 +933,14 @@ export const IncreaseMarriageSlots = z.object({
   type: z.literal("marriageslotincrease").default("marriageslotincrease"),
 });
 
+export const IncreaseReskinSlots = z.object({
+  ...BaseAttributes,
+  rank: z.enum(LetterRanks).default("D"),
+  description: msg("Increases the number of allowed reskins"),
+  power: z.coerce.number().int().min(0).max(100).default(1),
+  type: z.literal("noncombatincreasereskins").default("noncombatincreasereskins"),
+});
+
 /**
  * InjectJutsusTag: Grants access to selected jutsus flagged as injectableInBattle
  * - editors must restrict selection to jutsus where injectableInBattle=true
@@ -987,6 +993,7 @@ export const AllTags = z.union([
   IncreaseDamageTakenTag.default({}),
   IncreaseHealGivenTag.default({}),
   IncreaseMarriageSlots.default({}),
+  IncreaseReskinSlots.default({}),
   InjectJutsusTag.default({}),
   IncreasePoolCostTag.default({}),
   IncreaseRangeTag.default({}),
@@ -1331,7 +1338,7 @@ export const JutsuValidatorRawSchema = z.object({
   image: z.string(),
   description: z.string(),
   battleDescription: z.string(),
-  extraBaseCost: z.coerce.number().min(0).max(65535),
+  extraBaseCost: z.coerce.number().min(0).max(65_535),
   jutsuWeapon: z.enum(WeaponTypes),
   jutsuType: z.enum(JutsuTypes),
   jutsuRank: z.enum(LetterRanks),
@@ -1355,6 +1362,8 @@ export const JutsuValidatorRawSchema = z.object({
   villageId: z.string().nullable(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
 });
+
+// Final validator with additional cross-field checks
 export const JutsuValidator =
   JutsuValidatorRawSchema.superRefine(SuperRefineBase).superRefine(SuperRefineJutsu);
 export type ZodJutsuType = z.infer<typeof JutsuValidator>;

@@ -8,7 +8,13 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import JutsuFiltering, { useFiltering, getFilter } from "@/layout/JutsuFiltering";
 import { Button } from "@/components/ui/button";
-import { FilePlus, ChartCandlestick, ChartPie, ListChecks } from "lucide-react";
+import {
+  FilePlus,
+  ChartCandlestick,
+  ChartPie,
+  ListChecks,
+  Palette,
+} from "lucide-react";
 import { useInfinitePagination } from "@/libs/pagination";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
@@ -106,18 +112,21 @@ export default function ManualJutsus() {
           <div className="flex flex-row gap-1 items-center">
             {userData && canChangeContent(userData.role) && (
               <>
-                <Button id="create-jutsu" onClick={() => create()}>
-                  <FilePlus className="sm:mr-2 h-6 w-6" />
-                  <p className="hidden sm:block">New</p>
+                <Button id="create-jutsu" onClick={() => create()} hoverText="New">
+                  <FilePlus className="h-6 w-6" />
                 </Button>
                 <Link href="/manual/jutsu/mass_edit">
-                  <Button id="mass-edit-jutsu">
-                    <ListChecks className="sm:mr-2 h-6 w-6" />
-                    <p className="hidden sm:block">Edit</p>
+                  <Button id="mass-edit-jutsu" hoverText="Edit">
+                    <ListChecks className="h-6 w-6" />
                   </Button>
                 </Link>
               </>
             )}
+            <Link href="/manual/jutsu/reskins">
+              <Button id="jutsu-reskins" hoverText="Reskins">
+                <Palette className="h-6 w-6" />
+              </Button>
+            </Link>
             <JutsuFiltering state={state} />
           </div>
         }

@@ -53,6 +53,7 @@ import { TrainingSpeeds, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import GlowingBorder from "./GlowingBorder";
 import { TransactionHistory } from "src/app/points/page";
 import { EditContent } from "@/layout/EditContent";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 import {
   Flag,
   CopyCheck,
@@ -88,6 +89,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { canCloneUser } from "@/utils/permissions";
 import type { Jutsu, UserBadge, Badge, UserRank } from "@/drizzle/schema";
 import { NewConversationPrompt } from "@/app/inbox/page";
@@ -653,7 +661,23 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             <b>Associations</b>
             <p>Clan: {profile.clan?.name || "None"}</p>
             <p>ANBU: {profile.anbuSquad?.name || "None"}</p>
-            <p>Bloodline: {profile.bloodline?.name || "None"}</p>
+            <p>
+              Bloodline:{" "}
+              {profile.bloodline ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <span className="font-bold cursor-pointer hover:text-orange-500">
+                      {profile.bloodline.name}
+                    </span>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[500px] max-w-[90vw] ">
+                    <ItemWithEffects item={profile.bloodline} />
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                "None"
+              )}
+            </p>
             <p>
               Sensei:{" "}
               {profile.rank === "GENIN" && profile.senseiId && profile.sensei ? (
@@ -1077,14 +1101,16 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   );
 
   // Jutsu-specific helpers
-  const jutsuLevelForm = useForm<{ level: number }>({
+  const jutsuLevelForm = useForm<{ level: number; reskinId: string }>({
     defaultValues: {
       level: userJutsus?.find((uj) => uj.jutsuId === jutsu?.id)?.level || 0,
+      reskinId:
+        userJutsus?.find((uj) => uj.jutsuId === jutsu?.id)?.activeReskin?.id || "none",
     },
   });
 
   // Mutation for adjusting jutsu level
-  const adjustJutsuLevel = api.jutsu.adjustJutsuLevel.useMutation({
+  const adjustJutsuLevel = api.jutsu.adjustUserJutsu.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
@@ -1093,6 +1119,14 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
       }
     },
   });
+
+  // Query all reskins for selected jutsu
+  const { data: jutsuReskins } = api.jutsu.getReskinsForJutsu.useQuery(
+    { jutsuId: jutsu?.id || "" },
+    { enabled: perms.canEditJutsus && !!jutsu?.id },
+  );
+
+  // Note: reskin is applied via adjustJutsuLevel to keep a single update action
 
   // Derived – only relevant if jutsu editing is permitted
   const userJutsu = userJutsus?.find((uj) => uj.jutsuId === jutsu?.id);
@@ -1108,10 +1142,13 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   });
   const hasJutsus = perms.canEditJutsus && userJutsus && userJutsus.length > 0;
 
-  // Update jutsu level form default value when jutsu changes
+  // Update jutsu form default values when selected jutsu changes
   useEffect(() => {
     if (userJutsu) {
-      jutsuLevelForm.reset({ level: userJutsu.level });
+      jutsuLevelForm.reset({
+        level: userJutsu.level,
+        reskinId: userJutsu.activeReskin?.id || "none",
+      });
     }
   }, [userJutsu, jutsuLevelForm]);
 
@@ -1175,38 +1212,65 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
                           userId: userId,
                           jutsuId: jutsu.id,
                           level: data.level,
+                          reskinId: data.reskinId === "none" ? null : data.reskinId,
                         });
                       }
                     })}
                     className="flex items-center justify-between w-full gap-2"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-end gap-2">
                       <FormField
                         control={jutsuLevelForm.control}
                         name="level"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Level</FormLabel>
-                            <div className="relative flex flex-row gap-2">
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  className="w-20"
-                                  min={0}
-                                  max={25}
-                                  {...field}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    field.onChange(value ? parseInt(value) : 0);
-                                  }}
-                                />
-                              </FormControl>
-                              <Button type="submit">Update</Button>
-                            </div>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                className="w-20"
+                                min={0}
+                                max={25}
+                                {...field}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  field.onChange(value ? parseInt(value) : 0);
+                                }}
+                              />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+                      {perms.canEditJutsus && (
+                        <FormField
+                          control={jutsuLevelForm.control}
+                          name="reskinId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Reskin</FormLabel>
+                              <Select
+                                value={field.value}
+                                onValueChange={field.onChange}
+                              >
+                                <SelectTrigger className="w-56">
+                                  <SelectValue placeholder="None" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">None</SelectItem>
+                                  {jutsuReskins?.map((r) => (
+                                    <SelectItem key={r.id} value={r.id}>
+                                      {r.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                      <Button type="submit">Update</Button>
                     </div>
                   </form>
                 </Form>
@@ -1964,13 +2028,17 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
 
 // ---------------- Ranked Matches Tab ----------------
 
-const RankedMatchesTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
-  const { data: currentUser } = useUserData();
-
-  const { data: history, isPending } = api.combat.getBattleHistory.useQuery({
-    userId,
-    combatTypes: ["RANKED_PVP"],
-  });
+const RankedMatchesTab: React.FC<TabComponentProps> = ({
+  userId,
+  isActive: _isActive,
+}) => {
+  const { data: history, isPending } = api.combat.getBattleHistory.useQuery(
+    {
+      userId,
+      combatTypes: ["RANKED_PVP"],
+    },
+    { enabled: _isActive },
+  );
 
   const rankedMatches = history?.map((e) => ({
     attackerUsername: e.attacker?.username || "Deleted User",
