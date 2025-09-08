@@ -7,7 +7,6 @@ import { showMutationToast } from "@/libs/toast";
 import { api } from "@/app/_trpc/client";
 import { availableQuestLetterRanks } from "@/libs/train";
 import { getMissionHallSettings, fallbackQuestsFilter } from "@/libs/quest";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   MISSIONS_PER_DAY,
   ERRANDS_PER_DAY,
@@ -16,6 +15,7 @@ import {
 } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
+import MissionPicker from "@/layout/MissionPicker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -135,123 +135,118 @@ export default function MissionHall({ userData }: MissionHallProps) {
             const capped = isErrand
               ? errandsLeft <= 0
               : isMedical
-                ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY ||
-                  filtered.length === 0
+                ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY
                 : userData.dailyMissions >= MISSIONS_PER_DAY;
             // Checks
             const rankCheck = availableUserRanks.includes(setting.rank) || isErrand;
             const medicalCheck = isMedical
-              ? (medicalRanks?.some(
-                  (q) =>
-                    q.questRank === setting.rank &&
-                    (q.medicalRank === "NONE" || q.medicalRank === userMedicalRank),
-                ) ?? false)
+              ? filtered.length > 0  // Show colored if ANY medical missions are available
               : true;
             const grayScale = count === 0 || capped || !rankCheck || !medicalCheck;
 
-            if (setting.rank === "A") {
+
+            if (isMedical) {
+              const medicalMissions = filtered?.filter((q) => q.questRank === setting.rank).map(q => ({
+                id: q.id,
+                name: q.name,
+                image: q.image || undefined
+              })) || [];
+              const isDailyLimitReached = userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY;
+              
               return (
-                <Popover key={`mission-${i}`}>
-                  <PopoverTrigger asChild>
-                    <div
-                      key={i}
-                      className={cn(
-                        grayScale
-                          ? "filter grayscale"
-                          : "hover:cursor-pointer hover:opacity-30",
+                <MissionPicker
+                  key={`medical-${i}`}
+                  setting={setting}
+                  missions={medicalMissions}
+                  count={count}
+                  disabled={grayScale}
+                  onMissionSelect={(mission) =>
+                    startQuest({
+                      questId: mission.id,
+                      userSector: userData.sector,
+                    })
+                  }
+                  dialogTitle="Accept Medical Mission"
+                  dialogDescription={(mission) => 
+                    isDailyLimitReached ? (
+                      `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`
+                    ) : (
+                      <>
+                        Are you sure you want to accept the medical mission
+                        &quot;{mission.name}&quot;? You can only have one
+                        active {classifier} at a time.
+                      </>
+                    )
+                  }
+                  actionDisabled={isDailyLimitReached}
+                  actionText={isDailyLimitReached ? "Daily Limit Reached" : "Accept Mission"}
+                  additionalContent={(mission) => 
+                    isDailyLimitReached && (
+                      <p className="text-sm text-red-500">Daily Limit Reached</p>
+                    )
+                  }
+                />
+              );
+            }
+
+            if (setting.rank === "A") {
+              const aRankMissions = (filtered?.filter(q => q.questRank === setting.rank) ?? []).map(q => ({
+                id: q.id,
+                name: q.name,
+                image: q.image || undefined
+              })) || [];
+              const isDailyLimitReached = userData.dailyMissions >= MISSIONS_PER_DAY;
+              const isReducedRewards = !isErrand && !isMedical && userData.dailyMissions >= 9 && userData.dailyMissions < MISSIONS_PER_DAY;
+              
+              return (
+                <MissionPicker
+                  key={`mission-${i}`}
+                  setting={setting}
+                  missions={aRankMissions}
+                  count={count}
+                  disabled={grayScale}
+                  onMissionSelect={(mission) =>
+                    startQuest({
+                      questId: mission.id,
+                      userSector: userData.sector,
+                    })
+                  }
+                  dialogTitle="Accept Mission"
+                  dialogDescription={(mission) => 
+                    isDailyLimitReached ? (
+                      `You have reached your daily mission limit of ${MISSIONS_PER_DAY} missions. Please try again tomorrow.`
+                    ) : (
+                      <>
+                        Are you sure you want to accept the mission &quot;
+                        {mission.name}&quot;? You can only have one active
+                        mission at a time.
+                        {isReducedRewards && (
+                          <>
+                            <br />
+                            <br />
+                            <span className="text-yellow-500">
+                              Note: You have completed more than 9 missions
+                              today. This mission will only give 40% of its
+                              normal rewards.
+                            </span>
+                          </>
+                        )}
+                      </>
+                    )
+                  }
+                  actionDisabled={isDailyLimitReached}
+                  actionText={isDailyLimitReached ? "Daily Limit Reached" : "Accept Mission"}
+                  additionalContent={(mission) => (
+                    <>
+                      {isReducedRewards && (
+                        <p className="text-sm text-yellow-500">40% Rewards</p>
                       )}
-                    >
-                      <Image alt="small" src={setting.image} width={256} height={256} />
-                      <p className="font-bold">{setting.name}</p>
-                      <p>[Select out of {count} available]</p>
-                    </div>
-                  </PopoverTrigger>
-                  <PopoverContent>
-                    <div className="grid grid-cols-3 gap-2">
-                      {aRanks?.map((mission, i) => (
-                        <AlertDialog key={`specific-mission-${i}`}>
-                          <AlertDialogTrigger asChild>
-                            <div className="hover:opacity-70 hover:cursor-pointer">
-                              <div className="flex flex-col justify-center items-center">
-                                <Image
-                                  alt="small"
-                                  className="rounded-lg"
-                                  src={mission.image || setting.image}
-                                  width={128}
-                                  height={128}
-                                />
-                                <p className="font-bold text-xs text-center">
-                                  {mission.name}
-                                </p>
-                                {!isErrand &&
-                                  !isMedical &&
-                                  userData.dailyMissions >= 9 &&
-                                  userData.dailyMissions < MISSIONS_PER_DAY && (
-                                    <p className="text-sm text-yellow-500">
-                                      40% Rewards
-                                    </p>
-                                  )}
-                                {userData.dailyMissions >= MISSIONS_PER_DAY && (
-                                  <p className="text-sm text-red-500">
-                                    Daily Limit Reached
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Accept Mission: {mission.name}
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                {userData.dailyMissions >= MISSIONS_PER_DAY ? (
-                                  `You have reached your daily mission limit of ${MISSIONS_PER_DAY} missions. Please try again tomorrow.`
-                                ) : (
-                                  <>
-                                    Are you sure you want to accept the mission &quot;
-                                    {mission.name}&quot;? You can only have one active
-                                    mission at a time.
-                                    {userData.dailyMissions >= 9 && (
-                                      <>
-                                        <br />
-                                        <br />
-                                        <span className="text-yellow-500">
-                                          Note: You have completed more than 9 missions
-                                          today. This mission will only give 40% of its
-                                          normal rewards.
-                                        </span>
-                                      </>
-                                    )}
-                                  </>
-                                )}
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              {userData.dailyMissions >= MISSIONS_PER_DAY ? (
-                                <AlertDialogAction disabled>
-                                  Daily Limit Reached
-                                </AlertDialogAction>
-                              ) : (
-                                <AlertDialogAction
-                                  onClick={() =>
-                                    startQuest({
-                                      questId: mission.id,
-                                      userSector: userData.sector,
-                                    })
-                                  }
-                                >
-                                  Accept Mission
-                                </AlertDialogAction>
-                              )}
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                      {isDailyLimitReached && (
+                        <p className="text-sm text-red-500">Daily Limit Reached</p>
+                      )}
+                    </>
+                  )}
+                />
               );
             } else {
               return (

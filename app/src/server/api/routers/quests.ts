@@ -620,7 +620,7 @@ export const questsRouter = createTRPCRouter({
           );
         }
       } else if (["mission", "crime", "medical"].includes(questData.questType)) {
-        if (questData.questRank !== "A") {
+        if (["mission", "crime"].includes(questData.questType) && questData.questRank !== "A") {
           return errorResponse(`Only A rank missions/crimes are allowed`);
         }
         if (

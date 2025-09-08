@@ -2021,29 +2021,34 @@ export const processUsersForBattle = async (
             if (currentDurability <= DURABILITY_USABILITY_THR) {
               ui.equipped = "NONE" as const;
             } else {
-              // Add item effects to user
-              effects.forEach((effect) => {
-                const realized = realizeTag({
-                  tag: effect,
-                  user: user,
-                  actionId: ui.itemId,
-                  target: user,
-                  level: user.level,
+              // Add item effects to user (only if user has required bloodline)
+              if (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId) {
+                effects.forEach((effect) => {
+                  const realized = realizeTag({
+                    tag: effect,
+                    user: user,
+                    actionId: ui.itemId,
+                    target: user,
+                    level: user.level,
+                  });
+                  realized.isNew = false;
+                  realized.fromType = "armor";
+                  realized.castThisRound = false;
+                  realized.targetId = user.userId;
+                  userEffects.push(realized);
                 });
-                realized.isNew = false;
-                realized.fromType = "armor";
-                realized.castThisRound = false;
-                realized.targetId = user.userId;
-                userEffects.push(realized);
-              });
+              }
             }
           }
         }
-        // If droppable or action type, keep in battle row
+        // If droppable or action type, keep in battle row (only if user has required bloodline)
         if (ui.dropChancePerc > 0 || !NonActionItemTypes.includes(itemType)) {
-          ui.lastUsedRound = -ui.item.cooldown;
-          ui.originalCooldown = ui.item.cooldown;
-          items.push(ui);
+          // Check bloodline requirement for weapons and other action items
+          if (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId) {
+            ui.lastUsedRound = -ui.item.cooldown;
+            ui.originalCooldown = ui.item.cooldown;
+            items.push(ui);
+          }
         }
       });
     user.items = items;

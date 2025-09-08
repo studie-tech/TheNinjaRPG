@@ -460,7 +460,6 @@ export type QuestRewardMetric = (typeof QuestRewardMetrics)[number];
 export const QuestTypesWithMaxAttempts = [
   "event",
   "story",
-  "anbu",
   "battlepyramid",
   "starter",
 ];

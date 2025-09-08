@@ -18,6 +18,7 @@ export const itemFilteringSchema = z.object({
   minCost: z.number().default(0),
   minRepsCost: z.number().default(0),
   minSeichiSilverCost: z.number().default(0),
+  maxSeichiSilverCost: z.number().optional(),
   onlyInShop: z.boolean().optional(),
   eventItems: z.boolean().optional(),
   slot: z.enum(ItemSlotTypes).optional(),

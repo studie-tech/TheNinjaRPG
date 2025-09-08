@@ -84,6 +84,9 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   } = props;
   const { data: userData } = useUserData();
   const router = useRouter();
+  
+  // Get bloodline names for displaying bloodline requirements
+  const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
 
   // Setup clone mutations
   const { mutate: cloneQuest } = api.quests.clone.useMutation({
@@ -550,6 +553,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             {"requiredLevel" in item && item.requiredLevel && (
               <p>
                 <b>Required Level</b>: {item.requiredLevel}
+              </p>
+            )}
+            {"bloodlineId" in item && item.bloodlineId && (
+              <p>
+                <b>Required Bloodline</b>: {bloodlinesData?.find(b => b.id === item.bloodlineId)?.name || item.bloodlineId}
               </p>
             )}
             {"maxLevel" in item && item.maxLevel && (

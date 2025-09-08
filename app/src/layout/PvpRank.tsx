@@ -268,6 +268,7 @@ export const RankedLoadoutSelector: React.FC = () => {
       onlyInShop: true,
       eventItems: false,
       minRepsCost: 0,
+      maxSeichiSilverCost: 0,
     },
     {
       enabled: activeTab === "weapons",
@@ -282,6 +283,7 @@ export const RankedLoadoutSelector: React.FC = () => {
         onlyInShop: true,
         eventItems: false,
         minRepsCost: 0,
+        maxSeichiSilverCost: 0,
       },
       {
         enabled: activeTab === "consumables",

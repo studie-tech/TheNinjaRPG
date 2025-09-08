@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, sql, gte, and, like, desc, or } from "drizzle-orm";
+import { eq, sql, gte, lte, and, like, desc, or } from "drizzle-orm";
 import {
   item,
   userItem,
@@ -788,7 +788,8 @@ export const itemRouter = createTRPCRouter({
       if (
         !info.effects.find((e) => e.type.includes("bloodline")) &&
         instancesEquipped < info.maxEquips &&
-        user.level >= info.requiredLevel
+        user.level >= info.requiredLevel &&
+        (!info.bloodlineId || info.bloodlineId === user.bloodlineId)
       ) {
         ItemSlots.forEach((slot) => {
           if (slot.includes(info.slot) && !useritems.find((i) => i.equipped === slot)) {
@@ -972,6 +973,12 @@ export const selectItemLoadout = async (
       );
       continue;
     }
+    if (useritem.item.bloodlineId && useritem.item.bloodlineId !== user.bloodlineId) {
+      invalidItems.push(
+        `${useritem.item.name} requires a specific bloodline to equip`,
+      );
+      continue;
+    }
     if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
       invalidItems.push(`${useritem.item.name} is being crafted`);
       continue;
@@ -1061,6 +1068,7 @@ export const fetchItemWithCraftingRequirements = async (
           requirementItem: true,
         },
       },
+      requiredBloodline: true,
     },
   });
 };
@@ -1106,26 +1114,34 @@ export const toggleEquipItem = async (
   // Definitions & Guard
   if (!useritem) return errorResponse("User item not found");
   if (useritem.storedAtHome) return errorResponse("Fetch at home first");
-  if (useritem.item.requiredLevel > user.level) {
-    return errorResponse(
-      `You need to be level ${useritem.item.requiredLevel} to equip this item`,
+  const doEquip = slot ? useritem.equipped !== slot : useritem.equipped === "NONE";
+  
+  // Only check requirements when equipping (not when unequipping)
+  if (doEquip) {
+    if (useritem.item.requiredLevel > user.level) {
+      return errorResponse(
+        `You need to be level ${useritem.item.requiredLevel} to equip this item`,
+      );
+    }
+    if (useritem.item.bloodlineId && useritem.item.bloodlineId !== user.bloodlineId) {
+      return errorResponse(
+        `This item requires a specific bloodline to equip`,
+      );
+    }
+    if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
+      return errorResponse("Cannot equip crafting item");
+    }
+    if (useritem.isInAuction) {
+      return errorResponse("Cannot equip item in auction");
+    }
+    const currentlyImbuing = useritem.imbuements.filter(
+      (imbuement) =>
+        imbuement.craftingFinishedAt && imbuement.craftingFinishedAt > new Date(),
     );
+    if (currentlyImbuing.length > 0) {
+      return errorResponse("Cannot equip item because it is being imbued");
+    }
   }
-  if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
-    return errorResponse("Cannot equip crafting item");
-  }
-  if (useritem.isInAuction) {
-    return errorResponse("Cannot equip item in auction");
-  }
-  const currentlyImbuing = useritem.imbuements.filter(
-    (imbuement) =>
-      imbuement.craftingFinishedAt && imbuement.craftingFinishedAt > new Date(),
-  );
-  if (currentlyImbuing.length > 0) {
-    return errorResponse("Cannot equip item because it is being imbued");
-  }
-
-  const doEquip = !useritem.equipped || useritem.equipped !== slot;
   const info = useritem.item;
   const instances = newUserItems.filter(
     (ui) => ui.itemId === info.id && ui.equipped !== "NONE",
@@ -1293,5 +1309,8 @@ export const itemDatabaseFilter = (
     gte(item.cost, input?.minCost ?? 0),
     gte(item.repsCost, input?.minRepsCost ?? 0),
     gte(item.seichiSilverCost, input?.minSeichiSilverCost ?? 0),
+    ...(input?.maxSeichiSilverCost !== undefined
+      ? [lte(item.seichiSilverCost, input.maxSeichiSilverCost)]
+      : []),
   ];
 };

@@ -1253,12 +1253,15 @@ export const fallbackQuestsFilter = (
 
   if (questType === "medical") {
     const userMedicalRankIndex = MEDNIN_RANKS.indexOf(userMedicalRank);
-    // Try each rank from user's rank down to NONE
+    // Collect all missions from user's rank down to NONE (dedup by id)
+    const allQualifyingMissions: Quest[] = [];
+    const seen = new Set<string>();
+    
     for (let i = userMedicalRankIndex; i >= 0; i--) {
       const currentRank = MEDNIN_RANKS[i];
       if (!currentRank) continue;
 
-      // Filter for available quests
+      // Filter for available quests at this rank
       const availableMissions = quests.filter(
         (e) =>
           e.questType === questType &&
@@ -1266,13 +1269,27 @@ export const fallbackQuestsFilter = (
           isAvailableUserQuests(e, user).check,
       );
 
-      // If we found any available quests, break out of the loop
-      if (availableMissions.length > 0) {
-        filtered = availableMissions;
-        if (userMedicalRank !== currentRank) {
-          rankInfo = ` (using ${capitalizeFirstLetter(currentRank)} rank missions)`;
+      for (const q of availableMissions) {
+        if (!seen.has(q.id)) {
+          seen.add(q.id);
+          allQualifyingMissions.push(q);
         }
-        break;
+      }
+    }
+
+    filtered = allQualifyingMissions;
+    
+    // Set rank info if we're showing missions from lower ranks
+    if (filtered.length > 0) {
+      const highestRankShown = filtered.reduce((highest, mission) => {
+        if (!mission.medicalRank) return highest;
+        const missionRankIndex = MEDNIN_RANKS.indexOf(mission.medicalRank);
+        const highestIndex = MEDNIN_RANKS.indexOf(highest);
+        return missionRankIndex > highestIndex ? mission.medicalRank : highest;
+      }, "NONE" as MEDNIN_RANK);
+      
+      if (highestRankShown !== userMedicalRank) {
+        rankInfo = ` (showing missions up to ${capitalizeFirstLetter(highestRankShown)} rank)`;
       }
     }
   } else {

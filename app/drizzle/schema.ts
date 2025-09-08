@@ -1161,6 +1161,7 @@ export const item = mysqlTable(
     canBeHunted: boolean("canBeHunted").default(false).notNull(),
     canBeGathered: boolean("canBeGathered").default(false).notNull(),
     canBeTraded: boolean("canBeTraded").default(false).notNull(),
+    bloodlineId: varchar("bloodlineId", { length: 191 }),
   },
   (table) => {
     return {
@@ -1175,6 +1176,7 @@ export const item = mysqlTable(
       costIdx: index("Item_cost_idx").on(table.cost),
       repsCostIdx: index("Item_repsCost_idx").on(table.repsCost),
       requiredLevelIdx: index("Item_requiredLevel_idx").on(table.requiredLevel),
+      bloodlineIdIdx: index("Item_bloodlineId_idx").on(table.bloodlineId),
     };
   },
 );
@@ -1183,9 +1185,13 @@ export type ItemType = Item["itemType"];
 export type ItemSlotType = Item["slot"];
 export type ItemRarity = Item["rarity"];
 
-export const itemRelations = relations(item, ({ many }) => ({
+export const itemRelations = relations(item, ({ one, many }) => ({
   craftingRequirements: many(craftingRequirement, {
     relationName: "craftItems",
+  }),
+  requiredBloodline: one(bloodline, {
+    fields: [item.bloodlineId],
+    references: [bloodline.id],
   }),
 }));
 

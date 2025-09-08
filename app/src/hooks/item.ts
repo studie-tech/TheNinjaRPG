@@ -94,6 +94,9 @@ export const useItemEditForm = (
     enabled: canBeCrafted,
   });
 
+  // Query for bloodlines for bloodline requirement dropdown
+  const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
+
   // Object for form values
   const formData: FormEntry<keyof ZodItemType>[] = [
     { id: "name", label: "Item Name", type: "text" },
@@ -122,6 +125,13 @@ export const useItemEditForm = (
     { id: "healthCost", type: "number" },
     { id: "maxEquips", type: "number" },
     { id: "requiredLevel", type: "number", label: "Required Level" },
+    { 
+      id: "bloodlineId", 
+      type: "db_values", 
+      values: bloodlinesData,
+      label: "Required Bloodline",
+      resetButton: true
+    },
     { id: "canStack", type: "boolean" },
     { id: "maxImbueNumber", type: "number" },
     { id: "hidden", type: "boolean" },
