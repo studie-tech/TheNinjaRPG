@@ -157,6 +157,21 @@ export default function Staff() {
             content admin. If the issue cannot be resolved, it should be escalated to
             the owner, at which point a resolution will be found.
           </p>
+          <p>
+            <b>Staff Benefits</b>
+            <br />
+            <ul className="list-disc pl-5">
+              <li>
+                For every year of service, based on review from direct admin (moderator,
+                content, event), the member will be allowed to roll for a random S-rank
+                from the S-ranks not currently owned. This is based of admin evaluation
+                of actual work + contribution done by the member.
+              </li>
+              <li>Gold federal support</li>
+              <li>Free bloodline reskins</li>
+              <li>Free jutsu swaps</li>
+            </ul>
+          </p>
         </div>
       </ContentBox>
     </>
