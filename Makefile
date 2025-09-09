@@ -175,3 +175,8 @@ git-branch-uncommit: # Undo the last N commits (keeping changes staged), usage: 
 	git reset --hard origin/main
 	git apply --reject --whitespace=fix branch.patch
 	rm -f branch.patch
+
+.PHONY: force-push-staging
+force-push-staging: # Force-push the current branch to the remote staging branch
+	@echo "${YELLOW}Force-pushing current branch to origin/dev${RESET}"
+	git push origin HEAD:staging --force
