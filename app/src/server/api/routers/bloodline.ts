@@ -191,16 +191,18 @@ export const bloodlineRouter = createTRPCRouter({
       const id = nanoid();
       const resolvedImage = input.image ?? base.image;
       await Promise.all([
-        ctx.drizzle.insert(bloodlineReskin).values({
-          id,
-          bloodlineId: base.id,
-          name: input.name,
-          description: input.description,
-          image: resolvedImage,
-          createdBy: ctx.userId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }),
+        ctx.drizzle.insert(bloodlineReskin).values([
+          {
+            id: id,
+            bloodlineId: base.id,
+            name: input.name ?? base.name,
+            description: input.description ?? base.description,
+            image: resolvedImage,
+            createdBy: ctx.userId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,

@@ -78,10 +78,10 @@ export default function ManualJutsuReskins() {
         {totalLoading && <Loader explanation="Loading data" />}
         {transformedReskins?.map((reskin, i) => (
           <div
-            key={i}
+            key={reskin.id}
             ref={i === transformedReskins.length - 1 ? setLastElement : null}
           >
-            <ItemWithEffects item={reskin} key={reskin.id} showEdit="jutsu/reskins" />
+            <ItemWithEffects item={reskin} showEdit="jutsu/reskins" />
           </div>
         ))}
         {!totalLoading && transformedReskins?.length === 0 && (

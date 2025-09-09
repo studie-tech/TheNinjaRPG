@@ -45,6 +45,7 @@ export const ContentTypes = [
   "ai",
   "badge",
   "bloodline",
+  "bloodline_reskin",
   "item",
   "jutsu",
   "jutsu_reskin",

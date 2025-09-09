@@ -604,7 +604,7 @@ export default function MyJutsu() {
                   button={
                     <Button id="return" variant="destructive">
                       <Trash2 className="h-6 w-6 sm:mr-2" />
-                      <p className="hidden sm:block">Forget [${forgetRyo} ryo]</p>
+                      <p className="hidden sm:block">{`Forget [${forgetRyo} ryo]`}</p>
                     </Button>
                   }
                   onAccept={(e) => {

@@ -945,9 +945,9 @@ export const jutsuRouter = createTRPCRouter({
             id: reskinId,
             userId: ctx.userId,
             jutsuId: jutsuData.id,
-            name: input.name,
-            description: input.description,
-            battleDescription: input.battleDescription,
+            name: input.name ?? jutsuData.name,
+            description: input.description ?? jutsuData.description,
+            battleDescription: input.battleDescription ?? jutsuData.battleDescription,
             image: resolvedImage,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -1000,7 +1000,7 @@ export const jutsuRouter = createTRPCRouter({
           id: nanoid(),
           userId: ctx.userId,
           tableName: "jutsu",
-          changes: {},
+          changes: [`Reskin update rejected by AI: ${aiCheck.comment}`],
           relatedId: reskin.jutsuId,
           relatedMsg: `Reskin update rejected by AI: ${reason}`,
           relatedImage: reskin.image,
@@ -1127,7 +1127,10 @@ export const jutsuRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       const userJutsuData = await ctx.drizzle.query.userJutsu.findFirst({
-        where: eq(userJutsu.id, input.userJutsuId),
+        where: and(
+          eq(userJutsu.id, input.userJutsuId),
+          eq(userJutsu.userId, ctx.userId),
+        ),
         with: { activeReskin: true },
       });
       // Guard
@@ -1145,7 +1148,9 @@ export const jutsuRouter = createTRPCRouter({
             reskinId: null,
             updatedAt: new Date(),
           })
-          .where(eq(userJutsu.id, input.userJutsuId)),
+          .where(
+            and(eq(userJutsu.id, input.userJutsuId), eq(userJutsu.userId, ctx.userId)),
+          ),
       ]);
       // Return
       return {
