@@ -16,20 +16,21 @@ export const bloodlineFilteringSchema = z.object({
 
 export type BloodlineFilteringSchema = z.infer<typeof bloodlineFilteringSchema>;
 
-/** Schema for creating a bloodline reskin (staff only). */
-export const bloodlineReskinCreateSchema = z.object({
-  bloodlineId: z.string(),
-  name: z.string().min(1).max(100),
-  description: z.string().min(1).max(1000),
+/** Base schema for reskins */
+export const baseReskinSchema = z.object({
+  name: z.string().min(0).max(100).optional(),
+  description: z.string().min(0).max(1000).optional(),
   image: z.string().min(1).max(100).optional(),
+});
+
+/** Schema for creating a bloodline reskin (staff only). */
+export const bloodlineReskinCreateSchema = baseReskinSchema.extend({
+  bloodlineId: z.string(),
 });
 export type BloodlineReskinCreateSchema = z.infer<typeof bloodlineReskinCreateSchema>;
 
 /** Schema for updating a bloodline reskin (staff only, includes reason). */
-export const bloodlineReskinUpdateSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().min(1).max(1000),
-  image: z.string().min(1).max(100).optional(),
+export const bloodlineReskinUpdateSchema = baseReskinSchema.extend({
   reason: z.string().min(5).max(500),
 });
 export type BloodlineReskinUpdateSchema = z.infer<typeof bloodlineReskinUpdateSchema>;

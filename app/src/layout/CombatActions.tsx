@@ -185,8 +185,8 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   return (
     <div
       className={cn(
-        "relative text-center flex cursor-pointer flex-col items-center justify-start",
-        settings.combatMode ? "text-black" : "text-foreground",
+        "relative text-center flex cursor-pointer flex-col items-center justify-start rounded-md",
+        "text-black",
         props.isGreyed ? "hover:opacity-80" : "hover:opacity-90",
         props.className,
       )}

@@ -47,6 +47,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { jutsuReskinCreateSchema } from "@/validators/jutsu";
 import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
 import type { UserJutsuWithRelations } from "@/drizzle/schema";
+import { Label } from "@/components/ui/label";
+import { UploadButton } from "@/utils/uploadthing";
+import AvatarImage from "@/layout/Avatar";
 
 export default function MyJutsu() {
   // tRPC utility
@@ -573,10 +576,13 @@ export default function MyJutsu() {
                       // Pre-fill with current reskin data if it exists
                       reskinForm.reset({
                         jutsuId: userjutsu.jutsuId,
-                        name: userjutsu.activeReskin?.name || "",
-                        description: userjutsu.activeReskin?.description || "",
+                        name: userjutsu.activeReskin?.name ?? userjutsu.jutsu.name,
+                        description:
+                          userjutsu.activeReskin?.description ??
+                          userjutsu.jutsu.description,
                         battleDescription:
-                          userjutsu.activeReskin?.battleDescription || "",
+                          userjutsu.activeReskin?.battleDescription ??
+                          userjutsu.jutsu.battleDescription,
                         image: undefined,
                       });
                       setIsOpen(false);
@@ -621,6 +627,7 @@ export default function MyJutsu() {
           setIsOpen={setIsReskinOpen}
           proceed_label={userjutsu.activeReskin ? "Update Reskin" : "Create Reskin"}
           isValid={reskinForm.formState.isValid}
+          className="w-[800px] max-w-[99%] max-h-[99%]"
           onAccept={() => {
             if (!isReskinning && userjutsu) {
               const data = reskinForm.getValues();
@@ -630,18 +637,75 @@ export default function MyJutsu() {
             }
           }}
         >
-          <div className="space-y-4">
-            <div
-              className="reskin-rules"
-              style={{
-                maxWidth: "800px",
-                margin: "0 auto",
-                padding: "1rem",
-                fontFamily: "sans-serif",
-                lineHeight: "1.6",
-              }}
-            >
-              <p>
+          <div className="flex flex-col gap-4">
+            <div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (reskinForm.formState.isValid) {
+                    const data = reskinForm.getValues();
+                    setReskinData(data);
+                    setIsReskinOpen(false);
+                    setIsConfirmOpen(true);
+                  }
+                }}
+                className="space-y-4 grid grid-cols-3 gap-4"
+              >
+                <div className="space-y-2 row-span-3">
+                  <p className="text-sm text-muted-foreground">
+                    Optional: upload a new image for this reskin
+                  </p>
+                  <div className="flex items-center gap-3 flex-col">
+                    <AvatarImage
+                      href={reskinForm.watch("image") || userjutsu.jutsu.image}
+                      alt={userjutsu.jutsu.name}
+                      size={64}
+                      hover_effect={false}
+                    />
+                    <UploadButton
+                      endpoint="imageUploader"
+                      onClientUploadComplete={(res) => {
+                        const url = res?.[0]?.url;
+                        if (url) {
+                          reskinForm.setValue("image", url, { shouldValidate: true });
+                        }
+                      }}
+                      onUploadError={(error: Error) => {
+                        showMutationToast({ success: false, message: error.message });
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <Label htmlFor="name">Jutsu Name</Label>
+                  <Input
+                    placeholder="New jutsu name"
+                    defaultValue={userjutsu.jutsu.name}
+                    {...reskinForm.register("name")}
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <Label htmlFor="description">Jutsu Description</Label>
+                  <Textarea
+                    placeholder="New jutsu description"
+                    defaultValue={userjutsu.jutsu.description}
+                    {...reskinForm.register("description")}
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <Label htmlFor="battleDescription">Battle Description</Label>
+                  <Textarea
+                    placeholder="New battle description"
+                    defaultValue={userjutsu.jutsu.battleDescription}
+                    {...reskinForm.register("battleDescription")}
+                  />
+                </div>
+              </form>
+            </div>
+            <div>
+              <div>
                 <strong className="text-red-500">
                   {userjutsu.activeReskin
                     ? "Updating a reskin is free."
@@ -668,10 +732,42 @@ export default function MyJutsu() {
                 <br />
                 - Jutsu Description (what shows outside of combat)
                 <br />
-                - Battle Description (what appears in combat, e.g., &quot;%user uses
-                %jutsu on %target&quot;)
+                - Battle Description (what appears in combat, e.g., &quot;%user attacks
+                %target&quot;)
                 <br />
                 <br />
+                <ul className="list-disc pl-6">
+                  <li>
+                    <code>%user</code> or <code>%target</code>: The acting user&apos;s
+                    username.
+                  </li>
+                  <li>
+                    <code>%user_subject</code> or <code>%target_subject</code>: (
+                    <span className="italic">&quot;he&quot; or &quot;she&quot;</span>).
+                  </li>
+                  <li>
+                    <code>%user_object</code> or <code>%target_object</code>: (
+                    <span className="italic">&quot;him&quot; or &quot;her&quot;</span>).
+                  </li>
+                  <li>
+                    <code>%user_posessive</code> or <code>%target_posessive</code>: (
+                    <span className="italic">&quot;his&quot; or &quot;hers&quot;</span>
+                    ).
+                  </li>
+                  <li>
+                    <code>%user_reflexive</code> or <code>%target_reflexive</code>: (
+                    <span className="italic">
+                      &quot;himself&quot; or &quot;herself&quot;
+                    </span>
+                    ).
+                  </li>
+                  <li>
+                    <code>%location</code>: The location of the action, formatted as{" "}
+                    <span className="italic">[row, col]</span>.
+                  </li>
+                </ul>
+              </div>
+              <div>
                 <strong>Tone & Content Restrictions:</strong>
                 <br />
                 - No hostile, mocking, or negative wording toward other players, clans,
@@ -704,38 +800,8 @@ export default function MyJutsu() {
                 <br />
                 <strong>Note:</strong> Violation of these rules may result in the
                 modification or removal of the reskinned jutsu.
-              </p>
+              </div>
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (reskinForm.formState.isValid) {
-                  const data = reskinForm.getValues();
-                  setReskinData(data);
-                  setIsReskinOpen(false);
-                  setIsConfirmOpen(true);
-                }
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <Input placeholder="New jutsu name" {...reskinForm.register("name")} />
-              </div>
-
-              <div>
-                <Textarea
-                  placeholder="New jutsu description"
-                  {...reskinForm.register("description")}
-                />
-              </div>
-
-              <div>
-                <Textarea
-                  placeholder="New battle description"
-                  {...reskinForm.register("battleDescription")}
-                />
-              </div>
-            </form>
           </div>
         </Modal2>
       )}
