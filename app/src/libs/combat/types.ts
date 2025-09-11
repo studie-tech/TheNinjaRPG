@@ -116,6 +116,8 @@ export type BasicActions = {
 export type ExtraState = {
   jutsus?: Jutsu[];
   settings?: GameSetting[];
+  textureAssets?: string[];
+  sfxAssets?: string[];
 };
 
 // Create type for battle, which contains information on user current state
@@ -316,6 +318,9 @@ const BaseAttributes = {
   staticAnimation: z.string().default(""),
   appearAnimation: z.string().default(""),
   disappearAnimation: z.string().default(""),
+  // SFX controls
+  appearSfx: z.string().default(""),
+  disappearSfx: z.string().default(""),
   // Timing controls
   rounds: z.coerce.number().int().min(0).max(100).optional(),
   timeTracker: z.record(z.string(), z.coerce.number()).optional(),

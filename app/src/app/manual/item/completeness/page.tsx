@@ -63,6 +63,11 @@ export default function ManualItemBalance() {
         ) && !noBattleUsage
           ? 1
           : 0;
+
+      const missingSfx =
+        !item.effects.some((e) => e.appearSfx || e.disappearSfx) && !noBattleUsage
+          ? 1
+          : 0;
       // Check: referenced asset IDs exist in gameAsset table
       const assetIdSet = new Set((gameAssets ?? []).map((a) => a.id));
       const invalidAssets = gameAssets
@@ -77,7 +82,7 @@ export default function ManualItemBalance() {
           ? 1
           : 0
         : 0;
-      const total = effects + description + missingGraphic + invalidAssets;
+      const total = effects + description + missingGraphic + missingSfx + invalidAssets;
       // Return summary
       return {
         name: item.name,
@@ -115,6 +120,11 @@ export default function ManualItemBalance() {
         ) : (
           <CircleCheckBig className="h-4 w-4 text-green-500" />
         ),
+        missingSfx: missingSfx ? (
+          <CircleMinus className="h-4 w-4 text-red-500" />
+        ) : (
+          <CircleCheckBig className="h-4 w-4 text-green-500" />
+        ),
         assetsExist: invalidAssets ? (
           <CircleMinus className="h-4 w-4 text-red-500" />
         ) : (
@@ -133,6 +143,7 @@ export default function ManualItemBalance() {
     { key: "links", header: "Links", type: "jsx" },
     { key: "effects", header: "Effects", type: "jsx" },
     { key: "missingGraphic", header: "Graphics", type: "jsx" },
+    { key: "missingSfx", header: "SFX", type: "jsx" },
     { key: "assetsExist", header: "Asset Missing", type: "jsx" },
     { key: "description", header: "Description", type: "jsx" },
     { key: "total", header: "Total", type: "jsx" },

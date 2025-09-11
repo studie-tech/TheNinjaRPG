@@ -35,6 +35,8 @@ import type { TerrainHex } from "@/libs/hexgrid";
 import { useLocalStorage } from "@/hooks/localstorage";
 import Modal2 from "@/layout/Modal2";
 import { LogbookEntry } from "@/layout/Logbook";
+import { preloadTextures } from "@/libs/threejs/util";
+import { preloadAudioBuffers } from "@/utils/audio";
 
 interface CombatProps {
   action?: CombatAction | undefined;
@@ -98,6 +100,30 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Query data
   const { data: gameAssets } = api.misc.getAllGameAssetNames.useQuery(undefined);
+
+  // Preload all combat-related asset textures once assets list is ready
+  useEffect(() => {
+    if (!gameAssets || gameAssets.length === 0) return;
+    const ids = battle.current?.extraState.textureAssets || [];
+    if (ids.length === 0) return;
+    const urls = gameAssets
+      .filter((a) => ids.includes(a.id))
+      .map((a) => a.image)
+      .filter(Boolean);
+    void preloadTextures(urls);
+  }, [battle.current?.id, battle.current?.version, gameAssets]);
+
+  // Preload combat-related SFX (AudioBuffers via Web Audio API) once assets list is ready
+  useEffect(() => {
+    if (!gameAssets || gameAssets.length === 0) return;
+    const sfxIds = battle.current?.extraState.sfxAssets || [];
+    if (!sfxIds || sfxIds.length === 0) return;
+    const urls = gameAssets
+      .filter((a) => sfxIds.includes(a.id))
+      .map((a) => a.url)
+      .filter(Boolean);
+    void preloadAudioBuffers(urls);
+  }, [battle.current?.id, battle.current?.version, gameAssets]);
 
   // Convenience method for helping people to not move too fast
   const canPerformAction = () => {

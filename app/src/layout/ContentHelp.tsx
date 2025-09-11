@@ -458,7 +458,9 @@ const renderEffectsGraphicsWarning = (effects: ZodAllTags[]) => {
         <code className="bg-red-100 px-1 rounded mr-1">disappearAnimation</code>,{" "}
         <code className="bg-red-100 px-1 rounded mr-1">staticAnimation</code>
         or <code className="bg-red-100 px-1 rounded ml-1">staticAssetPath</code>
-        to at least one effect to improve battle visuals.
+        and optionally <code className="bg-red-100 px-1 rounded ml-1">appearSfx</code>/
+        <code className="bg-red-100 px-1 rounded ml-1">disappearSfx</code>
+        to at least one effect to improve battle feedback.
       </p>
     </div>
   );

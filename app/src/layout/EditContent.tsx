@@ -5,6 +5,7 @@ import Image from "next/image";
 import React, { useEffect, useState, useMemo } from "react";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import RichInput from "@/layout/RichInput";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { objectKeys } from "@/utils/typeutils";
@@ -138,9 +139,9 @@ export const EditContent = <
 
   // Asset picker dialog state
   const [assetPickerOpen, setAssetPickerOpen] = useState<boolean>(false);
-  const [assetPickerType, setAssetPickerType] = useState<"ANIMATION" | "STATIC">(
-    "ANIMATION",
-  );
+  const [assetPickerType, setAssetPickerType] = useState<
+    "ANIMATION" | "STATIC" | "SFX"
+  >("ANIMATION");
   const [assetPickerField, setAssetPickerField] = useState<string | null>(null);
   const [assetTokens, setAssetTokens] = useState<string[]>([]);
 
@@ -170,14 +171,14 @@ export const EditContent = <
   const pickerTags =
     assetPickerType === "ANIMATION" ? animationTagResp?.tags : generalTagResp?.tags;
 
-  const openAssetPicker = (fieldId: string, type: "ANIMATION" | "STATIC") => {
+  const openAssetPicker = (fieldId: string, type: "ANIMATION" | "STATIC" | "SFX") => {
     setAssetPickerField(fieldId);
     setAssetPickerType(type);
     setAssetTokens([]);
     setAssetPickerOpen(true);
   };
 
-  // Watch selected animation ids for preview
+  // Watch selected asset ids for preview
   const watchAppearSel = useWatch({
     control: form.control,
     name: "appearAnimation" as Path<S>,
@@ -190,16 +191,36 @@ export const EditContent = <
     control: form.control,
     name: "staticAnimation" as Path<S>,
   });
-  const animIds = useMemo(
+  const watchAppearSfx = useWatch({
+    control: form.control,
+    name: "appearSfx" as Path<S>,
+  });
+  const watchDisappearSfx = useWatch({
+    control: form.control,
+    name: "disappearSfx" as Path<S>,
+  });
+  const previewIds = useMemo(
     () =>
-      [watchAppearSel, watchDisappearSel, watchStaticSel]
+      [
+        watchAppearSel,
+        watchDisappearSel,
+        watchStaticSel,
+        watchAppearSfx,
+        watchDisappearSfx,
+      ]
         .map((x) => (typeof x === "string" ? x : ""))
         .filter((x) => x.length > 0),
-    [watchAppearSel, watchDisappearSel, watchStaticSel],
+    [
+      watchAppearSel,
+      watchDisappearSel,
+      watchStaticSel,
+      watchAppearSfx,
+      watchDisappearSfx,
+    ],
   );
-  const { data: animPreviewAssets } = api.gameAsset.getSceneAssets.useQuery(
-    { assetIds: animIds },
-    { enabled: animIds.length > 0 },
+  const { data: previewAssets } = api.gameAsset.getSceneAssets.useQuery(
+    { assetIds: previewIds },
+    { enabled: previewIds.length > 0 },
   );
 
   // Event listener for submitting on enter click
@@ -297,7 +318,11 @@ export const EditContent = <
         {assetPickerOpen && (
           <Modal2
             title={
-              assetPickerType === "ANIMATION" ? "Pick Animation" : "Pick Static Asset"
+              assetPickerType === "ANIMATION"
+                ? "Pick Animation"
+                : assetPickerType === "STATIC"
+                  ? "Pick Static Asset"
+                  : "Pick SFX"
             }
             isOpen={assetPickerOpen}
             setIsOpen={setAssetPickerOpen}
@@ -333,27 +358,70 @@ export const EditContent = <
                 ))}
               </div>
 
-              <ActionSelector
-                items={allPickerAssets?.map((a) => ({ ...a, type: "asset" as const }))}
-                labelSingles={true}
-                onClick={(pickedId) => {
-                  if (assetPickerField) {
-                    // Directly set the form value for the field we opened the picker for
-                    form.setValue(
-                      assetPickerField as unknown as Path<S>,
-                      pickedId as PathValue<S, K>,
-                      { shouldDirty: true },
-                    );
-                    setAssetPickerOpen(false);
-                  }
-                }}
-                showBgColor={false}
-                roundFull={true}
-                hideBorder={true}
-                showLabels={true}
-                gridClassNameOverwrite="grid grid-cols-3 md:grid-cols-4"
-                emptyText="No assets match the selected tags."
-              />
+              {assetPickerType === "SFX" ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-96 overflow-auto">
+                  {(allPickerAssets || [])
+                    .filter((a) => a.type === "SFX")
+                    .map((a) => {
+                      const selected =
+                        String(form.getValues(assetPickerField as Path<S>) ?? "") ===
+                        a.id;
+                      return (
+                        <div
+                          key={a.id}
+                          className={cn(
+                            "border rounded p-2 space-y-2",
+                            selected ? "border-green-500 bg-green-50" : "",
+                          )}
+                        >
+                          <Label>{a.name}</Label>
+                          <audio src={a.url ?? undefined} controls className="w-full" />
+                          <Button
+                            variant={selected ? "default" : "secondary"}
+                            className="w-full"
+                            onClick={() => {
+                              if (assetPickerField) {
+                                form.setValue(
+                                  assetPickerField as unknown as Path<S>,
+                                  a.id as PathValue<S, K>,
+                                  { shouldDirty: true },
+                                );
+                                setAssetPickerOpen(false);
+                              }
+                            }}
+                          >
+                            {selected ? "Selected" : "Use this"}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : (
+                <ActionSelector
+                  items={allPickerAssets?.map((a) => ({
+                    ...a,
+                    type: "asset" as const,
+                  }))}
+                  labelSingles={true}
+                  onClick={(pickedId) => {
+                    if (assetPickerField) {
+                      // Directly set the form value for the field we opened the picker for
+                      form.setValue(
+                        assetPickerField as unknown as Path<S>,
+                        pickedId as PathValue<S, K>,
+                        { shouldDirty: true },
+                      );
+                      setAssetPickerOpen(false);
+                    }
+                  }}
+                  showBgColor={false}
+                  roundFull={true}
+                  hideBorder={true}
+                  showLabels={true}
+                  gridClassNameOverwrite="grid grid-cols-3 md:grid-cols-4"
+                  emptyText="No assets match the selected tags."
+                />
+              )}
             </div>
           </Modal2>
         )}
@@ -555,6 +623,8 @@ export const EditContent = <
                         "disappearAnimation",
                         "staticAnimation",
                         "staticAssetPath",
+                        "appearSfx",
+                        "disappearSfx",
                       ].includes(id))) && (
                     <div className="flex flex-row items-end">
                       <div className="grow">
@@ -770,6 +840,8 @@ export const EditContent = <
                       "disappearAnimation",
                       "staticAnimation",
                       "staticAssetPath",
+                      "appearSfx",
+                      "disappearSfx",
                     ].includes(id) && (
                       <div className="flex flex-row items-start gap-3">
                         <FormField
@@ -779,7 +851,11 @@ export const EditContent = <
                             const label = formEntry.label ? formEntry.label : id;
                             const handleOpen = () => {
                               const t =
-                                id === "staticAssetPath" ? "STATIC" : "ANIMATION";
+                                id === "staticAssetPath"
+                                  ? "STATIC"
+                                  : id === "appearSfx" || id === "disappearSfx"
+                                    ? "SFX"
+                                    : "ANIMATION";
                               openAssetPicker(id, t);
                             };
                             const selectedOption = options.find(
@@ -819,7 +895,14 @@ export const EditContent = <
                                   <FormMessage />
                                 </FormItem>
                                 {/* Preview to the right */}
-                                <div className="w-24 h-24">
+                                <div
+                                  className={cn(
+                                    "h-24",
+                                    id === "appearSfx" || id === "disappearSfx"
+                                      ? "w-48"
+                                      : "w-24",
+                                  )}
+                                >
                                   {id === "staticAssetPath" ? (
                                     formEntry &&
                                     "current" in formEntry &&
@@ -832,9 +915,22 @@ export const EditContent = <
                                         hideBorder={false}
                                       />
                                     ) : null
+                                  ) : id === "appearSfx" || id === "disappearSfx" ? (
+                                    (() => {
+                                      const sfx = (previewAssets || []).find(
+                                        (a) => a.id === (field.value as string),
+                                      );
+                                      return sfx?.url ? (
+                                        <audio
+                                          src={sfx.url}
+                                          controls
+                                          className="w-full"
+                                        />
+                                      ) : null;
+                                    })()
                                   ) : (
                                     (() => {
-                                      const asset = (animPreviewAssets || []).find(
+                                      const asset = (previewAssets || []).find(
                                         (a) => a.id === field.value || "",
                                       );
                                       return asset?.image ? (
@@ -1335,7 +1431,9 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       fields.includes("staticAssetPath") ||
       fields.includes("appearAnimation") ||
       fields.includes("staticAnimation") ||
-      fields.includes("disappearAnimation"),
+      fields.includes("disappearAnimation") ||
+      fields.includes("appearSfx") ||
+      fields.includes("disappearSfx"),
   });
 
   // Form for handling the specific tag
@@ -1596,6 +1694,24 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           multiple: false,
           type: "db_values",
           current: staticImage,
+        };
+      } else if (innerType instanceof z.ZodString && value === "appearSfx") {
+        return {
+          id: value,
+          values: (assetData || []).filter((a) => a.type === "SFX"),
+          multiple: false,
+          type: "db_values",
+          searchable: true,
+          label: "appearSfx",
+        };
+      } else if (innerType instanceof z.ZodString && value === "disappearSfx") {
+        return {
+          id: value,
+          values: (assetData || []).filter((a) => a.type === "SFX"),
+          multiple: false,
+          type: "db_values",
+          searchable: true,
+          label: "disappearSfx",
         };
       } else if (
         innerType instanceof z.ZodLiteral ||
@@ -2418,6 +2534,7 @@ export const MassEffectEditor = <
       });
     });
     return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, selectedFields, modified, options]);
 
   // Mutations

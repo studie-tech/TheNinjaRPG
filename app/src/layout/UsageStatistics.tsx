@@ -3,7 +3,6 @@ import ExportGraph from "@/layout/ExportGraph";
 import { Chart as ChartJS } from "chart.js/auto";
 import { groupBy } from "@/utils/grouping";
 import type { BattleType } from "@/drizzle/constants";
-import { Button } from "@/components/ui/button";
 
 interface LevelStatsProps {
   levelDistribution: {

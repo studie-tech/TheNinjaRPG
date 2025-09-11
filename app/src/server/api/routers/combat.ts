@@ -82,6 +82,14 @@ import { getDefaultBasicActions } from "@/libs/combat/actions";
 import { canTrainJutsu, checkJutsuItems } from "@/libs/train";
 import { toOffenceStat, toDefenceStat } from "@/libs/stats";
 import { getReskinnedUserJutsu } from "@/libs/jutsu";
+import {
+  ID_ANIMATION_SMOKE,
+  ID_ANIMATION_HIT,
+  ID_ANIMATION_HEAL,
+  ID_SFX_SMOKE,
+  ID_SFX_HIT,
+  ID_SFX_HEAL,
+} from "@/drizzle/constants";
 import type { RankedLoadout } from "@/drizzle/schema";
 import type { BattleType } from "@/drizzle/constants";
 import type { BattleUserState, StatSchemaType } from "@/libs/combat/types";
@@ -1454,6 +1462,46 @@ export const initiateBattle = async (
   // Insert battle entry into DB
   const battleId = nanoid();
 
+  // Figure out all textures used by items/jutsus effects (in appearAnimation, disappearAnimation, staticAnimation) for all users
+  // Collect all unique texture and sfx asset paths from item and jutsu effects for all users
+  const textureAssets = [
+    ...users.flatMap((u) =>
+      u.items.flatMap((i) =>
+        (i.item?.effects ?? []).flatMap((e) => [
+          e.appearAnimation,
+          e.disappearAnimation,
+          e.staticAnimation,
+        ]),
+      ),
+    ),
+    ...users.flatMap((u) =>
+      u.jutsus.flatMap((j) =>
+        (j.jutsu?.effects ?? []).flatMap((e) => [
+          e.appearAnimation,
+          e.disappearAnimation,
+          e.staticAnimation,
+        ]),
+      ),
+    ),
+  ]
+    .filter((asset): asset is string => !!asset)
+    .concat([ID_ANIMATION_SMOKE, ID_ANIMATION_HIT, ID_ANIMATION_HEAL]);
+
+  const sfxAssets = [
+    ...users.flatMap((u) =>
+      u.items.flatMap((i) =>
+        (i.item?.effects ?? []).flatMap((e) => [e.appearSfx, e.disappearSfx]),
+      ),
+    ),
+    ...users.flatMap((u) =>
+      u.jutsus.flatMap((j) =>
+        (j.jutsu?.effects ?? []).flatMap((e) => [e.appearSfx, e.disappearSfx]),
+      ),
+    ),
+  ]
+    .filter((asset): asset is string => !!asset)
+    .concat([ID_SFX_SMOKE, ID_SFX_HIT, ID_SFX_HEAL]);
+
   // Insert data
   const [, , userResult] = await Promise.all([
     client.insert(battle).values({
@@ -1463,7 +1511,12 @@ export const initiateBattle = async (
       usersState: usersState,
       usersEffects: userEffects,
       groundEffects: groundEffects,
-      extraState: { jutsus: injectableJutsus, settings: settings },
+      extraState: {
+        jutsus: injectableJutsus,
+        settings: settings,
+        textureAssets: textureAssets,
+        sfxAssets: sfxAssets,
+      },
       rewardScaling: rewardScaling,
       createdAt: startTime,
       updatedAt: startTime,

@@ -117,6 +117,7 @@ const DistributionChart: React.FC<{
       },
     });
     return () => chart.destroy();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [labels, datasets, title, yTitle, xZoomMax]);
   return (
     <div className="w-full" style={{ height: 260 }}>

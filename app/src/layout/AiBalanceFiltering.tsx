@@ -5,7 +5,7 @@ import {
   defineFilteringSchema,
   toOptions,
 } from "@/layout/ContentFiltering";
-import { BattleTypes, STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
+import { BattleTypes, UserRanks } from "@/drizzle/constants";
 
 interface AiBalanceFilteringProps {
   state: AiBalanceFilteringState;

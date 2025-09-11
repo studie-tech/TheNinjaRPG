@@ -23,9 +23,11 @@ export const jutsuFilteringSchema = z.object({
   // "Include" fields
   // -----------------
   appear: z.string().optional(),
+  appearSfx: z.string().optional(),
   bloodline: z.string().optional(),
   classification: z.enum(StatTypes).optional(),
   disappear: z.string().optional(),
+  disappearSfx: z.string().optional(),
   effect: z.array(z.string()).optional(),
   element: z.array(z.string()).optional(),
   jutsuType: z.array(z.enum(JutsuTypes)).optional(),
@@ -50,7 +52,9 @@ export const jutsuFilteringSchema = z.object({
   excludedMethods: z.array(z.string()).optional(),
   excludedTargets: z.array(z.string()).optional(),
   excludedAppear: z.array(z.string()).optional(),
+  excludedAppearSfx: z.array(z.string()).optional(),
   excludedDisappear: z.array(z.string()).optional(),
+  excludedDisappearSfx: z.array(z.string()).optional(),
   excludedStatic: z.array(z.string()).optional(),
   excludedElements: z.array(z.string()).optional(),
   excludedEffects: z.array(z.string()).optional(),

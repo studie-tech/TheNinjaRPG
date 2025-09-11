@@ -14,6 +14,7 @@ import {
   Sprite,
 } from "three";
 import { loadTexture, createTexture } from "@/libs/threejs/util";
+import { playPreloadedAudio } from "@/utils/audio";
 import { getPossibleActionTiles, findHex, PathCalculator } from "../hexgrid";
 import { COMBAT_WIDTH } from "./constants";
 import { getAffectedTiles } from "./movement";
@@ -281,7 +282,9 @@ export const drawCombatEffect = (info: {
       effect.staticAssetPath ||
       effect.staticAnimation ||
       effect.appearAnimation ||
-      effect.disappearAnimation
+      effect.disappearAnimation ||
+      effect.appearSfx ||
+      effect.disappearSfx
     ) {
       const { height: h, width: w } = hex;
       let asset = groupEffects.getObjectByName(effect.id) as Group;
@@ -311,6 +314,16 @@ export const drawCombatEffect = (info: {
             if (actionSprite) asset.add(actionSprite);
           }
         }
+        // If there is an appear SFX, play it once
+        if (effect.appearSfx) {
+          try {
+            const sfx = gameAssets.find((a) => a.id === effect.appearSfx);
+            const url = sfx?.url;
+            if (url) {
+              void playPreloadedAudio(url, 0.8);
+            }
+          } catch {}
+        }
         // If there is a static animation, show it.
         if (effect.staticAnimation) {
           const obj = gameAssets.find((a) => a.id === effect.staticAnimation);
@@ -338,6 +351,17 @@ export const drawCombatEffect = (info: {
       if (asset) {
         if (effect.power !== undefined && effect.power <= 0) {
           asset.visible = false;
+          // Play disappear SFX when hiding
+          if (effect.disappearSfx) {
+            try {
+              console.log(effect);
+              const sfx = gameAssets.find((a) => a.id === effect.disappearSfx);
+              const url = sfx?.url;
+              if (url) {
+                void playPreloadedAudio(url, 0.8);
+              }
+            } catch {}
+          }
         } else {
           asset.visible = true;
           asset.userData.tile = hex;

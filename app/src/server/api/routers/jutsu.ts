@@ -1351,6 +1351,11 @@ export const jutsuDatabaseFilter = (input?: JutsuFilteringSchema) => {
           sql`JSON_SEARCH(${jutsu.effects}, 'one', ${input.appear}, NULL, '$[*].appearAnimation') IS NOT NULL`,
         ]
       : []),
+    ...(input?.appearSfx
+      ? [
+          sql`JSON_SEARCH(${jutsu.effects}, 'one', ${input.appearSfx}, NULL, '$[*].appearSfx') IS NOT NULL`,
+        ]
+      : []),
     ...(input?.static
       ? [
           sql`JSON_SEARCH(${jutsu.effects}, 'one', ${input.static}, NULL, '$[*].staticAnimation') IS NOT NULL`,
@@ -1359,6 +1364,11 @@ export const jutsuDatabaseFilter = (input?: JutsuFilteringSchema) => {
     ...(input?.disappear
       ? [
           sql`JSON_SEARCH(${jutsu.effects}, 'one', ${input.disappear}, NULL, '$[*].disappearAnimation') IS NOT NULL`,
+        ]
+      : []),
+    ...(input?.disappearSfx
+      ? [
+          sql`JSON_SEARCH(${jutsu.effects}, 'one', ${input.disappearSfx}, NULL, '$[*].disappearSfx') IS NOT NULL`,
         ]
       : []),
     ...(input?.classification
@@ -1492,10 +1502,22 @@ export const jutsuDatabaseFilter = (input?: JutsuFilteringSchema) => {
             sql`JSON_SEARCH(${jutsu.effects}, 'one', ${anim}, NULL, '$[*].appearAnimation') IS NULL`,
         )
       : []),
+    ...(input?.excludedAppearSfx?.length
+      ? input.excludedAppearSfx.map(
+          (sfx) =>
+            sql`JSON_SEARCH(${jutsu.effects}, 'one', ${sfx}, NULL, '$[*].appearSfx') IS NULL`,
+        )
+      : []),
     ...(input?.excludedDisappear?.length
       ? input.excludedDisappear.map(
           (anim) =>
             sql`JSON_SEARCH(${jutsu.effects}, 'one', ${anim}, NULL, '$[*].disappearAnimation') IS NULL`,
+        )
+      : []),
+    ...(input?.excludedDisappearSfx?.length
+      ? input.excludedDisappearSfx.map(
+          (sfx) =>
+            sql`JSON_SEARCH(${jutsu.effects}, 'one', ${sfx}, NULL, '$[*].disappearSfx') IS NULL`,
         )
       : []),
     ...(input?.excludedStatic?.length

@@ -108,12 +108,13 @@ export const checkFriendlyFire = (
 };
 
 /**
- * Create a visual effect with a specified appearAnimation
+ * Create a visual effect with a specified appearAnimation and optional SFX
  */
-const getVisual = (
+const getVisualOrSound = (
   longitude: number,
   latitude: number,
   animation?: string,
+  sfx?: string,
   round = 0,
 ): GroundEffect => {
   return {
@@ -122,6 +123,7 @@ const getVisual = (
       rounds: 0,
       description: "N/A",
       appearAnimation: animation,
+      appearSfx: sfx ?? "",
       createdAt: Date.now(),
     }),
     actionId: "visual",
@@ -218,10 +220,17 @@ export const applyEffects = (
         }
       }
 
-      // Show once appearing animation
-      if (e.appearAnimation && e.isNew && e.type !== "visual") {
+      // Show once appearing visual/audio
+      if ((e.appearAnimation || e.appearSfx) && e.isNew && e.type !== "visual") {
+        console.log("Adding 1", e);
         newGroundEffects.push(
-          getVisual(e.longitude, e.latitude, e.appearAnimation, round),
+          getVisualOrSound(
+            e.longitude,
+            e.latitude,
+            e.appearAnimation,
+            e.appearSfx,
+            round,
+          ),
         );
       }
 
@@ -229,9 +238,16 @@ export const applyEffects = (
       if (isEffectActive(e) || e.type === "visual") {
         e.isNew = false;
         newGroundEffects.push(e);
-      } else if (e.disappearAnimation) {
+      } else if (e.disappearAnimation || e.disappearSfx) {
+        console.log("Adding 2", e);
         newGroundEffects.push(
-          getVisual(e.longitude, e.latitude, e.disappearAnimation, round),
+          getVisualOrSound(
+            e.longitude,
+            e.latitude,
+            e.disappearAnimation,
+            e.disappearSfx,
+            round,
+          ),
         );
       }
     }
@@ -589,12 +605,24 @@ export const applyEffects = (
         // Process disappear animation of characters
         if (target.curHealth <= 0 && !target.isOriginal) {
           newGroundEffects.push(
-            getVisual(target.longitude, target.latitude, ID_ANIMATION_SMOKE, round),
+            getVisualOrSound(
+              target.longitude,
+              target.latitude,
+              ID_ANIMATION_SMOKE,
+              undefined,
+              round,
+            ),
           );
         }
         if (user.curHealth <= 0 && !user.isOriginal) {
           newGroundEffects.push(
-            getVisual(user.longitude, user.latitude, ID_ANIMATION_SMOKE, round),
+            getVisualOrSound(
+              user.longitude,
+              user.latitude,
+              ID_ANIMATION_SMOKE,
+              undefined,
+              round,
+            ),
           );
         }
       }
@@ -842,10 +870,22 @@ export const applySingleEffect = (
     actionEffects.push(info);
   }
 
-  // Show once appearing animation
-  if (effect.appearAnimation && longitude && latitude) {
+  // Show once appearing visual/audio
+  if (
+    (effect.appearAnimation || effect.appearSfx) &&
+    effect.isNew &&
+    longitude &&
+    latitude
+  ) {
+    console.log("Adding 5", effect);
     newGroundEffects.push(
-      getVisual(longitude, latitude, effect.appearAnimation, battle.round),
+      getVisualOrSound(
+        longitude,
+        latitude,
+        effect.appearAnimation,
+        effect.appearSfx,
+        battle.round,
+      ),
     );
   }
 
@@ -853,9 +893,20 @@ export const applySingleEffect = (
   if ((isEffectActive(effect) && !effect.fromGround) || effect.type === "visual") {
     effect.isNew = false;
     newUsersEffects.push(effect);
-  } else if (effect.disappearAnimation && longitude && latitude) {
+  } else if (
+    (effect.disappearAnimation || effect.disappearSfx) &&
+    longitude &&
+    latitude
+  ) {
+    console.log("Adding 6", effect);
     newGroundEffects.push(
-      getVisual(longitude, latitude, effect.disappearAnimation, round),
+      getVisualOrSound(
+        longitude,
+        latitude,
+        effect.disappearAnimation,
+        effect.disappearSfx,
+        round,
+      ),
     );
   }
 };
