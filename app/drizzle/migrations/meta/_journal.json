@@ -2059,6 +2059,13 @@
       "when": 1757904169608,
       "tag": "0293_uneven_king_cobra",
       "breakpoints": false
+    },
+    {
+      "idx": 294,
+      "version": "5",
+      "when": 1757955009177,
+      "tag": "0294_amazing_gladiator",
+      "breakpoints": false
     }
   ]
 }
