@@ -45,8 +45,11 @@ import {
   ID_ANIMATION_HIT,
   ID_SFX_HIT,
   ID_SFX_HEAL,
+  ID_SFX_MOVE,
   DURABILITY_USABILITY_THR,
   NonActionItemTypes,
+  ID_SFX_CLEANSE,
+  ID_SFX_CLEAR,
 } from "@/drizzle/constants";
 import type { AttackTargets, ElementName } from "@/drizzle/constants";
 import type { BattleUserState, ReturnedUserState } from "@/libs/combat/types";
@@ -387,7 +390,7 @@ export const getDefaultBasicActions = (
       chakraCost: 0,
       staminaCost: 0,
       actionCostPerc: 30,
-      effects: [MoveTag.parse({ power: 100 })],
+      effects: [MoveTag.parse({ power: 100, appearSfx: ID_SFX_MOVE })],
     },
     basicCleanse: {
       id: "cleanse",
@@ -407,7 +410,7 @@ export const getDefaultBasicActions = (
       chakraCost: 0,
       staminaCost: 0,
       actionCostPerc: 60,
-      effects: [CleanseTag.parse({ power: 100 })],
+      effects: [CleanseTag.parse({ power: 100, appearSfx: ID_SFX_CLEANSE })],
     },
     basicClear: {
       id: "clear",
@@ -427,7 +430,7 @@ export const getDefaultBasicActions = (
       chakraCost: 0,
       staminaCost: 0,
       actionCostPerc: 60,
-      effects: [ClearTag.parse({ power: 100 })],
+      effects: [ClearTag.parse({ power: 100, appearSfx: ID_SFX_CLEAR })],
     },
     basicFlee: {
       id: "flee",

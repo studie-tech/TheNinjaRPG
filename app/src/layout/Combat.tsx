@@ -542,6 +542,8 @@ const Combat: React.FC<CombatProps> = (props) => {
             grid: grid.current,
             playerId: suid,
             userData: userData,
+            sfxEnabled: Boolean(userData?.sfxOn ?? true),
+            gameAssets: gameAssets ?? [],
           });
 
           // Draw all ground effects on the map
@@ -552,6 +554,7 @@ const Combat: React.FC<CombatProps> = (props) => {
             animationId,
             spriteMixer,
             gameAssets: gameAssets ?? [],
+            sfxEnabled: Boolean(userData?.sfxOn ?? true),
           });
 
           // Highlight information on user hover
@@ -611,7 +614,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [battleId, gameAssets]);
+  }, [battleId, gameAssets, userData?.sfxOn]);
 
   // Update visibility when showGridNumbers flag changes
   useEffect(() => {

@@ -29,6 +29,7 @@ import {
   IMG_BATTLEFIELD_TOMBSTONE,
   IMG_BATTLEFIELD_STAR,
 } from "@/drizzle/constants";
+import { ID_SFX_MOVE } from "@/drizzle/constants";
 import type { GameAsset, UserData } from "@/drizzle/schema";
 import type { Grid } from "honeycomb-grid";
 import type { Scene, Object3D, Raycaster } from "three";
@@ -213,6 +214,7 @@ export const drawCombatEffects = (info: {
   animationId: number;
   spriteMixer: SpriteMixer;
   gameAssets: GameAsset[];
+  sfxEnabled?: boolean;
 }) => {
   // Destructure
   const { battle, groupEffects, spriteMixer, animationId, gameAssets } = info;
@@ -235,6 +237,7 @@ export const drawCombatEffects = (info: {
       spriteMixer,
       drawnIds,
       gameAssets,
+      sfxEnabled: info.sfxEnabled,
     });
   });
   // Draw all user effects
@@ -253,6 +256,7 @@ export const drawCombatEffects = (info: {
         spriteMixer,
         drawnIds,
         gameAssets,
+        sfxEnabled: info.sfxEnabled,
       });
     }
   });
@@ -273,6 +277,7 @@ export const drawCombatEffect = (info: {
   spriteMixer: SpriteMixer;
   drawnIds: Set<string>;
   gameAssets: GameAsset[];
+  sfxEnabled?: boolean;
 }) => {
   // Destructure
   const { effect, groupEffects, animationId, hex, drawnIds } = info;
@@ -315,7 +320,7 @@ export const drawCombatEffect = (info: {
           }
         }
         // If there is an appear SFX, play it once
-        if (effect.appearSfx) {
+        if (effect.appearSfx && animationId !== 0 && info.sfxEnabled) {
           try {
             const sfx = gameAssets.find((a) => a.id === effect.appearSfx);
             const url = sfx?.url;
@@ -352,7 +357,7 @@ export const drawCombatEffect = (info: {
         if (effect.power !== undefined && effect.power <= 0) {
           asset.visible = false;
           // Play disappear SFX when hiding
-          if (effect.disappearSfx) {
+          if (effect.disappearSfx && info.sfxEnabled) {
             try {
               console.log(effect);
               const sfx = gameAssets.find((a) => a.id === effect.disappearSfx);
@@ -701,6 +706,7 @@ const stepAlongPath = (
   meshData: UserMeshData,
   targetTile: TerrainHex,
   speed: number,
+  onTileStep?: () => void,
 ) => {
   const { x: curX, y: curY } = userMesh.position;
   const moveTowards = (tx: number, ty: number, maxStep: number) => {
@@ -741,6 +747,7 @@ const stepAlongPath = (
       meshData.hex = nextTile;
       index += 1;
       meshData.movement = { path, index };
+      if (onTileStep) onTileStep();
       if (!path || index >= path.length) {
         const { x: tx, y: ty } = targetTile.center;
         userMesh.position.set(-tx, -ty, 0);
@@ -771,6 +778,8 @@ export const drawCombatUsers = (info: {
   grid: Grid<TerrainHex>;
   playerId: string | undefined;
   userData: UserData;
+  sfxEnabled?: boolean;
+  gameAssets?: GameAsset[];
 }) => {
   // Destruct
   const { users, group_users, grid, playerId, userData } = info;
@@ -804,7 +813,17 @@ export const drawCombatUsers = (info: {
         const meshData = getOrInitUserMeshData(userMesh, targetTile);
         computePathIfNeeded(meshData, pathFinder, targetTile);
         const speed = getTileSpeed(meshData.hex ?? targetTile);
-        stepAlongPath(userMesh, meshData, targetTile, speed);
+        const onTileStep = () => {
+          if (info.sfxEnabled) {
+            try {
+              const assets = info.gameAssets ?? [];
+              const sfx = assets.find((a) => a.id === ID_SFX_MOVE);
+              const url = sfx?.url;
+              if (url) void playPreloadedAudio(url, 0.6);
+            } catch {}
+          }
+        };
+        stepAlongPath(userMesh, meshData, targetTile, speed, onTileStep);
         userMesh.userData = meshData;
         // Handle remove users from combat.
         if (!stillInBattle(user) && user.hidden === undefined) {

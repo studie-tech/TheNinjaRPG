@@ -123,6 +123,9 @@ export const combatRouter = createTRPCRouter({
         return { battle: null, result: null };
       }
 
+      // Initial battle version
+      const actionRounds: number[] = [];
+
       // OUTER LOOP: Attempt to perform action untill success || error thrown
       // The primary purpose here is that if the battle version was already updated, we retry the user's action
       let attempts = 0;
@@ -146,9 +149,14 @@ export const combatRouter = createTRPCRouter({
           const fetchedVersion = userBattle.version;
           const { progressRound, changedActor, actionRound } = alignBattle(
             userBattle,
+            actionRounds,
             ctx.userId,
           );
           if (changedActor) userBattle.version = userBattle.version + 1;
+
+          if (!actionRounds.includes(actionRound)) {
+            actionRounds.push(actionRound);
+          }
 
           // Calculate if the battle is over for this user, and if so update user DB
           // Fetch game settings for multipliers
@@ -381,6 +389,7 @@ export const combatRouter = createTRPCRouter({
       // Short-form
       const suid = ctx.userId;
       const db = ctx.drizzle;
+      const actionRounds: number[] = [];
 
       // Create the grid for the battle
       const grid = getBattleGrid(1);
@@ -415,11 +424,16 @@ export const combatRouter = createTRPCRouter({
         // INNER LOOP: Keep updating battle state until all actions have been performed
         while (true) {
           // Update the battle to the correct activeUserId & round. Default to current user
-          const { actor, actionRound } = alignBattle(newBattle, suid);
+          const { actor, actionRound } = alignBattle(newBattle, actionRounds, suid);
           if (debug) {
             console.log(
               `============ 1. Actor: ${actor.username} - ${actor.userId} ============`,
             );
+          }
+
+          // Record all rounds for this endpoint call¨
+          if (!actionRounds.includes(actionRound)) {
+            actionRounds.push(actionRound);
           }
 
           // Only allow action if it is the users turn
@@ -489,7 +503,11 @@ export const combatRouter = createTRPCRouter({
           }
 
           // Check if everybody finished their action, and if so, fast-forward the battle
-          const { actor: newActor, progressRound } = alignBattle(newBattle);
+          const { actor: newActor, progressRound } = alignBattle(
+            newBattle,
+            actionRounds,
+            suid,
+          );
           if (actionPerformed && progressRound) {
             const dot = description.endsWith(".");
             description += `${dot ? "" : ". "} It is now ${newActor.username}'s turn.`;

@@ -4,7 +4,7 @@ import ReactDOM from "react-dom";
 import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import MenuBoxCombat from "@/layout/MenuBoxCombat";
 import Footer from "@/layout/Footer";
@@ -40,6 +40,7 @@ import { api } from "@/app/_trpc/client";
 import { useUser } from "@clerk/nextjs";
 import { groupBy } from "@/utils/grouping";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { getCurrentSeason } from "@/utils/time";
 import { showMutationToast } from "@/libs/toast";
 import Tutorial from "@/layout/Tutorial";
@@ -137,13 +138,13 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   };
 
   // Get initial audio preference from user data, AB cookie or localStorage
-  const getInitialAudioState = () => {
+  const getInitialMusicState = (): boolean => {
     // Respect explicit user preference when logged in
-    if (userData) return userData.audioOn;
+    if (userData) return userData.musicOn;
 
     // Fallback to locally saved preference
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("audioOn");
+      const saved = localStorage.getItem("musicOn");
       if (saved !== null) return JSON.parse(saved) as boolean;
     }
 
@@ -155,7 +156,6 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   const {
     requiresInteraction,
     enabled: audioEnabled,
-    toggle: toggleAudio,
     setEnabled: setAudioEnabled,
   } = useAudio({
     src: MUSIC_DEFAULT,
@@ -164,24 +164,33 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
     preload: "metadata",
     // Important: keep SSR/CSR consistent. Start disabled during SSR/first paint,
     // then enable on client after mount based on real preference.
-    enabled: isClient ? getInitialAudioState() : false,
+    enabled: isClient ? getInitialMusicState() : false,
     autoPlay: isClient,
   });
 
-  // Simple toggle function for local users (saves to localStorage)
-  const toggleLocalAudio = useCallback(async () => {
-    await toggleAudio();
-    localStorage.setItem("audioOn", JSON.stringify(!audioEnabled));
-  }, [toggleAudio, audioEnabled]);
+  // SFX preference state
+  const getInitialSfxState = (): boolean => {
+    if (userData && typeof userData.sfxOn === "boolean") return userData.sfxOn;
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("sfxOn");
+      if (saved !== null) return JSON.parse(saved) as boolean;
+    }
+    return true;
+  };
+  const [sfxOn, setSfxOn] = useState<boolean>(() =>
+    isClient ? getInitialSfxState() : true,
+  );
 
   // Sync with user data changes
   useEffect(() => {
     if (!isClient) return;
     if (userData) {
-      void setAudioEnabled(userData.audioOn);
+      void setAudioEnabled(!!userData.musicOn);
+      setSfxOn(!!userData.sfxOn);
     } else {
       // No user logged in: sync from local preference when mounting on client
-      void setAudioEnabled(getInitialAudioState());
+      void setAudioEnabled(getInitialMusicState());
+      setSfxOn(getInitialSfxState());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isClient, userData]);
@@ -211,13 +220,10 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   const navbarMenuItemsLeft = navbarMenuItems.slice(0, 3);
   const navbarMenuItemsRight = navbarMenuItems.slice(3);
 
-  // Toggle audio mutation for logged-in users
-  const { mutate: toggleAudioMutation } = api.profile.toggleAudio.useMutation({
+  // Update preferences (music/sfx)
+  const { mutate: updatePreferences } = api.profile.updatePreferences.useMutation({
     onSuccess: async (result) => {
       showMutationToast(result);
-      if (result.success && result.data && userData) {
-        await updateUser({ audioOn: result.data.audioOn });
-      }
     },
   });
 
@@ -386,33 +392,77 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
       >
         <Bell className="h-6 w-6 xl:h-7 xl:w-7 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 rounded-full mx-1 ml-2 p-1" />
       </Link>
-      <div
-        onClick={userData ? () => toggleAudioMutation() : toggleLocalAudio}
-        aria-label={
-          audioEnabled
-            ? requiresInteraction
-              ? "Audio enabled - Click to start playback"
-              : "Audio enabled - Click to disable"
-            : "Audio disabled - Click to enable"
-        }
-        title={
-          requiresInteraction && audioEnabled
-            ? "Audio requires user interaction on this browser. Click anywhere to start playback."
-            : undefined
-        }
-      >
-        {audioEnabled ? (
-          <Volume2
-            className="h-6 w-6 xl:h-7 xl:w-7 rounded-full mx-1 p-1 hover:cursor-pointer hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80"
-            suppressHydrationWarning
-          />
-        ) : (
-          <VolumeX
-            className="h-6 w-6 xl:h-7 xl:w-7 rounded-full mx-1 p-1 hover:cursor-pointer hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80"
-            suppressHydrationWarning
-          />
-        )}
-      </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            aria-label="Audio settings"
+            className="rounded-full mx-1 p-1 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80"
+          >
+            {audioEnabled ? (
+              <Volume2 className="h-6 w-6 xl:h-7 xl:w-7" suppressHydrationWarning />
+            ) : (
+              <VolumeX className="h-6 w-6 xl:h-7 xl:w-7" suppressHydrationWarning />
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72" sideOffset={8}>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Music</p>
+                <p className="text-xs text-muted-foreground">Background soundtrack</p>
+              </div>
+              <Switch
+                checked={!!audioEnabled}
+                onCheckedChange={async (checked) => {
+                  await setAudioEnabled(checked);
+                  if (userData) {
+                    updatePreferences({
+                      preferredStat: userData.preferredStat ?? null,
+                      preferredGeneral1: userData.preferredGeneral1 ?? null,
+                      preferredGeneral2: userData.preferredGeneral2 ?? null,
+                      musicOn: checked,
+                    });
+                    await updateUser({ musicOn: checked });
+                  } else if (typeof window !== "undefined") {
+                    localStorage.setItem("musicOn", JSON.stringify(checked));
+                  }
+                }}
+                aria-label="Toggle music"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Sound effects</p>
+                <p className="text-xs text-muted-foreground">Combat SFX</p>
+              </div>
+              <Switch
+                checked={!!sfxOn}
+                onCheckedChange={(checked) => {
+                  setSfxOn(checked);
+                  if (userData) {
+                    updatePreferences({
+                      preferredStat: userData.preferredStat ?? null,
+                      preferredGeneral1: userData.preferredGeneral1 ?? null,
+                      preferredGeneral2: userData.preferredGeneral2 ?? null,
+                      sfxOn: checked,
+                    });
+                    void updateUser({ sfxOn: checked });
+                  } else if (typeof window !== "undefined") {
+                    localStorage.setItem("sfxOn", JSON.stringify(checked));
+                  }
+                }}
+                aria-label="Toggle sound effects"
+              />
+            </div>
+            {requiresInteraction && audioEnabled && (
+              <p className="text-[10px] text-muted-foreground">
+                Audio requires interaction on this browser; click anywhere to start
+              </p>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
       <Eclipse
         className={`hover:cursor-pointer h-6 w-6 xl:h-7 xl:w-7 min-w-6 min-h-6 xl:min-w-7 xl:min-h-7 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 rounded-full mx-1 p-1 ${theme === "light" ? "bg-yellow-100" : "bg-blue-100"}`}
         onClick={() => {

@@ -1250,7 +1250,11 @@ export const refillActionPoints = (battle: ReturnedBattle) => {
 /** Align battle based on timestamp to update:
  * - The proper round & activeUserId
  * - The action points of all users, in case of next round */
-export const alignBattle = (battle: CompleteBattle, userId?: string) => {
+export const alignBattle = (
+  battle: CompleteBattle,
+  actionRounds: number[], // Rounds present in this endpoint call
+  userId?: string, // Session user ID
+) => {
   const now = new Date();
   const precomputedActions = userId
     ? availableUserActions(battle as unknown as ReturnedBattle, userId)
@@ -1298,7 +1302,11 @@ export const alignBattle = (battle: CompleteBattle, userId?: string) => {
     // Remove expired ground effects (including barriers) immediately
     battle.groundEffects = battle.groundEffects.filter((e) => {
       if (e.rounds !== undefined && e.rounds <= 0) {
-        return false; // Remove expired effects
+        if (e.type === "visual" && actionRounds.includes(e.createdRound)) {
+          return true;
+        } else {
+          return false; // Remove expired effects
+        }
       }
       return true; // Keep active effects
     });

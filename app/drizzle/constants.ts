@@ -1214,9 +1214,12 @@ export const RANKED_LOADOUT_MAX_SUMMON_JUTSUS = 0;
 export const ID_ANIMATION_SMOKE = "gkYHdSzsHu";
 export const ID_ANIMATION_HIT = "oh4kVNrAwF";
 export const ID_ANIMATION_HEAL = "I9aYhT5wMB";
-export const ID_SFX_SMOKE = "unknown";
+export const ID_SFX_SMOKE = "16vlpusdcPY8Ki3zE4qOs";
 export const ID_SFX_HIT = "yGzPWg1cLQc6dYd1EpCsl";
-export const ID_SFX_HEAL = "unknown";
+export const ID_SFX_HEAL = "4iG_WpgEmPGUzHn8z129r";
+export const ID_SFX_MOVE = "Tze4i8gvgSHNZ-D4ffcAu";
+export const ID_SFX_CLEANSE = "mOSkDnYv4hchkPbhdpTDd";
+export const ID_SFX_CLEAR = "mOSkDnYv4hchkPbhdpTDd";
 
 // Discord invite link
 export const DISCORD_INVITE_URL = "https://discord.gg/eNtgPdAh7j";

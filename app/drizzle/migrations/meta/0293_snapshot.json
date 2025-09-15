@@ -75,45 +75,32 @@
       "indexes": {
         "AbEvent_userId_idx": {
           "name": "AbEvent_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "AbEvent_experiment_idx": {
           "name": "AbEvent_experiment_idx",
-          "columns": [
-            "experiment"
-          ],
+          "columns": ["experiment"],
           "isUnique": false
         },
         "AbEvent_event_idx": {
           "name": "AbEvent_event_idx",
-          "columns": [
-            "event"
-          ],
+          "columns": ["event"],
           "isUnique": false
         },
         "AbEvent_source_idx": {
           "name": "AbEvent_source_idx",
-          "columns": [
-            "source"
-          ],
+          "columns": ["source"],
           "isUnique": false
         },
         "AbEvent_event_ip_key": {
           "name": "AbEvent_event_ip_key",
-          "columns": [
-            "event",
-            "ip"
-          ],
+          "columns": ["event", "ip"],
           "isUnique": true
         },
         "AbEvent_createdAt_idx": {
           "name": "AbEvent_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -121,9 +108,7 @@
       "compositePrimaryKeys": {
         "AbEvent_id": {
           "name": "AbEvent_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -201,23 +186,17 @@
       "indexes": {
         "ActionLog_userId_idx": {
           "name": "ActionLog_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "ActionLog_relatedId_idx": {
           "name": "ActionLog_relatedId_idx",
-          "columns": [
-            "relatedId"
-          ],
+          "columns": ["relatedId"],
           "isUnique": false
         },
         "ActionLog_tableName_idx": {
           "name": "ActionLog_tableName_idx",
-          "columns": [
-            "tableName"
-          ],
+          "columns": ["tableName"],
           "isUnique": false
         }
       },
@@ -225,9 +204,7 @@
       "compositePrimaryKeys": {
         "ActionLog_id": {
           "name": "ActionLog_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -269,9 +246,7 @@
       "indexes": {
         "AiProfile_userId_idx": {
           "name": "AiProfile_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": true
         }
       },
@@ -279,9 +254,7 @@
       "compositePrimaryKeys": {
         "AiProfile_id": {
           "name": "AiProfile_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -391,23 +364,17 @@
       "indexes": {
         "AnbuSquad_name_key": {
           "name": "AnbuSquad_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         },
         "AnbuSquad_leaderId_idx": {
           "name": "AnbuSquad_leaderId_idx",
-          "columns": [
-            "leaderId"
-          ],
+          "columns": ["leaderId"],
           "isUnique": false
         },
         "AnbuSquad_villageId_idx": {
           "name": "AnbuSquad_villageId_idx",
-          "columns": [
-            "villageId"
-          ],
+          "columns": ["villageId"],
           "isUnique": false
         }
       },
@@ -415,9 +382,7 @@
       "compositePrimaryKeys": {
         "AnbuSquad_id": {
           "name": "AnbuSquad_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -474,23 +439,17 @@
       "indexes": {
         "AuctionBid_auctionId_idx": {
           "name": "AuctionBid_auctionId_idx",
-          "columns": [
-            "auctionId"
-          ],
+          "columns": ["auctionId"],
           "isUnique": false
         },
         "AuctionBid_bidderId_idx": {
           "name": "AuctionBid_bidderId_idx",
-          "columns": [
-            "bidderId"
-          ],
+          "columns": ["bidderId"],
           "isUnique": false
         },
         "AuctionBid_amount_idx": {
           "name": "AuctionBid_amount_idx",
-          "columns": [
-            "amount"
-          ],
+          "columns": ["amount"],
           "isUnique": false
         }
       },
@@ -498,9 +457,7 @@
       "compositePrimaryKeys": {
         "AuctionBid_id": {
           "name": "AuctionBid_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -607,44 +564,32 @@
       "indexes": {
         "AuctionListing_sellerId_idx": {
           "name": "AuctionListing_sellerId_idx",
-          "columns": [
-            "sellerId"
-          ],
+          "columns": ["sellerId"],
           "isUnique": false
         },
         "AuctionListing_buyerId_idx": {
           "name": "AuctionListing_buyerId_idx",
-          "columns": [
-            "buyerId"
-          ],
+          "columns": ["buyerId"],
           "isUnique": false
         },
         "AuctionListing_userItemId_idx": {
           "name": "AuctionListing_userItemId_idx",
-          "columns": [
-            "userItemId"
-          ],
+          "columns": ["userItemId"],
           "isUnique": false
         },
         "AuctionListing_targetUserId_idx": {
           "name": "AuctionListing_targetUserId_idx",
-          "columns": [
-            "targetUserId"
-          ],
+          "columns": ["targetUserId"],
           "isUnique": false
         },
         "AuctionListing_status_idx": {
           "name": "AuctionListing_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "AuctionListing_expiresAt_idx": {
           "name": "AuctionListing_expiresAt_idx",
-          "columns": [
-            "expiresAt"
-          ],
+          "columns": ["expiresAt"],
           "isUnique": false
         }
       },
@@ -652,9 +597,7 @@
       "compositePrimaryKeys": {
         "AuctionListing_id": {
           "name": "AuctionListing_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -807,16 +750,12 @@
       "indexes": {
         "AutoMod_userId_idx": {
           "name": "AutoMod_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "AutoMod_relationType_idx": {
           "name": "AutoMod_relationType_idx",
-          "columns": [
-            "relationType"
-          ],
+          "columns": ["relationType"],
           "isUnique": false
         }
       },
@@ -824,9 +763,7 @@
       "compositePrimaryKeys": {
         "AutomatedModeration_id": {
           "name": "AutomatedModeration_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -892,9 +829,7 @@
       "indexes": {
         "backgroundSchema_name_key": {
           "name": "backgroundSchema_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         }
       },
@@ -902,9 +837,7 @@
       "compositePrimaryKeys": {
         "backgroundSchema_id": {
           "name": "backgroundSchema_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -961,9 +894,7 @@
       "indexes": {
         "Badge_name_key": {
           "name": "Badge_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         }
       },
@@ -971,9 +902,7 @@
       "compositePrimaryKeys": {
         "Badge_id": {
           "name": "Badge_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1023,31 +952,22 @@
       "indexes": {
         "BankTransfers_senderId_idx": {
           "name": "BankTransfers_senderId_idx",
-          "columns": [
-            "senderId"
-          ],
+          "columns": ["senderId"],
           "isUnique": false
         },
         "BankTransfers_receiverId_idx": {
           "name": "BankTransfers_receiverId_idx",
-          "columns": [
-            "receiverId"
-          ],
+          "columns": ["receiverId"],
           "isUnique": false
         },
         "BankTransfers_senderId_receiverId_idx": {
           "name": "BankTransfers_senderId_receiverId_idx",
-          "columns": [
-            "senderId",
-            "receiverId"
-          ],
+          "columns": ["senderId", "receiverId"],
           "isUnique": false
         },
         "BankTransfers_createdAt_idx": {
           "name": "BankTransfers_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -1175,18 +1095,12 @@
       "indexes": {
         "Battle_id_version_key": {
           "name": "Battle_id_version_key",
-          "columns": [
-            "id",
-            "version"
-          ],
+          "columns": ["id", "version"],
           "isUnique": true
         },
         "Battle_battleType_createdAt_idx": {
           "name": "Battle_battleType_createdAt_idx",
-          "columns": [
-            "battleType",
-            "createdAt"
-          ],
+          "columns": ["battleType", "createdAt"],
           "isUnique": false
         }
       },
@@ -1194,9 +1108,7 @@
       "compositePrimaryKeys": {
         "Battle_id": {
           "name": "Battle_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1268,18 +1180,12 @@
       "indexes": {
         "BattleAction_round_key": {
           "name": "BattleAction_round_key",
-          "columns": [
-            "battleId",
-            "battleVersion",
-            "battleRound"
-          ],
+          "columns": ["battleId", "battleVersion", "battleRound"],
           "isUnique": true
         },
         "BattleAction_createdAt_idx": {
           "name": "BattleAction_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -1287,9 +1193,7 @@
       "compositePrimaryKeys": {
         "BattleAction_id": {
           "name": "BattleAction_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1345,37 +1249,27 @@
       "indexes": {
         "BattleHistory_createdAt_idx": {
           "name": "BattleHistory_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "BattleHistory_battleId_idx": {
           "name": "BattleHistory_battleId_idx",
-          "columns": [
-            "battleId"
-          ],
+          "columns": ["battleId"],
           "isUnique": false
         },
         "BattleHistory_battleType_idx": {
           "name": "BattleHistory_battleType_idx",
-          "columns": [
-            "battleType"
-          ],
+          "columns": ["battleType"],
           "isUnique": false
         },
         "BattleHistory_attackedId_idx": {
           "name": "BattleHistory_attackedId_idx",
-          "columns": [
-            "attackedId"
-          ],
+          "columns": ["attackedId"],
           "isUnique": false
         },
         "BattleHistory_defenderId_idx": {
           "name": "BattleHistory_defenderId_idx",
-          "columns": [
-            "defenderId"
-          ],
+          "columns": ["defenderId"],
           "isUnique": false
         }
       },
@@ -1383,9 +1277,7 @@
       "compositePrimaryKeys": {
         "BattleHistory_id": {
           "name": "BattleHistory_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1501,37 +1393,27 @@
       "indexes": {
         "Bloodline_name_key": {
           "name": "Bloodline_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         },
         "Bloodline_image_key": {
           "name": "Bloodline_image_key",
-          "columns": [
-            "image"
-          ],
+          "columns": ["image"],
           "isUnique": false
         },
         "Bloodline_village_idx": {
           "name": "Bloodline_village_idx",
-          "columns": [
-            "villageId"
-          ],
+          "columns": ["villageId"],
           "isUnique": false
         },
         "Bloodline_rank_idx": {
           "name": "Bloodline_rank_idx",
-          "columns": [
-            "rank"
-          ],
+          "columns": ["rank"],
           "isUnique": false
         },
         "Bloodline_difficulty_idx": {
           "name": "Bloodline_difficulty_idx",
-          "columns": [
-            "difficulty"
-          ],
+          "columns": ["difficulty"],
           "isUnique": false
         }
       },
@@ -1539,9 +1421,7 @@
       "compositePrimaryKeys": {
         "Bloodline_id": {
           "name": "Bloodline_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1612,24 +1492,17 @@
       "indexes": {
         "BloodlineReskin_bloodlineId_idx": {
           "name": "BloodlineReskin_bloodlineId_idx",
-          "columns": [
-            "bloodlineId"
-          ],
+          "columns": ["bloodlineId"],
           "isUnique": false
         },
         "BloodlineReskin_createdBy_idx": {
           "name": "BloodlineReskin_createdBy_idx",
-          "columns": [
-            "createdBy"
-          ],
+          "columns": ["createdBy"],
           "isUnique": false
         },
         "BloodlineReskin_bloodlineId_name_key": {
           "name": "BloodlineReskin_bloodlineId_name_key",
-          "columns": [
-            "bloodlineId",
-            "name"
-          ],
+          "columns": ["bloodlineId", "name"],
           "isUnique": true
         }
       },
@@ -1637,9 +1510,7 @@
       "compositePrimaryKeys": {
         "BloodlineReskin_id": {
           "name": "BloodlineReskin_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1720,16 +1591,12 @@
       "indexes": {
         "BloodlineRolls_userId_idx": {
           "name": "BloodlineRolls_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "BloodlineRolls_bloodlineId_idx": {
           "name": "BloodlineRolls_bloodlineId_idx",
-          "columns": [
-            "bloodlineId"
-          ],
+          "columns": ["bloodlineId"],
           "isUnique": false
         }
       },
@@ -1737,9 +1604,7 @@
       "compositePrimaryKeys": {
         "BloodlineRolls_id": {
           "name": "BloodlineRolls_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1824,23 +1689,17 @@
       "indexes": {
         "Bounty_targetUserId_idx": {
           "name": "Bounty_targetUserId_idx",
-          "columns": [
-            "targetUserId"
-          ],
+          "columns": ["targetUserId"],
           "isUnique": false
         },
         "Bounty_creatorUserId_idx": {
           "name": "Bounty_creatorUserId_idx",
-          "columns": [
-            "creatorUserId"
-          ],
+          "columns": ["creatorUserId"],
           "isUnique": false
         },
         "Bounty_status_idx": {
           "name": "Bounty_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -1848,9 +1707,7 @@
       "compositePrimaryKeys": {
         "Bounty_id": {
           "name": "Bounty_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1899,16 +1756,12 @@
       "indexes": {
         "BountyContribution_bountyId_idx": {
           "name": "BountyContribution_bountyId_idx",
-          "columns": [
-            "bountyId"
-          ],
+          "columns": ["bountyId"],
           "isUnique": false
         },
         "BountyContribution_contributorUserId_idx": {
           "name": "BountyContribution_contributorUserId_idx",
-          "columns": [
-            "contributorUserId"
-          ],
+          "columns": ["contributorUserId"],
           "isUnique": false
         }
       },
@@ -1916,9 +1769,7 @@
       "compositePrimaryKeys": {
         "BountyContribution_id": {
           "name": "BountyContribution_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1960,24 +1811,17 @@
       "indexes": {
         "BountySignup_bounty_hunter_key": {
           "name": "BountySignup_bounty_hunter_key",
-          "columns": [
-            "bountyId",
-            "hunterUserId"
-          ],
+          "columns": ["bountyId", "hunterUserId"],
           "isUnique": true
         },
         "BountySignup_bountyId_idx": {
           "name": "BountySignup_bountyId_idx",
-          "columns": [
-            "bountyId"
-          ],
+          "columns": ["bountyId"],
           "isUnique": false
         },
         "BountySignup_hunterUserId_idx": {
           "name": "BountySignup_hunterUserId_idx",
-          "columns": [
-            "hunterUserId"
-          ],
+          "columns": ["hunterUserId"],
           "isUnique": false
         }
       },
@@ -1985,9 +1829,7 @@
       "compositePrimaryKeys": {
         "BountySignup_id": {
           "name": "BountySignup_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2044,16 +1886,12 @@
       "indexes": {
         "CannedResponse_createdByUserId_idx": {
           "name": "CannedResponse_createdByUserId_idx",
-          "columns": [
-            "createdByUserId"
-          ],
+          "columns": ["createdByUserId"],
           "isUnique": false
         },
         "CannedResponse_title_idx": {
           "name": "CannedResponse_title_idx",
-          "columns": [
-            "title"
-          ],
+          "columns": ["title"],
           "isUnique": false
         }
       },
@@ -2061,9 +1899,7 @@
       "compositePrimaryKeys": {
         "CannedResponse_id": {
           "name": "CannedResponse_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2121,16 +1957,12 @@
       "indexes": {
         "Captcha_userId_key": {
           "name": "Captcha_userId_key",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "Captcha_used_idx": {
           "name": "Captcha_used_idx",
-          "columns": [
-            "used"
-          ],
+          "columns": ["used"],
           "isUnique": false
         }
       },
@@ -2138,9 +1970,7 @@
       "compositePrimaryKeys": {
         "Captcha_id": {
           "name": "Captcha_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2303,16 +2133,12 @@
       "indexes": {
         "Clan_name_key": {
           "name": "Clan_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         },
         "Clan_village_idx": {
           "name": "Clan_village_idx",
-          "columns": [
-            "villageId"
-          ],
+          "columns": ["villageId"],
           "isUnique": false
         }
       },
@@ -2320,9 +2146,7 @@
       "compositePrimaryKeys": {
         "Clan_id": {
           "name": "Clan_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2466,23 +2290,17 @@
       "indexes": {
         "image_avatar_key": {
           "name": "image_avatar_key",
-          "columns": [
-            "image"
-          ],
+          "columns": ["image"],
           "isUnique": true
         },
         "image_done_idx": {
           "name": "image_done_idx",
-          "columns": [
-            "done"
-          ],
+          "columns": ["done"],
           "isUnique": false
         },
         "image_userId_idx": {
           "name": "image_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -2490,9 +2308,7 @@
       "compositePrimaryKeys": {
         "ConceptImage_id": {
           "name": "ConceptImage_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2542,16 +2358,12 @@
       "indexes": {
         "ContentBackup_type_idx": {
           "name": "ContentBackup_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "ContentBackup_createdAt_idx": {
           "name": "ContentBackup_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -2559,9 +2371,7 @@
       "compositePrimaryKeys": {
         "ContentBackup_id": {
           "name": "ContentBackup_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2588,9 +2398,7 @@
       "indexes": {
         "ContentTag_name_key": {
           "name": "ContentTag_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         }
       },
@@ -2598,9 +2406,7 @@
       "compositePrimaryKeys": {
         "ContentTag_id": {
           "name": "ContentTag_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2674,16 +2480,12 @@
       "indexes": {
         "Conversation_title_key": {
           "name": "Conversation_title_key",
-          "columns": [
-            "title"
-          ],
+          "columns": ["title"],
           "isUnique": false
         },
         "Conversation_createdById_idx": {
           "name": "Conversation_createdById_idx",
-          "columns": [
-            "createdById"
-          ],
+          "columns": ["createdById"],
           "isUnique": false
         }
       },
@@ -2691,9 +2493,7 @@
       "compositePrimaryKeys": {
         "Conversation_id": {
           "name": "Conversation_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2781,23 +2581,17 @@
       "indexes": {
         "ConversationComment_userId_idx": {
           "name": "ConversationComment_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "ConversationComment_createdAt_idx": {
           "name": "ConversationComment_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "ConversationComment_conversationId_idx": {
           "name": "ConversationComment_conversationId_idx",
-          "columns": [
-            "conversationId"
-          ],
+          "columns": ["conversationId"],
           "isUnique": false
         }
       },
@@ -2805,9 +2599,7 @@
       "compositePrimaryKeys": {
         "ConversationComment_id": {
           "name": "ConversationComment_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2865,16 +2657,12 @@
       "indexes": {
         "CraftingRequirement_craftItemId_idx": {
           "name": "CraftingRequirement_craftItemId_idx",
-          "columns": [
-            "craftItemId"
-          ],
+          "columns": ["craftItemId"],
           "isUnique": false
         },
         "CraftingRequirement_requirementItemId_idx": {
           "name": "CraftingRequirement_requirementItemId_idx",
-          "columns": [
-            "requirementItemId"
-          ],
+          "columns": ["requirementItemId"],
           "isUnique": false
         }
       },
@@ -2882,9 +2670,7 @@
       "compositePrimaryKeys": {
         "CraftingRequirement_id": {
           "name": "CraftingRequirement_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2948,9 +2734,7 @@
       "indexes": {
         "DailyBankInterest_userId_idx": {
           "name": "DailyBankInterest_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -2958,18 +2742,13 @@
       "compositePrimaryKeys": {
         "DailyBankInterest_id": {
           "name": "DailyBankInterest_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "DailyBankInterest_userId_date_key": {
           "name": "DailyBankInterest_userId_date_key",
-          "columns": [
-            "userId",
-            "date"
-          ]
+          "columns": ["userId", "date"]
         }
       },
       "checkConstraint": {}
@@ -3018,16 +2797,12 @@
       "indexes": {
         "DamageCalculation_userId_idx": {
           "name": "DamageCalculation_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "DamageCalculation_createdAt_idx": {
           "name": "DamageCalculation_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -3035,9 +2810,7 @@
       "compositePrimaryKeys": {
         "DamageCalculation_id": {
           "name": "DamageCalculation_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3108,16 +2881,12 @@
       "indexes": {
         "DataBattleActions_count_idx": {
           "name": "DataBattleActions_count_idx",
-          "columns": [
-            "count"
-          ],
+          "columns": ["count"],
           "isUnique": false
         },
         "DataBattleActions_createdAt": {
           "name": "DataBattleActions_createdAt",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -3125,9 +2894,7 @@
       "compositePrimaryKeys": {
         "DataBattleAction_id": {
           "name": "DataBattleAction_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
@@ -3224,9 +2991,7 @@
       "indexes": {
         "EmailReminder_userId_idx": {
           "name": "EmailReminder_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -3234,9 +2999,7 @@
       "compositePrimaryKeys": {
         "EmailReminder_id": {
           "name": "EmailReminder_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3309,9 +3072,7 @@
       "indexes": {
         "ForumBoard_name_key": {
           "name": "ForumBoard_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         }
       },
@@ -3319,9 +3080,7 @@
       "compositePrimaryKeys": {
         "ForumBoard_id": {
           "name": "ForumBoard_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3385,16 +3144,12 @@
       "indexes": {
         "ForumPost_userId_idx": {
           "name": "ForumPost_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "ForumPost_threadId_idx": {
           "name": "ForumPost_threadId_idx",
-          "columns": [
-            "threadId"
-          ],
+          "columns": ["threadId"],
           "isUnique": false
         }
       },
@@ -3402,9 +3157,7 @@
       "compositePrimaryKeys": {
         "ForumPost_id": {
           "name": "ForumPost_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3485,16 +3238,12 @@
       "indexes": {
         "ForumThread_boardId_idx": {
           "name": "ForumThread_boardId_idx",
-          "columns": [
-            "boardId"
-          ],
+          "columns": ["boardId"],
           "isUnique": false
         },
         "ForumThread_userId_idx": {
           "name": "ForumThread_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -3502,9 +3251,7 @@
       "compositePrimaryKeys": {
         "ForumThread_id": {
           "name": "ForumThread_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3623,9 +3370,7 @@
       "indexes": {
         "GameAsset_type_idx": {
           "name": "GameAsset_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         }
       },
@@ -3633,9 +3378,7 @@
       "compositePrimaryKeys": {
         "GameAsset_id": {
           "name": "GameAsset_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3669,10 +3412,7 @@
       "indexes": {
         "GameAssetTag_assetId_tag_key": {
           "name": "GameAssetTag_assetId_tag_key",
-          "columns": [
-            "assetId",
-            "tagId"
-          ],
+          "columns": ["assetId", "tagId"],
           "isUnique": true
         }
       },
@@ -3680,9 +3420,7 @@
       "compositePrimaryKeys": {
         "GameAssetTag_id": {
           "name": "GameAssetTag_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3724,9 +3462,7 @@
       "indexes": {
         "name": {
           "name": "name",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": false
         }
       },
@@ -3734,9 +3470,7 @@
       "compositePrimaryKeys": {
         "GameSetting_id": {
           "name": "GameSetting_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3816,37 +3550,27 @@
       "indexes": {
         "HistoricalAvatar_replicateId_key": {
           "name": "HistoricalAvatar_replicateId_key",
-          "columns": [
-            "replicateId"
-          ],
+          "columns": ["replicateId"],
           "isUnique": true
         },
         "HistoricalAvatar_avatar_key": {
           "name": "HistoricalAvatar_avatar_key",
-          "columns": [
-            "avatar"
-          ],
+          "columns": ["avatar"],
           "isUnique": true
         },
         "HistoricalAvatar_done_idx": {
           "name": "HistoricalAvatar_done_idx",
-          "columns": [
-            "done"
-          ],
+          "columns": ["done"],
           "isUnique": false
         },
         "HistoricalAvatar_status_idx": {
           "name": "HistoricalAvatar_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "HistoricalAvatar_userId_idx": {
           "name": "HistoricalAvatar_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -3854,9 +3578,7 @@
       "compositePrimaryKeys": {
         "HistoricalAvatar_id": {
           "name": "HistoricalAvatar_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3898,24 +3620,17 @@
       "indexes": {
         "HistoricalIp_userId_ip_key": {
           "name": "HistoricalIp_userId_ip_key",
-          "columns": [
-            "userId",
-            "ip"
-          ],
+          "columns": ["userId", "ip"],
           "isUnique": true
         },
         "HistoricalIp_userId_idx": {
           "name": "HistoricalIp_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "HistoricalIp_userIp_idx": {
           "name": "HistoricalIp_userIp_idx",
-          "columns": [
-            "ip"
-          ],
+          "columns": ["ip"],
           "isUnique": false
         }
       },
@@ -3923,9 +3638,7 @@
       "compositePrimaryKeys": {
         "HistoricalIp_id": {
           "name": "HistoricalIp_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4027,37 +3740,27 @@
       "indexes": {
         "HistoricalSoundEffect_replicateId_idx": {
           "name": "HistoricalSoundEffect_replicateId_idx",
-          "columns": [
-            "replicateId"
-          ],
+          "columns": ["replicateId"],
           "isUnique": false
         },
         "HistoricalSoundEffect_relationId_idx": {
           "name": "HistoricalSoundEffect_relationId_idx",
-          "columns": [
-            "relationId"
-          ],
+          "columns": ["relationId"],
           "isUnique": false
         },
         "HistoricalSoundEffect_userId_idx": {
           "name": "HistoricalSoundEffect_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "HistoricalSoundEffect_done_idx": {
           "name": "HistoricalSoundEffect_done_idx",
-          "columns": [
-            "done"
-          ],
+          "columns": ["done"],
           "isUnique": false
         },
         "HistoricalSoundEffect_status_idx": {
           "name": "HistoricalSoundEffect_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -4065,9 +3768,7 @@
       "compositePrimaryKeys": {
         "HistoricalSoundEffect_id": {
           "name": "HistoricalSoundEffect_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4421,86 +4122,62 @@
       "indexes": {
         "Item_name_key": {
           "name": "Item_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         },
         "Item_rarity_idx": {
           "name": "Item_rarity_idx",
-          "columns": [
-            "rarity"
-          ],
+          "columns": ["rarity"],
           "isUnique": false
         },
         "Item_itemType_idx": {
           "name": "Item_itemType_idx",
-          "columns": [
-            "itemType"
-          ],
+          "columns": ["itemType"],
           "isUnique": false
         },
         "Item_slot_idx": {
           "name": "Item_slot_idx",
-          "columns": [
-            "slot"
-          ],
+          "columns": ["slot"],
           "isUnique": false
         },
         "Item_method_idx": {
           "name": "Item_method_idx",
-          "columns": [
-            "method"
-          ],
+          "columns": ["method"],
           "isUnique": false
         },
         "Item_target_idx": {
           "name": "Item_target_idx",
-          "columns": [
-            "target"
-          ],
+          "columns": ["target"],
           "isUnique": false
         },
         "Item_isEventItem_idx": {
           "name": "Item_isEventItem_idx",
-          "columns": [
-            "isEventItem"
-          ],
+          "columns": ["isEventItem"],
           "isUnique": false
         },
         "Item_onlyInShop_idx": {
           "name": "Item_onlyInShop_idx",
-          "columns": [
-            "inShop"
-          ],
+          "columns": ["inShop"],
           "isUnique": false
         },
         "Item_cost_idx": {
           "name": "Item_cost_idx",
-          "columns": [
-            "cost"
-          ],
+          "columns": ["cost"],
           "isUnique": false
         },
         "Item_repsCost_idx": {
           "name": "Item_repsCost_idx",
-          "columns": [
-            "reputationCost"
-          ],
+          "columns": ["reputationCost"],
           "isUnique": false
         },
         "Item_requiredLevel_idx": {
           "name": "Item_requiredLevel_idx",
-          "columns": [
-            "requiredLevel"
-          ],
+          "columns": ["requiredLevel"],
           "isUnique": false
         },
         "Item_bloodlineId_idx": {
           "name": "Item_bloodlineId_idx",
-          "columns": [
-            "bloodlineId"
-          ],
+          "columns": ["bloodlineId"],
           "isUnique": false
         }
       },
@@ -4508,9 +4185,7 @@
       "compositePrimaryKeys": {
         "Item_id": {
           "name": "Item_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4552,9 +4227,7 @@
       "indexes": {
         "ItemLoadout_userId_idx": {
           "name": "ItemLoadout_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -4562,9 +4235,7 @@
       "compositePrimaryKeys": {
         "ItemLoadout_id": {
           "name": "ItemLoadout_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4804,37 +4475,27 @@
       "indexes": {
         "Jutsu_name_key": {
           "name": "Jutsu_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         },
         "Jutsu_image_key": {
           "name": "Jutsu_image_key",
-          "columns": [
-            "image"
-          ],
+          "columns": ["image"],
           "isUnique": false
         },
         "Jutsu_bloodlineId_idx": {
           "name": "Jutsu_bloodlineId_idx",
-          "columns": [
-            "bloodlineId"
-          ],
+          "columns": ["bloodlineId"],
           "isUnique": false
         },
         "Jutsu_villageId_idx": {
           "name": "Jutsu_villageId_idx",
-          "columns": [
-            "villageId"
-          ],
+          "columns": ["villageId"],
           "isUnique": false
         },
         "Jutsu_injectable_idx": {
           "name": "Jutsu_injectable_idx",
-          "columns": [
-            "injectableInBattle"
-          ],
+          "columns": ["injectableInBattle"],
           "isUnique": false
         }
       },
@@ -4842,9 +4503,7 @@
       "compositePrimaryKeys": {
         "Jutsu_id": {
           "name": "Jutsu_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4886,9 +4545,7 @@
       "indexes": {
         "JutsuLoadout_userId_idx": {
           "name": "JutsuLoadout_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -4896,9 +4553,7 @@
       "compositePrimaryKeys": {
         "JutsuLoadout_id": {
           "name": "JutsuLoadout_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4976,24 +4631,17 @@
       "indexes": {
         "JutsuReskin_userId_idx": {
           "name": "JutsuReskin_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "JutsuReskin_jutsuId_idx": {
           "name": "JutsuReskin_jutsuId_idx",
-          "columns": [
-            "jutsuId"
-          ],
+          "columns": ["jutsuId"],
           "isUnique": false
         },
         "JutsuReskin_userId_jutsuId_key": {
           "name": "JutsuReskin_userId_jutsuId_key",
-          "columns": [
-            "userId",
-            "jutsuId"
-          ],
+          "columns": ["userId", "jutsuId"],
           "isUnique": true
         }
       },
@@ -5001,9 +4649,7 @@
       "compositePrimaryKeys": {
         "JutsuReskin_id": {
           "name": "JutsuReskin_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5067,23 +4713,17 @@
       "indexes": {
         "VillageKageChallenges_villageId_idx": {
           "name": "VillageKageChallenges_villageId_idx",
-          "columns": [
-            "villageId"
-          ],
+          "columns": ["villageId"],
           "isUnique": false
         },
         "VillageKageChallenges_userId_idx": {
           "name": "VillageKageChallenges_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "VillageKageChallenges_kageID_idx": {
           "name": "VillageKageChallenges_kageID_idx",
-          "columns": [
-            "kageId"
-          ],
+          "columns": ["kageId"],
           "isUnique": false
         }
       },
@@ -5091,9 +4731,7 @@
       "compositePrimaryKeys": {
         "KageDefendedChallenges_id": {
           "name": "KageDefendedChallenges_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5173,16 +4811,12 @@
       "indexes": {
         "LinkPromotion_userId_idx": {
           "name": "LinkPromotion_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "LinkPromotion_reviewedBy_idx": {
           "name": "LinkPromotion_reviewedBy_idx",
-          "columns": [
-            "reviewedBy"
-          ],
+          "columns": ["reviewedBy"],
           "isUnique": false
         }
       },
@@ -5190,9 +4824,7 @@
       "compositePrimaryKeys": {
         "LinkPromotion_id": {
           "name": "LinkPromotion_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5247,9 +4879,7 @@
       "indexes": {
         "LogBattleLengths_battleType_idx": {
           "name": "LogBattleLengths_battleType_idx",
-          "columns": [
-            "battleType"
-          ],
+          "columns": ["battleType"],
           "isUnique": false
         }
       },
@@ -5257,20 +4887,13 @@
       "compositePrimaryKeys": {
         "LogTimeDurations_id": {
           "name": "LogTimeDurations_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "uniqueEntry": {
           "name": "uniqueEntry",
-          "columns": [
-            "battleType",
-            "winnerLevel",
-            "loserLevel",
-            "rounds"
-          ]
+          "columns": ["battleType", "winnerLevel", "loserLevel", "rounds"]
         }
       },
       "checkConstraint": {}
@@ -5312,18 +4935,13 @@
       "compositePrimaryKeys": {
         "LogQueueLengths_id": {
           "name": "LogQueueLengths_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "uniqueEntry": {
           "name": "uniqueEntry",
-          "columns": [
-            "rankedRank",
-            "ceiledMinutes"
-          ]
+          "columns": ["rankedRank", "ceiledMinutes"]
         }
       },
       "checkConstraint": {}
@@ -5373,19 +4991,13 @@
       "compositePrimaryKeys": {
         "LogRankedPicks_id": {
           "name": "LogRankedPicks_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "uniqueContentId": {
           "name": "uniqueContentId",
-          "columns": [
-            "type",
-            "contentId",
-            "battleType"
-          ]
+          "columns": ["type", "contentId", "battleType"]
         }
       },
       "checkConstraint": {}
@@ -5440,30 +5052,22 @@
       "indexes": {
         "MpvpBattleQueue_battleId_idx": {
           "name": "MpvpBattleQueue_battleId_idx",
-          "columns": [
-            "battleId"
-          ],
+          "columns": ["battleId"],
           "isUnique": false
         },
         "MpvpBattleQueue_clan1Id_idx": {
           "name": "MpvpBattleQueue_clan1Id_idx",
-          "columns": [
-            "clan1Id"
-          ],
+          "columns": ["clan1Id"],
           "isUnique": false
         },
         "MpvpBattleQueue_clan2Id_idx": {
           "name": "MpvpBattleQueue_clan2Id_idx",
-          "columns": [
-            "clan2Id"
-          ],
+          "columns": ["clan2Id"],
           "isUnique": false
         },
         "MpvpBattleQueue_winnerId_idx": {
           "name": "MpvpBattleQueue_winnerId_idx",
-          "columns": [
-            "winnerId"
-          ],
+          "columns": ["winnerId"],
           "isUnique": false
         }
       },
@@ -5471,9 +5075,7 @@
       "compositePrimaryKeys": {
         "MpvpBattleQueue_id": {
           "name": "MpvpBattleQueue_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5515,16 +5117,12 @@
       "indexes": {
         "MpvpBattleUser_clanBattleId_idx": {
           "name": "MpvpBattleUser_clanBattleId_idx",
-          "columns": [
-            "clanBattleId"
-          ],
+          "columns": ["clanBattleId"],
           "isUnique": false
         },
         "MpvpBattleUser_userId_idx": {
           "name": "MpvpBattleUser_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -5532,9 +5130,7 @@
       "compositePrimaryKeys": {
         "MpvpBattleUser_id": {
           "name": "MpvpBattleUser_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5584,9 +5180,7 @@
       "indexes": {
         "Notification_createdAt_idx": {
           "name": "Notification_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -5594,9 +5188,7 @@
       "compositePrimaryKeys": {
         "Notification_id": {
           "name": "Notification_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5674,30 +5266,22 @@
       "indexes": {
         "PaypalSubscription_subscriptionId_key": {
           "name": "PaypalSubscription_subscriptionId_key",
-          "columns": [
-            "subscriptionId"
-          ],
+          "columns": ["subscriptionId"],
           "isUnique": true
         },
         "PaypalSubscription_orderId_key": {
           "name": "PaypalSubscription_orderId_key",
-          "columns": [
-            "orderId"
-          ],
+          "columns": ["orderId"],
           "isUnique": true
         },
         "PaypalSubscription_createdById_idx": {
           "name": "PaypalSubscription_createdById_idx",
-          "columns": [
-            "createdById"
-          ],
+          "columns": ["createdById"],
           "isUnique": false
         },
         "PaypalSubscription_affectedUserId_idx": {
           "name": "PaypalSubscription_affectedUserId_idx",
-          "columns": [
-            "affectedUserId"
-          ],
+          "columns": ["affectedUserId"],
           "isUnique": false
         }
       },
@@ -5705,9 +5289,7 @@
       "compositePrimaryKeys": {
         "PaypalSubscription_id": {
           "name": "PaypalSubscription_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5830,37 +5412,27 @@
       "indexes": {
         "PaypalTransaction_orderId_key": {
           "name": "PaypalTransaction_orderId_key",
-          "columns": [
-            "orderId"
-          ],
+          "columns": ["orderId"],
           "isUnique": true
         },
         "PaypalTransaction_createdById_idx": {
           "name": "PaypalTransaction_createdById_idx",
-          "columns": [
-            "createdById"
-          ],
+          "columns": ["createdById"],
           "isUnique": false
         },
         "PaypalTransaction_transactionId_idx": {
           "name": "PaypalTransaction_transactionId_idx",
-          "columns": [
-            "transactionId"
-          ],
+          "columns": ["transactionId"],
           "isUnique": false
         },
         "PaypalTransaction_invoiceId_idx": {
           "name": "PaypalTransaction_invoiceId_idx",
-          "columns": [
-            "invoiceId"
-          ],
+          "columns": ["invoiceId"],
           "isUnique": false
         },
         "PaypalTransaction_affectedUserId_idx": {
           "name": "PaypalTransaction_affectedUserId_idx",
-          "columns": [
-            "affectedUserId"
-          ],
+          "columns": ["affectedUserId"],
           "isUnique": false
         }
       },
@@ -5868,9 +5440,7 @@
       "compositePrimaryKeys": {
         "PaypalTransaction_id": {
           "name": "PaypalTransaction_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5930,9 +5500,7 @@
       "compositePrimaryKeys": {
         "PaypalWebhookMessage_id": {
           "name": "PaypalWebhookMessage_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6012,9 +5580,7 @@
       "indexes": {
         "Poll_createdByUserId_idx": {
           "name": "Poll_createdByUserId_idx",
-          "columns": [
-            "createdByUserId"
-          ],
+          "columns": ["createdByUserId"],
           "isUnique": false
         }
       },
@@ -6022,9 +5588,7 @@
       "compositePrimaryKeys": {
         "Poll_id": {
           "name": "Poll_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6096,23 +5660,17 @@
       "indexes": {
         "PollOption_pollId_idx": {
           "name": "PollOption_pollId_idx",
-          "columns": [
-            "pollId"
-          ],
+          "columns": ["pollId"],
           "isUnique": false
         },
         "PollOption_createdByUserId_idx": {
           "name": "PollOption_createdByUserId_idx",
-          "columns": [
-            "createdByUserId"
-          ],
+          "columns": ["createdByUserId"],
           "isUnique": false
         },
         "PollOption_targetUserId_idx": {
           "name": "PollOption_targetUserId_idx",
-          "columns": [
-            "targetUserId"
-          ],
+          "columns": ["targetUserId"],
           "isUnique": false
         }
       },
@@ -6120,9 +5678,7 @@
       "compositePrimaryKeys": {
         "PollOption_id": {
           "name": "PollOption_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6322,65 +5878,47 @@
       "indexes": {
         "Quest_questType_idx": {
           "name": "Quest_questType_idx",
-          "columns": [
-            "questType"
-          ],
+          "columns": ["questType"],
           "isUnique": false
         },
         "Quest_questRank_idx": {
           "name": "Quest_questRank_idx",
-          "columns": [
-            "questRank"
-          ],
+          "columns": ["questRank"],
           "isUnique": false
         },
         "Quest_requiredLevel_idx": {
           "name": "Quest_requiredLevel_idx",
-          "columns": [
-            "requiredLevel"
-          ],
+          "columns": ["requiredLevel"],
           "isUnique": false
         },
         "Quest_maxLevel_idx": {
           "name": "Quest_maxLevel_idx",
-          "columns": [
-            "maxLevel"
-          ],
+          "columns": ["maxLevel"],
           "isUnique": false
         },
         "Quest_requiredVillage_idx": {
           "name": "Quest_requiredVillage_idx",
-          "columns": [
-            "requiredVillage"
-          ],
+          "columns": ["requiredVillage"],
           "isUnique": false
         },
         "Quest_requiredBloodline_idx": {
           "name": "Quest_requiredBloodline_idx",
-          "columns": [
-            "requiredBloodlineId"
-          ],
+          "columns": ["requiredBloodlineId"],
           "isUnique": false
         },
         "Quest_endsAt_idx": {
           "name": "Quest_endsAt_idx",
-          "columns": [
-            "endsAt"
-          ],
+          "columns": ["endsAt"],
           "isUnique": false
         },
         "Quest_startsAt_idx": {
           "name": "Quest_startsAt_idx",
-          "columns": [
-            "startsAt"
-          ],
+          "columns": ["startsAt"],
           "isUnique": false
         },
         "Quest_prerequisiteQuestId_idx": {
           "name": "Quest_prerequisiteQuestId_idx",
-          "columns": [
-            "prerequisiteQuestId"
-          ],
+          "columns": ["prerequisiteQuestId"],
           "isUnique": false
         }
       },
@@ -6388,17 +5926,13 @@
       "compositePrimaryKeys": {
         "Quest_id": {
           "name": "Quest_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "tierLevel": {
           "name": "tierLevel",
-          "columns": [
-            "tierLevel"
-          ]
+          "columns": ["tierLevel"]
         }
       },
       "checkConstraint": {}
@@ -6477,37 +6011,27 @@
       "indexes": {
         "QuestHistory_userId_idx": {
           "name": "QuestHistory_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "QuestHistory_questType_idx": {
           "name": "QuestHistory_questType_idx",
-          "columns": [
-            "questType"
-          ],
+          "columns": ["questType"],
           "isUnique": false
         },
         "QuestHistory_endedAt_idx": {
           "name": "QuestHistory_endedAt_idx",
-          "columns": [
-            "endedAt"
-          ],
+          "columns": ["endedAt"],
           "isUnique": false
         },
         "QuestHistory_questId_idx": {
           "name": "QuestHistory_questId_idx",
-          "columns": [
-            "questId"
-          ],
+          "columns": ["questId"],
           "isUnique": false
         },
         "QuestHistory_completed_idx": {
           "name": "QuestHistory_completed_idx",
-          "columns": [
-            "completed"
-          ],
+          "columns": ["completed"],
           "isUnique": false
         }
       },
@@ -6515,9 +6039,7 @@
       "compositePrimaryKeys": {
         "QuestHistory_id": {
           "name": "QuestHistory_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6569,9 +6091,7 @@
       "compositePrimaryKeys": {
         "RankedLoadout_id": {
           "name": "RankedLoadout_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6621,16 +6141,12 @@
       "indexes": {
         "RankedPvpQueue_userId_idx": {
           "name": "RankedPvpQueue_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "RankedPvpQueue_rankedLp_idx": {
           "name": "RankedPvpQueue_rankedLp_idx",
-          "columns": [
-            "rankedLp"
-          ],
+          "columns": ["rankedLp"],
           "isUnique": false
         }
       },
@@ -6638,9 +6154,7 @@
       "compositePrimaryKeys": {
         "RankedPvpQueue_id": {
           "name": "RankedPvpQueue_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6729,9 +6243,7 @@
       "compositePrimaryKeys": {
         "RankedSeason_id": {
           "name": "RankedSeason_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6805,9 +6317,7 @@
       "compositePrimaryKeys": {
         "RankedUserRewards_id": {
           "name": "RankedUserRewards_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6871,23 +6381,17 @@
       "indexes": {
         "RecruitmentRewards_userId_idx": {
           "name": "RecruitmentRewards_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "RecruitmentRewards_recruitedUserId_idx": {
           "name": "RecruitmentRewards_recruitedUserId_idx",
-          "columns": [
-            "recruitedUserId"
-          ],
+          "columns": ["recruitedUserId"],
           "isUnique": false
         },
         "RecruitmentRewards_type_idx": {
           "name": "RecruitmentRewards_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         }
       },
@@ -6895,9 +6399,7 @@
       "compositePrimaryKeys": {
         "RecruitmentRewards_id": {
           "name": "RecruitmentRewards_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6931,16 +6433,12 @@
       "indexes": {
         "ReferralSource_userId_idx": {
           "name": "ReferralSource_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "ReferralSource_source_idx": {
           "name": "ReferralSource_source_idx",
-          "columns": [
-            "source"
-          ],
+          "columns": ["source"],
           "isUnique": false
         }
       },
@@ -6948,9 +6446,7 @@
       "compositePrimaryKeys": {
         "ReferralSource_id": {
           "name": "ReferralSource_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6999,16 +6495,12 @@
       "indexes": {
         "ReportLog_targetUserId_idx": {
           "name": "ReportLog_targetUserId_idx",
-          "columns": [
-            "targetUserId"
-          ],
+          "columns": ["targetUserId"],
           "isUnique": false
         },
         "ReportLog_staffUserId_idx": {
           "name": "ReportLog_staffUserId_idx",
-          "columns": [
-            "staffUserId"
-          ],
+          "columns": ["staffUserId"],
           "isUnique": false
         }
       },
@@ -7016,9 +6508,7 @@
       "compositePrimaryKeys": {
         "ReportLog_id": {
           "name": "ReportLog_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7088,9 +6578,7 @@
       "indexes": {
         "RyoTrade_creatorUserId_idx": {
           "name": "RyoTrade_creatorUserId_idx",
-          "columns": [
-            "creatorUserId"
-          ],
+          "columns": ["creatorUserId"],
           "isUnique": false
         }
       },
@@ -7098,9 +6586,7 @@
       "compositePrimaryKeys": {
         "RyoTrade_id": {
           "name": "RyoTrade_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7164,9 +6650,7 @@
       "indexes": {
         "Sector_sector_key": {
           "name": "Sector_sector_key",
-          "columns": [
-            "sector"
-          ],
+          "columns": ["sector"],
           "isUnique": true
         }
       },
@@ -7174,9 +6658,7 @@
       "compositePrimaryKeys": {
         "Sector_id": {
           "name": "Sector_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7288,30 +6770,22 @@
       "indexes": {
         "SkillTree_name_key": {
           "name": "SkillTree_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         },
         "SkillTree_tier_idx": {
           "name": "SkillTree_tier_idx",
-          "columns": [
-            "tier"
-          ],
+          "columns": ["tier"],
           "isUnique": false
         },
         "SkillTree_hidden_idx": {
           "name": "SkillTree_hidden_idx",
-          "columns": [
-            "hidden"
-          ],
+          "columns": ["hidden"],
           "isUnique": false
         },
         "SkillTree_skillType_idx": {
           "name": "SkillTree_skillType_idx",
-          "columns": [
-            "skillType"
-          ],
+          "columns": ["skillType"],
           "isUnique": false
         }
       },
@@ -7319,9 +6793,7 @@
       "compositePrimaryKeys": {
         "SkillTree_id": {
           "name": "SkillTree_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7387,9 +6859,7 @@
       "compositePrimaryKeys": {
         "SupportReview_id": {
           "name": "SupportReview_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7513,51 +6983,37 @@
       "indexes": {
         "SupportTicket_createdByUserId_idx": {
           "name": "SupportTicket_createdByUserId_idx",
-          "columns": [
-            "createdByUserId"
-          ],
+          "columns": ["createdByUserId"],
           "isUnique": false
         },
         "SupportTicket_assignedToUserId_idx": {
           "name": "SupportTicket_assignedToUserId_idx",
-          "columns": [
-            "assignedToUserId"
-          ],
+          "columns": ["assignedToUserId"],
           "isUnique": false
         },
         "SupportTicket_status_idx": {
           "name": "SupportTicket_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "SupportTicket_category_idx": {
           "name": "SupportTicket_category_idx",
-          "columns": [
-            "category"
-          ],
+          "columns": ["category"],
           "isUnique": false
         },
         "SupportTicket_priority_idx": {
           "name": "SupportTicket_priority_idx",
-          "columns": [
-            "priority"
-          ],
+          "columns": ["priority"],
           "isUnique": false
         },
         "SupportTicket_isPublic_idx": {
           "name": "SupportTicket_isPublic_idx",
-          "columns": [
-            "isPublic"
-          ],
+          "columns": ["isPublic"],
           "isUnique": false
         },
         "SupportTicket_createdAt_idx": {
           "name": "SupportTicket_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -7565,9 +7021,7 @@
       "compositePrimaryKeys": {
         "SupportTicket_id": {
           "name": "SupportTicket_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7638,30 +7092,22 @@
       "indexes": {
         "SupportTicketActivity_ticketId_idx": {
           "name": "SupportTicketActivity_ticketId_idx",
-          "columns": [
-            "ticketId"
-          ],
+          "columns": ["ticketId"],
           "isUnique": false
         },
         "SupportTicketActivity_authorId_idx": {
           "name": "SupportTicketActivity_authorId_idx",
-          "columns": [
-            "authorId"
-          ],
+          "columns": ["authorId"],
           "isUnique": false
         },
         "SupportTicketActivity_action_idx": {
           "name": "SupportTicketActivity_action_idx",
-          "columns": [
-            "action"
-          ],
+          "columns": ["action"],
           "isUnique": false
         },
         "SupportTicketActivity_createdAt_idx": {
           "name": "SupportTicketActivity_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -7669,9 +7115,7 @@
       "compositePrimaryKeys": {
         "SupportTicketActivity_id": {
           "name": "SupportTicketActivity_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7766,9 +7210,7 @@
       "indexes": {
         "Tournament_name_key": {
           "name": "Tournament_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         }
       },
@@ -7776,9 +7218,7 @@
       "compositePrimaryKeys": {
         "Tournament_id": {
           "name": "Tournament_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7870,30 +7310,22 @@
       "indexes": {
         "TournamentMatch_tournamentId_idx": {
           "name": "TournamentMatch_tournamentId_idx",
-          "columns": [
-            "tournamentId"
-          ],
+          "columns": ["tournamentId"],
           "isUnique": false
         },
         "TournamentMatch_userId1_idx": {
           "name": "TournamentMatch_userId1_idx",
-          "columns": [
-            "userId1"
-          ],
+          "columns": ["userId1"],
           "isUnique": false
         },
         "TournamentMatch_userId2_idx": {
           "name": "TournamentMatch_userId2_idx",
-          "columns": [
-            "userId2"
-          ],
+          "columns": ["userId2"],
           "isUnique": false
         },
         "TournamentMatch_winnerId_idx": {
           "name": "TournamentMatch_winnerId_idx",
-          "columns": [
-            "winnerId"
-          ],
+          "columns": ["winnerId"],
           "isUnique": false
         }
       },
@@ -7901,9 +7333,7 @@
       "compositePrimaryKeys": {
         "TournamentMatch_id": {
           "name": "TournamentMatch_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7981,9 +7411,7 @@
       "indexes": {
         "HistoricalTournament_name_key": {
           "name": "HistoricalTournament_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         }
       },
@@ -7991,9 +7419,7 @@
       "compositePrimaryKeys": {
         "TournamentRecord_id": {
           "name": "TournamentRecord_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -8049,30 +7475,22 @@
       "indexes": {
         "TrainingLog_userId_idx": {
           "name": "TrainingLog_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "TrainingLog_speed_idx": {
           "name": "TrainingLog_speed_idx",
-          "columns": [
-            "speed"
-          ],
+          "columns": ["speed"],
           "isUnique": false
         },
         "TrainingLog_stat_idx": {
           "name": "TrainingLog_stat_idx",
-          "columns": [
-            "stat"
-          ],
+          "columns": ["stat"],
           "isUnique": false
         },
         "TrainingLog_trainingFinishedAt_idx": {
           "name": "TrainingLog_trainingFinishedAt_idx",
-          "columns": [
-            "trainingFinishedAt"
-          ],
+          "columns": ["trainingFinishedAt"],
           "isUnique": false
         }
       },
@@ -8080,9 +7498,7 @@
       "compositePrimaryKeys": {
         "TrainingLog_id": {
           "name": "TrainingLog_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -8124,9 +7540,7 @@
       "indexes": {
         "UsersInConversation_userId_idx": {
           "name": "UsersInConversation_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -8134,10 +7548,7 @@
       "compositePrimaryKeys": {
         "UsersInConversation_conversationId_userId_pk": {
           "name": "UsersInConversation_conversationId_userId_pk",
-          "columns": [
-            "conversationId",
-            "userId"
-          ]
+          "columns": ["conversationId", "userId"]
         }
       },
       "uniqueConstraints": {},
@@ -8181,9 +7592,7 @@
       "compositePrimaryKeys": {
         "UserActivityEvent_id": {
           "name": "UserActivityEvent_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -8233,25 +7642,17 @@
       "indexes": {
         "UserOne_UserTwo_UserAssociation_key": {
           "name": "UserOne_UserTwo_UserAssociation_key",
-          "columns": [
-            "userOne",
-            "userTwo",
-            "associationType"
-          ],
+          "columns": ["userOne", "userTwo", "associationType"],
           "isUnique": true
         },
         "UserAttribute_userOne_idx": {
           "name": "UserAttribute_userOne_idx",
-          "columns": [
-            "userOne"
-          ],
+          "columns": ["userOne"],
           "isUnique": false
         },
         "UserAttribute_userTwo_idx": {
           "name": "UserAttribute_userTwo_idx",
-          "columns": [
-            "userTwo"
-          ],
+          "columns": ["userTwo"],
           "isUnique": false
         }
       },
@@ -8259,9 +7660,7 @@
       "compositePrimaryKeys": {
         "UserAssociation_id": {
           "name": "UserAssociation_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -8295,17 +7694,12 @@
       "indexes": {
         "UserAttribute_attribute_userId_key": {
           "name": "UserAttribute_attribute_userId_key",
-          "columns": [
-            "attribute",
-            "userId"
-          ],
+          "columns": ["attribute", "userId"],
           "isUnique": true
         },
         "UserAttribute_userId_idx": {
           "name": "UserAttribute_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -8313,9 +7707,7 @@
       "compositePrimaryKeys": {
         "UserAttribute_id": {
           "name": "UserAttribute_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -8350,16 +7742,12 @@
       "indexes": {
         "UserBadge_userId_idx": {
           "name": "UserBadge_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "UserBadge_badgeId_idx": {
           "name": "UserBadge_badgeId_idx",
-          "columns": [
-            "badgeId"
-          ],
+          "columns": ["badgeId"],
           "isUnique": false
         }
       },
@@ -8404,16 +7792,12 @@
       "indexes": {
         "BlackList_creatorUserId_idx": {
           "name": "BlackList_creatorUserId_idx",
-          "columns": [
-            "creatorUserId"
-          ],
+          "columns": ["creatorUserId"],
           "isUnique": false
         },
         "BlackList_targetUserId_idx": {
           "name": "BlackList_targetUserId_idx",
-          "columns": [
-            "targetUserId"
-          ],
+          "columns": ["targetUserId"],
           "isUnique": false
         }
       },
@@ -8421,9 +7805,7 @@
       "compositePrimaryKeys": {
         "UserBlackList_id": {
           "name": "UserBlackList_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -9501,177 +8883,127 @@
       "indexes": {
         "UserData_isAi_idx": {
           "name": "UserData_isAi_idx",
-          "columns": [
-            "isAi"
-          ],
+          "columns": ["isAi"],
           "isUnique": false
         },
         "UserData_isEvent_idx": {
           "name": "UserData_isEvent_idx",
-          "columns": [
-            "isEvent"
-          ],
+          "columns": ["isEvent"],
           "isUnique": false
         },
         "UserData_inArena_idx": {
           "name": "UserData_inArena_idx",
-          "columns": [
-            "inArena"
-          ],
+          "columns": ["inArena"],
           "isUnique": false
         },
         "UserData_inShrines_idx": {
           "name": "UserData_inShrines_idx",
-          "columns": [
-            "inShrines"
-          ],
+          "columns": ["inShrines"],
           "isUnique": false
         },
         "UserData_isSummon_idx": {
           "name": "UserData_isSummon_idx",
-          "columns": [
-            "isSummon"
-          ],
+          "columns": ["isSummon"],
           "isUnique": false
         },
         "UserData_rank_idx": {
           "name": "UserData_rank_idx",
-          "columns": [
-            "rank"
-          ],
+          "columns": ["rank"],
           "isUnique": false
         },
         "UserData_role_idx": {
           "name": "UserData_role_idx",
-          "columns": [
-            "role"
-          ],
+          "columns": ["role"],
           "isUnique": false
         },
         "UserData_clanId_idx": {
           "name": "UserData_clanId_idx",
-          "columns": [
-            "clanId"
-          ],
+          "columns": ["clanId"],
           "isUnique": false
         },
         "UserData_anbuId_idx": {
           "name": "UserData_anbuId_idx",
-          "columns": [
-            "anbuId"
-          ],
+          "columns": ["anbuId"],
           "isUnique": false
         },
         "UserData_jutsuLoadout_idx": {
           "name": "UserData_jutsuLoadout_idx",
-          "columns": [
-            "jutsuLoadout"
-          ],
+          "columns": ["jutsuLoadout"],
           "isUnique": false
         },
         "UserData_rankedLoadout_idx": {
           "name": "UserData_rankedLoadout_idx",
-          "columns": [
-            "rankedLoadout"
-          ],
+          "columns": ["rankedLoadout"],
           "isUnique": false
         },
         "UserData_rankedLp_idx": {
           "name": "UserData_rankedLp_idx",
-          "columns": [
-            "rankedLp"
-          ],
+          "columns": ["rankedLp"],
           "isUnique": false
         },
         "UserData_experience_idx": {
           "name": "UserData_experience_idx",
-          "columns": [
-            "experience"
-          ],
+          "columns": ["experience"],
           "isUnique": false
         },
         "UserData_level_idx": {
           "name": "UserData_level_idx",
-          "columns": [
-            "level"
-          ],
+          "columns": ["level"],
           "isUnique": false
         },
         "UserData_username_key": {
           "name": "UserData_username_key",
-          "columns": [
-            "username"
-          ],
+          "columns": ["username"],
           "isUnique": true
         },
         "UserData_bloodlineId_idx": {
           "name": "UserData_bloodlineId_idx",
-          "columns": [
-            "bloodlineId"
-          ],
+          "columns": ["bloodlineId"],
           "isUnique": false
         },
         "UserData_bloodlineReskinId_idx": {
           "name": "UserData_bloodlineReskinId_idx",
-          "columns": [
-            "bloodlineReskinId"
-          ],
+          "columns": ["bloodlineReskinId"],
           "isUnique": false
         },
         "UserData_villageId_idx": {
           "name": "UserData_villageId_idx",
-          "columns": [
-            "villageId"
-          ],
+          "columns": ["villageId"],
           "isUnique": false
         },
         "UserData_battleId_idx": {
           "name": "UserData_battleId_idx",
-          "columns": [
-            "battleId"
-          ],
+          "columns": ["battleId"],
           "isUnique": false
         },
         "UserData_status_idx": {
           "name": "UserData_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "UserData_sector_idx": {
           "name": "UserData_sector_idx",
-          "columns": [
-            "sector"
-          ],
+          "columns": ["sector"],
           "isUnique": false
         },
         "UserData_senseiId_idx": {
           "name": "UserData_senseiId_idx",
-          "columns": [
-            "senseiId"
-          ],
+          "columns": ["senseiId"],
           "isUnique": false
         },
         "UserData_latitude_idx": {
           "name": "UserData_latitude_idx",
-          "columns": [
-            "latitude"
-          ],
+          "columns": ["latitude"],
           "isUnique": false
         },
         "UserData_longitude_idx": {
           "name": "UserData_longitude_idx",
-          "columns": [
-            "longitude"
-          ],
+          "columns": ["longitude"],
           "isUnique": false
         },
         "UserData_createdAt_idx": {
           "name": "UserData_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -9679,9 +9011,7 @@
       "compositePrimaryKeys": {
         "UserData_userId": {
           "name": "UserData_userId",
-          "columns": [
-            "userId"
-          ]
+          "columns": ["userId"]
         }
       },
       "uniqueConstraints": {},
@@ -9786,30 +9116,22 @@
       "indexes": {
         "UserItem_userId_idx": {
           "name": "UserItem_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "UserItem_itemId_idx": {
           "name": "UserItem_itemId_idx",
-          "columns": [
-            "itemId"
-          ],
+          "columns": ["itemId"],
           "isUnique": false
         },
         "UserItem_quantity_idx": {
           "name": "UserItem_quantity_idx",
-          "columns": [
-            "quantity"
-          ],
+          "columns": ["quantity"],
           "isUnique": false
         },
         "UserItem_equipped_idx": {
           "name": "UserItem_equipped_idx",
-          "columns": [
-            "equipped"
-          ],
+          "columns": ["equipped"],
           "isUnique": false
         }
       },
@@ -9817,9 +9139,7 @@
       "compositePrimaryKeys": {
         "UserItem_id": {
           "name": "UserItem_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -9868,24 +9188,17 @@
       "indexes": {
         "UserItemImbuement_userItemId_idx": {
           "name": "UserItemImbuement_userItemId_idx",
-          "columns": [
-            "userItemId"
-          ],
+          "columns": ["userItemId"],
           "isUnique": false
         },
         "UserItemImbuement_imbuementItemId_idx": {
           "name": "UserItemImbuement_imbuementItemId_idx",
-          "columns": [
-            "imbuementItemId"
-          ],
+          "columns": ["imbuementItemId"],
           "isUnique": false
         },
         "UserItemImbuement_userItem_imbuement_key": {
           "name": "UserItemImbuement_userItem_imbuement_key",
-          "columns": [
-            "userItemId",
-            "imbuementItemId"
-          ],
+          "columns": ["userItemId", "imbuementItemId"],
           "isUnique": true
         }
       },
@@ -9893,9 +9206,7 @@
       "compositePrimaryKeys": {
         "UserItemImbuement_id": {
           "name": "UserItemImbuement_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -9983,31 +9294,22 @@
       "indexes": {
         "UserJutsu_userId_jutsuId_key": {
           "name": "UserJutsu_userId_jutsuId_key",
-          "columns": [
-            "userId",
-            "jutsuId"
-          ],
+          "columns": ["userId", "jutsuId"],
           "isUnique": true
         },
         "UserJutsu_jutsuId_idx": {
           "name": "UserJutsu_jutsuId_idx",
-          "columns": [
-            "jutsuId"
-          ],
+          "columns": ["jutsuId"],
           "isUnique": false
         },
         "Jutsu_equipped_idx": {
           "name": "Jutsu_equipped_idx",
-          "columns": [
-            "equipped"
-          ],
+          "columns": ["equipped"],
           "isUnique": false
         },
         "UserJutsu_reskinId_idx": {
           "name": "UserJutsu_reskinId_idx",
-          "columns": [
-            "reskinId"
-          ],
+          "columns": ["reskinId"],
           "isUnique": false
         }
       },
@@ -10015,9 +9317,7 @@
       "compositePrimaryKeys": {
         "UserJutsu_id": {
           "name": "UserJutsu_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10059,16 +9359,12 @@
       "indexes": {
         "userLikes_userId_idx": {
           "name": "userLikes_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "userLikes_imageId_idx": {
           "name": "userLikes_imageId_idx",
-          "columns": [
-            "imageId"
-          ],
+          "columns": ["imageId"],
           "isUnique": false
         }
       },
@@ -10121,9 +9417,7 @@
       "indexes": {
         "UserNindo_userId_idx": {
           "name": "UserNindo_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -10131,9 +9425,7 @@
       "compositePrimaryKeys": {
         "UserNindo_id": {
           "name": "UserNindo_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10182,24 +9474,17 @@
       "indexes": {
         "UserPollVote_userId_pollId_idx": {
           "name": "UserPollVote_userId_pollId_idx",
-          "columns": [
-            "userId",
-            "pollId"
-          ],
+          "columns": ["userId", "pollId"],
           "isUnique": true
         },
         "UserPollVote_pollId_idx": {
           "name": "UserPollVote_pollId_idx",
-          "columns": [
-            "pollId"
-          ],
+          "columns": ["pollId"],
           "isUnique": false
         },
         "UserPollVote_optionId_idx": {
           "name": "UserPollVote_optionId_idx",
-          "columns": [
-            "optionId"
-          ],
+          "columns": ["optionId"],
           "isUnique": false
         }
       },
@@ -10207,9 +9492,7 @@
       "compositePrimaryKeys": {
         "UserPollVote_id": {
           "name": "UserPollVote_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10325,23 +9608,17 @@
       "indexes": {
         "UserReport_reporterUserId_idx": {
           "name": "UserReport_reporterUserId_idx",
-          "columns": [
-            "reporterUserId"
-          ],
+          "columns": ["reporterUserId"],
           "isUnique": false
         },
         "UserReport_reportedUserId_idx": {
           "name": "UserReport_reportedUserId_idx",
-          "columns": [
-            "reportedUserId"
-          ],
+          "columns": ["reportedUserId"],
           "isUnique": false
         },
         "UserReport_status_idx": {
           "name": "UserReport_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -10349,9 +9626,7 @@
       "compositePrimaryKeys": {
         "UserReport_id": {
           "name": "UserReport_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10415,16 +9690,12 @@
       "indexes": {
         "UserReportComment_userId_idx": {
           "name": "UserReportComment_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "UserReportComment_reportId_idx": {
           "name": "UserReportComment_reportId_idx",
-          "columns": [
-            "reportId"
-          ],
+          "columns": ["reportId"],
           "isUnique": false
         }
       },
@@ -10432,9 +9703,7 @@
       "compositePrimaryKeys": {
         "UserReportComment_id": {
           "name": "UserReportComment_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10513,30 +9782,22 @@
       "indexes": {
         "UserRequest_createdAt_idx": {
           "name": "UserRequest_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "UserRequest_senderId_idx": {
           "name": "UserRequest_senderId_idx",
-          "columns": [
-            "senderId"
-          ],
+          "columns": ["senderId"],
           "isUnique": false
         },
         "UserRequest_receiverId_idx": {
           "name": "UserRequest_receiverId_idx",
-          "columns": [
-            "receiverId"
-          ],
+          "columns": ["receiverId"],
           "isUnique": false
         },
         "UserRequest_type_idx": {
           "name": "UserRequest_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         }
       },
@@ -10544,9 +9805,7 @@
       "compositePrimaryKeys": {
         "UserRequest_id": {
           "name": "UserRequest_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10610,16 +9869,12 @@
       "indexes": {
         "UserReview_authorUserId_idx": {
           "name": "UserReview_authorUserId_idx",
-          "columns": [
-            "authorUserId"
-          ],
+          "columns": ["authorUserId"],
           "isUnique": false
         },
         "UserReview_targetUserId_idx": {
           "name": "UserReview_targetUserId_idx",
-          "columns": [
-            "targetUserId"
-          ],
+          "columns": ["targetUserId"],
           "isUnique": false
         }
       },
@@ -10627,9 +9882,7 @@
       "compositePrimaryKeys": {
         "UserReview_id": {
           "name": "UserReview_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10694,23 +9947,17 @@
       "indexes": {
         "UserRewards_awardedById_idx": {
           "name": "UserRewards_awardedById_idx",
-          "columns": [
-            "awardedById"
-          ],
+          "columns": ["awardedById"],
           "isUnique": false
         },
         "UserRewards_receiverId_idx": {
           "name": "UserRewards_receiverId_idx",
-          "columns": [
-            "receiverId"
-          ],
+          "columns": ["receiverId"],
           "isUnique": false
         },
         "UserRewards_createdAt_idx": {
           "name": "UserRewards_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -10718,9 +9965,7 @@
       "compositePrimaryKeys": {
         "UserRewards_id": {
           "name": "UserRewards_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10770,24 +10015,17 @@
       "indexes": {
         "UserSkill_userId_skillId_key": {
           "name": "UserSkill_userId_skillId_key",
-          "columns": [
-            "userId",
-            "skillId"
-          ],
+          "columns": ["userId", "skillId"],
           "isUnique": true
         },
         "UserSkill_userId_idx": {
           "name": "UserSkill_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "UserSkill_skillId_idx": {
           "name": "UserSkill_skillId_idx",
-          "columns": [
-            "skillId"
-          ],
+          "columns": ["skillId"],
           "isUnique": false
         }
       },
@@ -10795,9 +10033,7 @@
       "compositePrimaryKeys": {
         "UserSkill_id": {
           "name": "UserSkill_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10847,9 +10083,7 @@
       "indexes": {
         "UserUpload_userId_idx": {
           "name": "UserUpload_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -10857,9 +10091,7 @@
       "compositePrimaryKeys": {
         "UserUpload_id": {
           "name": "UserUpload_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10989,9 +10221,7 @@
       "indexes": {
         "UserVote_userId_idx": {
           "name": "UserVote_userId_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": true
         }
       },
@@ -10999,9 +10229,7 @@
       "compositePrimaryKeys": {
         "UserVote_id": {
           "name": "UserVote_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -11215,16 +10443,12 @@
       "indexes": {
         "Village_name_key": {
           "name": "Village_name_key",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         },
         "Village_sector_key": {
           "name": "Village_sector_key",
-          "columns": [
-            "sector"
-          ],
+          "columns": ["sector"],
           "isUnique": true
         }
       },
@@ -11232,9 +10456,7 @@
       "compositePrimaryKeys": {
         "Village_id": {
           "name": "Village_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -11289,23 +10511,17 @@
       "indexes": {
         "VillageAlliance_villageIdA_idx": {
           "name": "VillageAlliance_villageIdA_idx",
-          "columns": [
-            "villageIdA"
-          ],
+          "columns": ["villageIdA"],
           "isUnique": false
         },
         "VillageAlliance_villageIdB_idx": {
           "name": "VillageAlliance_villageIdB_idx",
-          "columns": [
-            "villageIdB"
-          ],
+          "columns": ["villageIdB"],
           "isUnique": false
         },
         "VillageAlliance_status_idx": {
           "name": "VillageAlliance_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -11313,9 +10529,7 @@
       "compositePrimaryKeys": {
         "VillageAlliance_id": {
           "name": "VillageAlliance_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -11563,17 +10777,12 @@
       "indexes": {
         "VillageStructure_name_villageId_key": {
           "name": "VillageStructure_name_villageId_key",
-          "columns": [
-            "name",
-            "villageId"
-          ],
+          "columns": ["name", "villageId"],
           "isUnique": true
         },
         "VillageStructure_villageId_idx": {
           "name": "VillageStructure_villageId_idx",
-          "columns": [
-            "villageId"
-          ],
+          "columns": ["villageId"],
           "isUnique": false
         }
       },
@@ -11581,9 +10790,7 @@
       "compositePrimaryKeys": {
         "VillageStructure_id": {
           "name": "VillageStructure_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -11639,30 +10846,22 @@
       "indexes": {
         "VisitorLog_ip_key": {
           "name": "VisitorLog_ip_key",
-          "columns": [
-            "ip"
-          ],
+          "columns": ["ip"],
           "isUnique": true
         },
         "VisitorLog_ref_idx": {
           "name": "VisitorLog_ref_idx",
-          "columns": [
-            "ref"
-          ],
+          "columns": ["ref"],
           "isUnique": false
         },
         "VisitorLog_utmSource_idx": {
           "name": "VisitorLog_utmSource_idx",
-          "columns": [
-            "utmSource"
-          ],
+          "columns": ["utmSource"],
           "isUnique": false
         },
         "VisitorLog_createdAt_idx": {
           "name": "VisitorLog_createdAt_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -11670,9 +10869,7 @@
       "compositePrimaryKeys": {
         "VisitorLog_id": {
           "name": "VisitorLog_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -11783,30 +10980,22 @@
       "indexes": {
         "War_attackerVillageId_idx": {
           "name": "War_attackerVillageId_idx",
-          "columns": [
-            "attackerVillageId"
-          ],
+          "columns": ["attackerVillageId"],
           "isUnique": false
         },
         "War_defenderVillageId_idx": {
           "name": "War_defenderVillageId_idx",
-          "columns": [
-            "defenderVillageId"
-          ],
+          "columns": ["defenderVillageId"],
           "isUnique": false
         },
         "War_sector_idx": {
           "name": "War_sector_idx",
-          "columns": [
-            "sector"
-          ],
+          "columns": ["sector"],
           "isUnique": false
         },
         "War_status_idx": {
           "name": "War_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -11814,9 +11003,7 @@
       "compositePrimaryKeys": {
         "War_id": {
           "name": "War_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -11872,16 +11059,12 @@
       "indexes": {
         "WarAlly_warId_idx": {
           "name": "WarAlly_warId_idx",
-          "columns": [
-            "warId"
-          ],
+          "columns": ["warId"],
           "isUnique": false
         },
         "WarAlly_villageId_idx": {
           "name": "WarAlly_villageId_idx",
-          "columns": [
-            "villageId"
-          ],
+          "columns": ["villageId"],
           "isUnique": false
         }
       },
@@ -11889,9 +11072,7 @@
       "compositePrimaryKeys": {
         "WarAlly_id": {
           "name": "WarAlly_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -11978,37 +11159,27 @@
       "indexes": {
         "WarKill_warId_idx": {
           "name": "WarKill_warId_idx",
-          "columns": [
-            "warId"
-          ],
+          "columns": ["warId"],
           "isUnique": false
         },
         "WarKill_killerId_idx": {
           "name": "WarKill_killerId_idx",
-          "columns": [
-            "killerId"
-          ],
+          "columns": ["killerId"],
           "isUnique": false
         },
         "WarKill_victimId_idx": {
           "name": "WarKill_victimId_idx",
-          "columns": [
-            "victimId"
-          ],
+          "columns": ["victimId"],
           "isUnique": false
         },
         "WarKill_killerVillageId_idx": {
           "name": "WarKill_killerVillageId_idx",
-          "columns": [
-            "killerVillageId"
-          ],
+          "columns": ["killerVillageId"],
           "isUnique": false
         },
         "WarKill_victimVillageId_idx": {
           "name": "WarKill_victimVillageId_idx",
-          "columns": [
-            "victimVillageId"
-          ],
+          "columns": ["victimVillageId"],
           "isUnique": false
         }
       },
@@ -12016,9 +11187,7 @@
       "compositePrimaryKeys": {
         "WarKill_id": {
           "name": "WarKill_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},

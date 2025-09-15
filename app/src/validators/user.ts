@@ -138,13 +138,21 @@ export type GetPublicUsersSchema = z.infer<typeof getPublicUsersSchema>;
 // For updating highest preferences
 export const updateUserPreferencesSchema = z
   .object({
-    preferredStat: z.enum(StatTypes).nullable(),
-    preferredGeneral1: z.enum(GeneralTypes).nullable(),
-    preferredGeneral2: z.enum(GeneralTypes).nullable(),
+    preferredStat: z.enum(StatTypes).nullable().optional(),
+    preferredGeneral1: z.enum(GeneralTypes).nullable().optional(),
+    preferredGeneral2: z.enum(GeneralTypes).nullable().optional(),
+    // Audio preferences
+    musicOn: z.boolean().optional(),
+    sfxOn: z.boolean().optional(),
   })
   .refine(
     (data) => {
-      if (data.preferredGeneral1 && data.preferredGeneral2) {
+      if (
+        data.preferredGeneral1 !== undefined &&
+        data.preferredGeneral2 !== undefined &&
+        data.preferredGeneral1 !== null &&
+        data.preferredGeneral2 !== null
+      ) {
         return data.preferredGeneral1 !== data.preferredGeneral2;
       }
       return true;

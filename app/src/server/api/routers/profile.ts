@@ -141,35 +141,6 @@ export const profileRouter = createTRPCRouter({
         message: `Battle descriptions ${input.showBattleDescription ? "enabled" : "disabled"}`,
       };
     }),
-  // Toggle audio setting
-  toggleAudio: protectedProcedure
-    .output(
-      baseServerResponse.extend({
-        data: z.object({ audioOn: z.boolean() }).optional(),
-      }),
-    )
-    .mutation(async ({ ctx }) => {
-      // Get current user data
-      const user = await ctx.drizzle.query.userData.findFirst({
-        where: eq(userData.userId, ctx.userId),
-        columns: { audioOn: true },
-      });
-      // Guard
-      if (!user) return errorResponse("User not found");
-      // Derived
-      const newAudioState = !user.audioOn;
-      // Update the database
-      await ctx.drizzle
-        .update(userData)
-        .set({ audioOn: newAudioState })
-        .where(eq(userData.userId, ctx.userId));
-      // Return success response
-      return {
-        success: true,
-        message: `Audio ${newAudioState ? "enabled" : "disabled"}`,
-        data: { audioOn: newAudioState },
-      };
-    }),
   // Update tutorial step
   updateTutorialStep: protectedProcedure
     .input(z.object({ step: z.number() }))
