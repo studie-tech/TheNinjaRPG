@@ -377,6 +377,7 @@ export const EditContent = <
                           <Label>{a.name}</Label>
                           <audio src={a.url ?? undefined} controls className="w-full" />
                           <Button
+                            type="button"
                             variant={selected ? "default" : "secondary"}
                             className="w-full"
                             onClick={() => {

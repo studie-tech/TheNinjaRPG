@@ -357,7 +357,7 @@ export const drawCombatEffect = (info: {
         if (effect.power !== undefined && effect.power <= 0) {
           asset.visible = false;
           // Play disappear SFX when hiding
-          if (effect.disappearSfx && info.sfxEnabled) {
+          if (effect.disappearSfx && info.sfxEnabled && animationId !== 0) {
             try {
               console.log(effect);
               const sfx = gameAssets.find((a) => a.id === effect.disappearSfx);

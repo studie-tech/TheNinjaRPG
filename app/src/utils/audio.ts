@@ -209,12 +209,11 @@ export const preloadAudioBuffers = async (urls: string[]) => {
   const ctx = getSharedAudioContext();
   if (!ctx) return;
   const unique = [...new Set(urls.filter(Boolean))];
-  await Promise.all(
+  const results = await Promise.allSettled(
     unique.map(async (url) => {
       if (audioBufferCache.has(url)) return audioBufferCache.get(url)!;
       const existing = audioBufferPending.get(url);
       if (existing) return existing;
-
       const promise = (async () => {
         const response = await fetch(url, { mode: "cors", cache: "force-cache" });
         if (!response.ok) throw new Error(`Failed to fetch audio buffer: ${url}`);
@@ -227,38 +226,55 @@ export const preloadAudioBuffers = async (urls: string[]) => {
       return promise;
     }),
   );
+  const failed = results.filter((r) => r.status === "rejected");
+  if (failed.length) {
+    // eslint-disable-next-line no-console
+    console.warn(`preloadAudioBuffers: ${failed.length} audio file(s) failed`);
+  }
 };
 
 /**
  * Play a preloaded audio URL (falls back to on-demand if not preloaded).
  */
 export const playPreloadedAudio = async (url: string, volume = 0.8): Promise<void> => {
-  if (!url) return;
+  if (!url || typeof window === "undefined") return;
   const ctx = getSharedAudioContext();
   const buffer = url ? audioBufferCache.get(url) : undefined;
   if (ctx && buffer) {
     try {
       await resumeAudioContext(ctx);
       const gain = ctx.createGain();
-      gain.gain.value = volume;
+      const vol = Math.min(1, Math.max(0, volume));
+      gain.gain.value = vol;
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(gain).connect(ctx.destination);
       source.start(0);
+      source.onended = () => {
+        try {
+          source.disconnect();
+          gain.disconnect();
+        } catch {}
+      };
       return;
     } catch {
       // Fall through to element-based playback
     }
   }
-
   // Element-based fallback (still allows overlapping via clone)
   let audio = audioCache.get(url);
   if (!audio) {
     audio = new Audio(url);
+    try {
+      audio.crossOrigin = "anonymous";
+    } catch {}
     audioCache.set(url, audio);
   }
   const node = audio.cloneNode(true) as HTMLAudioElement;
-  node.volume = volume;
+  node.volume = Math.min(1, Math.max(0, volume));
+  try {
+    node.crossOrigin = "anonymous";
+  } catch {}
   try {
     await node.play();
   } catch {

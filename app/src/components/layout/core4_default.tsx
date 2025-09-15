@@ -396,12 +396,12 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
         <PopoverTrigger asChild>
           <button
             aria-label="Audio settings"
-            className="rounded-full mx-1 p-1 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80"
+            className="rounded-full mx-1 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80"
           >
             {audioEnabled ? (
-              <Volume2 className="h-6 w-6 xl:h-7 xl:w-7" suppressHydrationWarning />
+              <Volume2 className="h-6 w-6 xl:h-7 xl:w-7 p-1" suppressHydrationWarning />
             ) : (
-              <VolumeX className="h-6 w-6 xl:h-7 xl:w-7" suppressHydrationWarning />
+              <VolumeX className="h-6 w-6 xl:h-7 xl:w-7 p-1" suppressHydrationWarning />
             )}
           </button>
         </PopoverTrigger>

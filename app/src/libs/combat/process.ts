@@ -874,8 +874,8 @@ export const applySingleEffect = (
   if (
     (effect.appearAnimation || effect.appearSfx) &&
     effect.isNew &&
-    longitude &&
-    latitude
+    longitude !== undefined &&
+    latitude !== undefined
   ) {
     console.log("Adding 5", effect);
     newGroundEffects.push(
