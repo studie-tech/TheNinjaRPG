@@ -1,0 +1,1 @@
+ALTER TABLE `UserData` ADD `youtubeMuted` boolean DEFAULT false NOT NULL;
