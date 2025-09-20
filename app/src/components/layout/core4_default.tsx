@@ -205,6 +205,18 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
     isClient ? getInitialSfxState() : true,
   );
 
+  // SFX volume state
+  const getInitialSfxVolumeState = (): number => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("sfxVolume");
+      if (saved !== null) return JSON.parse(saved) as number;
+    }
+    return 0.8; // Default volume
+  };
+  const [sfxVolume, setSfxVolume] = useState<number>(() =>
+    isClient ? getInitialSfxVolumeState() : 0.8,
+  );
+
   // YouTube mute state
   const { isYouTubeMuted, setYouTubeMuted } = useYouTubeMute();
 
@@ -494,6 +506,33 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                 aria-label="Toggle sound effects"
               />
             </div>
+            {sfxOn && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Volume</p>
+                  <span className="text-xs text-muted-foreground">{Math.round(sfxVolume * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={sfxVolume}
+                  onChange={(e) => {
+                    const newVolume = parseFloat(e.target.value);
+                    setSfxVolume(newVolume);
+                    if (typeof window !== "undefined") {
+                      localStorage.setItem("sfxVolume", JSON.stringify(newVolume));
+                    }
+                  }}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                  style={{
+                    background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${sfxVolume * 100}%, #e5e7eb ${sfxVolume * 100}%, #e5e7eb 100%)`
+                  }}
+                  aria-label="Sound effects volume"
+                />
+              </div>
+            )}
             {requiresInteraction && audioEnabled && (
               <p className="text-[10px] text-muted-foreground">
                 Audio requires interaction on this browser; click anywhere to start

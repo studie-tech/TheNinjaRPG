@@ -535,6 +535,13 @@ const Combat: React.FC<CombatProps> = (props) => {
             (u) => u.userId === userId.current,
           );
 
+          // Get SFX volume from localStorage
+          const sfxVolume = typeof window !== "undefined" ? 
+            (() => {
+              const saved = localStorage.getItem("sfxVolume");
+              return saved !== null ? JSON.parse(saved) as number : 0.8;
+            })() : 0.8;
+
           // Draw all users on the map + indicators for positions with multiple users
           drawCombatUsers({
             group_users: group_users,
@@ -543,6 +550,7 @@ const Combat: React.FC<CombatProps> = (props) => {
             playerId: suid,
             userData: userData,
             sfxEnabled: Boolean(userData?.sfxOn ?? true),
+            sfxVolume: sfxVolume,
             gameAssets: gameAssets ?? [],
           });
 
@@ -555,6 +563,7 @@ const Combat: React.FC<CombatProps> = (props) => {
             spriteMixer,
             gameAssets: gameAssets ?? [],
             sfxEnabled: Boolean(userData?.sfxOn ?? true),
+            sfxVolume: sfxVolume,
           });
 
           // Highlight information on user hover
