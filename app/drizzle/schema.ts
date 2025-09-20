@@ -2017,6 +2017,7 @@ export const userData = mysqlTable(
     tavernMessages: int("tavernMessages").default(0).notNull(),
     musicOn: boolean("musicOn").default(true).notNull(),
     sfxOn: boolean("sfxOn").default(true).notNull(),
+    youtubeMuted: boolean("youtubeMuted").default(false).notNull(),
     tutorialStep: tinyint("tutorialStep", { unsigned: true }).default(0).notNull(),
     homeType: mysqlEnum("homeType", consts.HomeTypes).default("NONE").notNull(),
     staffAccount: boolean("staffAccount").default(false).notNull(),

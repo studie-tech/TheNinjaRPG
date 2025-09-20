@@ -84,6 +84,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "src/libs/shadui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAudio } from "@/hooks/useAudio";
+import { useYouTubeMute } from "@/hooks/useYouTubeMute";
 export interface LayoutProps {
   children: React.ReactNode;
 }
@@ -203,6 +204,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   const [sfxOn, setSfxOn] = useState<boolean>(() =>
     isClient ? getInitialSfxState() : true,
   );
+
+  // YouTube mute state
+  const { isYouTubeMuted, setYouTubeMuted } = useYouTubeMute();
 
   // Sync with user data changes
   useEffect(() => {
@@ -476,6 +480,18 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                   }
                 }}
                 aria-label="Toggle sound effects"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <p className="text-xs text-muted-foreground">YouTube Videos</p>
+              </div>
+              <Switch
+                checked={isYouTubeMuted}
+                onCheckedChange={(checked) => {
+                  setYouTubeMuted(checked);
+                }}
+                aria-label="Toggle YouTube video muting"
               />
             </div>
             {requiresInteraction && audioEnabled && (

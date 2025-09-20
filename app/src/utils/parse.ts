@@ -97,6 +97,59 @@ export const parseHtml = (html: string) => {
         },
         content,
       );
+    } else if (node.type === "tag" && node.name === "iframe" && node.attribs) {
+      const {
+        src,
+        width,
+        height,
+        title,
+        className,
+        id,
+        style,
+        allow,
+        allowfullscreen,
+        frameborder,
+      } = node.attribs;
+
+      let parsedStyle: React.CSSProperties | undefined;
+      if (style) {
+        try {
+          const parsed = JSON.parse(style) as unknown;
+          if (isValidStyle(parsed)) {
+            parsedStyle = parsed;
+          }
+        } catch {
+          // Invalid JSON style string, ignore it
+        }
+      }
+
+      // Check if this is a YouTube iframe
+      const isYouTube = src && (
+        src.includes("youtube.com/embed/") || 
+        src.includes("youtube-nocookie.com/embed/") ||
+        src.includes("youtu.be/")
+      );
+
+      const props: React.IframeHTMLAttributes<HTMLIFrameElement> = {
+        src,
+        width,
+        height,
+        title,
+        className,
+        id,
+        style: parsedStyle,
+        allow,
+        allowFullScreen: allowfullscreen === "true" || allowfullscreen === "1",
+        frameBorder: frameborder,
+        // Add data attribute to identify YouTube iframes for muting
+        ...(isYouTube && { "data-youtube-iframe": "true" }),
+      };
+
+      const cleanProps = Object.fromEntries(
+        Object.entries(props).filter(([_, value]) => value !== undefined),
+      ) as React.IframeHTMLAttributes<HTMLIFrameElement>;
+
+      return React.createElement("iframe", cleanProps);
     }
     return undefined;
   };

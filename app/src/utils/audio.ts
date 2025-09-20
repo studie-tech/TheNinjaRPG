@@ -280,3 +280,184 @@ export const playPreloadedAudio = async (url: string, volume = 0.8): Promise<voi
     // Ignore play errors (autoplay restrictions etc.)
   }
 };
+
+/**
+ * YouTube iframe utility functions for muting and controlling embedded videos
+ */
+
+/**
+ * Check if an iframe element is a YouTube video
+ */
+export const isYouTubeIframe = (iframe: HTMLIFrameElement): boolean => {
+  return iframe.hasAttribute("data-youtube-iframe") || 
+         iframe.src?.includes("youtube.com/embed/") ||
+         iframe.src?.includes("youtube-nocookie.com/embed/") ||
+         iframe.src?.includes("youtu.be/");
+};
+
+/**
+ * Get all YouTube iframes on the page
+ */
+export const getAllYouTubeIframes = (): HTMLIFrameElement[] => {
+  if (typeof window === "undefined") return [];
+  
+  const allIframes = document.querySelectorAll("iframe");
+  return Array.from(allIframes).filter(isYouTubeIframe);
+};
+
+/**
+ * Mute a YouTube iframe by modifying its src to include mute parameter
+ */
+export const muteYouTubeIframe = (iframe: HTMLIFrameElement): void => {
+  if (!isYouTubeIframe(iframe) || !iframe.src) return;
+
+  try {
+    const url = new URL(iframe.src);
+    
+    // Add mute parameter to YouTube URL
+    if (url.hostname.includes("youtube.com") || url.hostname.includes("youtube-nocookie.com")) {
+      url.searchParams.set("mute", "1");
+      iframe.src = url.toString();
+    } else if (url.hostname.includes("youtu.be")) {
+      // Convert youtu.be to embed format with mute
+      const videoId = url.pathname.substring(1);
+      iframe.src = `https://www.youtube.com/embed/${videoId}?mute=1`;
+    }
+  } catch (error) {
+    console.warn("Failed to mute YouTube iframe:", error);
+  }
+};
+
+/**
+ * Unmute a YouTube iframe by removing the mute parameter
+ */
+export const unmuteYouTubeIframe = (iframe: HTMLIFrameElement): void => {
+  if (!isYouTubeIframe(iframe) || !iframe.src) return;
+
+  try {
+    const url = new URL(iframe.src);
+    
+    // Remove mute parameter from YouTube URL
+    if (url.hostname.includes("youtube.com") || url.hostname.includes("youtube-nocookie.com")) {
+      url.searchParams.delete("mute");
+      iframe.src = url.toString();
+    } else if (url.hostname.includes("youtu.be")) {
+      // Convert youtu.be to embed format without mute
+      const videoId = url.pathname.substring(1);
+      iframe.src = `https://www.youtube.com/embed/${videoId}`;
+    }
+  } catch (error) {
+    console.warn("Failed to unmute YouTube iframe:", error);
+  }
+};
+
+/**
+ * Mute all YouTube iframes on the page
+ */
+export const muteAllYouTubeVideos = (): void => {
+  const youtubeIframes = getAllYouTubeIframes();
+  youtubeIframes.forEach(muteYouTubeIframe);
+};
+
+/**
+ * Unmute all YouTube iframes on the page
+ */
+export const unmuteAllYouTubeVideos = (): void => {
+  const youtubeIframes = getAllYouTubeIframes();
+  youtubeIframes.forEach(unmuteYouTubeIframe);
+};
+
+/**
+ * Set mute state for all YouTube videos
+ */
+export const setYouTubeMuteState = (muted: boolean): void => {
+  if (muted) {
+    muteAllYouTubeVideos();
+  } else {
+    unmuteAllYouTubeVideos();
+  }
+};
+
+/**
+ * Observer to automatically mute new YouTube iframes as they're added to the DOM
+ */
+export class YouTubeMuteObserver {
+  private observer: MutationObserver | null = null;
+  private isMuted: boolean = false;
+
+  constructor() {
+    if (typeof window === "undefined") return;
+    
+    this.observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const element = node as Element;
+            
+            // Check if the added node is a YouTube iframe
+            if (element.tagName === "IFRAME" && isYouTubeIframe(element as HTMLIFrameElement)) {
+              if (this.isMuted) {
+                muteYouTubeIframe(element as HTMLIFrameElement);
+              }
+            }
+            
+            // Check for YouTube iframes within the added node
+            const youtubeIframes = element.querySelectorAll?.("iframe[data-youtube-iframe]") || [];
+            youtubeIframes.forEach((iframe) => {
+              if (this.isMuted) {
+                muteYouTubeIframe(iframe as HTMLIFrameElement);
+              }
+            });
+          }
+        });
+      });
+    });
+  }
+
+  start(muted: boolean = false): void {
+    if (!this.observer) return;
+    
+    this.isMuted = muted;
+    this.observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  stop(): void {
+    if (this.observer) {
+      this.observer.disconnect();
+    }
+  }
+
+  setMuted(muted: boolean): void {
+    this.isMuted = muted;
+    setYouTubeMuteState(muted);
+  }
+}
+
+// Global instance
+let globalYouTubeObserver: YouTubeMuteObserver | null = null;
+
+/**
+ * Initialize the global YouTube mute observer
+ */
+export const initYouTubeMuteObserver = (muted: boolean = false): YouTubeMuteObserver => {
+  if (typeof window === "undefined") {
+    return new YouTubeMuteObserver();
+  }
+  
+  if (!globalYouTubeObserver) {
+    globalYouTubeObserver = new YouTubeMuteObserver();
+  }
+  
+  globalYouTubeObserver.start(muted);
+  return globalYouTubeObserver;
+};
+
+/**
+ * Get the global YouTube mute observer
+ */
+export const getYouTubeMuteObserver = (): YouTubeMuteObserver | null => {
+  return globalYouTubeObserver;
+};
