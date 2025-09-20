@@ -459,6 +459,18 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
               />
             </div>
             <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <p className="text-xs text-muted-foreground">YouTube Audio</p>
+              </div>
+              <Switch
+                checked={!isYouTubeMuted}
+                onCheckedChange={(checked) => {
+                  setYouTubeMuted(!checked);
+                }}
+                aria-label="Toggle YouTube audio"
+              />
+            </div>
+            <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">Sound effects</p>
                 <p className="text-xs text-muted-foreground">Combat SFX</p>
@@ -480,18 +492,6 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                   }
                 }}
                 aria-label="Toggle sound effects"
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col">
-                <p className="text-xs text-muted-foreground">YouTube Videos</p>
-              </div>
-              <Switch
-                checked={isYouTubeMuted}
-                onCheckedChange={(checked) => {
-                  setYouTubeMuted(checked);
-                }}
-                aria-label="Toggle YouTube video muting"
               />
             </div>
             {requiresInteraction && audioEnabled && (
