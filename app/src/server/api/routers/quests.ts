@@ -31,8 +31,12 @@ import { userJutsu, userItem, userData, userBadge } from "@/drizzle/schema";
 import { quest, questHistory, actionLog, village, userRewards } from "@/drizzle/schema";
 import { QuestValidator } from "@/validators/objectives";
 import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
-import { canPlayHiddenQuests } from "@/utils/permissions";
+import {
+  canChangeContent,
+  canEditQuests,
+  canEditStarterQuests,
+  canPlayHiddenQuests,
+} from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/discord";
 import { LetterRanks } from "@/drizzle/constants";
 import { calculateContentDiff } from "@/utils/diff";
@@ -78,8 +82,6 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import type { GetRewardResult } from "@/libs/quest";
 import type { QueryCondition } from "@/utils/typeutils";
-import { canEditQuests } from "@/utils/permissions";
-
 export const questsRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
     const results = await ctx.drizzle.query.quest.findMany({
@@ -745,6 +747,11 @@ export const questsRouter = createTRPCRouter({
       // Guards
       if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (entry && canChangeContent(user.role)) {
+        const editingStarterQuest =
+          entry.questType === "starter" || input.data.questType === "starter";
+        if (editingStarterQuest && !canEditStarterQuests(user.role)) {
+          return { success: false, message: `Not allowed to edit starter quests` };
+        }
         // Validate objective flow before updating
         if (entry.consecutiveObjectives) {
           const { check, message } = verifyQuestObjectiveFlow(

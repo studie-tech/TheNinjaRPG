@@ -272,7 +272,6 @@ export const enforceExtraRules = (rules: AiRuleType[], enforced: AiRuleType[]) =
     Object.keys(diff.deleted).length === 0 &&
     Object.keys(diff.updated).length === 0;
   if (!hasEnforcedRules) {
-    console.log("Adding backup rules");
     rules.push(...enforced);
   }
 };

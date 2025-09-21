@@ -12,11 +12,11 @@ import ChatBox from "@/layout/ChatBox";
 import { Button } from "@/components/ui/button";
 import { useUserData } from "@/utils/UserContext";
 
-interface SendTicketBtnProps {
+interface LowerRightHelpProps {
   children?: React.ReactNode;
 }
 
-const SendTicketBtn: React.FC<SendTicketBtnProps> = (props) => {
+const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
   const { updateUser } = useUserData();
   const [showActive, setShowActive] = useLocalStorage<TicketType>(
     "ticketType2",
@@ -203,4 +203,4 @@ const SendTicketBtn: React.FC<SendTicketBtnProps> = (props) => {
   );
 };
 
-export default SendTicketBtn;
+export default LowerRightHelpBtn;

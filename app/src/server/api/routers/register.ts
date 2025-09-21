@@ -10,12 +10,14 @@ import { visitorLog } from "@/drizzle/schema";
 import { secondsFromNow } from "@/utils/time";
 import { checkForBadWords } from "@/utils/profanity";
 import { abEvent } from "@/drizzle/schema";
+import { STARTER_QUEST_ID } from "@/drizzle/constants";
 import {
   bloodline,
   bloodlineRolls,
   emailReminder,
   userAttribute,
   userData,
+  questHistory,
   village,
 } from "@/drizzle/schema";
 
@@ -132,6 +134,17 @@ export const registerRouter = createTRPCRouter({
         .delete(userAttribute)
         .where(eq(userAttribute.userId, ctx.userId));
       await Promise.all([
+        ctx.drizzle.insert(questHistory).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          questId: STARTER_QUEST_ID,
+          questType: "starter",
+          startedAt: new Date(),
+          endAt: null,
+          completed: 0,
+          previousCompletes: 0,
+          previousAttempts: 1,
+        }),
         ctx.drizzle.insert(userAttribute).values(
           unique_attributes.map((attribute) => ({
             id: nanoid(),

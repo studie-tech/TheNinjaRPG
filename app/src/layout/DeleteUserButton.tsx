@@ -2,9 +2,8 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import Confirm2 from "@/layout/Confirm2";
 import Countdown from "@/layout/Countdown";
-import Loader from "@/layout/Loader";
 import { api } from "@/app/_trpc/client";
-import { Trash2 } from "lucide-react";
+import { Trash2, Loader2 } from "lucide-react";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { Button } from "@/components/ui/button";
@@ -67,7 +66,7 @@ const DeleteUserButton: React.FC<DeleteUserButtonProps> = (props) => {
     new Date(userData.deletionAt) < new Date();
 
   if (isTogglingDelete || isDeleting) {
-    return <Loader />;
+    return <Loader2 className="h-6 w-6 animate-spin" />;
   }
 
   return (

@@ -10,7 +10,7 @@ import MenuBoxCombat from "@/layout/MenuBoxCombat";
 import Footer from "@/layout/Footer";
 import Loader from "@/layout/Loader";
 import AvatarImage from "@/layout/Avatar";
-import SendTicketBtn from "@/layout/SendTicketButton";
+import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import {
   CircleUserRound,
@@ -43,7 +43,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Switch } from "@/components/ui/switch";
 import { getCurrentSeason } from "@/utils/time";
 import { showMutationToast } from "@/libs/toast";
-import Tutorial from "@/layout/Tutorial";
+import TutorialAssistant from "@/layout/TutorialAssistant";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   IMG_WALLPAPER_WINTER,
@@ -242,19 +242,6 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   const shownNotifications = notifications?.filter(
     (n) => n.color !== "toast" && n.color !== "hidden",
   );
-
-  // Add a notification that the user should go to the academy if they are in their village
-  if (
-    shownNotifications &&
-    userData?.village?.sector === userData?.sector &&
-    userData?.rank === "STUDENT"
-  ) {
-    shownNotifications.push({
-      href: "/academy",
-      name: "Go to Academy!",
-      color: "blue",
-    });
-  }
 
   // Split menu into two parts
   const navbarMenuItemsLeft = navbarMenuItems.slice(0, 3);
@@ -590,7 +577,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   return (
     <>
       {userData && (
-        <Tutorial
+        <TutorialAssistant
           rightSideBarOpen={rightSideBarOpen}
           setRightSideBarOpen={setRightSideBarOpen}
           rightSideBarRef={rightSideBarRef}
@@ -598,9 +585,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
       )}
       <div className="w-full absolute top-0 bottom-0 md:relative">
         <div className="fixed right-1 bottom-1 md:right-5 md:bottom-5 z-50 bg-slate-500 rounded-full">
-          <SendTicketBtn>
+          <LowerRightHelpBtn>
             <MessageCircleWarning className="h-16 w-16 bg-yellow-500 hover:bg-yellow-300 transition-colors text-orange-100 rounded-full p-2 shadow-md shadow-red-800 md:shadow-black border-2 hidden md:block" />
-          </SendTicketBtn>
+          </LowerRightHelpBtn>
         </div>
         {/* WALLPAPER BACKGROUND */}
         <Image
@@ -865,9 +852,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                       <Cog className="h-16 w-16  hover:bg-slate-500 transition-colors text-orange-100 bg-opacity-50 rounded-full p-2  " />
                     </Link>
                     <div className="flex justify-center -top-2 relative">
-                      <SendTicketBtn>
+                      <LowerRightHelpBtn>
                         <CircleHelp className="h-16 w-16  hover:bg-slate-500 transition-colors text-orange-100 bg-opacity-50 rounded-full p-2  " />
-                      </SendTicketBtn>
+                      </LowerRightHelpBtn>
                     </div>
                   </div>
                 ) : (
