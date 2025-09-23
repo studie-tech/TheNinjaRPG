@@ -310,8 +310,9 @@ export const isAllowedIframeUrl = (src: string): boolean => {
     if (host === "youtube.com" || host === "youtube-nocookie.com") return true;
     if (host === "youtu.be") return true;
     if (host === "player.vimeo.com" || host === "vimeo.com") return true;
-    if (host.endsWith("soundcloud.com")) return true;
-    if (host.endsWith("spotify.com")) return true;
+    // Only allow exactly 'soundcloud.com' or its direct subdomains
+    if (host === "soundcloud.com" || host.endsWith(".soundcloud.com")) return true;
+    if (host === "spotify.com" || host.endsWith(".spotify.com")) return true;
     return false;
   } catch {
     return false;
