@@ -50,97 +50,6 @@ const TUTORIAL_STEPS: TutorialStepConfig[] = [
     requiresGameMenu: false,
   },
   {
-    title: "Logbook",
-    description:
-      "The Logbook shows your current events, missions, quests and rank up exams that is currently in progress. It is alwso here you can see previous completed activities, battles and achievements.",
-    elementId: "tutorial-logbook",
-    page: "/profile",
-    requiresGameMenu: false,
-  },
-  {
-    title: "Tavern",
-    description:
-      "Talk with your fellow Shinobi in your own village or use the global chat",
-    elementId: "tutorial-tavern",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
-    title: "Users",
-    description:
-      "Search for users, view the strongest players or view the current staff and reach out to them.",
-    elementId: "tutorial-users",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
-    title: "Inbox",
-    description: "Check your messages from other players and system notifications.",
-    elementId: "tutorial-inbox",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
-    title: "Jutsus",
-    description:
-      "View all the jutsu that you have trained and equip them to use in battle.",
-    elementId: "tutorial-jutsus",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
-    title: "Reports",
-    description:
-      "View your report history this is where bans, warnings and silences are.",
-    elementId: "tutorial-reports",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
-    title: "Travel",
-    description:
-      "Access the TNR Globe here, you can travel to Wake Island and go to the science building to check if you have a Bloodline.",
-    elementId: "tutorial-travel",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
-    title: "Points",
-    description:
-      "You can support the game by purchasing reputation points or buying federal support here.",
-    elementId: "tutorial-points",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
-    title: "Items",
-    description: "View all the items that you have purchased here",
-    elementId: "tutorial-items",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
-    title: "Jobs",
-    description: "Gather and hunt for materials, or craft items here",
-    elementId: "tutorial-jobs",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
-    title: "Help",
-    description: "Support system where you can report bugs, request features and more",
-    elementId: "tutorial-support",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
-    title: "Rules",
-    description: "View all the rules of the game here",
-    elementId: "tutorial-rules",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-  {
     title: "Village",
     description:
       "The location Menu is the heart of your village, this is where you can access all your village has to offer from Trainings to the black-market, to taking Missions to buying Ramen. You can also view your village Notice board here as well.",
@@ -572,7 +481,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               <img
                 src={IMG_URL_ASSISTANT}
                 alt="Assistant"
-                className="absolute -top-14 -right-4 md:-top-20 md:-right-6 h-28 md:h-48 w-auto object-contain drop-shadow-2xl select-none pointer-events-none z-0"
+                className="absolute -top-14 -right-12 md:-top-20 md:-right-12 h-28 md:h-48 w-auto object-contain drop-shadow-2xl select-none pointer-events-none z-0"
               />
               {/* Foreground content */}
               <div className="relative z-10">
@@ -705,7 +614,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
             width={100}
             height={100}
             alt="Assistant"
-            className="absolute -top-38 -right-4 md:-top-48 md:-right-12 h-38 md:h-48 w-auto object-contain drop-shadow-2xl select-none pointer-events-none z-0"
+            className="absolute -top-38 right-0 md:-top-48 h-38 md:h-48 w-auto object-contain drop-shadow-2xl select-none pointer-events-none z-0"
           />
           {/* Foreground content */}
           <div className="relative z-10">
