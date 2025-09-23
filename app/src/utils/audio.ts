@@ -424,7 +424,11 @@ export const unmuteUserIframe = (iframe: HTMLIFrameElement): void => {
       iframe.src = url.toString();
       return;
     }
-    if (host.endsWith("soundcloud.com")) {
+    const soundcloudHosts = [
+      "soundcloud.com",
+      "www.soundcloud.com",
+    ];
+    if (soundcloudHosts.includes(host)) {
       // No-op; SoundCloud mute toggle not supported via URL; keep autoplay controls only
       return;
     }
