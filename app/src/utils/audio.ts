@@ -375,7 +375,8 @@ export const muteUserIframe = (iframe: HTMLIFrameElement): void => {
       iframe.src = url.toString();
       return;
     }
-    if (host.endsWith("soundcloud.com")) {
+    const allowedSoundCloudHosts = ["soundcloud.com", "www.soundcloud.com"];
+    if (allowedSoundCloudHosts.includes(url.hostname)) {
       url.searchParams.set("auto_play", "false");
       iframe.src = url.toString();
       return;
