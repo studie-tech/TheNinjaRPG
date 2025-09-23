@@ -422,7 +422,14 @@ export const unmuteUserIframe = (iframe: HTMLIFrameElement): void => {
       // No-op; SoundCloud mute toggle not supported via URL; keep autoplay controls only
       return;
     }
-    if (host.endsWith("spotify.com")) {
+    const spotifyHosts = [
+      "spotify.com",
+      "open.spotify.com",
+      "play.spotify.com",
+      "embed.spotify.com",
+      "community.spotify.com",
+    ];
+    if (spotifyHosts.includes(host)) {
       restoreAutoplayPermission(iframe);
       return;
     }
