@@ -84,6 +84,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "src/libs/shadui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAudio } from "@/hooks/useAudio";
+import { useIframeMute } from "@/hooks/useIframeMute";
+import { UncontrolledSliderField } from "@/layout/SliderField";
 export interface LayoutProps {
   children: React.ReactNode;
 }
@@ -203,6 +205,21 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   const [sfxOn, setSfxOn] = useState<boolean>(() =>
     isClient ? getInitialSfxState() : true,
   );
+
+  // SFX volume state
+  const getInitialSfxVolumeState = (): number => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("sfxVolume");
+      if (saved !== null) return JSON.parse(saved) as number;
+    }
+    return 0.8; // Default volume
+  };
+  const [sfxVolume, setSfxVolume] = useState<number>(() =>
+    isClient ? getInitialSfxVolumeState() : 0.8,
+  );
+
+  // Embedded iframe mute state
+  const { isIframesMuted, setIframesMuted } = useIframeMute();
 
   // Sync with user data changes
   useEffect(() => {
@@ -430,9 +447,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
         </PopoverTrigger>
         <PopoverContent className="w-72" sideOffset={8}>
           <div className="space-y-3">
+            <p className="font-medium">Music</p>
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Music</p>
                 <p className="text-xs text-muted-foreground">Background soundtrack</p>
               </div>
               <Switch
@@ -455,8 +472,20 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
               />
             </div>
             <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <p className="text-xs text-muted-foreground">Nindo Audio</p>
+              </div>
+              <Switch
+                checked={!isIframesMuted}
+                onCheckedChange={(checked) => {
+                  setIframesMuted(!checked);
+                }}
+                aria-label="Toggle embedded iframe audio"
+              />
+            </div>
+            <p className="font-medium">Sound effects</p>
+            <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Sound effects</p>
                 <p className="text-xs text-muted-foreground">Combat SFX</p>
               </div>
               <Switch
@@ -478,6 +507,36 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                 aria-label="Toggle sound effects"
               />
             </div>
+            {sfxOn && (
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    SFX Volume ({Math.round(sfxVolume * 100)}%)
+                  </p>
+                </div>
+                <UncontrolledSliderField
+                  id="sfxVolume"
+                  label={``}
+                  value={Math.round(sfxVolume * 100)}
+                  min={0}
+                  max={100}
+                  setValue={(nextValue: React.SetStateAction<number>) => {
+                    let percent: number;
+                    if (typeof nextValue === "function") {
+                      percent = nextValue(Math.round(sfxVolume * 100));
+                    } else {
+                      percent = nextValue;
+                    }
+                    const safePercent = Math.min(100, Math.max(0, percent));
+                    const newVolume = safePercent / 100;
+                    setSfxVolume(newVolume);
+                    if (typeof window !== "undefined") {
+                      localStorage.setItem("sfxVolume", JSON.stringify(newVolume));
+                    }
+                  }}
+                />
+              </div>
+            )}
             {requiresInteraction && audioEnabled && (
               <p className="text-[10px] text-muted-foreground">
                 Audio requires interaction on this browser; click anywhere to start

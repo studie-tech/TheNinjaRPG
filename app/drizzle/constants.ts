@@ -77,20 +77,21 @@ export type LetterRank = (typeof LetterRanks)[number];
 
 // List of tags that share cooldowns
 export const SHARED_COOLDOWN_TAGS = [
+  "barrier",
+  "buffprevent",
+  "cleanse",
+  "cleanseprevent",
+  "clear",
+  "clearprevent",
+  "debuffprevent",
+  "drain",
+  "increasepoolcost",
+  "moveprevent",
+  "pierce",
+  "poison",
+  "seal",
   "stun",
   "summon",
-  "drain",
-  "poison",
-  "moveprevent",
-  "clear",
-  "cleanse",
-  "pierce",
-  "debuffprevent",
-  "buffprevent",
-  "cleanseprevent",
-  "clearprevent",
-  "seal",
-  "increasepoolcost",
 ] as const;
 
 export const LOG_TYPES = [
@@ -281,6 +282,7 @@ export const BanStates = [
   "BAN_ESCALATED",
   "SILENCE_ESCALATED",
   "OFFICIAL_WARNING",
+  "TRADE_BAN_ACTIVATED",
 ] as const;
 export type BanState = (typeof BanStates)[number];
 

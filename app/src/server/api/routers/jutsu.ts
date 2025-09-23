@@ -307,6 +307,7 @@ export const jutsuRouter = createTRPCRouter({
 
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
+    if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
     if (canChangeContent(user.role)) {
       const id = nanoid();
       await ctx.drizzle.insert(jutsu).values({
@@ -346,6 +347,7 @@ export const jutsuRouter = createTRPCRouter({
         relations.itemInjectors.length +
         relations.aiUsingJutsu.length;
       // Guard
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Jutsu not found");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (totalRelations > 0) {
@@ -405,6 +407,7 @@ export const jutsuRouter = createTRPCRouter({
         getJutsuRelations(ctx.drizzle, input.id),
       ]);
       // Guard
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Jutsu not found");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (!input.data.injectableInBattle) {
@@ -877,6 +880,7 @@ export const jutsuRouter = createTRPCRouter({
       const maxReskins = user.extraReskinSlots + RESKIN_LIMIT;
       const existingReskin = userReskins.find((r) => r.jutsuId === input.jutsuId);
       // Guards
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!jutsuData) {
         return errorResponse("Original jutsu not found");
       }
@@ -976,6 +980,7 @@ export const jutsuRouter = createTRPCRouter({
         fetchUserReskin(ctx.drizzle, ctx.userId, input.reskinId),
       ]);
       // Guards
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!reskin) return errorResponse("Reskin not found");
       if (!canModerateReskin(user.role)) {
         return errorResponse("Unauthorized");

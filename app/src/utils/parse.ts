@@ -5,6 +5,7 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import React from "react";
 import { Quote } from "@/components/ui/quote";
 import { nanoid } from "nanoid";
+import { isAllowedIframeUrl } from "@/utils/audio";
 
 interface HtmlNode {
   type: string;
@@ -97,6 +98,60 @@ export const parseHtml = (html: string) => {
         },
         content,
       );
+    } else if (node.type === "tag" && node.name === "iframe" && node.attribs) {
+      const {
+        src,
+        width,
+        height,
+        title,
+        className,
+        id,
+        style,
+        allow,
+        allowfullscreen,
+        frameborder,
+      } = node.attribs;
+
+      // Only allow iframes from approved providers; otherwise return empty element
+      if (!src || !isAllowedIframeUrl(src)) {
+        return React.createElement("div", {});
+      }
+
+      let parsedStyle: React.CSSProperties | undefined;
+      if (style) {
+        try {
+          const parsed = JSON.parse(style) as unknown;
+          if (isValidStyle(parsed)) {
+            parsedStyle = parsed;
+          }
+        } catch {
+          // Invalid JSON style string, ignore it
+        }
+      }
+
+      // Identify user-embedded iframes (used for global mute capabilities)
+      const isUserEmbed = !!src;
+
+      const props: React.IframeHTMLAttributes<HTMLIFrameElement> = {
+        src,
+        width,
+        height,
+        title,
+        className,
+        id,
+        style: parsedStyle,
+        allow,
+        allowFullScreen: allowfullscreen === "true" || allowfullscreen === "1",
+        frameBorder: frameborder,
+        // Mark as user iframe to enable mute management
+        ...(isUserEmbed && { "data-user-iframe": "true" }),
+      };
+
+      const cleanProps = Object.fromEntries(
+        Object.entries(props).filter(([_, value]) => value !== undefined),
+      ) as React.IframeHTMLAttributes<HTMLIFrameElement>;
+
+      return React.createElement("iframe", cleanProps);
     }
     return undefined;
   };

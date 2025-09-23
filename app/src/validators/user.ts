@@ -144,6 +144,7 @@ export const updateUserPreferencesSchema = z
     // Audio preferences
     musicOn: z.boolean().optional(),
     sfxOn: z.boolean().optional(),
+    iframesMuted: z.boolean().optional(),
   })
   .refine(
     (data) => {

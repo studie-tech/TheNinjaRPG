@@ -517,6 +517,14 @@ export const profileRouter = createTRPCRouter({
           color: "red",
         });
       }
+      // Check if user is trade banned
+      if (user.isTradeBanned) {
+        notifications.push({
+          href: "/reports",
+          name: "Trade Banned!",
+          color: "red",
+        });
+      }
       // Unused experience points
       if (user.earnedExperience > 0) {
         notifications.push({
@@ -622,6 +630,7 @@ export const profileRouter = createTRPCRouter({
   // Create new AI
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
+    if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
     if (canChangeContent(user.role)) {
       const id = nanoid();
       await ctx.drizzle.insert(userData).values({
@@ -708,6 +717,7 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       const ai = await fetchUser(ctx.drizzle, input.id);
       if (ai && ai.isAi && canChangeContent(user.role)) {
         await deleteUser(ctx.drizzle, ai.userId);
@@ -733,6 +743,7 @@ export const profileRouter = createTRPCRouter({
       // Basic existence guards
       if (!village) return errorResponse("Village not found");
       if (!target) return errorResponse("User not found");
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
 
       // Prepare jutsu & item id arrays for permission checks and later DB update
       const oldJutsuIds = target.jutsus.map((j) => j.jutsuId);
@@ -909,6 +920,7 @@ export const profileRouter = createTRPCRouter({
       });
 
       // Guards
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!ai) return errorResponse("AI not found");
       if (!ai.isAi) return errorResponse("Not an AI");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
@@ -1545,6 +1557,7 @@ export const profileRouter = createTRPCRouter({
         return errorResponse("User not found");
       }
 
+      if (awarder.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!canAwardExperience(awarder)) {
         return errorResponse("You don't have permission to award experience");
       }
@@ -1590,6 +1603,7 @@ export const profileRouter = createTRPCRouter({
       const awarder = await fetchUser(ctx.drizzle, ctx.userId);
 
       // Guards
+      if (awarder.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!canAwardExperience(awarder)) {
         return errorResponse("You don't have permission to award experience");
       }

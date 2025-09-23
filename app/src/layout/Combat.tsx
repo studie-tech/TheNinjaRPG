@@ -517,6 +517,15 @@ const Combat: React.FC<CombatProps> = (props) => {
       // Callback on sprite animations
       // spriteMixer.addEventListener("finished", function (event) {});
 
+      // Get SFX volume from localStorage
+      const sfxVolume =
+        typeof window !== "undefined"
+          ? (() => {
+              const saved = localStorage.getItem("sfxVolume");
+              return saved !== null ? (JSON.parse(saved) as number) : 0.8;
+            })()
+          : 0.8;
+
       // Render the image
       let animationId = 0;
       const clock = new Clock();
@@ -543,6 +552,7 @@ const Combat: React.FC<CombatProps> = (props) => {
             playerId: suid,
             userData: userData,
             sfxEnabled: Boolean(userData?.sfxOn ?? true),
+            sfxVolume: sfxVolume,
             gameAssets: gameAssets ?? [],
           });
 
@@ -555,6 +565,7 @@ const Combat: React.FC<CombatProps> = (props) => {
             spriteMixer,
             gameAssets: gameAssets ?? [],
             sfxEnabled: Boolean(userData?.sfxOn ?? true),
+            sfxVolume: sfxVolume,
           });
 
           // Highlight information on user hover

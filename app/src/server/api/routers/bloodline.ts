@@ -93,6 +93,7 @@ export const bloodlineRouter = createTRPCRouter({
   // Create new bloodline
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
+    if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
     if (canChangeContent(user.role)) {
       const id = nanoid();
       await ctx.drizzle.insert(bloodline).values({
@@ -185,6 +186,7 @@ export const bloodlineRouter = createTRPCRouter({
         fetchBloodline(ctx.drizzle, input.bloodlineId),
       ]);
       // Guard
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!base) return errorResponse("Base bloodline not found");
       if (!canChangeContent(user.role)) return errorResponse("Unauthorized");
       // Mutate
@@ -225,6 +227,7 @@ export const bloodlineRouter = createTRPCRouter({
         fetchBloodlineReskin(ctx.drizzle, input.reskinId),
       ]);
       // Guard
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!reskin) return errorResponse("Reskin not found");
       if (!canChangeContent(user.role)) return errorResponse("Unauthorized");
       // Prepare old/new objects for diff (exclude reason from new)
@@ -284,6 +287,7 @@ export const bloodlineRouter = createTRPCRouter({
         fetchBloodlineReskin(ctx.drizzle, input.reskinId),
       ]);
       // Guard
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role)) return errorResponse("Unauthorized");
       if (!reskin) return errorResponse("Reskin not found");
       // Mutate
@@ -370,6 +374,7 @@ export const bloodlineRouter = createTRPCRouter({
       // Derived
       const usernames = usersWithBloodline.map((u) => u.username).join(", ");
       // Guard
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Bloodline does not exist");
       if (!user) return errorResponse("User does not exist");
       if (!canChangeContent(user.role)) {
@@ -403,6 +408,7 @@ export const bloodlineRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       const entry = await fetchBloodline(ctx.drizzle, input.id);
       if (entry && canChangeContent(user.role)) {
         // Prepare data: convert empty strings to null for optional fields

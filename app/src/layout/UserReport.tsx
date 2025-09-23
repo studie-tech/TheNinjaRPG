@@ -5,7 +5,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { parseHtml } from "@/utils/parse";
 import { MessagesSquare, Rocket, ShieldAlert } from "lucide-react";
-import { EarOff, Ban, Eraser } from "lucide-react";
+import { EarOff, Ban, Eraser, Repeat } from "lucide-react";
 import ContentBox from "@/layout/ContentBox";
 import Confirm2 from "@/layout/Confirm2";
 import Countdown from "@/layout/Countdown";
@@ -123,6 +123,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
   };
 
   const banUser = api.reports.ban.useMutation({ onSuccess });
+  const tradebanUser = api.reports.tradeBan.useMutation({ onSuccess });
   const clearReport = api.reports.clear.useMutation({ onSuccess });
   const createComment = api.comments.createReportComment.useMutation({ onSuccess });
   const escalateReport = api.reports.escalate.useMutation({ onSuccess });
@@ -131,6 +132,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
 
   const isPending =
     banUser.isPending ||
+    tradebanUser.isPending ||
     clearReport.isPending ||
     createComment.isPending ||
     escalateReport.isPending ||
@@ -160,6 +162,11 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
 
   const handleSubmitBan = handleSubmit(
     (data) => banUser.mutate(data),
+    (errors) => console.error(errors),
+  );
+
+  const handleSubmitTradeBan = handleSubmit(
+    (data) => tradebanUser.mutate(data),
     (errors) => console.error(errors),
   );
 
@@ -366,6 +373,24 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                     You are about to ban the user. Please note that the comment and
                     decision can not be edited or deleted. You can unban the person by
                     posting another comment and &rdquo;Clear&rdquo; the report.
+                  </Confirm2>
+                )}
+                {canModerate && canBan && (
+                  <Confirm2
+                    title="Confirm Trade Ban"
+                    button={
+                      <Button id="submit_tradeban" variant="destructive">
+                        <Repeat className="mr-2 h-5 w-5" />
+                        Trade Ban
+                      </Button>
+                    }
+                    onAccept={async () => {
+                      await handleSubmitTradeBan();
+                    }}
+                  >
+                    You are about to trade-ban the user. Please note that the comment
+                    and decision can not be edited or deleted. You can remove the trade
+                    ban by posting another comment and &rdquo;Clear&rdquo; the report.
                   </Confirm2>
                 )}
                 {canModerate && canWarn && (

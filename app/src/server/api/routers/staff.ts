@@ -301,6 +301,7 @@ export const staffRouter = createTRPCRouter({
       ]);
       // Guard
       if (!user) return errorResponse("User not found");
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!canUnstuckVillage(user.role)) return errorResponse("Not allowed for you");
       // Mutate
       await Promise.all([

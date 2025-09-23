@@ -172,22 +172,31 @@ export const auctionRouter = createTRPCRouter({
       } = input;
 
       // Check if user item exists and get the item data
-      const userItemData = await ctx.drizzle.query.userItem.findFirst({
-        where: and(
-          eq(userItem.id, userItemId),
-          eq(userItem.userId, ctx.userId),
-          eq(userItem.equipped, "NONE"),
-          eq(userItem.isInAuction, false),
-          isNull(userItem.craftingFinishedAt),
-        ),
-        with: {
-          item: true,
-          imbuements: true,
-        },
-      });
+      const [userItemData, user] = await Promise.all([
+        ctx.drizzle.query.userItem.findFirst({
+          where: and(
+            eq(userItem.id, userItemId),
+            eq(userItem.userId, ctx.userId),
+            eq(userItem.equipped, "NONE"),
+            eq(userItem.isInAuction, false),
+            isNull(userItem.craftingFinishedAt),
+          ),
+          with: {
+            item: true,
+            imbuements: true,
+          },
+        }),
+        fetchUser(ctx.drizzle, ctx.userId),
+      ]);
       // Guard
       if (!userItemData) {
         return errorResponse("User item not found or not available");
+      }
+      if (user.isBanned) {
+        return errorResponse("You are banned");
+      }
+      if (user.isTradeBanned) {
+        return errorResponse("You are banned from trading");
       }
       if (userItemData.equipped !== "NONE") {
         return errorResponse("Item is currently equipped");
@@ -291,6 +300,12 @@ export const auctionRouter = createTRPCRouter({
       }
       if (auction.targetUserId && auction.targetUserId !== ctx.userId) {
         return errorResponse("This auction is restricted to a specific user");
+      }
+      if (user.isBanned) {
+        return errorResponse("You are banned");
+      }
+      if (user.isTradeBanned) {
+        return errorResponse("You are banned from trading");
       }
       if (amount <= auction.currentPrice) {
         return errorResponse("Bid must be higher than current price");

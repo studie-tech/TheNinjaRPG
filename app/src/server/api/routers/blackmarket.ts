@@ -132,6 +132,7 @@ export const blackMarketRouter = createTRPCRouter({
         return errorResponse(`You can only have ${RYO_FOR_REP_MAX_LISTINGS} offers`);
       }
       if (user.isBanned) return errorResponse("You are banned");
+      if (user.isTradeBanned) return errorResponse("You are banned from trading");
       if (input.reps <= 0) return errorResponse("Reps must be greater than 0");
       if (input.ryo <= 0) return errorResponse("Ryo must be greater than 0");
       if (input.ryo < input.reps) return errorResponse("Ryo must be greater than reps");
@@ -208,6 +209,8 @@ export const blackMarketRouter = createTRPCRouter({
       if (offer.allowedPurchaserId && offer.allowedPurchaserId !== ctx.userId) {
         return errorResponse("You are not allowed to purchase this offer");
       }
+      if (user.isBanned) return errorResponse("You are banned");
+      if (user.isTradeBanned) return errorResponse("You are banned from trading");
       if (user.money < offer.requestedRyo) {
         return errorResponse("Insufficient funds");
       }

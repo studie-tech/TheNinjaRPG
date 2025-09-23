@@ -498,6 +498,8 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform moderation actions");
       const hasModRights = canModerateReports(user, report);
       if (!hasModRights) return errorResponse("You cannot resolve this report");
       if (!canBanUsers(user)) return errorResponse("You cannot ban users");
@@ -544,6 +546,8 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform moderation actions");
       const hasModRights = canModerateReports(user, report);
       if (!hasModRights) return errorResponse("You cannot resolve this report");
       if (!canSilenceUsers(user)) return errorResponse("You cannot silence users");
@@ -590,6 +594,8 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform moderation actions");
       const hasModRights = canModerateReports(user, report);
       if (!report.reportedUserId) return errorResponse("No user to warn");
       if (!hasModRights) return errorResponse("No permission to warn");
@@ -638,6 +644,8 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform moderation actions");
       if (canEscalateBan(user, report)) return errorResponse("You cannot escalate");
       // Update
       await Promise.all([
@@ -665,6 +673,8 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform moderation actions");
       if (!canClearReport(user, report)) return errorResponse("No permission");
       // If someone was reported
       if (report.reportedUserId) {
@@ -730,6 +740,8 @@ export const reportsRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, input.userId),
       ]);
       // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform moderation actions");
       if (!canClearUserNindo(user)) return errorResponse("You cannot clear nindos");
       // Mutate
       const { avatarUrl, thumbnailUrl } = await createUserAvatar(
@@ -770,6 +782,8 @@ export const reportsRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, input.userId),
       ]);
       // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform moderation actions");
       if (!canClearUserNindo(user)) return errorResponse("You cannot clear nindos");
       // Mutate
       await Promise.all([
@@ -903,6 +917,54 @@ export const reportsRouter = createTRPCRouter({
         );
       }
       return results;
+    }),
+  // Trade ban a user - moderators can ban users from blackmarket and auction house
+  tradeBan: protectedProcedure
+    .input(reportCommentSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, report] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
+      ]);
+      // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform moderation actions");
+      const hasModRights = canModerateReports(user, report);
+      if (!hasModRights) return errorResponse("You cannot resolve this report");
+      if (!canBanUsers(user)) return errorResponse("You cannot ban users");
+      if (!input.banTime || input.banTime <= 0) {
+        return errorResponse("Ban time must be specified.");
+      }
+      // Create a system report for the trade ban
+      await Promise.all([
+        ...(report.reportedUserId
+          ? [
+              ctx.drizzle
+                .update(userData)
+                .set({ isTradeBanned: true })
+                .where(eq(userData.userId, report.reportedUserId)),
+            ]
+          : []),
+        ctx.drizzle
+          .update(userReport)
+          .set({
+            status: "TRADE_BAN_ACTIVATED",
+            adminResolved: user.role.includes("ADMIN"),
+            updatedAt: new Date(),
+            banEnd: getBanEndDate(input),
+          })
+          .where(eq(userReport.id, input.object_id)),
+        ctx.drizzle.insert(userReportComment).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          reportId: input.object_id,
+          content: sanitize(input.comment),
+          decision: "TRADE_BAN_ACTIVATED",
+        }),
+      ]);
+      return { success: true, message: "User trade banned" };
     }),
 });
 

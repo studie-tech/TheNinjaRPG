@@ -215,6 +215,7 @@ export const drawCombatEffects = (info: {
   spriteMixer: SpriteMixer;
   gameAssets: GameAsset[];
   sfxEnabled?: boolean;
+  sfxVolume?: number;
 }) => {
   // Destructure
   const { battle, groupEffects, spriteMixer, animationId, gameAssets } = info;
@@ -238,6 +239,7 @@ export const drawCombatEffects = (info: {
       drawnIds,
       gameAssets,
       sfxEnabled: info.sfxEnabled,
+      sfxVolume: info.sfxVolume,
     });
   });
   // Draw all user effects
@@ -257,6 +259,7 @@ export const drawCombatEffects = (info: {
         drawnIds,
         gameAssets,
         sfxEnabled: info.sfxEnabled,
+        sfxVolume: info.sfxVolume,
       });
     }
   });
@@ -278,6 +281,7 @@ export const drawCombatEffect = (info: {
   drawnIds: Set<string>;
   gameAssets: GameAsset[];
   sfxEnabled?: boolean;
+  sfxVolume?: number;
 }) => {
   // Destructure
   const { effect, groupEffects, animationId, hex, drawnIds } = info;
@@ -325,7 +329,7 @@ export const drawCombatEffect = (info: {
             const sfx = gameAssets.find((a) => a.id === effect.appearSfx);
             const url = sfx?.url;
             if (url) {
-              void playPreloadedAudio(url, 0.8);
+              void playPreloadedAudio(url, info.sfxVolume);
             }
           } catch {}
         }
@@ -363,7 +367,7 @@ export const drawCombatEffect = (info: {
               const sfx = gameAssets.find((a) => a.id === effect.disappearSfx);
               const url = sfx?.url;
               if (url) {
-                void playPreloadedAudio(url, 0.8);
+                void playPreloadedAudio(url, info.sfxVolume);
               }
             } catch {}
           }
@@ -779,6 +783,7 @@ export const drawCombatUsers = (info: {
   playerId: string | undefined;
   userData: UserData;
   sfxEnabled?: boolean;
+  sfxVolume?: number;
   gameAssets?: GameAsset[];
 }) => {
   // Destruct
@@ -819,7 +824,7 @@ export const drawCombatUsers = (info: {
               const assets = info.gameAssets ?? [];
               const sfx = assets.find((a) => a.id === ID_SFX_MOVE);
               const url = sfx?.url;
-              if (url) void playPreloadedAudio(url, 0.6);
+              if (url) void playPreloadedAudio(url, (info.sfxVolume ?? 0.8) * 0.75);
             } catch {}
           }
         };

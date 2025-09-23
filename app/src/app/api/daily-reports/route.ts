@@ -17,10 +17,10 @@ export async function GET() {
   // if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
   try {
-    // Get all active bans and silences that have expired
+    // Get all active bans, silences, and trade bans that have expired
     const expiredReports = await drizzleDB.query.userReport.findMany({
       where: and(
-        inArray(userReport.status, ["BAN_ACTIVATED", "SILENCE_ACTIVATED"]),
+        inArray(userReport.status, ["BAN_ACTIVATED", "SILENCE_ACTIVATED", "TRADE_BAN_ACTIVATED"]),
         lt(userReport.banEnd, new Date()),
       ),
       with: {
@@ -29,6 +29,7 @@ export async function GET() {
             userId: true,
             isBanned: true,
             isSilenced: true,
+            isTradeBanned: true,
           },
         },
       },
@@ -47,17 +48,19 @@ export async function GET() {
     // Group reports by user ID and type
     const userBanReports = new Map<string, boolean>();
     const userSilenceReports = new Map<string, boolean>();
+    const userTradeBanReports = new Map<string, boolean>();
 
-    // Track users who are currently banned or silenced
+    // Track users who are currently banned, silenced, or trade banned
     const bannedUsers = new Map<string, boolean>();
     const silencedUsers = new Map<string, boolean>();
+    const tradeBannedUsers = new Map<string, boolean>();
 
     for (const report of expiredReports) {
       if (!report.reportedUser?.userId) continue;
 
       const userId = report.reportedUser.userId;
 
-      // Track if user is currently banned or silenced
+      // Track if user is currently banned, silenced, or trade banned
       if (report.reportedUser.isBanned) {
         bannedUsers.set(userId, true);
       }
@@ -66,11 +69,17 @@ export async function GET() {
         silencedUsers.set(userId, true);
       }
 
+      if (report.reportedUser.isTradeBanned) {
+        tradeBannedUsers.set(userId, true);
+      }
+
       // Track which type of report is expiring
       if (report.status === "BAN_ACTIVATED") {
         userBanReports.set(userId, true);
       } else if (report.status === "SILENCE_ACTIVATED") {
         userSilenceReports.set(userId, true);
+      } else if (report.status === "TRADE_BAN_ACTIVATED") {
+        userTradeBanReports.set(userId, true);
       }
     }
 
@@ -80,8 +89,9 @@ export async function GET() {
         inArray(userReport.reportedUserId, [
           ...bannedUsers.keys(),
           ...silencedUsers.keys(),
+          ...tradeBannedUsers.keys(),
         ]),
-        inArray(userReport.status, ["BAN_ACTIVATED", "SILENCE_ACTIVATED"]),
+        inArray(userReport.status, ["BAN_ACTIVATED", "SILENCE_ACTIVATED", "TRADE_BAN_ACTIVATED"]),
         gt(userReport.banEnd, new Date()),
       ),
     });
@@ -91,6 +101,7 @@ export async function GET() {
     // Group active reports by user and type
     const userHasActiveBan = new Map<string, boolean>();
     const userHasActiveSilence = new Map<string, boolean>();
+    const userHasActiveTradeBan = new Map<string, boolean>();
 
     for (const report of activeReports) {
       if (!report.reportedUserId) continue;
@@ -99,12 +110,15 @@ export async function GET() {
         userHasActiveBan.set(report.reportedUserId, true);
       } else if (report.status === "SILENCE_ACTIVATED") {
         userHasActiveSilence.set(report.reportedUserId, true);
+      } else if (report.status === "TRADE_BAN_ACTIVATED") {
+        userHasActiveTradeBan.set(report.reportedUserId, true);
       }
     }
 
-    // Determine which users need to be unbanned or unsilenced
+    // Determine which users need to be unbanned, unsilenced, or untrade banned
     const usersToUnban: string[] = [];
     const usersToUnsilence: string[] = [];
+    const usersToUntradeBan: string[] = [];
 
     // For each banned user, check if they have any active ban reports
     for (const [userId] of bannedUsers) {
@@ -122,8 +136,16 @@ export async function GET() {
       }
     }
 
+    // For each trade banned user, check if they have any active trade ban reports
+    for (const [userId] of tradeBannedUsers) {
+      // Only untrade ban if they had an expired trade ban report and have no active trade ban reports
+      if (userTradeBanReports.has(userId) && !userHasActiveTradeBan.has(userId)) {
+        usersToUntradeBan.push(userId);
+      }
+    }
+
     console.log(
-      `Users to unban: ${usersToUnban.length}, Users to unsilence: ${usersToUnsilence.length}`,
+      `Users to unban: ${usersToUnban.length}, Users to unsilence: ${usersToUnsilence.length}, Users to untrade ban: ${usersToUntradeBan.length}`,
     );
 
     // Execute updates in batch if needed
@@ -147,22 +169,34 @@ export async function GET() {
       );
     }
 
+    if (usersToUntradeBan.length > 0) {
+      updates.push(
+        drizzleDB
+          .update(userData)
+          .set({ isTradeBanned: false })
+          .where(inArray(userData.userId, usersToUntradeBan)),
+      );
+    }
+
     if (updates.length > 0) {
       await Promise.all(updates);
     }
 
     return NextResponse.json({
       success: true,
-      message: `Processed ${expiredReports.length} expired reports. Unbanned ${usersToUnban.length} users and unsilenced ${usersToUnsilence.length} users.`,
+      message: `Processed ${expiredReports.length} expired reports. Unbanned ${usersToUnban.length} users, unsilenced ${usersToUnsilence.length} users, and untrade banned ${usersToUntradeBan.length} users.`,
       details: {
         expiredReportsCount: expiredReports.length,
         activeReportsCount: activeReports.length,
         bannedUsersCount: bannedUsers.size,
         silencedUsersCount: silencedUsers.size,
+        tradeBannedUsersCount: tradeBannedUsers.size,
         usersToUnbanCount: usersToUnban.length,
         usersToUnsilenceCount: usersToUnsilence.length,
+        usersToUntradeBanCount: usersToUntradeBan.length,
         usersToUnban,
         usersToUnsilence,
+        usersToUntradeBan,
       },
     });
   } catch (cause) {

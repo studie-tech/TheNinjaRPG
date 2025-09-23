@@ -280,3 +280,266 @@ export const playPreloadedAudio = async (url: string, volume = 0.8): Promise<voi
     // Ignore play errors (autoplay restrictions etc.)
   }
 };
+
+/**
+ * Check if an iframe element is user-embedded (eligible for global mute)
+ * @param iframe - The iframe element to check
+ * @returns True if the iframe element is user-embedded, false otherwise
+ */
+export const isUserIframe = (iframe: HTMLIFrameElement): boolean => {
+  return !!iframe && iframe.hasAttribute("data-user-iframe");
+};
+
+/**
+ * Get all user iframes on the page
+ * @returns All user iframes on the page
+ */
+export const getAllUserIframes = (): HTMLIFrameElement[] => {
+  if (typeof window === "undefined") return [];
+  const selector = "iframe[data-user-iframe]";
+  return Array.from(document.querySelectorAll<HTMLIFrameElement>(selector));
+};
+
+/**
+ * Determine if an iframe src URL points to an allowed provider
+ */
+export const isAllowedIframeUrl = (src: string): boolean => {
+  try {
+    const url = new URL(src);
+    const host = url.hostname.replace(/^www\./, "");
+    if (host === "youtube.com" || host === "youtube-nocookie.com") return true;
+    if (host === "youtu.be") return true;
+    if (host === "player.vimeo.com" || host === "vimeo.com") return true;
+    if (host.endsWith("soundcloud.com")) return true;
+    if (host.endsWith("spotify.com")) return true;
+    return false;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Remove autoplay permission from an iframe
+ * @param iframe - The iframe element to remove autoplay permission from
+ * @returns void
+ */
+const removeAutoplayPermission = (iframe: HTMLIFrameElement) => {
+  const allow = iframe.getAttribute("allow") || "";
+  if (!allow) return;
+  if (!/\bautoplay\b/i.test(allow)) return;
+  iframe.setAttribute("data-original-allow", allow);
+  const newAllow = allow
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s && s.toLowerCase() !== "autoplay")
+    .join("; ");
+  iframe.setAttribute("allow", newAllow);
+};
+
+/**
+ * Restore autoplay permission to an iframe
+ * @param iframe - The iframe element to restore autoplay permission to
+ * @returns void
+ */
+const restoreAutoplayPermission = (iframe: HTMLIFrameElement) => {
+  const original = iframe.getAttribute("data-original-allow");
+  if (original !== null) {
+    iframe.setAttribute("allow", original);
+    iframe.removeAttribute("data-original-allow");
+  }
+};
+
+/**
+ * Mute a user iframe (best-effort across providers)
+ * @param iframe - The iframe element to mute
+ * @returns
+ */
+export const muteUserIframe = (iframe: HTMLIFrameElement): void => {
+  if (!isUserIframe(iframe) || !iframe.src) return;
+  try {
+    const url = new URL(iframe.src);
+    const host = url.hostname.replace(/^www\./, "");
+    if (host === "youtube.com" || host === "youtube-nocookie.com") {
+      url.searchParams.set("mute", "1");
+      iframe.src = url.toString();
+      return;
+    }
+    if (host === "youtu.be") {
+      const videoId = url.pathname.substring(1);
+      iframe.src = `https://www.youtube.com/embed/${videoId}?mute=1`;
+      return;
+    }
+    if (host === "player.vimeo.com" || host === "vimeo.com") {
+      url.searchParams.set("muted", "1");
+      iframe.src = url.toString();
+      return;
+    }
+    if (host.endsWith("soundcloud.com")) {
+      url.searchParams.set("auto_play", "false");
+      iframe.src = url.toString();
+      return;
+    }
+    if (host.endsWith("spotify.com")) {
+      // Spotify does not support a mute flag; limit autoplay as a fallback
+      removeAutoplayPermission(iframe);
+      return;
+    }
+    // Generic fallback: remove autoplay permission
+    removeAutoplayPermission(iframe);
+  } catch {
+    // As a last resort, remove autoplay permission
+    removeAutoplayPermission(iframe);
+  }
+};
+
+/**
+ * Unmute a user iframe
+ * @param iframe - The iframe element to unmute
+ * @returns void
+ */
+export const unmuteUserIframe = (iframe: HTMLIFrameElement): void => {
+  if (!isUserIframe(iframe) || !iframe.src) return;
+  try {
+    const url = new URL(iframe.src);
+    const host = url.hostname.replace(/^www\./, "");
+    if (host === "youtube.com" || host === "youtube-nocookie.com") {
+      url.searchParams.delete("mute");
+      iframe.src = url.toString();
+      return;
+    }
+    if (host === "youtu.be") {
+      const videoId = url.pathname.substring(1);
+      iframe.src = `https://www.youtube.com/embed/${videoId}`;
+      return;
+    }
+    if (host === "player.vimeo.com" || host === "vimeo.com") {
+      url.searchParams.delete("muted");
+      iframe.src = url.toString();
+      return;
+    }
+    if (host.endsWith("soundcloud.com")) {
+      // No-op; SoundCloud mute toggle not supported via URL; keep autoplay controls only
+      return;
+    }
+    if (host.endsWith("spotify.com")) {
+      restoreAutoplayPermission(iframe);
+      return;
+    }
+    // Generic fallback: restore autoplay permission if we removed it
+    restoreAutoplayPermission(iframe);
+  } catch {
+    restoreAutoplayPermission(iframe);
+  }
+};
+
+/**
+ * Mute all user iframes on the page
+ * @returns void
+ */
+export const muteAllUserIframes = (): void => {
+  const iframes = getAllUserIframes();
+  iframes.forEach(muteUserIframe);
+};
+
+/**
+ * Unmute all user iframes on the page
+ * @returns void
+ */
+export const unmuteAllUserIframes = (): void => {
+  const iframes = getAllUserIframes();
+  iframes.forEach(unmuteUserIframe);
+};
+
+/**
+ * Set mute state for all user iframes
+ * @param muted - The mute state to set
+ * @returns void
+ * @param muted
+ */
+export const setIframeMuteState = (muted: boolean): void => {
+  if (muted) {
+    muteAllUserIframes();
+  } else {
+    unmuteAllUserIframes();
+  }
+};
+
+/**
+ * Observer to automatically mute new YouTube iframes as they're added to the DOM
+ */
+export class IframeMuteObserver {
+  private observer: MutationObserver | null = null;
+  private isMuted = false;
+
+  constructor() {
+    if (typeof window === "undefined") return;
+
+    this.observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const element = node as Element;
+
+            if (
+              element.tagName === "IFRAME" &&
+              isUserIframe(element as HTMLIFrameElement)
+            ) {
+              if (this.isMuted) {
+                muteUserIframe(element as HTMLIFrameElement);
+              }
+            }
+
+            const userIframes =
+              element.querySelectorAll?.("iframe[data-user-iframe]") || [];
+            userIframes.forEach((iframe) => {
+              if (this.isMuted) {
+                muteUserIframe(iframe as HTMLIFrameElement);
+              }
+            });
+          }
+        });
+      });
+    });
+  }
+
+  start(muted = false): void {
+    if (!this.observer) return;
+    this.isMuted = muted;
+    this.observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  stop(): void {
+    if (this.observer) {
+      this.observer.disconnect();
+    }
+  }
+
+  setMuted(muted: boolean): void {
+    this.isMuted = muted;
+    setIframeMuteState(muted);
+  }
+}
+
+// Global instance
+let globalIframeObserver: IframeMuteObserver | null = null;
+
+/**
+ * Initialize the global YouTube mute observer
+ */
+export const initIframeMuteObserver = (muted = false): IframeMuteObserver => {
+  if (typeof window === "undefined") {
+    return new IframeMuteObserver();
+  }
+  if (!globalIframeObserver) {
+    globalIframeObserver = new IframeMuteObserver();
+  }
+  globalIframeObserver.start(muted);
+  return globalIframeObserver;
+};
+
+/**
+ * Get the global YouTube mute observer
+ */
+export const getIframeMuteObserver = (): IframeMuteObserver | null => {
+  return globalIframeObserver;
+};

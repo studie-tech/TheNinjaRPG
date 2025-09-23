@@ -743,6 +743,7 @@ export const questsRouter = createTRPCRouter({
         fetchQuest(ctx.drizzle, input.id),
       ]);
       // Guards
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (entry && canChangeContent(user.role)) {
         // Validate objective flow before updating
         if (entry.consecutiveObjectives) {
@@ -819,6 +820,7 @@ export const questsRouter = createTRPCRouter({
     }),
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
+    if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
     if (canChangeContent(user.role)) {
       const id = nanoid();
       await ctx.drizzle.insert(quest).values({
@@ -877,6 +879,7 @@ export const questsRouter = createTRPCRouter({
         fetchQuest(ctx.drizzle, input.id),
       ]);
       // Guard
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!questData) {
         return errorResponse("Quest not found");
       }
@@ -897,6 +900,7 @@ export const questsRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       const entry = await fetchQuest(ctx.drizzle, input.id);
       if (entry && canChangeContent(user.role)) {
         await Promise.all([
@@ -1114,6 +1118,7 @@ export const questsRouter = createTRPCRouter({
         fetchUpdatedUser({ client: ctx.drizzle, userId: input.userId }),
       ]);
       // Guard
+      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
       if (!user || !canEditQuests(user.role)) {
         return errorResponse("Not authorized to delete user quests");
       }
