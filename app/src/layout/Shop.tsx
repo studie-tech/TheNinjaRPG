@@ -20,7 +20,7 @@ import {
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
 } from "@/drizzle/constants";
 import type { ItemType, Item } from "@/drizzle/schema";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 
 interface ShopProps {
   userData: NonNullable<UserWithRelations>;

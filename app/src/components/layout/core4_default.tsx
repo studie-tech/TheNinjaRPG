@@ -79,7 +79,7 @@ import {
 } from "@/drizzle/constants";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import type { NavBarDropdownLink } from "@/libs/menus";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import { usePathname } from "next/navigation";
 import { cn } from "src/libs/shadui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";

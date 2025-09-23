@@ -28,7 +28,7 @@ import {
 import { Clock, Shield, Coins, AlertTriangle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { getShrineHpByLevel } from "@/libs/war";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import {
   SHRINE_MAX_LEVEL,

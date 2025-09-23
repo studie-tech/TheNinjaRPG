@@ -25,7 +25,7 @@ import { calcHealCost, calcChakraToPools } from "@/libs/hospital/hospital";
 import { MEDNIN_MIN_RANK, IMG_BUILDING_HOSPITAL } from "@/drizzle/constants";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { ArrayElement } from "@/utils/typeutils";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 
 export default function Hospital() {
   // Settings

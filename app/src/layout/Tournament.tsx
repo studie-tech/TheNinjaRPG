@@ -33,7 +33,7 @@ import type { TournamentMatch } from "@/drizzle/schema";
 import type { ObjectiveRewardType } from "@/validators/objectives";
 import type { TournamentCreateSchema } from "@/validators/tournament";
 import type { TournamentType } from "@/drizzle/constants";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 
 interface TournamentProps {
   userData: NonNullable<UserWithRelations>;

@@ -7,7 +7,7 @@ import { Clock, AlertCircle, CheckCircle, XCircle, MessageSquare } from "lucide-
 import { calcIsInVillage } from "./travel/controls";
 import { api } from "@/app/_trpc/client";
 import { findVillageUserRelationship } from "@/utils/alliance";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import { usePathname } from "next/navigation";
 import { useUserData } from "@/utils/UserContext";
 import type { SupportTicketStatus } from "@/drizzle/constants";

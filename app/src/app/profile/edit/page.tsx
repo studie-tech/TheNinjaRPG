@@ -82,7 +82,7 @@ import type { Gender } from "@/validators/register";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import type { Bloodline, Village } from "@/drizzle/schema";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import {
   AiRule,
   ConditionDistanceHigherThan,

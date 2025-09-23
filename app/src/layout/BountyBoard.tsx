@@ -42,7 +42,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import type { z } from "zod";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { useInfinitePagination } from "@/libs/pagination";
 import type { ReactElement } from "react";

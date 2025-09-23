@@ -15,7 +15,7 @@ import { Chart as ChartJS } from "chart.js/auto";
 import { getUserElements } from "@/validators/user";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 
 // Main StrengthWeaknesses Component
 const StrengthWeaknesses: React.FC = () => {

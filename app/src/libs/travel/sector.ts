@@ -43,7 +43,7 @@ import {
 } from "@/drizzle/constants";
 import { hasRequiredRank } from "@/libs/train";
 import type { ComplexObjectiveFields } from "@/validators/objectives";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import type { TerrainHex, PathCalculator, HexagonalFaceMesh } from "../hexgrid";
 import type { SectorUser, GlobalTile } from "./types";
 import type { SectorVillage } from "@/routers/travel";

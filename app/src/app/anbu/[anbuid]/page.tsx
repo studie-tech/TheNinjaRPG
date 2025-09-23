@@ -67,7 +67,7 @@ import type { AnbuRenameSchema } from "@/validators/anbu";
 import type { MutateContentSchema } from "@/validators/comments";
 import type { UserNindo } from "@/drizzle/schema";
 import type { AnbuRouter } from "@/routers/anbu";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 
 export default function ANBUDetails(props: { params: Promise<{ anbuid: string }> }) {
   const params = use(props.params);

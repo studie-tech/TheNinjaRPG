@@ -9,7 +9,7 @@ import {
   KAGE_ELDER_MIN_DAYS,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 
 /**
  * Calculate the total time (in seconds) that kage challenges have been locked for a user today.

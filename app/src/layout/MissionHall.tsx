@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "src/libs/shadui";
 import React from "react";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 
 interface MissionHallProps {
   userData: NonNullable<UserWithRelations>;

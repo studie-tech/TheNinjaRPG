@@ -16,7 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { round } from "@/utils/math";
 import { createStatSchema, type StatSchemaType } from "@/libs/combat/types";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 
 interface StatDistributionProps {

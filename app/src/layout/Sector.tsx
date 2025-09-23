@@ -43,7 +43,7 @@ import {
   IMG_SECTOR_ROB,
   IMG_ICON_MOVE,
 } from "@/drizzle/constants";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import type { UserData } from "@/drizzle/schema";
 import type { Grid } from "honeycomb-grid";
 import type { GlobalTile, SectorPoint, SectorUser } from "@/libs/travel/types";
@@ -414,10 +414,12 @@ const Sector: React.FC<SectorProps> = (props) => {
       // Check if enough time has passed since last attack
       const now = Date.now();
       const lastAttackTime = lastAutoAttackTime.current;
-      const attackDelaySeconds = parseInt(localStorage.getItem("autoAttackDelay") || "5");
+      const attackDelaySeconds = parseInt(
+        localStorage.getItem("autoAttackDelay") || "5",
+      );
       const attackDelayMs = attackDelaySeconds * 1000; // Convert seconds to milliseconds
 
-      if (lastAttackTime && (now - lastAttackTime) < attackDelayMs) {
+      if (lastAttackTime && now - lastAttackTime < attackDelayMs) {
         return; // Not enough time has passed, wait
       }
 

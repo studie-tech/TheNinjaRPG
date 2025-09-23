@@ -36,7 +36,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { Village, VillageAlliance } from "@/drizzle/schema";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import type { AllianceState } from "@/drizzle/constants";
 import { Input } from "@/components/ui/input";
 import { calculateEnemyConsequences } from "@/utils/alliance";

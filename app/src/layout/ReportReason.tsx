@@ -3,7 +3,7 @@ import Image from "next/image";
 import type { UserReport } from "../../drizzle/schema";
 import { parseHtml } from "@/utils/parse";
 import { canSeeSecretData } from "@/utils/permissions";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 
 const ParsedReportJson: React.FC<{
   report: Omit<UserReport, "reporterUserId">;

@@ -15,7 +15,7 @@ import { MAX_EXTRA_JUTSU_SLOTS } from "@/drizzle/constants";
 import { VILLAGE_LEAVE_REQUIRED_RANK } from "@/drizzle/constants";
 import { secondsPassed } from "@/utils/time";
 import { getUserElements } from "@/validators/user";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import type { LetterRank } from "@/drizzle/constants";
 import type { TrainingSpeed, BattleType } from "@/drizzle/constants";
 import type { UserItemWithItem, Jutsu, JutsuRank } from "@/drizzle/schema";

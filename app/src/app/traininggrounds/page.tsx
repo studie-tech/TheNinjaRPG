@@ -73,7 +73,7 @@ import type { CaptchaVerifySchema } from "@/validators/misc";
 import type { z } from "zod";
 import type { TrainingSpeed } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 
 export default function Training() {
   // Ensure user is in village
