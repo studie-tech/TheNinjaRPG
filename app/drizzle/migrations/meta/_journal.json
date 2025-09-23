@@ -2094,6 +2094,13 @@
       "when": 1758185235450,
       "tag": "0298_perfect_moonstone",
       "breakpoints": false
+    },
+    {
+      "idx": 299,
+      "version": "5",
+      "when": 1758628747534,
+      "tag": "0299_lovely_sauron",
+      "breakpoints": false
     }
   ]
 }
