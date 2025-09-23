@@ -381,7 +381,12 @@ export const muteUserIframe = (iframe: HTMLIFrameElement): void => {
       iframe.src = url.toString();
       return;
     }
-    if (host.endsWith("spotify.com")) {
+    const allowedSpotifyHosts = [
+      "open.spotify.com",
+      "embed.spotify.com",
+      "www.spotify.com"
+    ];
+    if (allowedSpotifyHosts.includes(url.hostname)) {
       // Spotify does not support a mute flag; limit autoplay as a fallback
       removeAutoplayPermission(iframe);
       return;
