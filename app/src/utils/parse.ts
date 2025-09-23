@@ -19,6 +19,38 @@ const isValidStyle = (value: unknown): value is React.CSSProperties => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 };
 
+// Whitelist of iframe allow tokens we consider safe
+const ALLOWED_IFRAME_ALLOW_TOKENS = new Set<string>([
+  "autoplay",
+  "encrypted-media",
+  "picture-in-picture",
+  "clipboard-write",
+  // fullscreen is typically controlled by allowFullScreen, but include to be lenient
+  "fullscreen",
+]);
+
+const DEFAULT_IFRAME_ALLOW = "autoplay; encrypted-media; picture-in-picture";
+
+/**
+ * Sanitize the iframe allow attribute by keeping only whitelisted tokens.
+ * Falls back to DEFAULT_IFRAME_ALLOW if nothing safe remains.
+ */
+const sanitizeIframeAllow = (raw?: string): string => {
+  if (!raw) return DEFAULT_IFRAME_ALLOW;
+  const safeParts = raw
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((part) => {
+      // token may be followed by origins; only keep the feature token
+      const token = part.split(/\s+/)[0]?.toLowerCase();
+      return token && ALLOWED_IFRAME_ALLOW_TOKENS.has(token) ? token : undefined;
+    })
+    .filter((t): t is string => Boolean(t));
+  const unique = Array.from(new Set(safeParts));
+  return unique.length ? unique.join("; ") : DEFAULT_IFRAME_ALLOW;
+};
+
 /*
  * Parse HTML string into React components
  * @param html - HTML string to parse
@@ -105,12 +137,14 @@ export const parseHtml = (html: string) => {
         height,
         title,
         className,
+        // map html "class" to React className if provided
+        class: classAttr,
         id,
         style,
         allow,
         allowfullscreen,
         frameborder,
-      } = node.attribs;
+      } = node.attribs as Record<string, string> & { class?: string };
 
       // Only allow iframes from approved providers; otherwise return empty element
       if (!src || !isAllowedIframeUrl(src)) {
@@ -132,17 +166,27 @@ export const parseHtml = (html: string) => {
       // Identify user-embedded iframes (used for global mute capabilities)
       const isUserEmbed = !!src;
 
+      const computedClassName = className ?? classAttr;
+      const sanitizedAllow = sanitizeIframeAllow(allow);
+      const allowFullScreen =
+        typeof allowfullscreen !== "undefined" &&
+        allowfullscreen.toLowerCase() !== "false" &&
+        allowfullscreen !== "0";
+
       const props: React.IframeHTMLAttributes<HTMLIFrameElement> = {
         src,
         width,
         height,
         title,
-        className,
+        className: computedClassName,
         id,
         style: parsedStyle,
-        allow,
-        allowFullScreen: allowfullscreen === "true" || allowfullscreen === "1",
+        allow: sanitizedAllow,
+        allowFullScreen,
         frameBorder: frameborder,
+        // Conservative safe defaults
+        sandbox: "allow-scripts allow-same-origin",
+        referrerPolicy: "no-referrer",
         // Mark as user iframe to enable mute management
         ...(isUserEmbed && { "data-user-iframe": "true" }),
       };
