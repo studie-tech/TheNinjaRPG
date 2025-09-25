@@ -9,14 +9,19 @@ import AvatarImage from "@/layout/Avatar";
 import { useInfinitePagination } from "@/libs/pagination";
 import Link from "next/link";
 import type { ArrayElement } from "@/utils/typeutils";
+import AwardsFiltering, { useFiltering, getFilter } from "@/layout/AwardsFiltering";
 
 export default function AwardsManual() {
   // State for infinite scroll
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
+  // Filtering state
+  const state = useFiltering();
+  const filter = getFilter(state);
+
   // Query with pagination
   const { data, fetchNextPage, hasNextPage } = api.misc.getAllAwards.useInfiniteQuery(
-    { limit: 50 },
+    { limit: 50, ...filter },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
@@ -87,6 +92,7 @@ export default function AwardsManual() {
       subtitle="History of all reputation points and money awarded"
       padding={false}
       defaultBackHref="/manual"
+      topRightContent={<AwardsFiltering state={state} />}
     >
       {allAwards && allAwards.length > 0 ? (
         <Table data={allAwards} columns={columns} setLastElement={setLastElement} />

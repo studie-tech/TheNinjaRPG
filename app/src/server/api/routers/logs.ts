@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../trpc";
-import { eq, ne, and, like, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, like, inArray, isNotNull } from "drizzle-orm";
 import { extractValueFromJson } from "@/utils/regex";
 import {
   actionLog,

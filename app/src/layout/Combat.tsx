@@ -12,7 +12,7 @@ import { COMBAT_SECONDS, COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
 import { SpriteMixer } from "@/libs/threejs/SpriteMixer";
 import { cleanUp, setupScene, setRaycasterFromMouse } from "@/libs/travel/util";
 import { highlightTiles } from "@/libs/combat/drawing";
-import { highlightTooltips } from "@/libs/combat/drawing";
+import { highlightTooltips, highlightTileTooltips } from "@/libs/combat/drawing";
 import { highlightUsers } from "@/libs/combat/drawing";
 import { calcActiveUser, availableUserActions } from "@/libs/combat/actions";
 import { drawCombatUsers } from "@/libs/combat/drawing";
@@ -67,6 +67,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const grid = useRef<Grid<TerrainHex> | null>(null);
   const mouse = new Vector2();
+  const mouseScreen = useRef({ x: 0, y: 0 });
   const battleId = battle.current?.id;
   const battleType = battle.current?.battleType;
 
@@ -309,6 +310,9 @@ const Combat: React.FC<CombatProps> = (props) => {
       const bounding_box = mountRef.current.getBoundingClientRect();
       mouse.x = (event.offsetX / bounding_box.width) * 2 - 1;
       mouse.y = -((event.offsetY / bounding_box.height) * 2 - 1);
+      // Also track screen coordinates for tooltips
+      mouseScreen.current.x = event.clientX;
+      mouseScreen.current.y = event.clientY;
     }
   };
   const onDocumentMouseLeave = () => {
@@ -453,6 +457,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       let highlights = new Set<string>();
       let tooltips = new Set<string>();
       let userHighlights = new Set<string>();
+      let tileTooltips = new Set<string>();
       // let currentTooltips = new Set<string>();
 
       // js groups for organization
@@ -599,6 +604,16 @@ const Combat: React.FC<CombatProps> = (props) => {
             raycaster,
             battle: battle.current,
             currentTooltips: tooltips,
+          });
+
+          // Highlight tile tooltips when hovering on tiles with ground effects
+          tileTooltips = highlightTileTooltips({
+            group_tiles,
+            raycaster,
+            battle: battle.current,
+            currentTileTooltips: tileTooltips,
+            mouseX: mouseScreen.current.x,
+            mouseY: mouseScreen.current.y,
           });
         }
 

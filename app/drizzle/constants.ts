@@ -477,6 +477,7 @@ export type TrainingSpeed = (typeof TrainingSpeeds)[number];
 export const JUTSU_MAX_RESIDUAL_EQUIPPED = 4;
 export const JUTSU_MAX_PIERCE_EQUIPPED = 9999;
 export const JUTSU_MAX_EVENT_EQUIPPED = 2;
+export const JUTSU_MAX_BARRIER_EQUIPPED = 1;
 
 // Content difficulty ratings
 export const BloodlineDifficultyRatings = ["Easy", "Medium", "Hard", "Expert"] as const;
@@ -1206,6 +1207,7 @@ export const RANKED_LOADOUT_MAX_POISON_JUTSUS = 1;
 export const RANKED_LOADOUT_MAX_INCREASECOST_ITEMS = 1;
 export const RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS = 1;
 export const RANKED_LOADOUT_MAX_SUMMON_JUTSUS = 0;
+export const RANKED_LOADOUT_MAX_BARRIER_JUTSUS = 1;
 
 // Game assets
 export const ID_ANIMATION_SMOKE = "gkYHdSzsHu";

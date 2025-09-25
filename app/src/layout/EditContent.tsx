@@ -522,27 +522,27 @@ export const EditContent = <
                       : "",
                     // Rewards drawn in green
                     formEntry.category === "reward"
-                      ? "bg-green-50 border-green-200 border rounded-lg"
+                      ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 border rounded-lg"
                       : "",
                     // Oppoenents drawn in red
                     formEntry.category === "opponent"
-                      ? "bg-red-50 border-red-200 border rounded-lg"
+                      ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 border rounded-lg"
                       : "",
                     // Attackers drawn in red
                     formEntry.category === "attackers"
-                      ? "bg-pink-100 border-pink-200 border rounded-lg"
+                      ? "bg-pink-100 dark:bg-pink-900/20 border-pink-200 dark:border-pink-800 border rounded-lg"
                       : "",
                     // Location things in blue
                     formEntry.category === "location"
-                      ? "bg-blue-50 border-blue-200 border rounded-lg"
+                      ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 border rounded-lg"
                       : "",
                     // Graph things in purple
                     formEntry.category === "graph"
-                      ? "bg-purple-50 border-purple-200 border rounded-lg"
+                      ? "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 border rounded-lg"
                       : "",
                     // Description things in yellow
                     formEntry.category === "scene"
-                      ? "bg-yellow-50 border-yellow-200 border rounded-lg text-black"
+                      ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 border rounded-lg text-black dark:text-white"
                       : "",
                   )}
                 >

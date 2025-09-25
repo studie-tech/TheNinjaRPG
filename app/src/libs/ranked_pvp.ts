@@ -11,6 +11,7 @@ import {
   RANKED_LOADOUT_MAX_WEAPONS,
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
+  RANKED_LOADOUT_MAX_BARRIER_JUTSUS,
   JUTSU_MAX_EVENT_EQUIPPED,
 } from "@/drizzle/constants";
 import type { Jutsu, UserData, Item } from "@/drizzle/schema";
@@ -147,6 +148,15 @@ export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
   if (summonJutsus.length > RANKED_LOADOUT_MAX_SUMMON_JUTSUS) {
     check = false;
     message = `You can only equip up to ${RANKED_LOADOUT_MAX_SUMMON_JUTSUS} summon jutsu in ranked PvP`;
+  }
+
+  // Check barrier jutsu limit
+  const barrierJutsus = jutsus.filter((jutsu) =>
+    jutsu.effects.some((e) => e.type === "barrier"),
+  );
+  if (barrierJutsus.length > RANKED_LOADOUT_MAX_BARRIER_JUTSUS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_BARRIER_JUTSUS} barrier jutsu in ranked PvP`;
   }
 
   // Check event jutsu limit

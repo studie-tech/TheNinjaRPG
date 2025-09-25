@@ -1121,3 +1121,72 @@ export const highlightTooltips = (info: {
   });
   return newTooltips;
 };
+
+/**
+ * Highlight ground effects on tiles when hovering
+ */
+export const highlightTileTooltips = (info: {
+  group_tiles: Group;
+  raycaster: Raycaster;
+  battle: ReturnedBattle;
+  currentTileTooltips: Set<string>;
+  mouseX?: number;
+  mouseY?: number;
+}) => {
+  // Definitions
+  const { group_tiles, battle, currentTileTooltips } = info;
+  const intersects = info.raycaster.intersectObjects(group_tiles.children);
+  const newTooltips = new Set<string>();
+
+  // Check if we're hovering over a tile
+  const tileHit = intersects.find((i) => i.object.userData.type === "tile");
+  if (tileHit) {
+    const tile = tileHit.object.userData.tile as TerrainHex;
+    const tileName = `${tile.row},${tile.col}`;
+
+    // Find ground effects on this tile
+    const groundEffectsOnTile = battle.groundEffects.filter(
+      (effect) => effect.longitude === tile.col && effect.latitude === tile.row
+    );
+
+    if (groundEffectsOnTile.length > 0) {
+      // Show tooltip for this tile
+      newTooltips.add(tileName);
+
+      // Create or update tooltip element
+      let tooltipElement = document.getElementById(`tile-tooltip-${tileName}`);
+      if (!tooltipElement) {
+        tooltipElement = document.createElement("div");
+        tooltipElement.id = `tile-tooltip-${tileName}`;
+        tooltipElement.className = "fixed z-50 bg-black bg-opacity-80 text-white text-xs p-2 rounded pointer-events-none";
+        document.body.appendChild(tooltipElement);
+      }
+
+      // Update tooltip content
+      const effectTexts = groundEffectsOnTile.map((effect) => {
+        const roundsLeft = effect.rounds || 0;
+        return `${effect.type} (${roundsLeft} rounds)`;
+      });
+      tooltipElement.textContent = `Ground Effects: ${effectTexts.join(", ")}`;
+
+      // Position tooltip near mouse cursor
+      const mouseX = info.mouseX || 0;
+      const mouseY = info.mouseY || 0;
+      tooltipElement.style.left = `${mouseX + 10}px`;
+      tooltipElement.style.top = `${mouseY - 30}px`;
+      tooltipElement.style.display = "block";
+    }
+  }
+
+  // Remove tooltips for tiles that are no longer hovered
+  currentTileTooltips.forEach((tileName) => {
+    if (!newTooltips.has(tileName)) {
+      const tooltipElement = document.getElementById(`tile-tooltip-${tileName}`);
+      if (tooltipElement) {
+        tooltipElement.style.display = "none";
+      }
+    }
+  });
+
+  return newTooltips;
+};

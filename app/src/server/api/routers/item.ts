@@ -98,7 +98,8 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (canChangeContent(user.role)) {
         const id = nanoid();
         await ctx.drizzle.insert(item).values({
@@ -129,7 +130,8 @@ export const itemRouter = createTRPCRouter({
         fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
       ]);
       // Guard
-      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!itemData) return errorResponse("Item not found");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
 
@@ -169,7 +171,8 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       const entry = await fetchItem(ctx.drizzle, input.id);
       if (entry && canChangeContent(user.role)) {
         await Promise.all([
@@ -209,7 +212,8 @@ export const itemRouter = createTRPCRouter({
         }),
       ]);
       // Guard
-      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Item not found");
       if (itemWithName && itemWithName.id !== entry.id)
         return errorResponse("Item name already exists");

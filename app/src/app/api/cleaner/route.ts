@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, lte, sql, eq, lt, isNull, or, ne } from "drizzle-orm";
+import { and, lte, sql, eq, lt, isNull, isNotNull, or, ne } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
 import { forumPost, forumThread, questHistory, userAttribute } from "@/drizzle/schema";
 import { bankTransfers, bloodlineRolls, conceptImage } from "@/drizzle/schema";
@@ -35,6 +35,18 @@ export async function GET() {
     await drizzleDB.execute(
       sql`UPDATE ${userData} a SET a.battleId=NULL, a.status="AWAKE", a.travelFinishAt=NULL WHERE NOT EXISTS (SELECT id FROM ${battle} b WHERE b.id = a.battleId) AND a.battleId IS NOT NULL`,
     );
+
+    // Step 2.5: Complete travel for users whose travel time has expired
+    await drizzleDB
+      .update(userData)
+      .set({ status: "AWAKE", travelFinishAt: null })
+      .where(
+        and(
+          eq(userData.status, "TRAVEL"),
+          isNotNull(userData.travelFinishAt),
+          lt(userData.travelFinishAt, new Date()),
+        ),
+      );
 
     // Step 3: Delete from battle action where battles have been deleted
     await drizzleDB.execute(

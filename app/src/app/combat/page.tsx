@@ -135,6 +135,7 @@ export default function CombatPage() {
           userData?.status === "BATTLE" && (
             <div className="flex flex-row items-center gap-2">
               <ActionTimer
+                action={actions.find((a) => a.id === actionId)}
                 user={{ userId: userId, actionPoints: user?.actionPoints ?? 0 }}
                 battle={battle}
                 isPending={battleState.isPending}

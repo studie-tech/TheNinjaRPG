@@ -414,7 +414,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 }}
               />
             )}
-            {userData && (
+            {userData && userData.role !== "USER" && (
               <>
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>

@@ -2,7 +2,7 @@ import { z } from "zod";
 import path from "path";
 import TextToSVG from "text-to-svg";
 import { randomString } from "@/libs/random";
-import { sql, and, desc, eq, inArray, gte } from "drizzle-orm";
+import { sql, and, desc, eq, inArray, gte, like, gt, lt } from "drizzle-orm";
 import {
   notification,
   userData,
@@ -17,7 +17,7 @@ import {
 } from "@/drizzle/schema";
 import { canAwardReputation } from "@/utils/permissions";
 import { nanoid } from "nanoid";
-import { awardSchema } from "@/validators/reputation";
+import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
 import { canSubmitNotification, canModifyEventGains } from "@/utils/permissions";
 import { fetchUser } from "@/routers/profile";
 import { secondsFromNow, DAY_S } from "@/utils/time";
@@ -230,7 +230,7 @@ export const miscRouter = createTRPCRouter({
 
   getAllAwards: publicProcedure
     .input(
-      z.object({
+      awardsFilteringSchema.extend({
         cursor: z.number().nullish(),
         limit: z.number().min(1).max(500),
       }),
@@ -239,6 +239,31 @@ export const miscRouter = createTRPCRouter({
       const currentCursor = input?.cursor ? input.cursor : 0;
       const limit = input?.limit ? input.limit : 100;
       const skip = currentCursor * limit;
+
+      // Resolve username filters to userId arrays (done upfront to keep main query simple)
+      const [receiverIds, awardedByIds] = await Promise.all([
+        input.awardedTo
+          ? ctx.drizzle.query.userData
+              .findMany({
+                where: like(userData.username, `%${input.awardedTo}%`),
+                columns: { userId: true },
+              })
+              .then((rows) => rows.map((r) => r.userId))
+          : Promise.resolve<string[]>([]),
+        input.awardedBy
+          ? ctx.drizzle.query.userData
+              .findMany({
+                where: like(userData.username, `%${input.awardedBy}%`),
+                columns: { userId: true },
+              })
+              .then((rows) => rows.map((r) => r.userId))
+          : Promise.resolve<string[]>([]),
+      ]);
+
+      // Compute date range for a given day if provided (UTC day)
+      const dayStart = input.date ? new Date(input.date) : undefined;
+      const dayEnd = dayStart ? new Date(dayStart) : undefined;
+      if (dayEnd) dayEnd.setDate(dayEnd.getDate() + 1);
 
       const results = await ctx.drizzle.query.userRewards.findMany({
         offset: skip,
@@ -259,6 +284,29 @@ export const miscRouter = createTRPCRouter({
             },
           },
         },
+        where: and(
+          // Reward type conditions
+          ...(input.rewardType === "reputation"
+            ? [gt(userRewards.reputationAmount, 0), eq(userRewards.moneyAmount, 0)]
+            : []),
+          ...(input.rewardType === "money"
+            ? [gt(userRewards.moneyAmount, 0), eq(userRewards.reputationAmount, 0)]
+            : []),
+          ...(input.rewardType === "both"
+            ? [gt(userRewards.reputationAmount, 0), gt(userRewards.moneyAmount, 0)]
+            : []),
+          // Date range conditions for a specific day (UTC)
+          ...(dayStart && dayEnd
+            ? [gte(userRewards.createdAt, dayStart), lt(userRewards.createdAt, dayEnd)]
+            : []),
+          // Username-derived id filters
+          ...(receiverIds.length > 0
+            ? [inArray(userRewards.receiverId, receiverIds)]
+            : []),
+          ...(awardedByIds.length > 0
+            ? [inArray(userRewards.awardedById, awardedByIds)]
+            : []),
+        ),
         orderBy: [desc(userRewards.createdAt)],
       });
 

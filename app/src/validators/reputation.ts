@@ -13,3 +13,12 @@ export const awardSchema = z
 
 export type AwardSchema = z.infer<typeof awardSchema>;
 
+// Filtering schema for listing awards
+export const awardsFilteringSchema = z.object({
+  rewardType: z.enum(["all", "reputation", "money", "both"]).default("all"),
+  awardedTo: z.string().optional(), // receiver username contains
+  awardedBy: z.string().optional(), // awardedBy username contains
+  date: z.string().optional(),
+});
+
+export type AwardsFilteringSchema = z.infer<typeof awardsFilteringSchema>;

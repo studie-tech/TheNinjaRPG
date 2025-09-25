@@ -131,6 +131,15 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
           width={768}
           height={62}
         />
+        {actionNow > 0 && !isPending && (
+          <p
+            className={`absolute bottom-0 left-0 right-0 top-3 flex items-center justify-center text-sm font-bold text-white drop-shadow-lg ${
+              !state.canAct ? "opacity-50" : ""
+            }`}
+          >
+            {actionNow.toFixed(1)}%
+          </p>
+        )}
         {(isPending || !user) && (
           <div className="absolute">
             <Loader noPadding={true} />

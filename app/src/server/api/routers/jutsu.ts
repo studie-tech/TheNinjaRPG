@@ -25,6 +25,7 @@ import {
   JUTSU_MAX_RESIDUAL_EQUIPPED,
   JUTSU_MAX_PIERCE_EQUIPPED,
   JUTSU_MAX_EVENT_EQUIPPED,
+  JUTSU_MAX_BARRIER_EQUIPPED,
 } from "@/drizzle/constants";
 import {
   calcJutsuTrainTime,
@@ -761,6 +762,12 @@ export const jutsuRouter = createTRPCRouter({
         (j) => j.jutsu.jutsuType === "EVENT",
       ).length;
       const curJutsuIsEvent = userjutsuObj?.jutsu.jutsuType === "EVENT";
+      const barrierEquipped = equippedJutsus.filter((j) =>
+        j.jutsu.effects.some((e) => e.type === "barrier"),
+      ).length;
+      const curJutsuIsBarrier = userjutsuObj?.jutsu.effects.some(
+        (e) => e.type === "barrier",
+      );
       const newEquippedState = isEquipped ? false : true;
       const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
       const isLoaded = userjutsuObj && loadout?.jutsuIds.includes(userjutsuObj.jutsuId);
@@ -798,6 +805,11 @@ export const jutsuRouter = createTRPCRouter({
       if (!isEquipped && curJutsuIsEvent && eventEquipped >= JUTSU_MAX_EVENT_EQUIPPED) {
         return errorResponse(
           `You cannot equip more than ${JUTSU_MAX_EVENT_EQUIPPED} event jutsu`,
+        );
+      }
+      if (!isEquipped && curJutsuIsBarrier && barrierEquipped >= JUTSU_MAX_BARRIER_EQUIPPED) {
+        return errorResponse(
+          `You cannot equip more than ${JUTSU_MAX_BARRIER_EQUIPPED} barrier jutsu`,
         );
       }
 

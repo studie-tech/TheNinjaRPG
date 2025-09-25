@@ -607,7 +607,7 @@ export const CopyTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
   type: z.literal("copy").default("copy"),
-  description: msg("Copies all positive effects from the target to the user"),
+  description: msg("Copies some positive effects from the target to the user"),
   calculation: z.enum(["percentage"]).default("percentage"),
   rounds: z.coerce.number().int().min(1).max(10).default(3),
 });
@@ -617,7 +617,7 @@ export const MirrorTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
   type: z.literal("mirror").default("mirror"),
-  description: msg("Mirrors all negative effects from the user to the target"),
+  description: msg("Mirrors some negative effects from the user to the target"),
   calculation: z.enum(["percentage"]).default("percentage"),
   rounds: z.coerce.number().int().min(1).max(10).default(3),
 });
