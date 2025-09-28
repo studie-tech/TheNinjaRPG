@@ -455,13 +455,19 @@ export const kageRouter = createTRPCRouter({
       ]);
       // Derived
       const isHideoutOrTown = ["HIDEOUT", "TOWN"].includes(village?.type ?? "");
-      const lockout = isHideoutOrTown ? KAGE_DELAY_SECS : 0;
+      const lockout = isHideoutOrTown ? 0 : KAGE_DELAY_SECS;
       const newRank = prospect.rank === "ELDER" ? "JONIN" : "ELDER";
       // Guards
       if (!kage) return errorResponse("User not found");
       if (!prospect) return errorResponse("Target not found");
       if (!village) return errorResponse("Village not found");
-      if (newRank !== "ELDER") return errorResponse("Demotion of elder is disabled");
+      // Allow elder removal after 3 days
+      if (newRank !== "ELDER") {
+        const threeDaysAgo = new Date(Date.now() - KAGE_DELAY_SECS * 1000);
+        if (prospect.updatedAt > threeDaysAgo) {
+          return errorResponse("Cannot remove elder until 3 days after appointment");
+        }
+      }
       if (prospect.anbuId) return errorResponse("Cannot promote ANBU to elder");
       if (prospect.isAi) return errorResponse("Do not touch the AI");
       if (kage.villageId !== village.id) return errorResponse("Wrong village");
@@ -472,7 +478,7 @@ export const kageRouter = createTRPCRouter({
         return errorResponse(`Already have ${KAGE_MAX_ELDERS} elders`);
       }
       if (secondsFromDate(lockout, village.leaderUpdatedAt) > new Date()) {
-        return errorResponse("Must have been kage for 24 hours");
+        return errorResponse(`Must have been kage for ${Math.floor(lockout / (24 * 60 * 60))} days`);
       }
       if (prospect.rank !== "ELDER" && !canBeElder(prospect)) {
         return errorResponse("Must be in village for 100 days to be elder");
@@ -657,6 +663,7 @@ export const fetchElders = async (client: DrizzleClient, villageId: string) => {
       level: true,
       rank: true,
       isOutlaw: true,
+      updatedAt: true,
     },
     where: and(
       eq(userData.villageId, villageId),

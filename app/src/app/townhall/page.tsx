@@ -14,7 +14,7 @@ import PublicUserComponent from "@/layout/PublicUser";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { Handshake, LandPlot, DoorOpen, Swords } from "lucide-react";
-import { CircleArrowUp, Lock, LockOpen } from "lucide-react";
+import { CircleArrowUp, Lock, LockOpen, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { showMutationToast } from "@/libs/toast";
 import { secondsPassed, secondsFromDate } from "@/utils/time";
@@ -27,7 +27,7 @@ import { canChallengeKage } from "@/utils/kage";
 import { findRelationship } from "@/utils/alliance";
 import { KAGE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
 import { KAGE_CHALLENGE_SECS, KAGE_CHALLENGE_MINS } from "@/drizzle/constants";
-import { KAGE_RANK_REQUIREMENT, WAR_FUNDS_COST } from "@/drizzle/constants";
+import { KAGE_RANK_REQUIREMENT, WAR_FUNDS_COST, KAGE_DELAY_SECS } from "@/drizzle/constants";
 import { KAGE_PRESTIGE_COST } from "@/drizzle/constants";
 import { KAGE_MIN_DAYS_IN_VILLAGE } from "@/drizzle/constants";
 import { KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS } from "@/drizzle/constants";
@@ -164,24 +164,32 @@ const ElderHall: React.FC<{
                       Lvl. {elder.level} {capitalizeFirstLetter(elder.rank)}
                     </div>
                   </div>
-                  {/* {isKage && (
-                    <Confirm
-                      title="Confirm Demotion"
-                      button={
-                        <Ban className="absolute right-[13%] top-[3%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
-                      }
-                      onAccept={(e) => {
-                        e.preventDefault();
-                        toggleElder({
-                          userId: elder.userId,
-                          villageId: elder.villageId,
-                        });
-                      }}
-                    >
-                      You are about to remove this user as a village elder. Are you
-                      sure?
-                    </Confirm>
-                  )} */}
+                  {isKage && (() => {
+                    const threeDaysAgo = new Date(Date.now() - KAGE_DELAY_SECS * 1000);
+                    const canRemove = elder.updatedAt && new Date(elder.updatedAt) <= threeDaysAgo;
+                    return canRemove ? (
+                      <Confirm2
+                        title="Confirm Demotion"
+                        button={
+                          <Ban className="absolute right-[13%] top-[3%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
+                        }
+                        onAccept={(e) => {
+                          e.preventDefault();
+                          toggleElder({
+                            userId: elder.userId,
+                            villageId: elder.villageId,
+                          });
+                        }}
+                      >
+                        You are about to remove this user as a village elder. Are you
+                        sure?
+                      </Confirm2>
+                    ) : (
+                      <div className="absolute right-[13%] top-[3%] h-9 w-9 rounded-full bg-gray-200 p-1 flex items-center justify-center">
+                        <span className="text-xs text-gray-500">3d</span>
+                      </div>
+                    );
+                  })()}
                 </Link>
               </div>
             ))}
