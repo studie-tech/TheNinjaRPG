@@ -73,8 +73,6 @@ const LogbookAchievements: React.FC = () => {
     ["tier", "achievement"].includes(uq.quest.questType),
   );
 
-  // Mutation
-  const { checkRewards } = useCheckRewards();
 
   useEffect(() => {
     if (quests && quests.length > 0 && !activeElement) {
@@ -92,11 +90,6 @@ const LogbookAchievements: React.FC = () => {
         .filter((uq) => uq.completed === 0)
         ?.map((uq, i) => {
           const tracker = userData?.questData?.find((q) => q.id === uq.questId);
-          const check = uq.quest.questType === "achievement" && !uq.completed;
-          const allDone = tracker?.goals.every((g) => g.done);
-          if (check && allDone && userData?.status === "AWAKE") {
-            void checkRewards({ questId: uq.quest.id });
-          }
 
           return (
             tracker && (

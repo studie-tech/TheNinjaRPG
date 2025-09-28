@@ -2482,19 +2482,23 @@ export const redirection = (
     return { longitude: targetLongitude, latitude: targetLatitude };
   };
 
-  // Apply position validation for both pull and push
-  if (direction === "pull" || direction === "push") {
-    const validatedPosition = validateAndAdjustPosition(newLongitude, newLatitude);
-    newLongitude = validatedPosition.longitude;
-    newLatitude = validatedPosition.latitude;
-  }
-
-  // Ensure we don't move the target outside the arena bounds
+  // Ensure we don't move the target outside the arena bounds first
   const maxLongitude = COMBAT_WIDTH - 1;
   const maxLatitude = COMBAT_HEIGHT - 1;
 
-  const clampedLongitude = Math.max(0, Math.min(maxLongitude, newLongitude));
-  const clampedLatitude = Math.max(0, Math.min(maxLatitude, newLatitude));
+  let clampedLongitude = Math.max(0, Math.min(maxLongitude, newLongitude));
+  let clampedLatitude = Math.max(0, Math.min(maxLatitude, newLatitude));
+
+  // Store original position for distance calculation
+  const originalLongitude = actualTarget.longitude;
+  const originalLatitude = actualTarget.latitude;
+
+  // Apply position validation for both pull and push after bounds clamping
+  if (direction === "pull" || direction === "push") {
+    const validatedPosition = validateAndAdjustPosition(clampedLongitude, clampedLatitude);
+    clampedLongitude = validatedPosition.longitude;
+    clampedLatitude = validatedPosition.latitude;
+  }
 
   // Update the actual target's position in the battle state
   actualTarget.longitude = clampedLongitude;
@@ -2516,10 +2520,17 @@ export const redirection = (
     }
   });
 
+  // Calculate the actual distance moved (hex distance between original and final positions)
+  const actualDistance = Math.max(
+    Math.abs(originalLongitude - clampedLongitude),
+    Math.abs(originalLatitude - clampedLatitude),
+    Math.abs((originalLongitude - clampedLongitude) + (originalLatitude - clampedLatitude))
+  );
+
   const actionText = direction === "push" ? "pushed away from" : "pulled towards";
 
   return {
-    txt: `${target.username} is ${actionText} ${caster.username} by ${moveDistance} spaces`,
+    txt: `${target.username} is ${actionText} ${caster.username} by ${actualDistance} spaces`,
     color: "blue",
   };
 };
