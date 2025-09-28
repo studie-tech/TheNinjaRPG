@@ -2423,6 +2423,36 @@ export const redirection = (
       actualTarget.longitude + Math.round((deltaX / maxDelta) * moveDistance);
     newLatitude =
       actualTarget.latitude + Math.round((deltaY / maxDelta) * moveDistance);
+
+    // Additional safety check: ensure target is never pulled to the same position as caster
+    if (direction === "pull" && newLongitude === caster.longitude && newLatitude === caster.latitude) {
+      // If we would end up at the same position, move one step back
+      newLongitude = actualTarget.longitude;
+      newLatitude = actualTarget.latitude;
+    }
+  }
+
+  // Check if target would land on a barrier and back up if necessary
+  if (direction === "pull") {
+    const barrierAtPosition = groundEffects.find(
+      (g) => g.longitude === newLongitude && g.latitude === newLatitude && "curHealth" in g
+    );
+    if (barrierAtPosition) {
+      // If there's a barrier at the target position, move one step back towards original position
+      const deltaX = actualTarget.longitude - newLongitude;
+      const deltaY = actualTarget.latitude - newLatitude;
+      const deltaZ = -deltaX - deltaY;
+      
+      const maxDelta = Math.max(Math.abs(deltaX), Math.abs(deltaY), Math.abs(deltaZ));
+      if (maxDelta > 0) {
+        newLongitude = newLongitude + Math.round((deltaX / maxDelta) * 1);
+        newLatitude = newLatitude + Math.round((deltaY / maxDelta) * 1);
+      } else {
+        // If we can't move back, stay at original position
+        newLongitude = actualTarget.longitude;
+        newLatitude = actualTarget.latitude;
+      }
+    }
   }
 
   // Ensure we don't move the target outside the arena bounds
