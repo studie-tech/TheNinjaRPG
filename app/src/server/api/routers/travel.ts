@@ -99,7 +99,7 @@ export const travelRouter = createTRPCRouter({
         return errorResponse("Target is immune from being robbed");
       }
       
-      // Level restrictions - prevent robbing users more than 15 levels under
+      // Level restrictions - prevent robbing users more than 15 levels under or above
       const robberLevel = calcLevel(user.experience);
       const targetLevel = calcLevel(target.experience);
       const levelDifference = robberLevel - targetLevel;
@@ -107,6 +107,12 @@ export const travelRouter = createTRPCRouter({
       if (levelDifference > 15) {
         return errorResponse(
           `Cannot rob ${target.username} - they are more than 15 levels below you (${levelDifference} level difference)`
+        );
+      }
+      
+      if (levelDifference < -15) {
+        return errorResponse(
+          `Cannot rob ${target.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)`
         );
       }
       

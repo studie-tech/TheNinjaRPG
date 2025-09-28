@@ -1351,7 +1351,7 @@ export const initiateBattle = async (
       }
     }
 
-    // Level restrictions - prevent attacking users more than 15 levels under
+    // Level restrictions - prevent attacking users more than 15 levels under or above
     if (battleType === "COMBAT" && userIds.includes(user.userId)) {
       const attacker = user;
       const targets = users.filter(u => targetIds.includes(u.userId));
@@ -1368,6 +1368,13 @@ export const initiateBattle = async (
           return { 
             success: false, 
             message: `Cannot attack ${target.username} - they are more than 15 levels below you (${levelDifference} level difference)` 
+          };
+        }
+        
+        if (levelDifference < -15) {
+          return { 
+            success: false, 
+            message: `Cannot attack ${target.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)` 
           };
         }
       }
