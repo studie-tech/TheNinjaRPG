@@ -75,6 +75,10 @@
     {
       "path": "/api/hourly-bounty-expire",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/auction-expire",
+      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
