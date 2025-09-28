@@ -301,7 +301,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         ]);
         if ("amountToDeduct" in data && data.amountToDeduct && userData) {
           await updateUser({
-            money: userData.money - data.amountToDeduct,
+            bank: userData.bank - data.amountToDeduct,
           });
         }
       }
@@ -320,7 +320,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
 
   // Derived
   const userBid = listing?.bids.find((bid) => bid.bidderId === userData.userId);
-  const availableFunds = userBid ? userData.money + userBid.amount : userData.money;
+  const availableFunds = userBid ? userData.bank + userBid.amount : userData.bank;
   const isExpired = new Date(listing.expiresAt) < new Date();
   const isOwner = listing.sellerId === userData.userId;
   const isActive = listing.status === "ACTIVE";
@@ -458,7 +458,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
               {/* Show current bid info */}
               <div className="p-3 rounded-lg">
                 <div className="flex justify-between text-sm">
-                  <span>Your available funds:</span>
+                  <span>Your available bank funds:</span>
                   <span className="font-semibold">
                     {availableFunds.toLocaleString()} ryo
                   </span>

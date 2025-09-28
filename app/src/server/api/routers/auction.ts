@@ -315,18 +315,18 @@ export const auctionRouter = createTRPCRouter({
       const existingBid = auction.bids.find((bid) => bid.bidderId === ctx.userId);
       const amountToDeduct = existingBid ? amount - existingBid.amount : amount;
 
-      // Validate user has enough money for the bid raise
-      if (user.money < amountToDeduct) {
-        return errorResponse("Insufficient funds");
+      // Validate user has enough money in bank for the bid raise
+      if (user.bank < amountToDeduct) {
+        return errorResponse("Insufficient funds in bank");
       }
 
       // Check if bid meets or exceeds buyout price
       const isBuyoutBid = auction.buyoutPrice && amount >= auction.buyoutPrice;
 
-      // Deduct additional money from the user (or full amount if first bid)
+      // Deduct additional money from the user's bank (or full amount if first bid)
       const result = await ctx.drizzle
         .update(userData)
-        .set({ money: sql`${userData.money} - ${amountToDeduct}` })
+        .set({ bank: sql`${userData.bank} - ${amountToDeduct}` })
         .where(eq(userData.userId, ctx.userId));
       if (result.rowsAffected === 0) {
         return errorResponse("Failed to deduct money from user");
@@ -561,7 +561,7 @@ export const completeAuctionInternal = async (
       drizzle
         .update(userData)
         .set({
-          money: sql`${userData.money} + ${winningBid.amount}`,
+          bank: sql`${userData.bank} + ${winningBid.amount}`,
           updatedAt: new Date(),
         })
         .where(eq(userData.userId, auction.sellerId)),
@@ -582,7 +582,7 @@ export const completeAuctionInternal = async (
         ? bidsToRefund.map((bid) =>
             drizzle
               .update(userData)
-              .set({ money: sql`${userData.money} + ${bid.amount}` })
+              .set({ bank: sql`${userData.bank} + ${bid.amount}` })
               .where(eq(userData.userId, bid.bidderId)),
           )
         : []),
