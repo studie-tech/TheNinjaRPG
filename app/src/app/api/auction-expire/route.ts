@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq, lt, sql } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
 import { auctionListing } from "@/drizzle/schema";
-import { handleEndpointError, lockWithGameTimer } from "@/libs/gamesettings";
+import { handleEndpointError, getGameSetting, updateGameSetting } from "@/libs/gamesettings";
 import { cookies } from "next/headers";
 import { completeAuctionInternal, fetchAuctionListing } from "@/server/api/routers/auction";
 
@@ -12,9 +12,20 @@ export async function GET() {
   // disable cache for this server action
   await cookies();
 
-  // Check timer - 5 minutes
-  const timerResponse = await lockWithGameTimer(drizzleDB, 5, "m", ENDPOINT_NAME);
-  if (timerResponse) return timerResponse;
+  // Check 5-minute timer lock to prevent abuse
+  const timer = await getGameSetting(drizzleDB, ENDPOINT_NAME);
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  
+  if (timer.time > fiveMinutesAgo) {
+    const timeLeft = Math.ceil((timer.time.getTime() + 5 * 60 * 1000 - Date.now()) / 1000 / 60);
+    return NextResponse.json({
+      success: false,
+      message: `Please wait ${timeLeft} minutes before running again`,
+    }, { status: 429 });
+  }
+  
+  // Update timer
+  await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, new Date());
 
   try {
     // Find auctions that are ACTIVE and have expired
