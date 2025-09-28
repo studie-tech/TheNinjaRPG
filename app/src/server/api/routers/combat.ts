@@ -1351,6 +1351,28 @@ export const initiateBattle = async (
       }
     }
 
+    // Level restrictions - prevent attacking users more than 15 levels under
+    if (battleType === "COMBAT" && userIds.includes(user.userId)) {
+      const attacker = user;
+      const targets = users.filter(u => targetIds.includes(u.userId));
+      
+      for (const target of targets) {
+        if (target.isAi) continue; // Skip AI targets
+        
+        // Calculate actual levels based on experience
+        const attackerLevel = calcLevel(attacker.experience);
+        const targetLevel = calcLevel(target.experience);
+        const levelDifference = attackerLevel - targetLevel;
+        
+        if (levelDifference > 15) {
+          return { 
+            success: false, 
+            message: `Cannot attack ${target.username} - they are more than 15 levels below you (${levelDifference} level difference)` 
+          };
+        }
+      }
+    }
+
     // Scale targets
     if (info?.scaleTarget && targetIds.includes(user.userId) && users[0]) {
       user.level = users[0].level;

@@ -17,6 +17,7 @@ import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { userData, clan, village, actionLog, war } from "@/drizzle/schema";
 import { fetchUser } from "@/routers/profile";
 import { initiateBattle } from "@/routers/combat";
+import { calcLevel } from "@/libs/profile";
 import { fetchSectorVillage } from "@/routers/village";
 import { findRelationship } from "@/utils/alliance";
 import { getStrucBoost } from "@/utils/village";
@@ -97,6 +98,18 @@ export const travelRouter = createTRPCRouter({
       if (target.immunityUntil && target.immunityUntil > new Date()) {
         return errorResponse("Target is immune from being robbed");
       }
+      
+      // Level restrictions - prevent robbing users more than 15 levels under
+      const robberLevel = calcLevel(user.experience);
+      const targetLevel = calcLevel(target.experience);
+      const levelDifference = robberLevel - targetLevel;
+      
+      if (levelDifference > 15) {
+        return errorResponse(
+          `Cannot rob ${target.username} - they are more than 15 levels below you (${levelDifference} level difference)`
+        );
+      }
+      
       if (
         target.sector !== input.sector ||
         target.longitude !== input.longitude ||
