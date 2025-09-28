@@ -254,6 +254,7 @@ export const villageRouter = createTRPCRouter({
           villagePrestige:
             user.villagePrestige >= 0 ? user.villagePrestige : -user.villagePrestige, // Converted to notoriety
           isOutlaw: true,
+          joinedVillageAt: new Date(),
           ...(user.rank === "GENIN" && { senseiId: null }),
           ...(user.rank === "ELDER" && { rank: "JONIN" }),
         })
