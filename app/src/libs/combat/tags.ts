@@ -2424,35 +2424,69 @@ export const redirection = (
     newLatitude =
       actualTarget.latitude + Math.round((deltaY / maxDelta) * moveDistance);
 
-    // Additional safety check: ensure target is never pulled to the same position as caster
-    if (direction === "pull" && newLongitude === caster.longitude && newLatitude === caster.latitude) {
-      // If we would end up at the same position, move one step back
-      newLongitude = actualTarget.longitude;
-      newLatitude = actualTarget.latitude;
-    }
   }
 
-  // Check if target would land on a barrier and back up if necessary
-  if (direction === "pull") {
-    const barrierAtPosition = groundEffects.find(
-      (g) => g.longitude === newLongitude && g.latitude === newLatitude && "curHealth" in g
+  // Helper function to validate and adjust position for push/pull effects
+  const validateAndAdjustPosition = (targetLongitude: number, targetLatitude: number) => {
+    const isOnCaster = targetLongitude === caster.longitude && targetLatitude === caster.latitude;
+    const isOnOtherPlayer = usersState.some(
+      (u) => u.userId !== actualTarget.userId && u.longitude === targetLongitude && u.latitude === targetLatitude
     );
-    if (barrierAtPosition) {
-      // If there's a barrier at the target position, move one step back towards original position
-      const deltaX = actualTarget.longitude - newLongitude;
-      const deltaY = actualTarget.latitude - newLatitude;
+    const barrierAtPosition = groundEffects.find(
+      (g) => g.longitude === targetLongitude && g.latitude === targetLatitude && "curHealth" in g
+    );
+    
+    if (isOnCaster || isOnOtherPlayer || barrierAtPosition) {
+      // Keep stepping back until we find a valid position
+      const deltaX = actualTarget.longitude - targetLongitude;
+      const deltaY = actualTarget.latitude - targetLatitude;
       const deltaZ = -deltaX - deltaY;
       
       const maxDelta = Math.max(Math.abs(deltaX), Math.abs(deltaY), Math.abs(deltaZ));
       if (maxDelta > 0) {
-        newLongitude = newLongitude + Math.round((deltaX / maxDelta) * 1);
-        newLatitude = newLatitude + Math.round((deltaY / maxDelta) * 1);
+        let stepBackCount = 0;
+        const maxSteps = Math.max(Math.abs(deltaX), Math.abs(deltaY), Math.abs(deltaZ)); // Maximum possible steps
+        
+        while (stepBackCount < maxSteps) {
+          stepBackCount++;
+          targetLongitude = targetLongitude + Math.round((deltaX / maxDelta) * 1);
+          targetLatitude = targetLatitude + Math.round((deltaY / maxDelta) * 1);
+          
+          // Check if this position is valid
+          const isOnCasterAfterStep = targetLongitude === caster.longitude && targetLatitude === caster.latitude;
+          const isOnOtherPlayerAfterStep = usersState.some(
+            (u) => u.userId !== actualTarget.userId && u.longitude === targetLongitude && u.latitude === targetLatitude
+          );
+          const barrierAtPositionAfterStep = groundEffects.find(
+            (g) => g.longitude === targetLongitude && g.latitude === targetLatitude && "curHealth" in g
+          );
+          
+          // If this position is valid, we're done
+          if (!isOnCasterAfterStep && !isOnOtherPlayerAfterStep && !barrierAtPositionAfterStep) {
+            break;
+          }
+        }
+        
+        // If we couldn't find a valid position after all steps, stay at original position
+        if (stepBackCount >= maxSteps) {
+          targetLongitude = actualTarget.longitude;
+          targetLatitude = actualTarget.latitude;
+        }
       } else {
-        // If we can't move back, stay at original position
-        newLongitude = actualTarget.longitude;
-        newLatitude = actualTarget.latitude;
+        // If we can't determine direction, stay at original position
+        targetLongitude = actualTarget.longitude;
+        targetLatitude = actualTarget.latitude;
       }
     }
+    
+    return { longitude: targetLongitude, latitude: targetLatitude };
+  };
+
+  // Apply position validation for both pull and push
+  if (direction === "pull" || direction === "push") {
+    const validatedPosition = validateAndAdjustPosition(newLongitude, newLatitude);
+    newLongitude = validatedPosition.longitude;
+    newLatitude = validatedPosition.latitude;
   }
 
   // Ensure we don't move the target outside the arena bounds
