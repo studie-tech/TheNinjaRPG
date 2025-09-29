@@ -1056,6 +1056,7 @@ export const performBattleAction = (props: {
 
   // Apply relevant effects, and get back new state + active effects
   const { newBattle, actionEffects } = applyEffects(battle, actorId, action);
+  
   return { newBattle, actionEffects };
 };
 

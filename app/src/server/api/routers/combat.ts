@@ -171,6 +171,20 @@ export const combatRouter = createTRPCRouter({
           if (battleOver || progressRound || changedActor) {
             if (!hadActivity && actId && activeUser) {
               const { newBattle, actionEffects } = applyEffects(userBattle, actId);
+              
+              // Remove expired ground effects after applyEffects has processed them
+              // This ensures summon despawning logic runs before effects are removed
+              newBattle.groundEffects = newBattle.groundEffects.filter((e) => {
+                if (e.rounds !== undefined && e.rounds <= 0) {
+                  if (e.type === "visual" && actionRounds.includes(e.createdRound)) {
+                    return true;
+                  } else {
+                    return false; // Remove expired effects
+                  }
+                }
+                return true; // Keep active effects
+              });
+              
               await Promise.all([
                 updateBattle(
                   ctx.drizzle,
