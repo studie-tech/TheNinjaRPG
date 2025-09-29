@@ -1021,6 +1021,8 @@ export const WAR_TOWNHALL_HP_REMOVE = 5;
 export const WAR_TOWNHALL_HP_RECOVER = 2;
 export const WAR_TOWNHALL_HP_ANBU_REMOVE = 10;
 export const WAR_TOWNHALL_HP_ANBU_RECOVER = 5;
+export const WAR_TOWNHALL_HP_ASSASSIN_REMOVE = 10;
+export const WAR_TOWNHALL_HP_ASSASSIN_RECOVER = 5;
 export const WAR_TOWNHALL_HP_ELDER_REMOVE = 15;
 export const WAR_TOWNHALL_HP_ELDER_RECOVER = 10;
 export const WAR_TOWNHALL_HP_COLEADER_REMOVE = 15;
@@ -1084,8 +1086,10 @@ export type WarState = (typeof WAR_STATES)[number];
 // PvP Rewards
 export const PVP_KILL_TOKEN_REWARD = 300; // Base village tokens for PvP kill
 export const PVP_KILL_TOKEN_REWARD_ANBU = 500; // Village tokens for PvP kill by ANBU member
+export const PVP_KILL_TOKEN_REWARD_ASSASSIN = 500; // Village tokens for PvP kill by Assassin member
 export const PVP_KILL_PRESTIGE_REWARD = 150; // Base prestige for PvP kill
 export const PVP_KILL_PRESTIGE_REWARD_ANBU = 300; // Prestige for PvP kill by ANBU member
+export const PVP_KILL_PRESTIGE_REWARD_ASSASSIN = 300; // Prestige for PvP kill by Assassin member
 export const PVP_KILL_ANBU_POINTS_REWARD = 5; // ANBU points for PvP kill by ANBU member
 
 // Clans config
@@ -1104,6 +1108,22 @@ export const CLAN_TRAINING_BOOST_COST = 300;
 export const CLAN_RYO_BOOST_COST = 100;
 export const CLAN_REGEN_BOOST_COST = 300;
 export const CLAN_COLOR_CHANGE_REP_COST = 50;
+export const CLAN_ASSASSIN_SLOTS = [
+  "assassin1",
+  "assassin2",
+  "assassin3",
+  "assassin4",
+  "assassin5",
+  "assassin6",
+  "assassin7",
+  "assassin8",
+  "assassin9",
+  "assassin10",
+] as const;
+export type CLAN_ASSASSIN_SLOT = (typeof CLAN_ASSASSIN_SLOTS)[number];
+
+// Assassin config (factions only)
+export const ASSASSIN_MAX_PER_FACTION = 10;
 
 // Hideout and town costs
 export const HIDEOUT_COST = 50_000_000;

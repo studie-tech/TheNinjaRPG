@@ -40,6 +40,8 @@ export interface SectorUser {
   villageId: string | null;
   level: number;
   rank: UserRank;
+  isOutlaw: boolean;
+  isBanned: boolean;
   immunityUntil: Date;
   robImmunityUntil: Date;
   updatedAt: Date;

@@ -60,3 +60,24 @@ export const checkCoLeader = (userId: string, clanData?: Clan | null) => {
     userId,
   );
 };
+
+/**
+ * Checks if a user is an assassin in a faction.
+ * @param userId - The ID of the user to check.
+ * @param clanData - The clan object to check against.
+ * @returns A boolean indicating whether the user is an assassin.
+ */
+export const checkAssassin = (userId: string, clanData?: Clan | null) => {
+  return [
+    clanData?.assassin1,
+    clanData?.assassin2,
+    clanData?.assassin3,
+    clanData?.assassin4,
+    clanData?.assassin5,
+    clanData?.assassin6,
+    clanData?.assassin7,
+    clanData?.assassin8,
+    clanData?.assassin9,
+    clanData?.assassin10,
+  ].includes(userId);
+};

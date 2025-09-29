@@ -501,7 +501,6 @@ const renderEffectsTips = (effects: ZodAllTags[]) => {
  * Returns true if any effect has a visual configured
  */
 const hasAnyEffectGraphics = (effects: ZodAllTags[]) => {
-  console.log(effects);
   return effects.some(
     (e) =>
       e.appearAnimation ||
@@ -805,7 +804,6 @@ const renderBattlePyramidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
     return !failId || failId !== resetQuestObjective?.id;
   });
 
-  console.log(resetQuestObjective);
   return (
     <div className="space-y-4">
       <Alert>

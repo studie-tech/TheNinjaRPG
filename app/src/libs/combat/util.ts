@@ -24,6 +24,8 @@ import {
   WAR_TOWNHALL_HP_RECOVER,
   WAR_TOWNHALL_HP_ANBU_REMOVE,
   WAR_TOWNHALL_HP_ANBU_RECOVER,
+  WAR_TOWNHALL_HP_ASSASSIN_REMOVE,
+  WAR_TOWNHALL_HP_ASSASSIN_RECOVER,
   WAR_TOWNHALL_HP_ELDER_REMOVE,
   WAR_TOWNHALL_HP_ELDER_RECOVER,
   WAR_TOWNHALL_HP_COLEADER_REMOVE,
@@ -37,12 +39,14 @@ import {
   WAR_SECTORWAR_PVP_SHRINE_RECOVER,
   PVP_KILL_TOKEN_REWARD,
   PVP_KILL_TOKEN_REWARD_ANBU,
+  PVP_KILL_TOKEN_REWARD_ASSASSIN,
   PVP_KILL_PRESTIGE_REWARD,
   PVP_KILL_PRESTIGE_REWARD_ANBU,
+  PVP_KILL_PRESTIGE_REWARD_ASSASSIN,
   PVP_KILL_ANBU_POINTS_REWARD,
 } from "@/drizzle/constants";
 import { calculateLpEloChange } from "@/libs/ranked_pvp";
-import { checkCoLeader } from "@/validators/clan";
+import { checkCoLeader, checkAssassin } from "@/validators/clan";
 import type { PathCalculator } from "../hexgrid";
 import type { TerrainHex } from "../hexgrid";
 import type { CombatResult, CompleteBattle, ReturnedBattle } from "./types";
@@ -791,13 +795,19 @@ export const calcBattleResult = (
                 target.villageId === vilId,
             )
           ) {
+            const isUserAssassin = user.isOutlaw && checkAssassin(user.userId, user.clan);
+
             deltaPrestige += user.anbuId
               ? PVP_KILL_PRESTIGE_REWARD_ANBU
+              : isUserAssassin
+              ? PVP_KILL_PRESTIGE_REWARD_ASSASSIN
               : PVP_KILL_PRESTIGE_REWARD;
 
             // Base village tokens for PvP kill (only for enemies)
             deltaTokens += user.anbuId
               ? PVP_KILL_TOKEN_REWARD_ANBU
+              : isUserAssassin
+              ? PVP_KILL_TOKEN_REWARD_ASSASSIN
               : PVP_KILL_TOKEN_REWARD;
 
             // ANBU points for PvP kill (only if target is not more than 10 levels under)
@@ -860,6 +870,10 @@ export const calcBattleResult = (
                 user.isOutlaw && checkCoLeader(user.userId, user.clan);
               const isTargetFactionColeader =
                 target.isOutlaw && checkCoLeader(target.userId, target.clan);
+              const isUserAssassin =
+                user.isOutlaw && checkAssassin(user.userId, user.clan);
+              const isTargetAssassin =
+                target.isOutlaw && checkAssassin(target.userId, target.clan);
 
               // Village wars & raids
               if (
@@ -883,6 +897,10 @@ export const calcBattleResult = (
                     townhallChangeHP += WAR_TOWNHALL_HP_ANBU_RECOVER;
                     townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_ANBU_RECOVER;
                     townhallInfo[targetVillageName]! -= WAR_TOWNHALL_HP_ANBU_REMOVE;
+                  } else if (isUserAssassin) {
+                    townhallChangeHP += WAR_TOWNHALL_HP_ASSASSIN_RECOVER;
+                    townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_ASSASSIN_RECOVER;
+                    townhallInfo[targetVillageName]! -= WAR_TOWNHALL_HP_ASSASSIN_REMOVE;
                   } else {
                     townhallChangeHP += WAR_TOWNHALL_HP_RECOVER;
                     townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_RECOVER;
@@ -905,6 +923,9 @@ export const calcBattleResult = (
                   } else if (target.anbuId) {
                     townhallChangeHP -= WAR_TOWNHALL_HP_ANBU_REMOVE;
                     townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_ANBU_REMOVE;
+                  } else if (isTargetAssassin) {
+                    townhallChangeHP -= WAR_TOWNHALL_HP_ASSASSIN_REMOVE;
+                    townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_ASSASSIN_REMOVE;
                   } else {
                     townhallChangeHP -= WAR_TOWNHALL_HP_REMOVE;
                     townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_REMOVE;

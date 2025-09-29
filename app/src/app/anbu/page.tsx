@@ -17,14 +17,17 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import AvatarImage from "@/layout/Avatar";
 import { Input } from "@/components/ui/input";
 import { useForm, useWatch } from "react-hook-form";
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { anbuCreateSchema } from "@/validators/anbu";
-import { UsersRound } from "lucide-react";
+import { UsersRound, Zap, ZapOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { getSearchValidator } from "@/validators/register";
+import AutoAttackModal from "@/layout/AutoAttackModal";
 import type { z } from "zod";
 import type { AnbuCreateSchema } from "@/validators/anbu";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -36,6 +39,13 @@ export default function ANBU() {
   // Must be in allied village
   const { userData, sectorVillage, access } = useRequireInVillage("/anbu");
   const structure = sectorVillage?.structures.find((s) => s.name === "ANBU");
+
+  // Auto attack state
+  const [autoAttackMode, setAutoAttackMode] = useLocalStorage<boolean>(
+    "autoAttackMode",
+    false,
+  );
+  const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
 
   // Queries
   const { data } = api.anbu.getAll.useQuery(
@@ -142,58 +152,96 @@ export default function ANBU() {
   const canCreateMore = allSquads && allSquads?.length < structure.level;
 
   return (
-    <ContentBox
-      title="ANBU"
-      subtitle="Assigned by Kage & Elders"
-      defaultBackHref="/village"
-      padding={false}
-      topRightContent={
-        canCreateMore &&
-        (isKage || isElder) && (
-          <Confirm2
-            title="Create a new squad"
-            proceed_label="Submit"
-            button={
-              <Button id="create-anbu-squad" className="w-full">
-                <UsersRound className="mr-2 h-5 w-5" />
-                New Squad
-              </Button>
-            }
-            isValid={createForm.formState.isValid}
-            onAccept={onSubmit}
-          >
-            <Form {...createForm}>
-              <form className="space-y-2" onSubmit={onSubmit}>
-                <FormLabel>Leader</FormLabel>
-                <UserSearchSelect
-                  useFormMethods={userSearchMethods}
-                  label="Select Leader"
-                  selectedUsers={[]}
-                  showYourself={false}
-                  inline={true}
-                  maxUsers={maxUsers}
-                  showAi={false}
-                />
-                <FormField
-                  control={createForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Title</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Name of the new squad" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </form>
-            </Form>
-          </Confirm2>
-        )
-      }
-    >
-      <Table data={allSquads} columns={columns} linkPrefix="/anbu/" linkColumn={"id"} />
-    </ContentBox>
+    <>
+      <ContentBox
+        title="ANBU"
+        subtitle="Assigned by Kage & Elders"
+        defaultBackHref="/village"
+        padding={false}
+        topRightContent={
+          <>
+            {userData?.anbuId && (
+              <>
+                {autoAttackMode ? (
+                  <Button
+                    className="mr-2 text-red-500"
+                    aria-label="Disable auto attack"
+                    hoverText="Auto Attack"
+                    onClick={() => setAutoAttackMode(false)}
+                  >
+                    <Zap className="h-7 w-7" />
+                  </Button>
+                ) : (
+                  <Button
+                    className="mr-2 hover:text-red-500"
+                    aria-label="Configure auto attack"
+                    hoverText="Auto Attack"
+                    onClick={() => setShowAutoAttackModal(true)}
+                  >
+                    <ZapOff className="h-7 w-7" />
+                  </Button>
+                )}
+              </>
+            )}
+            {canCreateMore && (isKage || isElder) && (
+              <Confirm2
+                title="Create a new squad"
+                proceed_label="Submit"
+                button={
+                  <Button id="create-anbu-squad" className="w-full">
+                    <UsersRound className="mr-2 h-5 w-5" />
+                    New Squad
+                  </Button>
+                }
+                isValid={createForm.formState.isValid}
+                onAccept={onSubmit}
+              >
+                <Form {...createForm}>
+                  <form className="space-y-2" onSubmit={onSubmit}>
+                    <FormLabel>Leader</FormLabel>
+                    <UserSearchSelect
+                      useFormMethods={userSearchMethods}
+                      label="Select Leader"
+                      selectedUsers={[]}
+                      showYourself={false}
+                      inline={true}
+                      maxUsers={maxUsers}
+                      showAi={false}
+                    />
+                    <FormField
+                      control={createForm.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Title</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Name of the new squad" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </form>
+                </Form>
+              </Confirm2>
+            )}
+          </>
+        }
+      >
+        <Table
+          data={allSquads}
+          columns={columns}
+          linkPrefix="/anbu/"
+          linkColumn={"id"}
+        />
+      </ContentBox>
+
+      {/* Auto Attack Configuration Modal */}
+      <AutoAttackModal
+        isOpen={showAutoAttackModal}
+        setIsOpen={setShowAutoAttackModal}
+        onEnable={() => setAutoAttackMode(true)}
+      />
+    </>
   );
 }

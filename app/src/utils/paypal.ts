@@ -63,7 +63,6 @@ export const dynamicMonthlyRepCap = (user?: UserData): number => {
     (now.getMonth() - created.getMonth()) +
     (now.getDate() >= created.getDate() ? 0 : -1);
   const months = Math.max(0, monthsActive);
-  console.log("months", created, months);
   return MAX_REPS_PER_MONTH + MAX_REPS_EXTRA_PER_MONTH * months;
 };
 

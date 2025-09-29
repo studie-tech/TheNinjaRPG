@@ -222,7 +222,6 @@ export const applyEffects = (
 
       // Show once appearing visual/audio
       if ((e.appearAnimation || e.appearSfx) && e.isNew && e.type !== "visual") {
-        console.log("Adding 1", e);
         newGroundEffects.push(
           getVisualOrSound(
             e.longitude,
@@ -239,7 +238,6 @@ export const applyEffects = (
         e.isNew = false;
         newGroundEffects.push(e);
       } else if (e.disappearAnimation || e.disappearSfx) {
-        console.log("Adding 2", e);
         newGroundEffects.push(
           getVisualOrSound(
             e.longitude,
@@ -877,7 +875,6 @@ export const applySingleEffect = (
     longitude !== undefined &&
     latitude !== undefined
   ) {
-    console.log("Adding 5", effect);
     newGroundEffects.push(
       getVisualOrSound(
         longitude,
@@ -898,7 +895,6 @@ export const applySingleEffect = (
     longitude &&
     latitude
   ) {
-    console.log("Adding 6", effect);
     newGroundEffects.push(
       getVisualOrSound(
         longitude,

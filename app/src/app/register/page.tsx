@@ -234,16 +234,13 @@ const Register: React.FC = () => {
   useEffect(() => {
     const usernameError = form.formState.errors.username;
     if (databaseUsername) {
-      console.log("databaseUsername", databaseUsername);
       if (!usernameError) {
-        console.log("setError");
         form.setError("username", {
           type: "custom",
           message: "The selected username already exists in the database",
         });
       }
     } else if (usernameError?.type === "custom") {
-      console.log("clearErrors");
       form.clearErrors("username");
     }
   }, [watchUsername, databaseUsername, form]);

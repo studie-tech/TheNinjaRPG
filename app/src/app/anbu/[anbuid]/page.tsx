@@ -60,6 +60,9 @@ import {
   ANBU_ESPIONAGE_PRESTIGE_COST,
   ANBU_ESPIONAGE_POINTS_COST,
 } from "@/drizzle/constants";
+import { Zap, ZapOff } from "lucide-react";
+import { useLocalStorage } from "@/hooks/localstorage";
+import AutoAttackModal from "@/layout/AutoAttackModal";
 import type { UserRank } from "@/drizzle/constants";
 import type { ArrayElement } from "@/utils/typeutils";
 import type { BaseServerResponse } from "@/server/api/trpc";
@@ -175,6 +178,13 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   // State for espionage
   const [selectedVillage, setSelectedVillage] = useState<string>("");
 
+  // Auto attack state
+  const [autoAttackMode, setAutoAttackMode] = useLocalStorage<boolean>(
+    "autoAttackMode",
+    false,
+  );
+  const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
+
   // Mutations
   const onSuccess = async (data: BaseServerResponse) => {
     showMutationToast(data);
@@ -233,7 +243,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
             title="Kick Member"
             proceed_label="Submit"
             button={
-              <Button id={`kick-${member.userId}`}>
+              <Button id={`kick-${member.userId}`} hoverText="Kick Member">
                 <DoorOpen className="mr-2 h-5 w-5" />
                 Kick
               </Button>
@@ -248,7 +258,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
             title="Promote Member"
             proceed_label="Submit"
             button={
-              <Button id={`promote-${member.userId}`}>
+              <Button id={`promote-${member.userId}`} hoverText="Promote Member">
                 <ArrowBigUpDash className="mr-2 h-5 w-5" />
                 Promote
               </Button>
@@ -276,18 +286,47 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
 
   return (
     <ContentBox
-      title={`Squad: ${squad.name}`}
+      title={`${squad.name}`}
       subtitle={`PVP Activity: ${squad.pvpActivity}`}
       defaultBackHref="/anbu"
       padding={false}
       topRightContent={
         <div className="flex flex-row items-center gap-1">
+          {userData?.anbuId && (
+            <>
+              {autoAttackMode ? (
+                <Button
+                  className="text-red-500"
+                  aria-label="Disable auto attack"
+                  hoverText="Auto Attack"
+                  onClick={() => setAutoAttackMode(false)}
+                >
+                  <Zap className="h-5 w-5" />
+                </Button>
+              ) : (
+                <Button
+                  className="hover:text-red-500"
+                  aria-label="Configure auto attack"
+                  hoverText="Auto Attack"
+                  onClick={() => setShowAutoAttackModal(true)}
+                >
+                  <ZapOff className="h-5 w-5" />
+                </Button>
+              )}
+            </>
+          )}
+          {/* Auto Attack Configuration Modal */}
+          <AutoAttackModal
+            isOpen={showAutoAttackModal}
+            setIsOpen={setShowAutoAttackModal}
+            onEnable={() => setAutoAttackMode(true)}
+          />
           {isLeader && (
             <Confirm2
               title="Rename Squad"
               proceed_label="Submit"
               button={
-                <Button id="rename-anbu-squad">
+                <Button id="rename-anbu-squad" hoverText="Rename Squad">
                   <FilePenLine className="h-5 w-5" />
                 </Button>
               }
@@ -340,7 +379,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
           {isLeader && (
             <Dialog>
               <DialogTrigger asChild>
-                <Button id="upgrade-anbu-squad">
+                <Button id="upgrade-anbu-squad" hoverText="Upgrade Squad">
                   <TrendingUp className="h-5 w-5" />
                 </Button>
               </DialogTrigger>
@@ -442,7 +481,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
           {inSquad && (
             <Dialog>
               <DialogTrigger asChild>
-                <Button id="espionage-anbu-squad">
+                <Button id="espionage-anbu-squad" hoverText="Perform Espionage">
                   <Eye className="h-5 w-5" />
                 </Button>
               </DialogTrigger>
@@ -547,7 +586,11 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
             </Dialog>
           )}
           {inSquad && (
-            <Button id="send" onClick={() => leave({ squadId })}>
+            <Button
+              id="send"
+              onClick={() => leave({ squadId })}
+              hoverText="Leave Squad"
+            >
               <DoorOpen className="h-5 w-5" />
             </Button>
           )}
@@ -638,7 +681,11 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
             <Confirm2
               title="Update Orders"
               proceed_label="Submit"
-              button={<Button id="create">Edit</Button>}
+              button={
+                <Button id="create" hoverText="Edit Orders">
+                  <FilePenLine className="h-5 w-5" />
+                </Button>
+              }
               onAccept={onUpdateOrder}
             >
               <RichInput

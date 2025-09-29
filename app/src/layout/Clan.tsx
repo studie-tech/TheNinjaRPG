@@ -15,10 +15,10 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { DoorOpen, ArrowBigUpDash, ArrowBigDownDash } from "lucide-react";
-import { SendHorizontal, Swords, DoorClosed, PiggyBank } from "lucide-react";
+import { SendHorizontal, Swords, DoorClosed, PiggyBank, Star } from "lucide-react";
 import { FilePenLine, List, CirclePlay, ScanEye, Palette } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Medal, HeartCrack, Star } from "lucide-react";
+import { Medal, HeartCrack } from "lucide-react";
 import ActionLogs from "@/layout/ActionLog";
 import { useFiltering, getFilter } from "@/layout/ActionLogFiltering";
 import { showUserRank } from "@/libs/profile";
@@ -55,7 +55,7 @@ import {
   HIDEOUT_TOWN_UPGRADE,
   CLAN_COLOR_CHANGE_REP_COST,
 } from "@/drizzle/constants";
-import { checkCoLeader } from "@/validators/clan";
+import { checkCoLeader, checkAssassin } from "@/validators/clan";
 import { factionEditSchema } from "@/validators/clan";
 import { factionColorEditSchema } from "@/validators/clan";
 import { useRequireInVillage } from "@/utils/UserContext";
@@ -907,7 +907,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               title={`Edit ${groupLabel}`}
               proceed_label="Submit"
               button={
-                <Button id="rename-clan">
+                <Button id="rename-clan" hoverText={`Edit ${groupLabel}`}>
                   <FilePenLine className="h-5 w-5" />
                 </Button>
               }
@@ -964,7 +964,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
             <Confirm2
               title={`Village ${groupLabel} Overview`}
               button={
-                <Button id="send">
+                <Button id="send" hoverText={`${groupLabel} Overview`}>
                   <List className="h-5 w-5" />
                 </Button>
               }
@@ -977,7 +977,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               title={`Leave ${groupLabel}`}
               proceed_label="Submit"
               button={
-                <Button id="send">
+                <Button id="send" hoverText={`Leave ${groupLabel}`}>
                   <DoorOpen className="h-5 w-5" />
                 </Button>
               }
@@ -1296,6 +1296,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
     .map((member) => {
       const memberIsLeader = member.userId === clanData.leaderId;
       const memberIsColeader = checkCoLeader(member.userId, clanData);
+      const memberIsAssassin = checkAssassin(member.userId, clanData);
       const canKick =
         canEdit || // canEdit role can kick anyone
         (isLeader && !memberIsLeader) || // Leader can kick anyone except other leaders
@@ -1306,7 +1307,9 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
           ? "Leader"
           : memberIsColeader
             ? "Coleader"
-            : showUserRank(member),
+            : memberIsAssassin
+              ? "Assassin"
+              : showUserRank(member),
         actions: (
           <div className="flex flex-row gap-1">
             {member.userId !== userId && (
@@ -1317,9 +1320,8 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
                     title="Kick Member"
                     proceed_label="Submit"
                     button={
-                      <Button id={`kick-${member.userId}`}>
-                        <DoorOpen className="mr-2 h-5 w-5" />
-                        Kick
+                      <Button id={`kick-${member.userId}`} hoverText="Kick Member">
+                        <DoorOpen className="h-5 w-5" />
                       </Button>
                     }
                     onAccept={() => kick({ clanId, memberId: member.userId })}
@@ -1331,20 +1333,23 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
                 )}
 
                 {/* DEMOTE BUTTON */}
-                {(isLeader || canEdit) && (
-                  <Confirm2
-                    title="Demote Member"
-                    button={
-                      <Button id={`demote-${member.userId}`}>
-                        <ArrowBigDownDash className="mr-2 h-5 w-5" />
-                        Demote
-                      </Button>
-                    }
-                    onAccept={() => demote({ clanId, memberId: member.userId })}
-                  >
-                    Confirm that you want to demote this member.
-                  </Confirm2>
-                )}
+                {(isLeader || canEdit) &&
+                  (memberIsAssassin || memberIsLeader || memberIsColeader) && (
+                    <Confirm2
+                      title="Demote Member"
+                      button={
+                        <Button
+                          id={`demote-${member.userId}`}
+                          hoverText="Demote Member"
+                        >
+                          <ArrowBigDownDash className="h-5 w-5" />
+                        </Button>
+                      }
+                      onAccept={() => demote({ clanId, memberId: member.userId })}
+                    >
+                      Confirm that you want to demote this member.
+                    </Confirm2>
+                  )}
 
                 {/* PROMOTE BUTTON */}
                 {(isLeader ||
@@ -1353,9 +1358,11 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
                   <Confirm2
                     title="Promote Member"
                     button={
-                      <Button id={`promote-${member.userId}`}>
-                        <ArrowBigUpDash className="mr-2 h-5 w-5" />
-                        Promote
+                      <Button
+                        id={`promote-${member.userId}`}
+                        hoverText="Promote Member"
+                      >
+                        <ArrowBigUpDash className="h-5 w-5" />
                       </Button>
                     }
                     onAccept={() => promote({ clanId, memberId: member.userId })}
@@ -1374,6 +1381,8 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       if (b.rank === "Leader") return 1;
       if (a.rank === "Coleader") return -1;
       if (b.rank === "Coleader") return 1;
+      if (a.rank === "Assassin") return -1;
+      if (b.rank === "Assassin") return 1;
       return 0;
     });
 

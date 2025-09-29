@@ -14,6 +14,7 @@ import Countdown from "@/layout/Countdown";
 import Confirm2 from "@/layout/Confirm2";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
+import AutoAttackModal from "@/layout/AutoAttackModal";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAwake } from "@/utils/routing";
 import {
@@ -73,14 +74,6 @@ export default function Travel() {
   const [autoAttackMode, setAutoAttackMode] = useLocalStorage<boolean>(
     "autoAttackMode",
     false,
-  );
-  const [autoAttackMinLevel, setAutoAttackMinLevel] = useLocalStorage<number>(
-    "autoAttackMinLevel",
-    1,
-  );
-  const [autoAttackDelay, setAutoAttackDelay] = useLocalStorage<number>(
-    "autoAttackDelay",
-    5,
   );
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showSorrounding, setShowSorrounding] = useState<boolean>(false);
@@ -596,71 +589,11 @@ export default function Travel() {
       )}
 
       {/* Auto Attack Configuration Modal */}
-      {showAutoAttackModal && (
-        <Modal2
-          title="Auto Attack Configuration"
-          isOpen={showAutoAttackModal}
-          setIsOpen={setShowAutoAttackModal}
-          isValid={true}
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Minimum Level to Attack
-              </label>
-              <Input
-                type="number"
-                min="1"
-                max="100"
-                value={autoAttackMinLevel}
-                onChange={(e) => setAutoAttackMinLevel(parseInt(e.target.value) || 1)}
-                className="w-full"
-                placeholder="1"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Only attack enemies at or above this level
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Attack Delay (seconds)
-              </label>
-              <Input
-                type="number"
-                min="1"
-                max="60"
-                value={autoAttackDelay}
-                onChange={(e) => setAutoAttackDelay(parseInt(e.target.value) || 5)}
-                className="w-full"
-                placeholder="5"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Wait this many seconds between attacks
-              </p>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowAutoAttackModal(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  setAutoAttackMode(true);
-                  setShowAutoAttackModal(false);
-                }}
-                className="flex-1"
-              >
-                Enable Auto Attack
-              </Button>
-            </div>
-          </div>
-        </Modal2>
-      )}
+      <AutoAttackModal
+        isOpen={showAutoAttackModal}
+        setIsOpen={setShowAutoAttackModal}
+        onEnable={() => setAutoAttackMode(true)}
+      />
     </>
   );
 }

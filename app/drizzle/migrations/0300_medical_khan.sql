@@ -1,0 +1,11 @@
+ALTER TABLE `Clan`
+  ADD `assassin1` varchar(191),
+  ADD `assassin2` varchar(191),
+  ADD `assassin3` varchar(191),
+  ADD `assassin4` varchar(191),
+  ADD `assassin5` varchar(191),
+  ADD `assassin6` varchar(191),
+  ADD `assassin7` varchar(191),
+  ADD `assassin8` varchar(191),
+  ADD `assassin9` varchar(191),
+  ADD `assassin10` varchar(191);

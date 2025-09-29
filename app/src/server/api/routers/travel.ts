@@ -242,6 +242,7 @@ export const travelRouter = createTRPCRouter({
             level: true,
             rank: true,
             isOutlaw: true,
+            isBanned: true,
             immunityUntil: true,
             robImmunityUntil: true,
             updatedAt: true,
@@ -277,13 +278,16 @@ export const travelRouter = createTRPCRouter({
         }),
         fetchSector(ctx.drizzle, user.sector),
         ctx.drizzle.query.war.findMany({
-          where: and(eq(war.sector, user.sector), eq(war.status, "ACTIVE")),
+          where: eq(war.status, "ACTIVE"),
           with: {
             attackerVillage: {
               columns: { name: true, id: true, villageGraphic: true },
             },
             defenderVillage: {
               columns: { name: true, id: true, villageGraphic: true },
+            },
+            warAllies: {
+              columns: { villageId: true, supportVillageId: true },
             },
           },
         }),

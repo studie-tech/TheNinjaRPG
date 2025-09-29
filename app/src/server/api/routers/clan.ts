@@ -11,7 +11,7 @@ import { errorResponse, baseServerResponse } from "@/server/api/trpc";
 import { fetchVillage, fetchVillages, fetchStructures } from "@/routers/village";
 import { fetchUser, updateNindo } from "@/routers/profile";
 import { getServerPusher } from "@/libs/pusher";
-import { clanCreateSchema, checkCoLeader } from "@/validators/clan";
+import { clanCreateSchema, checkCoLeader, checkAssassin } from "@/validators/clan";
 import { hasRequiredRank } from "@/libs/train";
 import { canEditClans } from "@/utils/permissions";
 import { checkIfSectorIsAvailable } from "@/libs/clan";
@@ -33,6 +33,8 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { HIDEOUT_COST, HIDEOUT_TOWN_UPGRADE } from "@/drizzle/constants";
 import { TOWN_REESTABLISH_COST } from "@/drizzle/constants";
 import { FACTION_MIN_POINTS_FOR_TOWN } from "@/drizzle/constants";
+import { ASSASSIN_MAX_PER_FACTION } from "@/drizzle/constants";
+import { CLAN_ASSASSIN_SLOTS } from "@/drizzle/constants";
 import { FACTION_MIN_MEMBERS_FOR_TOWN } from "@/drizzle/constants";
 import { IMG_VILLAGE_FACTION } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
@@ -646,6 +648,7 @@ export const clanRouter = createTRPCRouter({
       // Derived
       const isLeader = user.userId === fetchedClan?.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
+      const isMemberAssassin = checkAssassin(input.memberId, fetchedClan);
       const isMemberColeader = checkCoLeader(input.memberId, fetchedClan);
       const canEdit = canEditClans(user.role);
       const isMemberLeader = input.memberId === fetchedClan?.leaderId;
@@ -664,6 +667,11 @@ export const clanRouter = createTRPCRouter({
         return errorResponse(`Not in ${groupLabel}`);
       if (!hasRequiredRank(member.rank, CLAN_RANK_REQUIREMENT))
         return errorResponse("Leader rank too low");
+      // Derived
+      const currentAssassins = CLAN_ASSASSIN_SLOTS.map((k) => fetchedClan[k]).filter(
+        Boolean,
+      ).length;
+      // Userdata to update
       let updateData = null;
       // If member is a co-leader and the user is either a leader or has canEdit, promote them to leader
       if (isMemberColeader && (isLeader || canEdit)) {
@@ -685,10 +693,24 @@ export const clanRouter = createTRPCRouter({
       }
       // If member is NOT a co-leader, allow promotion to co-leader instead
       else if (!isMemberColeader) {
-        if (!fetchedClan.coLeader1) updateData = { coLeader1: input.memberId };
-        else if (!fetchedClan.coLeader2) updateData = { coLeader2: input.memberId };
-        else if (!fetchedClan.coLeader3) updateData = { coLeader3: input.memberId };
-        else return errorResponse(`No more co-leader slots available in ${groupLabel}`);
+        if (member.isOutlaw && !isMemberAssassin) {
+          if (currentAssassins >= ASSASSIN_MAX_PER_FACTION) {
+            return errorResponse(
+              `Maximum ${ASSASSIN_MAX_PER_FACTION} assassins allowed`,
+            );
+          }
+          const slotKey = CLAN_ASSASSIN_SLOTS.find((k) => !fetchedClan[k]);
+          if (!slotKey) {
+            return errorResponse(`No more assassin slots available in ${groupLabel}`);
+          }
+          updateData = { [slotKey]: input.memberId };
+        } else {
+          if (!fetchedClan.coLeader1) updateData = { coLeader1: input.memberId };
+          else if (!fetchedClan.coLeader2) updateData = { coLeader2: input.memberId };
+          else if (!fetchedClan.coLeader3) updateData = { coLeader3: input.memberId };
+          else
+            return errorResponse(`No more co-leader slots available in ${groupLabel}`);
+        }
       }
       // If the member is already a co-leader but the user isn't a leader or can't edit, deny the promotion attempt
       else {
@@ -726,6 +748,7 @@ export const clanRouter = createTRPCRouter({
       const isColeader = checkCoLeader(user.userId, clanData);
       const isMemberLeader = input.memberId === clanData?.leaderId;
       const isMemberColeader = checkCoLeader(input.memberId, clanData);
+      const isMemberAssassin = checkAssassin(input.memberId, clanData);
       const canEdit = canEditClans(user.role);
       const isYourself = ctx.userId === input.memberId;
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
@@ -740,6 +763,9 @@ export const clanRouter = createTRPCRouter({
       if (isMemberColeader && !isLeader && !canEdit && !isYourself) {
         return errorResponse(`Only ${groupLabel} leader can demote`);
       }
+      const assasinField = CLAN_ASSASSIN_SLOTS.find(
+        (k) => clanData[k] === member.userId,
+      );
       // Mutate
       await ctx.drizzle
         .update(clan)
@@ -747,6 +773,7 @@ export const clanRouter = createTRPCRouter({
           coLeader1: clanData.coLeader1 === member.userId ? null : clanData.coLeader1,
           coLeader2: clanData.coLeader2 === member.userId ? null : clanData.coLeader2,
           coLeader3: clanData.coLeader3 === member.userId ? null : clanData.coLeader3,
+          ...(isMemberAssassin && assasinField ? { [assasinField]: null } : {}),
         })
         .where(eq(clan.id, clanData.id));
       // Create

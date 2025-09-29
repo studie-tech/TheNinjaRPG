@@ -33,13 +33,12 @@ import type { UserData, AiProfile } from "@/drizzle/schema";
 import type { AnbuSquad } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type { BattleType } from "@/drizzle/constants";
-import type { WarAlly } from "@/drizzle/schema";
 import type { UserSkill, SkillTree } from "@/drizzle/schema";
 import type { BountyStatus } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 
 export type BattleWar = War & {
-  warAllies: WarAlly[];
+  warAllies: { villageId: string; supportVillageId: string }[];
   attackerVillage: { name: string } | null;
   defenderVillage: { name: string } | null;
 };

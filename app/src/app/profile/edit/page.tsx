@@ -1027,7 +1027,8 @@ const SwapBloodline: React.FC = () => {
   }
 
   // Derived data
-  const isDisabled = userData.bloodline ? false : true;
+  const hasAvailableSwaps = bloodlines && bloodlines.length > 0;
+  const isDisabled = !hasAvailableSwaps;
   const canAfford = userData && userData.reputationPoints >= COST_SWAP_BLOODLINE;
 
   // Show component
@@ -1052,11 +1053,11 @@ const SwapBloodline: React.FC = () => {
       {isFetching && <Loader explanation="Loading bloodlines" />}
       {isDisabled && (
         <div>
-          You do not have a bloodline currently. Go{" "}
+          You do not have any bloodlines available to swap to. Go{" "}
           <Link className="font-bold" href="/travel">
             travel
           </Link>{" "}
-          to the wake island location, and get one in the science building.
+          to the wake island location, and get bloodlines in the science building to build your history.
         </div>
       )}
       {isOpen && userData && bloodline && (

@@ -37,6 +37,7 @@ import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import { SECTOR_LENGTH_TO_WIDTH } from "@/libs/travel/constants";
 import { RANKS_RESTRICTED_FROM_PVP, MEDNIN_MIN_RANK } from "@/drizzle/constants";
 import { WAR_SHRINE_IMAGE } from "@/drizzle/constants";
+import { isWarAllies } from "@/libs/war";
 import {
   IMG_SECTOR_INFO,
   IMG_SECTOR_ATTACK,
@@ -108,6 +109,7 @@ const Sector: React.FC<SectorProps> = (props) => {
   );
   const villageData = data?.village;
   const fetchedUsers = data?.users;
+  const warData = data?.warData;
   const structures = villageData?.structures || [];
 
   // If we're in an active sector war, then we add a shrine to the center of the sector
@@ -428,6 +430,15 @@ const Sector: React.FC<SectorProps> = (props) => {
         if (!user.userId || user.userId === userData.userId) return false;
         if (user.status !== "AWAKE") return false;
 
+        // Don't attack banned users
+        if (user.isBanned) return false;
+
+        // Don't attack allies in active wars
+        const areWarAllies = isWarAllies(warData, userData.villageId, user.villageId);
+        if (areWarAllies) {
+          return false;
+        }
+
         // Check if user is an enemy (different village and not ally)
         const isAlly =
           user.villageId === userData.villageId || user.allianceStatus === "ALLY";
@@ -535,7 +546,15 @@ const Sector: React.FC<SectorProps> = (props) => {
         fetchedUsers
           ?.map((user) => {
             const allianceStatus = getAllyStatus(userData?.village, user.villageId);
-            return { ...user, allianceStatus };
+            return {
+              ...user,
+              allianceStatus,
+              isBanned:
+                "isBanned" in user
+                  ? Boolean((user as { isBanned?: boolean }).isBanned)
+                  : false,
+              isOutlaw: user.isOutlaw || false,
+            };
           })
           .filter((u) => u?.userId) || [];
       setSorrounding(enrichedData);

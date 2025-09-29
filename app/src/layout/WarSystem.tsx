@@ -444,8 +444,6 @@ export const WarMap: React.FC<{
     }
   }
 
-  console.log(sectorVillage);
-
   // Depending on which tile the user clicked, we're either declaring a sector war, village war, or faction raid
   return (
     <div className="relative">
