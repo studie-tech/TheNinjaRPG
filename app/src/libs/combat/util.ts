@@ -1310,7 +1310,9 @@ export const alignBattle = (
         }
       } else if (effect.type === "clone" && effect.rounds === 0) {
         // Clone despawning logic
-        const idx = battle.usersState.findIndex((u) => u.userId === effect.creatorId);
+        const idx = battle.usersState.findIndex(
+          (u) => u.controllerId === effect.creatorId && !u.isOriginal,
+        );
         if (idx > -1) {
           battle.usersState.splice(idx, 1);
         }
