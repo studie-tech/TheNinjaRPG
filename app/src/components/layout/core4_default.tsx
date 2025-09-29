@@ -1281,7 +1281,7 @@ const RightSideBar: React.FC<{
       <SideBannerTitle break={userData && notifications && notifications.length > 0}>
         Main Menu
       </SideBannerTitle>
-      <div className="mt-1 grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="mt-1 grid gap-3 grid-cols-2">
         {systems.map((system, i) => {
           const disabled = system.requireAwake && userData?.status !== "AWAKE";
           return (

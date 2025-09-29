@@ -42,6 +42,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { useTutorialStep } from "@/hooks/tutorial";
 import type { z } from "zod";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import type { StatSchemaType } from "@/libs/combat/types";
@@ -274,6 +275,9 @@ const ChallengeAI: React.FC<ChallengeAIProps> = (props) => {
   // Router for forwarding
   const router = useRouter();
 
+  // Tutorial step
+  const { currentStep, handleNextStep } = useTutorialStep();
+
   // Mutation for starting a fight
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({
@@ -287,6 +291,9 @@ const ChallengeAI: React.FC<ChallengeAIProps> = (props) => {
           router.push("/combat");
           showMutationToast({ ...result, message: "Entering the Arena" });
           sendGTMEvent({ event: "enter_arena" });
+          if (currentStep?.title === "Start Arena Match") {
+            handleNextStep();
+          }
         } else {
           showMutationToast(result);
         }
@@ -310,6 +317,7 @@ const ChallengeAI: React.FC<ChallengeAIProps> = (props) => {
       {!isAttacking && canDoArena && (
         <div className="p-3">
           <Button
+            id="tutorial-battlearena-challenge-ai-enter"
             size="xl"
             decoration="gold"
             animation="pulse"

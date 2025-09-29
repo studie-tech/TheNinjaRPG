@@ -27,11 +27,13 @@ import { VILLAGE_REDUCED_GAINS_DAYS } from "@/drizzle/constants";
 import { VILLAGE_LEAVE_REQUIRED_RANK } from "@/drizzle/constants";
 import Building from "@/layout/Building";
 import { StructureRewardEntries } from "@/layout/Building";
+import { useTutorialStep } from "@/hooks/tutorial";
 import type { MutateContentSchema } from "@/validators/comments";
 
 export default function VillageOverview() {
   // State
   const { userData, sectorVillage } = useRequireInVillage();
+  const { currentStep } = useTutorialStep();
 
   // Queries
   const { data, isFetching: isFetchingVillage } = api.village.get.useQuery(
@@ -109,6 +111,21 @@ export default function VillageOverview() {
 
   // Derived
   const canLeave = hasRequiredRank(userData.rank, VILLAGE_LEAVE_REQUIRED_RANK);
+
+  // Which structures to show
+  const shownStructures = villageData?.structures
+    .filter((s) => s.hasPage !== 0)
+    .filter((s) => s.showInVillagePage)
+    .filter((s) => ownSector || s.allyAccess)
+    .sort((a, v) => {
+      if (a.name === currentStep?.title) {
+        return -1;
+      }
+      if (v.name === currentStep?.title) {
+        return 1;
+      }
+      return 0;
+    });
 
   // Render
   return (
@@ -201,26 +218,22 @@ export default function VillageOverview() {
         }
       >
         <div className="grid grid-cols-3 items-center sm:grid-cols-4">
-          {villageData?.structures
-            .filter((s) => s.hasPage !== 0)
-            .filter((s) => s.showInVillagePage)
-            .filter((s) => ownSector || s.allyAccess)
-            .map((structure, i) => (
-              <div
-                key={i}
-                className="p-2"
-                id={`tutorial-${structure.route.replace("/", "")}`}
-              >
-                <Building
-                  structure={structure}
-                  village={villageData}
-                  key={structure.id}
-                  textPosition="bottom"
-                  showBar
-                  showUpgrade
-                />
-              </div>
-            ))}
+          {shownStructures?.map((structure, i) => (
+            <div
+              key={i}
+              className="p-2"
+              id={`tutorial-${structure.route.replace("/", "")}`}
+            >
+              <Building
+                structure={structure}
+                village={villageData}
+                key={structure.id}
+                textPosition="bottom"
+                showBar
+                showUpgrade
+              />
+            </div>
+          ))}
         </div>
         {isFetchingVillage && <Loader explanation="Loading Village Information" />}
       </ContentBox>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { useUserData } from "@/utils/UserContext";
@@ -14,168 +14,83 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getMobileOperatingSystem } from "@/utils/hardware";
-import { api } from "@/app/_trpc/client";
 import { IMG_URL_ASSISTANT, IMG_URL_HANDPOINTER } from "@/drizzle/constants";
+import { TUTORIAL_STEPS, useTutorialStep } from "@/hooks/tutorial";
+import { cn } from "src/libs/shadui";
+import type { TutorialStepConfig } from "@/hooks/tutorial";
 
-interface TutorialStepConfig {
+/**
+ * Reusable assistant portrait with correct styling
+ * @returns
+ */
+const AssistantPortrait: React.FC = () => (
+  <Image
+    src={IMG_URL_ASSISTANT}
+    width={100}
+    height={100}
+    alt="Assistant"
+    className="absolute -top-38 right-0 md:-top-48 h-38 md:h-48 w-auto object-contain drop-shadow-2xl select-none pointer-events-none z-0"
+  />
+);
+
+/**
+ * Reusable assistant dialog (uses the latter, correct styling)
+ * @param title - The title of the dialog
+ * @param children - The content of the dialog
+ * @returns
+ */
+const AssistantDialog: React.FC<{
   title: string;
-  description: string;
-  elementId?: string;
-  page: string;
-  requiresGameMenu?: boolean;
-  externalLink?: string;
-}
+  children: React.ReactNode;
+}> = ({ title, children }) => (
+  <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-60 pointer-events-auto">
+    <div className="relative">
+      {/* Assistant portrait positioned behind and above the dialog (top-right) */}
+      <AssistantPortrait />
+      {/* Foreground content */}
+      <div className="relative z-10">
+        {/* Nameplate */}
+        <div className="absolute -top-6 left-8 px-4 py-1 rounded-md bg-primary text-primary-foreground shadow-lg uppercase tracking-wider text-xs md:text-sm">
+          {title}
+        </div>
+        {/* Speech panel */}
+        <div className="bg-card text-foreground rounded-xl border-2 border-primary shadow-2xl w-[80vw] md:w-[560px] p-4 md:p-5">
+          {children}
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
-// Define the type for our tutorial step as used in the helper function
-type TutorialStep = TutorialStepConfig;
-
-// Define all tutorial steps
-const TUTORIAL_STEPS: TutorialStepConfig[] = [
-  // Profile page steps - main menu buttons
-
-  {
-    title: "Welcome to the game",
-    description:
-      "Welcome to The Ninja-Rpg! I'm Lemu and I'll be guiding you through the early stages of your development here at the academy. Before starting we will quickly go through basic controls and features. This is your main profile where all your overall progress can be viewed.",
-    elementId: "tutorial-profile",
-    page: "/profile",
-    requiresGameMenu: false,
-  },
-  {
-    title: "Strengths & Weaknesses",
-    description:
-      "In this section of the profile you can view the specifics of your character, your stats, strengths and weaknesses. Kinda weak right now, but we'll get you stronger. Let's go the the battle arena to train a bit. ",
-    elementId: "tutorial-strength-weaknesses",
-    page: "/profile",
-    requiresGameMenu: false,
-  },
-  {
-    title: "Village",
-    description:
-      "The location Menu is the heart of your village, this is where you can access all your village has to offer from Trainings to the black-market, to taking Missions to buying Ramen. You can also view your village Notice board here as well.",
-    elementId: "tutorial-village",
-    page: "/profile",
-    requiresGameMenu: true,
-  },
-
-  // Village page steps
-  {
-    title: "Training",
-    description:
-      "Come here to begin training each of your offense that was covered under Strength and Weakness along with Training your jutsu. Use the filters to locate what you are looking for. Jutsu's are locked behind rank and elements. If you want a comprehensive guide of what Jutsu's are in the game please select Info and use the jutsu page there.",
-    elementId: "tutorial-traininggrounds",
-    page: "/village",
-  },
-  {
-    title: "Town Hall",
-    description:
-      "This is where you go to see the current Kages, their leaders, your alliances with other villages and your village elders.",
-    elementId: "tutorial-townhall",
-    page: "/village",
-  },
-  {
-    title: "Ramen Shop",
-    description:
-      "You can purchase Ramen to heal you or you can wait on a medical ninja todo so.",
-    elementId: "tutorial-ramenshop",
-    page: "/village",
-  },
-  {
-    title: "Mission Hall",
-    description:
-      "Here you can take missions, Missions grant you Ryo and other Stats that can be used.",
-    elementId: "tutorial-missionhall",
-    page: "/village",
-  },
-  {
-    title: "Item Shop",
-    description: "Purchase items, weapons armor and consumables here.",
-    elementId: "tutorial-itemshop",
-    page: "/village",
-  },
-  {
-    title: "Hospital",
-    description:
-      "This is where those who are in need of healing shows up or if you have died in combat you will be in the hospital. If you're a medical ninja you can go to the hospital to heal your fellow villagers.",
-    elementId: "tutorial-hospital",
-    page: "/village",
-  },
-  {
-    title: "Home",
-    description:
-      "TNR is a PVP game, your home allows you to sleep to avoid being in fights and to increase your Regen along with storing items.",
-    elementId: "tutorial-home",
-    page: "/village",
-  },
-  {
-    title: "Clan Hall",
-    description:
-      "Clans are created by players they act as guilds where you can gain training boost, participate in clan battles and clan tournaments. You can also create a clan but that comes at a cost.",
-    elementId: "tutorial-clanhall",
-    page: "/village",
-  },
-  {
-    title: "Black Market",
-    description:
-      "Come here to purchase Crafted Goods, Reputation points from other players and other Items with reputation points or Ryo.",
-    elementId: "tutorial-blackmarket",
-    page: "/village",
-  },
-  {
-    title: "Battle Arena",
-    description:
-      "Put your skills to the test by fighting NPCs in the Arena, the Battle Pyramids. You can also train yourselves with the testing dummy to maximize damage rotations.",
-    elementId: "tutorial-battlearena",
-    page: "/village",
-  },
-  {
-    title: "Bank",
-    description:
-      "Withdraw, Bank or send ryo to other players. You also gain a daily interest rate on what you bank.",
-    elementId: "tutorial-bank",
-    page: "/village",
-  },
-  {
-    title: "Academy",
-    description:
-      "Learn the basics of the game here, this will be your starting point for how to play the game. Let's go there now.",
-    elementId: "tutorial-academy",
-    page: "/village",
-  },
-  {
-    title: "Academy",
-    description:
-      "Welcome to the academy. Once we're done with this tutorial, press here to start your first lesson to get more familiar with the game. Good luck!",
-    elementId: "tutorial-take-quest",
-    page: "/academy",
-  },
-  {
-    title: "That's it for now!",
-    description:
-      "That's it for the tutorial, you can now start playing the game! You can find further information on how to play the game at this link",
-    elementId: "tutorial-logo",
-    page: "/academy",
-    externalLink: "https://the-ninja-rpg.fandom.com/wiki/Getting_Started",
-  },
-];
-
+/**
+ * Tutorial assistant component props
+ * @param rightSideBarOpen - Whether the right side bar is open
+ * @param setRightSideBarOpen - Function to set the right side bar open
+ * @param rightSideBarRef - Reference to the right side bar
+ * @returns
+ */
 interface TutorialAssistantProps {
   rightSideBarOpen: boolean;
   setRightSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   rightSideBarRef: React.RefObject<HTMLDivElement | null>;
 }
 
+/**
+ * Tutorial assistant component
+ * @param rightSideBarOpen - Whether the right side bar is open
+ * @param setRightSideBarOpen - Function to set the right side bar open
+ * @param rightSideBarRef - Reference to the right side bar
+ * @returns
+ */
 const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   rightSideBarOpen,
   setRightSideBarOpen,
   rightSideBarRef,
 }) => {
   // State
-  const { data: userData, userAgent, updateUser } = useUserData();
+  const { data: userData, userAgent } = useUserData();
   const pathname = usePathname();
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState<number>(0);
-  const [isVisible, setIsVisible] = useState<boolean>(false);
   const [highlight, setHighlight] = useState<{
     top: number;
     left: number;
@@ -203,18 +118,15 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   // State to track if we should show the special game menu tutorial
   const [showGameMenuTutorial, setShowGameMenuTutorial] = useState<boolean>(false);
 
-  // Update user's tutorial step
-  const updateTutorialStep = api.profile.updateTutorialStep.useMutation({
-    onSuccess: async (data) => {
-      if (data.success && data.data) {
-        await updateUser({ tutorialStep: data.data.tutorialStep });
-        const nextStepPage = TUTORIAL_STEPS[data.data.tutorialStep]?.page;
-        if (nextStepPage && pathname !== nextStepPage) {
-          router.push(nextStepPage);
-        }
-      }
-    },
-  });
+  // Tutorial management hook
+  const {
+    updateTutorialStep,
+    handleNextStep,
+    currentStepNumber,
+    setCurrentStepNumber,
+    isAssistantVisible,
+    setIsAssistantVisible,
+  } = useTutorialStep();
 
   // Initialize tutorial visibility
   useEffect(() => {
@@ -228,7 +140,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
         updateTutorialStep.mutate({ step: 0 });
       }
 
-      setCurrentStep(tutorialStep);
+      setCurrentStepNumber(tutorialStep);
 
       // Get current step config
       const currentStepConfig = TUTORIAL_STEPS[tutorialStep];
@@ -253,7 +165,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
         // Only show if on correct page and game menu requirements are met
         const shouldShowRegularTutorial =
           tutorialStep < TUTORIAL_STEPS.length && onCorrectPage && hasRequiredGameMenu;
-        setIsVisible(Boolean(shouldShowRegularTutorial));
+        setIsAssistantVisible(Boolean(shouldShowRegularTutorial));
 
         // If we're at a valid step but not on the correct page, redirect
         if (
@@ -268,7 +180,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
         }
       } else {
         // If showing game menu tutorial, don't show regular tutorial
-        setIsVisible(false);
+        setIsAssistantVisible(false);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -304,9 +216,9 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
 
   // Update highlight position based on current step and element
   useEffect(() => {
-    if (!isVisible) return;
+    if (!isAssistantVisible) return;
 
-    const step = TUTORIAL_STEPS[currentStep];
+    const step = TUTORIAL_STEPS[currentStepNumber];
 
     // Guard against undefined step
     if (!step) {
@@ -370,30 +282,12 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       observer.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, isVisible, pathname]);
-
-  // Handle next step
-  const handleNextStep = useCallback(() => {
-    setCurrentStep((prevStep) => {
-      const nextStep = prevStep + 1;
-
-      // Update the user's tutorial step in the database
-      updateTutorialStep.mutate({ step: nextStep });
-
-      // If we've reached the end of the tutorial, hide it
-      if (nextStep >= TUTORIAL_STEPS.length) {
-        setIsVisible(false);
-        return prevStep; // Return current step since we're hiding the tutorial
-      }
-
-      return nextStep;
-    });
-  }, [updateTutorialStep, setIsVisible]);
+  }, [currentStepNumber, isAssistantVisible, pathname]);
 
   // Add keyboard event listener for Enter and ArrowLeft keys to forward tutorial
   useEffect(() => {
     // Only add keyboard listener when tutorial is visible (either regular or game menu)
-    if (!isVisible && !showGameMenuTutorial) return;
+    if (!isAssistantVisible && !showGameMenuTutorial) return;
 
     const handleKeyPress = (event: KeyboardEvent) => {
       // Check for Enter key or ArrowLeft key
@@ -417,9 +311,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     return () => {
       window.removeEventListener("keydown", handleKeyPress, true);
     };
-  }, [isVisible, showGameMenuTutorial, handleNextStep, setRightSideBarOpen]);
-
-  // Removed skip tutorial handler as part of simplifying flow
+  }, [isAssistantVisible, showGameMenuTutorial, handleNextStep, setRightSideBarOpen]);
 
   // Render Game Menu tutorial (with bottom-right assistant)
   const renderGameMenuTutorial = () => {
@@ -461,10 +353,12 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
           </div>
 
           {/* Hand pointer near the highlighted button */}
-          <img
+          <Image
             src={IMG_URL_HANDPOINTER}
             alt="Tap here"
-            className="absolute w-10 h-10 animate-bounce"
+            className="absolute w-18 h-18 animate-bounce"
+            width={80}
+            height={80}
             style={{
               top: Math.max(0, gameBtnHighlight.top + gameBtnHighlight.height + 12),
               left: Math.min(
@@ -475,35 +369,17 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
           />
 
           {/* Assistant panel bottom-right - large, game-like dialog */}
-          <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-60 pointer-events-auto">
-            <div className="relative">
-              {/* Assistant portrait positioned behind and above the dialog (top-right) */}
-              <img
-                src={IMG_URL_ASSISTANT}
-                alt="Assistant"
-                className="absolute -top-14 -right-12 md:-top-20 md:-right-12 h-28 md:h-48 w-auto object-contain drop-shadow-2xl select-none pointer-events-none z-0"
-              />
-              {/* Foreground content */}
-              <div className="relative z-10">
-                {/* Nameplate */}
-                <div className="absolute -top-6 left-8 px-4 py-1 rounded-md bg-amber-700 text-amber-50 shadow-lg uppercase tracking-wider text-sm">
-                  Game Menu
-                </div>
-                {/* Speech panel */}
-                <div className="bg-[rgba(255,252,235,0.95)] text-foreground rounded-xl border-2 border-amber-700 shadow-2xl w-[90vw] md:w-[560px] p-4 md:p-5">
-                  <p className="text-sm md:text-base leading-relaxed">
-                    Click the highlighted button to open the game menu and continue the
-                    tutorial.
-                  </p>
-                  <div className="mt-3 md:mt-4 flex justify-end gap-2">
-                    <Button size="lg" onClick={() => setRightSideBarOpen(true)}>
-                      Open Menu <ArrowRight className="ml-2 h-4 md:h-5 w-4 md:w-5" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
+          <AssistantDialog title="Game Menu">
+            <p className="text-sm md:text-base leading-relaxed">
+              Click the highlighted button to open the game menu and continue the
+              tutorial.
+            </p>
+            <div className="mt-3 md:mt-4 flex justify-end gap-2">
+              <Button size="lg" onClick={() => setRightSideBarOpen(true)}>
+                Open Menu <ArrowRight className="ml-2 h-4 md:h-5 w-4 md:w-5" />
+              </Button>
             </div>
-          </div>
+          </AssistantDialog>
         </div>
       );
     }
@@ -533,9 +409,9 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   }
 
   // If the regular tutorial is not visible, don't render anything
-  if (!isVisible) return null;
+  if (!isAssistantVisible) return null;
 
-  const currentTutorialStep = TUTORIAL_STEPS[currentStep];
+  const currentTutorialStep = TUTORIAL_STEPS[currentStepNumber];
 
   // Guard against undefined currentTutorialStep
   if (!currentTutorialStep) return null;
@@ -545,7 +421,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   // If we're not on the correct page, show a dialog to navigate there
   if (!isOnCorrectPage) {
     return (
-      <Dialog open={true} onOpenChange={() => setIsVisible(true)}>
+      <Dialog open={true} onOpenChange={() => setIsAssistantVisible(true)}>
         <DialogContent className="sm:max-w-md z-60">
           <DialogHeader>
             <DialogTitle>Continue the Tutorial</DialogTitle>
@@ -564,17 +440,23 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     );
   }
 
-  // Missing-element dialog removed
+  // Derived
+  const pointerEvents = currentTutorialStep.proceedOnHighlightClick
+    ? "pointer-events-none"
+    : "pointer-events-auto";
 
   // Render the tutorial overlay with highlight and assistant panel
   return (
     <>
       {highlight && (
-        <div className="fixed inset-0 z-60 pointer-events-none">
+        <div className={cn("fixed inset-0 z-60", pointerEvents)}>
           <div className="absolute inset-0 bg-black/30 min-h-[2000px]" />
 
           <div
-            className="absolute bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+            className={cn(
+              "absolute bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]",
+              pointerEvents,
+            )}
             style={{
               top: highlight.top - 10,
               left: highlight.left - 10,
@@ -583,16 +465,36 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
             }}
           >
             <div className="absolute inset-0 border-3 border-amber-400 rounded-md animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.7)] z-[1]">
-              <div className="absolute inset-0 cursor-pointer z-[2]" />
+              <div
+                className={cn("absolute inset-0 cursor-pointer z-[2]", pointerEvents)}
+                role="button"
+                aria-label="Continue tutorial"
+                onClick={() => {
+                  if (currentTutorialStep.proceedOnHighlightClick) {
+                    handleNextStep();
+                  }
+                }}
+                onTouchStart={(e) => {
+                  if (currentTutorialStep.proceedOnHighlightClick) {
+                    handleNextStep();
+                  }
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+              />
             </div>
           </div>
 
           {/* Hand pointer if this step highlights a clickable element */}
           {currentTutorialStep.elementId && (
-            <img
+            <Image
               src={IMG_URL_HANDPOINTER}
               alt="Tap here"
-              className="absolute w-10 h-10 animate-bounce"
+              className="absolute w-18 h-18 animate-bounce"
+              width={80}
+              height={80}
               style={{
                 top: Math.max(0, highlight.top + highlight.height + 12),
                 left: Math.min(
@@ -606,71 +508,51 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       )}
 
       {/* Assistant panel bottom-right - large, game-like dialog */}
-      <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-60 pointer-events-auto">
-        <div className="relative">
-          {/* Assistant portrait positioned behind and above the dialog (top-right) */}
-          <Image
-            src={IMG_URL_ASSISTANT}
-            width={100}
-            height={100}
-            alt="Assistant"
-            className="absolute -top-38 right-0 md:-top-48 h-38 md:h-48 w-auto object-contain drop-shadow-2xl select-none pointer-events-none z-0"
-          />
-          {/* Foreground content */}
-          <div className="relative z-10">
-            {/* Nameplate */}
-            <div className="absolute -top-6 left-8 px-4 py-1 rounded-md bg-amber-700 text-amber-50 shadow-lg uppercase tracking-wider text-xs md:text-sm">
-              {currentTutorialStep.title}
-            </div>
-            {/* Speech panel */}
-            <div className="bg-[rgba(255,252,235,0.95)] text-foreground rounded-xl border-2 border-amber-700 shadow-2xl w-[90vw] md:w-[560px] p-4 md:p-5">
-              <p className="text-sm md:text-base leading-relaxed">
-                {currentTutorialStep.description}
-              </p>
-              {currentTutorialStep.externalLink && (
-                <div className="mt-3">
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      window.open(currentTutorialStep.externalLink, "_blank")
-                    }
-                  >
-                    Read Getting Started Guide
-                  </Button>
-                </div>
-              )}
-              <div className="mt-3 md:mt-4 flex justify-end gap-2">
-                <Button
-                  size="lg"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (hardwarePlatform !== "mobile") {
-                      handleNextStep();
-                    }
-                  }}
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (hardwarePlatform === "mobile") {
-                      handleNextStep();
-                    }
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                >
-                  {currentStep === TUTORIAL_STEPS.length - 1 ? "Finish" : "Next"}
-                  <ArrowRight className="ml-2 h-4 md:h-5 w-4 md:w-5" />
-                </Button>
-              </div>
-            </div>
+      <AssistantDialog title={currentTutorialStep.title}>
+        <p className="text-sm md:text-base leading-relaxed">
+          {currentTutorialStep.description}
+        </p>
+        {currentTutorialStep.externalLink && (
+          <div className="mt-3">
+            <Button
+              className="w-full"
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(currentTutorialStep.externalLink, "_blank")}
+            >
+              Read Getting Started Guide
+            </Button>
           </div>
-        </div>
-      </div>
+        )}
+        {currentTutorialStep?.showNextButton && (
+          <div className="mt-3 md:mt-4 flex justify-end gap-2">
+            <Button
+              size="lg"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (hardwarePlatform !== "mobile") {
+                  handleNextStep();
+                }
+              }}
+              onTouchStart={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (hardwarePlatform === "mobile") {
+                  handleNextStep();
+                }
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+            >
+              {currentStepNumber === TUTORIAL_STEPS.length - 1 ? "Finish" : "Next"}
+              <ArrowRight className="ml-2 h-4 md:h-5 w-4 md:w-5" />
+            </Button>
+          </div>
+        )}
+      </AssistantDialog>
     </>
   );
 };
@@ -679,7 +561,7 @@ export default TutorialAssistant;
 
 // Helper function to find element to highlight based on current tutorial step
 const findElementToHighlight = (
-  step: TutorialStep,
+  step: TutorialStepConfig,
   rightSideBarRef: React.RefObject<HTMLDivElement | null>,
   rightSideBarOpen: boolean,
 ) => {
