@@ -90,7 +90,10 @@ export const travelRouter = createTRPCRouter({
         return errorResponse("Cannot rob Academy Students or Genins");
       }
       if (sectorData?.pvpDisabled) {
-        return errorResponse("Cannot rob players in this zone");
+        // Only protect members of the PvP-disabled village, not all users in the sector
+        if (target.villageId === sectorData.id) {
+          return errorResponse("Cannot rob players in this zone");
+        }
       }
       if (target.robImmunityUntil && target.robImmunityUntil > new Date()) {
         return errorResponse("Target is immune from being robbed");

@@ -1299,7 +1299,21 @@ export const initiateBattle = async (
   // Check if the villageData is in a pvp enabled zone
   const sectorData = villages.find((v) => v.sector === sector);
   if (sectorData?.pvpDisabled && battleType === "COMBAT") {
-    return { success: false, message: "Cannot PvP in this zone" };
+    // Check if any non-protected users are trying to attack protected village members
+    const protectedVillageId = sectorData.id;
+    const attackers = users.filter(u => userIds.includes(u.userId) && !u.isAi);
+    const defenders = users.filter(u => targetIds.includes(u.userId) && !u.isAi);
+    
+    // Check if any defender is from the protected village
+    const hasProtectedDefender = defenders.some(user => user.villageId === protectedVillageId);
+    
+    // Check if any attacker is NOT from the protected village
+    const hasNonProtectedAttacker = attackers.some(user => user.villageId !== protectedVillageId);
+    
+    // Block if non-protected users are trying to attack protected village members
+    if (hasProtectedDefender && hasNonProtectedAttacker) {
+      return { success: false, message: "Cannot attack members of this protected village" };
+    }
   }
 
   // Loop through each user
