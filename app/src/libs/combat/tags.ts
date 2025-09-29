@@ -179,7 +179,8 @@ export const copy = (
           e.targetId === target.userId &&
           isPositiveUserEffect(e) &&
           !excludedFromTypes.includes(e.fromType || "") &&
-          allowedEffectTypes.includes(e.type),
+          allowedEffectTypes.includes(e.type) &&
+          e.rounds && e.rounds > 0, // Don't copy effects with 0 remaining rounds
       );
 
       if (positiveEffects.length === 0) {
@@ -267,7 +268,8 @@ export const mirror = (
           e.targetId === user.userId &&
           isNegativeUserEffect(e) &&
           !excludedFromTypes.includes(e.fromType || "") &&
-          !excludedEffectTypes.includes(e.type),
+          !excludedEffectTypes.includes(e.type) &&
+          e.rounds && e.rounds > 0, // Don't mirror effects with 0 remaining rounds
       );
 
       if (negativeEffects.length === 0) {
