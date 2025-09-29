@@ -180,7 +180,7 @@ export const copy = (
           isPositiveUserEffect(e) &&
           !excludedFromTypes.includes(e.fromType || "") &&
           allowedEffectTypes.includes(e.type) &&
-          e.rounds && e.rounds > 0, // Don't copy effects with 0 remaining rounds
+          (e.rounds === undefined || e.rounds > 0), // Don't copy effects that have fully expired
       );
 
       if (positiveEffects.length === 0) {
@@ -269,7 +269,7 @@ export const mirror = (
           isNegativeUserEffect(e) &&
           !excludedFromTypes.includes(e.fromType || "") &&
           !excludedEffectTypes.includes(e.type) &&
-          e.rounds && e.rounds > 0, // Don't mirror effects with 0 remaining rounds
+          (e.rounds === undefined || e.rounds > 0), // Don't mirror effects that have fully expired
       );
 
       if (negativeEffects.length === 0) {
