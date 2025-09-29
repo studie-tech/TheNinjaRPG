@@ -1299,30 +1299,14 @@ export const alignBattle = (
       }
     });
 
-    // Process summon and clone despawning before filtering ground effects
-    battle.groundEffects.forEach((effect) => {
-      if (effect.type === "summon" && effect.rounds === 0) {
-        // Summon despawning logic
-        const ai = battle.usersState.find((u) => u.userId === effect.aiId);
-        const idx = battle.usersState.findIndex((u) => u.userId === effect.aiId);
-        if (ai && idx > -1) {
-          battle.usersState.splice(idx, 1);
-        }
-      } else if (effect.type === "clone" && effect.rounds === 0) {
-        // Clone despawning logic
-        const idx = battle.usersState.findIndex(
-          (u) => u.controllerId === effect.creatorId && !u.isOriginal,
-        );
-        if (idx > -1) {
-          battle.usersState.splice(idx, 1);
-        }
-      }
-    });
-
     // Remove expired ground effects (including barriers) immediately
     battle.groundEffects = battle.groundEffects.filter((e) => {
       if (e.rounds !== undefined && e.rounds <= 0) {
         if (e.type === "visual" && actionRounds.includes(e.createdRound)) {
+          return true;
+        } else if (e.type === "summon" || e.type === "clone") {
+          // Allow summon and clone effects to be processed by their tag functions
+          // before being removed in the applyEffects function
           return true;
         } else {
           return false; // Remove expired effects

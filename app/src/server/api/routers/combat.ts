@@ -1381,28 +1381,30 @@ export const initiateBattle = async (
 
     // Level restrictions - prevent attacking users more than 15 levels under or above
     if (battleType === "COMBAT" && userIds.includes(user.userId)) {
-      const attacker = user;
-      const targets = users.filter(u => targetIds.includes(u.userId));
+      const attackerLevel = calcLevel(user.experience);
       
-      for (const target of targets) {
-        if (target.isAi) continue; // Skip AI targets
-        
-        // Calculate actual levels based on experience
-        const attackerLevel = calcLevel(attacker.experience);
-        const targetLevel = calcLevel(target.experience);
+      // Check for non-compliant targets without creating copies
+      const nonCompliantTarget = users.find(u => 
+        targetIds.includes(u.userId) && 
+        !u.isAi && 
+        (Math.abs(attackerLevel - calcLevel(u.experience)) > 15)
+      );
+      
+      if (nonCompliantTarget) {
+        const targetLevel = calcLevel(nonCompliantTarget.experience);
         const levelDifference = attackerLevel - targetLevel;
         
         if (levelDifference > 15) {
           return { 
             success: false, 
-            message: `Cannot attack ${target.username} - they are more than 15 levels below you (${levelDifference} level difference)` 
+            message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels below you (${levelDifference} level difference)` 
           };
         }
         
         if (levelDifference < -15) {
           return { 
             success: false, 
-            message: `Cannot attack ${target.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)` 
+            message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)` 
           };
         }
       }
