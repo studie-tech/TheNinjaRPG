@@ -223,26 +223,30 @@ export const performAIaction = (
             return !nextBattle.usersState.find(
               (u) => u.controllerId === user.userId && u.isSummon && u.curHealth > 0,
             );
-          case "has_effect":
+          case "has_effect": {
+            if (condition.threshold === 0) return true;
             const userEffects = nextBattle.usersEffects.filter(
               (e) => e.targetId === user.userId && e.type === condition.effectType,
             );
             if (userEffects.length === 0) return false;
-            if (condition.threshold === 0) return true;
             const totalUserPower = userEffects.reduce((sum, effect) => sum + effect.power, 0);
             return totalUserPower >= condition.threshold;
-          case "target_has_effect":
-            const targetUser = target ? nextBattle.usersState.find(
-              (u) => u.longitude === target.longitude && u.latitude === target.latitude
-            ) : null;
+          }
+          case "target_has_effect": {
+            if (condition.threshold === 0) return true;
+            const targetUser = target
+              ? nextBattle.usersState.find(
+                  (u) => u.longitude === target.longitude && u.latitude === target.latitude,
+                )
+              : null;
             if (!targetUser) return false;
             const targetEffects = nextBattle.usersEffects.filter(
               (e) => e.targetId === targetUser.userId && e.type === condition.effectType,
             );
             if (targetEffects.length === 0) return false;
-            if (condition.threshold === 0) return true;
             const totalTargetPower = targetEffects.reduce((sum, effect) => sum + effect.power, 0);
             return totalTargetPower >= condition.threshold;
+          }
         }
       });
       /** ************************ */
