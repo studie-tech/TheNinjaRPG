@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq, lt, sql } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
 import { auctionListing } from "@/drizzle/schema";
-import { handleEndpointError, getGameSetting, updateGameSetting } from "@/libs/gamesettings";
+import { handleEndpointError, checkGameTimer, updateGameSetting } from "@/libs/gamesettings";
 import { cookies } from "next/headers";
 import { completeAuctionInternal, fetchAuctionListing } from "@/server/api/routers/auction";
 
@@ -13,19 +13,12 @@ export async function GET() {
   await cookies();
 
   // Check 5-minute timer lock to prevent abuse
-  const timer = await getGameSetting(drizzleDB, ENDPOINT_NAME);
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-  
-  if (timer.time > fiveMinutesAgo) {
-    const timeLeft = Math.ceil((timer.time.getTime() + 5 * 60 * 1000 - Date.now()) / 1000 / 60);
-    return NextResponse.json({
-      success: false,
-      message: `Please wait ${timeLeft} minutes before running again`,
-    }, { status: 429 });
-  }
-  
+  const frequency = 0.083; // Using a decimal so it can work in minutes rather than hours
+  const response = await checkGameTimer(drizzleDB, frequency, "m", "auction-expire");
+  if (response) return response;
+
   // Update timer
-  await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, new Date());
+  await updateGameSetting(drizzleDB, `auction-expire-${frequency}m`, 0, new Date());
 
   try {
     // Find auctions that are ACTIVE and have expired
@@ -44,32 +37,38 @@ export async function GET() {
       });
     }
 
-    // Process expired auctions sequentially with row-level locking
-    const results = [];
-    for (const auction of expiredAuctions) {
-      try {
-        // Use transaction to prevent double-settlement
-        const result = await drizzleDB.transaction(async (tx) => {
+    // Process all expired auctions in parallel
+    const results = await Promise.all(
+      expiredAuctions.map(async (auction) => {
+        try {
           // Check if auction is still ACTIVE before processing
-          const [currentAuction] = await tx
+          const [currentAuction] = await drizzleDB
             .select()
             .from(auctionListing)
             .where(and(eq(auctionListing.id, auction.id), eq(auctionListing.status, "ACTIVE")));
 
           // If auction is no longer ACTIVE, skip it (already processed)
           if (!currentAuction) {
-            return { auctionId: auction.id, success: false, error: "Auction already processed" };
+            return { 
+              auctionId: auction.id, 
+              success: false, 
+              error: "Auction already processed" 
+            };
           }
 
           // Fetch the full auction data with bids
-          const fullAuction = await fetchAuctionListing(tx, auction.id);
+          const fullAuction = await fetchAuctionListing(drizzleDB, auction.id);
           if (!fullAuction) {
             console.error(`Could not fetch auction ${auction.id}`);
-            return { auctionId: auction.id, success: false, error: "Auction not found" };
+            return { 
+              auctionId: auction.id, 
+              success: false, 
+              error: "Auction not found" 
+            };
           }
 
-          // Complete the auction within the transaction
-          const winningBid = await completeAuctionInternal(tx, fullAuction);
+          // Complete the auction
+          const winningBid = await completeAuctionInternal(drizzleDB, fullAuction);
           
           return {
             auctionId: auction.id,
@@ -77,18 +76,16 @@ export async function GET() {
             hadWinner: !!winningBid,
             winnerId: winningBid?.bidderId || null,
           };
-        });
-
-        results.push(result);
-      } catch (error) {
-        console.error(`Error processing auction ${auction.id}:`, error);
-        results.push({
-          auctionId: auction.id,
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }
+        } catch (error) {
+          console.error(`Error processing auction ${auction.id}:`, error);
+          return {
+            auctionId: auction.id,
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          };
+        }
+      })
+    );
 
     const successful = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;

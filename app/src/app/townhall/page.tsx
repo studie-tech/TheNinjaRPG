@@ -166,7 +166,7 @@ const ElderHall: React.FC<{
                   </div>
                   {isKage && (() => {
                     const threeDaysAgo = new Date(Date.now() - KAGE_DELAY_SECS * 1000);
-                    const canRemove = elder.updatedAt && new Date(elder.updatedAt) <= threeDaysAgo;
+                    const canRemove = user.village?.leaderUpdatedAt && new Date(user.village.leaderUpdatedAt) <= threeDaysAgo;
                     return canRemove ? (
                       <Confirm2
                         title="Confirm Demotion"

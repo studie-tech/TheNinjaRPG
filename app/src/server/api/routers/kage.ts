@@ -464,8 +464,8 @@ export const kageRouter = createTRPCRouter({
       // Allow elder removal after 3 days
       if (newRank !== "ELDER") {
         const threeDaysAgo = new Date(Date.now() - KAGE_DELAY_SECS * 1000);
-        if (prospect.updatedAt > threeDaysAgo) {
-          return errorResponse("Cannot remove elder until 3 days after appointment");
+        if (village.leaderUpdatedAt > threeDaysAgo) {
+          return errorResponse("Cannot remove elder until 3 days after becoming kage");
         }
       }
       if (prospect.anbuId) return errorResponse("Cannot promote ANBU to elder");
