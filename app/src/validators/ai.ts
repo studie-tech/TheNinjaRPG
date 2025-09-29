@@ -44,17 +44,55 @@ export const ConditionSpecificRound = z.object({
   value: z.coerce.number().int().positive().default(10),
 });
 
+export const ConditionRoundGreaterThan = z.object({
+  type: z.literal("round_greater_than").default("round_greater_than"),
+  description: z.string().default("Current round is greater than specified value"),
+  value: z.coerce.number().int().positive().default(5),
+});
+
+export const ConditionRoundLowerThan = z.object({
+  type: z.literal("round_lower_than").default("round_lower_than"),
+  description: z.string().default("Current round is lower than specified value"),
+  value: z.coerce.number().int().positive().default(3),
+});
+
 export const ConditionDoesNotHaveSummon = z.object({
   type: z.literal("does_not_have_summon").default("does_not_have_summon"),
   description: z.string().default("Does not have a summon active"),
 });
 
+import { tagTypes } from "@/libs/combat/types";
+
+// Import effect types from the combat system
+export const AvailableEffectTypes = (tagTypes.length > 0 ? tagTypes : ["damage"]) as [string, ...string[]];
+export type AvailableEffectType = (typeof AvailableEffectTypes)[number];
+
+export const ConditionHasEffect = z.object({
+  type: z.literal("has_effect").default("has_effect"),
+  description: z.string().default("AI is affected by a specific effect"),
+  effectType: z.enum(AvailableEffectTypes).default("damage"),
+  threshold: z.coerce.number().int().min(0).max(100).default(0),
+});
+
+export const ConditionTargetHasEffect = z.object({
+  type: z.literal("target_has_effect").default("target_has_effect"),
+  description: z.string().default("Target is affected by a specific effect"),
+  effectType: z.enum(AvailableEffectTypes).default("damage"),
+  target: z.enum(AvailableTargets).default("CLOSEST_OPPONENT"),
+  threshold: z.coerce.number().int().min(0).max(100).default(0),
+});
+
+
 export const ZodAllAiConditions = z.union([
   ConditionHealthBelow,
   ConditionSpecificRound,
+  ConditionRoundGreaterThan,
+  ConditionRoundLowerThan,
   ConditionDistanceHigherThan,
   ConditionDistanceLowerThan,
   ConditionDoesNotHaveSummon,
+  ConditionHasEffect,
+  ConditionTargetHasEffect,
 ]);
 
 export const AiConditionTypes = ZodAllAiConditions._def.options.map(

@@ -20,7 +20,7 @@ import {
 import { showMutationToast } from "@/libs/toast";
 import { api } from "@/app/_trpc/client";
 import { getConditionSchema, getActionSchema } from "@/validators/ai";
-import { AiActionTypes, AiConditionTypes } from "@/validators/ai";
+import { AiActionTypes, AiConditionTypes, AvailableEffectTypes } from "@/validators/ai";
 import { ActionMoveTowardsOpponent } from "@/validators/ai";
 import { getBackupRules, enforceExtraRules } from "@/validators/ai";
 import { canChangeContent } from "@/utils/permissions";
@@ -286,6 +286,57 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                           updateCondition(i, j, "value", e.target.value);
                         }}
                       />
+                    )}
+                    {"effectType" in condition && (
+                      <Select
+                        value={condition.effectType}
+                        onValueChange={(value) => {
+                          updateCondition(i, j, "effectType", value);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select effect type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AvailableEffectTypes.map((effectType, k) => (
+                            <SelectItem key={`effect-type-${k}`} value={effectType}>
+                              {effectType}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {"threshold" in condition && (
+                      <Input
+                        id="threshold"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={condition.threshold}
+                        onChange={(e) => {
+                          updateCondition(i, j, "threshold", (parseInt(e.target.value) || 0).toString());
+                        }}
+                        placeholder="Effect threshold (0-100)"
+                      />
+                    )}
+                    {"target" in condition && (
+                      <Select
+                        value={condition.target}
+                        onValueChange={(value) => {
+                          updateCondition(i, j, "target", value);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select target" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AvailableTargets.map((target, k) => (
+                            <SelectItem key={`target-${k}`} value={target}>
+                              {target}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
                   </div>
                 ))}

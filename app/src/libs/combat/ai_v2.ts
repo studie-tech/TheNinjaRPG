@@ -215,10 +215,34 @@ export const performAIaction = (
             return target ? target.distance <= condition.value : false;
           case "specific_round":
             return nextBattle.round === condition.value ? true : false;
+          case "round_greater_than":
+            return nextBattle.round > condition.value;
+          case "round_lower_than":
+            return nextBattle.round < condition.value;
           case "does_not_have_summon":
             return !nextBattle.usersState.find(
               (u) => u.controllerId === user.userId && u.isSummon && u.curHealth > 0,
             );
+          case "has_effect":
+            const userEffects = nextBattle.usersEffects.filter(
+              (e) => e.targetId === user.userId && e.type === condition.effectType,
+            );
+            if (userEffects.length === 0) return false;
+            if (condition.threshold === 0) return true;
+            const totalUserPower = userEffects.reduce((sum, effect) => sum + effect.power, 0);
+            return totalUserPower >= condition.threshold;
+          case "target_has_effect":
+            const targetUser = target ? nextBattle.usersState.find(
+              (u) => u.longitude === target.longitude && u.latitude === target.latitude
+            ) : null;
+            if (!targetUser) return false;
+            const targetEffects = nextBattle.usersEffects.filter(
+              (e) => e.targetId === targetUser.userId && e.type === condition.effectType,
+            );
+            if (targetEffects.length === 0) return false;
+            if (condition.threshold === 0) return true;
+            const totalTargetPower = targetEffects.reduce((sum, effect) => sum + effect.power, 0);
+            return totalTargetPower >= condition.threshold;
         }
       });
       /** ************************ */
