@@ -35,6 +35,7 @@ import { JUTSU_LEVEL_CAP } from "@/drizzle/constants";
 import { MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { canTrainJutsu } from "@/libs/train";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { ActionSelector } from "@/layout/CombatActions";
 import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
 import { secondsFromDate } from "@/utils/time";
@@ -349,6 +350,9 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     enabled: showCaptcha,
   });
 
+  // Tutorial management hook
+  const { currentStep, handleNextStep } = useTutorialStep();
+
   // Mutations
   const { mutate: startTraining, isPending: isStarting } =
     api.train.startTraining.useMutation({
@@ -357,6 +361,9 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
         if (result.success && result.data) {
           await updateUser(result.data);
           sendGTMEvent({ event: "stats_training" });
+          if (currentStep?.title === "Training") {
+            handleNextStep();
+          }
         }
       },
     });
@@ -367,6 +374,9 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
         showMutationToast(result);
         await utils.misc.getCaptcha.invalidate();
         if (result.success && result.data) {
+          if (currentStep?.title === "Training") {
+            handleNextStep();
+          }
           await updateUser({
             currentlyTraining: null,
             trainingStartedAt: null,
@@ -471,6 +481,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
 
           return (
             <div
+              id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
               key={i}
               onClick={() =>
                 overCap
@@ -521,6 +532,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               )}
               {!showCaptcha && (
                 <XCircle
+                  id="tutorial-traininggrounds-stopTraining"
                   className="w-10 h-10 m-auto mt-5 fill-red-500 cursor-pointer hover:text-orange-500"
                   onClick={() => stopTraining({ villageId: userData.villageId })}
                 />

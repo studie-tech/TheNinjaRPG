@@ -34,6 +34,7 @@ import type { BattleState } from "@/libs/combat/types";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { useLocalStorage } from "@/hooks/localstorage";
 import Modal2 from "@/layout/Modal2";
+import { useTutorialStep, TUTORIAL_STEPS } from "@/hooks/tutorial";
 import { LogbookEntry } from "@/layout/Logbook";
 import { preloadTextures } from "@/libs/threejs/util";
 import { preloadAudioBuffers } from "@/utils/audio";
@@ -360,6 +361,21 @@ const Combat: React.FC<CombatProps> = (props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPending, timeDiff, result, suid]);
 
+  // If we have a result, and it's a tutorial Battle Arena step, then progress to next step
+  const { stepNumber, currentStep, handleNextStep } = useTutorialStep();
+  useEffect(() => {
+    if (result && battleType === "ARENA" && currentStep?.title === "Battle Arena") {
+      let nextStep: null | number = null;
+      for (let i = stepNumber; i < TUTORIAL_STEPS.length; i++) {
+        if (TUTORIAL_STEPS?.[i]?.title !== "Battle Arena") {
+          nextStep = i;
+          break;
+        }
+      }
+      if (nextStep) handleNextStep(nextStep);
+    }
+  }, [result, battleType, stepNumber, currentStep, handleNextStep]);
+
   useEffect(() => {
     action.current = props.action;
     userId.current = props.userId;
@@ -671,7 +687,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     !["SPARRING", "RANKED_PVP"].includes(battleType);
   return (
     <>
-      <div ref={mountRef}></div>
+      <div id="tutorial-combat-field" ref={mountRef}></div>
       {webglError && <WebGlError />}
       {/* BATTLE LOBBY SCREEN */}
       {isInLobby &&

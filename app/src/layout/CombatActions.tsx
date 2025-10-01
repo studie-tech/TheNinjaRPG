@@ -114,6 +114,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
 
           return (
             <div
+              id={`tutorial-combat-action-${item.id}`}
               key={i}
               ref={i === filtered.length - 1 ? props.setLastElement : null}
               className="relative flex items-start justify-center"

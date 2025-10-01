@@ -123,7 +123,6 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     updateTutorialStep,
     handleNextStep,
     currentStepNumber,
-    setCurrentStepNumber,
     isAssistantVisible,
     setIsAssistantVisible,
   } = useTutorialStep();
@@ -137,10 +136,8 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       // Set to 0 if undefined (first time user)
       if (tutorialStep === undefined) {
         tutorialStep = 0;
-        updateTutorialStep.mutate({ step: 0 });
+        updateTutorialStep({ step: 0 });
       }
-
-      setCurrentStepNumber(tutorialStep);
 
       // Get current step config
       const currentStepConfig = TUTORIAL_STEPS[tutorialStep];
@@ -442,8 +439,8 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
 
   // Derived
   const pointerEvents = currentTutorialStep.proceedOnHighlightClick
-    ? "pointer-events-none"
-    : "pointer-events-auto";
+    ? "pointer-events-auto"
+    : "pointer-events-none";
 
   // Render the tutorial overlay with highlight and assistant panel
   return (
@@ -470,11 +467,13 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                 role="button"
                 aria-label="Continue tutorial"
                 onClick={() => {
+                  console.log("clicked", currentTutorialStep.proceedOnHighlightClick);
                   if (currentTutorialStep.proceedOnHighlightClick) {
                     handleNextStep();
                   }
                 }}
                 onTouchStart={(e) => {
+                  console.log("clicked", currentTutorialStep.proceedOnHighlightClick);
                   if (currentTutorialStep.proceedOnHighlightClick) {
                     handleNextStep();
                   }

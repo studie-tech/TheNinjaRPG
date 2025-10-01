@@ -222,7 +222,7 @@ export const trainRouter = createTRPCRouter({
       } else {
         return {
           success: true,
-          message: `You gained ${trainingAmount} ${user.currentlyTraining}`,
+          message: `You gained ${trainingAmount.toFixed(2)} ${user.currentlyTraining}`,
           data: {
             experience: trainingAmount,
             currentlyTraining: user.currentlyTraining,

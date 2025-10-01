@@ -133,7 +133,10 @@ export default function CombatPage() {
           battle &&
           user &&
           userData?.status === "BATTLE" && (
-            <div className="flex flex-row items-center gap-2">
+            <div
+              className="flex flex-row items-center gap-2"
+              id="tutorial-combat-action-timer"
+            >
               <ActionTimer
                 action={actions.find((a) => a.id === actionId)}
                 user={{ userId: userId, actionPoints: user?.actionPoints ?? 0 }}
