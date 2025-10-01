@@ -91,16 +91,12 @@ export const travelRouter = createTRPCRouter({
       }
       // Special check for Wake Island - always block if sector is 222
       if (input.sector === 222) {
-        console.log("Blocking Wake Island robbery (sector 222)");
         return errorResponse("Cannot rob players in Wake Island");
       }
       
       if (sectorData?.pvpDisabled) {
-        console.log("Robbery check - sector:", input.sector, "sectorData:", sectorData, "pvpDisabled:", sectorData?.pvpDisabled);
-        
         // Special case for Wake Island - protect ALL users in the sector
         if (sectorData.name === "Wake Island") {
-          console.log("Blocking Wake Island robbery");
           return errorResponse("Cannot rob players in Wake Island");
         }
         

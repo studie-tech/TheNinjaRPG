@@ -1320,19 +1320,15 @@ export const initiateBattle = async (
 
   // Check if the villageData is in a pvp enabled zone
   const sectorData = villages.find((v) => v.sector === sector);
-  console.log("Combat check - sector:", sector, "sectorData:", sectorData, "pvpDisabled:", sectorData?.pvpDisabled, "battleType:", battleType);
-  console.log("All villages:", villages.map(v => ({ name: v.name, sector: v.sector, pvpDisabled: v.pvpDisabled })));
   
   // Special check for Wake Island - always block if sector is 222
   if (sector === 222 && battleType === "COMBAT") {
-    console.log("Blocking Wake Island attack (sector 222)");
     return { success: false, message: "Cannot attack players in Wake Island" };
   }
   
   if (sectorData?.pvpDisabled && battleType === "COMBAT") {
     // Special case for Wake Island - protect ALL users in the sector
     if (sectorData.name === "Wake Island") {
-      console.log("Blocking Wake Island attack");
       return { success: false, message: "Cannot attack players in Wake Island" };
     }
     
