@@ -229,6 +229,35 @@ export type UserRole = (typeof UserRoles)[number];
 export const UserRolesWithSkillTreeAccess = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"];
 export type UserRoleWithSkillTreeAccess = (typeof UserRolesWithSkillTreeAccess)[number];
 
+// Staff Applications
+export const StaffApplicationStates = ["PENDING", "APPROVED", "REJECTED"] as const;
+export type StaffApplicationState = (typeof StaffApplicationStates)[number];
+
+// Approval groups required for promotion
+export const StaffApprovalGroups = [
+  "EVENT-ADMIN",
+  "CODING-ADMIN",
+  "MODERATOR-ADMIN",
+  "CONTENT-ADMIN",
+] as const satisfies readonly UserRole[];
+export type StaffApprovalGroup = (typeof StaffApprovalGroups)[number];
+
+// Per-group approval decision states
+export const StaffApplicationApprovalStates = ["APPROVED", "REJECTED"] as const;
+export type StaffApplicationApprovalState =
+  (typeof StaffApplicationApprovalStates)[number];
+
+// Roles users are allowed to apply for
+export const StaffApplicationTargetRoles = [
+  "CONTENT",
+  "CODER",
+  "EVENT",
+  "JR_MODERATOR",
+  "MODERATOR",
+  "HEAD_MODERATOR",
+] as const satisfies readonly UserRole[];
+export type StaffApplicationTargetRole = (typeof StaffApplicationTargetRoles)[number];
+
 export const UserStatuses = [
   "AWAKE",
   "HOSPITALIZED",

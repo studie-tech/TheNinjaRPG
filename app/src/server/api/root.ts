@@ -47,6 +47,7 @@ import { skillTreeRouter } from "./routers/skillTree";
 import { occupationRouter } from "./routers/occupation";
 import { auctionRouter } from "./routers/auction";
 import { supportRouter } from "./routers/support";
+import { applicationsRouter } from "./routers/applications";
 
 /**
  * This is the primary router for your server.
@@ -102,6 +103,7 @@ export const appRouter = createTRPCRouter({
   occupation: occupationRouter,
   auction: auctionRouter,
   support: supportRouter,
+  applications: applicationsRouter,
 });
 
 // export type definition of API

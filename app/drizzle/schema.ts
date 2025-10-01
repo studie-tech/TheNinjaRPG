@@ -3933,6 +3933,102 @@ export const cannedResponseRelations = relations(cannedResponse, ({ one }) => ({
   }),
 }));
 
+// ---------------- Staff Applications ----------------
+export const staffApplication = mysqlTable(
+  "StaffApplication",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    applicantUserId: varchar("applicantUserId", { length: 191 }).notNull(),
+    targetRole: mysqlEnum("targetRole", consts.UserRoles).notNull(),
+    state: mysqlEnum("state", consts.StaffApplicationStates)
+      .default("PENDING")
+      .notNull(),
+    conversationId: varchar("conversationId", { length: 191 }).notNull(),
+    motivation: text("motivation"),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      applicantIdx: index("StaffApplication_applicantUserId_idx").on(
+        table.applicantUserId,
+      ),
+      targetRoleIdx: index("StaffApplication_targetRole_idx").on(table.targetRole),
+      stateIdx: index("StaffApplication_state_idx").on(table.state),
+      createdAtIdx: index("StaffApplication_createdAt_idx").on(table.createdAt),
+    };
+  },
+);
+export type StaffApplication = InferSelectModel<typeof staffApplication>;
+
+export const staffApplicationRelations = relations(
+  staffApplication,
+  ({ one, many }) => ({
+    applicant: one(userData, {
+      fields: [staffApplication.applicantUserId],
+      references: [userData.userId],
+    }),
+    conversation: one(conversation, {
+      fields: [staffApplication.conversationId],
+      references: [conversation.id],
+    }),
+    approvals: many(staffApplicationApproval),
+  }),
+);
+
+export const staffApplicationApproval = mysqlTable(
+  "StaffApplicationApproval",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    applicationId: varchar("applicationId", { length: 191 }).notNull(),
+    approverUserId: varchar("approverUserId", { length: 191 }).notNull(),
+    group: mysqlEnum("group", consts.StaffApprovalGroups).notNull(),
+    state: mysqlEnum("state", consts.StaffApplicationApprovalStates)
+      .default("APPROVED")
+      .notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      applicationIdx: index("StaffApplicationApproval_applicationId_idx").on(
+        table.applicationId,
+      ),
+      approverIdx: index("StaffApplicationApproval_approverUserId_idx").on(
+        table.approverUserId,
+      ),
+      uniqueGroupPerApp: uniqueIndex(
+        "StaffApplicationApproval_applicationId_group_key",
+      ).on(table.applicationId, table.group),
+      uniqueUserPerApp: uniqueIndex(
+        "StaffApplicationApproval_applicationId_approverUserId_key",
+      ).on(table.applicationId, table.approverUserId),
+    };
+  },
+);
+export type StaffApplicationApproval = InferSelectModel<
+  typeof staffApplicationApproval
+>;
+
+export const staffApplicationApprovalRelations = relations(
+  staffApplicationApproval,
+  ({ one }) => ({
+    application: one(staffApplication, {
+      fields: [staffApplicationApproval.applicationId],
+      references: [staffApplication.id],
+    }),
+    approver: one(userData, {
+      fields: [staffApplicationApproval.approverUserId],
+      references: [userData.userId],
+    }),
+  }),
+);
+
 /**
  * Internal analytics data
  */

@@ -40,8 +40,8 @@ import { moderateContent } from "@/libs/moderator";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize from "@/utils/sanitize";
-import type { DrizzleClient } from "../../db";
 import { resolveSenderId } from "@/libs/comments";
+import type { DrizzleClient } from "@/server/db";
 
 export const commentsRouter = createTRPCRouter({
   /**

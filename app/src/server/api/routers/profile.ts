@@ -823,6 +823,11 @@ export const profileRouter = createTRPCRouter({
       if (roleChanged && !availableRoles.includes(input.data.role)) {
         return errorResponse(`Only available roles: ${availableRoles.join(", ")}`);
       }
+      if (roleChanged && target.role !== "USER") {
+        return errorResponse(
+          "Promotion of users to staff need to go through staff application process",
+        );
+      }
       if (village.id !== target.villageId) {
         const clanName = target.isOutlaw ? "Faction" : "Clan";
         if (target.anbuId) return errorResponse("Leave ANBU first");

@@ -1,0 +1,310 @@
+import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { baseServerResponse, errorResponse } from "@/server/api/trpc";
+import { z } from "zod";
+import { nanoid } from "nanoid";
+import { eq, and, desc, inArray, like } from "drizzle-orm";
+import { userData, staffApplication, staffApplicationApproval } from "@/drizzle/schema";
+import { StaffApplicationTargetRoles } from "@/drizzle/constants";
+import type { StaffApprovalGroup } from "@/drizzle/constants";
+import {
+  createApplicationSchema,
+  listApplicationsInfiniteSchema,
+} from "@/validators/applications";
+import type { StaffApplicationState } from "@/drizzle/constants";
+import type { DrizzleClient } from "@/server/db";
+import { StaffApprovalGroups } from "@/drizzle/constants";
+import { createConvo } from "@/routers/comments";
+import { fetchUser } from "@/routers/profile";
+
+export const applicationsRouter = createTRPCRouter({
+  create: protectedProcedure
+    .input(createApplicationSchema)
+    .output(baseServerResponse.extend({ id: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, existingRow] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchApplication({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          status: "PENDING",
+        }),
+      ]);
+      // Guards
+      if (!StaffApplicationTargetRoles.includes(input.targetRole)) {
+        return errorResponse("Invalid target role");
+      }
+      if (existingRow) {
+        return errorResponse("Application already pending");
+      }
+      // Update
+      const appid = nanoid();
+      const convoId = nanoid();
+      await Promise.all([
+        createConvo({
+          client: ctx.drizzle,
+          authorUserId: user.userId,
+          senderUserId: user.userId,
+          receiverUserIds: [],
+          title: `Staff Application: ${user.username}`,
+          content: input.motivation,
+          isStaffAvailable: true,
+          convoId,
+        }),
+        ctx.drizzle.insert(staffApplication).values({
+          id: appid,
+          applicantUserId: user.userId,
+          targetRole: input.targetRole,
+          state: "PENDING",
+          conversationId: convoId,
+          motivation: input.motivation,
+        }),
+      ]);
+      return { success: true, message: "Application created", id: appid };
+    }),
+
+  get: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      // Query
+      const [user, app] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchApplication({ client: ctx.drizzle, applicationId: input.id }),
+      ]);
+      // Guards
+      if (!user || !app) return null;
+      const isOwner = app.applicantUserId === user.userId;
+      const isStaff = user.role !== "USER";
+      if (!isOwner && !isStaff) return null;
+      // Return
+      return app;
+    }),
+
+  // Infinite list with filters
+  list: protectedProcedure
+    .input(listApplicationsInfiniteSchema)
+    .query(async ({ ctx, input }) => {
+      const currentCursor = input.cursor ?? 0;
+      const limit = input.limit ?? 30;
+      const skip = currentCursor * limit;
+
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const isStaff = user.role !== "USER";
+
+      // If onlyMine or not staff, constrain to self
+      const baseConds = [
+        ...(input.onlyMine || !isStaff
+          ? [eq(staffApplication.applicantUserId, user.userId)]
+          : []),
+        ...(input.state ? [eq(staffApplication.state, input.state)] : []),
+        ...(input.targetRole
+          ? [eq(staffApplication.targetRole, input.targetRole)]
+          : []),
+      ];
+
+      // Resolve username -> userIds
+      const usernameIds = input.username
+        ? (
+            await ctx.drizzle
+              .select({ userId: userData.userId })
+              .from(userData)
+              .where(like(userData.username, `%${input.username}%`))
+              .limit(10)
+          ).map((r) => r.userId)
+        : [];
+
+      // Fetch with relation and username filter using inArray on applicantUserId
+      const results = await ctx.drizzle.query.staffApplication.findMany({
+        where: and(
+          ...baseConds,
+          ...(input.username && usernameIds.length > 0
+            ? [inArray(staffApplication.applicantUserId, usernameIds)]
+            : input.username
+              ? [eq(staffApplication.applicantUserId, "__none__")] // force no results
+              : []),
+        ),
+        with: {
+          applicant: {
+            columns: {
+              userId: true,
+              username: true,
+              avatar: true,
+              level: true,
+              rank: true,
+            },
+            with: { village: { columns: { name: true } } },
+          },
+        },
+        orderBy: [desc(staffApplication.createdAt)],
+        limit,
+        offset: skip,
+      });
+
+      // Client-side filter on username if needed (drizzle query builder with relations
+      // does not support like on related fields directly without a manual join)
+      const nextCursor = results.length < limit ? null : currentCursor + 1;
+      return { data: results, nextCursor };
+    }),
+
+  approve: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, app] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchApplication({
+          client: ctx.drizzle,
+          applicationId: input.id,
+        }),
+      ]);
+      // Guards
+      if (!app) return errorResponse("No application found");
+      if (user.role === "USER") return errorResponse("Not allowed");
+      if (app.state === "APPROVED")
+        return errorResponse("Application already approved");
+      if (!user.role.includes("ADMIN")) return errorResponse("Only admins can approve");
+
+      // Update: record approval (upsert)
+      await ctx.drizzle
+        .insert(staffApplicationApproval)
+        .values({
+          id: nanoid(),
+          applicationId: app.id,
+          approverUserId: user.userId,
+          group: user.role as StaffApprovalGroup,
+          state: "APPROVED",
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            state: "APPROVED",
+            approverUserId: user.userId,
+            group: user.role as StaffApprovalGroup,
+          },
+        });
+
+      // Query: approvals with APPROVED state
+      const decisions = await ctx.drizzle.query.staffApplicationApproval.findMany({
+        where: eq(staffApplicationApproval.applicationId, input.id),
+      });
+      const approvals = decisions.filter((d) => d.state === "APPROVED");
+      const rejected = decisions.filter((d) => d.state === "REJECTED");
+      const approvedGroups = new Set<StaffApprovalGroup>(approvals.map((a) => a.group));
+      const done = StaffApprovalGroups.every((g) => approvedGroups.has(g));
+
+      // If all groups are approved, promote user and approve application
+      if (done) {
+        // Update: promote user and approve application
+        const [result] = await Promise.all([
+          ctx.drizzle
+            .update(userData)
+            .set({ role: app.targetRole })
+            .where(eq(userData.userId, app.applicantUserId)),
+          ctx.drizzle
+            .update(staffApplication)
+            .set({ state: "APPROVED", updatedAt: new Date() })
+            .where(eq(staffApplication.id, app.id)),
+        ]);
+        if (result.rowsAffected === 0) return errorResponse("Promotion failed");
+        return { success: true, message: "Application approved and user promoted" };
+      } else if (rejected.length === 0 && app.state === "REJECTED") {
+        await ctx.drizzle
+          .update(staffApplication)
+          .set({ state: "PENDING", updatedAt: new Date() })
+          .where(eq(staffApplication.id, app.id));
+        return {
+          success: true,
+          message: "Application approved. Reset to pending others.",
+        };
+      }
+      return { success: true, message: "Approval recorded" };
+    }),
+
+  reject: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        reason: z.string().min(1).max(2000).optional(),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, app] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.staffApplication.findFirst({
+          where: eq(staffApplication.id, input.id),
+        }),
+      ]);
+      // Guards
+      if (!user || !app) return errorResponse("Not found");
+      if (user.role === "USER") return errorResponse("Not allowed");
+      if (app.state !== "PENDING") return errorResponse("Not pending");
+      // Update: record rejection (upsert)
+      await Promise.all([
+        ctx.drizzle
+          .insert(staffApplicationApproval)
+          .values({
+            id: nanoid(),
+            applicationId: app.id,
+            approverUserId: user.userId,
+            group: user.role as StaffApprovalGroup,
+            state: "REJECTED",
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              state: "REJECTED",
+              approverUserId: user.userId,
+              group: user.role as StaffApprovalGroup,
+            },
+          }),
+        ctx.drizzle
+          .update(staffApplication)
+          .set({ state: "REJECTED", updatedAt: new Date() })
+          .where(eq(staffApplication.id, app.id)),
+      ]);
+
+      // Update application state
+      return { success: true, message: "Application rejected" };
+    }),
+});
+
+/**
+ * Fetch an application by user ID and status.
+ * @param client - The DrizzleClient instance used for database operations.
+ * @param userId - The ID of the user to fetch the application for.
+ * @param status - The status of the application to fetch.
+ * @returns The application if found, otherwise null.
+ */
+export const fetchApplication = async (info: {
+  client: DrizzleClient;
+  userId?: string;
+  applicationId?: string;
+  status?: StaffApplicationState;
+}) => {
+  const { client, userId, applicationId, status } = info;
+  return await client.query.staffApplication.findFirst({
+    where: and(
+      ...(userId ? [eq(staffApplication.applicantUserId, userId)] : []),
+      ...(applicationId ? [eq(staffApplication.id, applicationId)] : []),
+      ...(status ? [eq(staffApplication.state, status)] : []),
+    ),
+    with: {
+      applicant: {
+        columns: {
+          userId: true,
+          username: true,
+          avatar: true,
+          level: true,
+          rank: true,
+        },
+        with: { village: { columns: { name: true } } },
+      },
+      approvals: {
+        with: {
+          approver: { columns: { userId: true, username: true, avatar: true } },
+        },
+      },
+    },
+  });
+};
