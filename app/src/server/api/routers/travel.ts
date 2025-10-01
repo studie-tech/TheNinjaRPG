@@ -84,13 +84,27 @@ export const travelRouter = createTRPCRouter({
       if (target.isBanned) return errorResponse("Target is banned");
       if (target.status !== "AWAKE")
         return errorResponse("Target cannot currently be robbed");
-      if (user.clanId === target.clanId)
+      if (user.clanId && target.clanId && user.clanId === target.clanId)
         return errorResponse("Cannot rob faction members");
       if (target.rank === "STUDENT" || target.rank === "GENIN") {
         return errorResponse("Cannot rob Academy Students or Genins");
       }
+      // Special check for Wake Island - always block if sector is 222
+      if (input.sector === 222) {
+        console.log("Blocking Wake Island robbery (sector 222)");
+        return errorResponse("Cannot rob players in Wake Island");
+      }
+      
       if (sectorData?.pvpDisabled) {
-        // Only protect members of the PvP-disabled village, not all users in the sector
+        console.log("Robbery check - sector:", input.sector, "sectorData:", sectorData, "pvpDisabled:", sectorData?.pvpDisabled);
+        
+        // Special case for Wake Island - protect ALL users in the sector
+        if (sectorData.name === "Wake Island") {
+          console.log("Blocking Wake Island robbery");
+          return errorResponse("Cannot rob players in Wake Island");
+        }
+        
+        // For other PvP-disabled villages, only protect members of that village
         if (target.villageId === sectorData.id) {
           return errorResponse("Cannot rob players in this zone");
         }
