@@ -95,12 +95,7 @@ export const travelRouter = createTRPCRouter({
       }
       
       if (sectorData?.pvpDisabled) {
-        // Special case for Wake Island - protect ALL users in the sector
-        if (sectorData.name === "Wake Island") {
-          return errorResponse("Cannot rob players in Wake Island");
-        }
-        
-        // For other PvP-disabled villages, only protect members of that village
+        // Only protect members of the PvP-disabled village, not all users in the sector
         if (target.villageId === sectorData.id) {
           return errorResponse("Cannot rob players in this zone");
         }

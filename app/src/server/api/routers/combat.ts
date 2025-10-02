@@ -1327,12 +1327,7 @@ export const initiateBattle = async (
   }
   
   if (sectorData?.pvpDisabled && battleType === "COMBAT") {
-    // Special case for Wake Island - protect ALL users in the sector
-    if (sectorData.name === "Wake Island") {
-      return { success: false, message: "Cannot attack players in Wake Island" };
-    }
-    
-    // For other PvP-disabled villages, only protect members of that village
+    // Check if any non-protected users are trying to attack protected village members
     const protectedVillageId = sectorData.id;
     const attackers = users.filter(u => userIds.includes(u.userId) && !u.isAi);
     const defenders = users.filter(u => targetIds.includes(u.userId) && !u.isAi);
