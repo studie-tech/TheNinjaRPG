@@ -14,6 +14,7 @@ import {
 import { cn } from "@/libs/shadui";
 
 interface Modal2Props {
+  id?: string;
   title: string;
   children: string | React.ReactNode;
   className?: string;
@@ -70,6 +71,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
         <DialogFooter>
           {props.proceed_label && (
             <Button
+              id={props.id ? `${props.id}-proceed` : undefined}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -84,6 +86,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
             </Button>
           )}
           <Button
+            id={props.id ? `${props.id}-close` : undefined}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();

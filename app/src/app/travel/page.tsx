@@ -15,6 +15,7 @@ import Confirm2 from "@/layout/Confirm2";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import AutoAttackModal from "@/layout/AutoAttackModal";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAwake } from "@/utils/routing";
 import {
@@ -133,7 +134,7 @@ export default function Travel() {
       ? `You (${currentPosition.x}, ${currentPosition.y})`
       : `Sector ${currentSector}`
     : "";
-  const globalLink = `Global (${currentSector})`;
+  const globalLink = `Global`;
 
   useMap(setGlobe);
 
@@ -170,6 +171,10 @@ export default function Travel() {
 
   useAwake(userData);
 
+  // Tutorial step
+  const { currentStep, handleNextStep } = useTutorialStep();
+
+  // Mutations
   const { mutate: startGlobalMove, isPending: isStartingTravel } =
     api.travel.startGlobalMove.useMutation({
       onSuccess: async (result) => {
@@ -178,6 +183,9 @@ export default function Travel() {
           await updateUser(result.data);
           setShowModal(false);
           setActiveTab(globalLink);
+          if (currentStep?.title === "Travel") {
+            handleNextStep();
+          }
           if (globe) {
             setCurrentTile(globe.tiles[result.data.sector]!);
           }
@@ -313,8 +321,6 @@ export default function Travel() {
       : "The world of Seichi";
   const consumableItems = userItems?.filter((i) => nonCombatConsume(i.item, userData));
   const shownConsumables = consumableItems?.map((ui) => ({ ...ui.item, ...ui }));
-
-  console.log("showSector", showSector);
 
   // Render
   return (
@@ -469,6 +475,7 @@ export default function Travel() {
         {!villages && <Loader explanation="Loading data" />}
         {showModal && globe && userData && targetSector && (
           <Modal2
+            id="tutorial-global-travel"
             title="World Travel"
             isOpen={showModal}
             setIsOpen={setShowModal}

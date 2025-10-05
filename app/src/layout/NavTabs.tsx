@@ -39,7 +39,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
     >
       <ul className="-mb-px flex flex-row">
         {options.map((option) => (
-          <li className="mr-2" key={option}>
+          <li className="mr-2" key={option} id={`tutorial-${option}`}>
             <a
               href="#"
               className={cn(

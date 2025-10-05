@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -68,6 +68,7 @@ import {
 } from "@/drizzle/constants";
 import { USER_CAPS } from "@/drizzle/constants";
 import { cn } from "src/libs/shadui";
+import { availableRanks } from "@/libs/train";
 import { captchaVerifySchema } from "@/validators/misc";
 import type { UserStatName } from "@/drizzle/constants";
 import type { CaptchaVerifySchema } from "@/validators/misc";
@@ -600,6 +601,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Two-level filtering
   const state = useFiltering();
 
+  // Set the default selected ranks
+  useEffect(() => {
+    state.setRank(availableRanks(userData.rank));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userData.rank]);
+
   // Jutsus
   const {
     data: jutsus,
@@ -637,6 +644,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     };
   });
 
+  // Tutorial management hook
+  const { currentStep, handleNextStep } = useTutorialStep();
+
   // Mutations
   const { mutate: train, isPending: isStartingTrain } =
     api.jutsu.startTraining.useMutation({
@@ -645,6 +655,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
           await updateUser(result.data);
+          if (currentStep?.title === "Jutsu Training") {
+            handleNextStep();
+          }
         }
         await utils.jutsu.getUserJutsus.invalidate();
       },
@@ -763,6 +776,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
             />
             {isOpen && jutsu && (
               <Modal2
+                id="tutorial-traininggrounds-trainJutsu"
                 title="Confirm Purchase"
                 proceed_label={proceed_label}
                 isOpen={isOpen}

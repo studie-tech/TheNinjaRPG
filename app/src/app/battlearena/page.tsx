@@ -60,7 +60,8 @@ export default function Arena() {
   type TabType = (typeof availableTabs)[number];
   const [tab, setTab] = useLocalStorage<TabType | null>("arenaTab", "Arena", true);
 
-  const [aiId, setAiId] = useLocalStorage<string | undefined>("arenaAI", undefined);
+  const dummyId = "ICXb49Z0Jle3GyJ-rosTi";
+  const [aiId, setAiId] = useLocalStorage<string | undefined>("arenaAI4", dummyId);
   const [statDistribution, setStatDistribution] = useLocalStorage<
     StatSchemaType | undefined
   >("statDistribution", undefined);

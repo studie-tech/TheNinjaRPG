@@ -15,6 +15,7 @@ import { useAwake } from "@/utils/routing";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
 import { getStrucBoost } from "@/utils/village";
+import { useTutorialStep } from "@/hooks/tutorial";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
@@ -77,6 +78,9 @@ const Shop: React.FC<ShopProps> = (props) => {
         !item.expireFromStoreAt || new Date(item.expireFromStoreAt) > new Date(),
     );
 
+  // Tutorial hook
+  const { currentStep, handleNextStep } = useTutorialStep();
+
   // Mutations
   const { mutate: purchase, isPending: isPurchasing } = api.item.buy.useMutation({
     onSuccess: (data) => {
@@ -85,6 +89,9 @@ const Shop: React.FC<ShopProps> = (props) => {
         void utils.item.getUserItemCounts.invalidate();
         void utils.profile.getUser.invalidate();
         void utils.item.getUserItems.invalidate();
+        if (currentStep?.title === "Item shop") {
+          handleNextStep();
+        }
       }
     },
     onSettled: () => {
@@ -189,6 +196,7 @@ const Shop: React.FC<ShopProps> = (props) => {
               />
               {isOpen && item && (
                 <Modal2
+                  id="tutorial-itemshop-confirmPurchase"
                   title="Confirm Purchase"
                   proceed_label={
                     isPurchasing ? undefined : canAfford ? costString : missingString

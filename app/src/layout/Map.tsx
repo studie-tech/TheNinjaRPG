@@ -24,6 +24,7 @@ import WebGlError from "@/layout/WebGLError";
 import alea from "alea";
 import * as TWEEN from "@tweenjs/tween.js";
 import { createTexture, loadTexture } from "@/libs/threejs/util";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { cleanUp, setupScene } from "@/libs/travel/util";
 import {
   groundColors,
@@ -92,6 +93,11 @@ const Map: React.FC<MapProps> = (props) => {
     }
   };
 
+  // Tutorial step
+  const { currentStep } = useTutorialStep();
+  const isTravelStep = currentStep?.title === "Travel";
+
+  // Render the map
   useEffect(() => {
     // Reference to the mount
     const sceneRef = mountRef.current;
@@ -505,6 +511,7 @@ const Map: React.FC<MapProps> = (props) => {
         const current = controls.up0 as GlobalPoint;
         const previous = controls?.object as { up: GlobalPoint };
         if (
+          (animationId === 0 || !isTravelStep) &&
           current.x === previous.up.x &&
           current.y === previous.up.y &&
           current.z === previous.up.z
@@ -557,7 +564,7 @@ const Map: React.FC<MapProps> = (props) => {
 
   return (
     <>
-      <div ref={mountRef}></div>
+      <div ref={mountRef} id={"tutorial-global-map"}></div>
       {webglError && <WebGlError />}
       <div className="absolute left-0 top-0 m-5">
         <ul>

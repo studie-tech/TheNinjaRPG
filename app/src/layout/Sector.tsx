@@ -622,7 +622,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
       // Setup camara
       const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
-      camera.zoom = villageData ? 1 : 2;
+      camera.zoom = villageData ? 1 : 1;
       camera.updateProjectionMatrix();
 
       // Draw the map
@@ -823,7 +823,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   return (
     <>
-      <div ref={mountRef}></div>
+      <div id="tutorial-travel-sector" ref={mountRef}></div>
       {webglError && <WebGlError />}
       {currentStructure && (
         <div className="absolute bottom-4 left-4 z-20 rounded-lg bg-black/70 p-4 text-white shadow-lg">

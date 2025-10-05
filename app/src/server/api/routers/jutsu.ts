@@ -308,7 +308,8 @@ export const jutsuRouter = createTRPCRouter({
 
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
-    if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
+    if (user.isBanned)
+      return errorResponse("You are banned and cannot perform this action");
     if (canChangeContent(user.role)) {
       const id = nanoid();
       await ctx.drizzle.insert(jutsu).values({
@@ -348,7 +349,8 @@ export const jutsuRouter = createTRPCRouter({
         relations.itemInjectors.length +
         relations.aiUsingJutsu.length;
       // Guard
-      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Jutsu not found");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (totalRelations > 0) {
@@ -408,7 +410,8 @@ export const jutsuRouter = createTRPCRouter({
         getJutsuRelations(ctx.drizzle, input.id),
       ]);
       // Guard
-      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Jutsu not found");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (!input.data.injectableInBattle) {
@@ -807,7 +810,11 @@ export const jutsuRouter = createTRPCRouter({
           `You cannot equip more than ${JUTSU_MAX_EVENT_EQUIPPED} event jutsu`,
         );
       }
-      if (!isEquipped && curJutsuIsBarrier && barrierEquipped >= JUTSU_MAX_BARRIER_EQUIPPED) {
+      if (
+        !isEquipped &&
+        curJutsuIsBarrier &&
+        barrierEquipped >= JUTSU_MAX_BARRIER_EQUIPPED
+      ) {
         return errorResponse(
           `You cannot equip more than ${JUTSU_MAX_BARRIER_EQUIPPED} barrier jutsu`,
         );
@@ -892,7 +899,8 @@ export const jutsuRouter = createTRPCRouter({
       const maxReskins = user.extraReskinSlots + RESKIN_LIMIT;
       const existingReskin = userReskins.find((r) => r.jutsuId === input.jutsuId);
       // Guards
-      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!jutsuData) {
         return errorResponse("Original jutsu not found");
       }
@@ -992,7 +1000,8 @@ export const jutsuRouter = createTRPCRouter({
         fetchUserReskin(ctx.drizzle, ctx.userId, input.reskinId),
       ]);
       // Guards
-      if (user.isBanned) return errorResponse("You are banned and cannot perform this action");
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!reskin) return errorResponse("Reskin not found");
       if (!canModerateReskin(user.role)) {
         return errorResponse("Unauthorized");
@@ -1366,7 +1375,7 @@ export const jutsuDatabaseFilter = (input?: JutsuFilteringSchema) => {
     ...(input?.bloodline ? [eq(jutsu.bloodlineId, input.bloodline)] : []),
     ...(input?.jutsuType ? [inArray(jutsu.jutsuType, input.jutsuType)] : []),
     ...(input?.requiredLevel ? [gte(jutsu.requiredLevel, input.requiredLevel)] : []),
-    ...(input?.rank ? [eq(jutsu.requiredRank, input.rank)] : []),
+    ...(input?.rank?.length ? [inArray(jutsu.requiredRank, input.rank)] : []),
     ...(input?.rarity ? [eq(jutsu.jutsuRank, input.rarity)] : []),
     ...(input?.villageId ? [eq(jutsu.villageId, input.villageId)] : []),
 

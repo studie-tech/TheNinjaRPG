@@ -731,7 +731,9 @@ export const EditContent = <
                                     </PopoverTrigger>
                                     <PopoverContent className="w-[200px] p-0">
                                       <Command>
-                                        {formEntry.searchable && (
+                                        {(formEntry.searchable ||
+                                          (formEntry.type === "db_values" &&
+                                            dynamicOptions.length > 5)) && (
                                           <CommandInput
                                             placeholder="Search..."
                                             className="h-9"

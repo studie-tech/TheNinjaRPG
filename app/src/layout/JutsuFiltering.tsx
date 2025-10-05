@@ -103,10 +103,8 @@ const makeJutsuFilteringSchema = () =>
       {
         id: "rank",
         label: "Required Rank",
-        type: "single-select",
-        defaultValue: "NONE",
-        includeNone: false,
-        emptyValues: ["NONE"],
+        type: "multi-select",
+        defaultValue: [],
         options: UserRanks.map((r) => ({ value: r, label: r })),
       },
       {

@@ -91,7 +91,7 @@ export default function Hospital() {
       {!isPending && isHospitalized && userData && healFinishAt && (
         <div className="p-3">
           <p>You are hospitalized, either wait or pay to expedite treatment.</p>
-          <div className="grid grid-cols-2 py-3 gap-2">
+          <div className="grid grid-cols-2 py-3 gap-2" id="tutorial-hospital-buttons">
             <Button
               id="check"
               className="w-full"

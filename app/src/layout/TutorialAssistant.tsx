@@ -15,7 +15,11 @@ import {
 } from "@/components/ui/dialog";
 import { getMobileOperatingSystem } from "@/utils/hardware";
 import { IMG_URL_ASSISTANT, IMG_URL_HANDPOINTER } from "@/drizzle/constants";
-import { TUTORIAL_STEPS, useTutorialStep } from "@/hooks/tutorial";
+import {
+  TUTORIAL_STEPS,
+  TUTORIAL_HOSPITALIZED_STEP,
+  useTutorialStep,
+} from "@/hooks/tutorial";
 import { cn } from "src/libs/shadui";
 import type { TutorialStepConfig } from "@/hooks/tutorial";
 
@@ -92,6 +96,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   const pathname = usePathname();
   const router = useRouter();
   const [highlight, setHighlight] = useState<{
+    isPrimaryElement: boolean;
     top: number;
     left: number;
     width: number;
@@ -140,7 +145,11 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       }
 
       // Get current step config
-      const currentStepConfig = TUTORIAL_STEPS[tutorialStep];
+      const isBattle = userData.status === "BATTLE";
+      const isHospitalized = userData.status === "HOSPITALIZED";
+      const currentStepConfig = isHospitalized
+        ? TUTORIAL_HOSPITALIZED_STEP
+        : TUTORIAL_STEPS[tutorialStep];
 
       // Check if we need to show the special Game Menu tutorial
       // Show it when on mobile, sidebar is closed, and we're at a step that requires the game menu
@@ -155,25 +164,31 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       // Handle regular tutorial steps
       if (!shouldShowGameMenuTutorial) {
         // Show tutorial if we have a valid step and we're on the right page
+        const onBattlePage = pathname === "/combat";
         const onCorrectPage = currentStepConfig && pathname === currentStepConfig.page;
         const hasRequiredGameMenu =
           currentStepConfig?.requiresGameMenu && isMobile ? rightSideBarOpen : true;
 
         // Only show if on correct page and game menu requirements are met
         const shouldShowRegularTutorial =
-          tutorialStep < TUTORIAL_STEPS.length && onCorrectPage && hasRequiredGameMenu;
+          tutorialStep < TUTORIAL_STEPS.length &&
+          (onCorrectPage || isBattle) &&
+          hasRequiredGameMenu;
         setIsAssistantVisible(Boolean(shouldShowRegularTutorial));
 
         // If we're at a valid step but not on the correct page, redirect
         if (
           tutorialStep < TUTORIAL_STEPS.length &&
           !onCorrectPage &&
+          !onBattlePage &&
           currentStepConfig
         ) {
           if (!currentStepConfig?.requiresGameMenu) {
             setRightSideBarOpen(false);
           }
-          router.push(currentStepConfig.page);
+          if (!isBattle) {
+            router.push(currentStepConfig.page);
+          }
         }
       } else {
         // If showing game menu tutorial, don't show regular tutorial
@@ -191,7 +206,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     const highlightInfo = findElementToHighlight(
       {
         ...currentStepConfig,
-        elementId: currentStepConfig.elementId,
+        elementIds: currentStepConfig.elementIds,
       },
       rightSideBarRef,
       rightSideBarOpen,
@@ -199,6 +214,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
 
     if (highlightInfo) {
       setHighlight({
+        isPrimaryElement: highlightInfo.isPrimaryElement,
         top: highlightInfo.top,
         left: highlightInfo.left,
         width: highlightInfo.width,
@@ -215,7 +231,11 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   useEffect(() => {
     if (!isAssistantVisible) return;
 
-    const step = TUTORIAL_STEPS[currentStepNumber];
+    // Determine which step to use - hospitalized overrides everything
+    const isHospitalized = userData?.status === "HOSPITALIZED";
+    const step = isHospitalized
+      ? TUTORIAL_HOSPITALIZED_STEP
+      : TUTORIAL_STEPS[currentStepNumber];
 
     // Guard against undefined step
     if (!step) {
@@ -279,7 +299,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       observer.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStepNumber, isAssistantVisible, pathname]);
+  }, [currentStepNumber, isAssistantVisible, pathname, userData?.status]);
 
   // Add keyboard event listener for Enter and ArrowLeft keys to forward tutorial
   useEffect(() => {
@@ -308,13 +328,21 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     return () => {
       window.removeEventListener("keydown", handleKeyPress, true);
     };
-  }, [isAssistantVisible, showGameMenuTutorial, handleNextStep, setRightSideBarOpen]);
+  }, [
+    isAssistantVisible,
+    showGameMenuTutorial,
+    pathname,
+    userData?.status,
+    handleNextStep,
+    setRightSideBarOpen,
+    router,
+  ]);
 
   // Render Game Menu tutorial (with bottom-right assistant)
   const renderGameMenuTutorial = () => {
     const gameBtnHighlight = findElementToHighlight(
       {
-        elementId: "tutorial-gameBtn",
+        elementIds: ["tutorial-gameBtn"],
         title: "Game Menu",
         description:
           "Click this button to open the game menu and continue the tutorial.",
@@ -408,7 +436,12 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   // If the regular tutorial is not visible, don't render anything
   if (!isAssistantVisible) return null;
 
-  const currentTutorialStep = TUTORIAL_STEPS[currentStepNumber];
+  // Determine which step to show - hospitalized overrides everything
+  const isHospitalized = userData?.status === "HOSPITALIZED";
+  const inBattle = userData?.status === "BATTLE";
+  const currentTutorialStep = isHospitalized
+    ? TUTORIAL_HOSPITALIZED_STEP
+    : TUTORIAL_STEPS[currentStepNumber];
 
   // Guard against undefined currentTutorialStep
   if (!currentTutorialStep) return null;
@@ -416,20 +449,23 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   const isOnCorrectPage = pathname === currentTutorialStep.page;
 
   // If we're not on the correct page, show a dialog to navigate there
-  if (!isOnCorrectPage) {
+  if (!isOnCorrectPage && !inBattle) {
     return (
       <Dialog open={true} onOpenChange={() => setIsAssistantVisible(true)}>
         <DialogContent className="sm:max-w-md z-60">
           <DialogHeader>
-            <DialogTitle>Continue the Tutorial</DialogTitle>
+            <DialogTitle>
+              {isHospitalized ? "You are Hospitalized!" : "Continue the Tutorial"}
+            </DialogTitle>
             <DialogDescription>
-              You need to navigate to the {currentTutorialStep.page} page to continue
-              the tutorial.
+              {isHospitalized
+                ? "You need to go to the hospital to heal yourself."
+                : `You need to navigate to the ${currentTutorialStep.page} page to continue the tutorial.`}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-between mt-4">
             <Button onClick={() => router.push(currentTutorialStep.page)}>
-              Go to {currentTutorialStep.page}
+              {isHospitalized ? "Go to Hospital" : `Go to ${currentTutorialStep.page}`}
             </Button>
           </div>
         </DialogContent>
@@ -438,9 +474,10 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   }
 
   // Derived
-  const pointerEvents = currentTutorialStep.proceedOnHighlightClick
-    ? "pointer-events-auto"
-    : "pointer-events-none";
+  const pointerEvents =
+    currentTutorialStep.proceedOnHighlightClick && highlight?.isPrimaryElement
+      ? "pointer-events-auto"
+      : "pointer-events-none";
 
   // Render the tutorial overlay with highlight and assistant panel
   return (
@@ -467,13 +504,11 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                 role="button"
                 aria-label="Continue tutorial"
                 onClick={() => {
-                  console.log("clicked", currentTutorialStep.proceedOnHighlightClick);
                   if (currentTutorialStep.proceedOnHighlightClick) {
                     handleNextStep();
                   }
                 }}
-                onTouchStart={(e) => {
-                  console.log("clicked", currentTutorialStep.proceedOnHighlightClick);
+                onTouchStart={() => {
                   if (currentTutorialStep.proceedOnHighlightClick) {
                     handleNextStep();
                   }
@@ -487,71 +522,71 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
           </div>
 
           {/* Hand pointer if this step highlights a clickable element */}
-          {currentTutorialStep.elementId && (
-            <Image
-              src={IMG_URL_HANDPOINTER}
-              alt="Tap here"
-              className="absolute w-18 h-18 animate-bounce"
-              width={80}
-              height={80}
-              style={{
-                top: Math.max(0, highlight.top + highlight.height + 12),
-                left: Math.min(
-                  window.innerWidth - 40,
-                  highlight.left + highlight.width / 2 - 20,
-                ),
-              }}
-            />
-          )}
+          <Image
+            src={IMG_URL_HANDPOINTER}
+            alt="Tap here"
+            className="absolute w-18 h-18 animate-bounce"
+            width={80}
+            height={80}
+            style={{
+              top: Math.max(0, highlight.top + highlight.height + 12),
+              left: Math.min(
+                window.innerWidth - 40,
+                highlight.left + highlight.width / 2 - 20,
+              ),
+            }}
+          />
         </div>
       )}
 
       {/* Assistant panel bottom-right - large, game-like dialog */}
-      <AssistantDialog title={currentTutorialStep.title}>
-        <p className="text-sm md:text-base leading-relaxed">
-          {currentTutorialStep.description}
-        </p>
-        {currentTutorialStep.externalLink && (
-          <div className="mt-3">
-            <Button
-              className="w-full"
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(currentTutorialStep.externalLink, "_blank")}
-            >
-              Read Getting Started Guide
-            </Button>
-          </div>
-        )}
-        {currentTutorialStep?.showNextButton && (
-          <div className="mt-3 md:mt-4 flex justify-end gap-2">
-            <Button
-              size="lg"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (hardwarePlatform !== "mobile") {
-                  handleNextStep();
-                }
-              }}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (hardwarePlatform === "mobile") {
-                  handleNextStep();
-                }
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-            >
-              {currentStepNumber === TUTORIAL_STEPS.length - 1 ? "Finish" : "Next"}
-              <ArrowRight className="ml-2 h-4 md:h-5 w-4 md:w-5" />
-            </Button>
-          </div>
-        )}
-      </AssistantDialog>
+      {!currentTutorialStep.hideDialog && (
+        <AssistantDialog title={currentTutorialStep.title}>
+          <p className="text-sm md:text-base leading-relaxed">
+            {currentTutorialStep.description}
+          </p>
+          {currentTutorialStep.externalLink && (
+            <div className="mt-3">
+              <Button
+                className="w-full"
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(currentTutorialStep.externalLink, "_blank")}
+              >
+                Read Getting Started Guide
+              </Button>
+            </div>
+          )}
+          {currentTutorialStep?.showNextButton && (
+            <div className="mt-3 md:mt-4 flex justify-end gap-2">
+              <Button
+                size="lg"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (hardwarePlatform !== "mobile") {
+                    handleNextStep();
+                  }
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (hardwarePlatform === "mobile") {
+                    handleNextStep();
+                  }
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+              >
+                {currentStepNumber === TUTORIAL_STEPS.length - 1 ? "Finish" : "Next"}
+                <ArrowRight className="ml-2 h-4 md:h-5 w-4 md:w-5" />
+              </Button>
+            </div>
+          )}
+        </AssistantDialog>
+      )}
     </>
   );
 };
@@ -564,32 +599,37 @@ const findElementToHighlight = (
   rightSideBarRef: React.RefObject<HTMLDivElement | null>,
   rightSideBarOpen: boolean,
 ) => {
-  if (!step?.elementId) return null;
+  if (!step?.elementIds || step.elementIds.length === 0) return null;
 
-  // Try to find by ID first - most reliable
-  let element: HTMLElement | null = document.getElementById(step.elementId);
+  // Find the first non-null element in elementIds
+  let element: HTMLElement | null =
+    step.elementIds?.map((id) => id && document.getElementById(id)).find(Boolean) ||
+    null;
+  const primaryElement =
+    step.elementIds?.[0] && document.getElementById(step.elementIds[0]);
+  const isPrimaryElement = element === primaryElement;
 
   // Check within the rightSideBarRef if available and open
   const sidebarElement = rightSideBarRef.current;
-  if (sidebarElement && rightSideBarOpen && step.requiresGameMenu) {
-    // Try exact match first
-    const exactMatch = sidebarElement.querySelector<HTMLElement>(`#${step.elementId}`);
-    if (exactMatch) {
-      element = exactMatch;
-    } else if (step.elementId) {
-      // If no exact match, try partial match
-      const allElements = Array.from(
-        sidebarElement.querySelectorAll<HTMLElement>("[id]"),
+  if (
+    sidebarElement &&
+    rightSideBarOpen &&
+    step.requiresGameMenu &&
+    Array.isArray(step.elementIds)
+  ) {
+    // Try exact match first, then partial match if needed
+    const foundElement =
+      step.elementIds
+        ?.map((id) => id && sidebarElement.querySelector<HTMLElement>(`#${id}`))
+        .find(Boolean) ||
+      Array.from(sidebarElement.querySelectorAll<HTMLElement>("[id]")).find((el) =>
+        step.elementIds?.some(
+          (id) => id && el.id?.includes(id.replace("tutorial-", "")),
+        ),
       );
-      const partialMatch = allElements.find((el) => {
-        const id = el.id;
-        return id
-          ? id.includes(step?.elementId?.replace("tutorial-", "") || "")
-          : false;
-      });
-      if (partialMatch) {
-        element = partialMatch;
-      }
+
+    if (foundElement) {
+      element = foundElement;
     }
   }
 
@@ -601,6 +641,7 @@ const findElementToHighlight = (
   // Return the element reference along with its dimensions
   return {
     element,
+    isPrimaryElement,
     top: rect.top,
     left: rect.left,
     width: rect.width,

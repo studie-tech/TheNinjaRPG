@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Gamepad2 } from "lucide-react";
 import Accordion from "@/layout/Accordion";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { useState, useEffect } from "react";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { QuestType } from "@/drizzle/constants";
@@ -43,9 +44,16 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
     questType: props.questType,
   });
 
+  // Tutorial step
+  const { currentStep, handleNextStepAsync } = useTutorialStep();
+
+  // Mutations
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
+      if (currentStep?.title === "Genin Exam") {
+        await handleNextStepAsync();
+      }
       await Promise.all([
         util.profile.getUser.invalidate(),
         util.quests.specificQuests.invalidate(),

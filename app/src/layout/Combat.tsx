@@ -75,6 +75,9 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Reference to group holding tile names for toggling visibility
   const groupNamesRef = useRef<Group | null>(null);
 
+  // Tutorial step
+  const { currentStep, handleNextStepAsync } = useTutorialStep();
+
   // Mutation protection
   const onMutateCheck = useGlobalOnMutateProtect();
 
@@ -193,7 +196,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       document.body.style.cursor = "wait";
       setBattleState({ battle: battle.current, result: null, isPending: true });
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       // Notifications (if any)
       if (data.notification) {
         showMutationToast({ success: true, message: data.notification });
@@ -231,6 +234,10 @@ const Combat: React.FC<CombatProps> = (props) => {
             }
           },
         );
+      }
+      // Check if tutorial should progress
+      if (currentStep?.completeOnBattle && data.result) {
+        await handleNextStepAsync();
       }
       // Update battle state
       if (data.updateClient) {
@@ -360,21 +367,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPending, timeDiff, result, suid]);
-
-  // If we have a result, and it's a tutorial Battle Arena step, then progress to next step
-  const { stepNumber, currentStep, handleNextStep } = useTutorialStep();
-  useEffect(() => {
-    if (result && battleType === "ARENA" && currentStep?.title === "Battle Arena") {
-      let nextStep: null | number = null;
-      for (let i = stepNumber; i < TUTORIAL_STEPS.length; i++) {
-        if (TUTORIAL_STEPS?.[i]?.title !== "Battle Arena") {
-          nextStep = i;
-          break;
-        }
-      }
-      if (nextStep) handleNextStep(nextStep);
-    }
-  }, [result, battleType, stepNumber, currentStep, handleNextStep]);
 
   useEffect(() => {
     action.current = props.action;

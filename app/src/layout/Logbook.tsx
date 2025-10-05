@@ -16,6 +16,7 @@ import { api } from "@/app/_trpc/client";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { useInfinitePagination } from "@/libs/pagination";
 import { parseHtml } from "@/utils/parse";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import { isQuestComplete } from "@/libs/objectives";
 import {
@@ -72,7 +73,6 @@ const LogbookAchievements: React.FC = () => {
   const quests = userData?.userQuests.filter((uq) =>
     ["tier", "achievement"].includes(uq.quest.questType),
   );
-
 
   useEffect(() => {
     if (quests && quests.length > 0 && !activeElement) {
@@ -356,8 +356,10 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const { mutate: abandon } = api.quests.abandon.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await utils.quests.allianceBuilding.invalidate();
-      await utils.profile.getUser.invalidate();
+      await Promise.all([
+        utils.quests.allianceBuilding.invalidate(),
+        utils.profile.getUser.invalidate(),
+      ]);
     },
   });
 
@@ -406,7 +408,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
         </div>
       }
     >
-      <div className="flex flex-col h-full gap-3">
+      <div className="flex flex-col h-full gap-3" id={`logbook-entry-${quest.id}`}>
         {!hideTitle && (
           <div className={cn(showScene ? "px-3 pt-3" : "")}>
             <div className={"font-bold text-xl"}>
@@ -435,7 +437,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             <Image
               src={background}
               alt="SceneBackground"
-              className="w-full relative"
+              className="w-full relative aspect-3/2"
               width={512}
               height={341}
             />
@@ -546,6 +548,9 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
 export const useCheckRewards = () => {
   const utils = api.useUtils();
 
+  // Tutorial step
+  const { currentStep, handleNextStepAsync } = useTutorialStep();
+
   // Mutations
   const { mutate: checkRewards, isPending: isCheckingRewards } =
     api.quests.checkRewards.useMutation({
@@ -553,6 +558,10 @@ export const useCheckRewards = () => {
         // If a failutre, show a toast
         if (!data.success && "message" in data) {
           showMutationToast({ success: data.success, message: data.message });
+        }
+        // If the quest is finished, handle the next step
+        if (currentStep?.title === "Academy Dialog Option") {
+          await handleNextStepAsync();
         }
         // If there is a userQuest, show the rewards
         if ("userQuest" in data && data.userQuest) {

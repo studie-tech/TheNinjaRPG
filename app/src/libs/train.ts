@@ -92,7 +92,7 @@ export const getReducedGainsDays = (user: UserData) => {
   return 0;
 };
 
-export const availableRanks = (letterRank?: LetterRank): UserRank[] => {
+export const availableRanks = (letterRank?: LetterRank | UserRank): UserRank[] => {
   switch (letterRank) {
     case "D":
       return ["STUDENT"];
@@ -104,8 +104,21 @@ export const availableRanks = (letterRank?: LetterRank): UserRank[] => {
       return ["STUDENT", "GENIN", "CHUNIN", "JONIN", "ELDER"];
     case "S":
       return ["STUDENT", "GENIN", "CHUNIN", "JONIN", "ELDER", "ELITE JONIN"];
+    case "STUDENT":
+      return ["STUDENT"];
+    case "GENIN":
+      return ["STUDENT", "GENIN"];
+    case "CHUNIN":
+      return ["STUDENT", "GENIN", "CHUNIN"];
+    case "JONIN":
+      return ["STUDENT", "GENIN", "CHUNIN", "JONIN"];
+    case "ELDER":
+      return ["STUDENT", "GENIN", "CHUNIN", "JONIN", "ELDER"];
+    case "ELITE JONIN":
+      return ["STUDENT", "GENIN", "CHUNIN", "JONIN", "ELDER", "ELITE JONIN"];
+    default:
+      return ["STUDENT", "GENIN", "CHUNIN", "JONIN", "ELDER", "ELITE JONIN"];
   }
-  return ["STUDENT", "GENIN", "CHUNIN", "JONIN", "ELDER", "ELITE JONIN"];
 };
 
 export const getAvailableLetterRanks = (rank: LetterRank) => {

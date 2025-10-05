@@ -33,7 +33,7 @@ export const jutsuFilteringSchema = z.object({
   jutsuType: z.array(z.enum(JutsuTypes)).optional(),
   method: z.enum(AttackMethods).optional(),
   name: z.string().min(0).max(256).optional(),
-  rank: z.enum(UserRanks).optional(),
+  rank: z.array(z.enum(UserRanks)).optional(),
   requiredLevel: z.coerce.number().optional(),
   rarity: z.enum(LetterRanks).optional(),
   stat: z.array(z.enum(statFilters)).optional(),
