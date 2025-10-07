@@ -5,6 +5,7 @@ import { useUserData } from "@/utils/UserContext";
 import { usePathname, useRouter } from "next/navigation";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { api } from "@/app/_trpc/client";
+import type { UserWithRelations } from "@/routers/profile";
 
 export interface TutorialStepConfig {
   title: string;
@@ -82,6 +83,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/combat",
     showNextButton: true,
     proceedOnHighlightClick: true,
+    completeOnBattle: true,
   },
   {
     title: "Battle Arena",
@@ -90,6 +92,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/combat",
     showNextButton: true,
     proceedOnHighlightClick: true,
+    completeOnBattle: true,
   },
   {
     title: "Battle Arena",
@@ -98,6 +101,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/combat",
     showNextButton: true,
     proceedOnHighlightClick: true,
+    completeOnBattle: true,
   },
   {
     title: "Battle Arena",
@@ -106,6 +110,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     elementIds: ["tutorial-combat-action-move"],
     page: "/combat",
     proceedOnHighlightClick: true,
+    completeOnBattle: true,
   },
   {
     title: "Battle Arena",
@@ -147,10 +152,18 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/traininggrounds",
   },
   {
+    title: "Jutsu Training",
+    elementIds: ["tutorial-village"],
+    description:
+      "Training your character and acquiring new and more powerful jutsus is one way to be better prepared for battle. Training your jutsu will take a while, but let's not stay to wait. Let's go get you some better gear.",
+    page: "/traininggrounds",
+    requiresGameMenu: true,
+    proceedOnHighlightClick: true,
+  },
+  {
     title: "Item shop",
     elementIds: ["tutorial-itemshop"],
-    description:
-      "Training your character and acquiring new and more powerful jutsus is one way to be better prepared for battle. Training your jutsu will take a while, but let's not stay to wait. Another option is to gear up! let's go to the itemshop and buy some weapons.",
+    description: "To purchase new items, you need to go to the itemshop.",
     page: "/village",
     proceedOnHighlightClick: true,
   },
@@ -182,7 +195,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     title: "Academy Dialog Option",
-    elementIds: ["logbook-entry-eYDVpL63vPhK3lywMexdv"],
+    elementIds: ["logbook-entry-eYDVpL63vPhK3lywMexdv", "tutorial-take-quest"],
     description: "",
     page: "/academy",
     hideDialog: true,
@@ -238,8 +251,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   {
     title: "Academy Dialog Option",
     elementIds: ["logbook-entry-eYDVpL63vPhK3lywMexdv"],
-    description:
-      "Wait, before we go to the mission hall, we should head to the academy. This is where I normally work as an instructor, and where we will guide you on your way to the next ninja rank of Genin. As a Genin, you will have access to more jutsus, more difficult missions, and much more. Let's go. ",
+    description: "",
     page: "/academy",
     hideDialog: true,
   },
@@ -261,6 +273,22 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   //   showNextButton: true,
   // },
 ];
+
+/**
+ * Get the next step with a new title
+ * @param currentStep - The current step
+ * @returns The next step with a new title
+ */
+export const getNextNewTitleStep = (currentStep: TutorialStepConfig) => {
+  const currentIndex = TUTORIAL_STEPS.indexOf(currentStep);
+  for (let i = currentIndex + 1; i < TUTORIAL_STEPS.length; i++) {
+    const step = TUTORIAL_STEPS?.[i];
+    if (TUTORIAL_STEPS?.[i]?.title !== currentStep.title) {
+      return i;
+    }
+  }
+  return null;
+};
 
 /**
  * Hook to get the current tutorial step

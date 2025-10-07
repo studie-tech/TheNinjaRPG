@@ -7,6 +7,7 @@ import type { ToastActionElement } from "src/components/ui/toast";
 import type { PostProcessedRewards } from "@/libs/quest";
 import type { Quest } from "@/drizzle/schema";
 import { parseHtml } from "@/utils/parse";
+import { confetti } from "@tsparticles/confetti";
 import Image from "next/image";
 
 /**
@@ -138,87 +139,87 @@ export const showRewardToast = (
       <div className="flex flex-row items-center">
         <div className="flex flex-col basis-2/3">
           {rewards.reward_money > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Money:</b> {rewards.reward_money} ryo
             </span>
           )}
           {rewards.reward_seichi_silver > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Seichi Silver:</b> {rewards.reward_seichi_silver}
             </span>
           )}
           {rewards.reward_clanpoints > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Clan points:</b> {rewards.reward_clanpoints}
             </span>
           )}
           {rewards.reward_anbupoints > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Anbu points:</b> {rewards.reward_anbupoints}
             </span>
           )}
           {rewards.reward_exp > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Experience:</b> {rewards.reward_exp}
             </span>
           )}
           {rewards.reward_tokens > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Village tokens:</b> {rewards.reward_tokens}
             </span>
           )}
           {rewards.reward_prestige > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Village prestige:</b> {rewards.reward_prestige}
             </span>
           )}
           {rewards.reward_reputation > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Reputation points:</b> {rewards.reward_reputation}
             </span>
           )}
           {rewards.reward_skillpoints > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Skill points:</b> {rewards.reward_skillpoints}
             </span>
           )}
           {rewards.reward_medical_experience > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Medical experience:</b> {rewards.reward_medical_experience}
             </span>
           )}
           {rewards.reward_hunting_experience > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Hunting experience:</b> {rewards.reward_hunting_experience}
             </span>
           )}
           {rewards.reward_crafting_experience > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Crafting experience:</b> {rewards.reward_crafting_experience}
             </span>
           )}
           {rewards.reward_gathering_experience > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Gathering experience:</b> {rewards.reward_gathering_experience}
             </span>
           )}
           {rewards.reward_jutsus.length > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Jutsus: </b> {rewards.reward_jutsus.join(", ")}
             </span>
           )}
           {rewards.reward_badges.length > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Badges: </b> {rewards.reward_badges.join(", ")}
             </span>
           )}
           {rewards.reward_bloodlines.length > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Swappable Bloodlines: </b> {rewards.reward_bloodlines.join(", ")}
             </span>
           )}
           {rewards.reward_items.length > 0 && (
-            <span>
+            <span className="whitespace-nowrap">
               <b>Items: </b>
               {rewards.reward_items.join(", ")}
             </span>
@@ -244,4 +245,42 @@ export const showRewardToast = (
     message: message,
     title: title,
   });
+
+  // Trigger fireworks confetti animation
+  const duration = 1 * 1000;
+  const animationEnd = Date.now() + duration;
+  const defaults = {
+    startVelocity: 30,
+    spread: 360,
+    ticks: 60,
+    zIndex: 9999,
+    colors: ["#FFD700", "#FFA500", "#FF6347", "#4169E1", "#32CD32"],
+    disableForReducedMotion: true,
+  };
+
+  const randomInRange = (min: number, max: number) => {
+    return Math.random() * (max - min) + min;
+  };
+
+  const interval = setInterval(() => {
+    const timeLeft = animationEnd - Date.now();
+
+    if (timeLeft <= 0) {
+      return clearInterval(interval);
+    }
+
+    const particleCount = 50 * (timeLeft / duration);
+
+    // Shoot confetti from left and right sides
+    void confetti({
+      ...defaults,
+      particleCount,
+      origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+    });
+    void confetti({
+      ...defaults,
+      particleCount,
+      origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+    });
+  }, 250);
 };

@@ -183,9 +183,6 @@ export default function Travel() {
           await updateUser(result.data);
           setShowModal(false);
           setActiveTab(globalLink);
-          if (currentStep?.title === "Travel") {
-            handleNextStep();
-          }
           if (globe) {
             setCurrentTile(globe.tiles[result.data.sector]!);
           }
@@ -197,6 +194,9 @@ export default function Travel() {
     api.travel.finishGlobalMove.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
+        if (currentStep?.title === "Travel") {
+          handleNextStep();
+        }
         if (result.success) {
           await updateUser({ status: "AWAKE", travelFinishAt: null });
           setActiveTab(sectorLink);

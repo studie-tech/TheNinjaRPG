@@ -34,7 +34,7 @@ import type { BattleState } from "@/libs/combat/types";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { useLocalStorage } from "@/hooks/localstorage";
 import Modal2 from "@/layout/Modal2";
-import { useTutorialStep, TUTORIAL_STEPS } from "@/hooks/tutorial";
+import { useTutorialStep, getNextNewTitleStep } from "@/hooks/tutorial";
 import { LogbookEntry } from "@/layout/Logbook";
 import { preloadTextures } from "@/libs/threejs/util";
 import { preloadAudioBuffers } from "@/utils/audio";
@@ -212,13 +212,17 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
       // Check for quest updates
       if (data.updatedQuestIds && data.updatedQuestIds.length > 0) {
-        data.updatedQuestIds.forEach((questId) => {
-          const quest = userData?.userQuests?.find((q) => q.questId === questId);
-          if (quest?.quest?.consecutiveObjectives) {
-            setLogbookModalOpen(true);
-            setLogbookModalQuestId(questId);
-          }
-        });
+        // Ignore popup for tutorial step
+        if (currentStep?.title !== "Capture Target") {
+          // Show popup for consecutive quests
+          data.updatedQuestIds.forEach((questId) => {
+            const quest = userData?.userQuests?.find((q) => q.questId === questId);
+            if (quest?.quest?.consecutiveObjectives) {
+              setLogbookModalOpen(true);
+              setLogbookModalQuestId(questId);
+            }
+          });
+        }
       }
       // Update battle history
       if (battleId && data.logEntries) {
@@ -236,8 +240,11 @@ const Combat: React.FC<CombatProps> = (props) => {
         );
       }
       // Check if tutorial should progress
-      if (currentStep?.completeOnBattle && data.result) {
-        await handleNextStepAsync();
+      if (currentStep?.completeOnBattle && data.result?.outcome === "Won") {
+        const nextStep = getNextNewTitleStep(currentStep);
+        if (nextStep) {
+          await handleNextStepAsync(nextStep);
+        }
       }
       // Update battle state
       if (data.updateClient) {

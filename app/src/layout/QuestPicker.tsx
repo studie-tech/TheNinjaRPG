@@ -63,6 +63,10 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
 
   // Default active tab
   useEffect(() => {
+    // Ensure that we are using the correct active element
+    const activeQuest = activeElement && quests?.find((q) => q.name === activeElement);
+    if (!activeQuest) setActiveElement("");
+    // If active element is set,
     if (userData && !activeElement) {
       // Try to set to current quest if exists
       const currentQuest = userData.userQuests?.find(

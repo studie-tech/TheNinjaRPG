@@ -18,7 +18,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { Button } from "@/components/ui/button";
 import { LayoutGrid } from "lucide-react";
-import { useTutorialStep } from "@/hooks/tutorial";
+import { useTutorialStep, getNextNewTitleStep } from "@/hooks/tutorial";
 import { useLocalStorage } from "@/hooks/localstorage";
 
 const Combat = dynamic(() => import("@/layout/Combat"));
@@ -74,7 +74,10 @@ export default function CombatPage() {
       setBattleAtom(data.battle);
       setBattleState({ battle: data?.battle, result: res, isPending: false });
       if (currentStep?.completeOnBattle && results) {
-        handleNextStep();
+        const nextStep = getNextNewTitleStep(currentStep);
+        if (nextStep) {
+          handleNextStep(nextStep);
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

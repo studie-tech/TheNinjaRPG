@@ -145,11 +145,13 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       }
 
       // Get current step config
-      const isBattle = userData.status === "BATTLE";
       const isHospitalized = userData.status === "HOSPITALIZED";
       const currentStepConfig = isHospitalized
         ? TUTORIAL_HOSPITALIZED_STEP
         : TUTORIAL_STEPS[tutorialStep];
+      const inBattle = userData.status === "BATTLE";
+      const onBattlePage = pathname === "/combat";
+      const toBattlePage = currentStepConfig?.page === "/combat";
 
       // Check if we need to show the special Game Menu tutorial
       // Show it when on mobile, sidebar is closed, and we're at a step that requires the game menu
@@ -164,29 +166,28 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       // Handle regular tutorial steps
       if (!shouldShowGameMenuTutorial) {
         // Show tutorial if we have a valid step and we're on the right page
-        const onBattlePage = pathname === "/combat";
         const onCorrectPage = currentStepConfig && pathname === currentStepConfig.page;
         const hasRequiredGameMenu =
           currentStepConfig?.requiresGameMenu && isMobile ? rightSideBarOpen : true;
 
         // Only show if on correct page and game menu requirements are met
         const shouldShowRegularTutorial =
-          tutorialStep < TUTORIAL_STEPS.length &&
-          (onCorrectPage || isBattle) &&
-          hasRequiredGameMenu;
+          tutorialStep < TUTORIAL_STEPS.length && onCorrectPage && hasRequiredGameMenu;
         setIsAssistantVisible(Boolean(shouldShowRegularTutorial));
 
         // If we're at a valid step but not on the correct page, redirect
         if (
           tutorialStep < TUTORIAL_STEPS.length &&
           !onCorrectPage &&
-          !onBattlePage &&
           currentStepConfig
         ) {
           if (!currentStepConfig?.requiresGameMenu) {
             setRightSideBarOpen(false);
           }
-          if (!isBattle) {
+          const battleCheck =
+            (!onBattlePage && !toBattlePage) || // Unrelated to battle
+            (inBattle && toBattlePage); // In battle and going to battle page
+          if (battleCheck) {
             router.push(currentStepConfig.page);
           }
         }
@@ -447,31 +448,6 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   if (!currentTutorialStep) return null;
 
   const isOnCorrectPage = pathname === currentTutorialStep.page;
-
-  // If we're not on the correct page, show a dialog to navigate there
-  if (!isOnCorrectPage && !inBattle) {
-    return (
-      <Dialog open={true} onOpenChange={() => setIsAssistantVisible(true)}>
-        <DialogContent className="sm:max-w-md z-60">
-          <DialogHeader>
-            <DialogTitle>
-              {isHospitalized ? "You are Hospitalized!" : "Continue the Tutorial"}
-            </DialogTitle>
-            <DialogDescription>
-              {isHospitalized
-                ? "You need to go to the hospital to heal yourself."
-                : `You need to navigate to the ${currentTutorialStep.page} page to continue the tutorial.`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-between mt-4">
-            <Button onClick={() => router.push(currentTutorialStep.page)}>
-              {isHospitalized ? "Go to Hospital" : `Go to ${currentTutorialStep.page}`}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   // Derived
   const pointerEvents =

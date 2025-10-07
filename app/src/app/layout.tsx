@@ -13,6 +13,7 @@ import LayoutCore4 from "@/components/layout/core4_default";
 import { IMG_LOGO_FULL } from "@/drizzle/constants";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import PWAManager from "@/components/pwa/PWAManager";
+import ParticleProvider from "@/components/ui/particles";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import type { Viewport, Metadata } from "next";
 
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <AcceptWarning />
                 <PWAManager />
                 <InstallPrompt />
+                <ParticleProvider />
                 <SpeedInsights sampleRate={0.03} />
               </UserContextProvider>
             </TrpcClientProvider>
