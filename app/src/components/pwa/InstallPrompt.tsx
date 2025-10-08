@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { X, Download, Smartphone } from "lucide-react";
+import { useTutorialStep } from "@/hooks/tutorial";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -18,6 +19,9 @@ export default function InstallPrompt() {
   const [isIOS, setIsIOS] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+
+  // Tutorial mode
+  const { currentStep } = useTutorialStep();
 
   useEffect(() => {
     // Detect iOS
@@ -105,6 +109,8 @@ export default function InstallPrompt() {
   }
 
   if (!showInstallPrompt) return null;
+
+  if (currentStep) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-sm">

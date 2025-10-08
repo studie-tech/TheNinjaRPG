@@ -10,7 +10,7 @@ import { visitorLog } from "@/drizzle/schema";
 import { secondsFromNow } from "@/utils/time";
 import { checkForBadWords } from "@/utils/profanity";
 import { abEvent } from "@/drizzle/schema";
-import { STARTER_QUEST_ID } from "@/drizzle/constants";
+import { STARTER_QUEST_ID, IMG_DEFAULT_PROFILE_PICTURE } from "@/drizzle/constants";
 import {
   bloodline,
   bloodlineRolls,
@@ -158,12 +158,15 @@ export const registerRouter = createTRPCRouter({
           recruiterId: input.recruiter_userid,
           username: input.username,
           gender: input.gender,
+          avatar: IMG_DEFAULT_PROFILE_PICTURE,
           villageId: villageData.id,
           bloodlineId: selectedBloodline.id,
           approvedTos: true,
           sector: villageData.sector,
           extraJutsuSlots: 0,
           immunityUntil: secondsFromNow(24 * 3600),
+          musicOn: input.musicOn ?? true,
+          sfxOn: input.sfxOn ?? true,
           ...(reminder ? { earnedExperience: 10000 } : {}),
         }),
         ctx.drizzle.insert(bloodlineRolls).values({

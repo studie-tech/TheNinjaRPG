@@ -1290,6 +1290,8 @@ export const DRACO_ENCODER_URL =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGexpLZRfoVrha0LP4mAS5KM7wtiZbUNXJxdC";
 
 // Images
+export const IMG_DEFAULT_PROFILE_PICTURE =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ19UqON6bo95WClq4K0wxZUmJcvThgdVenO3P";
 export const IMG_OCCUPATION_GATHERING =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJePgzrqyV3OvUJQExAi0bGoIZDF74LqSnHRdp";
 export const IMG_OCCUPATION_HUNTER =

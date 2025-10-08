@@ -118,6 +118,17 @@ const Register: React.FC = () => {
     validSkinColors[Math.floor(Math.random() * validSkinColors.length)]!;
   const initialGender = validGenders[Math.floor(Math.random() * validGenders.length)]!;
 
+  // Get unsigned user settings from localStorage
+  const getLocalStorageBoolean = (key: string, defaultValue: boolean): boolean => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(key);
+      if (saved !== null) {
+        return JSON.parse(saved) as boolean;
+      }
+    }
+    return defaultValue;
+  };
+
   // Form handling
   const form = useForm<RegistrationSchema>({
     mode: "all",
@@ -134,6 +145,8 @@ const Register: React.FC = () => {
       attribute_2: initialAttr2,
       attribute_3: initialAttr3,
       bloodlineId: undefined,
+      musicOn: getLocalStorageBoolean("musicOn", true),
+      sfxOn: getLocalStorageBoolean("sfxOn", true),
     },
   });
 

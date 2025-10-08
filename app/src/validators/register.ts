@@ -69,6 +69,8 @@ export const registrationSchema = z
     recruiter_userid: z.string().optional().nullish(),
     utm_source: utmSourceSchema,
     bloodlineId: z.string().min(1, "Bloodline selection is required"),
+    musicOn: z.boolean().optional().default(true),
+    sfxOn: z.boolean().optional().default(true),
   })
   .strict()
   .required()

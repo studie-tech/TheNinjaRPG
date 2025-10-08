@@ -65,7 +65,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
   useEffect(() => {
     // Ensure that we are using the correct active element
     const activeQuest = activeElement && quests?.find((q) => q.name === activeElement);
-    if (!activeQuest) setActiveElement("");
+    if (!activeQuest && quests) setActiveElement("");
     // If active element is set,
     if (userData && !activeElement) {
       // Try to set to current quest if exists

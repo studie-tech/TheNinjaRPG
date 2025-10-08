@@ -9,7 +9,7 @@ import { useEffect, use, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { EditContent } from "@/layout/EditContent";
 import { ObjectiveFormWrapper } from "@/layout/EditContent";
-import { FilePlus, FileMinus } from "lucide-react";
+import { FilePlus, FileMinus, Copy } from "lucide-react";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import { allObjectiveTasks } from "@/validators/objectives";
@@ -94,6 +94,21 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
     setSelectedObjectiveId(null);
   };
 
+  const copyObjective = (idx: number) => {
+    const objectiveToCopy = objectives[idx];
+    if (!objectiveToCopy) return;
+
+    const copiedObjective = {
+      ...objectiveToCopy,
+      id: nanoid(5),
+    };
+
+    const newObjectives = [...objectives];
+    newObjectives.splice(idx + 1, 0, copiedObjective);
+    setObjectives(newObjectives);
+    setSelectedObjectiveId(copiedObjective.id);
+  };
+
   const AddObjectiveIcon = (
     <FilePlus
       className="h-6 w-6 cursor-pointer hover:text-orange-500"
@@ -115,7 +130,11 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         subtitle={`ID: ${objective.id}`}
         initialBreak={true}
         topRightContent={
-          <div className="flex flex-row">
+          <div className="flex flex-row gap-2">
+            <Copy
+              className="h-6 w-6 cursor-pointer hover:text-orange-500"
+              onClick={() => copyObjective(i)}
+            />
             <FileMinus
               className="h-6 w-6 cursor-pointer hover:text-orange-500"
               onClick={() => removeObjective(i)}
@@ -272,26 +291,10 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
   isFlowValid,
   flowErrorMsg,
 }) => {
-  // Memoize elements for performance
-  const elements = useMemo(() => {
-    const nodes: ElementDefinition[] = objectives.map((obj) => {
-      const { image } = getObjectiveImage(obj);
-      return {
-        data: {
-          id: obj.id,
-          label: obj.task,
-          description: obj.description ?? "",
-          image,
-        },
-        classes: obj.id === selectedObjectiveId ? "selected" : "",
-      };
-    });
-    const edges = buildObjectiveEdges(objectives, consecutiveObjectives ?? false);
-    return [...nodes, ...edges];
-  }, [objectives, consecutiveObjectives, selectedObjectiveId]);
-
   // Cytoscape ref and event handling
   const cyRef = useRef<Core | null>(null);
+  const nodePositionsRef = useRef<Record<string, { x: number; y: number }>>({});
+  const isInitialLayoutRef = useRef(true);
 
   // Tooltip state & container ref
   const [tooltipData, setTooltipData] = useState<{
@@ -302,41 +305,143 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
   } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Helper to update edges
-  const updateEdges = (cy: Core) => {
-    cy.edges().forEach((edge) => {
-      if (edge.id().includes("__to__")) {
-        edge.remove();
+  // Memoize elements for performance
+  const elements = useMemo(() => {
+    const nodes: ElementDefinition[] = objectives.map((obj) => {
+      const { image } = getObjectiveImage(obj);
+      const position = nodePositionsRef.current[obj.id];
+      return {
+        data: {
+          id: obj.id,
+          label: obj.task,
+          description: obj.description ?? "",
+          image,
+        },
+        classes: obj.id === selectedObjectiveId ? "selected" : "",
+        position: position, // Use stored position if available
+      };
+    });
+    const edges = buildObjectiveEdges(objectives, consecutiveObjectives ?? false);
+    return [...nodes, ...edges];
+  }, [objectives, consecutiveObjectives, selectedObjectiveId]);
+
+  // Save node positions after layout
+  const saveNodePositions = (cy: Core) => {
+    cy.nodes().forEach((node) => {
+      const pos = node.position();
+      nodePositionsRef.current[node.id()] = { x: pos.x, y: pos.y };
+    });
+  };
+
+  // Helper to update graph incrementally
+  const updateGraph = (cy: Core) => {
+    // Get current node and edge IDs
+    const currentNodeIds = new Set(cy.nodes().map((n) => n.id()));
+    const currentEdgeIds = new Set(cy.edges().map((e) => e.id()));
+
+    // Get new node and edge IDs
+    const newNodeIds = new Set(objectives.map((obj) => obj.id));
+    const newEdges = consecutiveObjectives
+      ? buildObjectiveEdges(objectives, consecutiveObjectives)
+      : [];
+    const newEdgeIds = new Set(newEdges.map((e) => e.data.id).filter(Boolean));
+
+    // Remove deleted nodes
+    currentNodeIds.forEach((id) => {
+      if (!newNodeIds.has(id)) {
+        cy.getElementById(id).remove();
+        delete nodePositionsRef.current[id];
       }
     });
-    if (consecutiveObjectives) {
-      const edges = buildObjectiveEdges(objectives, consecutiveObjectives);
-      edges.forEach(({ data }) => {
-        if (data.id && !cy.getElementById(data.id).length) {
-          cy.add({ group: "edges", data });
-        }
+
+    // Remove deleted edges
+    currentEdgeIds.forEach((id) => {
+      if (!newEdgeIds.has(id)) {
+        cy.getElementById(id).remove();
+      }
+    });
+
+    // Add new nodes
+    const nodesToAdd: string[] = [];
+    objectives.forEach((obj) => {
+      if (!currentNodeIds.has(obj.id)) {
+        const { image } = getObjectiveImage(obj);
+        cy.add({
+          group: "nodes",
+          data: {
+            id: obj.id,
+            label: obj.task,
+            description: obj.description ?? "",
+            image,
+          },
+        });
+        nodesToAdd.push(obj.id);
+      } else {
+        // Update existing node data
+        const node = cy.getElementById(obj.id);
+        const { image } = getObjectiveImage(obj);
+        node.data({
+          label: obj.task,
+          description: obj.description ?? "",
+          image,
+        });
+      }
+    });
+
+    // Add new edges
+    newEdges.forEach(({ data }) => {
+      if (data.id && !currentEdgeIds.has(data.id)) {
+        cy.add({ group: "edges", data });
+      }
+    });
+
+    // Only run layout for new nodes, or full layout if it's the initial render
+    if (nodesToAdd.length > 0 || isInitialLayoutRef.current) {
+      const layout = cy.layout({
+        name: "cose",
+        fit: isInitialLayoutRef.current,
+        padding: 30,
+        randomize: isInitialLayoutRef.current, // Only randomize on initial layout
+        animate: !isInitialLayoutRef.current,
+        animationDuration: 300,
+        nodeOverlap: 20,
       });
+
+      layout.on("layoutstop", () => {
+        saveNodePositions(cy);
+        isInitialLayoutRef.current = false;
+      });
+
+      layout.run();
+    } else {
+      // Just save current positions
+      saveNodePositions(cy);
     }
-    cy.layout({ name: "cose", fit: true, padding: 30, randomize: true }).run();
   };
 
   useEffect(() => {
     if (!cyRef.current) return;
     const cy = cyRef.current;
-    updateEdges(cy);
+
+    updateGraph(cy);
+
+    // Setup event listeners (only once)
     cy.removeListener("tap", "node");
     cy.removeListener("tap");
     cy.removeListener("mouseover", "node");
     cy.removeListener("mouseout", "node");
+
     cy.on("tap", "node", (event: EventObjectNode) => {
       const nodeId = event.target.id();
       setSelectedObjectiveId(nodeId);
     });
+
     cy.on("tap", (event: EventObject) => {
       if (event.target === cy) {
         setSelectedObjectiveId(null);
       }
     });
+
     // Tooltip handlers
     cy.on("mouseover", "node", (event: EventObjectNode) => {
       const node = event.target;
@@ -348,6 +453,7 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
         description: (node.data("description") ?? "") as string,
       });
     });
+
     cy.on("mouseout", "node", () => {
       setTooltipData(null);
     });
@@ -367,7 +473,7 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
             cyRef.current = cy;
           }}
           elements={elements}
-          layout={{ name: "cose", fit: true, padding: 30, randomize: true }}
+          layout={{ name: "preset" }}
           style={{ width: "100%", height: "100%" }}
           stylesheet={[
             {

@@ -901,7 +901,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                   </Button>
                 </Link>
               )}
-              {showNextMatch && arenaOpponentId && (
+              {showNextMatch && arenaOpponentId && !currentStep && (
                 <div>
                   <Button
                     id="return"
