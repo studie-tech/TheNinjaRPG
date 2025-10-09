@@ -1000,6 +1000,7 @@ export const JUTSU_XP_TO_LEVEL = 1000;
 export const JUTSU_LEVEL_CAP = 20;
 export const JUTSU_TRAIN_LEVEL_CAP = 25;
 export const MAX_DAILY_TRAININGS = 64;
+export const MAX_JUTSU_TRAIN_TIME_MS = 60 * 60 * 1000; // 1 hour in milliseconds
 
 // Combat config
 export const BATTLE_ARENA_DAILY_LIMIT = 99999;
@@ -1818,7 +1819,7 @@ export const BOUNTY_MAX_HUNTERS = 3;
 export const BOUNTY_MIN_AMOUNT = 1000000;
 
 // Skill system constants
-export const MAX_SKILL_POINTS = 100; // Total max skillpoints (20 from leveling + 10 from quests)
+export const MAX_SKILL_POINTS = 100; // Total max skillpoints (20 from leveling + 80 from quests)
 
 // Support System Settings
 export const SupportTicketCategories = [

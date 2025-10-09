@@ -5,6 +5,7 @@ import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { FED_NORMAL_JUTSU_SLOTS } from "@/drizzle/constants";
 import { FED_SILVER_JUTSU_SLOTS } from "@/drizzle/constants";
 import { FED_GOLD_JUTSU_SLOTS } from "@/drizzle/constants";
+import { MAX_JUTSU_TRAIN_TIME_MS } from "@/drizzle/constants";
 import {
   SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
   SENSEI_MAX_STUDENT_LEVEL,
@@ -206,10 +207,14 @@ export const calcJutsuTrainTime = (jutsu: Jutsu, level: number, userdata: UserDa
     lvlIncrement = 11;
   }
   const trainTime = (1 + level * lvlIncrement) * 60 * 1000;
+  
+  // Cap training time at maximum allowed time (1 hour)
+  const cappedTrainTime = Math.min(trainTime, MAX_JUTSU_TRAIN_TIME_MS);
+  
   if (userdata.senseiId && userdata.rank === "GENIN") {
-    return trainTime * (1 - SENSEI_JUTSU_TRAINING_BOOST_PERC / 100);
+    return cappedTrainTime * (1 - SENSEI_JUTSU_TRAINING_BOOST_PERC / 100);
   }
-  return trainTime;
+  return cappedTrainTime;
 };
 
 export const calcJutsuTrainCost = (
