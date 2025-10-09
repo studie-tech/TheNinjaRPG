@@ -14,7 +14,7 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import { DoorOpen, ArrowBigUpDash, ArrowBigDownDash } from "lucide-react";
+import { DoorOpen, ArrowBigUpDash, ArrowBigDownDash, XCircle } from "lucide-react";
 import { SendHorizontal, Swords, DoorClosed, PiggyBank, Star } from "lucide-react";
 import { FilePenLine, List, CirclePlay, ScanEye, Palette } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -821,6 +821,16 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     },
   });
 
+  const { mutate: clearLeadership } = api.clan.clearLeadership.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.clan.get.invalidate();
+        await utils.clan.getRequests.invalidate();
+      }
+    },
+  });
+
   // Rename Form
   const editForm = useForm<FactionEditSchema>({
     resolver: zodResolver(factionEditSchema),
@@ -1225,6 +1235,22 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               <DoorClosed className="h-6 w-6 mr-2" />
               Resign as Leader
             </Button>
+          )}
+          {isLeader && (
+            <Confirm2
+              title="Clear Leadership"
+              proceed_label="Clear All"
+              button={
+                <Button id="clear-leadership" className="w-full my-2">
+                  <XCircle className="mr-2 h-5 w-5" />
+                  Clear Leadership
+                </Button>
+              }
+              onAccept={() => clearLeadership({ clanId })}
+            >
+              This will remove all co-leaders and assassins from their positions. 
+              They will become regular members. This action cannot be undone.
+            </Confirm2>
           )}
           {!isLeader && canEditClans(userData.role) && (
             <Confirm2
