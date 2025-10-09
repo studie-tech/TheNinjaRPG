@@ -534,7 +534,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               {!showCaptcha && (
                 <XCircle
                   id="tutorial-traininggrounds-stopTraining"
-                  className="w-10 h-10 m-auto mt-5 fill-red-500 cursor-pointer hover:text-orange-500"
+                  className="absolute top-4 right-4 w-10 h-10 fill-red-500 cursor-pointer hover:text-orange-500 z-30"
                   onClick={() => stopTraining({ villageId: userData.villageId })}
                 />
               )}
@@ -542,7 +542,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               {showCaptcha && captcha && (
                 <Popover>
                   <PopoverTrigger>
-                    <XCircle className="w-10 h-10 m-auto mt-5 fill-red-500 cursor-pointer hover:text-orange-500" />
+                    <XCircle className="absolute top-4 right-4 w-10 h-10 fill-red-500 cursor-pointer hover:text-orange-500 z-30" />
                   </PopoverTrigger>
                   <PopoverContent>
                     <p className="font-bold text-lg">Verify Humanity</p>
@@ -828,7 +828,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                 </p>
                 {!isRefetchingUserJutsu && (
                   <XCircle
-                    className="w-10 h-10 m-auto mt-5 fill-red-500 cursor-pointer hover:text-orange-500"
+                    className="absolute top-4 right-4 w-10 h-10 fill-red-500 cursor-pointer hover:text-orange-500 z-30"
                     onClick={() => {
                       cancel();
                     }}
