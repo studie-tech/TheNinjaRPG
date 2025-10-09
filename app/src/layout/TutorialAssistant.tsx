@@ -343,6 +343,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   const renderGameMenuTutorial = () => {
     const gameBtnHighlight = findElementToHighlight(
       {
+        id: "MOrKKgxeHiwZvkA9JYW0i",
         elementIds: ["tutorial-gameBtn"],
         title: "Game Menu",
         description:

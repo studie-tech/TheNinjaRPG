@@ -8,6 +8,7 @@ import { api } from "@/app/_trpc/client";
 import type { UserWithRelations } from "@/routers/profile";
 
 export interface TutorialStepConfig {
+  id: string;
   title: string;
   description: string;
   elementIds?: string[];
@@ -17,10 +18,12 @@ export interface TutorialStepConfig {
   proceedOnHighlightClick?: boolean;
   requiresGameMenu?: boolean;
   externalLink?: string;
-  completeOnBattle?: boolean;
+  onCombatWin?: string;
+  onCombatLoss?: string;
 }
 
 export const TUTORIAL_HOSPITALIZED_STEP: TutorialStepConfig = {
+  id: "5uhDcTB1sMeGO_",
   title: "You are Hospitalized!",
   description:
     "You have been injured in battle and are currently hospitalized. I have re-directed you to the hospital. Please get yourself sorted out and then we'll get back to it",
@@ -33,6 +36,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   // Profile page steps - main menu buttons
 
   {
+    id: "2XpCaDhi3elhVNLGssEjZ",
     title: "Welcome to the game",
     description:
       "Welcome to The Ninja-Rpg! I'm Lemu and I'll be guiding you through the early stages of your development here at the academy. Before starting we will quickly go through basic controls and features. This is your main profile where all your overall progress can be viewed.",
@@ -40,8 +44,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile",
     requiresGameMenu: false,
     showNextButton: true,
+    proceedOnHighlightClick: true,
   },
   {
+    id: "RiYke5IPcx6cN6ao1QA23",
     title: "Strengths & Weaknesses",
     description:
       "In this section of the profile you can view the specifics of your character, your stats, strengths and weaknesses. Kinda weak right now, but we'll get you stronger. Let's go the the battle arena to train a bit. ",
@@ -49,8 +55,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile",
     requiresGameMenu: false,
     showNextButton: true,
+    proceedOnHighlightClick: true,
   },
   {
+    id: "YP5PEaCvfhJl37V",
     title: "Village",
     description:
       "The location Menu is the heart of your village, this is where you can access all your village has to offer from Trainings to the black-market, to taking Missions to buying Ramen. You can also view your village Notice board here as well. Let's click it to go to the battle arena.",
@@ -61,6 +69,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
 
   {
+    id: "1JShRbZwTTRQr",
     title: "Battle Arena",
     description:
       "We're going to the battle arena, where you can test your skills against NPCs. Let's go there now.",
@@ -69,6 +78,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
+    id: "w3eWC11tISZc0CUZ2tvYN",
     title: "Start Arena Match",
     description:
       "Here we are! In the top right corner, you can chose from various arena options, e.g. sparring, ranked PvP, Battle pyramid, etc. Right now, we're simply going to challenge the training dummy in the arena to see how strong you are.",
@@ -76,50 +86,61 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/battlearena",
   },
   {
+    id: "NASO2bE1zEQcc",
     title: "Battle Arena",
     description:
       "This is the battlefield, where you can see your character and opponent(s). ",
     elementIds: ["tutorial-combat-field"],
     page: "/combat",
+    onCombatLoss: "w3eWC11tISZc0CUZ2tvYN",
+    onCombatWin: "PCaQdWoDFuR0VGUq5c_ab",
     showNextButton: true,
     proceedOnHighlightClick: true,
-    completeOnBattle: true,
   },
   {
+    id: "Qz0sQcQLjTdlv",
     title: "Battle Arena",
     description: `Combat is based on rounds, where during your round you have ${COMBAT_SECONDS} seconds to perform your actions, and then it's your opponent's turn. You can see your action points and the time left for your round here.`,
     elementIds: ["tutorial-combat-action-timer"],
     page: "/combat",
+    onCombatLoss: "w3eWC11tISZc0CUZ2tvYN",
+    onCombatWin: "PCaQdWoDFuR0VGUq5c_ab",
     showNextButton: true,
     proceedOnHighlightClick: true,
-    completeOnBattle: true,
   },
   {
+    id: "RzahgsmGgfoNbLEcnQJsD",
     title: "Battle Arena",
     description: `Below the battlefield you see your available actions. The basic attack is the default action you can use to hit your opponent. Don't worry, you'll get powerful weapons and jutsus soon.`,
     elementIds: ["tutorial-combat-action-basicAttack"],
     page: "/combat",
+    onCombatLoss: "w3eWC11tISZc0CUZ2tvYN",
+    onCombatWin: "PCaQdWoDFuR0VGUq5c_ab",
     showNextButton: true,
     proceedOnHighlightClick: true,
-    completeOnBattle: true,
   },
   {
+    id: "xPnHsTPYULb",
     title: "Battle Arena",
     description:
       "Before you can attack, you'll have to move closer to your opponent. Chose the movement action here. ",
     elementIds: ["tutorial-combat-action-move"],
     page: "/combat",
+    onCombatLoss: "w3eWC11tISZc0CUZ2tvYN",
+    onCombatWin: "PCaQdWoDFuR0VGUq5c_ab",
     proceedOnHighlightClick: true,
-    completeOnBattle: true,
   },
   {
+    id: "bRelJfsU9wuHNmhUSg0db",
     title: "Battle Arena",
     description:
       "Move closer to your opponent, and beat it up with your basic attack. ",
     page: "/combat",
-    completeOnBattle: true,
+    onCombatLoss: "w3eWC11tISZc0CUZ2tvYN",
+    onCombatWin: "PCaQdWoDFuR0VGUq5c_ab",
   },
   {
+    id: "PCaQdWoDFuR0VGUq5c_ab",
     title: "Training",
     elementIds: ["tutorial-traininggrounds"],
     description:
@@ -128,6 +149,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
+    id: "OGLXpIqVbb0hPWtJ00LzT",
     title: "Training",
     elementIds: ["tutorial-traininggrounds-taijutsuoffence"],
     description:
@@ -135,6 +157,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/traininggrounds",
   },
   {
+    id: "09RZadarkULsnPkbQUfzA",
     title: "Training",
     elementIds: ["tutorial-traininggrounds-stopTraining"],
     description:
@@ -142,6 +165,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/traininggrounds",
   },
   {
+    id: "eSBZJXRN_MCSYM90z3d5f",
     title: "Jutsu Training",
     elementIds: [
       "tutorial-traininggrounds-trainJutsu-proceed",
@@ -152,6 +176,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/traininggrounds",
   },
   {
+    id: "r2azv66f1YNtFW2gbldOd",
     title: "Jutsu Training",
     elementIds: ["tutorial-village"],
     description:
@@ -161,6 +186,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
+    id: "lTgXEoGkIWxFh",
     title: "Item shop",
     elementIds: ["tutorial-itemshop"],
     description: "To purchase new items, you need to go to the itemshop.",
@@ -168,6 +194,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
+    id: "KvGkDox06od5iiFaGAzkM",
     title: "Item shop",
     elementIds: [
       "tutorial-itemshop-confirmPurchase-proceed",
@@ -177,6 +204,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/itemshop",
   },
   {
+    id: "JeoGW2HFUESQdw2PlSRIg",
     title: "Mission Hall",
     elementIds: ["tutorial-missionhall"],
     description:
@@ -186,6 +214,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     showNextButton: true,
   },
   {
+    id: "U04RvrqvvYaOcenOGKMDw",
     title: "Academy",
     elementIds: ["tutorial-academy"],
     description:
@@ -194,6 +223,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
+    id: "gaqwwlQAjB0b11DLsXMNE",
     title: "Academy Dialog Option",
     elementIds: ["logbook-entry-eYDVpL63vPhK3lywMexdv", "tutorial-take-quest"],
     description: "",
@@ -201,6 +231,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     hideDialog: true,
   },
   {
+    id: "t1GFAMQyZuxQ7FyUX4",
     title: "Travel",
     description:
       "Your target in this practise mission will be to go eliminate a target in a different sector, thereby moving outside the borders of the village. Let's go. Don't worry, for this first mission I will accompany you.",
@@ -210,6 +241,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     requiresGameMenu: true,
   },
   {
+    id: "hQCIFuJKJ",
     title: "Travel",
     elementIds: ["tutorial-travel-sector"],
     description:
@@ -219,6 +251,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
+    id: "qPx_xVsMAZY0t05thYgZj",
     title: "Travel",
     elementIds: [
       "tutorial-global-travel-proceed",
@@ -230,14 +263,17 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/travel",
   },
   {
+    id: "eRw6ObsRONhzY7AUMO3vm",
     title: "Capture Target",
     elementIds: ["tutorial-travel-sector"],
     description:
       "Time to track down our target - you need to track down a sad puppy which has gone missing. Careful, it may be aggressive, so we may have to fight it before we can bring it back to the village. Move in the sector to approach the target, and overpower it.",
     page: "/travel",
-    completeOnBattle: true,
+    onCombatLoss: "qPx_xVsMAZY0t05thYgZj",
+    onCombatWin: "UD2jVibug6Y0yKLYGzA_N",
   },
   {
+    id: "UD2jVibug6Y0yKLYGzA_N",
     title: "Travel",
     elementIds: [
       "tutorial-global-travel-proceed",
@@ -249,6 +285,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/travel",
   },
   {
+    id: "blL789mkRIKtjsWk",
     title: "Academy Dialog Option",
     elementIds: ["logbook-entry-eYDVpL63vPhK3lywMexdv"],
     description: "",
@@ -256,6 +293,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     hideDialog: true,
   },
   {
+    id: "qgfxpmmQ2mYayeN2iMuX6",
     title: "Genin Exam",
     elementIds: ["tutorial-take-quest"],
     description:
@@ -273,22 +311,6 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   //   showNextButton: true,
   // },
 ];
-
-/**
- * Get the next step with a new title
- * @param currentStep - The current step
- * @returns The next step with a new title
- */
-export const getNextNewTitleStep = (currentStep: TutorialStepConfig) => {
-  const currentIndex = TUTORIAL_STEPS.indexOf(currentStep);
-  for (let i = currentIndex + 1; i < TUTORIAL_STEPS.length; i++) {
-    const step = TUTORIAL_STEPS?.[i];
-    if (TUTORIAL_STEPS?.[i]?.title !== currentStep.title) {
-      return i;
-    }
-  }
-  return null;
-};
 
 /**
  * Hook to get the current tutorial step
@@ -329,9 +351,11 @@ export const useTutorialStep = () => {
 
   // Handle next step
   const handleNextStep = useCallback(
-    (forceStep?: number) => {
+    (forceStep?: string) => {
       setCurrentStepNumber((prevStep) => {
-        const nextStep = forceStep ? forceStep : prevStep + 1;
+        // Force step if provided
+        const setStep = TUTORIAL_STEPS.findIndex((step) => step.id === forceStep);
+        const nextStep = forceStep && setStep > -1 ? setStep : prevStep + 1;
 
         // Update the user's tutorial step in the database
         if (!isPending && nextStep !== stepNumber) {
@@ -355,8 +379,10 @@ export const useTutorialStep = () => {
    * @param info Optional info object with forceStep and skipOptimisticUpdate.
    */
   const handleNextStepAsync = useCallback(
-    async (forceStep?: number) => {
-      const nextStep = forceStep ?? stepNumber + 1;
+    async (forceStep?: string) => {
+      // Force step if provided
+      const setStep = TUTORIAL_STEPS.findIndex((step) => step.id === forceStep);
+      const nextStep = forceStep && setStep > -1 ? setStep : stepNumber + 1;
 
       // If we've reached the end of the tutorial, hide it and resolve
       if (nextStep >= TUTORIAL_STEPS.length) {

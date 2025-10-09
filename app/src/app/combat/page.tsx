@@ -18,7 +18,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { Button } from "@/components/ui/button";
 import { LayoutGrid } from "lucide-react";
-import { useTutorialStep, getNextNewTitleStep } from "@/hooks/tutorial";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { useLocalStorage } from "@/hooks/localstorage";
 
 const Combat = dynamic(() => import("@/layout/Combat"));
@@ -73,10 +73,11 @@ export default function CombatPage() {
       const res = results && battle?.id === data.battle.id ? results : data?.result;
       setBattleAtom(data.battle);
       setBattleState({ battle: data?.battle, result: res, isPending: false });
-      if (currentStep?.completeOnBattle && results) {
-        const nextStep = getNextNewTitleStep(currentStep);
-        if (nextStep) {
-          handleNextStep(nextStep);
+      if (results) {
+        if (currentStep?.onCombatWin && results?.outcome === "Won") {
+          handleNextStep(currentStep.onCombatWin);
+        } else if (currentStep?.onCombatLoss && results?.outcome !== "Won") {
+          handleNextStep(currentStep.onCombatLoss);
         }
       }
     }

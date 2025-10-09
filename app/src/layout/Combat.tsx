@@ -34,7 +34,7 @@ import type { BattleState } from "@/libs/combat/types";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { useLocalStorage } from "@/hooks/localstorage";
 import Modal2 from "@/layout/Modal2";
-import { useTutorialStep, getNextNewTitleStep } from "@/hooks/tutorial";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { LogbookEntry } from "@/layout/Logbook";
 import { preloadTextures } from "@/libs/threejs/util";
 import { preloadAudioBuffers } from "@/utils/audio";
@@ -240,10 +240,11 @@ const Combat: React.FC<CombatProps> = (props) => {
         );
       }
       // Check if tutorial should progress
-      if (currentStep?.completeOnBattle && data.result?.outcome === "Won") {
-        const nextStep = getNextNewTitleStep(currentStep);
-        if (nextStep) {
-          await handleNextStepAsync(nextStep);
+      if (data.result) {
+        if (currentStep?.onCombatWin && data.result?.outcome === "Won") {
+          await handleNextStepAsync(currentStep.onCombatWin);
+        } else if (currentStep?.onCombatLoss && data.result?.outcome !== "Won") {
+          await handleNextStepAsync(currentStep.onCombatLoss);
         }
       }
       // Update battle state
