@@ -1025,14 +1025,10 @@ export const combatRouter = createTRPCRouter({
       
       // For SPARRING and RANKED_SPARRING, only show spectatable battles
       if (input.battleType === "SPARRING" || input.battleType === "RANKED_SPARRING") {
-        // Get spectatable spar requests first
+        // Get spectatable spar requests with their battle IDs
         const spectatableSpars = await ctx.drizzle
           .select({
-            senderId: userRequest.senderId,
-            receiverId: userRequest.receiverId,
-            useRankedRules: userRequest.useRankedRules,
             relatedId: userRequest.relatedId,
-            createdAt: userRequest.createdAt,
           })
           .from(userRequest)
           .where(
@@ -1040,21 +1036,19 @@ export const combatRouter = createTRPCRouter({
               eq(userRequest.type, "SPAR"),
               eq(userRequest.spectatable, true),
               eq(userRequest.status, "ACCEPTED"),
-              isNotNull(userRequest.relatedId), // Only get spars that have a battle
+              isNotNull(userRequest.relatedId),
               input.battleType === "RANKED_SPARRING" 
                 ? eq(userRequest.useRankedRules, true)
                 : eq(userRequest.useRankedRules, false),
             ),
           );
 
-        console.log(`Found ${spectatableSpars.length} spectatable spars for ${input.battleType}`);
-        console.log('Spectatable spars:', spectatableSpars);
-        
         if (spectatableSpars.length === 0) {
           results = { rows: [] };
         } else {
-          // Get all battles first
-          const allBattles = await ctx.drizzle.execute(
+          // Get battles that match the spectatable spar battle IDs
+          const battleIds = spectatableSpars.map(spar => spar.relatedId).filter(Boolean);
+          results = await ctx.drizzle.execute(
             sql`
               SELECT 
                 id, battleType, createdAt, round, updatedAt,
@@ -1063,28 +1057,11 @@ export const combatRouter = createTRPCRouter({
                 JSON_EXTRACT(usersState, '$[*].avatar') as avatars
               FROM Battle
               WHERE battleType = ${input.battleType}
+              AND id IN (${sql.join(battleIds.map(id => sql`${id}`), sql`, `)})
               ORDER BY createdAt DESC
-              LIMIT ${input.limit * 3} OFFSET ${input.offset}
+              LIMIT ${input.limit} OFFSET ${input.offset}
             `,
           );
-
-          // Filter battles to only include those from spectatable spars
-          const filteredBattles = [];
-          
-          for (const battle of allBattles.rows as any[]) {
-            // Check if this battle ID matches any spectatable spar's relatedId
-            const hasMatchingSpar = spectatableSpars.some(spar => 
-              spar.relatedId === battle.id
-            );
-            
-            if (hasMatchingSpar) {
-              filteredBattles.push(battle);
-            }
-          }
-
-          // Apply limit to filtered results
-          const limitedResults = filteredBattles.slice(0, input.limit);
-          results = { rows: limitedResults };
         }
       } else {
         // For other battle types, use the original query
