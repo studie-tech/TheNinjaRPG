@@ -3231,6 +3231,7 @@ export const userRequest = mysqlTable(
     value: int("value").default(0),
     relatedId: varchar("relatedId", { length: 191 }),
     useRankedRules: boolean("useRankedRules").default(false),
+    spectatable: boolean("spectatable").default(false),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),

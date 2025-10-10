@@ -43,7 +43,7 @@ import {
 } from "@/libs/combat/database";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import { userData, questHistory, quest, gameSetting, jutsu } from "@/drizzle/schema";
+import { userData, questHistory, quest, gameSetting, jutsu, userRequest } from "@/drizzle/schema";
 import { battle, battleAction, battleHistory, war, item } from "@/drizzle/schema";
 import { villageAlliance, village, tournamentMatch, bounty } from "@/drizzle/schema";
 import { backgroundSchema, sector } from "@/drizzle/schema";
@@ -1021,20 +1021,87 @@ export const combatRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      // Optimized: fetch only userId, username, avatar from usersState JSON
-      const results = await ctx.drizzle.execute(
-        sql`
-          SELECT 
-            id, battleType, createdAt, round, updatedAt,
-            JSON_EXTRACT(usersState, '$[*].userId') as userIds,
-            JSON_EXTRACT(usersState, '$[*].username') as usernames,
-            JSON_EXTRACT(usersState, '$[*].avatar') as avatars
-          FROM Battle
-          WHERE battleType = ${input.battleType}
-          ORDER BY createdAt DESC
-          LIMIT ${input.limit} OFFSET ${input.offset}
-        `,
-      );
+      let results;
+      
+      // For SPARRING and RANKED_SPARRING, only show spectatable battles
+      if (input.battleType === "SPARRING" || input.battleType === "RANKED_SPARRING") {
+        // Get spectatable spar requests first
+        const spectatableSpars = await ctx.drizzle
+          .select({
+            senderId: userRequest.senderId,
+            receiverId: userRequest.receiverId,
+            useRankedRules: userRequest.useRankedRules,
+            relatedId: userRequest.relatedId,
+            createdAt: userRequest.createdAt,
+          })
+          .from(userRequest)
+          .where(
+            and(
+              eq(userRequest.type, "SPAR"),
+              eq(userRequest.spectatable, true),
+              eq(userRequest.status, "ACCEPTED"),
+              isNotNull(userRequest.relatedId), // Only get spars that have a battle
+              input.battleType === "RANKED_SPARRING" 
+                ? eq(userRequest.useRankedRules, true)
+                : eq(userRequest.useRankedRules, false),
+            ),
+          );
+
+        console.log(`Found ${spectatableSpars.length} spectatable spars for ${input.battleType}`);
+        console.log('Spectatable spars:', spectatableSpars);
+        
+        if (spectatableSpars.length === 0) {
+          results = { rows: [] };
+        } else {
+          // Get all battles first
+          const allBattles = await ctx.drizzle.execute(
+            sql`
+              SELECT 
+                id, battleType, createdAt, round, updatedAt,
+                JSON_EXTRACT(usersState, '$[*].userId') as userIds,
+                JSON_EXTRACT(usersState, '$[*].username') as usernames,
+                JSON_EXTRACT(usersState, '$[*].avatar') as avatars
+              FROM Battle
+              WHERE battleType = ${input.battleType}
+              ORDER BY createdAt DESC
+              LIMIT ${input.limit * 3} OFFSET ${input.offset}
+            `,
+          );
+
+          // Filter battles to only include those from spectatable spars
+          const filteredBattles = [];
+          
+          for (const battle of allBattles.rows as any[]) {
+            // Check if this battle ID matches any spectatable spar's relatedId
+            const hasMatchingSpar = spectatableSpars.some(spar => 
+              spar.relatedId === battle.id
+            );
+            
+            if (hasMatchingSpar) {
+              filteredBattles.push(battle);
+            }
+          }
+
+          // Apply limit to filtered results
+          const limitedResults = filteredBattles.slice(0, input.limit);
+          results = { rows: limitedResults };
+        }
+      } else {
+        // For other battle types, use the original query
+        results = await ctx.drizzle.execute(
+          sql`
+            SELECT 
+              id, battleType, createdAt, round, updatedAt,
+              JSON_EXTRACT(usersState, '$[*].userId') as userIds,
+              JSON_EXTRACT(usersState, '$[*].username') as usernames,
+              JSON_EXTRACT(usersState, '$[*].avatar') as avatars
+            FROM Battle
+            WHERE battleType = ${input.battleType}
+            ORDER BY createdAt DESC
+            LIMIT ${input.limit} OFFSET ${input.offset}
+          `,
+        );
+      }
 
       // Type the raw results from drizzle execute
       interface RawBattleRow {

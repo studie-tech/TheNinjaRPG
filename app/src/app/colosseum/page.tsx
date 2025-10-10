@@ -110,7 +110,7 @@ export default function ColosseumPage() {
           </SelectTrigger>
           <SelectContent>
             {BattleTypes.filter((type) =>
-              ["TOURNAMENT", "CLAN_BATTLE", "COMBAT", "RANKED_PVP"].includes(type),
+              ["TOURNAMENT", "CLAN_BATTLE", "COMBAT", "RANKED_PVP", "SPARRING", "RANKED_SPARRING"].includes(type),
             ).map((type) => (
               <SelectItem key={type} value={type}>
                 {battleTypeLabels[type]}

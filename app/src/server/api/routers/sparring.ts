@@ -24,6 +24,7 @@ export const sparringRouter = createTRPCRouter({
       z.object({
         targetId: z.string(),
         useRankedRules: z.boolean().optional().default(false),
+        spectatable: z.boolean().optional().default(false),
       }),
     )
     .output(baseServerResponse)
@@ -47,6 +48,7 @@ export const sparringRouter = createTRPCRouter({
         undefined,
         undefined,
         input.useRankedRules,
+        input.spectatable,
       );
       void pusher.trigger(input.targetId, "event", {
         type: "userMessage",
@@ -130,7 +132,7 @@ export const sparringRouter = createTRPCRouter({
       );
       if (result.success) {
         await Promise.all([
-          updateRequestState(ctx.drizzle, input.id, "ACCEPTED", "SPAR"),
+          updateRequestState(ctx.drizzle, input.id, "ACCEPTED", "SPAR", result.battleId),
           pusher.trigger(challenge.senderId, "event", {
             type: "userMessage",
             message: "Your challenge has been accepted",
@@ -243,10 +245,14 @@ export const updateRequestState = async (
   challengeId: string,
   status: UserRequestState,
   type: UserRequestType,
+  relatedId?: string,
 ) => {
   await client
     .update(userRequest)
-    .set({ status })
+    .set({ 
+      status,
+      ...(relatedId && { relatedId })
+    })
     .where(and(eq(userRequest.id, challengeId), eq(userRequest.type, type)));
   return { success: true, message: "Challenge state updated" };
 };
@@ -270,6 +276,7 @@ export const insertRequest = async (
   value?: number,
   relatedId?: string,
   useRankedRules?: boolean,
+  spectatable?: boolean,
 ) => {
   await client.insert(userRequest).values({
     id: nanoid(),
@@ -280,5 +287,6 @@ export const insertRequest = async (
     value: value || null,
     relatedId: relatedId || null,
     useRankedRules: useRankedRules || false,
+    spectatable: spectatable || false,
   });
 };

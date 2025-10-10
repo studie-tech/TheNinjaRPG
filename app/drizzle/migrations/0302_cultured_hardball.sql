@@ -1,0 +1,1 @@
+ALTER TABLE `UserRequest` ADD `spectatable` boolean DEFAULT false;

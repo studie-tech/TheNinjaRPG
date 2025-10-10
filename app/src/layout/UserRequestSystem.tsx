@@ -152,6 +152,9 @@ const ChallengeInfo: React.FC<{ request: UserRequest }> = ({ request }) => {
       {request.type === "SPAR" && request.useRankedRules && (
         <p className="text-blue-600 font-semibold">Uses Ranked Rules</p>
       )}
+      {request.type === "SPAR" && request.spectatable && (
+        <p className="text-green-600 font-semibold">Allows Spectating</p>
+      )}
     </div>
   );
 };

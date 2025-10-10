@@ -365,6 +365,9 @@ const ChallengeUser: React.FC = () => {
 
   // Ranked rules toggle
   const [useRankedRules, setUseRankedRules] = useState(false);
+  
+  // Spectate toggle
+  const [spectatable, setSpectatable] = useState(false);
 
   // tRPC utility
   const utils = api.useUtils();
@@ -410,11 +413,21 @@ const ChallengeUser: React.FC = () => {
             Use ranked rules (ranked loadouts, level 100 stats, no LP rewards)
           </label>
         </div>
+        <div className="flex items-center space-x-2 mt-2 mb-2">
+          <Checkbox
+            id="spectatable"
+            checked={spectatable}
+            onCheckedChange={(checked) => setSpectatable(checked === true)}
+          />
+          <label htmlFor="spectatable" className="text-sm">
+            Allow spectators to watch this spar
+          </label>
+        </div>
         {targetUser && (
           <Button
             id="challenge"
             className="mt-2 w-full"
-            onClick={() => create({ targetId: targetUser.userId, useRankedRules })}
+            onClick={() => create({ targetId: targetUser.userId, useRankedRules, spectatable })}
           >
             <Swords className="h-5 w-5 mr-2" />
             Challenge Now!
