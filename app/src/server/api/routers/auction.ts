@@ -67,6 +67,17 @@ export const auctionRouter = createTRPCRouter({
         },
       });
 
+      // Fix currencyType using raw SQL
+      if (listing && !listing.currencyType) {
+        const rawResult = await ctx.drizzle.execute(
+          sql`SELECT currencyType FROM AuctionListing WHERE id = ${auctionId}`
+        );
+        if (rawResult.rows.length > 0) {
+          const row = rawResult.rows[0] as Record<string, unknown>;
+          listing.currencyType = row.currencyType as "MONEY" | "REPUTATION";
+        }
+      }
+
       return listing;
     }),
 
@@ -150,6 +161,20 @@ export const auctionRouter = createTRPCRouter({
               orderBy: desc(auctionListing.expiresAt),
             })
           : [];
+
+      // Fix currencyType using raw SQL
+      if (fullListings.length > 0) {
+        const rawResults = await ctx.drizzle.execute(
+          sql`SELECT id, currencyType FROM AuctionListing WHERE id IN (${sql.join(listingIds.map(id => sql`${id}`), sql`, `)})`
+        );
+        
+        for (const listing of fullListings) {
+          const rawResult = rawResults.rows.find((row) => (row as Record<string, unknown>).id === listing.id) as { id: string; currencyType: string } | undefined;
+          if (rawResult) {
+            listing.currencyType = rawResult.currencyType as "MONEY" | "REPUTATION";
+          }
+        }
+      }
 
       return {
         data: fullListings,
@@ -536,6 +561,18 @@ export const fetchAuctionListing = async (
       },
     },
   });
+
+  // Fix currencyType using raw SQL
+  if (auction && !auction.currencyType) {
+    const rawResult = await drizzle.execute(
+      sql`SELECT currencyType FROM AuctionListing WHERE id = ${auctionId}`
+    );
+    if (rawResult.rows.length > 0) {
+      const row = rawResult.rows[0] as Record<string, unknown>;
+      auction.currencyType = row.currencyType as "MONEY" | "REPUTATION";
+    }
+  }
+
   return auction;
 };
 
