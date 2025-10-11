@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AUCTION_LISTING_STATES, AUCTION_LISTING_TYPES, RYO_FOR_REP_MIN_REPS } from "@/drizzle/constants";
+import { AUCTION_LISTING_STATES, AUCTION_LISTING_TYPES, RYO_FOR_REP_MIN_REPS, CURRENCY_TYPES } from "@/drizzle/constants";
 
 // Auction listing schemas
 export const createAuctionListingSchema = z.object({
@@ -10,7 +10,7 @@ export const createAuctionListingSchema = z.object({
   buyerId: z.string().optional(), // For direct sales
   targetUserId: z.string().optional(), // For direct auctions to specific users
   durationHours: z.number().min(1).max(168), // 1 hour to 7 days
-  currencyType: z.enum(["MONEY", "REPUTATION"]).default("MONEY"),
+  currencyType: z.enum(CURRENCY_TYPES).default("MONEY"),
 }).refine((data) => {
   // For reputation auctions, ensure minimum reputation amount
   if (data.currencyType === "REPUTATION") {

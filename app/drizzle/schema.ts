@@ -2380,7 +2380,7 @@ export const auctionListing = mysqlTable(
     startingPrice: double("startingPrice").notNull(),
     buyoutPrice: double("buyoutPrice"),
     currentPrice: double("currentPrice").notNull(),
-    currencyType: mysqlEnum("currencyType", ["MONEY", "REPUTATION"]).default("MONEY").notNull(),
+    currencyType: mysqlEnum("currencyType", consts.CURRENCY_TYPES).default("MONEY").notNull(),
     expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
     status: mysqlEnum("status", consts.AUCTION_LISTING_STATES)
       .default("ACTIVE")
