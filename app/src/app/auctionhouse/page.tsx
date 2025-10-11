@@ -129,11 +129,11 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
       currentPrice: (
         <div>
           <p className="font-bold text-green-600">
-            {listing.currentPrice.toLocaleString()} ryo
+            {listing.currentPrice.toLocaleString()} {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
           </p>
           {listing.buyoutPrice && (
             <p className="text-sm text-muted-foreground">
-              Buyout: {listing.buyoutPrice.toLocaleString()} ryo
+              Buyout: {listing.buyoutPrice.toLocaleString()} {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
             </p>
           )}
         </div>
@@ -416,11 +416,11 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             )}
             <div className="flex flex-col items-center">
               <p className="text-2xl font-bold text-green-600">
-                {listing.currentPrice.toLocaleString()}
+                {listing.currentPrice.toLocaleString()} {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
               </p>
               {listing.buyoutPrice && (
                 <p className="text-sm text-muted-foreground">
-                  Buyout: {listing.buyoutPrice.toLocaleString()}
+                  Buyout: {listing.buyoutPrice.toLocaleString()} {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
                 </p>
               )}
             </div>
@@ -548,6 +548,7 @@ export const NewAuctionListingDialog: React.FC = () => {
     defaultValues: {
       listingType: "AUCTION",
       durationHours: 24,
+      currencyType: "MONEY",
     },
   });
 
@@ -671,6 +672,28 @@ export const NewAuctionListingDialog: React.FC = () => {
                           {type === "AUCTION" ? "Auction" : "Direct to User"}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={createForm.control}
+              name="currencyType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Currency Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="MONEY">Money (Ryo)</SelectItem>
+                      <SelectItem value="REPUTATION">Reputation Points</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

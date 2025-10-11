@@ -169,6 +169,7 @@ export const auctionRouter = createTRPCRouter({
         buyoutPrice,
         durationHours,
         targetUserId,
+        currencyType,
       } = input;
 
       // Check if user item exists and get the item data
@@ -243,6 +244,7 @@ export const auctionRouter = createTRPCRouter({
           startingPrice,
           buyoutPrice: buyoutPrice || null,
           currentPrice: startingPrice,
+          currencyType,
           expiresAt,
         }),
         ctx.drizzle
@@ -315,21 +317,31 @@ export const auctionRouter = createTRPCRouter({
       const existingBid = auction.bids.find((bid) => bid.bidderId === ctx.userId);
       const amountToDeduct = existingBid ? amount - existingBid.amount : amount;
 
-      // Validate user has enough money in bank for the bid raise
-      if (user.bank < amountToDeduct) {
-        return errorResponse("Insufficient funds in bank");
+      // Validate user has enough currency for the bid raise
+      if (auction.currencyType === "MONEY") {
+        if (user.bank < amountToDeduct) {
+          return errorResponse("Insufficient funds in bank");
+        }
+      } else {
+        if (user.reputationPoints < amountToDeduct) {
+          return errorResponse("Insufficient reputation points");
+        }
       }
 
       // Check if bid meets or exceeds buyout price
       const isBuyoutBid = auction.buyoutPrice && amount >= auction.buyoutPrice;
 
-      // Deduct additional money from the user's bank (or full amount if first bid)
+      // Deduct currency from the user (or full amount if first bid)
       const result = await ctx.drizzle
         .update(userData)
-        .set({ bank: sql`${userData.bank} - ${amountToDeduct}` })
+        .set(
+          auction.currencyType === "MONEY"
+            ? { bank: sql`${userData.bank} - ${amountToDeduct}` }
+            : { reputationPoints: sql`${userData.reputationPoints} - ${amountToDeduct}` }
+        )
         .where(eq(userData.userId, ctx.userId));
       if (result.rowsAffected === 0) {
-        return errorResponse("Failed to deduct money from user");
+        return errorResponse(`Failed to deduct ${auction.currencyType === "MONEY" ? "money" : "reputation"} from user`);
       }
 
       // Either update existing bid or create new one
@@ -558,13 +570,22 @@ export const completeAuctionInternal = async (
           updatedAt: new Date(),
         })
         .where(eq(userItem.id, auction.userItemId)),
-      drizzle
-        .update(userData)
-        .set({
-          bank: sql`${userData.bank} + ${winningBid.amount}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(userData.userId, auction.sellerId)),
+      // Update seller based on currency type
+      auction.currencyType === "MONEY"
+        ? drizzle
+            .update(userData)
+            .set({
+              bank: sql`${userData.bank} + ${winningBid.amount}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(userData.userId, auction.sellerId))
+        : drizzle
+            .update(userData)
+            .set({
+              reputationPoints: sql`${userData.reputationPoints} + ${winningBid.amount}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(userData.userId, auction.sellerId)),
       drizzle
         .update(auctionBid)
         .set({ status: "WON" })
@@ -580,10 +601,15 @@ export const completeAuctionInternal = async (
         .where(eq(auctionListing.id, auction.id)),
       ...(bidsToRefund.length > 0
         ? bidsToRefund.map((bid) =>
-            drizzle
-              .update(userData)
-              .set({ bank: sql`${userData.bank} + ${bid.amount}` })
-              .where(eq(userData.userId, bid.bidderId)),
+            auction.currencyType === "MONEY"
+              ? drizzle
+                  .update(userData)
+                  .set({ bank: sql`${userData.bank} + ${bid.amount}` })
+                  .where(eq(userData.userId, bid.bidderId))
+              : drizzle
+                  .update(userData)
+                  .set({ reputationPoints: sql`${userData.reputationPoints} + ${bid.amount}` })
+                  .where(eq(userData.userId, bid.bidderId)),
           )
         : []),
       ...(bidsToRefund.length > 0
