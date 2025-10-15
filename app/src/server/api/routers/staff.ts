@@ -292,7 +292,7 @@ export const staffRouter = createTRPCRouter({
     }),
   forceAwake: protectedProcedure
     .output(baseServerResponse)
-    .input(z.object({ userId: z.string() }))
+    .input(z.object({ userId: z.string(), reason: z.string().min(1, "Reason is required") }))
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, targetUser] = await Promise.all([
@@ -312,7 +312,7 @@ export const staffRouter = createTRPCRouter({
           tableName: "user",
           relatedId: input.userId,
           relatedMsg: `Force updated status to awake from status: ${targetUser.status}`,
-          changes: [`Previous BattleId: ${targetUser.battleId}`],
+          changes: [`Previous BattleId: ${targetUser.battleId}`, `Reason: ${input.reason}`],
         }),
         ctx.drizzle
           .update(userData)

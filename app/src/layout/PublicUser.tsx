@@ -49,6 +49,7 @@ import DeleteUserButton from "@/layout/DeleteUserButton";
 import { ActionSelector } from "@/layout/CombatActions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
 import { TrainingSpeeds, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import GlowingBorder from "./GlowingBorder";
 import { TransactionHistory } from "src/app/points/page";
@@ -165,6 +166,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   // Get state
   const [showEditModal, setShowEditModal] = useState(false);
   const [showActive, setShowActive] = useState("nindo");
+  const [showForceAwakeModal, setShowForceAwakeModal] = useState(false);
+  const [forceAwakeReason, setForceAwakeReason] = useState("");
   const { data: userData } = useUserData();
 
   const canSeeSecrets = userData && canSeeSecretData(userData.role);
@@ -280,6 +283,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await utils.profile.getUser.invalidate();
+        setShowForceAwakeModal(false);
+        setForceAwakeReason("");
       }
     },
   });
@@ -611,27 +616,17 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             )}
             {userData && canUnstuckVillage(userData.role) ? (
               <>
-                <Confirm2
-                  title="Confirm force change user state to awake"
-                  button={
-                    <TooltipProvider delayDuration={50}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <PersonStanding className="h-6 w-6 cursor-pointer hover:text-orange-500" />
-                        </TooltipTrigger>
-                        <TooltipContent>Force Awake</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  }
-                  onAccept={(e) => {
-                    e.preventDefault();
-                    unstuckUser.mutate({ userId: profile.userId });
-                  }}
-                >
-                  Note that abuse of this feature is forbidden, it is solely intended
-                  for fixing users stuck in a particular state. I.E Battle. The action
-                  will be logged. Are you sure?
-                </Confirm2>
+                <TooltipProvider delayDuration={50}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <PersonStanding 
+                        className="h-6 w-6 cursor-pointer hover:text-orange-500" 
+                        onClick={() => setShowForceAwakeModal(true)}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>Force Awake</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
                     <TooltipTrigger>
@@ -1013,6 +1008,46 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             </TabsContent>
           )}
         </Tabs>
+      )}
+
+      {/* Force Awake Modal */}
+      {showForceAwakeModal && (
+        <Modal2
+          title="Force User Awake"
+          isOpen={showForceAwakeModal}
+          setIsOpen={setShowForceAwakeModal}
+          proceed_label="Force Awake"
+          confirmClassName="bg-orange-600 hover:bg-orange-700"
+          onAccept={() => {
+            if (forceAwakeReason.trim()) {
+              unstuckUser.mutate({ 
+                userId: profile.userId, 
+                reason: forceAwakeReason.trim() 
+              });
+            }
+          }}
+          isValid={forceAwakeReason.trim().length > 0}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              You are about to force <strong>{profile.username}</strong> to awake status.
+              This action will be logged and should only be used to fix users stuck in a particular state.
+            </p>
+            
+            <div className="space-y-2">
+              <Label htmlFor="reason">Reason *</Label>
+              <Input
+                id="reason"
+                value={forceAwakeReason}
+                onChange={(e) => setForceAwakeReason(e.target.value)}
+                placeholder="Enter reason for forcing awake status..."
+              />
+              <p className="text-xs text-muted-foreground">
+                This reason will be logged in the action log.
+              </p>
+            </div>
+          </div>
+        </Modal2>
       )}
     </>
   );
