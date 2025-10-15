@@ -292,7 +292,7 @@ export const staffRouter = createTRPCRouter({
     }),
   forceAwake: protectedProcedure
     .output(baseServerResponse)
-    .input(z.object({ userId: z.string(), reason: z.string().min(1, "Reason is required") }))
+    .input(z.object({ userId: z.string(), reason: z.string().min(10, "Reason must be at least 10 characters").transform((val) => val.trim()) }))
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, targetUser] = await Promise.all([

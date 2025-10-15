@@ -1019,14 +1019,19 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           proceed_label="Force Awake"
           confirmClassName="bg-orange-600 hover:bg-orange-700"
           onAccept={() => {
-            if (forceAwakeReason.trim()) {
+            if (forceAwakeReason.trim().length >= 10) {
               unstuckUser.mutate({ 
                 userId: profile.userId, 
                 reason: forceAwakeReason.trim() 
               });
+            } else {
+              showMutationToast({
+                success: false,
+                message: "Reason must be at least 10 characters long"
+              });
             }
           }}
-          isValid={forceAwakeReason.trim().length > 0}
+          isValid={forceAwakeReason.trim().length >= 10}
         >
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
@@ -1040,10 +1045,10 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 id="reason"
                 value={forceAwakeReason}
                 onChange={(e) => setForceAwakeReason(e.target.value)}
-                placeholder="Enter reason for forcing awake status..."
+                placeholder="Enter reason for forcing awake status (minimum 10 characters)..."
               />
               <p className="text-xs text-muted-foreground">
-                This reason will be logged in the action log.
+                This reason will be logged in the action log. Minimum 10 characters required.
               </p>
             </div>
           </div>
