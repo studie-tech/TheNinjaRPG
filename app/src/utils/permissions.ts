@@ -18,6 +18,20 @@ export const canChangeContent = (role: UserRole) => {
   ].includes(role);
 };
 
+export const canTakeKage = (role: UserRole) => {
+  return [
+    "CONTENT",
+    "EVENT",
+    "EVENT-ADMIN",
+    "CODING-ADMIN",
+    "MODERATOR",
+    "HEAD_MODERATOR",
+    "MODERATOR-ADMIN",
+    "CONTENT-ADMIN",
+    "CODER",
+  ].includes(role);
+};
+
 export const canModerateReskin = (role: UserRole) => {
   return role !== "USER";
 };

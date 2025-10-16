@@ -9,7 +9,7 @@ import {
   kageDefendedChallenges,
   actionLog,
 } from "@/drizzle/schema";
-import { canChangeContent } from "@/utils/permissions";
+import { canTakeKage } from "@/utils/permissions";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { errorResponse, baseServerResponse } from "@/server/api/trpc";
 import { initiateBattle } from "@/routers/combat";
@@ -377,17 +377,24 @@ export const kageRouter = createTRPCRouter({
         message: `Sent ${input.amount} prestige to ${kage.username}`,
       };
     }),
-  takeKage: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
+  takeKage: protectedProcedure
+    .output(baseServerResponse)
+    .input(z.object({ reason: z.string().min(10, "Reason must be at least 10 characters").transform((val) => val.trim()) }))
+    .mutation(async ({ ctx, input }) => {
     // Fetch
     const { user } = await fetchUpdatedUser({
       client: ctx.drizzle,
       userId: ctx.userId,
     });
+    
     // Guards
     if (!user) return errorResponse("User not found");
+    
+    // Fetch village data for logging
+    const villageData = user.villageId ? await fetchVillage(ctx.drizzle, user.villageId) : null;
     if (user.anbuId) return errorResponse("Cannot be kage while in ANBU");
     if (user.village?.type !== "VILLAGE") return errorResponse("Only for villages");
-    if (!canChangeContent(user.role)) return errorResponse("Not staff");
+    if (!canTakeKage(user.role)) return errorResponse("Not staff");
     // Update
     const [result] = await Promise.all([
       ctx.drizzle
@@ -408,6 +415,14 @@ export const kageRouter = createTRPCRouter({
               : KAGE_DEFAULT_PRESTIGE,
         })
         .where(eq(userData.userId, user.userId)),
+      ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "user",
+        relatedId: user.userId,
+        relatedMsg: `Staff took kage position in ${villageData?.name || 'Unknown Village'}`,
+        changes: [`Previous KageId: ${user?.village?.kageId}`, `Reason: ${input.reason}`],
+      }),
     ]);
     if (result.rowsAffected === 0) return errorResponse("No village found");
     return { success: true, message: "You have taken the kage position" };

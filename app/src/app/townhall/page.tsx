@@ -39,6 +39,8 @@ import type { Village, VillageAlliance } from "@/drizzle/schema";
 import type { UserWithRelations } from "@/routers/profile";
 import type { AllianceState } from "@/drizzle/constants";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import Modal2 from "@/layout/Modal2";
 import { calculateEnemyConsequences } from "@/utils/alliance";
 import {
   Form,
@@ -429,6 +431,10 @@ const KageChallenge: React.FC<{
   // tRPC utility
   const utils = api.useUtils();
 
+  // Modal state
+  const [showTakeKageModal, setShowTakeKageModal] = useState(false);
+  const [takeKageReason, setTakeKageReason] = useState("");
+
   // Queries
   const { data: requests, isPending: isPendingRequests } =
     api.kage.getUserChallenges.useQuery(undefined, {
@@ -520,6 +526,8 @@ const KageChallenge: React.FC<{
           utils.village.get.invalidate(),
           utils.profile.getUser.invalidate(),
         ]);
+        setShowTakeKageModal(false);
+        setTakeKageReason("");
       }
     },
   });
@@ -696,13 +704,54 @@ const KageChallenge: React.FC<{
             id="challenge"
             variant="destructive"
             className="my-2 w-full"
-            onClick={() => take()}
+            onClick={() => setShowTakeKageModal(true)}
             loading={isTaking}
           >
             <ShieldPlus className="h-6 w-6 mr-2" />
             Take kage as Staff
           </Button>
         </div>
+      )}
+
+      {/* Take Kage Modal */}
+      {showTakeKageModal && (
+        <Modal2
+          title="Take Kage as Staff"
+          isOpen={showTakeKageModal}
+          setIsOpen={setShowTakeKageModal}
+          proceed_label="Take Kage"
+          confirmClassName="bg-red-600 hover:bg-red-700"
+          onAccept={() => {
+            if (takeKageReason.trim().length >= 10) {
+              take({ reason: takeKageReason.trim() });
+            } else {
+              showMutationToast({
+                success: false,
+                message: "Reason must be at least 10 characters long"
+              });
+            }
+          }}
+          isValid={takeKageReason.trim().length >= 10}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              You are about to take the kage position as staff. This action will be logged and should only be used for administrative purposes.
+            </p>
+            
+            <div className="space-y-2">
+              <Label htmlFor="reason">Reason *</Label>
+              <Input
+                id="reason"
+                value={takeKageReason}
+                onChange={(e) => setTakeKageReason(e.target.value)}
+                placeholder="Enter reason for taking kage position (minimum 10 characters)..."
+              />
+              <p className="text-xs text-muted-foreground">
+                This reason will be logged in the action log. Minimum 10 characters required.
+              </p>
+            </div>
+          </div>
+        </Modal2>
       )}
     </ContentBox>
   );
