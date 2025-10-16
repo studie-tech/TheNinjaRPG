@@ -22,7 +22,7 @@ import { DoorClosed, ShieldPlus } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { canChangeContent } from "@/utils/permissions";
+import { canTakeKage } from "@/utils/permissions";
 import { canChallengeKage } from "@/utils/kage";
 import { findRelationship } from "@/utils/alliance";
 import { KAGE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
@@ -698,7 +698,7 @@ const KageChallenge: React.FC<{
           )}
         </>
       )}
-      {!isKage && canChangeContent(user.role) && (
+      {!isKage && canTakeKage(user.role) && (
         <div className="p-3">
           <Button
             id="challenge"
