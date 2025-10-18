@@ -935,10 +935,13 @@ export const questsRouter = createTRPCRouter({
   checkRewards: protectedProcedure
     .input(z.object({ questId: z.string(), nextObjectiveId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
+      // Query
       const { user, toastMessages, settings } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
+
+      // Guards
       if (!user) {
         return errorResponse("User does not exist");
       }

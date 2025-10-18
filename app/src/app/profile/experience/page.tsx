@@ -37,6 +37,7 @@ export default function AssignExperience() {
   // Show component
   return (
     <ContentBox
+      id="tutorial-unassigned-stats-contentbox"
       title="Assign Experience Points"
       subtitle={`You have ${userData.earnedExperience} unused experience points`}
       defaultBackHref="/profile"

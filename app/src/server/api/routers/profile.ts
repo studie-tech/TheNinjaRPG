@@ -528,6 +528,7 @@ export const profileRouter = createTRPCRouter({
       // Unused experience points
       if (user.earnedExperience > 0) {
         notifications.push({
+          id: "tutorial-unassigned-stats",
           href: "/profile/experience",
           name: "Unassigned Stats",
           color: "blue",

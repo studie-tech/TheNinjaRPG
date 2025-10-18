@@ -58,6 +58,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
   return (
     <Dialog open={props.isOpen} onOpenChange={props.setIsOpen}>
       <DialogContent
+        id={props.id ? `${props.id}-content` : undefined}
         className={cn(props.className || "", "overflow-y-scroll max-h-screen")}
         onEscapeKeyDown={handleDialogClose}
         onInteractOutside={handleDialogClose}

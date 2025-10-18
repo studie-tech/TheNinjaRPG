@@ -1044,7 +1044,7 @@ const NotificationList: React.FC<NotificationListProps> = ({
     key: string,
     isInPopover = false,
   ) => (
-    <Link key={key} href={notification.href}>
+    <Link key={key} href={notification.href} id={notification.id}>
       <div
         className={`flex flex-row items-center rounded-lg border-2 border-slate-800 hover:opacity-70 ${
           layout === "mobile"

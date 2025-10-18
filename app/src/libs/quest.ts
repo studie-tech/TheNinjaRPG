@@ -258,11 +258,13 @@ export const getReward = (
 
     // Apply mission experience multiplier if available (for missions, crimes, and medical missions)
     if (settings && (missionLike || userQuest.quest.questType === "medical")) {
-      const missionSetting = settings.find(s => s.name === "missionExpMultiplier");
+      const missionSetting = settings.find((s) => s.name === "missionExpMultiplier");
       if (missionSetting) {
         const secondsLeft = -secondsPassed(missionSetting.time);
         if (secondsLeft > 0 && missionSetting.value > 0) {
-          rawRewards.reward_exp = Math.floor(rawRewards.reward_exp * missionSetting.value);
+          rawRewards.reward_exp = Math.floor(
+            rawRewards.reward_exp * missionSetting.value,
+          );
         }
       }
     }
@@ -643,7 +645,9 @@ export const getNewTrackers = (
 
           // Specific updates requested by the caller
           tasks
-            .filter((taskUpdate) => taskUpdate.task === task)
+            .filter(
+              (taskUpdate) => taskUpdate.task === task || taskUpdate.task === "any",
+            )
             .forEach((taskUpdate) => {
               // If objective has a value, increment it
               if (status && "value" in objective) {
@@ -1256,7 +1260,6 @@ export const fallbackQuestsFilter = (
     // Collect all missions from user's rank down to NONE (dedup by id)
     const allQualifyingMissions: Quest[] = [];
     const seen = new Set<string>();
-    
     for (let i = userMedicalRankIndex; i >= 0; i--) {
       const currentRank = MEDNIN_RANKS[i];
       if (!currentRank) continue;
@@ -1278,7 +1281,6 @@ export const fallbackQuestsFilter = (
     }
 
     filtered = allQualifyingMissions;
-    
     // Set rank info if we're showing missions from lower ranks
     if (filtered.length > 0) {
       const highestRankShown = filtered.reduce((highest, mission) => {
@@ -1287,7 +1289,7 @@ export const fallbackQuestsFilter = (
         const highestIndex = MEDNIN_RANKS.indexOf(highest);
         return missionRankIndex > highestIndex ? mission.medicalRank : highest;
       }, "NONE" as MEDNIN_RANK);
-      
+
       if (highestRankShown !== userMedicalRank) {
         rankInfo = ` (showing missions up to ${capitalizeFirstLetter(highestRankShown)} rank)`;
       }

@@ -58,6 +58,40 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
+    id: "YP5PEaCvfhJfdsl37V",
+    title: "Assigning Stats",
+    description:
+      "Naturally, having grown up in the ninja world, you already have some skills and abilities. Let's go assign some points to your stats.",
+    elementIds: ["tutorial-unassigned-stats"],
+    page: "/profile",
+    proceedOnHighlightClick: true,
+    requiresGameMenu: true,
+  },
+  {
+    id: "YPfhJfdsl37V",
+    title: "Assigning Stats",
+    description:
+      "You have 1000 points to assign freely to your stats. Feel free to assign to any stat of your liking - if in doubt, I'd recommend putting it all into strength. Sometimes completing missions or quests will give you experience points, which you can freely assign on this page.",
+    elementIds: ["tutorial-unassigned-stats-contentbox"],
+    page: "/profile/experience",
+  },
+  {
+    id: "f34p798tfn0327",
+    title: "Level Up!",
+    description:
+      "I knew it, you're far from our ordinary graduate. You're ready to level up! Let's do it.",
+    elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
+    page: "/profile",
+  },
+  {
+    id: "f34p798tfn0327",
+    title: "Level Up!",
+    description:
+      "Hmm, I sense amazing power within you, I think you're already ready for another level up!",
+    elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
+    page: "/profile",
+  },
+  {
     id: "YP5PEaCvfhJl37V",
     title: "Village",
     description:
@@ -231,12 +265,47 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     hideDialog: true,
   },
   {
+    id: "YP5PEaCvfhJfdsl37V",
+    title: "Assigning Stats",
+    description:
+      "Wow, you're picking up things fast. You already acquired a substantial amount of additional XP. Let's go assign it.",
+    elementIds: ["tutorial-unassigned-stats"],
+    page: "/academy",
+    proceedOnHighlightClick: true,
+    requiresGameMenu: true,
+  },
+  {
+    id: "YPfhJfdsl37V",
+    title: "Assigning Stats",
+    description:
+      "Assign the obtained experience to the stat of your liking. A good ninja is well-rounded, so don't stress too much about which stat you assign it to yet.",
+    elementIds: ["tutorial-unassigned-stats-contentbox"],
+    page: "/profile/experience",
+  },
+  {
+    id: "f34p798tfn0327",
+    title: "Level Up!",
+    description:
+      "Another level up! Perfect, this will make our practise mission easier. Get your level, and then we head out of the village.",
+    elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
+    page: "/profile",
+  },
+
+  {
+    id: "f34p798tfn0327",
+    title: "Level Up!",
+    description:
+      "Another level up! Perfect, this will make our practise mission easier. Get your level, and then we head out of the village.",
+    elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
+    page: "/profile",
+  },
+  {
     id: "t1GFAMQyZuxQ7FyUX4",
     title: "Travel",
     description:
-      "Your target in this practise mission will be to go eliminate a target in a different sector, thereby moving outside the borders of the village. Let's go. Don't worry, for this first mission I will accompany you.",
+      "Your target for our first practise mission will be to go eliminate a target in a different sector, thereby moving outside the borders of the village. Let's go. Don't worry, for this first mission I will accompany you.",
     elementIds: ["tutorial-travel"],
-    page: "/academy",
+    page: "/profile",
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
   },
@@ -293,11 +362,57 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     hideDialog: true,
   },
   {
+    id: "YP5PEaCvfhJfdsl37V",
+    title: "Assigning Stats",
+    description:
+      "Great job on getting the hang of things. Let's assign all your experience points one more",
+    elementIds: ["tutorial-unassigned-stats"],
+    page: "/academy",
+    proceedOnHighlightClick: true,
+    requiresGameMenu: true,
+  },
+  {
+    id: "YPfhJfdsl37V",
+    title: "Assigning Stats",
+    description:
+      "Assign the obtained experience to the stat of your liking. A good ninja is well-rounded, so don't stress too much about which stat you assign it to yet.",
+    elementIds: ["tutorial-unassigned-stats-contentbox"],
+    page: "/profile/experience",
+  },
+  {
+    id: "f34p798tfn0327",
+    title: "Level Up!",
+    description: "And then let's claim your next level.",
+    elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
+    page: "/profile",
+  },
+  {
+    id: "f34p798tfn0327",
+    title: "Academy",
+    description:
+      "I'll let you off the hook soon, and then you can roam the village on your own a bit. Before that, let's go to the academy for the last time.",
+    elementIds: ["tutorial-village"],
+    proceedOnHighlightClick: true,
+    requiresGameMenu: true,
+    page: "/profile",
+  },
+
+  {
+    id: "f34p798tfn0327",
+    title: "Academy",
+    description:
+      "I'll let you off the hook soon, and then you can roam the village on your own a bit. Before that, let's go to the academy for the last time.",
+    elementIds: ["tutorial-academy"],
+    proceedOnHighlightClick: true,
+    requiresGameMenu: true,
+    page: "/village",
+  },
+  {
     id: "qgfxpmmQ2mYayeN2iMuX6",
     title: "Genin Exam",
     elementIds: ["tutorial-take-quest"],
     description:
-      "Once you're ready, let's start the Genin exam. Passing this exam will award you the rank of Genin, which will unlock more difficult missions and jutsus, as well as pick pick one of the major ninja villages to join. Feel free to explore a bit, if you want, and otherwise come back here once you're ready for the exam. ",
+      "Once you're ready, you can start the Genin exam here. Passing this exam will award you the rank of Genin, which will unlock more difficult missions and jutsus, as well as pick pick one of the major ninja villages to join. Feel free to explore a bit, if you want, and otherwise come back here once you're ready for the exam. ",
     page: "/academy",
     showNextButton: true,
   },

@@ -207,7 +207,7 @@ export default function Profile() {
             </p>
           </div>
         </div>
-        <LevelUpBtn />
+        <LevelUpBtn id="tutorial-level-up-btn" />
       </ContentBox>
       <StrengthWeaknesses />
       <Logbook />

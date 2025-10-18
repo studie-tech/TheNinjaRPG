@@ -10,14 +10,17 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
+import { showMutationToast } from "@/libs/toast";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { round } from "@/utils/math";
 import { createStatSchema, type StatSchemaType } from "@/libs/combat/types";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
+import SliderField from "@/layout/SliderField";
+import { noCase } from "change-case";
 
 interface StatDistributionProps {
   userData: NonNullable<UserWithRelations>;
@@ -42,6 +45,9 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
   );
   const defaultValues = statSchema.parse(isRedistribution ? userData : {});
   const statNames = Object.keys(defaultValues) as (keyof typeof defaultValues)[];
+
+  // Tutorial hook
+  const { currentStep, handleNextStep } = useTutorialStep();
 
   // Form setup
   const form = useForm<StatSchemaType>({
@@ -78,7 +84,19 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
 
   // Submit handler
   const onSubmit = form.handleSubmit((data) => {
-    onAccept(data);
+    if (currentStep?.title === "Assigning Stats") {
+      if (formSum === availableStats) {
+        handleNextStep();
+        onAccept(data);
+      } else {
+        showMutationToast({
+          success: false,
+          message: "You must assign all points to your stats to continue.",
+        });
+      }
+    } else {
+      onAccept(data);
+    }
   });
 
   // Show component
@@ -88,19 +106,36 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
         <form className="grid grid-cols-2 gap-2" onSubmit={onSubmit}>
           {statNames.map((stat, i) => {
             const maxValue = statSchema.shape[stat]._def.innerType._def.schema.maxValue;
+            const minValue =
+              statSchema.shape[stat]._def.innerType._def.schema.minValue ?? 0;
+            const currentValue = Number(formValues[stat] ?? 0);
+
+            // Calculate remaining points and dynamic max for this slider
+            // remainingPoints already includes currentValue freed up from the total
+            const remainingPoints = availableStats - formSum + currentValue;
+            const dynamicMax = Math.min(maxValue ?? Infinity, remainingPoints);
+
             if (maxValue && maxValue > 0) {
               return (
                 <FormField
                   key={i}
                   control={form.control}
                   name={stat}
-                  render={({ field }) => (
+                  render={({ field, fieldState }) => (
                     <FormItem className="pt-1">
-                      <FormLabel>{stat}</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder={stat} {...field} />
-                      </FormControl>
-                      <FormMessage />
+                      <SliderField
+                        id={stat}
+                        label={capitalizeFirstLetter(noCase(stat))}
+                        default={defaultValues[stat] ?? 0}
+                        min={minValue}
+                        max={dynamicMax}
+                        watchedValue={currentValue}
+                        watchedTotal={availableStats}
+                        setValue={form.setValue}
+                        register={form.register}
+                        error={fieldState.error?.message}
+                        preventDebounce={true}
+                      />
                     </FormItem>
                   )}
                 />
@@ -108,9 +143,11 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
             } else {
               return (
                 <FormItem className="pt-1" key={i}>
-                  <FormLabel>{stat}</FormLabel>
+                  <FormLabel>{capitalizeFirstLetter(stat)}</FormLabel>
                   <FormControl>
-                    <div>- Max for {capitalizeFirstLetter(userData.rank)}</div>
+                    <div className="text-sm text-muted-foreground">
+                      - Max for {capitalizeFirstLetter(userData.rank)}
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

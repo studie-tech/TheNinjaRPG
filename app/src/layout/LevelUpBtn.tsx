@@ -12,9 +12,15 @@ import { calcHP, calcSP, calcCP } from "@/libs/profile";
 import { calcLevelRequirements } from "@/libs/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { showMutationToast } from "@/libs/toast";
+import { triggerConfetti } from "@/libs/toast";
 import { IMG_PROFILE_LEVELUPGUY } from "@/drizzle/constants";
+import { useTutorialStep } from "@/hooks/tutorial";
 
-const LevelUpBtn: React.FC = () => {
+interface LevelUpBtnProps {
+  id?: string;
+}
+
+const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
   // State
   const onMutateCheck = useGlobalOnMutateProtect();
   const { data: userData } = useRequiredUserData();
@@ -24,6 +30,9 @@ const LevelUpBtn: React.FC = () => {
   // tRPC utility
   const utils = api.useUtils();
 
+  // Tutorial hook
+  const { currentStep, handleNextStepAsync } = useTutorialStep();
+
   // Fetch avatar query
   const { mutate: levelUp } = api.profile.levelUp.useMutation({
     onMutate: () => {
@@ -32,6 +41,10 @@ const LevelUpBtn: React.FC = () => {
     },
     onSuccess: async (data) => {
       showMutationToast(data);
+      triggerConfetti();
+      if (currentStep?.title === "Level Up!") {
+        await handleNextStepAsync();
+      }
       if (data.success && userData) {
         await utils.profile.getUser.invalidate();
         sendGTMEvent({
@@ -59,7 +72,7 @@ const LevelUpBtn: React.FC = () => {
       {userData.experience >= expRequired && userData.level < 100 && (
         <div className="mt-2">
           <Button
-            id="create"
+            id={id ?? undefined}
             decoration="gold"
             animation="pulse"
             className="w-full"
@@ -76,6 +89,7 @@ const LevelUpBtn: React.FC = () => {
       )}
       {showModal && (
         <Modal2
+          id="tutorial-level-up-modal"
           title={`Level up to Lvl ${userData.level + 1}!`}
           isOpen={showModal}
           setIsOpen={setShowModal}

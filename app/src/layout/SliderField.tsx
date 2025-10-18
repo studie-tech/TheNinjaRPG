@@ -12,22 +12,34 @@ interface SliderFieldProps {
   unit?: string;
   error?: string;
   watchedValue: number;
+  watchedTotal?: number;
   setValue: UseFormSetValue<any>;
   register: UseFormRegister<any>;
+  preventDebounce?: boolean;
 }
 
 const SliderField: React.FC<SliderFieldProps> = (props) => {
-  // Debounced setValue for slider changes
+  // Debounced setValue
   const debouncedSetValue = useDebouncedCallback(
     (id: string, value: number) => props.setValue(id, value),
     250,
   );
+
+  // Debounced setValue for slider changes
+  const handleChange = (id: string, value: number) => {
+    if (props.preventDebounce) {
+      props.setValue(id, value);
+    } else {
+      debouncedSetValue(id, value);
+    }
+  };
+
   return (
     <div className="m-1">
       <label htmlFor={props.id} className="mb-2 block font-medium">
         {props.label ? `${props.label}.` : ""}
         {props.watchedValue
-          ? ` Selected: ${props.watchedValue} ${props.unit ? props.unit : ""}`
+          ? ` Selected: ${props.watchedValue} ${props.watchedTotal ? `/ ${props.watchedTotal}` : ""} ${props.unit ?? ""}`
           : ""}
       </label>
       <div className="flex flex-row items-center">
@@ -46,7 +58,7 @@ const SliderField: React.FC<SliderFieldProps> = (props) => {
           max={props.max}
           {...props?.register?.(props.id, { valueAsNumber: true })}
           className="h-5 w-full cursor-pointer appearance-none  rounded-lg bg-orange-200 accent-orange-800"
-          onChange={(e) => debouncedSetValue(props.id, Number(e.target.value))}
+          onChange={(e) => handleChange(props.id, Number(e.target.value))}
         />
         <PlusCircle
           className="inline-block h-10 w-10 ml-2 fill-orange-100 text-orange-800 hover:fill-orange-600 hover:cursor-pointer"

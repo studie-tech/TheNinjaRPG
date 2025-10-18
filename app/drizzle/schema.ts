@@ -1890,7 +1890,7 @@ export const userData = mysqlTable(
     money: bigint("money", { mode: "number" }).default(1000).notNull(),
     bank: bigint("bank", { mode: "number" }).default(1000).notNull(),
     experience: int("experience").default(0).notNull(),
-    earnedExperience: int("earnedExperience").default(0).notNull(),
+    earnedExperience: int("earnedExperience").default(2000).notNull(),
     rank: mysqlEnum("rank", consts.UserRanks).default("STUDENT").notNull(),
     isOutlaw: boolean("isOutlaw").default(false).notNull(),
     level: int("level").default(1).notNull(),
