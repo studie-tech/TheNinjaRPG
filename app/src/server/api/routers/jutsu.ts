@@ -26,6 +26,7 @@ import {
   JUTSU_MAX_PIERCE_EQUIPPED,
   JUTSU_MAX_EVENT_EQUIPPED,
   JUTSU_MAX_BARRIER_EQUIPPED,
+  TUTORIAL_JUTSU_ID,
 } from "@/drizzle/constants";
 import {
   calcJutsuTrainTime,
@@ -352,6 +353,8 @@ export const jutsuRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Jutsu not found");
+      if (entry.id === TUTORIAL_JUTSU_ID)
+        return errorResponse("Cannot delete tutorial jutsu");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (totalRelations > 0) {
         const message = [
@@ -413,6 +416,8 @@ export const jutsuRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Jutsu not found");
+      if (entry.id === TUTORIAL_JUTSU_ID && input?.data?.hidden)
+        return errorResponse("Cannot hide tutorial jutsu");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (!input.data.injectableInBattle) {
         const totalRelations =

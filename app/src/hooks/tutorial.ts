@@ -5,7 +5,11 @@ import { useUserData } from "@/utils/UserContext";
 import { usePathname, useRouter } from "next/navigation";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { api } from "@/app/_trpc/client";
-import type { UserWithRelations } from "@/routers/profile";
+import {
+  TUTORIAL_JUTSU_ID,
+  TUTORIAL_ITEM_ID,
+  TUTORIAL_STARTER_QUEST_ID,
+} from "@/drizzle/constants";
 
 export interface TutorialStepConfig {
   id: string;
@@ -203,7 +207,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Jutsu Training",
     elementIds: [
       "tutorial-traininggrounds-trainJutsu-proceed",
-      "tutorial-combat-action-clh4d6pxd0006tb0h4y1yudi5",
+      `tutorial-combat-action-${TUTORIAL_JUTSU_ID}`,
     ],
     description:
       "Now that your character is a bit stronger, pick a jutsu from the list to train. The more you train and progress the more powerful jutsu will be available for you to train.",
@@ -232,7 +236,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Item shop",
     elementIds: [
       "tutorial-itemshop-confirmPurchase-proceed",
-      "tutorial-combat-action-VOditPJ3X2id0yC-F5Kz3",
+      `tutorial-combat-action-${TUTORIAL_ITEM_ID}`,
     ],
     description: "Let's buy some shurikens, a good weapon to start with.",
     page: "/itemshop",
@@ -259,7 +263,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   {
     id: "gaqwwlQAjB0b11DLsXMNE",
     title: "Academy Dialog Option",
-    elementIds: ["logbook-entry-eYDVpL63vPhK3lywMexdv", "tutorial-take-quest"],
+    elementIds: [`logbook-entry-${TUTORIAL_STARTER_QUEST_ID}`, "tutorial-take-quest"],
     description: "",
     page: "/academy",
     hideDialog: true,

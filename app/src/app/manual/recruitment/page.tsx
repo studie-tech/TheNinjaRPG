@@ -36,6 +36,7 @@ import VisitorFiltering, {
   useFiltering as useVisitorFiltering,
   getFilter as getVisitorFilter,
 } from "@/layout/VisitorFiltering";
+import { TUTORIAL_GENIN_EXAM_QUEST_ID } from "@/drizzle/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import AbTestResults from "@/layout/AbTestResults";
 import { QuestFunnelBar } from "@/layout/UsageStatistics";
@@ -53,12 +54,12 @@ export default function ManualRecruitment() {
 
   const visitorFilterState = useVisitorFiltering();
 
-  // Quest funnel for specific onboarding quest
-  const QUEST_ID = "eYDVpL63vPhK3lywMexdv" as const;
-
   const { data: mainMetrics, isFetching: isFetchingMain } =
     api.data.getRecruitmentMainMetrics.useQuery(
-      { ...getVisitorFilter(visitorFilterState), questFunnels: [QUEST_ID] },
+      {
+        ...getVisitorFilter(visitorFilterState),
+        questFunnels: [TUTORIAL_GENIN_EXAM_QUEST_ID],
+      },
       {
         staleTime: 1000 * 60,
         enabled: allowed,
@@ -118,7 +119,7 @@ export default function ManualRecruitment() {
     if (valueUsd >= goal * 0.9) return "text-orange-500";
     return "text-red-600";
   };
-  const questFunnel = mainMetrics?.questFunnels?.[QUEST_ID];
+  const questFunnel = mainMetrics?.questFunnels?.[TUTORIAL_GENIN_EXAM_QUEST_ID];
   console.log(questFunnel);
 
   return (

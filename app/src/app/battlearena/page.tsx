@@ -46,6 +46,7 @@ import { useTutorialStep } from "@/hooks/tutorial";
 import type { z } from "zod";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import type { StatSchemaType } from "@/libs/combat/types";
+import { TUTORIAL_ARENA_DUMMY_ID } from "@/drizzle/constants";
 import { useState } from "react";
 
 export default function Arena() {
@@ -60,8 +61,10 @@ export default function Arena() {
   type TabType = (typeof availableTabs)[number];
   const [tab, setTab] = useLocalStorage<TabType | null>("arenaTab", "Arena", true);
 
-  const dummyId = "ICXb49Z0Jle3GyJ-rosTi";
-  const [aiId, setAiId] = useLocalStorage<string | undefined>("arenaAI4", dummyId);
+  const [aiId, setAiId] = useLocalStorage<string | undefined>(
+    "arenaAI4",
+    TUTORIAL_ARENA_DUMMY_ID,
+  );
   const [statDistribution, setStatDistribution] = useLocalStorage<
     StatSchemaType | undefined
   >("statDistribution", undefined);

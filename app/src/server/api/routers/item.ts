@@ -27,6 +27,7 @@ import { calcItemSellingPrice, calcItemRepairCost } from "@/libs/item";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
+  TUTORIAL_ITEM_ID,
 } from "@/drizzle/constants";
 import { nonCombatConsume } from "@/libs/item";
 import { getRandomElement } from "@/utils/array";
@@ -170,10 +171,17 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Query
+      const [user, entry] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchItem(ctx.drizzle, input.id),
+      ]);
+      // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
-      const entry = await fetchItem(ctx.drizzle, input.id);
+      if (!entry) return errorResponse("Item not found");
+      if (entry.id === TUTORIAL_ITEM_ID)
+        return errorResponse("Cannot delete tutorial item");
       if (entry && canChangeContent(user.role)) {
         await Promise.all([
           ctx.drizzle.delete(item).where(eq(item.id, input.id)),
@@ -220,6 +228,8 @@ export const itemRouter = createTRPCRouter({
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to edit item");
       }
+      if (entry.id === TUTORIAL_ITEM_ID && input?.data?.hidden)
+        return errorResponse("Cannot hide tutorial item");
       // Calculate diff
       const diff = calculateContentDiff(entry, {
         id: entry.id,

@@ -199,16 +199,20 @@ export const dataRouter = createTRPCRouter({
           .where(visitorWhere.length > 0 ? and(...visitorWhere) : undefined),
         // Signups: users with an entry in ReferralSource (mapped via historical IP to the visit)
         ctx.drizzle
-          .select({ questData: userData.questData })
+          .select({ questData: userData.questData, questHistory: questHistory })
           .from(visitorLog)
           .innerJoin(historicalIp, eq(historicalIp.ip, visitorLog.ip))
           .innerJoin(userData, eq(userData.userId, historicalIp.userId))
           .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
+          .leftJoin(questHistory, eq(questHistory.userId, userData.userId))
           .where(
             and(
               ...(visitorWhere.length > 0 ? visitorWhere : []),
               eq(userData.isAi, false),
               gte(userData.createdAt, visitorLog.createdAt),
+              ...(input.questFunnels && input.questFunnels.length > 0
+                ? [inArray(questHistory.questId, input.questFunnels)]
+                : []),
               // If utmSource filter provided, also match referralSource.source to it
               ...(input.utmSource && input.utmSource.length > 0
                 ? [eq(referralSource.source, input.utmSource)]

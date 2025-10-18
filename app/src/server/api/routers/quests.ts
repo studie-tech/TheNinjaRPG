@@ -66,6 +66,8 @@ import {
   MEDICAL_MISSIONS_PER_DAY,
   MEDNIN_EXP_CAP,
   MAX_SKILL_POINTS,
+  TUTORIAL_STARTER_QUEST_ID,
+  TUTORIAL_GENIN_EXAM_QUEST_ID,
 } from "@/drizzle/constants";
 import { questFilteringSchema } from "@/validators/quest";
 import type { QuestConsequence } from "@/libs/quest";
@@ -745,8 +747,19 @@ export const questsRouter = createTRPCRouter({
         fetchQuest(ctx.drizzle, input.id),
       ]);
       // Guards
-      if (user.isBanned)
+      if (user.isBanned) {
         return errorResponse("You are banned and cannot perform this action");
+      }
+      if (!entry) {
+        return errorResponse("Quest not found");
+      }
+      if (
+        [TUTORIAL_STARTER_QUEST_ID, TUTORIAL_GENIN_EXAM_QUEST_ID].includes(entry.id) &&
+        input?.data?.hidden
+      ) {
+        return errorResponse("Cannot delete tutorial quest");
+      }
+      // Permission check
       if (entry && canChangeContent(user.role)) {
         const editingStarterQuest =
           entry.questType === "starter" || input.data.questType === "starter";
@@ -909,10 +922,18 @@ export const questsRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Query
+      const [user, entry] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchQuest(ctx.drizzle, input.id),
+      ]);
+      // Guards
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
-      const entry = await fetchQuest(ctx.drizzle, input.id);
+      if (!entry) return errorResponse("Quest not found");
+      if ([TUTORIAL_STARTER_QUEST_ID, TUTORIAL_GENIN_EXAM_QUEST_ID].includes(entry.id))
+        return errorResponse("Cannot delete tutorial quest");
+      // Permission check
       if (entry && canChangeContent(user.role)) {
         await Promise.all([
           ctx.drizzle.delete(quest).where(eq(quest.id, input.id)),

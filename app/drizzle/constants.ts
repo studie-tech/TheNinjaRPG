@@ -616,11 +616,15 @@ export const Sentiment = ["POSITIVE", "NEGATIVE", "NEUTRAL"] as const;
 export type SentimentType = (typeof Sentiment)[number];
 
 // Starter quest used for recruitment analytics
-export const STARTER_QUEST_ID = "eYDVpL63vPhK3lywMexdv" as const;
 export const IMG_URL_ASSISTANT =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJrCz0dVhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx" as const;
 export const IMG_URL_HANDPOINTER =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIvN7gkJxfOewksxBoS1HQCihpL7c42Ky9uUF" as const;
+export const TUTORIAL_JUTSU_ID = "clh4d6pxd0006tb0h4y1yudi5" as const;
+export const TUTORIAL_ITEM_ID = "VOditPJ3X2id0yC-F5Kz3" as const;
+export const TUTORIAL_STARTER_QUEST_ID = "eYDVpL63vPhK3lywMexdv" as const;
+export const TUTORIAL_GENIN_EXAM_QUEST_ID = "9-t1rNWEzXbIfdUfxWrny" as const;
+export const TUTORIAL_ARENA_DUMMY_ID = "ICXb49Z0Jle3GyJ-rosTi" as const;
 
 // Recruitment analytics metric options (used by frontend and backend)
 export const RecruitmentMetrics = [

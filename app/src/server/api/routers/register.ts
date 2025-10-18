@@ -10,7 +10,10 @@ import { visitorLog } from "@/drizzle/schema";
 import { secondsFromNow } from "@/utils/time";
 import { checkForBadWords } from "@/utils/profanity";
 import { abEvent } from "@/drizzle/schema";
-import { STARTER_QUEST_ID, IMG_DEFAULT_PROFILE_PICTURE } from "@/drizzle/constants";
+import {
+  TUTORIAL_STARTER_QUEST_ID,
+  IMG_DEFAULT_PROFILE_PICTURE,
+} from "@/drizzle/constants";
 import {
   bloodline,
   bloodlineRolls,
@@ -137,7 +140,7 @@ export const registerRouter = createTRPCRouter({
         ctx.drizzle.insert(questHistory).values({
           id: nanoid(),
           userId: ctx.userId,
-          questId: STARTER_QUEST_ID,
+          questId: TUTORIAL_STARTER_QUEST_ID,
           questType: "starter",
           startedAt: new Date(),
           endAt: null,
