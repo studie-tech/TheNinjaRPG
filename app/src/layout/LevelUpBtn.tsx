@@ -41,7 +41,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
     },
     onSuccess: async (data) => {
       showMutationToast(data);
-      triggerConfetti();
+      void triggerConfetti();
       if (currentStep?.title === "Level Up!") {
         await handleNextStepAsync();
       }

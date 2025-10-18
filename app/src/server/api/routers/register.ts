@@ -137,17 +137,20 @@ export const registerRouter = createTRPCRouter({
         .delete(userAttribute)
         .where(eq(userAttribute.userId, ctx.userId));
       await Promise.all([
-        ctx.drizzle.insert(questHistory).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          questId: TUTORIAL_STARTER_QUEST_ID,
-          questType: "starter",
-          startedAt: new Date(),
-          endAt: null,
-          completed: 0,
-          previousCompletes: 0,
-          previousAttempts: 1,
-        }),
+        ctx.drizzle
+          .insert(questHistory)
+          .values({
+            id: nanoid(),
+            userId: ctx.userId,
+            questId: TUTORIAL_STARTER_QUEST_ID,
+            questType: "starter",
+            startedAt: new Date(),
+            endAt: null,
+            completed: 0,
+            previousCompletes: 0,
+            previousAttempts: 1,
+          })
+          .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
         ctx.drizzle.insert(userAttribute).values(
           unique_attributes.map((attribute) => ({
             id: nanoid(),

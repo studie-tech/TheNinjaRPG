@@ -88,7 +88,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile",
   },
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0fds327",
     title: "Level Up!",
     description:
       "Hmm, I sense amazing power within you, I think you're already ready for another level up!",

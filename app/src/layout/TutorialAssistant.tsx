@@ -33,7 +33,7 @@ const AssistantPortrait: React.FC = () => (
     width={100}
     height={100}
     alt="Assistant"
-    className="absolute -top-38 right-0 md:-top-48 h-38 md:h-48 w-auto object-contain drop-shadow-2xl select-none pointer-events-none z-0"
+    className="absolute -top-[9.5rem] right-0 md:-top-48 h-[9.5rem] md:h-48 w-auto object-contain drop-shadow-2xl select-none pointer-events-none z-0"
   />
 );
 
@@ -47,7 +47,7 @@ const AssistantDialog: React.FC<{
   title: string;
   children: React.ReactNode;
 }> = ({ title, children }) => (
-  <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-60 pointer-events-auto">
+  <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-[60] pointer-events-auto">
     <div className="relative">
       {/* Assistant portrait positioned behind and above the dialog (top-right) */}
       <AssistantPortrait />
@@ -255,7 +255,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     // Set up a more frequent interval for smoother updates (100ms)
     const intervalId = setInterval(() => {
       updateHighlightPosition(step);
-    }, 100);
+    }, 250);
 
     // Add scroll event listener to update position when scrolling
     const handleScroll = () => {
@@ -356,7 +356,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
 
     if (gameBtnHighlight) {
       return (
-        <div className="fixed inset-0 z-60">
+        <div className="fixed inset-0 z-[60]">
           {/* Dim background */}
           <div className="absolute inset-0 bg-black/30" />
 
@@ -370,7 +370,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               height: gameBtnHighlight.height + 20,
             }}
           >
-            <div className="absolute inset-0 border-3 border-amber-400 rounded-md animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.7)] z-[1]">
+            <div className="absolute inset-0 border-[3px] border-amber-400 rounded-md animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.7)] z-[1]">
               {/* Allow clicking to open the menu */}
               <div
                 className="absolute inset-0 cursor-pointer z-[2] pointer-events-auto"
@@ -383,7 +383,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
           <Image
             src={IMG_URL_HANDPOINTER}
             alt="Tap here"
-            className="absolute w-18 h-18 animate-bounce"
+            className="absolute w-[4.5rem] h-[4.5rem] animate-bounce"
             width={80}
             height={80}
             style={{
@@ -414,7 +414,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     // Fallback dialog if button not found
     return (
       <Dialog open={true}>
-        <DialogContent className="sm:max-w-md z-60">
+        <DialogContent className="sm:max-w-md z-[60]">
           <DialogHeader>
             <DialogTitle>Continue the Tutorial</DialogTitle>
             <DialogDescription>
@@ -460,7 +460,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   return (
     <>
       {highlight && (
-        <div className={cn("fixed inset-0 z-60", pointerEvents)}>
+        <div className={cn("fixed inset-0 z-[60]", pointerEvents)}>
           <div className="absolute inset-0 bg-black/30 min-h-[2000px]" />
 
           <div
@@ -475,7 +475,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               height: highlight.height + 20,
             }}
           >
-            <div className="absolute inset-0 border-3 border-amber-400 rounded-md animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.7)] z-[1]">
+            <div className="absolute inset-0 border-[3px] border-amber-400 rounded-md animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.7)] z-[1]">
               <div
                 className={cn("absolute inset-0 cursor-pointer z-[2]", pointerEvents)}
                 role="button"

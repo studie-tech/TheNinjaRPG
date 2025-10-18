@@ -172,7 +172,7 @@ export default function Travel() {
   useAwake(userData);
 
   // Tutorial step
-  const { currentStep, handleNextStep } = useTutorialStep();
+  const { currentStep, handleNextStepAsync } = useTutorialStep();
 
   // Mutations
   const { mutate: startGlobalMove, isPending: isStartingTravel } =
@@ -194,8 +194,8 @@ export default function Travel() {
     api.travel.finishGlobalMove.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
-        if (currentStep?.title === "Travel") {
-          handleNextStep();
+        if (result.success && currentStep?.title === "Travel") {
+          await handleNextStepAsync();
         }
         if (result.success) {
           await updateUser({ status: "AWAKE", travelFinishAt: null });

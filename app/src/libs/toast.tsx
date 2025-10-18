@@ -7,24 +7,32 @@ import type { ToastActionElement } from "src/components/ui/toast";
 import type { PostProcessedRewards } from "@/libs/quest";
 import type { Quest } from "@/drizzle/schema";
 import { parseHtml } from "@/utils/parse";
-import { confetti } from "@tsparticles/confetti";
 import Image from "next/image";
 
 /**
  * Trigger a confetti animation
  * @param duration - Duration of the animation in milliseconds (default: 1000)
  * @param colors - Array of colors for the confetti (default: gold, orange, red, blue, green)
+ * @returns Promise that resolves when animation is complete (or immediately if running on server)
  */
-export const triggerConfetti = (
+export const triggerConfetti = async (
   duration = 1000,
   colors = ["#FFD700", "#FFA500", "#FF6347", "#4169E1", "#32CD32"],
-) => {
+): Promise<void> => {
+  // Guard against SSR - only run in browser
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  // Dynamically import confetti only in browser
+  const { confetti } = await import("@tsparticles/confetti");
+
   const animationEnd = Date.now() + duration;
   const defaults = {
     startVelocity: 30,
     spread: 360,
     ticks: 60,
-    zIndex: 9999,
+    zIndex: 50, // Lower than toasts (which are typically 100+)
     colors,
     disableForReducedMotion: true,
   };
@@ -292,6 +300,6 @@ export const showRewardToast = (
     title: title,
   });
 
-  // Trigger confetti animation
-  triggerConfetti();
+  // Trigger confetti animation (intentionally not awaited)
+  void triggerConfetti();
 };
