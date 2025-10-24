@@ -277,6 +277,30 @@ export const warRouter = createTRPCRouter({
       ) {
         return errorResponse("You are already at war against the owner village.");
       }
+      
+      // Check if attacker village is already involved in any active war
+      if (
+        activeWars.find(
+          (w) =>
+            w.attackerVillageId === user?.village?.id ||
+            w.defenderVillageId === user?.village?.id ||
+            w.warAllies.some((ally) => ally.villageId === user?.village?.id)
+        )
+      ) {
+        return errorResponse("Your village is already involved in an active war");
+      }
+      
+      // Check if target village is already involved in any active war
+      if (
+        activeWars.find(
+          (w) =>
+            w.attackerVillageId === defenderVillageId ||
+            w.defenderVillageId === defenderVillageId ||
+            w.warAllies.some((ally) => ally.villageId === defenderVillageId)
+        )
+      ) {
+        return errorResponse("Target village is already involved in an active war");
+      }
 
       // Create war and deduct tokens
       const warId = nanoid();
@@ -439,6 +463,30 @@ export const warRouter = createTRPCRouter({
       ) {
         return errorResponse("You are already raiding this village structure");
       }
+      
+      // Check if attacker village is already involved in any active war
+      if (
+        activeWars.find(
+          (w) =>
+            w.attackerVillageId === user?.village?.id ||
+            w.defenderVillageId === user?.village?.id ||
+            w.warAllies.some((ally) => ally.villageId === user?.village?.id)
+        )
+      ) {
+        return errorResponse("Your village is already involved in an active war");
+      }
+      
+      // Check if target village is already involved in any active war
+      if (
+        activeWars.find(
+          (w) =>
+            w.attackerVillageId === input.targetVillageId ||
+            w.defenderVillageId === input.targetVillageId ||
+            w.warAllies.some((ally) => ally.villageId === input.targetVillageId)
+        )
+      ) {
+        return errorResponse("Target village is already involved in an active war");
+      }
 
       // Create war and deduct tokens
       const warId = nanoid();
@@ -521,6 +569,14 @@ export const warRouter = createTRPCRouter({
       if (user.village.tokens < input.tokenOffer) {
         return errorResponse("Not enough tokens to create offer");
       }
+      
+      // Check if payment exceeds 20% of village tokens
+      const maxPayment = Math.floor(user.village.tokens * 0.2);
+      if (input.tokenOffer > maxPayment) {
+        return errorResponse(
+          `Payment cannot exceed 20% of village tokens (max: ${maxPayment.toLocaleString()})`
+        );
+      }
       if (!targetVillage) {
         return errorResponse("Target village not found");
       }
@@ -530,6 +586,20 @@ export const warRouter = createTRPCRouter({
         )
       ) {
         return errorResponse("Cannot create offer for a village already in the war");
+      }
+      
+      // Check if target village is already involved in any other active war
+      const allActiveWars = await fetchActiveWars(ctx.drizzle);
+      if (
+        allActiveWars.find(
+          (w) =>
+            w.id !== activeWar.id &&
+            (w.attackerVillageId === input.targetVillageId ||
+              w.defenderVillageId === input.targetVillageId ||
+              w.warAllies.some((ally) => ally.villageId === input.targetVillageId))
+        )
+      ) {
+        return errorResponse("Target village is already involved in another active war");
       }
       // Final checks
       const { check, message } = canJoinWar(
