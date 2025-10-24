@@ -23,9 +23,9 @@ import {
   MAP_RESERVED_SECTORS,
   WAR_VILLAGE_MAX_SECTORS,
   WAR_FACTION_MAX_SECTORS,
-  WAR_EXHAUSTION_DURATION_DAYS,
   WAR_MINIMUM_TOKENS_FOR_BEING_ATTACKABLE,
   SHRINE_MAX_PER_VILLAGE,
+  WAR_LOSING_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
 import {
   handleWarEnd,
@@ -843,7 +843,7 @@ export const warRouter = createTRPCRouter({
         // Ally surrendering
         const endedAt = new Date();
         const warExhaustionEnd = new Date(
-          endedAt.getTime() + WAR_EXHAUSTION_DURATION_DAYS * 24 * 60 * 60 * 1000,
+          endedAt.getTime() + WAR_LOSING_COOLDOWN_DAYS * 24 * 60 * 60 * 1000,
         );
         await Promise.all([
           ctx.drizzle.delete(warAlly).where(eq(warAlly.id, warAllyData.id)),

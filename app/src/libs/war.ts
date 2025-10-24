@@ -4,13 +4,14 @@ import { userData, notification, gameSetting, sector } from "@/drizzle/schema";
 import { eq, and, or, ne } from "drizzle-orm";
 import { sql, inArray, notInArray } from "drizzle-orm";
 import {
-  WAR_EXHAUSTION_DURATION_DAYS,
   WAR_STRUCTURE_UPGRADE_BLOCK_DAYS,
   WAR_VICTORY_TOKEN_BONUS,
   WAR_WINNING_BOOST_DAYS,
   WAR_WINNING_BOOST_REGEN_PERC,
   WAR_WINNING_BOOST_TRAINING_PERC,
   SHRINE_HP_BY_LEVEL,
+  WAR_LOSING_COOLDOWN_DAYS,
+  WAR_WINNING_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
 import { getUnique } from "@/utils/grouping";
 import type { WarState } from "@/drizzle/constants";
@@ -187,8 +188,11 @@ export const canJoinWar = (
 export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
   // Timer calculations
   const endedAt = new Date();
-  const warExhaustionEnd = new Date(
-    endedAt.getTime() + WAR_EXHAUSTION_DURATION_DAYS * 24 * 60 * 60 * 1000,
+  const losingCooldownEnd = new Date(
+    endedAt.getTime() + WAR_LOSING_COOLDOWN_DAYS * 24 * 60 * 60 * 1000,
+  );
+  const winningCooldownEnd = new Date(
+    endedAt.getTime() + WAR_WINNING_COOLDOWN_DAYS * 24 * 60 * 60 * 1000,
   );
   const structureUpgradeBlock = new Date(
     endedAt.getTime() + WAR_STRUCTURE_UPGRADE_BLOCK_DAYS * 24 * 60 * 60 * 1000,
@@ -299,7 +303,7 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
             drizzleDB
               .update(village)
               .set({
-                warExhaustionEndedAt: warExhaustionEnd,
+                warExhaustionEndedAt: losingCooldownEnd,
                 lastWarEndedAt: endedAt,
               })
               .where(inArray(village.id, [loserVillageId, winnerVillageId])),
@@ -348,10 +352,17 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
             drizzleDB
               .update(village)
               .set({
-                warExhaustionEndedAt: warExhaustionEnd,
+                warExhaustionEndedAt: losingCooldownEnd,
                 lastWarEndedAt: endedAt,
               })
               .where(eq(village.id, loserVillageId)),
+            drizzleDB
+              .update(village)
+              .set({
+                warExhaustionEndedAt: winningCooldownEnd,
+                lastWarEndedAt: endedAt,
+              })
+              .where(eq(village.id, winnerVillageId)),
             drizzleDB
               .update(villageStructure)
               .set({
