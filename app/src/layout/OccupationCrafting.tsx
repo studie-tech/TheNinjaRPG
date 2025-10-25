@@ -93,7 +93,7 @@ export default function OccupationCrafting() {
   });
 
   const removeImbuementMutation = api.occupation.removeImbuement.useMutation({
-    onSuccess: async (data: any) => {
+    onSuccess: async (data) => {
       showMutationToast(data);
       await utils.item.getUserItems.invalidate();
     },

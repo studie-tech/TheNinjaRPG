@@ -136,7 +136,9 @@ export const clanRouter = createTRPCRouter({
           villageGraphic: IMG_VILLAGE_FACTION,
         }),
       ]);
-      return { success: true, message: "Hideout purchased successfully" };
+      
+      // Temporary block for hideout creation
+      return errorResponse("Hideout creation is currently disabled");
     }),
   upgradeHideoutToTown: protectedProcedure
     .input(z.object({ clanId: z.string() }))

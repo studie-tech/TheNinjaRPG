@@ -40,6 +40,20 @@ import {
   fetchRequest,
   fetchRequests,
 } from "@/routers/sparring";
+
+/**
+ * Get the member count for a village
+ * @param client - The DrizzleClient instance
+ * @param villageId - The ID of the village
+ * @returns The number of members in the village
+ */
+const getVillageMemberCount = async (client: DrizzleClient, villageId: string): Promise<number> => {
+  const result = await client
+    .select({ count: sql<number>`count(*)` })
+    .from(userData)
+    .where(eq(userData.villageId, villageId));
+  return result[0]?.count || 0;
+};
 import { findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { countVillageSectors, fetchSector } from "@/routers/village";
@@ -302,6 +316,19 @@ export const warRouter = createTRPCRouter({
         return errorResponse("Target village is already involved in an active war");
       }
 
+      // Check minimum member count for war participation
+      const [attackerMemberCount, defenderMemberCount] = await Promise.all([
+        getVillageMemberCount(ctx.drizzle, attackerVillage.id),
+        defenderVillage ? getVillageMemberCount(ctx.drizzle, defenderVillage.id) : 0,
+      ]);
+
+      if (attackerMemberCount < 10) {
+        return errorResponse("Your village needs at least 10 members to declare sector war");
+      }
+      if (defenderVillage && defenderMemberCount < 10) {
+        return errorResponse("Target village needs at least 10 members to be attacked");
+      }
+
       // Create war and deduct tokens
       const warId = nanoid();
       const [updateResult] = await Promise.all([
@@ -488,6 +515,19 @@ export const warRouter = createTRPCRouter({
         return errorResponse("Target village is already involved in an active war");
       }
 
+      // Check minimum member count for war participation
+      const [attackerMemberCount, defenderMemberCount] = await Promise.all([
+        getVillageMemberCount(ctx.drizzle, attackerVillage.id),
+        getVillageMemberCount(ctx.drizzle, defenderVillage.id),
+      ]);
+
+      if (attackerMemberCount < 10) {
+        return errorResponse("Your village needs at least 10 members to declare war");
+      }
+      if (defenderMemberCount < 10) {
+        return errorResponse("Target village needs at least 10 members to be attacked");
+      }
+
       // Create war and deduct tokens
       const warId = nanoid();
       const [updateResult] = await Promise.all([
@@ -601,6 +641,20 @@ export const warRouter = createTRPCRouter({
       ) {
         return errorResponse("Target village is already involved in another active war");
       }
+
+      // Check minimum member count for war participation
+      const [userVillageMemberCount, targetVillageMemberCount] = await Promise.all([
+        getVillageMemberCount(ctx.drizzle, user.villageId),
+        getVillageMemberCount(ctx.drizzle, targetVillage.id),
+      ]);
+
+      if (userVillageMemberCount < 10) {
+        return errorResponse("Your village needs at least 10 members to create ally offers");
+      }
+      if (targetVillageMemberCount < 10) {
+        return errorResponse("Target village needs at least 10 members to be invited to war");
+      }
+
       // Final checks
       const { check, message } = canJoinWar(
         activeWar,
