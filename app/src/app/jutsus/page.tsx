@@ -33,6 +33,7 @@ import {
   JUTSU_TRANSFER_COST,
   JUTSU_TRANSFER_MAX_LEVEL,
   JUTSU_TRANSFER_MINIMUM_LEVEL,
+  JUTSU_TRANSFER_DAYS,
 } from "@/drizzle/constants";
 import { getFreeTransfers } from "@/libs/jutsu";
 import JutsuFiltering, { useFiltering, getFilter } from "@/layout/JutsuFiltering";
@@ -134,7 +135,7 @@ export default function MyJutsu() {
     
     // Add JUTSU_TRANSFER_DAYS to the oldest transfer date
     const resetTime = new Date(oldestFreeTransfer.createdAt);
-    resetTime.setDate(resetTime.getDate() + 20); // JUTSU_TRANSFER_DAYS = 20
+    resetTime.setDate(resetTime.getDate() + JUTSU_TRANSFER_DAYS);
     
     return resetTime;
   };

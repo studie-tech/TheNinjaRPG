@@ -2062,7 +2062,7 @@ const ResetSkills: React.FC = () => {
         <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4 mb-4">
           <div className="text-center space-y-2">
             <p className="text-sm text-muted-foreground">
-              You have used {resetInfo.freeResetsUsed} free skill resets this month. 
+              You have used {resetInfo.freeResetsUsed} free skill resets this month.
               {resetInfo.freeResetsRemaining === 0 && " You must wait for monthly reset or pay reputation points."}
             </p>
             <p className="text-lg font-semibold">

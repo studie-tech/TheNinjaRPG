@@ -329,6 +329,18 @@ export const warRouter = createTRPCRouter({
         return errorResponse("Target village needs at least 10 members to be attacked");
       }
 
+      // Re-check just before creation to avoid races
+      const [attackerWarsNow, defenderWarsNow] = await Promise.all([
+        fetchActiveWars(ctx.drizzle, attackerVillage.id),
+        fetchActiveWars(ctx.drizzle, defenderVillageId),
+      ]);
+      if (
+        attackerWarsNow.length > 0 ||
+        defenderWarsNow.length > 0
+      ) {
+        return errorResponse("A village is now already involved in an active war");
+      }
+
       // Create war and deduct tokens
       const warId = nanoid();
       const [updateResult] = await Promise.all([
@@ -526,6 +538,18 @@ export const warRouter = createTRPCRouter({
       }
       if (defenderMemberCount < 10) {
         return errorResponse("Target village needs at least 10 members to be attacked");
+      }
+
+      // Re-check just before creation to avoid races
+      const [attackerWarsNow, defenderWarsNow] = await Promise.all([
+        fetchActiveWars(ctx.drizzle, attackerVillage.id),
+        fetchActiveWars(ctx.drizzle, defenderVillage.id),
+      ]);
+      if (
+        attackerWarsNow.length > 0 ||
+        defenderWarsNow.length > 0
+      ) {
+        return errorResponse("A village is now already involved in an active war");
       }
 
       // Create war and deduct tokens

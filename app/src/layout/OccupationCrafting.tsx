@@ -637,12 +637,16 @@ export default function OccupationCrafting() {
                         />
                         <div>
                           <h4 className="font-semibold">{userItem.item?.name}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {userItem.imbuements?.filter(imbuement => 
-                              !imbuement.craftingFinishedAt || 
-                              new Date(imbuement.craftingFinishedAt) <= new Date()
-                            ).length || 0} imbuement{(userItem.imbuements?.length || 0) !== 1 ? 's' : ''}
-                          </p>
+                          {(() => {
+                            const done = (userItem.imbuements || []).filter(
+                              i => !i.craftingFinishedAt || new Date(i.craftingFinishedAt) <= new Date()
+                            ).length;
+                            return (
+                              <p className="text-sm text-muted-foreground">
+                                {done} imbuement{done !== 1 ? 's' : ''}
+                              </p>
+                            );
+                          })()}
                         </div>
                       </div>
                       <ItemWithEffects
@@ -682,7 +686,7 @@ export default function OccupationCrafting() {
                                   onAccept={() => removeImbuementMutation.mutate({ userItemImbuementId: imbuement.id })}
                                 >
                                   <p>
-                                    Are you sure you want to remove the <strong>{imbuement.item.name}</strong> imbuement from <strong>{userItem.item?.name}</strong>? This action cannot be undone.
+                                    Are you sure you want to remove the <strong>{imbuement.item.name}</strong> imbuement from <strong>{userItem.item?.name}</strong>? This action cannot be undone and you will not get the crystal back.
                                   </p>
                                 </Confirm2>
                               </div>
