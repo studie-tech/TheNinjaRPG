@@ -122,6 +122,25 @@ export default function MyJutsu() {
   const freeTransfers = getFreeTransfers(userData?.federalStatus || "NONE");
   const usedTransfers = prevFreeTransfers?.length || 0;
 
+  // Calculate when free transfers reset
+  const getFreeTransferResetTime = () => {
+    if (!recentTransfers || recentTransfers.length === 0) return null;
+    
+    // Find the oldest transfer that used a free transfer
+    const oldestFreeTransfer = prevFreeTransfers
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0];
+    
+    if (!oldestFreeTransfer) return null;
+    
+    // Add JUTSU_TRANSFER_DAYS to the oldest transfer date
+    const resetTime = new Date(oldestFreeTransfer.createdAt);
+    resetTime.setDate(resetTime.getDate() + 20); // JUTSU_TRANSFER_DAYS = 20
+    
+    return resetTime;
+  };
+
+  const freeTransferResetTime = getFreeTransferResetTime();
+
   const onSettled = () => {
     document.body.style.cursor = "default";
     setIsOpen(false);
@@ -315,6 +334,26 @@ export default function MyJutsu() {
   const reskinCost = canReskinFreely(userData?.role) ? 0 : COST_RESKIN_JUTSU;
 
   return (
+    <>
+    {/* Free Transfer Timer */}
+    {freeTransferResetTime && freeTransferResetTime > new Date() && usedTransfers > 0 && (
+      <ContentBox
+        title="Free Transfer Status"
+        subtitle="Free transfers will reset"
+        initialBreak={true}
+      >
+        <div className="text-center space-y-2">
+          <p className="text-muted-foreground">
+            You have used {usedTransfers}/{freeTransfers} free transfers. 
+            {usedTransfers >= freeTransfers && " You must wait for transfers to reset or pay reputation points."}
+          </p>
+          <p className="text-lg font-semibold">
+            Next free transfer available: {new Date(freeTransferResetTime).toLocaleString()}
+          </p>
+        </div>
+      </ContentBox>
+    )}
+
     <ContentBox
       title="Jutsu Management"
       subtitle={subtitle}
@@ -837,7 +876,8 @@ export default function MyJutsu() {
             </p>
           </div>
         </Modal2>
-      )}
-    </ContentBox>
+        )}
+      </ContentBox>
+    </>
   );
 }

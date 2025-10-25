@@ -56,6 +56,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
 import { useUserSearch } from "@/utils/search";
 import { showMutationToast } from "@/libs/toast";
+import Countdown from "@/layout/Countdown";
 import { COST_CHANGE_USERNAME } from "@/drizzle/constants";
 import { COST_CUSTOM_TITLE } from "@/drizzle/constants";
 import { COST_RESET_STATS } from "@/drizzle/constants";
@@ -2048,8 +2049,29 @@ const ResetSkills: React.FC = () => {
   const canAffordPaid = userData.reputationPoints >= COST_SKILL_RESET;
   const canAfford = Boolean(isFree) || canAffordPaid;
 
+  // Calculate when skill resets reset (monthly - 1st of next month)
+  const now = new Date();
+  const skillResetResetTime = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0),
+  );
+
   return (
     <div className="p-4 space-y-4">
+      {/* Skill Reset Timer */}
+      {resetInfo && !resetInfo.isFree && (
+        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4 mb-4">
+          <div className="text-center space-y-2">
+            <p className="text-sm text-muted-foreground">
+              You have used {resetInfo.freeResetsUsed} free skill resets this month. 
+              {resetInfo.freeResetsRemaining === 0 && " You must wait for monthly reset or pay reputation points."}
+            </p>
+            <p className="text-lg font-semibold">
+              Next free skill reset available: <Countdown targetDate={skillResetResetTime} />
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2 pb-4">
         <p className="text-sm text-muted-foreground">
           This will reset all your skill tree investments and refund all spent skill
