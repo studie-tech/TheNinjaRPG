@@ -256,6 +256,11 @@ export const occupationRouter = createTRPCRouter({
       if (crystalItem.itemType !== "CRYSTAL") {
         return errorResponse("Selected item is not a crystal");
       }
+      if (crystalItem.crystalTargetTypes && crystalItem.crystalTargetTypes.trim() !== "") {
+        if (crystalItem.crystalTargetTypes !== targetUserItem.item?.itemType) {
+          return errorResponse(`This crystal can only be applied to ${crystalItem.crystalTargetTypes} items`);
+        }
+      }
       if (!targetUserItem.item?.canBeImbued) {
         return errorResponse("This item cannot be imbued");
       }
@@ -392,6 +397,59 @@ export const occupationRouter = createTRPCRouter({
       return {
         success: true,
         message: `Immediately finished imbuing ${imbuingItem.item.name}`,
+      };
+    }),
+
+  removeImbuement: protectedProcedure
+    .input(z.object({ userItemImbuementId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Queries
+      const [user, userItems] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+      ]);
+      
+      // Find the imbuement
+      const imbuement = await ctx.drizzle.query.userItemImbuement.findFirst({
+        where: eq(userItemImbuement.id, input.userItemImbuementId),
+        with: {
+          userItem: {
+            with: { item: true }
+          },
+          item: true
+        }
+      });
+      
+      // Guards
+      if (!imbuement) {
+        return errorResponse("Imbuement not found");
+      }
+      
+      // Check if the user owns this item
+      const userItem = userItems.find(ui => ui.id === imbuement.userItemId);
+      if (!userItem) {
+        return errorResponse("You don't own this item");
+      }
+      
+      // Check if item is equipped
+      if (userItem.equipped !== "NONE") {
+        return errorResponse("Cannot remove imbuement from equipped item");
+      }
+      
+      // Check if imbuement is still being crafted
+      if (imbuement.craftingFinishedAt && imbuement.craftingFinishedAt > new Date()) {
+        return errorResponse("Cannot remove imbuement that is still being crafted");
+      }
+      
+      // Remove the imbuement
+      await ctx.drizzle
+        .delete(userItemImbuement)
+        .where(eq(userItemImbuement.id, input.userItemImbuementId));
+      
+      return {
+        success: true,
+        message: `Removed ${imbuement.item.name} from ${userItem.item.name}`,
       };
     }),
 });

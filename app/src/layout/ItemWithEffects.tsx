@@ -317,6 +317,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             {!hideDetails && "description" in item && item.description && (
               <div>{parseHtml(item.description)}</div>
             )}
+            {!hideDetails && "itemType" in item && item.itemType === "CRYSTAL" && "crystalTargetTypes" in item && item.crystalTargetTypes && (
+              <div className="mt-2">
+                <b>Can Imbue: </b>
+                <span className="text-blue-600 font-medium">{item.crystalTargetTypes}</span>
+              </div>
+            )}
           </div>
         </div>
         <div>

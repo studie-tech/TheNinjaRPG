@@ -1171,6 +1171,7 @@ export const item = mysqlTable(
     canBeHunted: boolean("canBeHunted").default(false).notNull(),
     canBeGathered: boolean("canBeGathered").default(false).notNull(),
     canBeTraded: boolean("canBeTraded").default(false).notNull(),
+    crystalTargetTypes: varchar("crystalTargetTypes", { length: 191 }).default("").notNull(),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
   },
   (table) => {

@@ -1,0 +1,1 @@
+ALTER TABLE `Item` ADD `crystalTargetTypes` varchar(191) DEFAULT ('') NOT NULL;

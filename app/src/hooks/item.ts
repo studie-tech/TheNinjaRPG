@@ -31,6 +31,7 @@ export const useItemEditForm = (
     ...data,
     effects: data.effects,
     expireFromStoreAt: expireFromStoreAt,
+    crystalTargetTypes: data.crystalTargetTypes || "",
     craftingRequirements: data.craftingRequirements.map((req) => ({
       ids: [req.requirementItemId],
       number: req.quantity,
@@ -57,7 +58,10 @@ export const useItemEditForm = (
   // Form submission
   const handleItemSubmit = form.handleSubmit(
     (data: ZodItemType) => {
-      const newItem = { ...item, ...data };
+      const newItem = { 
+        ...item, 
+        ...data
+      };
       const diff = calculateContentDiff(item, newItem);
       if (diff.length > 0) {
         updateItem({ id: item.id, data: newItem });
@@ -87,6 +91,12 @@ export const useItemEditForm = (
   const canBeCrafted = useWatch({
     control: form.control,
     name: "canBeCrafted",
+  });
+
+  // Watch for changes to itemType
+  const itemType = useWatch({
+    control: form.control,
+    name: "itemType",
   });
 
   // Query for items if this item is canBeCrafted
@@ -153,6 +163,16 @@ export const useItemEditForm = (
       label: "Crafting Requirements [and quantity]",
       type: "db_values_with_number",
       values: itemsData?.filter((i) => i.id !== item.id) || [],
+    });
+  }
+
+  // Add crystal target types field only for CRYSTAL items
+  if (itemType === "CRYSTAL") {
+    formData.push({
+      id: "crystalTargetTypes",
+      type: "str_array",
+      values: ItemTypes,
+      label: "Crystal Target Types",
     });
   }
 

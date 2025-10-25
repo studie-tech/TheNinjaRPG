@@ -5,11 +5,13 @@ import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Modal2 from "@/layout/Modal2";
 import Countdown from "@/layout/Countdown";
+import ContentImage from "@/layout/ContentImage";
 import { ActionSelector } from "@/layout/CombatActions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import Confirm2 from "@/layout/Confirm2";
 import { Hammer, Star, Info, Gem, Zap } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -85,6 +87,13 @@ export default function OccupationCrafting() {
 
   const finishImbuingImmediatelyMutation = api.occupation.finishImbuingImmediately.useMutation({
     onSuccess: async (data) => {
+      showMutationToast(data);
+      await utils.item.getUserItems.invalidate();
+    },
+  });
+
+  const removeImbuementMutation = api.occupation.removeImbuement.useMutation({
+    onSuccess: async (data: any) => {
       showMutationToast(data);
       await utils.item.getUserItems.invalidate();
     },
@@ -497,16 +506,32 @@ export default function OccupationCrafting() {
                     {selectedImbuableItem && (
                       <div>
                         <h4 className="font-medium mb-2">Select Crystal</h4>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Only crystals compatible with <strong>{selectedImbuableItem.item?.itemType}</strong> items are shown.
+                        </p>
                         <ActionSelector
-                          items={crystals.map((userItem) => ({
-                            id: userItem.id,
-                            name: userItem.item?.name || "Unknown",
-                            image: userItem.item?.image || "",
-                            rarity: userItem.item?.rarity || "COMMON",
-                            type: "item" as const,
-                            effects: userItem.item?.effects || [],
-                            hidden: false,
-                          }))}
+                          items={crystals
+                            .filter((userItem) => {
+                              const crystal = userItem.item;
+                              if (!crystal) return false;
+                              
+                              // If crystal has no target types specified, it can be used on any item
+                              if (!crystal.crystalTargetTypes || crystal.crystalTargetTypes.trim() === "") {
+                                return true;
+                              }
+                              
+                              // Check if the target item type matches the crystal's allowed type
+                              return crystal.crystalTargetTypes === selectedImbuableItem.item?.itemType;
+                            })
+                            .map((userItem) => ({
+                              id: userItem.id,
+                              name: userItem.item?.name || "Unknown",
+                              image: userItem.item?.image || "",
+                              rarity: userItem.item?.rarity || "COMMON",
+                              type: "item" as const,
+                              effects: userItem.item?.effects || [],
+                              hidden: false,
+                            }))}
                           selectedId={selectedCrystalUserItem?.id}
                           showBgColor={false}
                           showLabels={true}
@@ -576,6 +601,102 @@ export default function OccupationCrafting() {
             </CardContent>
           </Card>
         )}
+
+        {/* Manage Existing Imbuements */}
+        {(() => {
+          const itemsWithImbuements = (userItems || []).filter(
+            (userItem) => 
+              userItem.imbuements && 
+              userItem.imbuements.length > 0 &&
+              userItem.imbuements.some(imbuement => 
+                !imbuement.craftingFinishedAt || 
+                new Date(imbuement.craftingFinishedAt) <= new Date()
+              )
+          );
+          
+          return itemsWithImbuements.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Star className="h-5 w-5" />
+                  Manage Existing Imbuements
+                  <Badge variant="outline" className="ml-auto">
+                    {itemsWithImbuements.length} item{itemsWithImbuements.length !== 1 ? 's' : ''}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {itemsWithImbuements.map((userItem) => (
+                    <div key={userItem.id} className="border rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <ContentImage
+                          image={userItem.item?.image || ""}
+                          alt={userItem.item?.name || "Unknown"}
+                          className="w-12 h-12"
+                        />
+                        <div>
+                          <h4 className="font-semibold">{userItem.item?.name}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {userItem.imbuements?.filter(imbuement => 
+                              !imbuement.craftingFinishedAt || 
+                              new Date(imbuement.craftingFinishedAt) <= new Date()
+                            ).length || 0} imbuement{(userItem.imbuements?.length || 0) !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <ItemWithEffects
+                        item={{
+                          ...userItem.item,
+                          imbuements: userItem.imbuements?.map((i) => i.item) || [],
+                        }}
+                      />
+                      {/* Imbuements with remove buttons */}
+                      {userItem.imbuements && userItem.imbuements.length > 0 && (
+                        <div className="mt-3 rounded-lg bg-purple-100 p-3">
+                          <h4 className="font-semibold text-purple-800 mb-2">Imbuements</h4>
+                          <div className="space-y-2">
+                            {userItem.imbuements
+                              .filter(imbuement => 
+                                !imbuement.craftingFinishedAt || 
+                                new Date(imbuement.craftingFinishedAt) <= new Date()
+                              )
+                              .map((imbuement) => (
+                              <div key={imbuement.id} className="flex items-center justify-between bg-white rounded p-2">
+                                <div className="flex items-center space-x-2">
+                                  <ContentImage
+                                    image={imbuement.item.image}
+                                    alt={imbuement.item.name}
+                                    className="w-8 h-8"
+                                  />
+                                  <span className="font-medium">{imbuement.item.name}</span>
+                                </div>
+                                <Confirm2
+                                  title="Remove Imbuement"
+                                  proceed_label="Remove"
+                                  button={
+                                    <Button variant="destructive" size="sm">
+                                      Remove
+                                    </Button>
+                                  }
+                                  onAccept={() => removeImbuementMutation.mutate({ userItemImbuementId: imbuement.id })}
+                                >
+                                  <p>
+                                    Are you sure you want to remove the <strong>{imbuement.item.name}</strong> imbuement from <strong>{userItem.item?.name}</strong>? This action cannot be undone.
+                                  </p>
+                                </Confirm2>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null;
+        })()}
 
         {/* Crafting Information */}
         <Card>
