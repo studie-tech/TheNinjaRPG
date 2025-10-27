@@ -1057,6 +1057,7 @@ export const ADDITIONAL_MISSION_REWARD_MULTIPLIER = 0.4;
 export const WAR_VILLAGE_MAX_SECTORS = 12;
 export const WAR_FACTION_MAX_SECTORS = 6;
 export const WAR_MINIMUM_TOKENS_FOR_BEING_ATTACKABLE = 10000;
+export const WAR_MINIMUM_MEMBERS_REQUIRED = 10; // Minimum members required for war participation
 export const WAR_TOWNHALL_HP_REMOVE = 5;
 export const WAR_TOWNHALL_HP_RECOVER = 2;
 export const WAR_TOWNHALL_HP_ANBU_REMOVE = 10;
@@ -1085,6 +1086,13 @@ export const WAR_PURCHASE_SHRINE_TOKEN_COST = 100000; // Cost in village tokens 
 export const WAR_DECLARATION_COST = 15000; // Cost in village tokens to declare war
 export const WAR_DAILY_TOKEN_REDUCTION = 1000; // Daily token reduction during war
 export const WAR_ALLY_OFFER_MIN = 1000; // Minimum token offer for allies
+export const WAR_ALLY_MAX_PAYMENT_PERCENTAGE = 0.2; // Maximum payment as percentage of village tokens (20%)
+
+// Skill point leveling constants
+export const SKILL_POINT_MIN_LEVEL = 21; // Minimum level to start gaining skill points from leveling
+export const SKILL_POINT_MAX_LEVEL = 40; // Maximum level to gain skill points from leveling
+export const MAX_SKILL_POINTS_FROM_LEVELING = 20; // Maximum skill points that can be gained from leveling
+
 export const WAR_SECTORWAR_AI_SHRINE_REDUCE = 3; // KIlling AI shrine hp decrease
 export const WAR_SECTORWAR_AI_SHRINE_RECOVER = 3; // Shrine hp recover per day
 export const WAR_SECTORWAR_PVP_SHRINE_REDUCE = 5; // Killing a player in a sector war shrine hp decrease

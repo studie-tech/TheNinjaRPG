@@ -38,6 +38,8 @@ import {
 import { getFreeTransfers } from "@/libs/jutsu";
 import JutsuFiltering, { useFiltering, getFilter } from "@/layout/JutsuFiltering";
 import { canTransferJutsu } from "@/utils/permissions";
+import Countdown from "@/layout/Countdown";
+import { secondsFromDate, DAY_S } from "@/utils/time";
 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -133,11 +135,8 @@ export default function MyJutsu() {
     
     if (!oldestFreeTransfer) return null;
     
-    // Add JUTSU_TRANSFER_DAYS to the oldest transfer date
-    const resetTime = new Date(oldestFreeTransfer.createdAt);
-    resetTime.setDate(resetTime.getDate() + JUTSU_TRANSFER_DAYS);
-    
-    return resetTime;
+    // Add JUTSU_TRANSFER_DAYS to the oldest transfer date using secondsFromDate
+    return secondsFromDate(JUTSU_TRANSFER_DAYS * DAY_S, new Date(oldestFreeTransfer.createdAt));
   };
 
   const freeTransferResetTime = getFreeTransferResetTime();
@@ -349,7 +348,7 @@ export default function MyJutsu() {
             {usedTransfers >= freeTransfers && " You must wait for transfers to reset or pay reputation points."}
           </p>
           <p className="text-lg font-semibold">
-            Next free transfer available: {new Date(freeTransferResetTime).toLocaleString()}
+            Next free transfer available: <Countdown targetDate={freeTransferResetTime} />
           </p>
         </div>
       </ContentBox>

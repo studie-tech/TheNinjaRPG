@@ -20,7 +20,7 @@ import { findRelationship } from "@/utils/alliance";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import type { Village, VillageAlliance } from "@/drizzle/schema";
 import type { BattleWar } from "@/libs/combat/types";
-import { secondsFromNow } from "@/utils/time";
+import { secondsFromNow, secondsFromDate, DAY_S } from "@/utils/time";
 
 /**
  * Convenience method which checks target wars, and sees if the user village ID is in the war.
@@ -188,16 +188,10 @@ export const canJoinWar = (
 export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
   // Timer calculations
   const endedAt = new Date();
-  const losingCooldownEnd = new Date(
-    endedAt.getTime() + WAR_LOSING_COOLDOWN_DAYS * 24 * 60 * 60 * 1000,
-  );
-  const winningCooldownEnd = new Date(
-    endedAt.getTime() + WAR_WINNING_COOLDOWN_DAYS * 24 * 60 * 60 * 1000,
-  );
-  const structureUpgradeBlock = new Date(
-    endedAt.getTime() + WAR_STRUCTURE_UPGRADE_BLOCK_DAYS * 24 * 60 * 60 * 1000,
-  );
-  const boostEndAt = secondsFromNow(WAR_WINNING_BOOST_DAYS * 24 * 60 * 60);
+  const losingCooldownEnd = secondsFromDate(WAR_LOSING_COOLDOWN_DAYS * DAY_S, endedAt);
+  const winningCooldownEnd = secondsFromDate(WAR_WINNING_COOLDOWN_DAYS * DAY_S, endedAt);
+  const structureUpgradeBlock = secondsFromDate(WAR_STRUCTURE_UPGRADE_BLOCK_DAYS * DAY_S, endedAt);
+  const boostEndAt = secondsFromNow(WAR_WINNING_BOOST_DAYS * DAY_S);
 
   // If both villages have >= 0 tokens, just return without ending
   if (activeWar.attackerVillage.tokens > 0 && activeWar.defenderVillage.tokens > 0) {
@@ -395,4 +389,32 @@ export const getShrineHpByLevel = (level?: number | null) => {
     [1, 2, 3].includes(level || 1) ? level : 1
   ) as keyof typeof SHRINE_HP_BY_LEVEL;
   return SHRINE_HP_BY_LEVEL[idx];
+};
+
+/**
+ * Checks if a village is involved in any active war (as attacker, defender, or ally)
+ * @param activeWars - Array of active wars to check against
+ * @param villageId - The village ID to check
+ * @param excludeWarId - Optional war ID to exclude from the check
+ * @returns true if the village is involved in any active war, false otherwise
+ */
+export const isVillageInvolvedInAnyWar = (
+  activeWars: FetchActiveWarsReturnType[],
+  villageId: string,
+  excludeWarId?: string
+): boolean => {
+  return activeWars.some((war) => {
+    // Skip the excluded war if provided
+    if (excludeWarId && war.id === excludeWarId) {
+      return false;
+    }
+    
+    // Check if village is attacker or defender
+    if (war.attackerVillageId === villageId || war.defenderVillageId === villageId) {
+      return true;
+    }
+    
+    // Check if village is an ally in the war
+    return war.warAllies.some((ally) => ally.villageId === villageId);
+  });
 };

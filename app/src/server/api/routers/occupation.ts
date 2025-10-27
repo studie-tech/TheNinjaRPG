@@ -405,21 +405,19 @@ export const occupationRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [user, userItems] = await Promise.all([
+      const [user, userItems, imbuement] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.userItemImbuement.findFirst({
+          where: eq(userItemImbuement.id, input.userItemImbuementId),
+          with: {
+            userItem: {
+              with: { item: true }
+            },
+            item: true
+          }
+        })
       ]);
-      
-      // Find the imbuement
-      const imbuement = await ctx.drizzle.query.userItemImbuement.findFirst({
-        where: eq(userItemImbuement.id, input.userItemImbuementId),
-        with: {
-          userItem: {
-            with: { item: true }
-          },
-          item: true
-        }
-      });
       
       // Guards
       if (!imbuement) {

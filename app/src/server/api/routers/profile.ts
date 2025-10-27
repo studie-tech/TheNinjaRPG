@@ -58,7 +58,7 @@ import { activityStreakRewards } from "@/libs/profile";
 import { calcHP, calcSP, calcCP } from "@/libs/profile";
 import { COST_CHANGE_USERNAME, SENSEI_MAX_STUDENT_LEVEL } from "@/drizzle/constants";
 import { UserRolesWithSkillTreeAccess } from "@/drizzle/constants";
-import { MAX_ATTRIBUTES, MAX_SKILL_POINTS } from "@/drizzle/constants";
+import { MAX_ATTRIBUTES, MAX_SKILL_POINTS, SKILL_POINT_MIN_LEVEL, SKILL_POINT_MAX_LEVEL, MAX_SKILL_POINTS_FROM_LEVELING } from "@/drizzle/constants";
 import { REGEN_SECONDS } from "@/drizzle/constants";
 import { createStatSchema } from "@/libs/combat/types";
 import { isAvailableUserQuests } from "@/libs/quest";
@@ -264,17 +264,16 @@ export const profileRouter = createTRPCRouter({
     const { trackers } = getNewTrackers(user, [
       { task: "user_level", value: newLevel },
     ]);
-    // Calculate skill points reward for chunin+ ranks - only if under leveling cap (20)
+    // Calculate skill points reward for chunin+ ranks - levels 21-40 give 1 skill point each
     const isChunin = UserRolesWithSkillTreeAccess.includes(user.rank);
     // Calculate how many skillpoints they should have from leveling (max 20)
-    // Chunin+ ranks get 1 skillpoint per level starting from level 20
-    const minLevelForSkillPoints = 20;
+    // Chunin+ ranks get 1 skillpoint per level from levels 21-40
     const expectedSkillPointsFromLeveling =
-      isChunin && user.level >= minLevelForSkillPoints
-        ? Math.min(user.level - minLevelForSkillPoints + 1, 20)
+      isChunin && newLevel >= SKILL_POINT_MIN_LEVEL
+        ? Math.min(newLevel - SKILL_POINT_MIN_LEVEL + 1, MAX_SKILL_POINTS_FROM_LEVELING)
         : 0;
     // Only give skillpoints if they haven't received all their leveling skillpoints yet
-    const skillPointsGain = isChunin && expectedSkillPointsFromLeveling < 20 ? 1 : 0;
+    const skillPointsGain = isChunin && newLevel >= SKILL_POINT_MIN_LEVEL && newLevel <= SKILL_POINT_MAX_LEVEL && expectedSkillPointsFromLeveling <= MAX_SKILL_POINTS_FROM_LEVELING ? 1 : 0;
 
     const result = await ctx.drizzle
       .update(userData)

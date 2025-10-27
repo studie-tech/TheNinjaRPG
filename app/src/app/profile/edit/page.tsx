@@ -57,6 +57,7 @@ import { api } from "@/app/_trpc/client";
 import { useUserSearch } from "@/utils/search";
 import { showMutationToast } from "@/libs/toast";
 import Countdown from "@/layout/Countdown";
+import { secondsFromNow, DAY_S } from "@/utils/time";
 import { COST_CHANGE_USERNAME } from "@/drizzle/constants";
 import { COST_CUSTOM_TITLE } from "@/drizzle/constants";
 import { COST_RESET_STATS } from "@/drizzle/constants";
@@ -2051,9 +2052,9 @@ const ResetSkills: React.FC = () => {
 
   // Calculate when skill resets reset (monthly - 1st of next month)
   const now = new Date();
-  const skillResetResetTime = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0),
-  );
+  const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
+  const secondsUntilNextMonth = Math.floor((nextMonth.getTime() - now.getTime()) / 1000);
+  const skillResetResetTime = secondsFromNow(secondsUntilNextMonth);
 
   return (
     <div className="p-4 space-y-4">
