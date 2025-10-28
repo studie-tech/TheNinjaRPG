@@ -1,4 +1,4 @@
-ALTER TABLE `Item` ADD `crystalTargetTypes` varchar(191) DEFAULT ('') NOT NULL;
+ALTER TABLE `Item` ADD `crystalTargetTypes` enum('WEAPON','CONSUMABLE','ARMOR','ACCESSORY','MATERIAL','KEYSTONE','CRYSTAL','OTHER') DEFAULT NULL;
 
 -- Set skill points to the correct amount based on level (levels 21-40 give 1 skill point each)
 UPDATE `UserData` SET `skillPoints` = CASE 

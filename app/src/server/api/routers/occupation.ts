@@ -256,9 +256,8 @@ export const occupationRouter = createTRPCRouter({
       if (crystalItem.itemType !== "CRYSTAL") {
         return errorResponse("Selected item is not a crystal");
       }
-      if (crystalItem.crystalTargetTypes && crystalItem.crystalTargetTypes.trim() !== "") {
-        const allowedTypes = crystalItem.crystalTargetTypes.split(",").map((t) => t.trim());
-        if (!allowedTypes.includes(targetUserItem.item?.itemType || "")) {
+      if (crystalItem.crystalTargetTypes) {
+        if (crystalItem.crystalTargetTypes !== targetUserItem.item?.itemType) {
           return errorResponse(`This crystal can only be applied to ${crystalItem.crystalTargetTypes} items`);
         }
       }

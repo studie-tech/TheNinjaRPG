@@ -31,7 +31,7 @@ export const useItemEditForm = (
     ...data,
     effects: data.effects,
     expireFromStoreAt: expireFromStoreAt,
-    crystalTargetTypes: data.crystalTargetTypes || "",
+    crystalTargetTypes: data.crystalTargetTypes || undefined,
     craftingRequirements: data.craftingRequirements.map((req) => ({
       ids: [req.requirementItemId],
       number: req.quantity,
@@ -172,7 +172,7 @@ export const useItemEditForm = (
       id: "crystalTargetTypes",
       type: "str_array",
       values: ItemTypes,
-      label: "Crystal Target Types",
+      label: "Crystal Target Type",
     });
   }
 

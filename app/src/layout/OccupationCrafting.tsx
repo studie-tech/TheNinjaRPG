@@ -516,13 +516,12 @@ export default function OccupationCrafting() {
                               if (!crystal) return false;
                               
                               // If crystal has no target types specified, it can be used on any item
-                              if (!crystal.crystalTargetTypes || crystal.crystalTargetTypes.trim() === "") {
+                              if (!crystal.crystalTargetTypes) {
                                 return true;
                               }
                               
                               // Check if the target item type matches the crystal's allowed type
-                              const allowedTypes = crystal.crystalTargetTypes.split(",").map((t) => t.trim());
-                              return allowedTypes.includes(selectedImbuableItem.item?.itemType || "");
+                              return crystal.crystalTargetTypes === selectedImbuableItem.item?.itemType;
                             })
                             .map((userItem) => ({
                               id: userItem.id,

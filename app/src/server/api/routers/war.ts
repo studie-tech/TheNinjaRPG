@@ -290,26 +290,12 @@ export const warRouter = createTRPCRouter({
       }
       
       // Check if attacker village is already involved in any active war
-      if (
-        activeWars.find(
-          (w) =>
-            w.attackerVillageId === user?.village?.id ||
-            w.defenderVillageId === user?.village?.id ||
-            w.warAllies.some((ally) => ally.villageId === user?.village?.id)
-        )
-      ) {
+      if (isVillageInvolvedInAnyWar(activeWars, user?.village?.id)) {
         return errorResponse("Your village is already involved in an active war");
       }
       
       // Check if target village is already involved in any active war
-      if (
-        activeWars.find(
-          (w) =>
-            w.attackerVillageId === defenderVillageId ||
-            w.defenderVillageId === defenderVillageId ||
-            w.warAllies.some((ally) => ally.villageId === defenderVillageId)
-        )
-      ) {
+      if (isVillageInvolvedInAnyWar(activeWars, defenderVillageId)) {
         return errorResponse("Target village is already involved in an active war");
       }
 
@@ -498,26 +484,12 @@ export const warRouter = createTRPCRouter({
       }
       
       // Check if attacker village is already involved in any active war
-      if (
-        activeWars.find(
-          (w) =>
-            w.attackerVillageId === user?.village?.id ||
-            w.defenderVillageId === user?.village?.id ||
-            w.warAllies.some((ally) => ally.villageId === user?.village?.id)
-        )
-      ) {
+      if (isVillageInvolvedInAnyWar(activeWars, user?.village?.id)) {
         return errorResponse("Your village is already involved in an active war");
       }
       
       // Check if target village is already involved in any active war
-      if (
-        activeWars.find(
-          (w) =>
-            w.attackerVillageId === input.targetVillageId ||
-            w.defenderVillageId === input.targetVillageId ||
-            w.warAllies.some((ally) => ally.villageId === input.targetVillageId)
-        )
-      ) {
+      if (isVillageInvolvedInAnyWar(activeWars, input.targetVillageId)) {
         return errorResponse("Target village is already involved in an active war");
       }
 
