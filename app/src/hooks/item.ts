@@ -31,7 +31,7 @@ export const useItemEditForm = (
     ...data,
     effects: data.effects,
     expireFromStoreAt: expireFromStoreAt,
-    crystalTargetTypes: data.crystalTargetTypes || undefined,
+    crystalTargetTypes: data.crystalTargetTypes || null,
     craftingRequirements: data.craftingRequirements.map((req) => ({
       ids: [req.requirementItemId],
       number: req.quantity,
