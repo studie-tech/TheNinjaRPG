@@ -594,10 +594,10 @@ export const warRouter = createTRPCRouter({
       // Derived
       const targetVillage = villages.find((v) => v.id === input.targetVillageId);
       
-      // Check minimum member count for war participation (run after we know village IDs)
+      // Check minimum member count for war participation (after we know village IDs)
       const [userVillageMemberCount, targetVillageMemberCount] = await Promise.all([
-        getVillageMemberCount(ctx.drizzle, user!.villageId!),
-        getVillageMemberCount(ctx.drizzle, targetVillage!.id),
+        user?.villageId ? getVillageMemberCount(ctx.drizzle, user.villageId) : 0,
+        targetVillage ? getVillageMemberCount(ctx.drizzle, targetVillage.id) : 0,
       ]);
       // Guard
       if (!user?.village || !user?.villageId) {

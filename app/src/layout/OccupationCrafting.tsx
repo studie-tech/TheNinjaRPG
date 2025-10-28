@@ -521,7 +521,8 @@ export default function OccupationCrafting() {
                               }
                               
                               // Check if the target item type matches the crystal's allowed type
-                              return crystal.crystalTargetTypes === selectedImbuableItem.item?.itemType;
+                              const allowedTypes = crystal.crystalTargetTypes.split(",").map((t) => t.trim());
+                              return allowedTypes.includes(selectedImbuableItem.item?.itemType || "");
                             })
                             .map((userItem) => ({
                               id: userItem.id,

@@ -1,4 +1,8 @@
 ALTER TABLE `Item` ADD `crystalTargetTypes` varchar(191) DEFAULT ('') NOT NULL;
 
--- Set skill points to 20 for users above level 40 (they would have earned all leveling skill points)
-UPDATE `UserData` SET `skillPoints` = 20 WHERE `level` > 40;
+-- Set skill points to the correct amount based on level (levels 21-40 give 1 skill point each)
+UPDATE `UserData` SET `skillPoints` = CASE 
+  WHEN `level` >= 21 AND `level` <= 40 THEN `level` - 20
+  WHEN `level` > 40 THEN 20
+  ELSE `skillPoints`
+END;
