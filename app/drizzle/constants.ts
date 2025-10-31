@@ -1,8 +1,11 @@
 export const OCCUPATIONS = ["GATHERING", "HUNTER", "CRAFTING"] as const;
 export type OccupationType = (typeof OCCUPATIONS)[number];
 
-export const CURRENCY_TYPES = ["MONEY", "REPUTATION"] as const;
+export const CURRENCY_TYPES = ["MONEY", "REPUTATION", "SEICHI_SILVER"] as const;
 export type CurrencyType = (typeof CURRENCY_TYPES)[number];
+
+export const TRADEABLE_CURRENCY_TYPES = ["MONEY", "REPUTATION"] as const;
+export type TradeableCurrencyType = (typeof TRADEABLE_CURRENCY_TYPES)[number];
 
 // Occupation config
 export const OCCUPATION_CHANGE_COOLDOWN_DAYS = 3;

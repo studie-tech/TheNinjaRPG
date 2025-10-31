@@ -23,7 +23,7 @@ import { cn } from "src/libs/shadui";
 import { createAuctionListingSchema } from "@/validators/auction";
 import type { CreateAuctionListingSchema } from "@/validators/auction";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { AUCTION_LISTING_STATES, AUCTION_LISTING_TYPES } from "@/drizzle/constants";
+import { AUCTION_LISTING_STATES, AUCTION_LISTING_TYPES, TRADEABLE_CURRENCY_TYPES } from "@/drizzle/constants";
 import {
   Select,
   SelectContent,
@@ -548,7 +548,7 @@ export const NewAuctionListingDialog: React.FC = () => {
     defaultValues: {
       listingType: "AUCTION",
       durationHours: 24,
-      currencyType: "MONEY",
+      currencyType: TRADEABLE_CURRENCY_TYPES[0],
     },
   });
 
@@ -692,8 +692,11 @@ export const NewAuctionListingDialog: React.FC = () => {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="MONEY">Money (Ryo)</SelectItem>
-                      <SelectItem value="REPUTATION">Reputation Points</SelectItem>
+                      {TRADEABLE_CURRENCY_TYPES.map((currency) => (
+                        <SelectItem key={currency} value={currency}>
+                          {currency === "MONEY" ? "Money (Ryo)" : "Reputation Points"}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />

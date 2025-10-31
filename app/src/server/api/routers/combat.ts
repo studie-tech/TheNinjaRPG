@@ -64,7 +64,7 @@ import { fetchAiProfileById } from "@/routers/ai";
 import { getBattleGrid } from "@/libs/combat/util";
 import { BATTLE_ARENA_DAILY_LIMIT } from "@/drizzle/constants";
 import { REGEN_SECONDS } from "@/drizzle/constants";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { VILLAGE_SYNDICATE_ID, MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
 import { StatTypes, GeneralTypes } from "@/drizzle/constants";
 import { BattleTypes } from "@/drizzle/constants";
 import { PvpBattleTypes } from "@/drizzle/constants";
@@ -1021,64 +1021,33 @@ export const combatRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      let results;
-      
-      // For SPARRING and RANKED_SPARRING, only show spectatable battles
-      if (input.battleType === "SPARRING" || input.battleType === "RANKED_SPARRING") {
-        // Get spectatable spar requests with their battle IDs
-        const spectatableSpars = await ctx.drizzle
-          .select({
-            relatedId: userRequest.relatedId,
-          })
-          .from(userRequest)
-          .where(
-            and(
-              eq(userRequest.type, "SPAR"),
-              eq(userRequest.spectatable, true),
-              eq(userRequest.status, "ACCEPTED"),
-              isNotNull(userRequest.relatedId),
-              input.battleType === "RANKED_SPARRING" 
-                ? eq(userRequest.useRankedRules, true)
-                : eq(userRequest.useRankedRules, false),
-            ),
-          );
-
-        if (spectatableSpars.length === 0) {
-          results = { rows: [] };
-        } else {
-          // Get battles that match the spectatable spar battle IDs
-          const battleIds = spectatableSpars.map(spar => spar.relatedId).filter(Boolean);
-          results = await ctx.drizzle.execute(
-            sql`
-              SELECT 
-                id, battleType, createdAt, round, updatedAt,
-                JSON_EXTRACT(usersState, '$[*].userId') as userIds,
-                JSON_EXTRACT(usersState, '$[*].username') as usernames,
-                JSON_EXTRACT(usersState, '$[*].avatar') as avatars
-              FROM Battle
-              WHERE battleType = ${input.battleType}
-              AND id IN (${sql.join(battleIds.map(id => sql`${id}`), sql`, `)})
-              ORDER BY createdAt DESC
-              LIMIT ${input.limit} OFFSET ${input.offset}
-            `,
-          );
-        }
-      } else {
-        // For other battle types, use the original query
-        results = await ctx.drizzle.execute(
-          sql`
-            SELECT 
-              id, battleType, createdAt, round, updatedAt,
-              JSON_EXTRACT(usersState, '$[*].userId') as userIds,
-              JSON_EXTRACT(usersState, '$[*].username') as usernames,
-              JSON_EXTRACT(usersState, '$[*].avatar') as avatars
-            FROM Battle
-            WHERE battleType = ${input.battleType}
-            ORDER BY createdAt DESC
-            LIMIT ${input.limit} OFFSET ${input.offset}
-          `,
-        );
-      }
+      const results = await ctx.drizzle.execute(
+        sql`
+          SELECT 
+            Battle.id, Battle.battleType, Battle.createdAt, Battle.round, Battle.updatedAt,
+            JSON_EXTRACT(Battle.usersState, '$[*].userId') as userIds,
+            JSON_EXTRACT(Battle.usersState, '$[*].username') as usernames,
+            JSON_EXTRACT(Battle.usersState, '$[*].avatar') as avatars
+          FROM Battle
+          LEFT JOIN UserRequest ON Battle.id = UserRequest.relatedId
+            AND UserRequest.type = 'SPAR'
+            AND UserRequest.status = 'ACCEPTED'
+            AND UserRequest.relatedId IS NOT NULL
+          WHERE Battle.battleType = ${input.battleType}
+            AND (
+              Battle.battleType NOT IN ('SPARRING', 'RANKED_SPARRING')
+              OR (
+                UserRequest.spectatable = true
+                AND (
+                  (Battle.battleType = 'SPARRING' AND UserRequest.useRankedRules = false)
+                  OR (Battle.battleType = 'RANKED_SPARRING' AND UserRequest.useRankedRules = true)
+                )
+              )
+            )
+          ORDER BY Battle.createdAt DESC
+          LIMIT ${input.limit} OFFSET ${input.offset}
+        `,
+      );
 
       // Type the raw results from drizzle execute
       interface RawBattleRow {
@@ -1366,7 +1335,7 @@ export const initiateBattle = async (
   const sectorData = villages.find((v) => v.sector === sector);
   
   // Special check for Wake Island - always block if sector is 222
-  if (sector === 222 && battleType === "COMBAT") {
+  if (sector === MAP_WAKE_ISLAND_SECTOR && battleType === "COMBAT") {
     return { success: false, message: "Cannot attack players in Wake Island" };
   }
   
