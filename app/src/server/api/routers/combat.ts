@@ -820,6 +820,9 @@ export const combatRouter = createTRPCRouter({
         (e) => e.creatorId !== ctx.userId,
       );
 
+      // Preserve original initiative to avoid changing it when updating loadouts
+      const originalInitiative = user.initiative;
+
       // Process only the single user for
       const { userEffects, usersState } = await processUsersForBattle(ctx.drizzle, {
         users: [user],
@@ -832,6 +835,11 @@ export const combatRouter = createTRPCRouter({
         hide: false,
         isSummon: false,
       });
+
+      // Restore original initiative
+      if (usersState[0]) {
+        usersState[0].initiative = originalInitiative;
+      }
 
       // Merge the user's state with the other user's state
       userBattle.usersState = [...otherUserState, ...usersState];
@@ -2125,7 +2133,13 @@ export const processUsersForBattle = async (
       originalCooldown: number;
     })[] = [];
     user.items
-      .filter((ui) => ui.item && (!ui.item.preventBattleUsage || ui.dropChancePerc > 0))
+      .filter((ui) => {
+        if (!ui.item) return false;
+        // Always include ARMOR, ACCESSORY, and KEYSTONE items as they need to be processed for effects
+        if (["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON"].includes(ui.item.itemType)) return true;
+        // For other items, include if they don't prevent battle usage or are droppable
+        return !ui.item.preventBattleUsage || ui.dropChancePerc > 0;
+      })
       .forEach((ui) => {
         // Add any imbuement effects to the item effects
         const imbuementEffects = ui.imbuements
@@ -2171,8 +2185,12 @@ export const processUsersForBattle = async (
             }
           }
         }
-        // If droppable or action type, keep in battle row (only if user has required bloodline)
-        if (ui.dropChancePerc > 0 || !NonActionItemTypes.includes(itemType)) {
+        // If droppable, action type, or equipment type (ARMOR/ACCESSORY/KEYSTONE), keep in battle row (only if user has required bloodline)
+        if (
+          ui.dropChancePerc > 0 ||
+          !NonActionItemTypes.includes(itemType) ||
+          ["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON"].includes(itemType)
+        ) {
           // Check bloodline requirement for weapons and other action items
           if (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId) {
             ui.lastUsedRound = -ui.item.cooldown;
