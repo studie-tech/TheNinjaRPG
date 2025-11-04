@@ -2136,7 +2136,7 @@ export const processUsersForBattle = async (
       .filter((ui) => {
         if (!ui.item) return false;
         // Always include ARMOR, ACCESSORY, and KEYSTONE items as they need to be processed for effects
-        if (["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON"].includes(ui.item.itemType)) return true;
+        if (["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON", "CONSUMABLE"].includes(ui.item.itemType)) return true;
         // For other items, include if they don't prevent battle usage or are droppable
         return !ui.item.preventBattleUsage || ui.dropChancePerc > 0;
       })
@@ -2189,7 +2189,7 @@ export const processUsersForBattle = async (
         if (
           ui.dropChancePerc > 0 ||
           !NonActionItemTypes.includes(itemType) ||
-          ["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON"].includes(itemType)
+          ["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON", "CONSUMABLE"].includes(itemType)
         ) {
           // Check bloodline requirement for weapons and other action items
           if (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId) {
