@@ -2135,7 +2135,7 @@ export const processUsersForBattle = async (
     user.items
       .filter((ui) => {
         if (!ui.item) return false;
-        // Always include ARMOR, ACCESSORY, and KEYSTONE items as they need to be processed for effects
+        // Always include equipment (ARMOR, ACCESSORY, KEYSTONE) and consumables (WEAPON, CONSUMABLE) as they need to be processed for effects
         if (["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON", "CONSUMABLE"].includes(ui.item.itemType)) return true;
         // For other items, include if they don't prevent battle usage or are droppable
         return !ui.item.preventBattleUsage || ui.dropChancePerc > 0;
@@ -2185,7 +2185,7 @@ export const processUsersForBattle = async (
             }
           }
         }
-        // If droppable, action type, or equipment type (ARMOR/ACCESSORY/KEYSTONE), keep in battle row (only if user has required bloodline)
+        // If droppable, action type, or equipment/consumable type (ARMOR/ACCESSORY/KEYSTONE/WEAPON/CONSUMABLE), keep in battle row (only if user has required bloodline)
         if (
           ui.dropChancePerc > 0 ||
           !NonActionItemTypes.includes(itemType) ||
