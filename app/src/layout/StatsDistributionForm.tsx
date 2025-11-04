@@ -1,7 +1,7 @@
 "use client";
 
 import { capUserStats } from "@/libs/profile";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import {
   Form,
@@ -25,6 +25,9 @@ import SliderField from "@/layout/SliderField";
 import NavTabs from "@/layout/NavTabs";
 import ContentBox from "@/layout/ContentBox";
 import { noCase } from "change-case";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   IMG_TRAIN_NIN_OFF,
   IMG_TRAIN_GEN_OFF,
@@ -322,7 +325,25 @@ interface AdvancedDistributionProps {
 const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   const { forceUseAll, isRedistribution, userData, availableStats, onAccept } = props;
 
-  // State
+  // State - initialize from localStorage if available
+  const [useInputBoxes, setUseInputBoxes] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("statsDistributionUseInputBoxes");
+      return stored === "true";
+    }
+    return false;
+  });
+
+  // Persist toggle state to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "statsDistributionUseInputBoxes",
+        useInputBoxes.toString(),
+      );
+    }
+  }, [useInputBoxes]);
+
   if (userData) capUserStats(userData);
 
   // Stats Schema
@@ -375,6 +396,16 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   // Show component
   return (
     <Form {...form}>
+      <div className="flex items-center justify-end gap-2 mb-4">
+        <Label htmlFor="input-toggle" className="text-sm">
+          Use input boxes
+        </Label>
+        <Switch
+          id="input-toggle"
+          checked={useInputBoxes}
+          onCheckedChange={setUseInputBoxes}
+        />
+      </div>
       <form className="grid grid-cols-2 gap-2" onSubmit={onSubmit}>
         {statNames.map((stat, i) => {
           const maxValue = statSchema.shape[stat]._def.innerType._def.schema.maxValue;
@@ -393,22 +424,52 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                 key={i}
                 control={form.control}
                 name={stat}
-                render={({ fieldState }) => (
+                render={({ field, fieldState }) => (
                   <FormItem className="pt-1">
-                    <SliderField
-                      id={stat}
-                      label={capitalizeFirstLetter(noCase(stat))}
-                      default={defaultValues[stat] ?? 0}
-                      min={minValue}
-                      max={dynamicMax}
-                      step={0.01}
-                      watchedValue={currentValue}
-                      watchedTotal={availableStats}
-                      setValue={form.setValue}
-                      register={form.register}
-                      error={fieldState.error?.message}
-                      preventDebounce={true}
-                    />
+                    <FormLabel>
+                      {capitalizeFirstLetter(noCase(stat))}
+                      {currentValue
+                        ? ` - Selected: ${currentValue.toFixed(2)} / ${availableStats.toFixed(2)}`
+                        : ""}
+                    </FormLabel>
+                    {useInputBoxes ? (
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={minValue}
+                          max={dynamicMax}
+                          step={0.01}
+                          value={field.value ?? 0}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            const clampedValue = Math.max(
+                              minValue,
+                              Math.min(dynamicMax, value),
+                            );
+                            field.onChange(clampedValue);
+                          }}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          className="w-full"
+                        />
+                      </FormControl>
+                    ) : (
+                      <SliderField
+                        id={stat}
+                        label={capitalizeFirstLetter(noCase(stat))}
+                        default={defaultValues[stat] ?? 0}
+                        min={minValue}
+                        max={dynamicMax}
+                        step={0.01}
+                        watchedValue={currentValue}
+                        watchedTotal={availableStats}
+                        setValue={form.setValue}
+                        register={form.register}
+                        error={fieldState.error?.message}
+                        preventDebounce={true}
+                      />
+                    )}
+                    <FormMessage />
                   </FormItem>
                 )}
               />
