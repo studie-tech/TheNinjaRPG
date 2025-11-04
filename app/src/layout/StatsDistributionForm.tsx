@@ -327,20 +327,24 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
 
   // State - initialize from localStorage if available
   const [useInputBoxes, setUseInputBoxes] = useState(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("statsDistributionUseInputBoxes");
-      return stored === "true";
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("statsDistributionUseInputBoxes") === "true";
+    } catch {
+      return false;
     }
-    return false;
   });
 
   // Persist toggle state to localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window === "undefined") return;
+    try {
       localStorage.setItem(
         "statsDistributionUseInputBoxes",
         useInputBoxes.toString(),
       );
+    } catch {
+      // ignore storage failures
     }
   }, [useInputBoxes]);
 
@@ -426,12 +430,14 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                 name={stat}
                 render={({ field, fieldState }) => (
                   <FormItem className="pt-1">
-                    <FormLabel>
-                      {capitalizeFirstLetter(noCase(stat))}
-                      {currentValue
-                        ? ` - Selected: ${currentValue.toFixed(2)} / ${availableStats.toFixed(2)}`
-                        : ""}
-                    </FormLabel>
+                    {useInputBoxes && (
+                      <FormLabel>
+                        {capitalizeFirstLetter(noCase(stat))}
+                        {currentValue
+                          ? ` - Selected: ${currentValue.toFixed(2)} / ${availableStats.toFixed(2)}`
+                          : ""}
+                      </FormLabel>
+                    )}
                     {useInputBoxes ? (
                       <FormControl>
                         <Input
