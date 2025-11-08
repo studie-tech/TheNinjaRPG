@@ -2136,6 +2136,13 @@
       "when": 1762529038399,
       "tag": "0304_wonderful_black_queen",
       "breakpoints": false
+    },
+    {
+      "idx": 305,
+      "version": "5",
+      "when": 1762607281040,
+      "tag": "0305_omniscient_tomas",
+      "breakpoints": false
     }
   ]
 }

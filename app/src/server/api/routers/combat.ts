@@ -43,7 +43,14 @@ import {
 } from "@/libs/combat/database";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import { userData, questHistory, quest, gameSetting, jutsu, userRequest } from "@/drizzle/schema";
+import {
+  userData,
+  questHistory,
+  quest,
+  gameSetting,
+  jutsu,
+  userRequest,
+} from "@/drizzle/schema";
 import { battle, battleAction, battleHistory, war, item } from "@/drizzle/schema";
 import { villageAlliance, village, tournamentMatch, bounty } from "@/drizzle/schema";
 import { backgroundSchema, sector } from "@/drizzle/schema";
@@ -171,7 +178,7 @@ export const combatRouter = createTRPCRouter({
           if (battleOver || progressRound || changedActor) {
             if (!hadActivity && actId && activeUser) {
               const { newBattle, actionEffects } = applyEffects(userBattle, actId);
-              
+
               // Remove expired ground effects after applyEffects has processed them
               // This ensures summon despawning logic runs before effects are removed
               newBattle.groundEffects = newBattle.groundEffects.filter((e) => {
@@ -184,7 +191,7 @@ export const combatRouter = createTRPCRouter({
                 }
                 return true; // Keep active effects
               });
-              
+
               await Promise.all([
                 updateBattle(
                   ctx.drizzle,
@@ -1035,14 +1042,8 @@ export const combatRouter = createTRPCRouter({
             AND UserRequest.relatedId IS NOT NULL
           WHERE Battle.battleType = ${input.battleType}
             AND (
-              Battle.battleType NOT IN ('SPARRING', 'RANKED_SPARRING')
-              OR (
-                UserRequest.spectatable = true
-                AND (
-                  (Battle.battleType = 'SPARRING' AND UserRequest.useRankedRules = false)
-                  OR (Battle.battleType = 'RANKED_SPARRING' AND UserRequest.useRankedRules = true)
-                )
-              )
+              Battle.battleType NOT IN ('SPARRING', 'RANKED_SPARRING') OR 
+              UserRequest.spectatable = true
             )
           ORDER BY Battle.createdAt DESC
           LIMIT ${input.limit} OFFSET ${input.offset}
@@ -1333,27 +1334,34 @@ export const initiateBattle = async (
 
   // Check if the villageData is in a pvp enabled zone
   const sectorData = villages.find((v) => v.sector === sector);
-  
+
   // Special check for Wake Island - always block if sector is 222
   if (sector === MAP_WAKE_ISLAND_SECTOR && battleType === "COMBAT") {
     return { success: false, message: "Cannot attack players in Wake Island" };
   }
-  
+
   if (sectorData?.pvpDisabled && battleType === "COMBAT") {
     // Check if any non-protected users are trying to attack protected village members
     const protectedVillageId = sectorData.id;
-    const attackers = users.filter(u => userIds.includes(u.userId) && !u.isAi);
-    const defenders = users.filter(u => targetIds.includes(u.userId) && !u.isAi);
-    
+    const attackers = users.filter((u) => userIds.includes(u.userId) && !u.isAi);
+    const defenders = users.filter((u) => targetIds.includes(u.userId) && !u.isAi);
+
     // Check if any defender is from the protected village
-    const hasProtectedDefender = defenders.some(user => user.villageId === protectedVillageId);
-    
+    const hasProtectedDefender = defenders.some(
+      (user) => user.villageId === protectedVillageId,
+    );
+
     // Check if any attacker is NOT from the protected village
-    const hasNonProtectedAttacker = attackers.some(user => user.villageId !== protectedVillageId);
-    
+    const hasNonProtectedAttacker = attackers.some(
+      (user) => user.villageId !== protectedVillageId,
+    );
+
     // Block if non-protected users are trying to attack protected village members
     if (hasProtectedDefender && hasNonProtectedAttacker) {
-      return { success: false, message: "Cannot attack members of this protected village" };
+      return {
+        success: false,
+        message: "Cannot attack members of this protected village",
+      };
     }
   }
 
@@ -1409,29 +1417,30 @@ export const initiateBattle = async (
     // Level restrictions - prevent attacking users more than 15 levels under or above
     if (battleType === "COMBAT" && userIds.includes(user.userId)) {
       const attackerLevel = calcLevel(user.experience);
-      
+
       // Check for non-compliant targets without creating copies
-      const nonCompliantTarget = users.find(u => 
-        targetIds.includes(u.userId) && 
-        !u.isAi && 
-        (Math.abs(attackerLevel - calcLevel(u.experience)) > 15)
+      const nonCompliantTarget = users.find(
+        (u) =>
+          targetIds.includes(u.userId) &&
+          !u.isAi &&
+          Math.abs(attackerLevel - calcLevel(u.experience)) > 15,
       );
-      
+
       if (nonCompliantTarget) {
         const targetLevel = calcLevel(nonCompliantTarget.experience);
         const levelDifference = attackerLevel - targetLevel;
-        
+
         if (levelDifference > 15) {
-          return { 
-            success: false, 
-            message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels below you (${levelDifference} level difference)` 
+          return {
+            success: false,
+            message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels below you (${levelDifference} level difference)`,
           };
         }
-        
+
         if (levelDifference < -15) {
-          return { 
-            success: false, 
-            message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)` 
+          return {
+            success: false,
+            message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)`,
           };
         }
       }
@@ -2155,7 +2164,12 @@ export const processUsersForBattle = async (
       .filter((ui) => {
         if (!ui.item) return false;
         // Always include equipment (ARMOR, ACCESSORY, KEYSTONE) and consumables (WEAPON, CONSUMABLE) as they need to be processed for effects
-        if (["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON", "CONSUMABLE"].includes(ui.item.itemType)) return true;
+        if (
+          ["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON", "CONSUMABLE"].includes(
+            ui.item.itemType,
+          )
+        )
+          return true;
         // For other items, include if they don't prevent battle usage or are droppable
         return !ui.item.preventBattleUsage || ui.dropChancePerc > 0;
       })

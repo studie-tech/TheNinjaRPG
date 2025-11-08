@@ -46,14 +46,15 @@ import { fetchActiveWars } from "@/routers/war";
 
 const pusher = getServerPusher();
 
-
-
 export const kageRouter = createTRPCRouter({
   /**
    * Get the daily locked time for the current user
    */
   getDailyLockedTime: protectedProcedure.query(async ({ ctx }) => {
-    const dailyLockedTimeSeconds = await calculateDailyLockedTime(ctx.drizzle, ctx.userId);
+    const dailyLockedTimeSeconds = await calculateDailyLockedTime(
+      ctx.drizzle,
+      ctx.userId,
+    );
     return { dailyLockedTimeSeconds };
   }),
 
@@ -217,10 +218,12 @@ export const kageRouter = createTRPCRouter({
         ctx.drizzle
           .update(userData)
           .set({ status: "AWAKE" })
-          .where(and(
-            eq(userData.userId, challenge.senderId),
-            eq(userData.status, "KAGE_QUEUED")
-          )),
+          .where(
+            and(
+              eq(userData.userId, challenge.senderId),
+              eq(userData.status, "KAGE_QUEUED"),
+            ),
+          ),
         updateRequestState(ctx.drizzle, input.id, "REJECTED", "KAGE"),
       ]);
       return { success: true, message: "Challenge rejected" };
@@ -261,10 +264,12 @@ export const kageRouter = createTRPCRouter({
           ctx.drizzle
             .update(userData)
             .set({ status: "AWAKE" })
-            .where(and(
-              eq(userData.userId, challenge.senderId),
-              eq(userData.status, "KAGE_QUEUED")
-            )),
+            .where(
+              and(
+                eq(userData.userId, challenge.senderId),
+                eq(userData.status, "KAGE_QUEUED"),
+              ),
+            ),
           pusher.trigger(challenge.senderId, "event", {
             type: "userMessage",
             message:
@@ -282,10 +287,9 @@ export const kageRouter = createTRPCRouter({
           ctx.drizzle
             .update(userData)
             .set({ status: "AWAKE" })
-            .where(and(
-              eq(userData.userId, ctx.userId),
-              eq(userData.status, "KAGE_QUEUED")
-            )),
+            .where(
+              and(eq(userData.userId, ctx.userId), eq(userData.status, "KAGE_QUEUED")),
+            ),
         ]);
         return { success: true, message: "Challenge cancelled" };
       }
@@ -379,54 +383,63 @@ export const kageRouter = createTRPCRouter({
     }),
   takeKage: protectedProcedure
     .output(baseServerResponse)
-    .input(z.object({ reason: z.string().min(10, "Reason must be at least 10 characters").transform((val) => val.trim()) }))
-    .mutation(async ({ ctx, input }) => {
-    // Fetch
-    const { user } = await fetchUpdatedUser({
-      client: ctx.drizzle,
-      userId: ctx.userId,
-    });
-    
-    // Guards
-    if (!user) return errorResponse("User not found");
-    
-    // Fetch village data for logging
-    const villageData = user.villageId ? await fetchVillage(ctx.drizzle, user.villageId) : null;
-    if (user.anbuId) return errorResponse("Cannot be kage while in ANBU");
-    if (user.village?.type !== "VILLAGE") return errorResponse("Only for villages");
-    if (!canTakeKage(user.role)) return errorResponse("Not staff");
-    // Update
-    const [result] = await Promise.all([
-      ctx.drizzle
-        .update(village)
-        .set({ kageId: user.userId, leaderUpdatedAt: new Date() })
-        .where(eq(village.id, user.villageId ?? "")),
-      ctx.drizzle
-        .update(userData)
-        .set({ villagePrestige: KAGE_PRESTIGE_REQUIREMENT })
-        .where(eq(userData.userId, user?.village?.kageId ?? "")),
-      ctx.drizzle
-        .update(userData)
-        .set({
-          rank: sql`CASE WHEN ${userData.rank} = 'ELDER' THEN 'JONIN' ELSE ${userData.rank} END`,
-          villagePrestige:
-            user.villagePrestige > KAGE_DEFAULT_PRESTIGE
-              ? user.villagePrestige
-              : KAGE_DEFAULT_PRESTIGE,
-        })
-        .where(eq(userData.userId, user.userId)),
-      ctx.drizzle.insert(actionLog).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        tableName: "user",
-        relatedId: user.userId,
-        relatedMsg: `Staff took kage position in ${villageData?.name || 'Unknown Village'}`,
-        changes: [`Previous KageId: ${user?.village?.kageId}`, `Reason: ${input.reason}`],
+    .input(
+      z.object({
+        reason: z
+          .string()
+          .min(10, "Reason must be at least 10 characters")
+          .transform((val) => val.trim()),
       }),
-    ]);
-    if (result.rowsAffected === 0) return errorResponse("No village found");
-    return { success: true, message: "You have taken the kage position" };
-  }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Fetch
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+
+      // Fetch village data for logging
+      if (user.anbuId) return errorResponse("Cannot be kage while in ANBU");
+      if (user.village?.type !== "VILLAGE") return errorResponse("Only for villages");
+      if (!canTakeKage(user.role)) return errorResponse("Not staff");
+      // Update
+      const [result] = await Promise.all([
+        ctx.drizzle
+          .update(village)
+          .set({ kageId: user.userId, leaderUpdatedAt: new Date() })
+          .where(eq(village.id, user.villageId ?? "")),
+        ctx.drizzle
+          .update(userData)
+          .set({ villagePrestige: KAGE_PRESTIGE_REQUIREMENT })
+          .where(eq(userData.userId, user?.village?.kageId ?? "")),
+        ctx.drizzle
+          .update(userData)
+          .set({
+            rank: sql`CASE WHEN ${userData.rank} = 'ELDER' THEN 'JONIN' ELSE ${userData.rank} END`,
+            villagePrestige:
+              user.villagePrestige > KAGE_DEFAULT_PRESTIGE
+                ? user.villagePrestige
+                : KAGE_DEFAULT_PRESTIGE,
+          })
+          .where(eq(userData.userId, user.userId)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "user",
+          relatedId: user.userId,
+          relatedMsg: `Staff took kage position in ${user?.village?.name || "Unknown Village"}`,
+          changes: [
+            `Previous KageId: ${user?.village?.kageId}`,
+            `Reason: ${input.reason}`,
+          ],
+        }),
+      ]);
+      if (result.rowsAffected === 0) return errorResponse("No village found");
+      return { success: true, message: "You have taken the kage position" };
+    }),
   upsertNotice: protectedProcedure
     .input(z.object({ content: z.string() }))
     .output(baseServerResponse)
@@ -493,7 +506,9 @@ export const kageRouter = createTRPCRouter({
         return errorResponse(`Already have ${KAGE_MAX_ELDERS} elders`);
       }
       if (secondsFromDate(lockout, village.leaderUpdatedAt) > new Date()) {
-        return errorResponse(`Must have been kage for ${Math.floor(lockout / (24 * 60 * 60))} days`);
+        return errorResponse(
+          `Must have been kage for ${Math.floor(lockout / (24 * 60 * 60))} days`,
+        );
       }
       if (prospect.rank !== "ELDER" && !canBeElder(prospect)) {
         return errorResponse("Must be in village for 100 days to be elder");
@@ -583,23 +598,26 @@ export const kageRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch all data in parallel
-      const [user, requests, userVillage, lastToggle, dailyLockedTimeSeconds] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchRequests(ctx.drizzle, ["KAGE"], KAGE_REQUESTS_SHOW_SECONDS, ctx.userId),
-        fetchVillage(ctx.drizzle, input.villageId),
-        ctx.drizzle
-          .select({
-            createdAt: actionLog.createdAt,
-          })
-          .from(actionLog)
-          .where(and(
-            eq(actionLog.userId, ctx.userId),
-            eq(actionLog.tableName, "kageChallengeToggle")
-          ))
-          .orderBy(desc(actionLog.createdAt))
-          .limit(1),
-        calculateDailyLockedTime(ctx.drizzle, ctx.userId),
-      ]);
+      const [user, requests, userVillage, lastToggle, dailyLockedTimeSeconds] =
+        await Promise.all([
+          fetchUser(ctx.drizzle, ctx.userId),
+          fetchRequests(ctx.drizzle, ["KAGE"], KAGE_REQUESTS_SHOW_SECONDS, ctx.userId),
+          fetchVillage(ctx.drizzle, input.villageId),
+          ctx.drizzle
+            .select({
+              createdAt: actionLog.createdAt,
+            })
+            .from(actionLog)
+            .where(
+              and(
+                eq(actionLog.userId, ctx.userId),
+                eq(actionLog.tableName, "kageChallengeToggle"),
+              ),
+            )
+            .orderBy(desc(actionLog.createdAt))
+            .limit(1),
+          calculateDailyLockedTime(ctx.drizzle, ctx.userId),
+        ]);
 
       // Derived
       const pendingRequests = requests?.filter((r) => r.status === "PENDING");
@@ -631,7 +649,7 @@ export const kageRouter = createTRPCRouter({
         const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
         if (dailyLockedTimeSeconds >= maxDailySeconds) {
           return errorResponse(
-            `Daily challenge lock limit of ${KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS} hours has been reached. Challenges will be automatically unlocked at the start of the next day.`
+            `Daily challenge lock limit of ${KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS} hours has been reached. Challenges will be automatically unlocked at the start of the next day.`,
           );
         }
       }
@@ -649,7 +667,9 @@ export const kageRouter = createTRPCRouter({
           id: nanoid(),
           userId: ctx.userId,
           tableName: "kageChallengeToggle",
-          changes: [`Challenges ${!userVillage.openForChallenges ? "opened" : "closed"}`],
+          changes: [
+            `Challenges ${!userVillage.openForChallenges ? "opened" : "closed"}`,
+          ],
           relatedId: input.villageId,
           relatedMsg: `Toggle: ${userVillage.openForChallenges ? "CLOSE" : "OPEN"}`,
         }),

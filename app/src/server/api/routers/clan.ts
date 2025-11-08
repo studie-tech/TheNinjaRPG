@@ -701,7 +701,9 @@ export const clanRouter = createTRPCRouter({
               `Maximum ${ASSASSIN_MAX_PER_FACTION} assassins allowed`,
             );
           }
-          const slotKey = CLAN_ASSASSIN_SLOTS.find((k) => fetchedClan[k] === null || fetchedClan[k] === undefined);
+          const slotKey = CLAN_ASSASSIN_SLOTS.find(
+            (k) => fetchedClan[k] === null || fetchedClan[k] === undefined,
+          );
           if (!slotKey) {
             return errorResponse(`No more assassin slots available in ${groupLabel}`);
           }
@@ -1362,17 +1364,18 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
       ]);
-      
+
       // Derived
       const isLeader = user.userId === fetchedClan?.leaderId;
       const canEdit = canEditClans(user.role);
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
-      
+
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (!user) return errorResponse("User not found");
-      if (!isLeader && !canEdit) return errorResponse("Only leader or staff can clear leadership");
-      if (fetchedClan.villageId !== user.villageId)
+      if (!isLeader && !canEdit)
+        return errorResponse("Only leader or staff can clear leadership");
+      if (fetchedClan.villageId !== user.villageId && isLeader)
         return errorResponse(user.isOutlaw ? "!= syndicate" : "!= village");
 
       // Mutate - Clear all co-leader and assassin slots
