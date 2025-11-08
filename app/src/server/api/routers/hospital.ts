@@ -176,7 +176,8 @@ export const hospitalRouter = createTRPCRouter({
                 ? { curStamina: sql`LEAST(${t.curStamina + toHeal}, ${t.maxStamina})` }
                 : {}),
               regenAt: new Date(),
-              status: "AWAKE",
+              // Don't change status - users must check out manually at the hospital
+              // unless they pay to be healed at the hospital while hospitalized
             })
             .where(eq(userData.userId, t.userId)),
           shareExp > 0

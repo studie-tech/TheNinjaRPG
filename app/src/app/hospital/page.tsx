@@ -57,6 +57,8 @@ export default function Hospital() {
   const healCost = userData && calcHealCost(userData);
   const canAfford = userData && healCost && userData.money >= healCost;
   const canHealOthers = hasRequiredRank(userData?.rank, MEDNIN_MIN_RANK);
+  // If user is fully healed, allow immediate checkout
+  const isFullyHealed = userData && userData.curHealth >= userData.maxHealth;
 
   // Heal finish time
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -90,22 +92,32 @@ export default function Hospital() {
       />
       {!isPending && isHospitalized && userData && healFinishAt && (
         <div className="p-3">
-          <p>You are hospitalized, either wait or pay to expedite treatment.</p>
+          <p>
+            {isFullyHealed
+              ? "You are fully healed. You can check out now."
+              : "You are hospitalized, either wait or pay to expedite treatment."}
+          </p>
           <div className="grid grid-cols-2 py-3 gap-2" id="tutorial-hospital-buttons">
             <Button
               id="check"
               className="w-full"
-              disabled={healFinishAt && healFinishAt > new Date()}
+              disabled={!isFullyHealed && healFinishAt && healFinishAt > new Date()}
               onClick={() => heal({ villageId: userData.villageId })}
             >
               <Clock className="mr-2 h-6 w-6" />
-              <div>Wait ({<Countdown targetDate={healFinishAt} />})</div>
+              <div>
+                {isFullyHealed ? (
+                  "Check Out"
+                ) : (
+                  <>Wait ({<Countdown targetDate={healFinishAt} />})</>
+                )}
+              </div>
             </Button>
             <Button
               id="check"
               className="w-full"
               color={canAfford ? "default" : "red"}
-              disabled={healFinishAt && healFinishAt <= new Date()}
+              disabled={isFullyHealed || (healFinishAt && healFinishAt <= new Date())}
               onClick={() => heal({ villageId: userData.villageId })}
             >
               {canAfford ? (
