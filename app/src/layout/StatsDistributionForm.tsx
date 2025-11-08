@@ -14,6 +14,7 @@ import {
 import Confirm2 from "@/layout/Confirm2";
 import { Button } from "@/components/ui/button";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { useForm, useWatch } from "react-hook-form";
 import { showMutationToast } from "@/libs/toast";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -325,28 +326,11 @@ interface AdvancedDistributionProps {
 const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   const { forceUseAll, isRedistribution, userData, availableStats, onAccept } = props;
 
-  // State - initialize from localStorage if available
-  const [useInputBoxes, setUseInputBoxes] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return localStorage.getItem("statsDistributionUseInputBoxes") === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  // Persist toggle state to localStorage
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem(
-        "statsDistributionUseInputBoxes",
-        useInputBoxes.toString(),
-      );
-    } catch {
-      // ignore storage failures
-    }
-  }, [useInputBoxes]);
+  // State - synchronize with localStorage using useLocalStorage hook
+  const [useInputBoxes, setUseInputBoxes] = useLocalStorage<boolean>(
+    "statsDistributionUseInputBoxes",
+    false,
+  );
 
   if (userData) capUserStats(userData);
 
