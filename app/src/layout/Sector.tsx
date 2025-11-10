@@ -19,12 +19,13 @@ import { Vector2, OrthographicCamera, Group } from "three";
 import { api } from "@/app/_trpc/client";
 import { useRouter } from "next/navigation";
 import { PathCalculator, findHex } from "@/libs/hexgrid";
-import { OrbitControls } from "@/libs/threejs/OrbitControls";
+// TODO: Remove legacy Three.js imports - replaced by R3F
+// import { OrbitControls } from "@/libs/threejs/OrbitControls";
 import { getBackgroundColor } from "@/libs/travel/biome";
-import { cleanUp, setupScene, setRaycasterFromMouse } from "@/libs/travel/util";
-import { drawSector, drawVillage, drawUsers, drawQuest } from "@/libs/travel/sector";
-import { intersectUsers } from "@/libs/travel/sector";
-import { intersectTiles } from "@/libs/travel/sector";
+// import { cleanUp, setupScene, setRaycasterFromMouse } from "@/libs/travel/util";
+// import { drawSector, drawVillage, drawUsers, drawQuest } from "@/libs/travel/sector";
+// import { intersectUsers } from "@/libs/travel/sector";
+// import { intersectTiles } from "@/libs/travel/sector";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { showMutationToast } from "@/libs/toast";
 import { isLocationObjective } from "@/libs/quest";

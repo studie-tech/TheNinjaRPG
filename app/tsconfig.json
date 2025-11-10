@@ -44,6 +44,7 @@
       "@/data/*": ["src/data/*"],
       "@/routers/*": ["src/server/api/routers/*"],
       "@/components/*": ["src/components/*"],
+      "@/components-r3f/*": ["src/components-r3f/*"],
       "@/contentbox/*": ["src/components/contentboxes/*"],
       "@/public/*": ["public/*"]
     }

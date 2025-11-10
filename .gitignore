@@ -5,6 +5,7 @@ scripts/clerk_migration.ipynb
 scripts/discord_analysis.ipynb
 scripts/user_segmentation.ipynb
 scripts/clips/*
+scripts/music/*
 scripts/theninja_rpg_trailer*
 *.pem
 assets/pwa/*

@@ -1,21 +1,11 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Vector2, OrthographicCamera, Group, Clock } from "three";
 import Countdown from "./Countdown";
-import WebGlError from "@/layout/WebGLError";
 import { Button } from "@/components/ui/button";
 import { HelpCircle } from "lucide-react";
-import { drawCombatBackground, drawCombatEffects } from "@/libs/combat/drawing";
-import { OrbitControls } from "@/libs/threejs/OrbitControls";
 import { COMBAT_SECONDS, COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
-import { SpriteMixer } from "@/libs/threejs/SpriteMixer";
-import { cleanUp, setupScene, setRaycasterFromMouse } from "@/libs/travel/util";
-import { highlightTiles } from "@/libs/combat/drawing";
-import { highlightTooltips, highlightTileTooltips } from "@/libs/combat/drawing";
-import { highlightUsers } from "@/libs/combat/drawing";
 import { calcActiveUser, availableUserActions } from "@/libs/combat/actions";
-import { drawCombatUsers } from "@/libs/combat/drawing";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { secondsFromNow } from "@/utils/time";
@@ -27,7 +17,6 @@ import { PvpBattleTypes } from "@/drizzle/constants";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import { IMG_INITIATIVE_D20 } from "@/drizzle/constants";
-import type { Grid } from "honeycomb-grid";
 import type { ReturnedBattle, StatSchemaType } from "@/libs/combat/types";
 import type { CombatAction } from "@/libs/combat/types";
 import type { BattleState } from "@/libs/combat/types";
@@ -38,6 +27,9 @@ import { useTutorialStep } from "@/hooks/tutorial";
 import { LogbookEntry } from "@/layout/Logbook";
 import { preloadTextures } from "@/libs/threejs/util";
 import { preloadAudioBuffers } from "@/utils/audio";
+
+// Import R3F Combat Scene
+import { CombatScene } from "@/components-r3f/scenes/CombatScene";
 
 interface CombatProps {
   action?: CombatAction | undefined;
@@ -59,21 +51,13 @@ const Combat: React.FC<CombatProps> = (props) => {
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
 
   // References which shouldn't update
-  const [webglError, setWebglError] = useState<boolean>(false);
   const [hasFocus, setHasFocus] = useState<boolean>(true);
   const lastActions = useRef<Date[]>([]);
   const battle = useRef<ReturnedBattle | null | undefined>(battleState.battle);
   const action = useRef<CombatAction | undefined>(props.action);
   const userId = useRef<string>(props.userId);
-  const mountRef = useRef<HTMLDivElement | null>(null);
-  const grid = useRef<Grid<TerrainHex> | null>(null);
-  const mouse = new Vector2();
-  const mouseScreen = useRef({ x: 0, y: 0 });
   const battleId = battle.current?.id;
   const battleType = battle.current?.battleType;
-
-  // Reference to group holding tile names for toggling visibility
-  const groupNamesRef = useRef<Group | null>(null);
 
   // Tutorial step
   const { currentStep, handleNextStepAsync } = useTutorialStep();
@@ -338,24 +322,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update mouse position on mouse move
-  const onDocumentMouseMove = (event: MouseEvent) => {
-    if (mountRef.current) {
-      const bounding_box = mountRef.current.getBoundingClientRect();
-      mouse.x = (event.offsetX / bounding_box.width) * 2 - 1;
-      mouse.y = -((event.offsetY / bounding_box.height) * 2 - 1);
-      // Also track screen coordinates for tooltips
-      mouseScreen.current.x = event.clientX;
-      mouseScreen.current.y = event.clientY;
-    }
-  };
-  const onDocumentMouseLeave = () => {
-    if (mountRef.current) {
-      mouse.x = 9999999;
-      mouse.y = 9999999;
-    }
-  };
-
   // If user has no actions left / round is over, propagate battle & potentially - perform AI actions
   useEffect(() => {
     const interval = setInterval(() => {
@@ -437,251 +403,26 @@ const Combat: React.FC<CombatProps> = (props) => {
     }
   }, [battle, timeDiff, isInLobby]);
 
-  useEffect(() => {
-    // Reference to the mount
-    const sceneRef = mountRef.current;
-
-    if (sceneRef && battle.current && gameAssets !== undefined) {
-      // Used for map size calculations
-      const backgroundLengthToWidth = 576 / 1024;
-
-      // Map size
-      const WIDTH = sceneRef.getBoundingClientRect().width;
-      const HEIGHT = WIDTH * backgroundLengthToWidth;
-
-      // Listeners
-      sceneRef.addEventListener("mousemove", onDocumentMouseMove, false);
-      sceneRef.addEventListener("mouseleave", onDocumentMouseLeave, false);
-
-      // Setup scene, renderer and raycaster
-      const { scene, renderer, raycaster, handleResize } = setupScene({
-        mountRef: mountRef,
-        width: WIDTH,
-        height: HEIGHT,
-        sortObjects: false,
-        color: 0x000000,
-        colorAlpha: 1,
-        width2height: backgroundLengthToWidth,
-      });
-
-      // If no renderer, then we have an error with the browser, let the user know
-      if (!renderer) {
-        setWebglError(true);
-        return;
+  // Handle tile click in R3F mode
+  const handleTileClick = (hex: TerrainHex) => {
+    if (action.current && battle.current && !isPending) {
+      document.body.style.cursor = "wait";
+      if (canPerformAction()) {
+        performAction({
+          battleId: battle.current.id,
+          userId: userId.current,
+          actionId: action.current.id,
+          longitude: hex.col,
+          latitude: hex.row,
+          version: battle.current.version,
+        });
       }
-
-      // Create scene
-      sceneRef.appendChild(renderer.domElement);
-
-      // Setup camara
-      const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
-      camera.zoom = 1.5;
-      camera.updateProjectionMatrix();
-
-      // Draw the background
-      const { group_tiles, group_edges, group_names, honeycombGrid } =
-        drawCombatBackground(WIDTH, HEIGHT, scene, battle.current.background);
-      grid.current = honeycombGrid;
-
-      // Set initial visibility based on prop and store reference
-      group_names.visible = showGridNumbers;
-      groupNamesRef.current = group_names;
-
-      // Intersections & highlights from interactions
-      let highlights = new Set<string>();
-      let tooltips = new Set<string>();
-      let userHighlights = new Set<string>();
-      let tileTooltips = new Set<string>();
-      // let currentTooltips = new Set<string>();
-
-      // js groups for organization
-      const group_users = new Group();
-      const group_ground = new Group();
-      const group_effects = new Group();
-
-      // Enable controls
-      const controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableRotate = false;
-      controls.zoomSpeed = 0.3;
-      controls.minZoom = 1;
-      controls.maxZoom = 3;
-
-      // Add the group to the scene
-      scene.add(group_tiles);
-      scene.add(group_edges);
-      scene.add(group_names);
-      scene.add(group_ground);
-      scene.add(group_users);
-      scene.add(group_effects);
-
-      // Capture clicks to update move direction
-      const onClick = (e: MouseEvent) => {
-        setRaycasterFromMouse(raycaster, sceneRef, e, camera);
-        const intersects = raycaster.intersectObjects(scene.children);
-        intersects
-          .filter((i) => i.object.visible)
-          .every((i) => {
-            if (
-              i.object.userData.type === "tile" &&
-              document.body.style.cursor !== "wait"
-            ) {
-              if (
-                i.object.userData.canClick === true &&
-                action.current &&
-                battle.current
-              ) {
-                const target = i.object.userData.tile as TerrainHex;
-                document.body.style.cursor = "wait";
-                if (canPerformAction()) {
-                  performAction({
-                    battleId: battle.current.id,
-                    userId: userId.current,
-                    actionId: action.current.id,
-                    longitude: target.col,
-                    latitude: target.row,
-                    version: battle.current.version,
-                  });
-                }
-                return false;
-              }
-            }
-            return true;
-          });
-      };
-      renderer.domElement.addEventListener("click", onClick, true);
-
-      // Sprite mixer for sprite animations
-      const spriteMixer = new SpriteMixer();
-
-      // Callback on sprite animations
-      // spriteMixer.addEventListener("finished", function (event) {});
-
-      // Get SFX volume from localStorage
-      const sfxVolume =
-        typeof window !== "undefined"
-          ? (() => {
-              const saved = localStorage.getItem("sfxVolume");
-              return saved !== null ? (JSON.parse(saved) as number) : 0.8;
-            })()
-          : 0.8;
-
-      // Render the image
-      let animationId = 0;
-      const clock = new Clock();
-      clock.start();
-      function render() {
-        // Use clock for animating sprites
-        spriteMixer.update(clock.getDelta());
-
-        // Use raycaster to detect mouse intersections
-        raycaster.setFromCamera(mouse, camera);
-
-        // Assume we have battle and a grid
-        if (userData && battle.current && grid.current) {
-          // Get the selected user
-          const user = battle.current.usersState.find(
-            (u) => u.userId === userId.current,
-          );
-
-          // Draw all users on the map + indicators for positions with multiple users
-          drawCombatUsers({
-            group_users: group_users,
-            users: battle.current.usersState,
-            grid: grid.current,
-            playerId: suid,
-            userData: userData,
-            sfxEnabled: Boolean(userData?.sfxOn ?? true),
-            sfxVolume: sfxVolume,
-            gameAssets: gameAssets ?? [],
-          });
-
-          // Draw all ground effects on the map
-          drawCombatEffects({
-            groupEffects: group_effects,
-            battle: battle.current,
-            grid: grid.current,
-            animationId,
-            spriteMixer,
-            gameAssets: gameAssets ?? [],
-            sfxEnabled: Boolean(userData?.sfxOn ?? true),
-            sfxVolume: sfxVolume,
-          });
-
-          // Highlight information on user hover
-          userHighlights = highlightUsers({
-            group_tiles,
-            group_users,
-            raycaster,
-            userId: userId.current,
-            users: battle.current.usersState,
-            currentHighlights: userHighlights,
-          });
-
-          // Detect intersections with tiles for movement/action
-          if (user) {
-            highlights = highlightTiles({
-              group_tiles,
-              raycaster,
-              user,
-              timeDiff,
-              action: action.current,
-              battle: battle.current,
-              grid: grid.current,
-              currentHighlights: highlights,
-              precomputedActions,
-            });
-          }
-
-          // Highlight tooltips when hovering on battlefield
-          tooltips = highlightTooltips({
-            group_ground,
-            raycaster,
-            battle: battle.current,
-            currentTooltips: tooltips,
-          });
-
-          // Highlight tile tooltips when hovering on tiles with ground effects
-          tileTooltips = highlightTileTooltips({
-            group_tiles,
-            raycaster,
-            battle: battle.current,
-            currentTileTooltips: tileTooltips,
-            mouseX: mouseScreen.current.x,
-            mouseY: mouseScreen.current.y,
-          });
-        }
-
-        // Trackball updates
-        controls.update();
-
-        // Render the scene
-        animationId = requestAnimationFrame(render);
-        renderer?.render(scene, camera);
-      }
-      render();
-
-      // Remove the mouseover listener
-      return () => {
-        void setBattleAtom(undefined);
-        window.removeEventListener("resize", handleResize);
-        sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
-        sceneRef.removeEventListener("mouseleave", onDocumentMouseLeave);
-        if (sceneRef.contains(renderer.domElement)) {
-          sceneRef.removeChild(renderer.domElement);
-        }
-        cleanUp(scene, renderer);
-        cancelAnimationFrame(animationId);
-      };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [battleId, gameAssets, userData?.sfxOn]);
+  };
 
-  // Update visibility when showGridNumbers flag changes
-  useEffect(() => {
-    if (groupNamesRef.current) {
-      groupNamesRef.current.visible = showGridNumbers;
-    }
-  }, [showGridNumbers]);
+  // Calculate dimensions for R3F canvas
+  const canvasWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
+  const canvasHeight = canvasWidth * 0.5625; // 16:9 aspect ratio
 
   // Derived variables
   const showNextMatch =
@@ -705,8 +446,22 @@ const Combat: React.FC<CombatProps> = (props) => {
     !["SPARRING", "RANKED_PVP"].includes(battleType);
   return (
     <>
-      <div id="tutorial-combat-field" ref={mountRef}></div>
-      {webglError && <WebGlError />}
+      {battle.current && gameAssets && (
+        <div id="tutorial-combat-field">
+          <CombatScene
+            battle={battle.current}
+            userId={userId.current}
+            action={action.current}
+            timeDiff={timeDiff}
+            precomputedActions={precomputedActions}
+            showGridNumbers={showGridNumbers}
+            onTileClick={handleTileClick}
+            gameAssets={gameAssets}
+            width={canvasWidth}
+            height={canvasHeight}
+          />
+        </div>
+      )}
       {/* BATTLE LOBBY SCREEN */}
       {isInLobby &&
         battle.current &&
