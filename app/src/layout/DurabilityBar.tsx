@@ -47,8 +47,8 @@ export const DurabilityBar: React.FC<DurabilityBarProps> = ({
 
   // Color based on durability percentage
   const getColor = () => {
-    if (durabilityPercentage > 60) return "bg-green-500";
-    if (durabilityPercentage > 30) return "bg-yellow-500";
+    if (durabilityPercentage > 50) return "bg-green-500";
+    if (durabilityPercentage > 25) return "bg-yellow-500";
     return "bg-red-500";
   };
 
