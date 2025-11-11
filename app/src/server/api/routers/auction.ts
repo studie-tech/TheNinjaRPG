@@ -249,6 +249,7 @@ export const auctionRouter = createTRPCRouter({
             storedAtHome: userItemData.storedAtHome,
             isInAuction: false, // Will be set to true below
             craftingFinishedAt: userItemData.craftingFinishedAt,
+            dropChancePerc: userItemData.dropChancePerc,
             createdAt: new Date(),
             updatedAt: new Date(),
           });

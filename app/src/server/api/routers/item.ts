@@ -452,6 +452,7 @@ export const itemRouter = createTRPCRouter({
         storedAtHome: currentUserItem.storedAtHome,
         isInAuction: false,
         craftingFinishedAt: currentUserItem.craftingFinishedAt,
+        dropChancePerc: currentUserItem.dropChancePerc,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
