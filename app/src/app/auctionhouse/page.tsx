@@ -2,7 +2,7 @@
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { useRequireInVillage, useRequiredUserData } from "@/utils/UserContext";
 import Loader from "@/layout/Loader";
@@ -126,6 +126,16 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
     listings?.data?.map((listing) => ({
       ...listing,
       itemIcon: listing.userItem.item.image,
+      itemName: (
+        <div>
+          <p>{listing.userItem.item.name}</p>
+          {listing.userItem.item.canStack && listing.userItem.quantity > 1 && (
+            <p className="text-sm text-muted-foreground">
+              Quantity: {listing.userItem.quantity}
+            </p>
+          )}
+        </div>
+      ),
       currentPrice: (
         <div>
           <p className="font-bold text-green-600">
@@ -162,6 +172,11 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
       key: "itemIcon",
       header: "Item",
       type: "avatar",
+    },
+    {
+      key: "itemName",
+      header: "Name",
+      type: "jsx",
     },
     {
       key: "seller",
@@ -350,7 +365,11 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
 
   return (
     <Modal2
-      title={listing.userItem.item.name}
+      title={
+        listing.userItem.item.canStack && listing.userItem.quantity > 1
+          ? `${listing.userItem.item.name} (${listing.userItem.quantity})`
+          : listing.userItem.item.name
+      }
       isOpen={isOpen}
       setIsOpen={setIsOpen}
       className="max-w-2xl"
@@ -365,6 +384,13 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
           }}
           showStatistic="item"
         />
+        {listing.userItem.item.canStack && listing.userItem.quantity > 1 && (
+          <div className="bg-popover p-2 rounded-lg border">
+            <p className="text-sm font-semibold">
+              Quantity: <span className="font-normal">{listing.userItem.quantity}</span>
+            </p>
+          </div>
+        )}
 
         {/* Auction Info */}
         <div className="bg-popover p-2 rounded-lg border">
@@ -586,6 +612,33 @@ export const NewAuctionListingDialog: React.FC = () => {
     name: "listingType",
   });
 
+  const watchedUserItemId = useWatch({
+    control: createForm.control,
+    name: "userItemId",
+  });
+
+  const filteredItems =
+    userItems?.filter((item) => {
+      return (
+        item.item?.canBeTraded &&
+        item.equipped === "NONE" &&
+        !item.craftingFinishedAt &&
+        !item.isInAuction
+      );
+    }) || [];
+
+  // Get the selected item to check if it's stackable
+  const selectedItem = filteredItems.find((item) => item.id === watchedUserItemId);
+  const showQuantityInput =
+    selectedItem?.item?.canStack && selectedItem.quantity > 1;
+
+  // Reset quantity when item selection changes
+  useEffect(() => {
+    if (!showQuantityInput) {
+      createForm.setValue("quantity", undefined);
+    }
+  }, [showQuantityInput, createForm]);
+
   const onCreateSubmit = (data: CreateAuctionListingSchema) => {
     const userSearchData = userSearchMethods.getValues();
     const submissionData: CreateAuctionListingSchema = {
@@ -597,16 +650,6 @@ export const NewAuctionListingDialog: React.FC = () => {
     };
     createListing(submissionData);
   };
-
-  const filteredItems =
-    userItems?.filter((item) => {
-      return (
-        item.item?.canBeTraded &&
-        item.equipped === "NONE" &&
-        !item.craftingFinishedAt &&
-        !item.isInAuction
-      );
-    }) || [];
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -642,6 +685,7 @@ export const NewAuctionListingDialog: React.FC = () => {
                       {filteredItems.map((userItem) => (
                         <SelectItem key={userItem.id} value={userItem.id}>
                           {userItem.item?.name}
+                          {userItem.quantity > 1 ? ` (${userItem.quantity})` : ""}
                           {userItem.imbuements && userItem.imbuements.length > 0
                             ? ` (${userItem.imbuements.length} imbuement(s))`
                             : ""}
@@ -653,6 +697,36 @@ export const NewAuctionListingDialog: React.FC = () => {
                 </FormItem>
               )}
             />
+
+            {showQuantityInput && (
+              <FormField
+                control={createForm.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantity to Auction</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="1"
+                        max={selectedItem?.quantity || 1}
+                        placeholder={`1-${selectedItem?.quantity || 1}`}
+                        {...field}
+                        onChange={(e) => {
+                          const value = e.target.value === "" ? undefined : parseInt(e.target.value, 10);
+                          field.onChange(isNaN(value || 0) ? undefined : value);
+                        }}
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <p className="text-sm text-muted-foreground">
+                      Current stack: {selectedItem?.quantity} items
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={createForm.control}

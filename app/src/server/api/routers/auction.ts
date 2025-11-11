@@ -170,6 +170,7 @@ export const auctionRouter = createTRPCRouter({
         durationHours,
         targetUserId,
         currencyType,
+        quantity,
       } = input;
 
       // Check if user item exists and get the item data
@@ -212,6 +213,60 @@ export const auctionRouter = createTRPCRouter({
         return errorResponse("Buyout price must be greater than starting price");
       }
 
+      // Handle quantity splitting for stackable items
+      let auctionUserItemId = userItemId;
+      if (quantity !== undefined) {
+        // Validate quantity is provided for stackable items
+        if (!userItemData.item.canStack) {
+          return errorResponse("Quantity can only be specified for stackable items");
+        }
+
+        // Validate quantity range
+        if (quantity < 1 || quantity > userItemData.quantity) {
+          return errorResponse(
+            `Quantity must be between 1 and ${userItemData.quantity}`,
+          );
+        }
+
+        // Can't split items with imbuements
+        if (userItemData.imbuements.length > 0) {
+          return errorResponse("Cannot split items with imbuements");
+        }
+
+        // If quantity equals the full stack, use the existing item
+        if (quantity === userItemData.quantity) {
+          // Use the existing item, no splitting needed
+        } else {
+          // Create a new userItem with the specified quantity for the auction
+          const newUserItemId = nanoid();
+          await ctx.drizzle.insert(userItem).values({
+            id: newUserItemId,
+            userId: ctx.userId,
+            itemId: userItemData.itemId,
+            quantity: quantity,
+            durability: userItemData.durability,
+            equipped: "NONE",
+            storedAtHome: userItemData.storedAtHome,
+            isInAuction: false, // Will be set to true below
+            craftingFinishedAt: userItemData.craftingFinishedAt,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+
+          // Update the original stack to reduce by the quantity
+          await ctx.drizzle
+            .update(userItem)
+            .set({
+              quantity: userItemData.quantity - quantity,
+              updatedAt: new Date(),
+            })
+            .where(eq(userItem.id, userItemId));
+
+          // Use the new item for the auction
+          auctionUserItemId = newUserItemId;
+        }
+      }
+
       // Validate target user for DIRECT listings
       if (listingType === "DIRECT") {
         if (!targetUserId) {
@@ -238,7 +293,7 @@ export const auctionRouter = createTRPCRouter({
         ctx.drizzle.insert(auctionListing).values({
           id: auctionId,
           sellerId: ctx.userId,
-          userItemId,
+          userItemId: auctionUserItemId,
           listingType,
           targetUserId: targetUserId || null,
           startingPrice,
@@ -253,15 +308,17 @@ export const auctionRouter = createTRPCRouter({
             isInAuction: true,
             updatedAt: new Date(),
           })
-          .where(eq(userItem.id, userItemId)),
+          .where(eq(userItem.id, auctionUserItemId)),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
           tableName: "auctionListing",
           changes: JSON.stringify({
             action: "CREATE_AUCTION",
-            userItemId,
+            userItemId: auctionUserItemId,
+            originalUserItemId: userItemId,
             itemId: userItemData.itemId,
+            quantity: quantity || userItemData.quantity,
             startingPrice,
             buyoutPrice,
             expiresAt,

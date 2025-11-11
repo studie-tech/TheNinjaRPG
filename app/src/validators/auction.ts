@@ -11,6 +11,7 @@ export const createAuctionListingSchema = z.object({
   targetUserId: z.string().optional(), // For direct auctions to specific users
   durationHours: z.number().min(1).max(168), // 1 hour to 7 days
   currencyType: z.enum(TRADEABLE_CURRENCY_TYPES).default("MONEY"),
+  quantity: z.number().int().min(1).optional(), // Quantity to auction from stack
 }).refine((data) => {
   // For reputation auctions, ensure minimum reputation amount
   if (data.currencyType === "REPUTATION") {
