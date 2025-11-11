@@ -554,6 +554,54 @@ export const updateUser = async (
     user.questData = trackers;
     // Add notifications to combatResult
     result.notifications.push(...notifications);
+    
+    // Check for low durability warnings (items that dropped to 50 or below, or 25 or below)
+    const initialDurability = curBattle.extraState.initialDurability;
+    if (initialDurability && initialDurability[userId]) {
+      const userInitialDurability = initialDurability[userId];
+      user.items.forEach((item) => {
+        if (item.item.maxDurability && item.item.maxDurability > 0) {
+          const initial = userInitialDurability[item.id];
+          const final = item.durability;
+          // Check if durability dropped to 0 (item is broken)
+          if (
+            initial !== undefined &&
+            initial > 0 &&
+            final <= 0
+          ) {
+            result.notifications.push(
+              `${item.item.name} has broken and cannot be used until repaired!`,
+            );
+          }
+          // Check if durability dropped to 25 or below (and was above 25 initially) - urgent warning
+          else if (
+            initial !== undefined &&
+            initial > 25 &&
+            final <= 25 &&
+            final > 0 // Only warn if item is still usable
+          ) {
+            const durabilityPercent = Math.round((final / item.item.maxDurability) * 100);
+            result.notifications.push(
+              `${item.item.name} durability is critically low at ${durabilityPercent}%! Repair it soon to prevent it from breaking!`,
+            );
+          }
+          // Check if durability dropped to 50 or below (and was above 50 initially) - regular warning
+          else if (
+            initial !== undefined &&
+            initial > 50 &&
+            final <= 50 &&
+            final > 25 && // Only show 50 warning if not already showing 25 warning
+            final > 0 // Only warn if item is still usable
+          ) {
+            const durabilityPercent = Math.round((final / item.item.maxDurability) * 100);
+            result.notifications.push(
+              `${item.item.name} durability is now ${durabilityPercent}%. Consider repairing it soon!`,
+            );
+          }
+        }
+      });
+    }
+    
     // Is it a kage challenge
     const isKageChallenge = ["KAGE_AI", "KAGE_PVP"].includes(curBattle.battleType);
     const deleteItems = user.items.filter((ui) => ui.quantity <= 0).map((i) => i.id);

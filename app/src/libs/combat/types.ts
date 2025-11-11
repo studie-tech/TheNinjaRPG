@@ -117,6 +117,7 @@ export type ExtraState = {
   settings?: GameSetting[];
   textureAssets?: string[];
   sfxAssets?: string[];
+  initialDurability?: Record<string, Record<string, number>>; // userId -> userItemId -> durability
 };
 
 // Create type for battle, which contains information on user current state

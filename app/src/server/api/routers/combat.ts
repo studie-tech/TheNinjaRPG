@@ -1526,6 +1526,17 @@ export const initiateBattle = async (
   // Set attacker to be the agressor
   if (usersState[0]) usersState[0].isAggressor = true;
 
+  // Store initial durability for all users' items (for durability warnings at battle end)
+  const initialDurability: Record<string, Record<string, number>> = {};
+  usersState.forEach((user) => {
+    initialDurability[user.userId] = {};
+    user.items.forEach((item) => {
+      if (item.item.maxDurability && item.item.maxDurability > 0) {
+        initialDurability[user.userId]![item.id] = item.durability;
+      }
+    });
+  });
+
   // Starting ground effects
   const groundEffects: GroundEffect[] = [];
   const groundAssets = assets.filter((a) => a.onInitialBattleField);
@@ -1639,6 +1650,7 @@ export const initiateBattle = async (
         settings: settings,
         textureAssets: textureAssets,
         sfxAssets: sfxAssets,
+        initialDurability: initialDurability,
       },
       rewardScaling: rewardScaling,
       createdAt: startTime,

@@ -155,7 +155,7 @@ export const availableUserActions = (
             if (ui.equipped === "NONE") return false;
             if (ui.item?.itemType === "WEAPON") {
               const current = Math.min(ui.durability, ui.item.maxDurability);
-              return current > 20;
+              return current > DURABILITY_USABILITY_THR;
             }
             return true;
           })

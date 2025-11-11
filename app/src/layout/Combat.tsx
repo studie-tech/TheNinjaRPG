@@ -211,9 +211,19 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
       if (data?.result?.notifications.length !== 0) {
         data?.result?.notifications.forEach((notification) => {
+          // Check if this is a durability warning (contains "durability is now" or "has broken")
+          const isDurabilityWarning =
+            notification.includes("durability is now") ||
+            notification.includes("durability is critically low") ||
+            notification.includes("has broken");
+          const isBrokenItem = notification.includes("has broken");
           showMutationToast({
-            success: true,
-            title: "Quest Update",
+            success: !isDurabilityWarning, // Durability warnings are not "success" (they're warnings)
+            title: isDurabilityWarning
+              ? isBrokenItem
+                ? "Item Broken"
+                : "Low Durability Warning"
+              : "Quest Update",
             message: notification,
           });
         });
