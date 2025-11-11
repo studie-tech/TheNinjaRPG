@@ -555,7 +555,7 @@ export const updateUser = async (
     // Add notifications to combatResult
     result.notifications.push(...notifications);
     
-    // Check for low durability warnings (items that dropped to 50 or below, or 25 or below)
+    // Check for low durability warnings (percent-based: <=50% and <=25%) and for broken items
     const initialDurability = curBattle.extraState.initialDurability;
     if (initialDurability && initialDurability[userId]) {
       const userInitialDurability = initialDurability[userId];
@@ -563,39 +563,33 @@ export const updateUser = async (
         if (item.item.maxDurability && item.item.maxDurability > 0) {
           const initial = userInitialDurability[item.id];
           const final = item.durability;
-          // Check if durability dropped to 0 (item is broken)
-          if (
-            initial !== undefined &&
-            initial > 0 &&
-            final <= 0
-          ) {
+          const max = item.item.maxDurability;
+          if (initial === undefined) return;
+          const initialPct = Math.round((initial / max) * 100);
+          const finalPct = Math.round((final / max) * 100);
+          // Broken: now at 0
+          if (initial > 0 && final <= 0) {
             result.notifications.push(
               `${item.item.name} has broken and cannot be used until repaired!`,
             );
-          }
-          // Check if durability dropped to 25 or below (and was above 25 initially) - urgent warning
-          else if (
-            initial !== undefined &&
-            initial > 25 &&
-            final <= 25 &&
-            final > 0 // Only warn if item is still usable
+          } else if (
+            // Urgent warning: crossed down to <=25%
+            initialPct > 25 &&
+            finalPct <= 25 &&
+            final > 0
           ) {
-            const durabilityPercent = Math.round((final / item.item.maxDurability) * 100);
             result.notifications.push(
-              `${item.item.name} durability is critically low at ${durabilityPercent}%! Repair it soon to prevent it from breaking!`,
+              `${item.item.name} durability is critically low at ${finalPct}%! Repair it soon to prevent it from breaking!`,
             );
-          }
-          // Check if durability dropped to 50 or below (and was above 50 initially) - regular warning
-          else if (
-            initial !== undefined &&
-            initial > 50 &&
-            final <= 50 &&
-            final > 25 && // Only show 50 warning if not already showing 25 warning
-            final > 0 // Only warn if item is still usable
+          } else if (
+            // Regular warning: crossed down to <=50% (but still above 25%)
+            initialPct > 50 &&
+            finalPct <= 50 &&
+            finalPct > 25 &&
+            final > 0
           ) {
-            const durabilityPercent = Math.round((final / item.item.maxDurability) * 100);
             result.notifications.push(
-              `${item.item.name} durability is now ${durabilityPercent}%. Consider repairing it soon!`,
+              `${item.item.name} durability is now ${finalPct}%. Consider repairing it soon!`,
             );
           }
         }
