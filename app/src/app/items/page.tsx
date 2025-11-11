@@ -8,6 +8,7 @@ import {
   ArrowDownToLine,
   Zap,
   Wrench,
+  Split,
 } from "lucide-react";
 import Image from "next/image";
 import ContentBox from "@/layout/ContentBox";
@@ -21,6 +22,16 @@ import DurabilityBar from "@/layout/DurabilityBar";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import { nonCombatConsume } from "@/libs/item";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { calcItemSellingPrice } from "@/libs/item";
 import { ActionSelector } from "@/layout/CombatActions";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -222,6 +233,8 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     undefined,
   );
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [isSplitDialogOpen, setIsSplitDialogOpen] = useState<boolean>(false);
+  const [quantityToKeep, setQuantityToKeep] = useState<string>("");
 
   // tRPC utility
   const utils = api.useUtils();
@@ -297,11 +310,39 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     onSettled,
   });
 
+  const { mutate: splitStack, isPending: isSplitting } = api.item.splitStack.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.item.getUserItems.invalidate();
+        setIsSplitDialogOpen(false);
+        setQuantityToKeep("");
+      }
+    },
+    onSettled,
+  });
+
   // Derived
   const structures = userData?.village?.structures;
-  const isLoading = isMerging || isConsuming || isSelling || isEquipping || isRepairing;
+  const isLoading =
+    isMerging || isConsuming || isSelling || isEquipping || isRepairing || isSplitting;
   const items = useritems?.map((useritem) => ({ ...useritem.item, ...useritem }));
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
+
+  // Split stack handler
+  const handleSplitStack = () => {
+    if (!useritem) return;
+    const quantity = parseInt(quantityToKeep, 10);
+    if (
+      isNaN(quantity) ||
+      quantity < 1 ||
+      quantity >= useritem.quantity ||
+      !useritem.item.canStack
+    ) {
+      return;
+    }
+    splitStack({ userItemId: useritem.id, quantityToKeep: quantity });
+  };
 
   return (
     <>
@@ -359,13 +400,27 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                 </Button>
               )}
               {useritem.item.canStack && (
-                <Button
-                  variant="info"
-                  onClick={() => merge({ itemId: useritem.itemId })}
-                >
-                  <Merge className="mr-2 h-5 w-5" />
-                  Merge Stacks
-                </Button>
+                <>
+                  <Button
+                    variant="info"
+                    onClick={() => merge({ itemId: useritem.itemId })}
+                  >
+                    <Merge className="mr-2 h-5 w-5" />
+                    Merge Stacks
+                  </Button>
+                  {useritem.quantity > 1 && (
+                    <Button
+                      variant="info"
+                      onClick={() => {
+                        setIsSplitDialogOpen(true);
+                        setQuantityToKeep("");
+                      }}
+                    >
+                      <Split className="mr-2 h-5 w-5" />
+                      Split Stack
+                    </Button>
+                  )}
+                </>
               )}
               {nonCombatConsume(useritem.item, userData) && (
                 <Button
@@ -405,6 +460,65 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           {isSelling && <Loader explanation={`Selling ${useritem.item.name}`} />}
           {isEquipping && <Loader explanation={`Equipping ${useritem.item.name}`} />}
         </Modal2>
+      )}
+      {isSplitDialogOpen && useritem && (
+        <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Split Stack</DialogTitle>
+              <DialogDescription>
+                How many items do you want to keep in this stack? The rest will be moved to a
+                new stack.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Label htmlFor="quantity">Quantity to Keep</Label>
+              <Input
+                id="quantity"
+                type="number"
+                min="1"
+                max={useritem.quantity - 1}
+                value={quantityToKeep}
+                onChange={(e) => setQuantityToKeep(e.target.value)}
+                placeholder={`1-${useritem.quantity - 1}`}
+                className="mt-2"
+              />
+              <p className="text-sm text-muted-foreground mt-2">
+                Current stack: {useritem.quantity} items
+              </p>
+              {quantityToKeep && !isNaN(parseInt(quantityToKeep, 10)) && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  New stack will have:{" "}
+                  {useritem.quantity - parseInt(quantityToKeep, 10)} items
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsSplitDialogOpen(false);
+                  setQuantityToKeep("");
+                }}
+                disabled={isSplitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSplitStack}
+                disabled={
+                  isSplitting ||
+                  !quantityToKeep ||
+                  isNaN(parseInt(quantityToKeep, 10)) ||
+                  parseInt(quantityToKeep, 10) < 1 ||
+                  parseInt(quantityToKeep, 10) >= useritem.quantity
+                }
+              >
+                {isSplitting ? "Splitting..." : "Split Stack"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </>
   );

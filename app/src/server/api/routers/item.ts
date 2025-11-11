@@ -390,6 +390,77 @@ export const itemRouter = createTRPCRouter({
       }
       return { success: false, message: "Failed to merge stacks" };
     }),
+  // Split item stack
+  splitStack: protectedProcedure
+    .input(
+      z.object({
+        userItemId: z.string(),
+        quantityToKeep: z.number().int().min(1),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Fetch the user item
+      const currentUserItem = await ctx.drizzle.query.userItem.findFirst({
+        where: and(eq(userItem.id, input.userItemId), eq(userItem.userId, ctx.userId)),
+        with: { item: true, imbuements: true },
+      });
+
+      if (!currentUserItem) {
+        return { success: false, message: "Item not found" };
+      }
+
+      // Check if item can be stacked
+      if (!currentUserItem.item.canStack) {
+        return { success: false, message: "Item cannot be stacked" };
+      }
+
+      // Check if item has imbuements (can't split items with imbuements)
+      if (currentUserItem.imbuements.length > 0) {
+        return { success: false, message: "Cannot split items with imbuements" };
+      }
+
+      // Validate quantity
+      if (input.quantityToKeep >= currentUserItem.quantity) {
+        return {
+          success: false,
+          message: `Quantity to keep must be less than current quantity (${currentUserItem.quantity})`,
+        };
+      }
+
+      if (input.quantityToKeep < 1) {
+        return { success: false, message: "Quantity to keep must be at least 1" };
+      }
+
+      const quantityToSplit = currentUserItem.quantity - input.quantityToKeep;
+
+      // Update current stack to keep the specified quantity
+      await ctx.drizzle
+        .update(userItem)
+        .set({ quantity: input.quantityToKeep })
+        .where(eq(userItem.id, input.userItemId));
+
+      // Create new stack with the remaining quantity
+      const newUserItemId = nanoid();
+      await ctx.drizzle.insert(userItem).values({
+        id: newUserItemId,
+        userId: ctx.userId,
+        itemId: currentUserItem.itemId,
+        quantity: quantityToSplit,
+        durability: currentUserItem.durability,
+        equipped: "NONE",
+        storedAtHome: currentUserItem.storedAtHome,
+        isInAuction: false,
+        craftingFinishedAt: currentUserItem.craftingFinishedAt,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      return {
+        success: true,
+        message: `Split stack: kept ${input.quantityToKeep}, created new stack with ${quantityToSplit}`,
+      };
+    }),
   // Drop user item
   sellUserItem: protectedProcedure
     .input(z.object({ userItemId: z.string() }))
