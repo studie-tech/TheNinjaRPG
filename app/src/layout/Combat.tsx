@@ -106,12 +106,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Asset IDs to fetch
   const textureAssets = battle.current?.extraState.textureAssets || [];
   const sfxAssets = battle.current?.extraState.sfxAssets || [];
-  // Also include staticAssetPath from all current ground effects (barriers, etc.)
-  const groundEffectAssets =
-    battle.current?.groundEffects
-      ?.map((e) => e.staticAssetPath)
-      .filter((asset): asset is string => !!asset) || [];
-  const allAssets = [...textureAssets, ...sfxAssets, ...groundEffectAssets];
+  const allAssets = [...textureAssets, ...sfxAssets];
 
   // Query data
   const { data: gameAssets } = api.misc.getAllGameAssetNames.useQuery(
