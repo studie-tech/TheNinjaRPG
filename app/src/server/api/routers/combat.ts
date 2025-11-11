@@ -1599,6 +1599,8 @@ export const initiateBattle = async (
         ]),
       ),
     ),
+    // Include staticAssetPath from ground effects (barriers, etc.)
+    ...groundEffects.map((e) => e.staticAssetPath),
   ]
     .filter((asset): asset is string => !!asset)
     .concat([ID_ANIMATION_SMOKE, ID_ANIMATION_HIT, ID_ANIMATION_HEAL]);
