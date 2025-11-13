@@ -410,6 +410,16 @@ export const itemRouter = createTRPCRouter({
         return { success: false, message: "Item not found" };
       }
 
+      // Do not split items that are currently in auction
+      if (currentUserItem.isInAuction) {
+        return { success: false, message: "Cannot split items in auction" };
+      }
+
+      // Do not split items that are currently equipped
+      if (currentUserItem.equipped !== "NONE") {
+        return { success: false, message: "Cannot split equipped items" };
+      }
+
       // Check if item can be stacked
       if (!currentUserItem.item.canStack) {
         return { success: false, message: "Item cannot be stacked" };
@@ -1469,6 +1479,11 @@ export const splitItemStack = async (
     return null;
   }
 
+  // Do not split items that are currently in auction or equipped
+  if (currentUserItem.isInAuction || currentUserItem.equipped !== "NONE") {
+    return null;
+  }
+
   // Check if item can be stacked
   if (!currentUserItem.item.canStack) {
     return null;
@@ -1501,7 +1516,7 @@ export const splitItemStack = async (
       durability: currentUserItem.durability,
       equipped: "NONE",
       storedAtHome: currentUserItem.storedAtHome,
-      isInAuction: currentUserItem.isInAuction,
+      isInAuction: false,
       craftingFinishedAt: currentUserItem.craftingFinishedAt,
       dropChancePerc: currentUserItem.dropChancePerc,
       createdAt: new Date(),
