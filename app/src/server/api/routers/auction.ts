@@ -17,6 +17,7 @@ import {
   getAuctionListingsSchema,
 } from "@/validators/auction";
 import type { DrizzleClient } from "@/server/db";
+import { splitItemStack } from "./item";
 
 export const auctionRouter = createTRPCRouter({
   // Get single auction listing with all bids
@@ -237,34 +238,16 @@ export const auctionRouter = createTRPCRouter({
         if (quantity === userItemData.quantity) {
           // Use the existing item, no splitting needed
         } else {
-          // Create a new userItem with the specified quantity for the auction
-          const newUserItemId = nanoid();
-          await ctx.drizzle.insert(userItem).values({
-            id: newUserItemId,
-            userId: ctx.userId,
-            itemId: userItemData.itemId,
-            quantity: quantity,
-            durability: userItemData.durability,
-            equipped: "NONE",
-            storedAtHome: userItemData.storedAtHome,
-            isInAuction: false, // Will be set to true below
-            craftingFinishedAt: userItemData.craftingFinishedAt,
-            dropChancePerc: userItemData.dropChancePerc,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          });
+          // Use the convenience method to split the stack
+          const quantityToKeep = userItemData.quantity - quantity;
+          const result = await splitItemStack(ctx.drizzle, userItemId, quantityToKeep);
 
-          // Update the original stack to reduce by the quantity
-          await ctx.drizzle
-            .update(userItem)
-            .set({
-              quantity: userItemData.quantity - quantity,
-              updatedAt: new Date(),
-            })
-            .where(eq(userItem.id, userItemId));
+          if (!result) {
+            return errorResponse("Failed to split item stack");
+          }
 
           // Use the new item for the auction
-          auctionUserItemId = newUserItemId;
+          auctionUserItemId = result.newUserItemId;
         }
       }
 

@@ -400,7 +400,7 @@ export const itemRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch the user item
+      // Fetch the user item to verify ownership
       const currentUserItem = await ctx.drizzle.query.userItem.findFirst({
         where: and(eq(userItem.id, input.userItemId), eq(userItem.userId, ctx.userId)),
         with: { item: true, imbuements: true },
@@ -432,34 +432,20 @@ export const itemRouter = createTRPCRouter({
         return { success: false, message: "Quantity to keep must be at least 1" };
       }
 
-      const quantityToSplit = currentUserItem.quantity - input.quantityToKeep;
+      // Use the convenience method to split the stack
+      const result = await splitItemStack(
+        ctx.drizzle,
+        input.userItemId,
+        input.quantityToKeep,
+      );
 
-      // Update current stack to keep the specified quantity
-      await ctx.drizzle
-        .update(userItem)
-        .set({ quantity: input.quantityToKeep })
-        .where(eq(userItem.id, input.userItemId));
-
-      // Create new stack with the remaining quantity
-      const newUserItemId = nanoid();
-      await ctx.drizzle.insert(userItem).values({
-        id: newUserItemId,
-        userId: ctx.userId,
-        itemId: currentUserItem.itemId,
-        quantity: quantityToSplit,
-        durability: currentUserItem.durability,
-        equipped: "NONE",
-        storedAtHome: currentUserItem.storedAtHome,
-        isInAuction: false,
-        craftingFinishedAt: currentUserItem.craftingFinishedAt,
-        dropChancePerc: currentUserItem.dropChancePerc,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      if (!result) {
+        return { success: false, message: "Failed to split stack" };
+      }
 
       return {
         success: true,
-        message: `Split stack: kept ${input.quantityToKeep}, created new stack with ${quantityToSplit}`,
+        message: `Split stack: kept ${input.quantityToKeep}, created new stack with ${result.quantityToSplit}`,
       };
     }),
   // Drop user item
@@ -1459,4 +1445,69 @@ export const itemDatabaseFilter = (
       ? [lte(item.seichiSilverCost, input.maxSeichiSilverCost)]
       : []),
   ];
+};
+
+/**
+ * Split an item stack into two stacks
+ * @param client - The database client
+ * @param userItemId - The ID of the user item to split
+ * @param quantityToKeep - The quantity to keep in the original stack
+ * @returns The ID of the newly created stack, or null if splitting failed
+ */
+export const splitItemStack = async (
+  client: DrizzleClient,
+  userItemId: string,
+  quantityToKeep: number,
+): Promise<{ newUserItemId: string; quantityToSplit: number } | null> => {
+  // Fetch the user item
+  const currentUserItem = await client.query.userItem.findFirst({
+    where: eq(userItem.id, userItemId),
+    with: { item: true, imbuements: true },
+  });
+
+  if (!currentUserItem) {
+    return null;
+  }
+
+  // Check if item can be stacked
+  if (!currentUserItem.item.canStack) {
+    return null;
+  }
+
+  // Check if item has imbuements (can't split items with imbuements)
+  if (currentUserItem.imbuements.length > 0) {
+    return null;
+  }
+
+  // Validate quantity
+  if (quantityToKeep >= currentUserItem.quantity || quantityToKeep < 1) {
+    return null;
+  }
+
+  const quantityToSplit = currentUserItem.quantity - quantityToKeep;
+  const newUserItemId = nanoid();
+
+  // Update current stack and create new stack in parallel
+  await Promise.all([
+    client
+      .update(userItem)
+      .set({ quantity: quantityToKeep })
+      .where(eq(userItem.id, userItemId)),
+    client.insert(userItem).values({
+      id: newUserItemId,
+      userId: currentUserItem.userId,
+      itemId: currentUserItem.itemId,
+      quantity: quantityToSplit,
+      durability: currentUserItem.durability,
+      equipped: "NONE",
+      storedAtHome: currentUserItem.storedAtHome,
+      isInAuction: currentUserItem.isInAuction,
+      craftingFinishedAt: currentUserItem.craftingFinishedAt,
+      dropChancePerc: currentUserItem.dropChancePerc,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }),
+  ]);
+
+  return { newUserItemId, quantityToSplit };
 };
