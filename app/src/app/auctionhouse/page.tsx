@@ -39,6 +39,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Form,
   FormControl,
   FormField,
@@ -295,6 +305,9 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
 
   // State
   const [bidAmount, setBidAmount] = useState("");
+  const [showBidConfirmation, setShowBidConfirmation] = useState(false);
+  const [showBuyoutConfirmation, setShowBuyoutConfirmation] = useState(false);
+  const [pendingBidAmount, setPendingBidAmount] = useState<number | null>(null);
 
   // Utils
   const utils = api.useUtils();
@@ -352,14 +365,32 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         // This should be caught by the disabled state, but just in case
         return;
       }
-      handlePlaceBid(auctionId, amount);
-      setBidAmount("");
+      setPendingBidAmount(amount);
+      setShowBidConfirmation(true);
     }
   };
 
   const handleBuyoutClick = () => {
     if (listing?.buyoutPrice) {
+      setPendingBidAmount(listing.buyoutPrice);
+      setShowBuyoutConfirmation(true);
+    }
+  };
+
+  const confirmBid = () => {
+    if (pendingBidAmount !== null) {
+      handlePlaceBid(auctionId, pendingBidAmount);
+      setBidAmount("");
+      setPendingBidAmount(null);
+      setShowBidConfirmation(false);
+    }
+  };
+
+  const confirmBuyout = () => {
+    if (pendingBidAmount !== null && listing?.buyoutPrice) {
       handlePlaceBid(auctionId, listing.buyoutPrice);
+      setPendingBidAmount(null);
+      setShowBuyoutConfirmation(false);
     }
   };
 
@@ -558,6 +589,51 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             </div>
           )}
       </div>
+
+      {/* Bid Confirmation Dialog */}
+      <AlertDialog open={showBidConfirmation} onOpenChange={setShowBidConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Bid</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to place a bid of{" "}
+              <span className="font-semibold">
+                {pendingBidAmount?.toLocaleString()} {listing?.currencyType === "MONEY" ? "ryo" : "reputation"}
+              </span>{" "}
+              on this auction?
+              {userBid && (
+                <span className="block mt-2 text-sm">
+                  Your current bid of {userBid.amount.toLocaleString()} will be replaced.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBid}>Confirm Bid</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Buyout Confirmation Dialog */}
+      <AlertDialog open={showBuyoutConfirmation} onOpenChange={setShowBuyoutConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Buyout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to buyout this auction for{" "}
+              <span className="font-semibold">
+                {listing?.buyoutPrice?.toLocaleString()} {listing?.currencyType === "MONEY" ? "ryo" : "reputation"}
+              </span>
+              ? This will immediately complete the auction and transfer the item to you.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBuyout}>Confirm Buyout</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Modal2>
   );
 };

@@ -400,63 +400,15 @@ export const itemRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch the user item to verify ownership
-      const currentUserItem = await ctx.drizzle.query.userItem.findFirst({
-        where: and(eq(userItem.id, input.userItemId), eq(userItem.userId, ctx.userId)),
-        with: { item: true, imbuements: true },
-      });
-
-      if (!currentUserItem) {
-        return { success: false, message: "Item not found" };
-      }
-
-      // Do not split items that are currently in auction
-      if (currentUserItem.isInAuction) {
-        return { success: false, message: "Cannot split items in auction" };
-      }
-
-      // Do not split items that are currently equipped
-      if (currentUserItem.equipped !== "NONE") {
-        return { success: false, message: "Cannot split equipped items" };
-      }
-
-      // Check if item can be stacked
-      if (!currentUserItem.item.canStack) {
-        return { success: false, message: "Item cannot be stacked" };
-      }
-
-      // Check if item has imbuements (can't split items with imbuements)
-      if (currentUserItem.imbuements.length > 0) {
-        return { success: false, message: "Cannot split items with imbuements" };
-      }
-
-      // Validate quantity
-      if (input.quantityToKeep >= currentUserItem.quantity) {
-        return {
-          success: false,
-          message: `Quantity to keep must be less than current quantity (${currentUserItem.quantity})`,
-        };
-      }
-
-      if (input.quantityToKeep < 1) {
-        return { success: false, message: "Quantity to keep must be at least 1" };
-      }
-
       // Use the convenience method to split the stack
       const result = await splitItemStack(
         ctx.drizzle,
         input.userItemId,
+        ctx.userId,
         input.quantityToKeep,
       );
 
-      if (!result) {
-        return { success: false, message: "Failed to split stack" };
-      }
-
-      return {
-        success: true,
-        message: `Split stack: kept ${input.quantityToKeep}, created new stack with ${result.quantityToSplit}`,
-      };
+      return { success: result.success, message: result.message };
     }),
   // Drop user item
   sellUserItem: protectedProcedure
@@ -1461,42 +1413,59 @@ export const itemDatabaseFilter = (
  * Split an item stack into two stacks
  * @param client - The database client
  * @param userItemId - The ID of the user item to split
+ * @param userId - The ID of the user who owns the item (for ownership verification)
  * @param quantityToKeep - The quantity to keep in the original stack
- * @returns The ID of the newly created stack, or null if splitting failed
+ * @returns A response with success status, message, and new stack info on success
  */
 export const splitItemStack = async (
   client: DrizzleClient,
   userItemId: string,
+  userId: string,
   quantityToKeep: number,
-): Promise<{ newUserItemId: string; quantityToSplit: number } | null> => {
-  // Fetch the user item
+): Promise<
+  | { success: true; message: string; newUserItemId: string; quantityToSplit: number }
+  | { success: false; message: string }
+> => {
+  // Fetch the user item to verify ownership
   const currentUserItem = await client.query.userItem.findFirst({
-    where: eq(userItem.id, userItemId),
+    where: and(eq(userItem.id, userItemId), eq(userItem.userId, userId)),
     with: { item: true, imbuements: true },
   });
 
   if (!currentUserItem) {
-    return null;
+    return { success: false, message: "Item not found" };
   }
 
-  // Do not split items that are currently in auction or equipped
-  if (currentUserItem.isInAuction || currentUserItem.equipped !== "NONE") {
-    return null;
+  // Do not split items that are currently in auction
+  if (currentUserItem.isInAuction) {
+    return { success: false, message: "Cannot split items in auction" };
+  }
+
+  // Do not split items that are currently equipped
+  if (currentUserItem.equipped !== "NONE") {
+    return { success: false, message: "Cannot split equipped items" };
   }
 
   // Check if item can be stacked
   if (!currentUserItem.item.canStack) {
-    return null;
+    return { success: false, message: "Item cannot be stacked" };
   }
 
   // Check if item has imbuements (can't split items with imbuements)
   if (currentUserItem.imbuements.length > 0) {
-    return null;
+    return { success: false, message: "Cannot split items with imbuements" };
   }
 
   // Validate quantity
-  if (quantityToKeep >= currentUserItem.quantity || quantityToKeep < 1) {
-    return null;
+  if (quantityToKeep >= currentUserItem.quantity) {
+    return {
+      success: false,
+      message: `Quantity to keep must be less than current quantity (${currentUserItem.quantity})`,
+    };
+  }
+
+  if (quantityToKeep < 1) {
+    return { success: false, message: "Quantity to keep must be at least 1" };
   }
 
   const quantityToSplit = currentUserItem.quantity - quantityToKeep;
@@ -1524,5 +1493,10 @@ export const splitItemStack = async (
     }),
   ]);
 
-  return { newUserItemId, quantityToSplit };
+  return {
+    success: true,
+    message: `Split stack: kept ${quantityToKeep}, created new stack with ${quantityToSplit}`,
+    newUserItemId,
+    quantityToSplit,
+  };
 };

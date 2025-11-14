@@ -229,21 +229,22 @@ export const auctionRouter = createTRPCRouter({
           );
         }
 
-        // Can't split items with imbuements
-        if (userItemData.imbuements.length > 0) {
-          return errorResponse("Cannot split items with imbuements");
-        }
-
         // If quantity equals the full stack, use the existing item
         if (quantity === userItemData.quantity) {
           // Use the existing item, no splitting needed
+          auctionUserItemId = userItemId;
         } else {
           // Use the convenience method to split the stack
           const quantityToKeep = userItemData.quantity - quantity;
-          const result = await splitItemStack(ctx.drizzle, userItemId, quantityToKeep);
+          const result = await splitItemStack(
+            ctx.drizzle,
+            userItemId,
+            ctx.userId,
+            quantityToKeep,
+          );
 
-          if (!result) {
-            return errorResponse("Failed to split item stack");
+          if (!result.success) {
+            return errorResponse(result.message);
           }
 
           // Use the new item for the auction
