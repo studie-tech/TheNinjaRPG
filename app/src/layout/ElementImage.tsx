@@ -33,6 +33,7 @@ import {
   IMG_ELEMENT_EARTH,
   IMG_ELEMENT_SCORCH,
   IMG_ELEMENT_DUST,
+  IMG_ELEMENT_SAND,
   IMG_ELEMENT_LIGHTNING,
   IMG_ELEMENT_BOIL,
   IMG_ELEMENT_METAL,
@@ -103,6 +104,8 @@ export const getElementImg = (element: ElementName): string => {
       return IMG_ELEMENT_SCORCH;
     case "Dust":
       return IMG_ELEMENT_DUST;
+    case "Sand":
+      return IMG_ELEMENT_SAND;
     case "Lightning":
       return IMG_ELEMENT_LIGHTNING;
     case "Boil":

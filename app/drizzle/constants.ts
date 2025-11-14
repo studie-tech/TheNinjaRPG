@@ -600,6 +600,7 @@ export const ElementNames = [
   "Light",
   "Boil",
   "Metal",
+  "Sand",
   "None",
 ] as const;
 export type ElementName = (typeof ElementNames)[number];
@@ -1685,6 +1686,8 @@ export const IMG_ELEMENT_SCORCH =
   "https://utfs.io/f/Hzww9EQvYURJCmW9wm326OYrIJuNP1pvSyz29edFtKbngjRc";
 export const IMG_ELEMENT_DUST =
   "https://utfs.io/f/Hzww9EQvYURJchNmlmSnxBpQqGNDcTHbLmYz8uXAl3oa54ti";
+export const IMG_ELEMENT_SAND =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJzu4nv37emvaQu94EYJs8HpxVzofny6iPtbgC";
 export const IMG_ELEMENT_LIGHTNING =
   "https://utfs.io/f/Hzww9EQvYURJ4DIVIclYIif5CL8BKvMsOh2ZnmS7yHt0jTD3";
 export const IMG_ELEMENT_BOIL =
