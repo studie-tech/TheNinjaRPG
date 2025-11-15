@@ -332,6 +332,11 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             bank: userData.bank - data.amountToDeduct,
           });
         }
+        // Clear state after successful bid
+        setBidAmount("");
+        setPendingBidAmount(null);
+        setShowBidConfirmation(false);
+        setShowBuyoutConfirmation(false);
       }
     },
   });
@@ -380,17 +385,12 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   const confirmBid = () => {
     if (pendingBidAmount !== null) {
       handlePlaceBid(auctionId, pendingBidAmount);
-      setBidAmount("");
-      setPendingBidAmount(null);
-      setShowBidConfirmation(false);
     }
   };
 
   const confirmBuyout = () => {
     if (pendingBidAmount !== null && listing?.buyoutPrice) {
       handlePlaceBid(auctionId, listing.buyoutPrice);
-      setPendingBidAmount(null);
-      setShowBuyoutConfirmation(false);
     }
   };
 
