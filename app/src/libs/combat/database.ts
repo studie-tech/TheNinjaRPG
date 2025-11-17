@@ -221,61 +221,73 @@ export const updateKage = async (
   client: DrizzleClient,
   curBattle: CompleteBattle,
   result: CombatResult | null,
-  userId: string,
 ) => {
-  // Fetch
-  const user = curBattle.usersState.find((u) => u.userId === userId && !u.isSummon);
-  const kage = curBattle.usersState.find((u) => u.userId !== userId && !u.isSummon);
-  // Guards
+  // Only care about Kage battles
   if (!["KAGE_AI", "KAGE_PVP"].includes(curBattle.battleType)) return;
-  if (!user || !user.villageId || !kage || !kage.villageId) return;
-  if (user.villageId !== kage.villageId) return;
-  // Lost items for the kage
+  if (!result) return;
+
+  // In Kage challenges, the challenger is always the aggressor
+  const challenger = curBattle.usersState.find(
+    (u) => u.isAggressor && !u.isSummon,
+  );
+  const kage = curBattle.usersState.find(
+    (u) => !u.isAggressor && !u.isSummon,
+  );
+
+  // Guards
+  if (!challenger || !kage) return;
+  if (!challenger.villageId || !kage.villageId) return;
+  if (challenger.villageId !== kage.villageId) return;
+
+  // Lost items for both sides
   const deleteItems = [
     ...kage.items.filter((ui) => ui.quantity <= 0).map((i) => i.id),
-    ...user.items.filter((ui) => ui.quantity <= 0).map((i) => i.id),
+    ...challenger.items.filter((ui) => ui.quantity <= 0).map((i) => i.id),
   ];
+
   const updateItems = [
     ...kage.items.filter((ui) => ui.quantity > 0),
-    ...user.items.filter((ui) => ui.quantity > 0),
+    ...challenger.items.filter((ui) => ui.quantity > 0),
   ];
-  // Apply
-  if (result) {
-    await Promise.all([
-      ...(result.didWin > 0 && user.isAggressor
-        ? [
-            client
-              .update(village)
-              .set({ kageId: user.userId, leaderUpdatedAt: new Date() })
-              .where(eq(village.id, user.villageId)),
-          ]
-        : []),
-      ...(deleteItems.length > 0
-        ? [
-            client.delete(userItem).where(inArray(userItem.id, deleteItems)),
-            client
-              .delete(userItemImbuement)
-              .where(inArray(userItemImbuement.userItemId, deleteItems)),
-          ]
-        : []),
-      ...(updateItems.length > 0
-        ? updateItems.map((ui) =>
-            client
-              .update(userItem)
-              .set({ quantity: ui.quantity })
-              .where(eq(userItem.id, ui.id)),
-          )
-        : []),
-      client.insert(kageDefendedChallenges).values({
-        id: nanoid(),
-        villageId: user.villageId,
-        userId: user.userId,
-        kageId: kage.userId,
-        didWin: result.didWin,
-        rounds: curBattle.round,
-      }),
-    ]);
-  }
+
+  await Promise.all([
+    // Move the hat only if the challenger actually wins
+    ...(result.didWin > 0
+      ? [
+          client
+            .update(village)
+            .set({ kageId: challenger.userId, leaderUpdatedAt: new Date() })
+            .where(eq(village.id, challenger.villageId)),
+        ]
+      : []),
+
+    ...(deleteItems.length > 0
+      ? [
+          client.delete(userItem).where(inArray(userItem.id, deleteItems)),
+          client
+            .delete(userItemImbuement)
+            .where(inArray(userItemImbuement.userItemId, deleteItems)),
+        ]
+      : []),
+
+    ...(updateItems.length > 0
+      ? updateItems.map((ui) =>
+          client
+            .update(userItem)
+            .set({ quantity: ui.quantity })
+            .where(eq(userItem.id, ui.id)),
+        )
+      : []),
+
+    client.insert(kageDefendedChallenges).values({
+      id: nanoid(),
+      villageId: challenger.villageId,
+      userId: challenger.userId,
+      kageId: kage.userId,
+      didWin: result.didWin,
+      rounds: curBattle.round,
+    }),
+  ]);
 };
 
 export const updateClanLeaders = async (

@@ -225,11 +225,12 @@ export const combatRouter = createTRPCRouter({
 
           // Update user
           if (result) {
-            await Promise.all([
-              updateUser(ctx.drizzle, pusher, userBattle, result, ctx.userId),
-              updateWars(ctx.drizzle, userBattle, result, ctx.userId),
-            ]);
-          }
+  await Promise.all([
+    updateUser(ctx.drizzle, pusher, userBattle, result, ctx.userId),
+    updateWars(ctx.drizzle, userBattle, result, ctx.userId),
+    updateKage(ctx.drizzle, userBattle, result), // no ctx.userId needed
+  ]);
+}
 
           // Hide private state of non-session user
           const newMaskedBattle = maskBattle(userBattle, ctx.userId);
