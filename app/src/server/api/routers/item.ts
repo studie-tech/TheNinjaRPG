@@ -1399,6 +1399,11 @@ export const itemDatabaseFilter = (
       ? [eq(item.canBeTraded, input.canBeTraded)]
       : []),
 
+    // Level filter - only show items the user can use
+    ...(input?.maxLevel !== undefined
+      ? [lte(item.requiredLevel, input.maxLevel)]
+      : []),
+
     // Cost filters
     gte(item.cost, input?.minCost ?? 0),
     gte(item.repsCost, input?.minRepsCost ?? 0),

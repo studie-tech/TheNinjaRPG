@@ -30,6 +30,7 @@ export const itemFilteringSchema = z.object({
   canBeHunted: z.boolean().optional(),
   canBeGathered: z.boolean().optional(),
   canBeTraded: z.boolean().optional(),
+  maxLevel: z.number().optional(),
 });
 
 export type ItemFilteringSchema = z.infer<typeof itemFilteringSchema>;

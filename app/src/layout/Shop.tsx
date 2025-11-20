@@ -63,6 +63,7 @@ const Shop: React.FC<ShopProps> = (props) => {
       ...getShopFilter(filteringState),
       onlyInShop: true,
       hidden: false,
+      maxLevel: userData.level,
     },
     {
       enabled: userData !== undefined,
