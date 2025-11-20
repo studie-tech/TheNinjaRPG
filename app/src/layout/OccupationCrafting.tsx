@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import Confirm2 from "@/layout/Confirm2";
-import { Hammer, Star, Info, Gem, Zap } from "lucide-react";
+import { Hammer, Star, Info, Gem, Zap, Wrench } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { showMutationToast } from "@/libs/toast";
@@ -29,6 +29,7 @@ import {
   getTotalItemQuantity,
   getEffectiveMaxImbuements,
 } from "@/libs/crafting";
+import { calcItemRepairCost } from "@/libs/item";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 
 export default function OccupationCrafting() {
@@ -98,6 +99,27 @@ export default function OccupationCrafting() {
       await utils.item.getUserItems.invalidate();
     },
   });
+
+  const repairItemMutation = api.item.repair.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.item.getUserItems.invalidate();
+        await utils.profile.getUser.invalidate();
+      }
+    },
+  });
+
+  const repairAllMutation = api.item.repairAll.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.item.getUserItems.invalidate();
+        await utils.profile.getUser.invalidate();
+      }
+    },
+  });
+
 
   const [selectedItem, setSelectedItem] = useState<Item | undefined>(undefined);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -696,6 +718,128 @@ export default function OccupationCrafting() {
                       )}
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null;
+        })()}
+
+        {/* Repair Items */}
+        {(() => {
+          const itemsNeedingRepair = (userItems || []).filter(
+            (userItem) =>
+              userItem.durability < userItem.item.maxDurability &&
+              userItem.item.maxDurability > 0,
+          );
+
+          return itemsNeedingRepair.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5" />
+                  Repair Items
+                  <Badge variant="outline" className="ml-auto">
+                    {itemsNeedingRepair.length} item{itemsNeedingRepair.length !== 1 ? "s" : ""}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Repair All Button */}
+                  {(() => {
+                    const totalRepairCost = itemsNeedingRepair.reduce(
+                      (total, userItem) => total + calcItemRepairCost(userItem),
+                      0,
+                    );
+                    const canAfford = (userData?.money || 0) >= totalRepairCost;
+                    return (
+                      <div className="mb-4 flex items-center justify-between rounded-lg border p-4 bg-muted/50">
+                        <div>
+                          <p className="font-semibold">Repair All Items</p>
+                          <p className="text-sm text-muted-foreground">
+                            Total cost:{" "}
+                            <span className={canAfford ? "text-green-600" : "text-red-600"}>
+                              {totalRepairCost.toLocaleString()} ryo
+                            </span>
+                            {!canAfford && (
+                              <span className="ml-2">
+                                (You have {(userData?.money ?? 0).toLocaleString()} ryo)
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <Confirm2
+                          title="Repair All Items"
+                          proceed_label={
+                            repairAllMutation.isPending ? undefined : "Repair All"
+                          }
+                          button={
+                            <Button
+                              variant="default"
+                              disabled={repairAllMutation.isPending || !canAfford}
+                              loading={repairAllMutation.isPending}
+                            >
+                              <Wrench className="mr-2 h-4 w-4" />
+                              Repair All
+                            </Button>
+                          }
+                          onAccept={() => repairAllMutation.mutate()}
+                        >
+                          <p>
+                            Are you sure you want to repair all {itemsNeedingRepair.length} item
+                            {itemsNeedingRepair.length !== 1 ? "s" : ""} for{" "}
+                            <strong>{totalRepairCost.toLocaleString()} ryo</strong>?
+                          </p>
+                        </Confirm2>
+                      </div>
+                    );
+                  })()}
+                  {itemsNeedingRepair.map((userItem) => {
+                    const repairCost = calcItemRepairCost(userItem);
+                    const durabilityPercent = Math.round(
+                      (userItem.durability / userItem.item.maxDurability) * 100,
+                    );
+                    return (
+                      <div key={userItem.id} className="border rounded-lg p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <ContentImage
+                            image={userItem.item?.image || ""}
+                            alt={userItem.item?.name || "Unknown"}
+                            className="w-12 h-12"
+                          />
+                          <div className="flex-1">
+                            <h4 className="font-semibold">{userItem.item?.name}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Durability: {userItem.durability} / {userItem.item.maxDurability} (
+                              {durabilityPercent}%)
+                            </p>
+                          </div>
+                        </div>
+                        <ItemWithEffects
+                          item={{
+                            ...userItem.item,
+                            imbuements: userItem.imbuements?.map((i) => i.item) || [],
+                            curDurability: userItem.durability,
+                          }}
+                        />
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="text-sm">
+                            <span className="font-medium">Repair Cost: </span>
+                            <span className="text-green-600">{repairCost.toLocaleString()} ryo</span>
+                          </div>
+                          <Button
+                            variant="info"
+                            onClick={() => repairItemMutation.mutate({ userItemId: userItem.id })}
+                            disabled={repairItemMutation.isPending}
+                            loading={repairItemMutation.isPending}
+                          >
+                            <Wrench className="mr-2 h-4 w-4" />
+                            Repair
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

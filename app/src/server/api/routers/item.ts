@@ -749,6 +749,9 @@ export const itemRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       if (!useritem) return errorResponse("User item not found");
       if (useritem.userId !== user.userId) return errorResponse("Not yours to repair");
+      if (user.occupation !== "CRAFTING") {
+        return errorResponse("You must have the Crafting occupation to repair items");
+      }
       if (user.status !== "AWAKE") {
         return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
       }
@@ -760,20 +763,355 @@ export const itemRouter = createTRPCRouter({
       if (user.money < repairCost) {
         return errorResponse(`Insufficient funds. Repair costs ${repairCost} ryo`);
       }
-      // Mutate
-      await Promise.all([
-        ctx.drizzle
-          .update(userData)
-          .set({ money: sql`${userData.money} - ${repairCost}` })
-          .where(eq(userData.userId, ctx.userId)),
-        ctx.drizzle
-          .update(userItem)
-          .set({ durability: useritem.item.maxDurability })
-          .where(eq(userItem.id, input.userItemId)),
-      ]);
+      // Mutate - update money with conditional guard to prevent race conditions
+      const moneyUpdateResult = await ctx.drizzle
+        .update(userData)
+        .set({ money: sql`${userData.money} - ${repairCost}` })
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.money, repairCost),
+          ),
+        );
+      if (moneyUpdateResult.rowsAffected !== 1) {
+        return errorResponse("Insufficient funds for this repair");
+      }
+      // Update item durability
+      await ctx.drizzle
+        .update(userItem)
+        .set({ durability: useritem.item.maxDurability })
+        .where(eq(userItem.id, input.userItemId));
       return {
         success: true,
         message: `Repaired ${useritem.item.name} for ${repairCost} ryo`,
+      };
+    }),
+  // Repair all user items
+  repairAll: protectedProcedure
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Query
+      const [user, useritems] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+      ]);
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (user.occupation !== "CRAFTING") {
+        return errorResponse("You must have the Crafting occupation to repair items");
+      }
+      if (user.status !== "AWAKE") {
+        return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
+      }
+      // Filter items that need repair
+      const itemsNeedingRepair = useritems.filter(
+        (useritem) =>
+          useritem.durability < useritem.item.maxDurability &&
+          useritem.item.maxDurability > 0,
+      );
+      if (itemsNeedingRepair.length === 0) {
+        return errorResponse("No items need repair");
+      }
+      // Calculate total repair cost
+      const totalRepairCost = itemsNeedingRepair.reduce(
+        (total, useritem) => total + calcItemRepairCost(useritem),
+        0,
+      );
+      if (user.money < totalRepairCost) {
+        return errorResponse(
+          `Insufficient funds. Total repair cost is ${totalRepairCost} ryo, but you only have ${user.money} ryo`,
+        );
+      }
+      // Mutate - repair all items and update money
+      // Update money with conditional guard to prevent race conditions
+      const moneyUpdateResult = await ctx.drizzle
+        .update(userData)
+        .set({ money: sql`${userData.money} - ${totalRepairCost}` })
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.money, totalRepairCost),
+          ),
+        );
+      if (moneyUpdateResult.rowsAffected !== 1) {
+        return errorResponse("Insufficient funds for this repair");
+      }
+      // Update item durabilities
+      await Promise.all(
+        itemsNeedingRepair.map((useritem) =>
+          ctx.drizzle
+            .update(userItem)
+            .set({ durability: useritem.item.maxDurability })
+            .where(eq(userItem.id, useritem.id)),
+        ),
+      );
+      return {
+        success: true,
+        message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} for ${totalRepairCost.toLocaleString()} ryo`,
+      };
+    }),
+  // Use repair item on another item
+  useRepairItem: protectedProcedure
+    .input(z.object({ repairItemId: z.string(), targetItemId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, repairUserItem, targetUserItem] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserItem(ctx.drizzle, ctx.userId, input.repairItemId),
+        fetchUserItem(ctx.drizzle, ctx.userId, input.targetItemId),
+      ]);
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (!repairUserItem) return errorResponse("Repair item not found");
+      if (!targetUserItem) return errorResponse("Target item not found");
+      if (repairUserItem.userId !== user.userId) return errorResponse("Not your repair item");
+      if (targetUserItem.userId !== user.userId) return errorResponse("Not your target item");
+      if (user.status !== "AWAKE") {
+        return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
+      }
+      if (repairUserItem.quantity <= 0) {
+        return errorResponse("You don't have any of this repair item");
+      }
+      if (targetUserItem.durability >= targetUserItem.item.maxDurability) {
+        return errorResponse("Item is already at full durability");
+      }
+      // Check if repair item has repair tag
+      const repairEffect = repairUserItem.item.effects.find((e) => e.type === "repair");
+      if (!repairEffect) {
+        return errorResponse("This item does not have a repair effect");
+      }
+      // Calculate repair amount
+      const repairAmount = Math.floor(repairEffect.power || 0);
+      if (repairAmount <= 0) {
+        return errorResponse("Repair item has invalid power");
+      }
+      // Calculate new durability
+      const newDurability = Math.min(
+        targetUserItem.durability + repairAmount,
+        targetUserItem.item.maxDurability,
+      );
+      const actualRepair = newDurability - targetUserItem.durability;
+      if (actualRepair <= 0) {
+        return errorResponse("Item is already at full durability");
+      }
+      // Mutate
+      const promises: Promise<any>[] = [
+        ctx.drizzle
+          .update(userItem)
+          .set({ durability: newDurability })
+          .where(eq(userItem.id, input.targetItemId)),
+      ];
+      // Consume repair item if it's consumable
+      if (repairUserItem.item.destroyOnUse) {
+        if (repairUserItem.quantity <= 1) {
+          promises.push(
+            ctx.drizzle.delete(userItem).where(eq(userItem.id, input.repairItemId)),
+          );
+        } else {
+          promises.push(
+            ctx.drizzle
+              .update(userItem)
+              .set({ quantity: sql`${userItem.quantity} - 1` })
+              .where(eq(userItem.id, input.repairItemId)),
+          );
+        }
+      }
+      await Promise.all(promises);
+      return {
+        success: true,
+        message: `Repaired ${targetUserItem.item.name} by ${actualRepair} durability using ${repairUserItem.item.name}`,
+      };
+    }),
+  // Use repair items to repair all items
+  useRepairAll: protectedProcedure
+    .output(
+      baseServerResponse.extend({
+        kitsUsed: z
+          .array(
+            z.object({
+              repairItemId: z.string(),
+              repairItemName: z.string(),
+              quantityUsed: z.number(),
+            }),
+          )
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx }) => {
+      // Query
+      const [user, useritems] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+      ]);
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (user.status !== "AWAKE") {
+        return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
+      }
+      // Filter items that need repair
+      const itemsNeedingRepair = useritems.filter(
+        (useritem) =>
+          useritem.durability < useritem.item.maxDurability &&
+          useritem.item.maxDurability > 0,
+      );
+      if (itemsNeedingRepair.length === 0) {
+        return errorResponse("No items need repair");
+      }
+      // Get all available repair kits
+      const repairKits = useritems
+        .filter(
+          (userItem) =>
+            userItem.item?.effects?.some((e: { type: string }) => e.type === "repair") &&
+            userItem.quantity > 0,
+        )
+        .map((userItem) => {
+          const repairEffect = userItem.item.effects.find(
+            (e: { type: string }) => e.type === "repair",
+          );
+          return {
+            userItem,
+            repairAmount: Math.floor(repairEffect?.power || 0),
+            repairEffect,
+          };
+        })
+        .filter((kit) => kit.repairAmount > 0)
+        .sort((a, b) => a.repairAmount - b.repairAmount); // Sort by repair power (smallest first) to minimize waste
+
+      if (repairKits.length === 0) {
+        return errorResponse("You don't have any repair items in your inventory");
+      }
+
+      // Calculate total durability needed (pool all together)
+      const totalDurabilityNeeded = itemsNeedingRepair.reduce(
+        (total, useritem) =>
+          total + (useritem.item.maxDurability - useritem.durability),
+        0,
+      );
+
+      // Track kit usage and available quantities
+      const kitUsage: Map<string, number> = new Map(); // Map of userItemId -> quantity used
+      const kitAvailability: Map<string, number> = new Map(); // Map of userItemId -> available quantity
+      for (const kit of repairKits) {
+        kitAvailability.set(kit.userItem.id, kit.userItem.quantity);
+      }
+
+      // Group kits by power level and aggregate quantities
+      const kitsByPower = new Map<number, Array<{ kitId: string; available: number; power: number }>>();
+      for (const kit of repairKits) {
+        const available = kitAvailability.get(kit.userItem.id) || 0;
+        if (available <= 0) continue;
+
+        if (!kitsByPower.has(kit.repairAmount)) {
+          kitsByPower.set(kit.repairAmount, []);
+        }
+        kitsByPower.get(kit.repairAmount)!.push({
+          kitId: kit.userItem.id,
+          available,
+          power: kit.repairAmount,
+        });
+      }
+
+      // Sort by power (smallest first)
+      const sortedPowers = Array.from(kitsByPower.keys()).sort((a, b) => a - b);
+
+      // Use kits starting with lowest power first until all durability is covered
+      let remainingDurability = totalDurabilityNeeded;
+      for (const power of sortedPowers) {
+        if (remainingDurability <= 0) break;
+
+        const kitsWithThisPower = kitsByPower.get(power)!;
+        const totalAvailable = kitsWithThisPower.reduce((sum, k) => sum + k.available, 0);
+        
+        if (totalAvailable <= 0) continue;
+
+        const kitsNeeded = Math.ceil(remainingDurability / power);
+        let kitsToUse = Math.min(kitsNeeded, totalAvailable);
+
+        // Distribute across all stacks of this power level
+        for (const { kitId, available } of kitsWithThisPower) {
+          if (kitsToUse <= 0) break;
+          const useFromThisStack = Math.min(kitsToUse, available);
+          if (useFromThisStack > 0) {
+            const currentUsage = kitUsage.get(kitId) || 0;
+            kitUsage.set(kitId, currentUsage + useFromThisStack);
+            const currentAvailable = kitAvailability.get(kitId) || 0;
+            kitAvailability.set(kitId, currentAvailable - useFromThisStack);
+            kitsToUse -= useFromThisStack;
+            remainingDurability -= useFromThisStack * power;
+          }
+        }
+      }
+
+      if (remainingDurability > 0) {
+        return errorResponse(
+          `Insufficient repair kits. Need ${totalDurabilityNeeded} durability total, but only have enough for ${totalDurabilityNeeded - remainingDurability} durability`,
+        );
+      }
+
+      // All items will be repaired to full durability
+      const itemRepairs: Array<{ userItemId: string; newDurability: number }> =
+        itemsNeedingRepair.map((useritem) => ({
+          userItemId: useritem.id,
+          newDurability: useritem.item.maxDurability,
+        }));
+
+      // Build kits used summary
+      const kitsToUse: Array<{
+        repairItemId: string;
+        repairItemName: string;
+        quantityUsed: number;
+      }> = [];
+      for (const [repairItemId, quantityUsed] of kitUsage.entries()) {
+        const repairUserItem = useritems.find((ui) => ui.id === repairItemId);
+        if (repairUserItem && quantityUsed > 0) {
+          kitsToUse.push({
+            repairItemId,
+            repairItemName: repairUserItem.item.name,
+            quantityUsed,
+          });
+        }
+      }
+
+      // Apply repairs to all items
+      const repairPromises: Promise<any>[] = itemRepairs.map((repair) =>
+        ctx.drizzle
+          .update(userItem)
+          .set({ durability: repair.newDurability })
+          .where(eq(userItem.id, repair.userItemId)),
+      );
+
+      // Consume repair kits
+      for (const [repairItemId, quantityUsed] of kitUsage.entries()) {
+        const repairUserItem = useritems.find((ui) => ui.id === repairItemId);
+        if (!repairUserItem) continue;
+
+        if (repairUserItem.item.destroyOnUse) {
+          if (repairUserItem.quantity <= quantityUsed) {
+            repairPromises.push(
+              ctx.drizzle.delete(userItem).where(eq(userItem.id, repairItemId)),
+            );
+          } else {
+            repairPromises.push(
+              ctx.drizzle
+                .update(userItem)
+                .set({ quantity: sql`${userItem.quantity} - ${quantityUsed}` })
+                .where(eq(userItem.id, repairItemId)),
+            );
+          }
+        }
+      }
+
+      await Promise.all(repairPromises);
+
+      const kitsUsedSummary = kitsToUse
+        .map((kit) => `${kit.quantityUsed}x ${kit.repairItemName}`)
+        .join(", ");
+
+      return {
+        success: true,
+        message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} using ${kitsUsedSummary}`,
+        kitsUsed: kitsToUse,
       };
     }),
   // Buy user item

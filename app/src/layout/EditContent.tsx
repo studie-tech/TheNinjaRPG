@@ -1567,6 +1567,21 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     })
     .filter((value) => {
       return (
+        !["repair"].includes(watchType) ||
+        ![
+          "staticAnimation",
+          "staticAssetPath",
+          "appearAnimation",
+          "disappearAnimation",
+          "rounds",
+          "target",
+          "friendlyFire",
+          "calculation",
+        ].includes(value)
+      );
+    })
+    .filter((value) => {
+      return (
         !["rollbloodline", "removebloodline", "marriageslotincrease"].includes(
           watchType,
         ) ||

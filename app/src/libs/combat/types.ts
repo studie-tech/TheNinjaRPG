@@ -852,6 +852,13 @@ export const NonCombatConsumeRewardTag = z.object({
 });
 export type NonCombatConsumeRewardTagType = z.infer<typeof NonCombatConsumeRewardTag>;
 
+export const RepairTag = z.object({
+  ...BaseAttributes,
+  type: z.literal("repair").default("repair"),
+  description: msg("Repair an item's durability by the power amount"),
+});
+export type RepairTagType = z.infer<typeof RepairTag>;
+
 export const SealPreventTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
@@ -1025,6 +1032,7 @@ export const AllTags = z.union([
   MoveTag.default({}),
   NonCombatConsumeRewardTag.default({}),
   NonCombatGainSkill.default({}),
+  RepairTag.default({}),
   OneHitKillPreventTag.default({}),
   OneHitKillTag.default({}),
   PierceTag.default({}),

@@ -49,6 +49,8 @@ export const nonCombatConsume = (item: Item, userData: UserData): boolean => {
       return true;
     } else if (effect.type === "noncombatgainskill") {
       return true;
+    } else if (effect.type === "repair") {
+      return true;
     }
   }
 

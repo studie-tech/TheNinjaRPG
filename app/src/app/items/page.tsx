@@ -7,8 +7,8 @@ import {
   Cookie,
   ArrowDownToLine,
   Zap,
-  Wrench,
   Split,
+  Wrench,
 } from "lucide-react";
 import Image from "next/image";
 import ContentBox from "@/layout/ContentBox";
@@ -40,13 +40,13 @@ import { showMutationToast, showRewardToast } from "@/libs/toast";
 import {
   calcMaxItems,
   calcMaxEventItems,
-  calcItemRepairCost,
   calcMaxMaterials,
 } from "@/libs/item";
 import { CircleFadingArrowUp, Shirt } from "lucide-react";
 import { COST_EXTRA_ITEM_SLOT, IMG_EQUIP_SILHOUETTE } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 import type { Item, UserItemWithRelations, UserItem, ItemSlot } from "@/drizzle/schema";
+import { calculateKitsToUse, getRepairKits, type RepairKit } from "@/libs/repair";
 
 export default function MyItems() {
   // State
@@ -79,6 +79,17 @@ export default function MyItems() {
         showMutationToast(data);
         if (data.success) {
           await utils.item.getUserItems.invalidate();
+        }
+      },
+    });
+
+  const { mutate: mutateRepairAll, isPending: isRepairingAll } =
+    api.item.useRepairAll.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.item.getUserItems.invalidate();
+          await utils.profile.getUser.invalidate();
         }
       },
     });
@@ -116,6 +127,23 @@ export default function MyItems() {
   // Can afford removing
   const canAfford =
     userData.reputationPoints && userData.reputationPoints >= COST_EXTRA_ITEM_SLOT;
+
+  // Calculate items needing repair and which kits will be used
+  const itemsNeedingRepair = (userItems || []).filter(
+    (useritem) =>
+      useritem.durability < useritem.item.maxDurability &&
+      useritem.item.maxDurability > 0,
+  );
+  const repairKits = getRepairKits(userItems);
+
+  // Calculate which kits will be used (same algorithm as backend)
+  const repairKitCalculation = calculateKitsToUse(
+    itemsNeedingRepair,
+    repairKits,
+    userItems,
+  );
+
+  const repairAllInfo = repairKitCalculation;
 
   return (
     <>
@@ -192,27 +220,241 @@ export default function MyItems() {
         <div>
           <ItemLoadoutSelector />
         </div>
-        <Confirm2
-          title="Auto Equip"
-          isValid={!isPending}
-          button={
-            <Button disabled={isAutoEquipping} variant="default">
-              <Zap className="mr-2 h-4 w-4" />
-              {isAutoEquipping ? "Auto Equipping..." : "Auto Equip"}
-            </Button>
-          }
-          onAccept={(e) => {
-            e.preventDefault();
-            autoEquipOptimal();
-          }}
-        >
-          <p>
-            You are about to auto-equip your items. This will equip unequipped items in
-            the best possible way. Are you sure?
-          </p>
-        </Confirm2>
+        <div className="flex gap-2">
+          {itemsNeedingRepair.length > 0 && repairKits.length > 0 && (
+            <Confirm2
+              title="Repair All Items"
+              proceed_label={
+                repairAllInfo.canRepairAll
+                  ? isRepairingAll
+                    ? undefined
+                    : "Repair All"
+                  : undefined
+              }
+              isValid={repairAllInfo.canRepairAll && !isRepairingAll}
+              button={
+                <Button disabled={isRepairingAll} variant="outline">
+                  <Wrench className="mr-2 h-4 w-4" />
+                  {isRepairingAll ? "Repairing..." : "Repair All"}
+                </Button>
+              }
+              onAccept={(e) => {
+                e.preventDefault();
+                if (repairAllInfo.canRepairAll) {
+                  mutateRepairAll();
+                }
+              }}
+            >
+              <div className="space-y-3">
+                {repairAllInfo.canRepairAll ? (
+                  <>
+                    <p>
+                      You are about to repair all {itemsNeedingRepair.length} item
+                      {itemsNeedingRepair.length !== 1 ? "s" : ""} using repair kits.
+                    </p>
+                    {repairAllInfo.kitsToUse.length > 0 && (
+                      <div>
+                        <p className="font-semibold mb-2">Repair kits to be used:</p>
+                        <div className="space-y-1">
+                          {repairAllInfo.kitsToUse.map((kit) => (
+                            <div
+                              key={kit.repairItemId}
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <span>{kit.repairItemName}</span>
+                              <span className="font-medium">x{kit.quantityUsed}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div>
+                    <p className="text-red-600 font-semibold mb-2">
+                      Not enough repair kits
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      You have {itemsNeedingRepair.length} damaged item
+                      {itemsNeedingRepair.length !== 1 ? "s" : ""} that need{" "}
+                      {repairAllInfo.totalDurabilityNeeded} total durability, but you
+                      don't have enough repair kits to repair all of them.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Confirm2>
+          )}
+          <Confirm2
+            title="Auto Equip"
+            isValid={!isPending}
+            button={
+              <Button disabled={isAutoEquipping} variant="default">
+                <Zap className="mr-2 h-4 w-4" />
+                {isAutoEquipping ? "Auto Equipping..." : "Auto Equip"}
+              </Button>
+            }
+            onAccept={(e) => {
+              e.preventDefault();
+              autoEquipOptimal();
+            }}
+          >
+            <p>
+              You are about to auto-equip your items. This will equip unequipped items in
+              the best possible way. Are you sure?
+            </p>
+          </Confirm2>
+        </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Repair Item Selection Modal Component
+ */
+type SetIsOpenType = React.Dispatch<React.SetStateAction<boolean>>;
+
+interface RepairItemModalProps {
+  isOpen: boolean;
+  setIsOpen: SetIsOpenType;
+  targetItem: UserItemWithRelations;
+  repairItems: UserItemWithRelations[];
+  onSelectRepairItem: (repairItemId: string, targetItemId: string) => void;
+  isPending?: boolean;
+}
+
+function RepairItemSelectionModal({
+  isOpen,
+  setIsOpen,
+  targetItem,
+  repairItems,
+  onSelectRepairItem,
+  isPending = false,
+}: RepairItemModalProps) {
+  if (!isOpen || !targetItem) return null;
+
+
+  return (
+    <Modal2
+      title="Select Repair Item"
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+      isValid={false}
+    >
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm text-muted-foreground mb-2">
+            Repairing: <strong>{targetItem.item.name}</strong>
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Durability: {targetItem.durability} / {targetItem.item.maxDurability}
+          </p>
+        </div>
+        {repairItems.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            You don't have any repair items in your inventory.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {repairItems.map((repairItem) => {
+              const repairEffect = repairItem.item.effects.find((e) => e.type === "repair");
+              const repairAmount = Math.floor(repairEffect?.power || 0);
+              const newDurability = Math.min(
+                targetItem.durability + repairAmount,
+                targetItem.item.maxDurability,
+              );
+              const actualRepair = newDurability - targetItem.durability;
+              return (
+                <div
+                  key={repairItem.id}
+                  className={`border rounded-lg p-3 transition-colors ${
+                    isPending
+                      ? "opacity-50 cursor-not-allowed bg-slate-50"
+                      : "hover:bg-slate-100 cursor-pointer"
+                  }`}
+                  onClick={() => {
+                    if (!isPending) {
+                      onSelectRepairItem(repairItem.id, targetItem.id);
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <ContentImage
+                      image={repairItem.item.image}
+                      alt={repairItem.item.name}
+                      className="w-12 h-12"
+                    />
+                    <div className="flex-1">
+                      <h4 className="font-semibold">{repairItem.item.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Quantity: {repairItem.quantity}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {isPending ? (
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Repairing...
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium text-green-600">
+                            +{actualRepair} Durability
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {targetItem.durability} → {newDurability} / {targetItem.item.maxDurability}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Modal2>
+  );
+}
+
+/**
+ * Shared Repair Modal Wrapper Component
+ * Handles the repair item selection modal with mutation logic
+ */
+interface RepairModalWrapperProps {
+  useritem: UserItemWithRelations | undefined;
+  repairItems: UserItemWithRelations[];
+  isRepairModalOpen: boolean;
+  setIsRepairModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  onRepairItem: (params: { repairItemId: string; targetItemId: string }) => void;
+  isPending?: boolean;
+}
+
+function RepairModalWrapper({
+  useritem,
+  repairItems,
+  isRepairModalOpen,
+  setIsRepairModalOpen,
+  onRepairItem,
+  isPending = false,
+}: RepairModalWrapperProps) {
+  if (!useritem) return null;
+
+  return (
+    <RepairItemSelectionModal
+      isOpen={isRepairModalOpen}
+      setIsOpen={setIsRepairModalOpen}
+      targetItem={useritem}
+      repairItems={repairItems}
+      onSelectRepairItem={(repairItemId, targetItemId) => {
+        onRepairItem({
+          repairItemId,
+          targetItemId,
+        });
+      }}
+      isPending={isPending}
+    />
   );
 }
 
@@ -235,6 +477,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isSplitDialogOpen, setIsSplitDialogOpen] = useState<boolean>(false);
   const [quantityToKeep, setQuantityToKeep] = useState<string>("");
+  const [isRepairModalOpen, setIsRepairModalOpen] = useState<boolean>(false);
 
   // tRPC utility
   const utils = api.useUtils();
@@ -299,16 +542,6 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     onSettled,
   });
 
-  const { mutate: repair, isPending: isRepairing } = api.item.repair.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.item.getUserItems.invalidate();
-        await utils.profile.getUser.invalidate();
-      }
-    },
-    onSettled,
-  });
 
   const { mutate: splitStack, isPending: isSplitting } = api.item.splitStack.useMutation({
     onSuccess: async (data) => {
@@ -322,12 +555,29 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     onSettled,
   });
 
+  const { mutate: mutateRepairItem, isPending: isUsingRepairItem } =
+    api.item.useRepairItem.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          setIsRepairModalOpen(false);
+          await utils.item.getUserItems.invalidate();
+          await utils.profile.getUser.invalidate();
+        }
+      },
+    });
+
   // Derived
   const structures = userData?.village?.structures;
   const isLoading =
-    isMerging || isConsuming || isSelling || isEquipping || isRepairing || isSplitting;
+    isMerging || isConsuming || isSelling || isEquipping || isSplitting || isUsingRepairItem;
   const items = useritems?.map((useritem) => ({ ...useritem.item, ...useritem }));
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
+  const repairItems = (useritems || []).filter(
+    (userItem: UserItemWithRelations) =>
+      userItem.item?.effects?.some((e: { type: string }) => e.type === "repair") &&
+      userItem.quantity > 0,
+  );
 
   // Split stack handler
   const handleSplitStack = () => {
@@ -390,15 +640,6 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                   Equip
                 </Button>
               )}
-              {useritem.durability < useritem.item.maxDurability && (
-                <Button
-                  variant="info"
-                  onClick={() => repair({ userItemId: useritem.id })}
-                >
-                  <Wrench className="mr-2 h-5 w-5" />
-                  Repair ({calcItemRepairCost(useritem)} ryo)
-                </Button>
-              )}
               {useritem.item.canStack && (
                 <>
                   <Button
@@ -431,6 +672,17 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                   Consume
                 </Button>
               )}
+              {useritem.durability < useritem.item.maxDurability &&
+                useritem.item.maxDurability > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsRepairModalOpen(true)}
+                    disabled={repairItems.length === 0}
+                  >
+                    <Wrench className="mr-2 h-5 w-5" />
+                    Use Repair Item
+                  </Button>
+                )}
               <div className="grow"></div>
               <Confirm2
                 title="Security Confirmation"
@@ -520,6 +772,15 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           </DialogContent>
         </Dialog>
       )}
+      {/* Repair Item Selection Modal */}
+      <RepairModalWrapper
+        useritem={useritem}
+        repairItems={repairItems}
+        isRepairModalOpen={isRepairModalOpen}
+        setIsRepairModalOpen={setIsRepairModalOpen}
+        onRepairItem={mutateRepairItem}
+        isPending={isUsingRepairItem}
+      />
     </>
   );
 };
@@ -540,12 +801,18 @@ const Character: React.FC<CharacterProps> = (props) => {
   );
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [showItemDetails, setShowItemDetails] = useState<boolean>(false);
+  const [isRepairModalOpen, setIsRepairModalOpen] = useState<boolean>(false);
 
   // The item on the current slot
 
   // Collapse UserItem and Item
   const items = useritems?.map((useritem) => ({ ...useritem.item, ...useritem }));
   const equipped = items?.find((item) => item.equipped === slot);
+  const repairItems = (useritems || []).filter(
+    (userItem: UserItemWithRelations) =>
+      userItem.item?.effects?.some((e: { type: string }) => e.type === "repair") &&
+      userItem.quantity > 0,
+  );
 
   // tRPC utility
   const utils = api.useUtils();
@@ -578,21 +845,18 @@ const Character: React.FC<CharacterProps> = (props) => {
     },
   });
 
-  const { mutate: repairEquipped, isPending: isRepairingEquipped } =
-    api.item.repair.useMutation({
+  const { mutate: mutateRepairItem, isPending: isUsingRepairItem } =
+    api.item.useRepairItem.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
+          setIsRepairModalOpen(false);
           await utils.item.getUserItems.invalidate();
           await utils.profile.getUser.invalidate();
         }
       },
-      onSettled: () => {
-        document.body.style.cursor = "default";
-        setShowItemDetails(false);
-        setUserItem(undefined);
-      },
     });
+
 
   // Placement of equip boxes
   const l = "left-[10%] ";
@@ -667,10 +931,6 @@ const Character: React.FC<CharacterProps> = (props) => {
             isOpen={showItemDetails}
             setIsOpen={setShowItemDetails}
             isValid={false}
-            proceed_label="Unequip"
-            onAccept={() => {
-              equip({ userItemId: useritem.id, slot: slot! });
-            }}
           >
             <ItemWithEffects
               item={{
@@ -681,27 +941,48 @@ const Character: React.FC<CharacterProps> = (props) => {
               key={useritem.id}
               showStatistic="item"
             />
-            {!isEquipping && !isRepairingEquipped && (
+            {!isEquipping && !isUsingRepairItem && (
               <div className="flex flex-row gap-1 mt-2">
-                {useritem.durability < useritem.item.maxDurability && (
-                  <Button
-                    variant="info"
-                    onClick={() => repairEquipped({ userItemId: useritem.id })}
-                  >
-                    <Wrench className="mr-2 h-5 w-5" />
-                    Repair ({calcItemRepairCost(useritem)} ryo)
-                  </Button>
-                )}
+                <Button
+                  variant="info"
+                  onClick={() => {
+                    if (slot) equip({ userItemId: useritem.id, slot });
+                  }}
+                  disabled={!slot}
+                >
+                  <Shirt className="mr-2 h-4 w-4" />
+                  Unequip
+                </Button>
+                {useritem.durability < useritem.item.maxDurability &&
+                  useritem.item.maxDurability > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsRepairModalOpen(true)}
+                      disabled={repairItems.length === 0}
+                    >
+                      <Wrench className="mr-2 h-4 w-4" />
+                      Use Repair Item
+                    </Button>
+                  )}
                 <div className="grow"></div>
               </div>
             )}
-            {(isEquipping || isRepairingEquipped) && (
+            {(isEquipping || isUsingRepairItem) && (
               <Loader
                 explanation={`${isEquipping ? "Unequipping" : "Repairing"} ${useritem.item.name}`}
               />
             )}
           </Modal2>
         )}
+        {/* Repair Item Selection Modal */}
+        <RepairModalWrapper
+          useritem={useritem}
+          repairItems={repairItems}
+          isRepairModalOpen={isRepairModalOpen}
+          setIsRepairModalOpen={setIsRepairModalOpen}
+          onRepairItem={mutateRepairItem}
+          isPending={isUsingRepairItem}
+        />
       </div>
     </div>
   );
