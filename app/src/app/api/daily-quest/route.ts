@@ -1,4 +1,4 @@
-import { eq, or, isNotNull, and, sql } from "drizzle-orm";
+import { eq, or, isNotNull, and, sql, gte, lte } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
@@ -91,7 +91,12 @@ export async function GET() {
           newDaily,
           or(
             ...m.combos.map((c) =>
-              and(eq(userData.rank, c.rank), eq(userData.villageId, c.villageId)),
+              and(
+                eq(userData.rank, c.rank),
+                eq(userData.villageId, c.villageId),
+                gte(userData.level, newDaily.requiredLevel),
+                lte(userData.level, newDaily.maxLevel),
+              ),
             ),
           ),
         );

@@ -1027,6 +1027,8 @@ export const isAvailableUserQuests = (
     completed?: number | null;
     medicalRank?: MEDNIN_RANK | null;
     huntingRank?: HUNTING_RANK | null;
+    requiredLevel?: number | null;
+    maxLevel?: number | null;
   },
   user: UserData & {
     completedQuests: { id: string; questId: string; completed?: number }[];
@@ -1065,6 +1067,12 @@ export const isAvailableUserQuests = (
   const medicalRankCheck = !reqMedRankIdx || userMedRankIdx >= reqMedRankIdx;
   const huntingRankCheck = !reqHuntRankIdx || userHuntRankIdx >= reqHuntRankIdx;
 
+  // Level check - user must be >= requiredLevel and <= maxLevel
+  const levelCheck =
+    (!questAndUserQuestInfo.requiredLevel ||
+      user.level >= questAndUserQuestInfo.requiredLevel) &&
+    (!questAndUserQuestInfo.maxLevel || user.level <= questAndUserQuestInfo.maxLevel);
+
   // Event specific tests
   const eventCompletedCheck =
     !QuestTypesWithMaxAttempts.includes(questAndUserQuestInfo.questType) ||
@@ -1095,7 +1103,8 @@ export const isAvailableUserQuests = (
     bloodlineCheck &&
     prerequisiteCheck &&
     medicalRankCheck &&
-    huntingRankCheck;
+    huntingRankCheck &&
+    levelCheck;
 
   // If quest is not available, return the reason
   let message = "";
@@ -1110,6 +1119,20 @@ export const isAvailableUserQuests = (
     message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;
   if (!huntingRankCheck)
     message += `Quest requires hunting rank ${capitalizeFirstLetter(questHuntRank ?? "NONE")}\n`;
+  if (!levelCheck) {
+    if (
+      questAndUserQuestInfo.requiredLevel &&
+      user.level < questAndUserQuestInfo.requiredLevel
+    ) {
+      message += `Quest requires level ${questAndUserQuestInfo.requiredLevel}\n`;
+    }
+    if (
+      questAndUserQuestInfo.maxLevel &&
+      user.level > questAndUserQuestInfo.maxLevel
+    ) {
+      message += `Quest is only available up to level ${questAndUserQuestInfo.maxLevel}\n`;
+    }
+  }
   // Returned detailed info on all the checks
   return { check, message };
 };
