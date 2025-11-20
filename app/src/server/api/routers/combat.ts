@@ -593,7 +593,7 @@ export const combatRouter = createTRPCRouter({
               createAction(db, newBattle, history),
               updateUser(db, pusher, newBattle, result, suid),
               saveUsage(db, newBattle, result, suid),
-              updateKage(db, newBattle, result, suid),
+              updateKage(db, newBattle, result),
               updateClanLeaders(db, newBattle, result, suid),
               updateVillageAnbuClan(db, newBattle, result, suid),
               updateWars(db, newBattle, result, suid),
