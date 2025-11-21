@@ -796,7 +796,7 @@ export const RemoveBloodline = z.object({
   ...BaseAttributes,
   type: z.literal("removebloodline").default("removebloodline"),
   description: msg("Remove bloodline"),
-  power: z.coerce.number().min(0).max(100).default(1),
+  power: z.coerce.number().int().min(0).max(100).default(1),
   calculation: z.enum(["percentage"]).default("percentage"),
 });
 
@@ -957,7 +957,7 @@ export const IncreaseReskinSlots = z.object({
   ...BaseAttributes,
   rank: z.enum(LetterRanks).default("D"),
   description: msg("Increases the number of allowed reskins"),
-  power: z.coerce.number().min(0).max(100).default(1),
+  power: z.coerce.number().int().min(0).max(100).default(1),
   type: z.literal("noncombatincreasereskins").default("noncombatincreasereskins"),
 });
 
