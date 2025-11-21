@@ -23,10 +23,15 @@ import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { hasRequiredRank } from "@/libs/train";
-import { VILLAGE_REDUCED_GAINS_DAYS } from "@/drizzle/constants";
-import { VILLAGE_LEAVE_REQUIRED_RANK } from "@/drizzle/constants";
-import Building from "@/layout/Building";
-import { StructureRewardEntries } from "@/layout/Building";
+
+import {
+  VILLAGE_REDUCED_GAINS_DAYS,
+  VILLAGE_LEAVE_REQUIRED_RANK,
+  WAR_VILLAGE_MAX_SECTORS,
+  WAR_FACTION_MAX_SECTORS,
+} from "@/drizzle/constants";
+
+import Building, { StructureRewardEntries } from "@/layout/Building";
 import { useTutorialStep } from "@/hooks/tutorial";
 import type { MutateContentSchema } from "@/validators/comments";
 
@@ -56,6 +61,11 @@ export default function VillageOverview() {
       : "Village";
   const subtitle = ownSector ? "Your Community" : `Ally of ${userData?.village?.name}`;
   const href = villageData ? `/users/village/${villageData.id}` : "/users";
+
+  // Determine sector cap
+  const maxSectors = userData?.isOutlaw
+    ? WAR_FACTION_MAX_SECTORS
+    : WAR_VILLAGE_MAX_SECTORS;
 
   // Specific structures
   const walls = villageData?.structures.find((s) => s.name === "Walls");
@@ -104,30 +114,22 @@ export default function VillageOverview() {
   if (!villageData) return <Loader explanation="Loading userdata" />;
   if (isLeaving) return <Loader explanation="Leaving village" />;
 
-  // Overwrite village tokens if user is outlaw
   villageData.tokens = userData.isOutlaw
     ? userData.clan?.points || 0
     : villageData.tokens;
 
-  // Derived
   const canLeave = hasRequiredRank(userData.rank, VILLAGE_LEAVE_REQUIRED_RANK);
 
-  // Which structures to show
   const shownStructures = villageData?.structures
     .filter((s) => s.hasPage !== 0)
     .filter((s) => s.showInVillagePage)
     .filter((s) => ownSector || s.allyAccess)
     .sort((a, v) => {
-      if (a.name === currentStep?.title) {
-        return -1;
-      }
-      if (v.name === currentStep?.title) {
-        return 1;
-      }
+      if (a.name === currentStep?.title) return -1;
+      if (v.name === currentStep?.title) return 1;
       return 0;
     });
 
-  // Render
   return (
     <>
       <ContentBox
@@ -140,12 +142,15 @@ export default function VillageOverview() {
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="flex flex-row">
-                      <MapPinHouse className="w-6 h-6 mr-2" />{" "}
-                      {data?.sectorCount || "?"}
+                      <MapPinHouse className="w-6 h-6 mr-2" />
+                      {data?.sectorCount ?? "?"} / {maxSectors}
                     </div>
                   </TooltipTrigger>
-                  {walls && <TooltipContent>Number of sectors owned</TooltipContent>}
+                  <TooltipContent>
+                    Number of sectors owned (max {maxSectors})
+                  </TooltipContent>
                 </Tooltip>
+
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="flex flex-row">
@@ -156,6 +161,7 @@ export default function VillageOverview() {
                     <TooltipContent>{StructureRewardEntries(walls)}</TooltipContent>
                   )}
                 </Tooltip>
+
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="flex flex-row">
@@ -168,11 +174,12 @@ export default function VillageOverview() {
                     </TooltipContent>
                   )}
                 </Tooltip>
+
                 <Tooltip>
                   <TooltipTrigger>
                     <Link href={href}>
                       <div className="flex flex-row hover:text-orange-500 hover:cursor-pointer">
-                        <Users className="w-6 h-6 mr-2" />{" "}
+                        <Users className="w-6 h-6 mr-2" />
                         {prettyNumber(villageData?.populationCount ?? 0)}
                       </div>
                     </Link>
@@ -181,21 +188,23 @@ export default function VillageOverview() {
                     Total {userData?.isOutlaw ? "faction" : "village"} population
                   </TooltipContent>
                 </Tooltip>
+
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="flex flex-row">
-                      <ReceiptJapaneseYen className="w-6 h-6 mr-2" />{" "}
+                      <ReceiptJapaneseYen className="w-6 h-6 mr-2" />
                       {prettyNumber(villageData?.tokens ?? 0)}
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
                     Tokens earned through PvP and quests can be used to improve{" "}
-                    {userData?.isOutlaw ? "faction" : "village"}. Current tokens:{" "}
-                    {villageData?.tokens.toLocaleString()}.
+                    {userData?.isOutlaw ? "faction" : "village"}.
+                    Current tokens: {villageData?.tokens.toLocaleString()}.
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
+
             {!userData.isOutlaw && canLeave && ownSector && (
               <Confirm2
                 title="Leave Village"
@@ -237,10 +246,13 @@ export default function VillageOverview() {
         </div>
         {isFetchingVillage && <Loader explanation="Loading Village Information" />}
       </ContentBox>
+
       {["OUTLAW", "VILLAGE"].includes(sectorVillage?.type || "unknown") && (
         <ContentBox
           title="Notice Board"
-          subtitle={`Information from ${sectorVillage?.type === "OUTLAW" ? "Leader" : "Kage"}`}
+          subtitle={`Information from ${
+            sectorVillage?.type === "OUTLAW" ? "Leader" : "Kage"
+          }`}
           initialBreak={true}
           topRightContent={
             isKage && (
