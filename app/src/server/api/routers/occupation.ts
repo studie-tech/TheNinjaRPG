@@ -23,6 +23,7 @@ import {
 import { nanoid } from "nanoid";
 import { baseServerResponse } from "@/server/api/trpc";
 import { canChangeContent } from "@/utils/permissions";
+import { getNewTrackers } from "@/libs/quest";
 
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure.query(async ({ ctx }) => {
@@ -184,10 +185,16 @@ export const occupationRouter = createTRPCRouter({
       });
 
       // Award crafting experience (small amount when starting)
+      const expGain = CRAFTING_EXP_GAIN[userCraftingRank];
+      // Update trackers with crafting experience gained
+      const { trackers } = getNewTrackers(user, [
+        { task: "crafting_experience_gained", increment: expGain },
+      ]);
       const expUpdate = ctx.drizzle
         .update(userData)
         .set({
-          craftingExperience: sql`${userData.craftingExperience} + ${CRAFTING_EXP_GAIN[userCraftingRank]}`,
+          craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
+          questData: trackers,
         })
         .where(eq(userData.userId, ctx.userId));
 
@@ -209,12 +216,16 @@ export const occupationRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Run all initial queries in parallel
-      const [user, userItems] = await Promise.all([
+      const [updatedUserResult, userItems] = await Promise.all([
         // Get user data
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         // Get all user items (like in crafting)
         fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
+
+      // Guards
+      const user = updatedUserResult.user;
+      if (!user) return errorResponse("User not found");
 
       // Find target item and crystal from user items
       const targetUserItem = userItems.find((ui) => ui.id === input.userItemId);
@@ -305,10 +316,16 @@ export const occupationRouter = createTRPCRouter({
       });
 
       // Award small amount of crafting experience
+      const expGain = CRAFTING_EXP_GAIN[userCraftingRank] / 2;
+      // Update trackers with crafting experience gained
+      const { trackers } = getNewTrackers(user, [
+        { task: "crafting_experience_gained", increment: expGain },
+      ]);
       const expUpdate = ctx.drizzle
         .update(userData)
         .set({
-          craftingExperience: sql`${userData.craftingExperience} + ${CRAFTING_EXP_GAIN[userCraftingRank] / 2}`,
+          craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
+          questData: trackers,
         })
         .where(eq(userData.userId, ctx.userId));
 

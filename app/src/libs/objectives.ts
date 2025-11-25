@@ -18,6 +18,9 @@ import {
   IMG_BADGE_REPUTATION_POINTS,
   IMG_BADGE_USER_LEVEL,
   IMG_BADGE_MEDICAL_EXPERIENCE,
+  IMG_BADGE_GATHERING_EXPERIENCE,
+  IMG_BADGE_HUNTING_EXPERIENCE,
+  IMG_BADGE_CRAFTING_EXPERIENCE,
   IMG_BADGE_MOVE_TO_LOCATION,
   IMG_BADGE_COLLECT_ITEM,
   IMG_BADGE_DEFEAT_OPPONENTS,
@@ -83,6 +86,27 @@ export const getObjectiveImage = (objective: AllObjectivesType) => {
         image: IMG_BADGE_MEDICAL_EXPERIENCE,
         title: "Medical Experience Gained",
       };
+    case "crafting_experience":
+      return { image: IMG_BADGE_CRAFTING_EXPERIENCE, title: "Crafting Experience" };
+    case "crafting_experience_gained":
+      return {
+        image: IMG_BADGE_CRAFTING_EXPERIENCE,
+        title: "Crafting Experience Gained",
+      };
+    case "hunting_experience":
+      return { image: IMG_BADGE_HUNTING_EXPERIENCE, title: "Hunting Experience" };
+    case "hunting_experience_gained":
+      return {
+        image: IMG_BADGE_HUNTING_EXPERIENCE,
+        title: "Hunting Experience Gained",
+      };
+    case "gathering_experience":
+      return { image: IMG_BADGE_GATHERING_EXPERIENCE, title: "Gathering Experience" };
+    case "gathering_experience_gained":
+      return {
+        image: IMG_BADGE_GATHERING_EXPERIENCE,
+        title: "Gathering Experience Gained",
+      };
     case "move_to_location":
       return { image: IMG_BADGE_MOVE_TO_LOCATION, title: "Travel" };
     case "collect_item":
@@ -93,6 +117,8 @@ export const getObjectiveImage = (objective: AllObjectivesType) => {
       return { image: IMG_BADGE_DEFEAT_OPPONENTS, title: "Defeat" };
     case "random_encounter_wins":
       return { image: IMG_BADGE_RANDOM_ENCOUNTER_WINS, title: "Encounter Wins" };
+    case "spars_won":
+      return { image: IMG_BADGE_ARENAKILLS, title: "Spars Won" };
     case "win_encounter_at_location":
       return {
         image: IMG_BADGE_RANDOM_ENCOUNTER_WINS,

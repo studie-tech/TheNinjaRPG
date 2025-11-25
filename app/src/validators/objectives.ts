@@ -36,8 +36,15 @@ export const SimpleTasks = [
   "user_level",
   "reputation_points",
   "random_encounter_wins",
+  "spars_won",
   "medical_experience",
   "medical_experience_gained",
+  "crafting_experience",
+  "crafting_experience_gained",
+  "hunting_experience",
+  "hunting_experience_gained",
+  "gathering_experience",
+  "gathering_experience_gained",
   //"students_trained",
 ] as const;
 

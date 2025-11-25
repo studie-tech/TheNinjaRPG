@@ -272,6 +272,44 @@ export const getReward = (
   // Final rewards (some need a bit pose-processing)
   const rewards = postProcessRewards(rawRewards);
 
+  // Update trackers for experience gained from quest rewards
+  const experienceTrackerTasks = [];
+  if (rewards.reward_medical_experience > 0) {
+    experienceTrackerTasks.push({
+      task: "medical_experience_gained" as const,
+      increment: rewards.reward_medical_experience,
+    });
+  }
+  if (rewards.reward_crafting_experience > 0) {
+    experienceTrackerTasks.push({
+      task: "crafting_experience_gained" as const,
+      increment: rewards.reward_crafting_experience,
+    });
+  }
+  if (rewards.reward_hunting_experience > 0) {
+    experienceTrackerTasks.push({
+      task: "hunting_experience_gained" as const,
+      increment: rewards.reward_hunting_experience,
+    });
+  }
+  if (rewards.reward_gathering_experience > 0) {
+    experienceTrackerTasks.push({
+      task: "gathering_experience_gained" as const,
+      increment: rewards.reward_gathering_experience,
+    });
+  }
+  if (experienceTrackerTasks.length > 0) {
+    // Run experience-gain updates on top of the already-updated questData,
+    // so we preserve progress changes from the first getNewTrackers call.
+    const { trackers: updatedTrackers } = getNewTrackers(
+      { ...user, questData: trackers },
+      experienceTrackerTasks,
+    );
+    // Replace in-place to keep the original `trackers` array reference.
+    trackers.length = 0;
+    trackers.push(...updatedTrackers);
+  }
+
   // Return results
   return { rewards, trackers, userQuest, resolved, notifications, consequences };
 };
@@ -603,6 +641,12 @@ export const getNewTrackers = (
             if (field) status.value = user[field];
           } else if (task === "medical_experience") {
             status.value = user.medicalExperience;
+          } else if (task === "crafting_experience") {
+            status.value = user.craftingExperience;
+          } else if (task === "hunting_experience") {
+            status.value = user.huntingExperience;
+          } else if (task === "gathering_experience") {
+            status.value = user.gatheringExperience;
           }
 
           // If opponentAIs is in objective, get the ids
@@ -1126,10 +1170,7 @@ export const isAvailableUserQuests = (
     ) {
       message += `Quest requires level ${questAndUserQuestInfo.requiredLevel}\n`;
     }
-    if (
-      questAndUserQuestInfo.maxLevel &&
-      user.level > questAndUserQuestInfo.maxLevel
-    ) {
+    if (questAndUserQuestInfo.maxLevel && user.level > questAndUserQuestInfo.maxLevel) {
       message += `Quest is only available up to level ${questAndUserQuestInfo.maxLevel}\n`;
     }
   }

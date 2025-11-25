@@ -527,6 +527,12 @@ export const updateUser = async (
         ]);
         user.questData = trackers;
       }
+      if (curBattle.battleType === "SPARRING") {
+        const { trackers } = getNewTrackers(user, [
+          { task: "spars_won", increment: 1 },
+        ]);
+        user.questData = trackers;
+      }
     }
     // Update trackers
     const trackerEvents = [

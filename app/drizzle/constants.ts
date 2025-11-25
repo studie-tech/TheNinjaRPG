@@ -1489,6 +1489,12 @@ export const IMG_BADGE_DEFEAT_OPPONENTS =
   "https://utfs.io/f/Hzww9EQvYURJYwI8YKOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
 export const IMG_BADGE_MEDICAL_EXPERIENCE =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJzr5NPBemvaQu94EYJs8HpxVzofny6iPtbgCZ";
+export const IMG_BADGE_GATHERING_EXPERIENCE =
+  "https://utfs.io/f/Hzww9EQvYURJMgUHxAtsO4cexqW2RDgkE3zZbNXSFGitmnar";
+export const IMG_BADGE_HUNTING_EXPERIENCE =
+  "https://utfs.io/f/Hzww9EQvYURJg0V017cU9cpECTimBdjaqbNn7vQsxGR1wLk4";
+export const IMG_BADGE_CRAFTING_EXPERIENCE =
+  "https://utfs.io/f/Hzww9EQvYURJIY2lVjxfOewksxBoS1HQCihpL7c42Ky9uUFv";
 
 export const IMG_BG_COLISEUM =
   "https://utfs.io/f/Hzww9EQvYURJo5wb6hZ9MPZpHJ7VliuEWDfATdxhv62SXnm4";
