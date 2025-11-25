@@ -452,6 +452,7 @@ export type HEXTILE_TYPE = (typeof HEXTILE_BIOMES)[number];
 // HEX grid settings
 export const HEX_STACKING_DISPLACEMENT = 0.25; // To compensate for how hexagons stack, this is how much (in percent of width) we lose from a stacking op
 export const HEX_ASPECT_RATIO = 0.5; // To give perspective, make hex height smaller than width
+export const NO_DURABILITY_LOSS_COMBATS: BattleType[] = ["SPARRING"];
 
 // Sector settings
 export const SECTOR_WIDTH = 20;

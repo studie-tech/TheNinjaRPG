@@ -551,7 +551,6 @@ export const RankedLoadoutSelector: React.FC = () => {
   if (!access) return <Loader explanation="Accessing Ranked PvP" />;
   if (!userData) return <Loader explanation="Loading user" />;
   if (userData?.isBanned) return <BanInfo />;
-  if (!currentSeason) return null;
 
   return (
     <>

@@ -46,6 +46,7 @@ import {
   BATTLE_TAG_STACKING,
   ID_ANIMATION_SMOKE,
   DURABILITY_USABILITY_THR,
+  NO_DURABILITY_LOSS_COMBATS,
 } from "@/drizzle/constants";
 import type { BattleUserState, ReturnedUserState } from "./types";
 import type { GroundEffect, UserEffect, ActionEffect, BattleEffect } from "./types";
@@ -413,17 +414,19 @@ export const applyEffects = (
             color: "red",
             types: c.types,
           });
-          // Reduce armor durability by 1 when hit
-          const t = newUsersState.find((u) => u.userId === target.userId);
-          t?.items.forEach((ui) => {
-            if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
-              const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
-              ui.durability = Math.max(0, currentDurability - 1);
-              if (ui.durability <= DURABILITY_USABILITY_THR) {
-                ui.equipped = "NONE" as const;
+          // Reduce armor durability by 1 when hit (skip for battles that don't lose durability)
+          if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
+            const t = newUsersState.find((u) => u.userId === target.userId);
+            t?.items.forEach((ui) => {
+              if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
+                const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
+                ui.durability = Math.max(0, currentDurability - 1);
+                if (ui.durability <= DURABILITY_USABILITY_THR) {
+                  ui.equipped = "NONE" as const;
+                }
               }
-            }
-          });
+            });
+          }
         }
         if (c.residual !== undefined && c.residual >= 0) {
           target.curHealth -= c.residual;
@@ -433,17 +436,19 @@ export const applyEffects = (
             color: "red",
             types: c.types,
           });
-          // Track armor hits from residual damage as well
-          const t = newUsersState.find((u) => u.userId === target.userId);
-          t?.items.forEach((ui) => {
-            if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
-              const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
-              ui.durability = Math.max(0, currentDurability - 1);
-              if (ui.durability <= DURABILITY_USABILITY_THR) {
-                ui.equipped = "NONE" as const;
+          // Track armor hits from residual damage as well (skip for battles that don't lose durability)
+          if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
+            const t = newUsersState.find((u) => u.userId === target.userId);
+            t?.items.forEach((ui) => {
+              if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
+                const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
+                ui.durability = Math.max(0, currentDurability - 1);
+                if (ui.durability <= DURABILITY_USABILITY_THR) {
+                  ui.equipped = "NONE" as const;
+                }
               }
-            }
-          });
+            });
+          }
         }
         if (c.wound !== undefined && c.wound >= 0) {
           target.curHealth -= c.wound;
@@ -453,17 +458,19 @@ export const applyEffects = (
             color: "red",
             types: c.types,
           });
-          // Track armor hits from wound damage as well
-          const t = newUsersState.find((u) => u.userId === target.userId);
-          t?.items.forEach((ui) => {
-            if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
-              const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
-              ui.durability = Math.max(0, currentDurability - 1);
-              if (ui.durability <= DURABILITY_USABILITY_THR) {
-                ui.equipped = "NONE" as const;
+          // Track armor hits from wound damage as well (skip for battles that don't lose durability)
+          if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
+            const t = newUsersState.find((u) => u.userId === target.userId);
+            t?.items.forEach((ui) => {
+              if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
+                const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
+                ui.durability = Math.max(0, currentDurability - 1);
+                if (ui.durability <= DURABILITY_USABILITY_THR) {
+                  ui.equipped = "NONE" as const;
+                }
               }
-            }
-          });
+            });
+          }
         }
         if (c.heal_hp !== undefined && c.heal_hp >= 0 && target.curHealth > 0) {
           target.curHealth += c.heal_hp;

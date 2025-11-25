@@ -50,6 +50,7 @@ import {
   NonActionItemTypes,
   ID_SFX_CLEANSE,
   ID_SFX_CLEAR,
+  NO_DURABILITY_LOSS_COMBATS,
 } from "@/drizzle/constants";
 import type { AttackTargets, ElementName } from "@/drizzle/constants";
 import type { BattleUserState, ReturnedUserState } from "@/libs/combat/types";
@@ -948,8 +949,8 @@ export const performBattleAction = (props: {
     throw new Error(`Action ${action.name} no longer possible for ${user.username}`);
   }
 
-  // Track weapon durability usage
-  if (action.type === "item") {
+  // Track weapon durability usage (skip for battles that don't lose durability)
+  if (action.type === "item" && !NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
     const used = user.items.find((i) => i.item.id === action.id);
     if (used && used.item.itemType === "WEAPON") {
       const currentDurability = Math.min(used.durability, used.item.maxDurability);
