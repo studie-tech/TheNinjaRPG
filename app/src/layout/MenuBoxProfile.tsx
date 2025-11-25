@@ -594,6 +594,10 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     if (e.type === "wound") {
       return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}`;
     }
+    // Special handling for heal effects - show as multiplicative
+    if (e.type === "heal" && e.calculation === "percentage") {
+      return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}%`;
+    }
     // Standard handling for all other effects
     return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${
       e.calculation === "percentage" ? "%" : ""
@@ -610,6 +614,8 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           return e.value > 0; // More damage dealt is good
         case "damagetaken":
           return e.value < 0; // Less damage taken is good
+        case "heal":
+          return e.value > 0; // More heal given is good
         default:
           return e.value > 0; // Fallback for other types
       }
@@ -670,6 +676,56 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     "timedilation",
     "redirection",
   ]);
+
+  // Calculate net multiplicative heal given effects
+  const decreaseHealEffects = filteredEffects.filter(
+    (e) =>
+      e.type === "decreaseheal" &&
+      e.calculation === "percentage" &&
+      e.targetId === userId &&
+      isEffectActive(e) &&
+      !sealCheck(e, sealEffects)
+  );
+  const increaseHealEffects = filteredEffects.filter(
+    (e) =>
+      e.type === "increaseheal" &&
+      e.calculation === "percentage" &&
+      e.targetId === userId &&
+      isEffectActive(e) &&
+      !sealCheck(e, sealEffects)
+  );
+
+  let healGivenEffects: CollapsedEffect[] = [];
+  if (decreaseHealEffects.length > 0 || increaseHealEffects.length > 0) {
+    // Calculate net multiplicative effect
+    let netFactor = 1;
+
+    // Apply all decrease effects multiplicatively
+    decreaseHealEffects.forEach((e) => {
+      const power = Math.abs(e.power + e.level * e.powerPerLevel);
+      netFactor *= 1 - power / 100; // decrease = 1 - percentage
+    });
+
+    // Apply all increase effects multiplicatively
+    increaseHealEffects.forEach((e) => {
+      const power = Math.abs(e.power + e.level * e.powerPerLevel);
+      netFactor *= 1 + power / 100; // increase = 1 + percentage
+    });
+
+    const netPercentage = (netFactor - 1) * 100;
+
+    healGivenEffects = [
+      {
+        type: "heal",
+        value: netPercentage,
+        category: "All" as EffectCategory,
+        calculation: "percentage" as const,
+        upDownEffect: true,
+        rounds: [],
+        sealed: false,
+      },
+    ];
+  }
 
   const statusEffects = collapsedEffects.filter((e) => STATUS_TYPES.has(e.type));
   const damageGivenEffects = collapsedEffects.filter((e) => e.type === "damagegiven");
@@ -811,6 +867,15 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           <div className="font-semibold mb-1">Damage Taken</div>
           <div className="grid grid-cols-2 gap-1">
             {damageTakenEffects.map(renderCompact)}
+          </div>
+        </div>
+      )}
+
+      {healGivenEffects.length > 0 && (
+        <div>
+          <div className="font-semibold mb-1">Heal Given</div>
+          <div className="grid grid-cols-2 gap-1">
+            {healGivenEffects.map(renderCompact)}
           </div>
         </div>
       )}
