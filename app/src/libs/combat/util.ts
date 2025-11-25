@@ -10,6 +10,8 @@ import {
   KAGE_PRESTIGE_COST,
   FRIENDLY_PRESTIGE_COST,
   BattleType,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  WAR_TORN_SECTOR_BASE_MONEY,
 } from "@/drizzle/constants";
 import { KAGE_CHALLENGE_WIN_PRESTIGE } from "@/drizzle/constants";
 import { CLAN_BATTLE_REWARD_POINTS } from "@/drizzle/constants";
@@ -698,8 +700,14 @@ export const calcBattleResult = (
       // Calculate ELO change if user had won.
       let eloDiff = Math.max(calcEloChange(uExp, oExp || 1000, maxGain, true), 0.02);
 
-      // If killing ally, then no experience
-      if (battleType === "COMBAT" && villageIds.length === 1) {
+      // If killing ally, then no experience (unless in war-torn sector)
+      // Note: isInWarTornSector is declared later in the prestige calculation section
+      const isInWarTornSectorForExp = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
+      if (
+        battleType === "COMBAT" &&
+        villageIds.length === 1 &&
+        !isInWarTornSectorForExp
+      ) {
         eloDiff = 0;
       }
 
@@ -779,7 +787,13 @@ export const calcBattleResult = (
 
       // Money/ryo calculation
       const moneyBoost = user?.clan?.ryoBoost ? 1 + user.clan.ryoBoost / 100 : 1;
-      let moneyDelta = didWin ? (randomInt(30, 40) + user.level) * moneyBoost : 0;
+      const isCombatOrWarBattle =
+        battleType === "COMBAT" || battleType === "SHRINE_WAR";
+      let moneyDelta = didWin
+        ? (isCombatOrWarBattle && isInWarTornSectorForExp
+            ? WAR_TORN_SECTOR_BASE_MONEY
+            : randomInt(30, 40) + user.level) * moneyBoost
+        : 0;
 
       // If combat, more money
       if (battleType === "COMBAT") {
@@ -825,24 +839,27 @@ export const calcBattleResult = (
 
       // Check for prestige, tokens, etc.
       const vilId = user.villageId;
+      const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
       if (didWin && battleType === "COMBAT" && user.isAggressor) {
         targetUsers.forEach((target) => {
           if (user.isOutlaw) {
             deltaPrestige += KILLING_NOTORIETY_GAIN;
           } else {
-            // Prestige deduction for killing allies
-            const isAlly = target.relations
-              .filter((r) => r.status === "ALLY")
-              .find(
-                (r) =>
-                  (r.villageIdA === vilId && r.villageIdB === target.villageId) ||
-                  (r.villageIdA === target.villageId && r.villageIdB === vilId),
-              );
-            const sameVillage = target.villageId === vilId;
-            deltaPrestige -= isAlly || sameVillage ? FRIENDLY_PRESTIGE_COST : 0;
+            // Prestige deduction for killing allies (skip if in war-torn sector)
+            if (!isInWarTornSector) {
+              const isAlly = target.relations
+                .filter((r) => r.status === "ALLY")
+                .find(
+                  (r) =>
+                    (r.villageIdA === vilId && r.villageIdB === target.villageId) ||
+                    (r.villageIdA === target.villageId && r.villageIdB === vilId),
+                );
+              const sameVillage = target.villageId === vilId;
+              deltaPrestige -= isAlly || sameVillage ? FRIENDLY_PRESTIGE_COST : 0;
+            }
           }
 
-          // Base prestige for PvP kill (only for enemies)
+          // Base prestige for PvP kill (only for enemies, even in war-torn sector)
           if (
             user.isOutlaw ||
             !target.relations.some(
@@ -892,7 +909,9 @@ export const calcBattleResult = (
       const shrineInfo: Record<number, number> = {};
       let townhallChangeHP = 0;
       let shrineChangeHp = 0;
-      if (!user.fledBattle) {
+      // Skip war updates if kill happened in war-torn sector
+      const isInWarTornSectorForWar = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
+      if (!user.fledBattle && !isInWarTornSectorForWar) {
         targets
           .filter((t) => !t.isSummon)
           .filter((t) => t.villageId !== vilId)
@@ -1161,6 +1180,7 @@ export const calcBattleResult = (
         taijutsuDefence: 0,
         bukijutsuDefence: 0,
         money: 0,
+        seichiSilver: 0,
         villagePrestige: deltaPrestige,
         friendsLeft: friendsLeft.length,
         targetsLeft: targetsLeft.length,
@@ -1249,6 +1269,45 @@ export const calcBattleResult = (
         result.earnedExperience = deltaEarnedExperience * battle.rewardScaling;
         result.villageTokens = deltaTokens * battle.rewardScaling;
         result.villagePrestige = deltaPrestige * battle.rewardScaling;
+      }
+
+      // Apply 1.6x multiplier to all PvP rewards in war-torn sector
+      // Allow both COMBAT and war battle types (SHRINE_WAR, etc.) in war-torn sector
+      if (isCombatOrWarBattle && isInWarTornSectorForExp && didWin) {
+        result.experience *= 1.6;
+        result.money *= 1.6;
+        result.earnedExperience *= 1.6;
+
+        // Silver drop chance for kills in war-torn sector (using same diminishing returns as rewards)
+        // Check level difference is within 10 levels
+        if (targets.length > 0) {
+          const maxTargetLevel = Math.max(...targets.map((t) => t.level), 0);
+          const levelDifference = Math.abs(user.level - maxTargetLevel);
+          if (levelDifference <= STREAK_LEVEL_DIFF) {
+            const silverDropChance = 0.5 * battle.rewardScaling;
+            if (Math.random() * 100 < silverDropChance) {
+              result.seichiSilver = 1;
+            }
+          }
+        }
+      }
+
+      // Apply money penalty for losers in war-torn sector (lose the same amount winner would gain)
+      if (
+        isCombatOrWarBattle &&
+        isInWarTornSectorForExp &&
+        !didWin &&
+        outcome !== "Fled"
+      ) {
+        // Calculate what the user would have gotten if they won (same calculation as winner)
+        const loserMoneyBoost = user?.clan?.ryoBoost ? 1 + user.clan.ryoBoost / 100 : 1;
+        let loserMoneyGain = WAR_TORN_SECTOR_BASE_MONEY * loserMoneyBoost;
+        loserMoneyGain *= 1.5; // COMBAT multiplier
+        loserMoneyGain *= battle.rewardScaling;
+        // Apply 1.6x multiplier (same as winner gets)
+        loserMoneyGain *= 1.6;
+        // Deduct this amount from the loser
+        result.money = -loserMoneyGain;
       }
 
       // Return results

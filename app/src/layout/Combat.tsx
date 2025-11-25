@@ -956,6 +956,7 @@ const Combat: React.FC<CombatProps> = (props) => {
               )}
               {result.money > 0 && <p>Money gained: {result.money.toFixed(2)}</p>}
               {result.money < 0 && <p>Money lost: {result.money.toFixed(2)}</p>}
+              {result.seichiSilver > 0 && <p>Seichi Silver: {result.seichiSilver}</p>}
               {result.strength > 0 && <p>Strength: {result.strength.toFixed(2)}</p>}
               {result.willpower > 0 && <p>Willpower: {result.willpower.toFixed(2)}</p>}
               {result.speed > 0 && <p>Speed: {result.speed.toFixed(2)}</p>}

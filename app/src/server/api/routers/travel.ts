@@ -11,7 +11,7 @@ import { serverError, baseServerResponse, errorResponse } from "../trpc";
 import { calcGlobalTravelTime } from "@/libs/travel";
 import { calcIsInVillage } from "@/libs/travel";
 import { isAtEdge, maxDistance } from "@/libs/travel";
-import { SECTOR_HEIGHT, SECTOR_WIDTH } from "@/drizzle/constants";
+import { SECTOR_HEIGHT, SECTOR_WIDTH, MAP_WAR_TORN_BATTLEGROUND_SECTOR } from "@/drizzle/constants";
 import { secondsFromNow } from "@/utils/time";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { userData, clan, village, actionLog, war } from "@/drizzle/schema";
@@ -107,21 +107,24 @@ export const travelRouter = createTRPCRouter({
         return errorResponse("Target is immune from being robbed");
       }
 
-      // Level restrictions - prevent robbing users more than 15 levels under or above
-      const robberLevel = calcLevel(user.experience);
-      const targetLevel = calcLevel(target.experience);
-      const levelDifference = robberLevel - targetLevel;
+      // Level restrictions - prevent robbing users more than 15 levels under or above (skip if in war-torn sector)
+      const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
+      if (!isInWarTornSector) {
+        const robberLevel = calcLevel(user.experience);
+        const targetLevel = calcLevel(target.experience);
+        const levelDifference = robberLevel - targetLevel;
 
-      if (levelDifference > 15) {
-        return errorResponse(
-          `Cannot rob ${target.username} - they are more than 15 levels below you (${levelDifference} level difference)`,
-        );
-      }
+        if (levelDifference > 15) {
+          return errorResponse(
+            `Cannot rob ${target.username} - they are more than 15 levels below you (${levelDifference} level difference)`,
+          );
+        }
 
-      if (levelDifference < -15) {
-        return errorResponse(
-          `Cannot rob ${target.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)`,
-        );
+        if (levelDifference < -15) {
+          return errorResponse(
+            `Cannot rob ${target.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)`,
+          );
+        }
       }
 
       if (

@@ -65,6 +65,7 @@ import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
 import {
   ERRANDS_PER_DAY,
   MEDICAL_MISSIONS_PER_DAY,
+  PVP_MISSIONS_PER_DAY,
   MEDNIN_EXP_CAP,
   MAX_SKILL_POINTS,
   TUTORIAL_STARTER_QUEST_ID,
@@ -227,7 +228,7 @@ export const questsRouter = createTRPCRouter({
           )
           .where(
             and(
-              inArray(quest.questType, ["mission", "errand", "crime", "medical"]),
+              inArray(quest.questType, ["mission", "errand", "crime", "medical", "pvp"]),
               ...(input.villageId
                 ? [
                     or(
@@ -285,7 +286,7 @@ export const questsRouter = createTRPCRouter({
   startRandom: protectedProcedure
     .input(
       z.object({
-        type: z.enum(["errand", "mission", "crime", "medical"]),
+        type: z.enum(["errand", "mission", "crime", "medical", "pvp"]),
         rank: z.enum(LetterRanks),
         userLevel: z.number(),
         userSector: z.number(),
@@ -408,6 +409,7 @@ export const questsRouter = createTRPCRouter({
       );
       const isErrand = setting?.type === "errand";
       const isMedical = setting?.type === "medical";
+      const isPvp = setting?.type === "pvp";
       // Guards
       if (!setting) return errorResponse("Setting not found");
       if (user.isBanned) return errorResponse("You are banned");
@@ -426,16 +428,23 @@ export const questsRouter = createTRPCRouter({
         );
       }
 
+      // Check daily PvP mission limit
+      if (isPvp && user.dailyPvpMissions >= PVP_MISSIONS_PER_DAY) {
+        return errorResponse(
+          `You have reached your daily PvP mission limit of ${PVP_MISSIONS_PER_DAY} PvP missions. Please try again tomorrow.`,
+        );
+      }
+
       // Check if user is allowed to perform this rank
       const ranks = availableQuestLetterRanks(user.rank);
       if (!ranks.includes(input.rank) && input.type === "mission") {
         return errorResponse(`Rank ${input.rank} not allowed`);
       }
 
-      // Confirm user does not have any current active missions/crimes/errands/medical
+      // Confirm user does not have any current active missions/crimes/errands/medical/pvp
       const current = user?.userQuests?.find(
         (q) =>
-          ["mission", "crime", "errand", "medical"].includes(q.quest.questType) &&
+          ["mission", "crime", "errand", "medical", "pvp"].includes(q.quest.questType) &&
           !q.endAt,
       );
       if (current) {
@@ -457,7 +466,9 @@ export const questsRouter = createTRPCRouter({
               ? { dailyErrands: sql`${userData.dailyErrands} + 1` }
               : isMedical
                 ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
-                : { dailyMissions: sql`${userData.dailyMissions} + 1` },
+                : isPvp
+                  ? { dailyPvpMissions: sql`${userData.dailyPvpMissions} + 1` }
+                  : { dailyMissions: sql`${userData.dailyMissions} + 1` },
           )
           .where(eq(userData.userId, user.userId)),
       ]);
@@ -624,7 +635,7 @@ export const questsRouter = createTRPCRouter({
               .join(", ")}. Abandon one to start this quest.`,
           );
         }
-      } else if (["mission", "crime", "medical"].includes(questData.questType)) {
+      } else if (["mission", "crime", "medical", "pvp"].includes(questData.questType)) {
         if (
           ["mission", "crime"].includes(questData.questType) &&
           questData.questRank !== "A"
@@ -639,7 +650,7 @@ export const questsRouter = createTRPCRouter({
         }
         const current = user?.userQuests?.find(
           (q) =>
-            ["mission", "crime", "errand", "medical"].includes(q.quest.questType) &&
+            ["mission", "crime", "errand", "medical", "pvp"].includes(q.quest.questType) &&
             !q.endAt,
         );
         if (current) {
@@ -687,6 +698,7 @@ export const questsRouter = createTRPCRouter({
           "gathering",
           "medical",
           "battlepyramid",
+          "pvp",
         ].includes(current.questType)
       ) {
         throw serverError("PRECONDITION_FAILED", `Cannot abandon ${current.questType}`);
@@ -1628,11 +1640,13 @@ export const incrementDailyQuestCounter = async (
   user: UserData,
   questType: string,
 ) => {
-  if (["mission", "crime", "medical"].includes(questType)) {
+  if (["mission", "crime", "medical", "pvp"].includes(questType)) {
     const updateField =
       questType === "medical"
         ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
-        : { dailyMissions: sql`${userData.dailyMissions} + 1` };
+        : questType === "pvp"
+          ? { dailyPvpMissions: sql`${userData.dailyPvpMissions} + 1` }
+          : { dailyMissions: sql`${userData.dailyMissions} + 1` };
 
     await client
       .update(userData)

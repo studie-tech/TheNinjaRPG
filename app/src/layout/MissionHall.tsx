@@ -11,6 +11,7 @@ import {
   MISSIONS_PER_DAY,
   ERRANDS_PER_DAY,
   MEDICAL_MISSIONS_PER_DAY,
+  PVP_MISSIONS_PER_DAY,
   IMG_BUILDING_MISSIONHALL,
 } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
@@ -40,7 +41,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
 
   const currentQuest = userData?.userQuests?.find(
     (q) =>
-      ["mission", "crime", "errand", "medical"].includes(q.quest.questType) && !q.endAt,
+      ["mission", "crime", "errand", "medical", "pvp"].includes(q.quest.questType) &&
+      !q.endAt,
   );
   const currentTracker = userData?.questData?.find(
     (q) => q.id === currentQuest?.questId,
@@ -98,7 +100,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
             Errands [{userData.dailyErrands} / {ERRANDS_PER_DAY}] -{" "}
             {capitalizeFirstLetter(classifier)}s [{userData.dailyMissions} /{" "}
             {MISSIONS_PER_DAY}] - Medical [{userData.dailyMedicalMissions} /{" "}
-            {MEDICAL_MISSIONS_PER_DAY}]
+            {MEDICAL_MISSIONS_PER_DAY}] - PvP [{userData.dailyPvpMissions} /{" "}
+            {PVP_MISSIONS_PER_DAY}]
           </p>
         </>
       )}
@@ -118,94 +121,94 @@ export default function MissionHall({ userData }: MissionHallProps) {
               userData,
               setting.type,
             );
-            const count =
-              filtered?.filter((q) => q.questRank === setting.rank)?.length ?? 0;
             // Check is user rank is high enough for this quest
             const isErrand = setting.type === "errand";
             const isMedical = setting.type === "medical";
+            const isPvp = setting.type === "pvp";
+            const dailyPvpMissions = userData.dailyPvpMissions;
+            // For PvP missions, count all ranks user has access to; for others, filter by setting rank
+            // Also ensure we filter by quest type since fallbackQuestsFilter doesn't filter non-medical types
+            const count = isPvp
+              ? (filtered?.filter(
+                  (q) =>
+                    q.questType === "pvp" && availableUserRanks.includes(q.questRank),
+                )?.length ?? 0)
+              : (filtered?.filter((q) => q.questRank === setting.rank)?.length ?? 0);
             const capped = isErrand
               ? errandsLeft <= 0
               : isMedical
                 ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY
-                : userData.dailyMissions >= MISSIONS_PER_DAY;
+                : isPvp
+                  ? dailyPvpMissions >= PVP_MISSIONS_PER_DAY
+                  : userData.dailyMissions >= MISSIONS_PER_DAY;
             // Checks
-            const rankCheck = availableUserRanks.includes(setting.rank) || isErrand;
+            const rankCheck =
+              availableUserRanks.includes(setting.rank) || isErrand || isPvp;
             const medicalCheck = isMedical
               ? filtered.length > 0 // Show colored if ANY medical missions are available
               : true;
-            const grayScale = count === 0 || capped || !rankCheck || !medicalCheck;
+            const pvpCheck = isPvp
+              ? filtered.length > 0 // Show colored if ANY pvp missions are available
+              : true;
+            const grayScale =
+              count === 0 || capped || !rankCheck || !medicalCheck || !pvpCheck;
 
-            if (isMedical) {
-              const medicalMissions =
-                filtered
-                  ?.filter((q) => q.questRank === setting.rank)
-                  .map((q) => ({
-                    id: q.id,
-                    name: q.name,
-                    image: q.image || undefined,
-                  })) || [];
-              const isDailyLimitReached =
-                userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY;
-
-              return (
-                <MissionPicker
-                  key={`medical-${i}`}
-                  setting={setting}
-                  missions={medicalMissions}
-                  count={count}
-                  disabled={grayScale}
-                  onMissionSelect={(mission) =>
-                    startQuest({
-                      questId: mission.id,
-                      userSector: userData.sector,
-                    })
-                  }
-                  dialogTitle="Accept Medical Mission"
-                  dialogDescription={(mission) =>
-                    isDailyLimitReached ? (
-                      `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`
-                    ) : (
-                      <>
-                        Are you sure you want to accept the medical mission &quot;
-                        {mission.name}&quot;? You can only have one active {classifier}{" "}
-                        at a time.
-                      </>
+            // Handle mission picker cases (PvP, Medical, A-rank)
+            if (isPvp || isMedical || setting.rank === "A") {
+              // For PvP, show all ranks user has access to and ensure we filter by quest type
+              // For others, filter by setting rank
+              const missions =
+                (isPvp
+                  ? filtered?.filter(
+                      (q) =>
+                        q.questType === "pvp" &&
+                        availableUserRanks.includes(q.questRank),
                     )
-                  }
-                  actionDisabled={isDailyLimitReached}
-                  actionText={
-                    isDailyLimitReached ? "Daily Limit Reached" : "Accept Mission"
-                  }
-                  additionalContent={() =>
-                    isDailyLimitReached && (
-                      <p className="text-sm text-red-500">Daily Limit Reached</p>
-                    )
-                  }
-                />
-              );
-            }
+                  : filtered?.filter((q) => q.questRank === setting.rank)
+                )?.map((q) => ({
+                  id: q.id,
+                  name: q.name,
+                  image: q.image || undefined,
+                })) || [];
 
-            if (setting.rank === "A") {
-              const aRankMissions =
-                (filtered?.filter((q) => q.questRank === setting.rank) ?? []).map(
-                  (q) => ({
-                    id: q.id,
-                    name: q.name,
-                    image: q.image || undefined,
-                  }),
-                ) || [];
-              const isDailyLimitReached = userData.dailyMissions >= MISSIONS_PER_DAY;
+              // Determine daily limit configuration
+              const limitConfig = isPvp
+                ? {
+                    current: dailyPvpMissions,
+                    limit: PVP_MISSIONS_PER_DAY,
+                    typeName: "PvP",
+                    dialogTitle: "Accept PvP Mission",
+                  }
+                : isMedical
+                  ? {
+                      current: userData.dailyMedicalMissions,
+                      limit: MEDICAL_MISSIONS_PER_DAY,
+                      typeName: "medical",
+                      dialogTitle: "Accept Medical Mission",
+                    }
+                  : {
+                      current: userData.dailyMissions,
+                      limit: MISSIONS_PER_DAY,
+                      typeName: "",
+                      dialogTitle: "Accept Mission",
+                    };
+
+              const isDailyLimitReached = limitConfig.current >= limitConfig.limit;
               const isReducedRewards =
+                setting.rank === "A" &&
                 !isErrand &&
                 !isMedical &&
+                !isPvp &&
                 userData.dailyMissions >= 9 &&
                 userData.dailyMissions < MISSIONS_PER_DAY;
 
+              const keyPrefix = isPvp ? "pvp" : isMedical ? "medical" : "mission";
+
               return (
                 <MissionPicker
-                  key={`mission-${i}`}
+                  key={`${keyPrefix}-${i}`}
                   setting={setting}
-                  missions={aRankMissions}
+                  missions={missions}
                   count={count}
                   disabled={grayScale}
                   onMissionSelect={(mission) =>
@@ -214,15 +217,17 @@ export default function MissionHall({ userData }: MissionHallProps) {
                       userSector: userData.sector,
                     })
                   }
-                  dialogTitle="Accept Mission"
+                  dialogTitle={limitConfig.dialogTitle}
                   dialogDescription={(mission) =>
                     isDailyLimitReached ? (
-                      `You have reached your daily mission limit of ${MISSIONS_PER_DAY} missions. Please try again tomorrow.`
+                      `You have reached your daily ${limitConfig.typeName ? `${limitConfig.typeName} ` : ""}mission limit of ${limitConfig.limit} ${limitConfig.typeName ? `${limitConfig.typeName} ` : ""}missions. Please try again tomorrow.`
                     ) : (
                       <>
-                        Are you sure you want to accept the mission &quot;
-                        {mission.name}&quot;? You can only have one active mission at a
-                        time.
+                        Are you sure you want to accept the{" "}
+                        {limitConfig.typeName ? `${limitConfig.typeName} ` : ""}mission
+                        &quot;
+                        {mission.name}&quot;? You can only have one active{" "}
+                        {setting.rank === "A" ? "mission" : classifier} at a time.
                         {isReducedRewards && (
                           <>
                             <br />
@@ -255,7 +260,6 @@ export default function MissionHall({ userData }: MissionHallProps) {
             } else {
               return (
                 <>
-                  {setting.rank === "S" && <div></div>}
                   <AlertDialog key={i}>
                     <AlertDialogTrigger asChild>
                       <div
@@ -280,13 +284,16 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         </p>
                         {!isErrand &&
                           !isMedical &&
+                          !isPvp &&
                           userData.dailyMissions >= 9 &&
                           userData.dailyMissions < MISSIONS_PER_DAY && (
                             <p className="text-sm text-yellow-500">40% Rewards</p>
                           )}
-                        {!isErrand && userData.dailyMissions >= MISSIONS_PER_DAY && (
-                          <p className="text-sm text-red-500">Daily Limit Reached</p>
-                        )}
+                        {!isErrand &&
+                          !isPvp &&
+                          userData.dailyMissions >= MISSIONS_PER_DAY && (
+                            <p className="text-sm text-red-500">Daily Limit Reached</p>
+                          )}
                         {isErrand && userData.dailyErrands >= ERRANDS_PER_DAY && (
                           <p className="text-sm text-red-500">Daily Limit Reached</p>
                         )}
@@ -294,6 +301,9 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY && (
                             <p className="text-sm text-red-500">Daily Limit Reached</p>
                           )}
+                        {isPvp && dailyPvpMissions >= PVP_MISSIONS_PER_DAY && (
+                          <p className="text-sm text-red-500">Daily Limit Reached</p>
+                        )}
                       </div>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
@@ -302,6 +312,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         <AlertDialogDescription>
                           {!isErrand &&
                           !isMedical &&
+                          !isPvp &&
                           userData.dailyMissions >= MISSIONS_PER_DAY ? (
                             `You have reached your daily mission limit of ${MISSIONS_PER_DAY} missions. Please try again tomorrow.`
                           ) : isErrand && userData.dailyErrands >= ERRANDS_PER_DAY ? (
@@ -310,15 +321,20 @@ export default function MissionHall({ userData }: MissionHallProps) {
                             userData.dailyMedicalMissions >=
                               MEDICAL_MISSIONS_PER_DAY ? (
                             `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`
+                          ) : isPvp && dailyPvpMissions >= PVP_MISSIONS_PER_DAY ? (
+                            `You have reached your daily PvP mission limit of ${PVP_MISSIONS_PER_DAY} PvP missions. Please try again tomorrow.`
                           ) : (
                             <>
                               Are you sure you want to accept a random{" "}
                               {isMedical
                                 ? "medical mission"
-                                : `${setting.rank}-rank ${setting.type}`}
+                                : isPvp
+                                  ? "PvP mission"
+                                  : `${setting.rank}-rank ${setting.type}`}
                               ? You can only have one active {classifier} at a time.
                               {!isErrand &&
                                 !isMedical &&
+                                !isPvp &&
                                 userData.dailyMissions >= 9 && (
                                   <>
                                     <br />
@@ -338,10 +354,12 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         {(!isErrand &&
                           !isMedical &&
+                          !isPvp &&
                           userData.dailyMissions >= MISSIONS_PER_DAY) ||
                         (isErrand && userData.dailyErrands >= ERRANDS_PER_DAY) ||
                         (isMedical &&
-                          userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY) ? (
+                          userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY) ||
+                        (isPvp && dailyPvpMissions >= PVP_MISSIONS_PER_DAY) ? (
                           <AlertDialogAction disabled>
                             Daily Limit Reached
                           </AlertDialogAction>

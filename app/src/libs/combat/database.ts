@@ -18,12 +18,15 @@ import {
 } from "@/drizzle/schema";
 import { kageDefendedChallenges, village, clan, anbuSquad } from "@/drizzle/schema";
 import { dataBattleAction } from "@/drizzle/schema";
-import { getNewTrackers } from "@/libs/quest";
+import { getNewTrackers, getUserQuests } from "@/libs/quest";
 import { battleJutsuExp } from "@/libs/train";
 import { updateUserOnMap } from "@/libs/pusher";
 import { JUTSU_XP_TO_LEVEL } from "@/drizzle/constants";
 import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import {
+  VILLAGE_SYNDICATE_ID,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+} from "@/drizzle/constants";
 import { findWarsWithUser } from "@/libs/war";
 import type { PusherClient } from "@/libs/pusher";
 import type { BattleTypes, BattleDataEntryType } from "@/drizzle/constants";
@@ -227,12 +230,8 @@ export const updateKage = async (
   if (!result) return;
 
   // In Kage challenges, the challenger is always the aggressor
-  const challenger = curBattle.usersState.find(
-    (u) => u.isAggressor && !u.isSummon,
-  );
-  const kage = curBattle.usersState.find(
-    (u) => !u.isAggressor && !u.isSummon,
-  );
+  const challenger = curBattle.usersState.find((u) => u.isAggressor && !u.isSummon);
+  const kage = curBattle.usersState.find((u) => !u.isAggressor && !u.isSummon);
 
   // Guards
   if (!challenger || !kage) return;
@@ -342,6 +341,8 @@ export const updateWars = async (
   if (!user) return;
   if (!user.villageId) return;
   if (!result) return;
+  // Skip war updates if kill happened in war-torn sector
+  if (user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR) return;
   // Fetch target with whom the user is in a war
   const warResults = curBattle.usersState
     .filter((t) => t.userId !== userId)
@@ -507,44 +508,73 @@ export const updateUser = async (
   const updatedQuestIds: string[] = [];
   const user = curBattle.usersState.find((u) => u.userId === userId);
   if (result && user) {
+    // Check if user has active PvP quests with pvp_kills or defeat_opponents objectives
+    const activeQuests = getUserQuests(user);
+    const activePvpQuests = activeQuests.filter((q) => q.questType === "pvp");
+    const hasPvpKillsInPvpQuest = activePvpQuests.some((quest) =>
+      quest.content.objectives.some((obj) => obj.task === "pvp_kills"),
+    );
+    const hasDefeatOpponentsInPvpQuest = activePvpQuests.some((quest) =>
+      quest.content.objectives.some((obj) => obj.task === "defeat_opponents"),
+    );
+    // Check if user has non-PvP quests with these objectives (should increment normally)
+    const hasPvpKillsInNonPvpQuest = activeQuests
+      .filter((q) => q.questType !== "pvp")
+      .some((quest) =>
+        quest.content.objectives.some((obj) => obj.task === "pvp_kills"),
+      );
+    const hasDefeatOpponentsInNonPvpQuest = activeQuests
+      .filter((q) => q.questType !== "pvp")
+      .some((quest) =>
+        quest.content.objectives.some((obj) => obj.task === "defeat_opponents"),
+      );
+    const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
+    // Only increment pvp_kills if:
+    // - User has non-PvP quest with that objective (increment normally), OR
+    // - User has PvP quest with that objective AND is in war-torn sector
+    const shouldIncrementPvpKills =
+      hasPvpKillsInNonPvpQuest || (hasPvpKillsInPvpQuest && isInWarTornSector);
+    // Only increment defeat_opponents if:
+    // - User has non-PvP quest with that objective (increment normally), OR
+    // - User has PvP quest with that objective AND is in war-torn sector
+    const shouldIncrementDefeatOpponents =
+      hasDefeatOpponentsInNonPvpQuest ||
+      (hasDefeatOpponentsInPvpQuest && isInWarTornSector);
+
+    // Accumulate all tracker tasks into a single array for one getNewTrackers call
+    const trackerTasks: Parameters<typeof getNewTrackers>[1] = [];
+
     // Update quest tracker with battle result
     if (result.didWin > 0) {
-      if (curBattle.battleType === "COMBAT") {
-        const { trackers } = getNewTrackers(user, [
-          { task: "pvp_kills", increment: 1 },
-        ]);
-        user.questData = trackers;
+      if (curBattle.battleType === "COMBAT" && shouldIncrementPvpKills) {
+        trackerTasks.push({ task: "pvp_kills", increment: 1 });
       }
       if (curBattle.battleType === "ARENA") {
-        const { trackers } = getNewTrackers(user, [
-          { task: "arena_kills", increment: 1 },
-        ]);
-        user.questData = trackers;
+        trackerTasks.push({ task: "arena_kills", increment: 1 });
       }
       if (curBattle.battleType === "RANDOM_ENCOUNTER") {
-        const { trackers } = getNewTrackers(user, [
-          { task: "random_encounter_wins", increment: 1 },
-        ]);
-        user.questData = trackers;
+        trackerTasks.push({ task: "random_encounter_wins", increment: 1 });
       }
       if (curBattle.battleType === "SPARRING") {
-        const { trackers } = getNewTrackers(user, [
-          { task: "spars_won", increment: 1 },
-        ]);
-        user.questData = trackers;
+        trackerTasks.push({ task: "spars_won", increment: 1 });
       }
     }
-    // Update trackers
+
+    // Add other tracker events
     const trackerEvents = [
       ...curBattle.usersState
         .filter((u) => u.userId !== userId)
         .map((u) => [
-          // Defeat opponent with outcome
-          {
-            task: "defeat_opponents" as const,
-            contentId: u.controllerId,
-            text: result.outcome,
-          },
+          // Defeat opponent with outcome - only if conditions are met
+          ...(shouldIncrementDefeatOpponents
+            ? [
+                {
+                  task: "defeat_opponents" as const,
+                  contentId: u.controllerId,
+                  text: result.outcome,
+                },
+              ]
+            : []),
           // Start battle with outcome
           {
             task: "start_battle" as const,
@@ -564,14 +594,37 @@ export const updateUser = async (
           ]
         : []),
     ];
+    trackerTasks.push(...trackerEvents);
+
+    // Single call to getNewTrackers with all tasks
     const { trackers, notifications, questIdsUpdated } = getNewTrackers(
       user,
-      trackerEvents,
+      trackerTasks,
     );
     updatedQuestIds.push(...questIdsUpdated);
     user.questData = trackers;
     // Add notifications to combatResult
     result.notifications.push(...notifications);
+
+    // Apply durability penalty for dying in war-torn sector (reduce 50 durability from all equipped gear)
+    // This must be done BEFORE durability warnings so warnings see the true final durability
+    const deleteItems = user.items.filter((ui) => ui.quantity <= 0).map((i) => i.id);
+    const updateItems = user.items.filter((ui) => ui.quantity > 0);
+    if (isInWarTornSector && result.didWin === 0 && result.outcome === "Lost") {
+      updateItems.forEach((ui) => {
+        // Only reduce durability for equipped items (not "NONE") that are not consumables
+        if (
+          ui.equipped !== "NONE" &&
+          ui.item.itemType !== "CONSUMABLE" &&
+          ui.item.maxDurability &&
+          ui.item.maxDurability > 0
+        ) {
+          // Reduce durability by 50, ensuring it doesn't go below 0
+          const currentDurability = ui.durability ?? ui.item.maxDurability;
+          ui.durability = Math.max(0, currentDurability - 50);
+        }
+      });
+    }
 
     // Check for low durability warnings (percent-based: <=50% and <=25%) and for broken items
     const initialDurability = curBattle.extraState.initialDurability;
@@ -616,8 +669,7 @@ export const updateUser = async (
 
     // Is it a kage challenge
     const isKageChallenge = ["KAGE_AI", "KAGE_PVP"].includes(curBattle.battleType);
-    const deleteItems = user.items.filter((ui) => ui.quantity <= 0).map((i) => i.id);
-    const updateItems = user.items.filter((ui) => ui.quantity > 0);
+
     // Any jutsus to be updated
     const jUsage = user.usedActions.filter((a) => a.type === "jutsu").map((a) => a.id);
     const jUnique = [...new Set(jUsage)];
@@ -719,6 +771,9 @@ export const updateUser = async (
           willpower: sql`willpower + ${result.willpower}`,
           speed: sql`speed + ${result.speed}`,
           money: result.money ? sql`money + ${result.money}` : sql`money`,
+          seichiSilver: result.seichiSilver
+            ? sql`seichiSilver + ${result.seichiSilver}`
+            : sql`seichiSilver`,
           ninjutsuOffence: sql`ninjutsuOffence + ${result.ninjutsuOffence}`,
           genjutsuOffence: sql`genjutsuOffence + ${result.genjutsuOffence}`,
           taijutsuOffence: sql`taijutsuOffence + ${result.taijutsuOffence}`,

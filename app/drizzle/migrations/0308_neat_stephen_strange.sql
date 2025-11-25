@@ -1,0 +1,4 @@
+ALTER TABLE `Battle` MODIFY COLUMN `background` enum('ocean','ground','dessert','ice','snow','arena','default') NOT NULL;
+ALTER TABLE `Quest` MODIFY COLUMN `questType` enum('mission','crime','event','exam','starter','errand','tier','daily','achievement','story','anbu','medical','hunting','gathering','battlepyramid','pvp') NOT NULL;
+ALTER TABLE `QuestHistory` MODIFY COLUMN `questType` enum('mission','crime','event','exam','starter','errand','tier','daily','achievement','story','anbu','medical','hunting','gathering','battlepyramid','pvp') NOT NULL;
+ALTER TABLE `UserData` ADD `dailyPvpMissions` smallint unsigned DEFAULT 0 NOT NULL;

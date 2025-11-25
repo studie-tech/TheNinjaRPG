@@ -68,6 +68,7 @@ export const MAP_RESERVED_SECTORS = [
 ];
 export const MAP_TOTAL_SECTORS = 443;
 export const MAP_WAKE_ISLAND_SECTOR = 222;
+export const MAP_WAR_TORN_BATTLEGROUND_SECTOR = 335;
 export const MAP_GLOBAL_TRAVEL_TIME_CAP_SECS = 10;
 
 export const CoreVillages = [
@@ -520,6 +521,7 @@ export const QuestTypes = [
   "hunting",
   "gathering",
   "battlepyramid",
+  "pvp",
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
 export const QUESTS_CONCURRENT_LIMIT = 4;
@@ -1104,6 +1106,7 @@ export const FED_EVENT_ITEMS_DEFAULT = 10;
 export const ERRANDS_PER_DAY = 50;
 export const MISSIONS_PER_DAY = 20;
 export const MEDICAL_MISSIONS_PER_DAY = 9;
+export const PVP_MISSIONS_PER_DAY = 12;
 export const ADDITIONAL_MISSION_REWARD_MULTIPLIER = 0.4;
 
 // War config
@@ -1193,6 +1196,7 @@ export const PVP_KILL_PRESTIGE_REWARD = 150; // Base prestige for PvP kill
 export const PVP_KILL_PRESTIGE_REWARD_ANBU = 300; // Prestige for PvP kill by ANBU member
 export const PVP_KILL_PRESTIGE_REWARD_ASSASSIN = 300; // Prestige for PvP kill by Assassin member
 export const PVP_KILL_ANBU_POINTS_REWARD = 5; // ANBU points for PvP kill by ANBU member
+export const WAR_TORN_SECTOR_BASE_MONEY = 2000; // Base money reward for battles in war-torn sector (sector 335)
 
 // Clans config
 export const CLAN_MPVP_MAX_USERS_PER_SIDE = 3;
@@ -1784,6 +1788,8 @@ export const IMG_MISSION_E =
   "https://utfs.io/f/Hzww9EQvYURJPAguocQpKeUGyX2kj6u45AOQiSa1zYH0mqZo";
 export const IMG_MISSION_M =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJyweIVKukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
+export const IMG_MISSION_PVP =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJzCBxBXemvaQu94EYJs8HpxVzofny6iPtbgCZ";
 
 export const IMG_BUILDING_MISSIONHALL =
   "https://utfs.io/f/Hzww9EQvYURJ2TCTWInMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8";

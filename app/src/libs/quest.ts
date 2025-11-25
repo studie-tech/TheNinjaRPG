@@ -13,6 +13,7 @@ import {
   IMG_MISSION_D,
   IMG_MISSION_E,
   IMG_MISSION_M,
+  IMG_MISSION_PVP,
   VILLAGE_SYNDICATE_ID,
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   MEDNIN_RANKS,
@@ -925,14 +926,6 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
       description: `Errands typically involve simple tasks such as fetching an item somewhere in the village, delivering groceries, etc.`,
     },
     {
-      type: "medical",
-      rank: "D",
-      name: "Medical",
-      image: IMG_MISSION_M,
-      delayMinutes: 5,
-      description: `Medical quests are specialized missions for medical ninja. These quests focus on healing, medical research, and providing medical assistance to the village.`,
-    },
-    {
       type: type,
       rank: "D",
       name: "D-rank",
@@ -971,6 +964,22 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
       image: IMG_MISSION_S,
       delayMinutes: 25,
       description: `S-rank ${type}s are the highest rank of ${type}s. They are usually extremely dangerous and difficult and reserved for kage-level shinobi.`,
+    },
+    {
+      type: "medical",
+      rank: "D",
+      name: "Medical",
+      image: IMG_MISSION_M,
+      delayMinutes: 5,
+      description: `Medical quests are specialized missions for medical ninja. These quests focus on healing, medical research, and providing medical assistance to the village.`,
+    },
+    {
+      type: "pvp",
+      rank: "S",
+      name: "PvP",
+      image: IMG_MISSION_PVP,
+      delayMinutes: 0,
+      description: `PvP missions involve combat against other players. Test your skills in player versus player battles.`,
     },
   ] as const;
 };

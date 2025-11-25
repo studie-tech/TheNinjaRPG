@@ -455,7 +455,8 @@ const Sector: React.FC<SectorProps> = (props) => {
       userData?.status === "AWAKE" &&
       origin.current &&
       !isMoving &&
-      !isAttacking
+      !isAttacking &&
+      sector === userData?.village?.sector
     ) {
       // Check if enough time has passed since last attack
       const now = Date.now();
