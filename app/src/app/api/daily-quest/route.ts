@@ -41,6 +41,7 @@ export async function GET() {
           count: sql`count(${userData.userId})`.mapWith(Number),
         })
         .from(userData)
+        .where(eq(userData.isAi, false))
         .groupBy(userData.rank, userData.villageId),
       drizzleDB
         .update(questHistory)
