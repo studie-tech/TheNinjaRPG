@@ -83,13 +83,13 @@ export default function ApplicationsPage() {
       <div>
         {me && canDeleteStaffApplication(me.role) && (
           <button
-            disabled={deleteMutation.isLoading}
+            disabled={deleteMutation.isPending}
             className={`text-red-600 hover:underline ${
-              deleteMutation.isLoading ? "opacity-50 cursor-not-allowed" : ""
+              deleteMutation.isPending ? "opacity-50 cursor-not-allowed" : ""
             }`}
             onClick={async (e) => {
               e.preventDefault();
-              if (deleteMutation.isLoading) return;
+              if (deleteMutation.isPending) return;
               const ok = window.confirm("Delete this application? This cannot be undone.");
               if (!ok) return;
               try {
@@ -102,7 +102,7 @@ export default function ApplicationsPage() {
               }
             }}
           >
-            {deleteMutation.isLoading ? "Deleting..." : "Delete"}
+            {deleteMutation.isPending ? "Deleting..." : "Delete"}
           </button>
         )}
       </div>
