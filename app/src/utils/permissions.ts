@@ -399,6 +399,10 @@ export const canClearSectors = (role: UserRole) => {
 export const canDeleteReferral = (role: UserRole) => {
   return ["HEAD_MODERATOR", "MODERATOR-ADMIN", "CODING-ADMIN"].includes(role);
 };
+// Staff applications
+export const canDeleteStaffApplication = (role: UserRole) => {
+  return role === "CODING-ADMIN";
+};
 
 export const canUnequipAllUsers = (user: UserData) => {
   return [

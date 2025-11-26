@@ -2,7 +2,7 @@ import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { baseServerResponse, errorResponse } from "@/server/api/trpc";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, and, desc, inArray, like } from "drizzle-orm";
+import { eq, and, desc, inArray, like, isNull } from "drizzle-orm";
 import { userData, staffApplication, staffApplicationApproval } from "@/drizzle/schema";
 import { StaffApplicationTargetRoles } from "@/drizzle/constants";
 import type { StaffApprovalGroup } from "@/drizzle/constants";
@@ -15,6 +15,7 @@ import type { DrizzleClient } from "@/server/db";
 import { StaffApprovalGroups } from "@/drizzle/constants";
 import { createConvo } from "@/routers/comments";
 import { fetchUser } from "@/routers/profile";
+import { canDeleteStaffApplication } from "@/utils/permissions";
 
 export const applicationsRouter = createTRPCRouter({
   create: protectedProcedure
@@ -134,17 +135,79 @@ export const applicationsRouter = createTRPCRouter({
             },
             with: { village: { columns: { name: true } } },
           },
+          approvals: {
+            with: { approver: { columns: { userId: true, username: true, avatar: true } } },
+          },
         },
         orderBy: [desc(staffApplication.createdAt)],
         limit,
         offset: skip,
       });
 
-      // Client-side filter on username if needed (drizzle query builder with relations
-      // does not support like on related fields directly without a manual join)
+      // Attach current user's vote (if any) to each application
+      const enriched = results.map((app) => {
+        const myApproval = Array.isArray(app.approvals)
+          ? app.approvals.find((a) => a.approverUserId === user.userId)
+          : undefined;
+        return {
+          ...app,
+          myVote: myApproval?.state ?? null,
+        };
+      });
+
       const nextCursor = results.length < limit ? null : currentCursor + 1;
-      return { data: results, nextCursor };
+      return { data: enriched, nextCursor };
     }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!user) return errorResponse("Not allowed");
+      if (!canDeleteStaffApplication(user.role)) return errorResponse("Not allowed");
+
+      const app = await ctx.drizzle.query.staffApplication.findFirst({
+        where: eq(staffApplication.id, input.id),
+      });
+      if (!app) return errorResponse("Application not found");
+      if (app.state !== "PENDING")
+        return errorResponse("Only pending applications can be deleted");
+
+      await ctx.drizzle.delete(staffApplication).where(eq(staffApplication.id, input.id));
+      return { success: true, message: "Application deleted" };
+    }),
+
+  pendingVoteCount: protectedProcedure.query(async ({ ctx }) => {
+    const user = await fetchUser(ctx.drizzle, ctx.userId);
+    if (!user || user.role === "USER") return { count: 0 };
+    // Only admins from approval groups should get counts. If the user's role
+    // is not part of the StaffApprovalGroups, return zero.
+    if (!StaffApprovalGroups.includes(user.role as StaffApprovalGroup)) return { count: 0 };
+
+    // Count applications where:
+    // - application is PENDING
+    // - there is NO approval yet from this user's approval group
+    const rows = await ctx.drizzle
+      .select({ id: staffApplication.id })
+      .from(staffApplication)
+      .leftJoin(
+        staffApplicationApproval,
+        and(
+          eq(staffApplication.id, staffApplicationApproval.applicationId),
+          eq(staffApplicationApproval.group, user.role as StaffApprovalGroup),
+          eq(staffApplicationApproval.approverUserId, user.userId),
+        ),
+      )
+      .where(
+        and(
+          eq(staffApplication.state, "PENDING"),
+          isNull(staffApplicationApproval.applicationId),
+        ),
+      );
+
+    return { count: rows.length };
+  }),
 
   approve: protectedProcedure
     .input(z.object({ id: z.string() }))

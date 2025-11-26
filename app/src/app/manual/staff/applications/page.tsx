@@ -11,6 +11,7 @@ import ApplicationsFiltering, {
   getApplicationsFilter,
   useApplicationsFiltering,
 } from "@/layout/ApplicationsFiltering";
+import { canDeleteStaffApplication } from "@/utils/permissions";
 
 export default function ApplicationsPage() {
   const { data: me } = useUserData();
@@ -33,6 +34,16 @@ export default function ApplicationsPage() {
   );
   const apps = appsPages?.pages.map((p) => p.data).flat();
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
+  const utils = api.useContext();
+  const deleteMutation = api.applications.delete.useMutation({
+    onSuccess: async () => {
+      // Invalidate the exact list query with current filters for precision
+      await utils.applications.list.invalidate({
+        ...getApplicationsFilter(filterState),
+        limit: 30,
+      });
+    },
+  });
 
   if (!isStaff) {
     return (
@@ -65,6 +76,37 @@ export default function ApplicationsPage() {
       (a.motivation || "").length > 140
         ? `${a.motivation?.slice(0, 140)}…`
         : a.motivation || "",
+    // Human-friendly vote text for table
+    myVote: a.myVote ? (a.myVote === "APPROVED" ? "Approved" : "Rejected") : "Not voted",
+    // Actions: delete button for CODING_ADMIN
+    actions: (
+      <div>
+        {me && canDeleteStaffApplication(me.role) && (
+          <button
+            disabled={deleteMutation.isLoading}
+            className={`text-red-600 hover:underline ${
+              deleteMutation.isLoading ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+            onClick={async (e) => {
+              e.preventDefault();
+              if (deleteMutation.isLoading) return;
+              const ok = window.confirm("Delete this application? This cannot be undone.");
+              if (!ok) return;
+              try {
+                await deleteMutation.mutateAsync({ id: a.id });
+              } catch (err) {
+                // swallow - optionally show toast
+                // eslint-disable-next-line no-console
+                console.error(err);
+                alert("Failed to delete application");
+              }
+            }}
+          >
+            {deleteMutation.isLoading ? "Deleting..." : "Delete"}
+          </button>
+        )}
+      </div>
+    ),
   }));
 
   return (
@@ -86,12 +128,14 @@ export default function ApplicationsPage() {
             { key: "avatar", header: "", type: "avatar" } as any,
             { key: "info", header: "Info", type: "jsx" } as any,
             { key: "createdAt", header: "Created", type: "date" },
+            { key: "myVote", header: "Your Vote", type: "string" },
             {
               key: "motivationPreview",
               header: "Motivation",
               type: "string",
               tooltip: (row) => (row as { motivation?: string }).motivation || "",
             },
+            { key: "actions", header: "Actions", type: "jsx" } as any,
           ]}
           setLastElement={setLastElement}
         />
