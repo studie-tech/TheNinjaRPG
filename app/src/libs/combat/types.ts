@@ -97,6 +97,7 @@ export type BattleUserState = Omit<NonNullable<UserWithRelations>, "items"> & {
   originalLongitude: number;
   originalLatitude: number;
   originalMoney: number;
+  originalLevel: number;
   direction: "left" | "right";
   allyVillage: boolean;
   moneyStolen: number;

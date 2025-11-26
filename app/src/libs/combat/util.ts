@@ -1312,8 +1312,10 @@ export const calcBattleResult = (
         loserMoneyGain *= battle.rewardScaling;
         // Apply 1.6x multiplier (same as winner gets)
         loserMoneyGain *= 1.6;
-        // Deduct this amount from the loser
-        result.money = -loserMoneyGain;
+        // Deduct this amount from the loser, but don't let money go below 0
+        const currentMoney = user?.money || 0;
+        const moneyToLose = Math.min(loserMoneyGain, currentMoney);
+        result.money = -moneyToLose;
       }
 
       // Return results

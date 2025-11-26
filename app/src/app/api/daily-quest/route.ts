@@ -37,7 +37,6 @@ export async function GET() {
           rank: userData.rank,
           villageId: userData.villageId,
           minLevel: sql`min(${userData.level})`.mapWith(Number),
-          maxLevel: sql`max(${userData.level})`.mapWith(Number),
           count: sql`count(${userData.userId})`.mapWith(Number),
         })
         .from(userData)
@@ -57,7 +56,7 @@ export async function GET() {
 
     // For each user rank, get a random daily quest
     for (const config of userRankPerVillage) {
-      const { rank, villageId, minLevel, maxLevel } = config;
+      const { rank, villageId, minLevel } = config;
       const village = villages?.find((v) => v.id === villageId);
       const questRanks = availableQuestLetterRanks(rank);
       if (village && questRanks.length > 0) {
@@ -69,8 +68,7 @@ export async function GET() {
             (q) =>
               questRanks.includes(q.questRank) &&
               (!q.requiredVillage || q.requiredVillage === requiredVillage) &&
-              // Check that the quest's level range overlaps with users' level range
-              q.requiredLevel <= maxLevel &&
+              q.requiredLevel <= minLevel &&
               q.maxLevel >= minLevel,
           );
         if (newDaily) {

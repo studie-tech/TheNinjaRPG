@@ -180,7 +180,7 @@ export default function Users() {
               ))}
             </SelectContent>
           </Select>
-          <Link href="/staff">
+          <Link href="/manual/staff">
             <Button>
               <BriefcaseBusiness className="h-6 w-6" />
             </Button>

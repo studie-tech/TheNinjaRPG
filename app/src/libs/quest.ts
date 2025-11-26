@@ -617,7 +617,12 @@ export const getNewTrackers = (
 
           // General updates we want to apply every time
           if (task === "user_level") {
-            status.value = user.level;
+            // Use originalLevel if available (for combat-scaled users), otherwise use current level
+            const userLevel =
+              "originalLevel" in user && typeof user.originalLevel === "number"
+                ? user.originalLevel
+                : user.level ?? 1;
+            status.value = userLevel;
           } else if (task === "days_in_village") {
             const days = Math.floor(secondsPassed(user.joinedVillageAt) / 60 / 60 / 24);
             status.value = days;
@@ -1121,10 +1126,15 @@ export const isAvailableUserQuests = (
   const huntingRankCheck = !reqHuntRankIdx || userHuntRankIdx >= reqHuntRankIdx;
 
   // Level check - user must be >= requiredLevel and <= maxLevel
+  // Use originalLevel if available (for combat-scaled users), otherwise use current level
+  const userLevel =
+    "originalLevel" in user && typeof user.originalLevel === "number"
+      ? user.originalLevel
+      : user.level ?? 1;
   const levelCheck =
     (!questAndUserQuestInfo.requiredLevel ||
-      user.level >= questAndUserQuestInfo.requiredLevel) &&
-    (!questAndUserQuestInfo.maxLevel || user.level <= questAndUserQuestInfo.maxLevel);
+      userLevel >= questAndUserQuestInfo.requiredLevel) &&
+    (!questAndUserQuestInfo.maxLevel || userLevel <= questAndUserQuestInfo.maxLevel);
 
   // Event specific tests
   const eventCompletedCheck =
@@ -1146,6 +1156,13 @@ export const isAvailableUserQuests = (
       );
     });
 
+  // Daily quests should be available even if previously completed (they reset daily)
+  const completedCheck =
+    questAndUserQuestInfo.questType === "daily" ||
+    QuestTypesWithMaxAttempts.includes(questAndUserQuestInfo.questType) ||
+    !questAndUserQuestInfo.completed ||
+    questAndUserQuestInfo.completed === 0;
+
   // Check if quest is available
   const check =
     hideCheck &&
@@ -1157,7 +1174,8 @@ export const isAvailableUserQuests = (
     prerequisiteCheck &&
     medicalRankCheck &&
     huntingRankCheck &&
-    levelCheck;
+    levelCheck &&
+    completedCheck;
 
   // If quest is not available, return the reason
   let message = "";
@@ -1172,14 +1190,24 @@ export const isAvailableUserQuests = (
     message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;
   if (!huntingRankCheck)
     message += `Quest requires hunting rank ${capitalizeFirstLetter(questHuntRank ?? "NONE")}\n`;
+  if (
+    !completedCheck &&
+    questAndUserQuestInfo.questType !== "daily" &&
+    !QuestTypesWithMaxAttempts.includes(questAndUserQuestInfo.questType)
+  ) {
+    message += "Quest has already been completed\n";
+  }
   if (!levelCheck) {
     if (
       questAndUserQuestInfo.requiredLevel &&
-      user.level < questAndUserQuestInfo.requiredLevel
+      userLevel < questAndUserQuestInfo.requiredLevel
     ) {
       message += `Quest requires level ${questAndUserQuestInfo.requiredLevel}\n`;
     }
-    if (questAndUserQuestInfo.maxLevel && user.level > questAndUserQuestInfo.maxLevel) {
+    if (
+      questAndUserQuestInfo.maxLevel &&
+      userLevel > questAndUserQuestInfo.maxLevel
+    ) {
       message += `Quest is only available up to level ${questAndUserQuestInfo.maxLevel}\n`;
     }
   }

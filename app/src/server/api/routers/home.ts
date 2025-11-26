@@ -7,7 +7,7 @@ import { fetchUpdatedUser } from "@/routers/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { calcIsInVillage } from "@/libs/travel";
 import { fetchSectorVillage } from "@/routers/village";
-import { HomeTypes, HomeTypeDetails } from "@/drizzle/constants";
+import { HomeTypes, HomeTypeDetails, MAP_WAR_TORN_BATTLEGROUND_SECTOR } from "@/drizzle/constants";
 import { fetchUserItems } from "@/routers/item";
 import {
   calcMaxItems,
@@ -55,6 +55,9 @@ export const homeRouter = createTRPCRouter({
       }
       if (user.sector !== user.village?.sector && !user.isOutlaw) {
         return errorResponse("Wrong sector");
+      }
+      if (newStatus === "ASLEEP" && user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR) {
+        return errorResponse("You cannot sleep in the war-torn battleground");
       }
       // Mutate
       if (user.status === "ASLEEP") {

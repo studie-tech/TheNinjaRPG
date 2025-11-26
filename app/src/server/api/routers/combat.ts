@@ -1465,7 +1465,9 @@ export const initiateBattle = async (
     capUserStats(user);
 
     // If PvP rank, set pools to max & level to 100
+    // Save original level before setting to 100 for ranked battles (for quest validation)
     if (battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING") {
+      (user as BattleUserState).originalLevel = user.level;
       user.maxHealth = calcHP(100);
       user.maxChakra = calcSP(100);
       user.maxStamina = calcCP(100);
@@ -1945,9 +1947,15 @@ export const processUsersForBattle = async (
     // By default set iAmHere to false
     user.iAmHere = false;
 
+    // Remember the original level before any combat scaling
+    // Only set if not already set (e.g., for ranked battles it's set in initiateBattle)
+    if (user.originalLevel === undefined) {
+      user.originalLevel = user.level;
+    }
+
     // Update user level to the effective level if he had leveled up (to combat level-holding, as some things are scaled based on level)
-    // Skip for ranked battles as they have their level set to 100
-    if (battleType !== "RANKED_SPARRING") {
+    // Skip for ranked battles as they have their level set to 100 in initiateBattle
+    if (battleType !== "RANKED_SPARRING" && battleType !== "RANKED_PVP") {
       user.level = calcLevel(user.experience);
     }
 
