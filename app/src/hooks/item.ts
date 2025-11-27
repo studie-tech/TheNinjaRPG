@@ -8,6 +8,7 @@ import { AttackMethods } from "@/drizzle/constants";
 import { ItemTypes } from "@/drizzle/constants";
 import { ItemRarities } from "@/drizzle/constants";
 import { ItemSlotTypes } from "@/drizzle/constants";
+import { BattleUsageTypes } from "@/drizzle/constants";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import type { Item, CraftingRequirement } from "@/drizzle/schema";
@@ -154,6 +155,12 @@ export const useItemEditForm = (
     { id: "canBeTraded", type: "boolean" },
     { id: "canBeImbued", type: "boolean" },
     { id: "expireFromStoreAt", type: "date", label: "Remove from store at" },
+    {
+      id: "battleUsageType",
+      type: "str_array",
+      values: BattleUsageTypes,
+      label: "Battle Usage Type",
+    },
   ];
 
   if (canBeCrafted) {

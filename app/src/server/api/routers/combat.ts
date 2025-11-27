@@ -53,7 +53,7 @@ import {
 } from "@/libs/combat/database";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import { userData, questHistory, quest, gameSetting, jutsu } from "@/drizzle/schema";
+import { userData, questHistory, quest, gameSetting, jutsu, jutsuLoadout } from "@/drizzle/schema";
 import { battle, battleAction, battleHistory, war, item } from "@/drizzle/schema";
 import { villageAlliance, village, tournamentMatch, bounty } from "@/drizzle/schema";
 import { sector } from "@/drizzle/schema";
@@ -785,7 +785,7 @@ export const combatRouter = createTRPCRouter({
       ] = await Promise.all([
         fetchBattleEssentials(ctx.drizzle),
         fetchBattle(ctx.drizzle, input.battleId),
-        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId, "PVP"),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
@@ -1210,7 +1210,8 @@ export const initiateBattle = async (
             jutsu: true,
             activeReskin: true,
           },
-          where: (jutsus) => eq(jutsus.equipped, true),
+          // Fetch all jutsus - we'll filter by loadout based on battle type later
+          // This ensures we have the correct jutsus even if PvE loadout was recently selected
           orderBy: (table, { desc }) => [desc(table.level)],
         },
         userSkills: {
@@ -1268,6 +1269,56 @@ export const initiateBattle = async (
     // Fetch all jutsus that can be injected in battle
     client.query.jutsu.findMany({ where: eq(jutsu.injectableInBattle, true) }),
   ]);
+
+  // For QUEST and RANDOM_ENCOUNTER battles, use PvE loadout instead of PvP loadout
+  if (battleType === "QUEST" || battleType === "RANDOM_ENCOUNTER") {
+    const pveLoadoutIds = fetchedUsers
+      .map((u) => u.pveJutsuLoadout)
+      .filter((id): id is string => id !== null && id !== undefined);
+    
+    if (pveLoadoutIds.length > 0) {
+      const pveLoadouts = await client.query.jutsuLoadout.findMany({
+        where: inArray(jutsuLoadout.id, pveLoadoutIds),
+        columns: { id: true, jutsuIds: true },
+      });
+      
+      const pveLoadoutMap = new Map(pveLoadouts.map((l) => [l.id, l]));
+      
+      for (const user of fetchedUsers) {
+        if (user.pveJutsuLoadout) {
+          const pveLoadout = pveLoadoutMap.get(user.pveJutsuLoadout);
+          if (pveLoadout) {
+            user.loadout = pveLoadout;
+            // Filter jutsus to only include those in the PvE loadout
+            const pveJutsuIds = new Set(pveLoadout.jutsuIds);
+            user.jutsus = user.jutsus.filter((uj) => pveJutsuIds.has(uj.jutsuId));
+          } else {
+            // No PvE loadout found, use PvP loadout (equipped jutsus)
+            user.jutsus = user.jutsus.filter((uj) => uj.equipped);
+          }
+        } else {
+          // No PvE loadout set, use PvP loadout (equipped jutsus)
+          user.jutsus = user.jutsus.filter((uj) => uj.equipped);
+        }
+      }
+    } else {
+      // No users have PvE loadouts, filter to equipped jutsus for all
+      for (const user of fetchedUsers) {
+        user.jutsus = user.jutsus.filter((uj) => uj.equipped);
+      }
+    }
+  } else {
+    // Filter jutsus by PvP loadout (user.loadout) to avoid using PvE-equipped jutsus
+    for (const user of fetchedUsers) {
+      if (user.loadout?.jutsuIds && user.loadout.jutsuIds.length > 0) {
+        const pvpJutsuIds = new Set(user.loadout.jutsuIds);
+        user.jutsus = user.jutsus.filter((uj) => pvpJutsuIds.has(uj.jutsuId));
+      } else {
+        // No PvP loadout, fall back to equipped jutsus
+        user.jutsus = user.jutsus.filter((uj) => uj.equipped);
+      }
+    }
+  }
 
   // If we have forced loadouts, overwrite user items and jutsus appropriately
   if (info.forceLoadouts && info.forceLoadouts.length > 0) {

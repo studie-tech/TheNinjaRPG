@@ -11,6 +11,7 @@ interface JutsuLoadoutSelectorProps {
   label?: string;
   onSelectOverride?: (loadoutId: string) => void;
   selectedOverrideId?: string | null;
+  battleType?: "PVP" | "PVE";
 }
 
 const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
@@ -20,16 +21,32 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
   // tRPC utility
   const utils = api.useUtils();
 
-  // How many loadouts?
-  const maxLoadouts = fedJutsuLoadouts(userData);
+  // Determine battle type (default to PVP)
+  const battleType = props.battleType || "PVP";
+  const isPvE = battleType === "PVE";
 
-  // Get loadouts
-  const { data, isFetching } = api.jutsu.getLoadouts.useQuery(undefined, {
-    enabled: maxLoadouts > 1,
-  });
+  // How many loadouts?
+  const maxLoadouts = isPvE ? 1 : fedJutsuLoadouts(userData);
+
+  // Get loadouts based on battle type
+  const { data: pvpData, isFetching: isFetchingPvp } = api.jutsu.getLoadouts.useQuery(
+    undefined,
+    {
+      enabled: !isPvE && maxLoadouts > 1,
+    },
+  );
+  const { data: pveData, isFetching: isFetchingPve } = api.jutsu.getPveLoadouts.useQuery(
+    undefined,
+    {
+      enabled: isPvE,
+    },
+  );
+
+  const data = isPvE ? pveData : pvpData;
+  const isFetching = isPvE ? isFetchingPve : isFetchingPvp;
 
   // Mutations
-  const { mutate: selectJutsuLoadout, isPending } =
+  const { mutate: selectJutsuLoadout, isPending: isPendingPvp } =
     api.jutsu.selectJutsuLoadout.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
@@ -41,10 +58,26 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
       },
     });
 
+  const { mutate: selectPveJutsuLoadout, isPending: isPendingPve } =
+    api.jutsu.selectPveJutsuLoadout.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.profile.getUser.invalidate();
+          await utils.item.getUserItems.invalidate();
+          await utils.jutsu.getUserJutsus.invalidate();
+        }
+      },
+    });
+
+  const isPending = isPvE ? isPendingPve : isPendingPvp;
+
   // Derived size vars
   const iconSize = props?.size === "small" ? "h-6 w-6" : "h-10 w-10";
   const textSize = props?.size === "small" ? "text-xs" : "text-sm mt-1";
-  const selectedId = props.selectedOverrideId || userData?.jutsuLoadout;
+  const selectedId =
+    props.selectedOverrideId ||
+    (isPvE ? userData?.pveJutsuLoadout : userData?.jutsuLoadout);
 
   // Loaders
   if (!userData) return <Loader />;
@@ -58,7 +91,11 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
     if (props.onSelectOverride) {
       props.onSelectOverride(id);
     } else {
+      if (isPvE) {
+        selectPveJutsuLoadout({ id });
+    } else {
       selectJutsuLoadout({ id });
+      }
     }
   };
 

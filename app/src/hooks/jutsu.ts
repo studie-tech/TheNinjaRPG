@@ -12,6 +12,7 @@ import { WeaponTypes } from "@/drizzle/constants";
 import { JutsuTypes } from "@/drizzle/constants";
 import { UserRanks } from "@/drizzle/constants";
 import { StatTypes } from "@/drizzle/constants";
+import { BattleUsageTypes } from "@/drizzle/constants";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { ZodJutsuType } from "@/libs/combat/types";
@@ -108,6 +109,12 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     { id: "target", type: "str_array", values: AttackTargets },
     { id: "hidden", type: "boolean" },
     { id: "injectableInBattle", type: "boolean" },
+    {
+      id: "battleUsageType",
+      type: "str_array",
+      values: BattleUsageTypes,
+      label: "Battle Usage Type",
+    },
   ];
 
   return { jutsu, effects, form, formData, loading, setEffects, handleJutsuSubmit };

@@ -1179,6 +1179,9 @@ export const item = mysqlTable(
     canBeTraded: boolean("canBeTraded").default(false).notNull(),
     crystalTargetTypes: mysqlEnum("crystalTargetTypes", consts.ItemTypes),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
+    battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
+      .default("BOTH")
+      .notNull(),
   },
   (table) => {
     return {
@@ -1292,6 +1295,9 @@ export const jutsu = mysqlTable(
     method: mysqlEnum("method", consts.AttackMethods).default("SINGLE").notNull(),
     hidden: boolean("hidden").default(false).notNull(),
     injectableInBattle: boolean("injectableInBattle").default(false).notNull(),
+    battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
+      .default("BOTH")
+      .notNull(),
   },
   (table) => {
     return {
@@ -1364,6 +1370,9 @@ export const jutsuLoadout = mysqlTable(
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     jutsuIds: json("content").$type<string[]>().notNull(),
+    battleType: mysqlEnum("battleType", consts.JutsuLoadoutBattleTypes)
+      .default("PVP")
+      .notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -1881,6 +1890,7 @@ export const userData = mysqlTable(
     anbuId: varchar("anbuId", { length: 191 }),
     clanId: varchar("clanId", { length: 191 }),
     jutsuLoadout: varchar("jutsuLoadout", { length: 191 }),
+    pveJutsuLoadout: varchar("pveJutsuLoadout", { length: 191 }),
     itemLoadout: varchar("itemLoadout", { length: 191 }),
     rankedLoadout: varchar("rankedLoadout", { length: 191 }),
     nRecruited: int("nRecruited").default(0).notNull(),
@@ -2063,6 +2073,7 @@ export const userData = mysqlTable(
       clanIdIdx: index("UserData_clanId_idx").on(table.clanId),
       anbuIdIdx: index("UserData_anbuId_idx").on(table.anbuId),
       jutsuLoadoutIdx: index("UserData_jutsuLoadout_idx").on(table.jutsuLoadout),
+      pveJutsuLoadoutIdx: index("UserData_pveJutsuLoadout_idx").on(table.pveJutsuLoadout),
       rankedLoadoutIdx: index("UserData_rankedLoadout_idx").on(table.rankedLoadout),
       rankedLpIdx: index("UserData_rankedLp_idx").on(table.rankedLp),
       experienceIdx: index("UserData_experience_idx").on(table.experience),

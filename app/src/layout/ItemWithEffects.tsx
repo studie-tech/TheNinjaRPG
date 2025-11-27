@@ -403,7 +403,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Difficulty</b>: {item.difficulty}
                 </p>
               )}
-
+              {"battleUsageType" in item && item.battleUsageType && (
+                <p>
+                  <b>Battle Usage</b>: {item.battleUsageType === "BOTH" ? "PVE & PVP" : item.battleUsageType}
+                </p>
+              )}
               {"level" in item && item.level !== undefined && item.level > 0 && (
                 <p>
                   <b>Level</b>: {item.level}

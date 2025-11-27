@@ -443,6 +443,16 @@ export const PvpBattleTypes: BattleType[] = [
   "RANKED_SPARRING",
 ];
 
+export const BattleUsageTypes = [
+  "PVE",
+  "PVP",
+  "BOTH",
+] as const;
+export type BattleUsageType = (typeof BattleUsageTypes)[number];
+
+export const JutsuLoadoutBattleTypes = ["PVE", "PVP"] as const;
+export type JutsuLoadoutBattleType = (typeof JutsuLoadoutBattleTypes)[number];
+
 // Combat backgrounds
 export const COMBAT_BIOMES = [
   "ocean",

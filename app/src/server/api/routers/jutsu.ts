@@ -263,7 +263,7 @@ export const jutsuRouter = createTRPCRouter({
 
   getLoadouts: protectedProcedure.query(async ({ ctx }) => {
     const [loadouts, user] = await Promise.all([
-      fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+      fetchJutsuLoadouts(ctx.drizzle, ctx.userId, "PVP"),
       fetchUser(ctx.drizzle, ctx.userId),
     ]);
     const maxLoadouts = fedJutsuLoadouts(user);
@@ -275,6 +275,7 @@ export const jutsuRouter = createTRPCRouter({
           id: nanoid(),
           userId: ctx.userId,
           jutsuIds: [],
+          battleType: "PVP" as const,
           createdAt: new Date(),
         };
         await ctx.drizzle.insert(jutsuLoadout).values(loadout);
@@ -293,18 +294,63 @@ export const jutsuRouter = createTRPCRouter({
     return maxLoadouts < loadouts.length ? loadouts.slice(0, maxLoadouts) : loadouts;
   }),
 
+  getPveLoadouts: protectedProcedure.query(async ({ ctx }) => {
+    const [loadouts, user] = await Promise.all([
+      fetchJutsuLoadouts(ctx.drizzle, ctx.userId, "PVE"),
+      fetchUser(ctx.drizzle, ctx.userId),
+    ]);
+    const maxLoadouts = 1; // PvE only gets 1 loadout
+
+    // Create missing loadout if needed
+    if (loadouts.length < maxLoadouts) {
+      const loadout = {
+        id: nanoid(),
+        userId: ctx.userId,
+        jutsuIds: [],
+        battleType: "PVE" as const,
+        createdAt: new Date(),
+      };
+      await ctx.drizzle.insert(jutsuLoadout).values(loadout);
+      loadouts.push(loadout);
+    }
+
+    // If no user PvE loadout, set it to the first
+    if (loadouts?.[0] && !user.pveJutsuLoadout) {
+      await ctx.drizzle
+        .update(userData)
+        .set({ pveJutsuLoadout: loadouts[0].id })
+        .where(eq(userData.userId, ctx.userId));
+    }
+
+    return loadouts.slice(0, maxLoadouts);
+  }),
+
   selectJutsuLoadout: protectedProcedure
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [loadouts, user, userjutsus] = await Promise.all([
-        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId, "PVP"),
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
       ]);
       // Mutate & return result
       const id = input.id;
-      return await selectJutsuLoadout(ctx.drizzle, id, loadouts, userjutsus, user);
+      return await selectJutsuLoadout(ctx.drizzle, id, loadouts, userjutsus, user, "PVP");
+    }),
+
+  selectPveJutsuLoadout: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [loadouts, user, userjutsus] = await Promise.all([
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId, "PVE"),
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserJutsus(ctx.drizzle, ctx.userId),
+      ]);
+      // Mutate & return result
+      const id = input.id;
+      return await selectJutsuLoadout(ctx.drizzle, id, loadouts, userjutsus, user, "PVE");
     }),
 
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
@@ -718,51 +764,65 @@ export const jutsuRouter = createTRPCRouter({
     }),
 
   unequipAll: protectedProcedure
+    .input(z.object({ battleType: z.enum(["PVP", "PVE"]).optional() }))
     .output(baseServerResponse)
-    .mutation(async ({ ctx }) => {
+    .mutation(async ({ ctx, input }) => {
+      const battleType = input.battleType ?? "PVP";
       const [data, loadouts] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId, battleType),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
-
-      const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
-
-      await Promise.all([
-        ctx.drizzle
-          .update(userJutsu)
-          .set({ equipped: false })
-          .where(eq(userJutsu.userId, ctx.userId)),
-        loadout
-          ? ctx.drizzle
-              .update(jutsuLoadout)
-              .set({ jutsuIds: [] })
-              .where(eq(jutsuLoadout.id, loadout.id))
-          : null,
-      ]);
-
-      return { success: true, message: "All jutsu unequipped" };
+      
+      const loadoutId = battleType === "PVP" ? user.jutsuLoadout : user.pveJutsuLoadout;
+      const loadout = loadouts.find((l) => l.id === loadoutId);
+      
+      const updates: Promise<unknown>[] = [];
+      
+      // Only update global equipped status for PvP
+      if (battleType === "PVP") {
+        updates.push(
+          ctx.drizzle
+            .update(userJutsu)
+            .set({ equipped: false })
+            .where(eq(userJutsu.userId, ctx.userId)),
+        );
+      }
+      
+      // Clear the loadout (both PvP and PvE)
+      if (loadout) {
+        updates.push(
+          ctx.drizzle
+            .update(jutsuLoadout)
+            .set({ jutsuIds: [] })
+            .where(eq(jutsuLoadout.id, loadout.id)),
+        );
+      }
+      
+      await Promise.all(updates);
+      return { success: true, message: `All ${battleType} jutsu unequipped` };
     }),
 
   toggleEquip: protectedProcedure
-    .input(z.object({ userJutsuId: z.string() }))
+    .input(z.object({ userJutsuId: z.string(), loadoutType: z.enum(["PVP", "PVE"]).optional() }))
     .output(
       baseServerResponse.extend({
         data: z.object({ equipped: z.boolean(), jutsuId: z.string() }).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const loadoutType = input.loadoutType || "PVP";
       const [userjutsus, data, loadouts] = await Promise.all([
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId, loadoutType),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
@@ -789,79 +849,114 @@ export const jutsuRouter = createTRPCRouter({
       const curJutsuIsBarrier = userjutsuObj?.jutsu.effects.some(
         (e) => e.type === "barrier",
       );
-      const newEquippedState = isEquipped ? false : true;
-      const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
+      const loadoutId = loadoutType === "PVP" ? user.jutsuLoadout : user.pveJutsuLoadout;
+      const loadout = loadouts.find((l) => l.id === loadoutId && l.battleType === loadoutType);
       const isLoaded = userjutsuObj && loadout?.jutsuIds.includes(userjutsuObj.jutsuId);
+      const newLoadedState = isLoaded ? false : true;
+      // For PvP, also update global equipped status based on loadout state
+      const newEquippedState = loadoutType === "PVP" ? newLoadedState : isEquipped;
       const residualJutsus = userjutsus.filter(
         (uj) =>
           uj.equipped &&
           uj.jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
       );
 
-      // Guards
-      if (residualJutsus.length >= JUTSU_MAX_RESIDUAL_EQUIPPED && newEquippedState) {
-        return errorResponse(
-          `You cannot equip more than ${JUTSU_MAX_RESIDUAL_EQUIPPED} residual jutsu. Please unequip first.`,
-        );
-      }
       if (!userjutsuObj) return errorResponse("Jutsu not found");
 
       // Check if jutsu can be equipped (including bloodline check)
-      if (!isEquipped && !canTrainJutsu(userjutsuObj.jutsu, user)) {
-        return errorResponse("You cannot equip this jutsu due to missing requirements");
+      const isAddingToLoadout = !isLoaded && newLoadedState;
+      
+      if (isAddingToLoadout) {
+        // Check if jutsu can be equipped (including bloodline check)
+        if (!canTrainJutsu(userjutsuObj.jutsu, user)) {
+          return errorResponse("You cannot equip this jutsu due to missing requirements");
+        }
+
+        if (loadoutType === "PVP") {
+          if (residualJutsus.length >= JUTSU_MAX_RESIDUAL_EQUIPPED && newEquippedState) {
+            return errorResponse(
+              `You cannot equip more than ${JUTSU_MAX_RESIDUAL_EQUIPPED} residual jutsu. Please unequip first.`,
+            );
+          }
+
+          if (curEquip >= maxEquip) {
+            return errorResponse("You cannot equip more jutsu");
+          }
+          if (
+            curJutsuIsPierce &&
+            pierceEquipped >= JUTSU_MAX_PIERCE_EQUIPPED
+          ) {
+            return errorResponse(
+              `You cannot equip more than ${JUTSU_MAX_PIERCE_EQUIPPED} piercing jutsu`,
+            );
+          }
+          if (curJutsuIsEvent && eventEquipped >= JUTSU_MAX_EVENT_EQUIPPED) {
+            return errorResponse(
+              `You cannot equip more than ${JUTSU_MAX_EVENT_EQUIPPED} event jutsu`,
+            );
+          }
+          if (
+            curJutsuIsBarrier &&
+            barrierEquipped >= JUTSU_MAX_BARRIER_EQUIPPED
+          ) {
+            return errorResponse(
+              `You cannot equip more than ${JUTSU_MAX_BARRIER_EQUIPPED} barrier jutsu`,
+            );
+          }
+        }
       }
 
-      if (!isEquipped && curEquip >= maxEquip) {
-        return errorResponse("You cannot equip more jutsu");
-      }
-      if (
-        !isEquipped &&
-        curJutsuIsPierce &&
-        pierceEquipped >= JUTSU_MAX_PIERCE_EQUIPPED
-      ) {
+      let updatedJutsuIds: string[] | undefined;
+      if (!loadout) {
         return errorResponse(
-          `You cannot equip more than ${JUTSU_MAX_PIERCE_EQUIPPED} piercing jutsu`,
+          `No ${loadoutType} loadout found. Please select a loadout first.`,
         );
       }
-      if (!isEquipped && curJutsuIsEvent && eventEquipped >= JUTSU_MAX_EVENT_EQUIPPED) {
-        return errorResponse(
-          `You cannot equip more than ${JUTSU_MAX_EVENT_EQUIPPED} event jutsu`,
-        );
-      }
-      if (
-        !isEquipped &&
-        curJutsuIsBarrier &&
-        barrierEquipped >= JUTSU_MAX_BARRIER_EQUIPPED
-      ) {
-        return errorResponse(
-          `You cannot equip more than ${JUTSU_MAX_BARRIER_EQUIPPED} barrier jutsu`,
-        );
+      
+      if (isLoaded && !newLoadedState) {
+        // Remove from loadout - create new array
+        updatedJutsuIds = loadout.jutsuIds.filter((id) => id !== userjutsuObj.jutsuId);
+      } else if (!isLoaded && newLoadedState) {
+        // Add to loadout - create new array
+        updatedJutsuIds = [...loadout.jutsuIds, userjutsuObj.jutsuId];
+      } else {
+        // No change needed - jutsu already in desired state
+        return {
+          success: true,
+          message: `Jutsu already ${isLoaded ? "in" : "not in"} ${loadoutType} loadout`,
+          data: { equipped: newEquippedState, jutsuId: userjutsuObj.jutsuId },
+        };
       }
 
-      // Calculate loadout
-      if (loadout && isLoaded && !newEquippedState) {
-        loadout.jutsuIds = loadout.jutsuIds.filter((id) => id !== userjutsuObj.jutsuId);
-      } else if (loadout && !isLoaded && newEquippedState) {
-        loadout.jutsuIds.push(userjutsuObj.jutsuId);
-      }
-
-      await Promise.all([
-        ctx.drizzle
-          .update(userJutsu)
-          .set({ equipped: newEquippedState })
-          .where(eq(userJutsu.id, input.userJutsuId)),
-        loadout
-          ? ctx.drizzle
-              .update(jutsuLoadout)
-              .set({ jutsuIds: loadout.jutsuIds })
-              .where(eq(jutsuLoadout.id, loadout.id))
-          : null,
-      ]);
+      await Promise.all(
+        [
+          loadout && updatedJutsuIds !== undefined && loadout.battleType === loadoutType
+            ? ctx.drizzle
+                .update(jutsuLoadout)
+                .set({ jutsuIds: updatedJutsuIds })
+                .where(
+                  and(
+                    eq(jutsuLoadout.id, loadout.id),
+                    eq(jutsuLoadout.battleType, loadoutType),
+                  ),
+                )
+            : null,
+          loadoutType === "PVP"
+            ? ctx.drizzle
+                .update(userJutsu)
+                .set({ equipped: newEquippedState })
+                .where(eq(userJutsu.id, input.userJutsuId))
+            : null,
+        ].filter((u): u is NonNullable<typeof u> => u !== null),
+      );
 
       return {
         success: true,
-        message: `Jutsu ${isEquipped ? "unequipped" : "equipped"}`,
-        data: { equipped: newEquippedState, jutsuId: userjutsuObj.jutsuId },
+        message: `Jutsu ${isLoaded ? "removed from" : "added to"} ${loadoutType} loadout`,
+        data: {
+          equipped: loadoutType === "PVP" ? newEquippedState : newLoadedState,
+          jutsuId: userjutsuObj.jutsuId,
+        },
       };
     }),
 
@@ -871,11 +966,12 @@ export const jutsuRouter = createTRPCRouter({
         jutsuId: z.string(),
         loadoutId: z.string(),
         moveForward: z.boolean(),
+        battleType: z.enum(["PVP", "PVE"]).optional(),
       }),
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const loadouts = await fetchJutsuLoadouts(ctx.drizzle, ctx.userId);
+      const loadouts = await fetchJutsuLoadouts(ctx.drizzle, ctx.userId, input.battleType ?? "PVP");
       const loadout = loadouts.find((l) => l.id === input.loadoutId);
       if (!loadout) return errorResponse("Loadout not found");
 
@@ -1273,11 +1369,16 @@ export type JutsuRelations = Awaited<ReturnType<typeof getJutsuRelations>>;
  * Fetch all loadouts for a user
  * @param client - The database client
  * @param userId - The ID of the user to fetch loadouts for
+ * @param battleType - The battle type to filter by (PVP or PVE)
  * @returns A promise that resolves to the result of the select
  */
-export const fetchJutsuLoadouts = async (client: DrizzleClient, userId: string) => {
+export const fetchJutsuLoadouts = async (
+  client: DrizzleClient,
+  userId: string,
+  battleType: "PVP" | "PVE" = "PVP",
+) => {
   return await client.query.jutsuLoadout.findMany({
-    where: eq(jutsuLoadout.userId, userId),
+    where: and(eq(jutsuLoadout.userId, userId), eq(jutsuLoadout.battleType, battleType)),
     orderBy: (table) => desc(table.createdAt),
   });
 };
@@ -1647,7 +1748,9 @@ const filterByEffectConstraints = <T extends { effects: ZodAllTags[] }>(
  * @param client - The database client
  * @param loadoutId - The ID of the loadout to select
  * @param loadouts - The loadouts to select from
+ * @param userjutsus - The user's jutsus
  * @param user - The user data
+ * @param battleType - The battle type (PVP or PVE)
  * @returns A promise that resolves to the result of the select
  */
 export const selectJutsuLoadout = async (
@@ -1656,28 +1759,35 @@ export const selectJutsuLoadout = async (
   loadouts: JutsuLoadout[],
   userjutsus: UserJutsuWithRelations[],
   user: UserData,
+  battleType: "PVP" | "PVE" = "PVP",
 ) => {
   const loadout = loadouts.find((l) => l.id === loadoutId);
-  const maxLoadouts = fedJutsuLoadouts(user);
+  const maxLoadouts = battleType === "PVP" ? fedJutsuLoadouts(user) : 1;
 
   if (!loadout) return errorResponse("Loadout not found");
   if (maxLoadouts <= 0) return errorResponse("Loadouts not available");
 
-  await Promise.all([
-    client
-      .update(userData)
-      .set({ jutsuLoadout: loadout.id })
-      .where(eq(userData.userId, user.userId)),
-    client
-      .update(userJutsu)
-      .set({
-        equipped:
-          loadout.jutsuIds.length > 0
-            ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, loadout.jutsuIds)} THEN 1 ELSE 0 END`
-            : false,
-      })
-      .where(eq(userJutsu.userId, user.userId)),
-  ]);
+  const updateField = battleType === "PVP" ? "jutsuLoadout" : "pveJutsuLoadout";
+
+  await Promise.all(
+    [
+      client
+        .update(userData)
+        .set({ [updateField]: loadout.id })
+        .where(eq(userData.userId, user.userId)),
+      battleType === "PVP"
+        ? client
+            .update(userJutsu)
+            .set({
+              equipped:
+                loadout.jutsuIds.length > 0
+                  ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, loadout.jutsuIds)} THEN 1 ELSE 0 END`
+                  : false,
+            })
+            .where(eq(userJutsu.userId, user.userId))
+        : null,
+    ].filter((u): u is NonNullable<typeof u> => u !== null),
+  );
 
   return {
     success: true,

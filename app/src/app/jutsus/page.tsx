@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Trash2, CircleFadingArrowUp, ArrowRightLeft, Palette } from "lucide-react";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import ContentBox from "@/layout/ContentBox";
@@ -53,6 +53,7 @@ import type { UserJutsuWithRelations } from "@/drizzle/schema";
 import { Label } from "@/components/ui/label";
 import { UploadButton } from "@/utils/uploadthing";
 import AvatarImage from "@/layout/Avatar";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export default function MyJutsu() {
   // tRPC utility
@@ -77,6 +78,7 @@ export default function MyJutsu() {
   const [transferValue, setTransferValue] = useState<number>(1);
   const [modalType, setModalType] = useState<string | null>(null);
   const [reskinData, setReskinData] = useState<JutsuReskinCreateSchema | null>(null);
+  const [activeTab, setActiveTab] = useState<"pvp" | "pve">("pvp");
 
   // Reskin form
   const reskinForm = useForm<JutsuReskinCreateSchema>({
@@ -105,6 +107,38 @@ export default function MyJutsu() {
   });
   const { data: recentTransfers } = api.jutsu.getRecentTransfers.useQuery(undefined, {
     enabled: !!userData,
+  });
+
+  // Fetch loadouts for both PvP and PvE
+  const { data: pvpLoadouts } = api.jutsu.getLoadouts.useQuery(undefined, {
+    enabled: !!userData,
+  });
+  const { data: pveLoadouts } = api.jutsu.getPveLoadouts.useQuery(undefined, {
+    enabled: !!userData,
+  });
+
+  // Mutations to select loadouts
+  const { mutate: selectJutsuLoadout } = api.jutsu.selectJutsuLoadout.useMutation({
+    onSuccess: async (data) => {
+      if (data.success) {
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.jutsu.getUserJutsus.invalidate(),
+          utils.jutsu.getLoadouts.invalidate(),
+        ]);
+      }
+    },
+  });
+  const { mutate: selectPveJutsuLoadout } = api.jutsu.selectPveJutsuLoadout.useMutation({
+    onSuccess: async (data) => {
+      if (data.success) {
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.jutsu.getUserJutsus.invalidate(),
+          utils.jutsu.getPveLoadouts.invalidate(),
+        ]);
+      }
+    },
   });
 
   const userJutsuCounts = userJutsus?.map((userJutsu) => {
@@ -157,16 +191,13 @@ export default function MyJutsu() {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.jutsu.getUserJutsus.invalidate();
-      }
-      // Optimistically update loadout
-      if (data?.data && userData) {
-        const currentLoadout = userData?.loadout?.jutsuIds || [];
-        const jutsuId = data.data.jutsuId;
-        const newLoadout = data?.data.equipped
-          ? [...currentLoadout, jutsuId]
-          : currentLoadout.filter((id) => id !== jutsuId);
-        await updateUser({ loadout: { jutsuIds: newLoadout } });
+        await Promise.all([
+          utils.jutsu.getUserJutsus.invalidate(),
+          utils.profile.getUser.invalidate(),
+          activeTab === "pve"
+            ? utils.jutsu.getPveLoadouts.invalidate()
+            : utils.jutsu.getLoadouts.invalidate(),
+        ]);
       }
     },
     onSettled,
@@ -177,7 +208,13 @@ export default function MyJutsu() {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.jutsu.getUserJutsus.invalidate();
+          await Promise.all([
+            utils.jutsu.getUserJutsus.invalidate(),
+            utils.profile.getUser.invalidate(),
+            activeTab === "pvp"
+              ? utils.jutsu.getLoadouts.invalidate()
+              : utils.jutsu.getPveLoadouts.invalidate(),
+          ]);
         }
       },
       onSettled,
@@ -193,11 +230,86 @@ export default function MyJutsu() {
     onSettled,
   });
 
+  // Helper function to optimistically reorder loadout
+  const optimisticallyReorderLoadout = async (
+    isPvE: boolean,
+    loadoutId: string,
+    jutsuId: string,
+    moveForward: boolean,
+  ) => {
+    // Shared logic for updating loadout order
+    const updateLoadoutOrder = <T extends { id: string; jutsuIds: string[] }>(
+      old: T[] | undefined,
+    ): T[] | undefined => {
+      if (!old) return old;
+      return old.map((loadout) => {
+        if (loadout.id === loadoutId) {
+          const curIndex = loadout.jutsuIds.indexOf(jutsuId);
+          if (curIndex === -1) return loadout;
+          
+          // Backend guards prevent invalid moves, but defensively handle edge cases
+          // Clamp newIndex to valid bounds to match backend behavior
+          const withoutJutsu = loadout.jutsuIds.filter((id) => id !== jutsuId);
+          const rawIndex = curIndex + (moveForward ? 1 : -1);
+          const newIndex = Math.max(0, Math.min(withoutJutsu.length, rawIndex));
+          
+          // Match backend logic exactly
+          const newOrder = withoutJutsu.slice(0, newIndex);
+          newOrder.push(jutsuId);
+          newOrder.push(...loadout.jutsuIds.filter((id) => !newOrder.includes(id)));
+          
+          return { ...loadout, jutsuIds: newOrder };
+        }
+        return loadout;
+      });
+    };
+
+    if (isPvE) {
+      await utils.jutsu.getPveLoadouts.cancel();
+      const previous = utils.jutsu.getPveLoadouts.getData();
+      utils.jutsu.getPveLoadouts.setData(undefined, updateLoadoutOrder);
+      return { previous };
+    } else {
+      await utils.jutsu.getLoadouts.cancel();
+      const previous = utils.jutsu.getLoadouts.getData();
+      utils.jutsu.getLoadouts.setData(undefined, updateLoadoutOrder);
+      return { previous };
+    }
+  };
+
   const { mutate: updateOrder } = api.jutsu.updateUserJutsuOrder.useMutation({
+    onMutate: async (variables) => {
+      // Optimistically update the loadout order in cache
+      const battleType = variables.battleType ?? "PVP";
+      const isPvE = battleType === "PVE";
+      
+      return await optimisticallyReorderLoadout(
+        isPvE,
+        variables.loadoutId,
+        variables.jutsuId,
+        variables.moveForward,
+      );
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previous) {
+        const battleType = variables.battleType ?? "PVP";
+        if (battleType === "PVE") {
+          utils.jutsu.getPveLoadouts.setData(undefined, context.previous);
+        } else {
+          utils.jutsu.getLoadouts.setData(undefined, context.previous);
+        }
+      }
+    },
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.jutsu.getLoadouts.invalidate(),
+          utils.jutsu.getPveLoadouts.invalidate(),
+          utils.jutsu.getUserJutsus.invalidate(),
+        ]);
       }
     },
   });
@@ -268,7 +380,31 @@ export default function MyJutsu() {
 
   // Collapse UserItem and Item
   const userElements = new Set(getUserElements(userData));
-  const actionItems = userJutsus?.map((uj) => {
+  
+  // Sort userJutsus based on current loadout before mapping
+  const sortedUserJutsus = useMemo(() => {
+    if (!userJutsus) return undefined;
+    
+    const currentLoadoutJutsuIds = activeTab === "pvp"
+      ? pvpLoadouts?.find((l) => l.id === userData?.jutsuLoadout)?.jutsuIds
+      : pveLoadouts?.find((l) => l.id === userData?.pveJutsuLoadout)?.jutsuIds;
+    
+    if (!currentLoadoutJutsuIds) return userJutsus;
+    
+    // Create a sorted copy (don't mutate the original)
+    const sorted = [...userJutsus].sort((a, b) => {
+      const aIndex = currentLoadoutJutsuIds.indexOf(a.jutsuId);
+      const bIndex = currentLoadoutJutsuIds.indexOf(b.jutsuId);
+      if (aIndex === -1 && bIndex === -1) return 0;
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
+    
+    return sorted;
+  }, [userJutsus, activeTab, pvpLoadouts, pveLoadouts, userData?.jutsuLoadout, userData?.pveJutsuLoadout]);
+  
+  const allActionItems = sortedUserJutsus?.map((uj) => {
     let warning = "";
     if (userData) {
       if (!checkJutsuItems(uj.jutsu, userItems)) {
@@ -293,34 +429,99 @@ export default function MyJutsu() {
         warning = "You do not have the required bloodline to use this jutsu.";
       }
     }
+    
+    const isEquippedInActiveTab =
+      activeTab === "pvp"
+        ? !!uj.equipped
+        : pveLoadouts
+            ?.find((l) => l.id === userData?.pveJutsuLoadout)
+            ?.jutsuIds.includes(uj.jutsuId) ?? false;
+
     return {
       ...uj.jutsu,
       ...uj,
       type: "jutsu" as const,
-      highlight: !!uj.equipped,
+      highlight: isEquippedInActiveTab,
       warning,
       isReskinned: !!uj.activeReskin,
     };
   });
 
-  // Sort if we have a loadout
-  if (userData?.loadout?.jutsuIds && userJutsus) {
-    userJutsus.sort((a, b) => {
-      const aIndex = userData?.loadout?.jutsuIds.indexOf(a.jutsuId) ?? -1;
-      const bIndex = userData?.loadout?.jutsuIds.indexOf(b.jutsuId) ?? -1;
-      if (aIndex === -1 && bIndex === -1) return 0;
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
-    });
-  }
 
-  // Derived calculations
-  const curEquip = userJutsus?.filter((j) => j.equipped).length;
+  // Automatically select the loadout when tab changes or loadouts become available
+  useEffect(() => {
+    if (!userData) return;
+
+    if (activeTab === "pvp") {
+      const pvpLoadoutId = userData.jutsuLoadout;
+      if (pvpLoadouts && pvpLoadouts.length > 0) {
+        // Only auto-select if no loadout is currently selected, or selected loadout doesn't exist
+        const existingLoadout = pvpLoadoutId
+          ? pvpLoadouts.find((l) => l.id === pvpLoadoutId)
+          : null;
+        
+        if (!existingLoadout) {
+          // No loadout selected or selected loadout doesn't exist - auto-select first one
+          const targetLoadout = pvpLoadouts[0];
+          if (targetLoadout) {
+            selectJutsuLoadout({ id: targetLoadout.id });
+          }
+        }
+      }
+    } else {
+      const pveLoadoutId = userData.pveJutsuLoadout;
+      if (pveLoadouts && pveLoadouts.length > 0) {
+        // Only auto-select if no loadout is currently selected, or selected loadout doesn't exist
+        const existingLoadout = pveLoadoutId
+          ? pveLoadouts.find((l) => l.id === pveLoadoutId)
+          : null;
+        
+        if (!existingLoadout) {
+          // No loadout selected or selected loadout doesn't exist - auto-select first one
+          const targetLoadout = pveLoadouts[0];
+          if (targetLoadout) {
+            selectPveJutsuLoadout({ id: targetLoadout.id });
+          }
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, userData, pvpLoadouts, pveLoadouts, selectJutsuLoadout, selectPveJutsuLoadout]);
+
+  // Close modal when tab changes to prevent stale state
+  useEffect(() => {
+    if (isOpen) {
+      setIsOpen(false);
+      setUserJutsu(undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Filter action items by battle usage type (show all matching jutsu, not just loadout)
+  const actionItems = useMemo(() => {
+    if (!allActionItems) return undefined;
+
+    return allActionItems.filter((item) => {
+      const battleUsageType = item.battleUsageType || "BOTH";
+      return activeTab === "pvp"
+        ? battleUsageType === "PVP" || battleUsageType === "BOTH"
+        : battleUsageType === "PVE" || battleUsageType === "BOTH";
+    });
+  }, [allActionItems, activeTab]);
+
+
+  // Derived calculations - count based on active tab
+  const currentLoadoutJutsuIds = activeTab === "pvp"
+    ? pvpLoadouts?.find((l) => l.id === userData?.jutsuLoadout)?.jutsuIds
+    : pveLoadouts?.find((l) => l.id === userData?.pveJutsuLoadout)?.jutsuIds;
+  
+  const curEquip = activeTab === "pvp"
+    ? userJutsus?.filter((j) => j.equipped).length ?? 0
+    : userJutsus?.filter((j) => currentLoadoutJutsuIds?.includes(j.jutsuId)).length ?? 0;
   const maxEquip = userData && calcJutsuEquipLimit(userData);
   const canEquip = curEquip !== undefined && maxEquip && curEquip < maxEquip;
   const subtitle =
-    curEquip && maxEquip
+    curEquip !== undefined && maxEquip
       ? `Equipped ${curEquip}/${maxEquip}`
       : "Jutsus you want to use in combat";
   const activeReskins = userJutsus?.filter((uj) => uj.activeReskin);
@@ -343,7 +544,7 @@ export default function MyJutsu() {
         title="Jutsu Management"
         subtitle={subtitle}
         bottomRightContent={
-          <Button onClick={() => unequipAll()}>
+          <Button onClick={() => unequipAll({ battleType: activeTab === "pvp" ? "PVP" : "PVE" })}>
             <OctagonX className="h-6 w-6 mr-2" />
             Unequip All
           </Button>
@@ -351,7 +552,7 @@ export default function MyJutsu() {
         topRightContent={
           !isOpen && (
             <div className="flex flex-row items-center gap-2">
-              <JutsuLoadoutSelector />
+              <JutsuLoadoutSelector battleType={activeTab === "pvp" ? "PVP" : "PVE"} />
               <JutsuFiltering state={state} />
               {userData.extraJutsuSlots < MAX_EXTRA_JUTSU_SLOTS && (
                 <Confirm2
@@ -384,40 +585,58 @@ export default function MyJutsu() {
         }
       >
         {isFetching && <Loader explanation="Loading Jutsu" />}
-        <ActionSelector
-          items={actionItems}
-          counts={userJutsuCounts}
-          labelSingles={true}
-          onClick={(id) => {
-            setUserJutsu(userJutsus?.find((uj) => uj.id === id));
-            setIsOpen(true);
-          }}
-          showBgColor={false}
-          showLabels={true}
-          emptyText="You have not learned any jutsu. Go to the training grounds in your village to learn some."
-        />
-        {isOpen && userData && userjutsu && (
-          <Modal2
-            title="Edit Jutsu"
-            isOpen={isOpen}
-            setIsOpen={setIsOpen}
-            proceed_label={
-              !isToggling
-                ? userjutsu.equipped
-                  ? "Unequip"
-                  : canEquip
-                    ? "Equip"
-                    : "Unequip other first"
-                : undefined
-            }
-            isValid={false}
-            onAccept={() => {
-              if (canEquip || userjutsu.equipped) {
-                equip({ userJutsuId: userjutsu.id });
-              } else {
-                setIsOpen(false);
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pvp" | "pve")}>
+          <div className="mb-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="pvp">PvP</TabsTrigger>
+              <TabsTrigger value="pve">PvE</TabsTrigger>
+            </TabsList>
+          </div>
+          {(["pvp", "pve"] as const).map((tab) => (
+            <TabsContent key={tab} value={tab}>
+              <ActionSelector
+                items={actionItems}
+                counts={userJutsuCounts}
+                labelSingles={true}
+                onClick={(id) => {
+                  setUserJutsu(userJutsus?.find((uj) => uj.id === id));
+                  setIsOpen(true);
+                }}
+                showBgColor={false}
+                showLabels={true}
+                emptyText={`You have not learned any ${tab.toUpperCase()} jutsu. Go to the training grounds in your village to learn some.`}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
+        {isOpen && userData && userjutsu && (() => {
+          // Determine if jutsu is in the current loadout (PvP or PvE)
+          const isInCurrentLoadout = activeTab === "pvp"
+            ? pvpLoadouts?.find((l) => l.id === userData.jutsuLoadout)?.jutsuIds?.includes(userjutsu.jutsuId) ?? false
+            : pveLoadouts?.find((l) => l.id === userData.pveJutsuLoadout)?.jutsuIds?.includes(userjutsu.jutsuId) ?? false;
+          
+          return (
+            <Modal2
+              title="Edit Jutsu"
+              isOpen={isOpen}
+              setIsOpen={setIsOpen}
+              proceed_label={
+                !isToggling
+                  ? isInCurrentLoadout
+                    ? "Unequip"
+                    : canEquip
+                      ? "Equip"
+                      : "Unequip other first"
+                  : undefined
               }
-            }}
+              isValid={!isToggling}
+              onAccept={() => {
+                if (canEquip || isInCurrentLoadout) {
+                  equip({ userJutsuId: userjutsu.id, loadoutType: activeTab === "pvp" ? "PVP" : "PVE" });
+                } else {
+                  setIsOpen(false);
+                }
+              }}
             confirmClassName={
               canEquip
                 ? "bg-blue-600 text-white hover:bg-blue-700"
@@ -436,7 +655,6 @@ export default function MyJutsu() {
                   showStatistic="jutsu"
                 />
                 {userReskins?.find((r) => r.jutsuId === userjutsu.jutsuId) &&
-                  !userjutsu.activeReskin &&
                   !userjutsu.activeReskin && (
                     <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-blue-700">
@@ -447,31 +665,46 @@ export default function MyJutsu() {
                     </div>
                   )}
                 <div className="flex flex-row gap-3 items-center">
-                  {userData.loadout?.jutsuIds.includes(userjutsu.jutsuId) && (
-                    <>
-                      <SquareChevronLeft
-                        className="h-8 w-8 hover:text-orange-300 hover:cursor-pointer"
-                        onClick={() =>
-                          updateOrder({
-                            jutsuId: userjutsu.jutsuId,
-                            loadoutId: userData?.jutsuLoadout ?? "",
-                            moveForward: false,
-                          })
-                        }
-                      />
-                      <p>Order</p>
-                      <SquareChevronRight
-                        className="h-8 w-8 hover:text-orange-300 hover:cursor-pointer"
-                        onClick={() =>
-                          updateOrder({
-                            jutsuId: userjutsu.jutsuId,
-                            loadoutId: userData?.jutsuLoadout ?? "",
-                            moveForward: true,
-                          })
-                        }
-                      />
-                    </>
-                  )}
+                  {(() => {
+                    // Check if jutsu is in the current loadout (PvP or PvE)
+                    const currentLoadoutId = activeTab === "pvp" 
+                      ? userData.jutsuLoadout 
+                      : userData.pveJutsuLoadout;
+                    const currentLoadout = activeTab === "pvp"
+                      ? pvpLoadouts?.find((l) => l.id === currentLoadoutId)
+                      : pveLoadouts?.find((l) => l.id === currentLoadoutId);
+                    const isInCurrentLoadout = currentLoadout?.jutsuIds.includes(userjutsu.jutsuId) ?? false;
+                    
+                    if (!isInCurrentLoadout) return null;
+                    
+                    return (
+                      <>
+                        <SquareChevronLeft
+                          className="h-8 w-8 hover:text-orange-300 hover:cursor-pointer"
+                          onClick={() =>
+                            updateOrder({
+                              jutsuId: userjutsu.jutsuId,
+                              loadoutId: currentLoadoutId ?? "",
+                              moveForward: false,
+                              battleType: activeTab === "pvp" ? "PVP" : "PVE",
+                            })
+                          }
+                        />
+                        <p>Order</p>
+                        <SquareChevronRight
+                          className="h-8 w-8 hover:text-orange-300 hover:cursor-pointer"
+                          onClick={() =>
+                            updateOrder({
+                              jutsuId: userjutsu.jutsuId,
+                              loadoutId: currentLoadoutId ?? "",
+                              moveForward: true,
+                              battleType: activeTab === "pvp" ? "PVP" : "PVE",
+                            })
+                          }
+                        />
+                      </>
+                    );
+                  })()}
 
                   <div className="grow"></div>
                   {userjutsu.level >= JUTSU_TRANSFER_MINIMUM_LEVEL &&
@@ -645,7 +878,8 @@ export default function MyJutsu() {
             )}
             {isPending && <Loader explanation={`Processing ${userjutsu.jutsu.name}`} />}
           </Modal2>
-        )}
+          );
+        })()}
         {modalType === "reskin" && userjutsu && isReskinOpen && (
           <Modal2
             title={
