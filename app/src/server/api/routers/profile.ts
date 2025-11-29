@@ -565,6 +565,38 @@ export const profileRouter = createTRPCRouter({
             notificationCount: userTickets,
           });
         }
+
+        // Application counts for admins: pending applications that the current
+        // admin hasn't personally voted on yet (only if the role participates in approvals)
+        let applicationCounts = [{ count: 0 }];
+        if (user.role !== "USER" && StaffApprovalGroups.includes(user.role as any)) {
+          applicationCounts = await ctx.drizzle
+            .select({ count: sql<number>`count(*)`.mapWith(Number) })
+            .from(staffApplication)
+            .leftJoin(
+              staffApplicationApproval,
+              and(
+                eq(staffApplication.id, staffApplicationApproval.applicationId),
+                eq(staffApplicationApproval.group, user.role as any),
+                eq(staffApplicationApproval.approverUserId, user.userId),
+              ),
+            )
+            .where(
+              and(
+                eq(staffApplication.state, "PENDING"),
+                isNull(staffApplicationApproval.applicationId),
+              ),
+            );
+        }
+        const adminAppCount = applicationCounts?.[0]?.count ?? 0;
+        if (adminAppCount > 0) {
+          notifications.push({
+            href: "/manual/staff/applications",
+            name: `Staff applications awaiting your vote`,
+            color: "blue",
+            notificationCount: adminAppCount,
+          });
+        }
       }
       // Check if user is banned
       if (user.isBanned) {

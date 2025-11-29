@@ -108,52 +108,9 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
     });
   };
 
-  // Pending staff-application votes (admin) — lightweight query used to surface a
-  // single notification entry in the user's notifications on initial load.
-  const pendingVotesQuery = api.applications.pendingVoteCount.useQuery(undefined, {
-    enabled: !!data?.userData && data.userData.role?.includes("ADMIN"),
-  });
-
-  useEffect(() => {
-    if (!data?.userData) return;
-    if (!data.userData.role?.includes("ADMIN")) return;
-
-    const count = pendingVotesQuery.data?.count ?? 0;
-    const existing = data.notifications ?? [];
-    const href = "/manual/staff/applications";
-    const idx = existing.findIndex((n) => n.href === href);
-
-    // If notification already present with same count, skip updating.
-    if (idx !== -1 && existing[idx]?.notificationCount === count) return;
-
-    if (count > 0) {
-      const notif: NavBarDropdownLink = {
-        name: "Staff applications awaiting your vote",
-        href,
-        notificationCount: count,
-        color: "blue",
-      };
-      if (idx === -1) {
-        void updateNotifications([...existing, notif]);
-      } else {
-        const next = [...existing];
-        const updated: NavBarDropdownLink = {
-          ...next[idx],
-          notificationCount: count,
-          name: notif.name,
-          color: notif.color,
-        };
-        next[idx] = updated;
-        void updateNotifications(next);
-      }
-    } else {
-      if (idx !== -1) {
-        const next = existing.filter((n) => n.href !== href);
-        void updateNotifications(next);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingVotesQuery.data?.count, data?.userData?.role]);
+  // NOTE: pending application counts are now provided by `profile.getUser`.
+  // We intentionally avoid a separate `pendingVoteCount` query here so the
+  // notification logic is centralized in the profile endpoint.
 
   // Time diff setting
   useEffect(() => {

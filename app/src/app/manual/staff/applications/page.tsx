@@ -12,6 +12,8 @@ import ApplicationsFiltering, {
   useApplicationsFiltering,
 } from "@/layout/ApplicationsFiltering";
 import { canDeleteStaffApplication } from "@/utils/permissions";
+import Confirm2 from "@/layout/Confirm2";
+import { Button } from "@/components/ui/button";
 
 export default function ApplicationsPage() {
   const { data: me } = useUserData();
@@ -82,28 +84,26 @@ export default function ApplicationsPage() {
     actions: (
       <div>
         {me && canDeleteStaffApplication(me.role) && (
-          <button
+          <Confirm2
+            title="Confirm delete"
+            button={<Button variant="destructive" size="sm" loading={deleteMutation.isPending}>Delete</Button>}
+            confirmClassName="bg-red-600 text-white hover:bg-red-700"
             disabled={deleteMutation.isPending}
-            className={`text-red-600 hover:underline ${
-              deleteMutation.isPending ? "opacity-50 cursor-not-allowed" : ""
-            }`}
-            onClick={async (e) => {
+            onAccept={async (e) => {
               e.preventDefault();
               if (deleteMutation.isPending) return;
-              const ok = window.confirm("Delete this application? This cannot be undone.");
-              if (!ok) return;
               try {
                 await deleteMutation.mutateAsync({ id: a.id });
               } catch (err) {
-                // swallow - optionally show toast
                 // eslint-disable-next-line no-console
                 console.error(err);
                 alert("Failed to delete application");
               }
             }}
+            proceed_label="Delete"
           >
-            {deleteMutation.isPending ? "Deleting..." : "Delete"}
-          </button>
+            Delete this application? This cannot be undone.
+          </Confirm2>
         )}
       </div>
     ),

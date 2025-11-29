@@ -163,51 +163,28 @@ export const applicationsRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Query: fetch the user and the application in parallel for efficiency
+      const [user, app] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.staffApplication.findFirst({
+          where: eq(staffApplication.id, input.id),
+        }),
+      ]);
+
+      // Guards
       if (!user) return errorResponse("Not allowed");
       if (!canDeleteStaffApplication(user.role)) return errorResponse("Not allowed");
-
-      const app = await ctx.drizzle.query.staffApplication.findFirst({
-        where: eq(staffApplication.id, input.id),
-      });
       if (!app) return errorResponse("Application not found");
-      if (app.state !== "PENDING")
-        return errorResponse("Only pending applications can be deleted");
+      if (app.state !== "PENDING") return errorResponse("Only pending applications can be deleted");
 
+      // Mutation: perform deletion
       await ctx.drizzle.delete(staffApplication).where(eq(staffApplication.id, input.id));
       return { success: true, message: "Application deleted" };
     }),
 
-  pendingVoteCount: protectedProcedure.query(async ({ ctx }) => {
-    const user = await fetchUser(ctx.drizzle, ctx.userId);
-    if (!user || user.role === "USER") return { count: 0 };
-    // Only admins from approval groups should get counts. If the user's role
-    // is not part of the StaffApprovalGroups, return zero.
-    if (!StaffApprovalGroups.includes(user.role as StaffApprovalGroup)) return { count: 0 };
-
-    // Count applications where:
-    // - application is PENDING
-    // - there is NO approval yet from this user's approval group
-    const rows = await ctx.drizzle
-      .select({ id: staffApplication.id })
-      .from(staffApplication)
-      .leftJoin(
-        staffApplicationApproval,
-        and(
-          eq(staffApplication.id, staffApplicationApproval.applicationId),
-          eq(staffApplicationApproval.group, user.role as StaffApprovalGroup),
-          eq(staffApplicationApproval.approverUserId, user.userId),
-        ),
-      )
-      .where(
-        and(
-          eq(staffApplication.state, "PENDING"),
-          isNull(staffApplicationApproval.applicationId),
-        ),
-      );
-
-    return { count: rows.length };
-  }),
+  // NOTE: `pendingVoteCount` was intentionally removed here; its count is now
+  // included in `profile.getUser` to avoid a separate endpoint and keep
+  // notification logic consolidated. See `profile.getUser` for the query.
 
   approve: protectedProcedure
     .input(z.object({ id: z.string() }))
