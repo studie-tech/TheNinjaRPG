@@ -1156,13 +1156,6 @@ export const isAvailableUserQuests = (
       );
     });
 
-  // Daily quests should be available even if previously completed (they reset daily)
-  const completedCheck =
-    questAndUserQuestInfo.questType === "daily" ||
-    QuestTypesWithMaxAttempts.includes(questAndUserQuestInfo.questType) ||
-    !questAndUserQuestInfo.completed ||
-    questAndUserQuestInfo.completed === 0;
-
   // Check if quest is available
   const check =
     hideCheck &&
@@ -1174,8 +1167,7 @@ export const isAvailableUserQuests = (
     prerequisiteCheck &&
     medicalRankCheck &&
     huntingRankCheck &&
-    levelCheck &&
-    completedCheck;
+    levelCheck;
 
   // If quest is not available, return the reason
   let message = "";
@@ -1190,13 +1182,6 @@ export const isAvailableUserQuests = (
     message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;
   if (!huntingRankCheck)
     message += `Quest requires hunting rank ${capitalizeFirstLetter(questHuntRank ?? "NONE")}\n`;
-  if (
-    !completedCheck &&
-    questAndUserQuestInfo.questType !== "daily" &&
-    !QuestTypesWithMaxAttempts.includes(questAndUserQuestInfo.questType)
-  ) {
-    message += "Quest has already been completed\n";
-  }
   if (!levelCheck) {
     if (
       questAndUserQuestInfo.requiredLevel &&
