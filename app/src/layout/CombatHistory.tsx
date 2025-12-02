@@ -8,6 +8,8 @@ import { cn } from "src/libs/shadui";
 import { parseHtml } from "@/utils/parse";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { canViewFullBattleLog } from "@/utils/permissions";
+import { getUserFederalStatus } from "@/utils/paypal";
+import { BATTLE_LOG_FULL_LIMIT, BATTLE_LOG_DEFAULT_LIMIT } from "@/drizzle/constants";
 import type { CombatResult } from "@/libs/combat/types";
 import type { ActionEffect } from "@/libs/combat/types";
 import { ChevronsDown } from "lucide-react";
@@ -26,13 +28,19 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
   const { data: userData } = useRequiredUserData();
   const [openRounds, setOpenRounds] = useState<number[]>([]);
 
+  // Check if user can view full battle log (staff role or gold federal status)
+  const canViewFull = userData
+    ? canViewFullBattleLog(userData.role) ||
+      getUserFederalStatus(userData) === "GOLD"
+    : false;
+
   // From database
   const { data: allEntries, isFetching } = api.combat.getBattleEntries.useQuery(
     {
       battleId: battleId,
       refreshKey: battleVersion ?? 0,
       checkBattle: results ? true : false,
-      limit: canViewFullBattleLog(userData?.role ?? "USER") ? 1000 : 30,
+      limit: canViewFull ? BATTLE_LOG_FULL_LIMIT : BATTLE_LOG_DEFAULT_LIMIT,
     },
     {
       enabled: !!battleId && !!userData,

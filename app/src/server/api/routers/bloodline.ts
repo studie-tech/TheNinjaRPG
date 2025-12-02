@@ -12,6 +12,7 @@ import {
   isNotNull,
   like,
   desc,
+  lt,
 } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
 import { bloodline, bloodlineRolls, actionLog } from "@/drizzle/schema";
@@ -36,10 +37,12 @@ import { validateUserUpdateReason } from "@/libs/moderator";
 import { filterRollableBloodlines, getPityRolls } from "@/libs/bloodline";
 import { LetterRanks, PITY_SYSTEM_ENABLED } from "@/drizzle/constants";
 import { COST_SWAP_BLOODLINE } from "@/drizzle/constants";
-import { BLOODLINE_SWAP_COOLDOWN_HOURS } from "@/drizzle/constants";
+import { BLOODLINE_SWAP_COOLDOWN_HOURS, BLOODLINE_SWAP_FREE_DAYS } from "@/drizzle/constants";
 import { getUnique } from "@/utils/grouping";
 import { canSwapBloodline } from "@/utils/permissions";
-import { secondsFromDate, secondsPassed } from "@/utils/time";
+import { getUserFederalStatus } from "@/utils/paypal";
+import { getFreeBloodlineSwaps } from "@/libs/bloodline";
+import { secondsFromDate, secondsPassed, DAY_S } from "@/utils/time";
 import { getTimeLeftStr, getDaysHoursMinutesSeconds } from "@/utils/time";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import type { ZodAllTags } from "@/libs/combat/types";
@@ -115,27 +118,52 @@ export const bloodlineRouter = createTRPCRouter({
   getUserHistoricBloodlines: protectedProcedure.query(async ({ ctx }) => {
     return await fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId);
   }),
+  // Get bloodline swap info
+  getSwapInfo: protectedProcedure.query(async ({ ctx }) => {
+    // Query
+    const [{ user }, recentSwaps] = await Promise.all([
+      fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      }),
+      fetchMonthlyBloodlineSwaps(ctx.drizzle, ctx.userId),
+    ]);
+    // Guard
+    if (!user) return { isFree: false, freeSwapsUsed: 0, freeSwapsRemaining: 0, recentSwaps: [] };
+    // Derived
+    const federalStatus = getUserFederalStatus(user);
+    const freeSwaps = getFreeBloodlineSwaps(federalStatus);
+    const freeSwapsUsed = recentSwaps.length;
+    const rawRemaining = freeSwaps - freeSwapsUsed;
+    const freeSwapsRemaining = Math.max(0, rawRemaining);
+    const isFree = freeSwapsRemaining > 0;
+    // Return
+    return { isFree, freeSwapsUsed, freeSwapsRemaining, recentSwaps };
+  }),
   // Swap bloodline of session user
   swapBloodline: protectedProcedure
     .input(z.object({ bloodlineId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [updatedUser, line, historicBloodlines, lastTransfer] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchBloodline(ctx.drizzle, input.bloodlineId),
-        fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId),
-        ctx.drizzle.query.actionLog.findFirst({
-          where: and(
-            eq(actionLog.userId, ctx.userId),
-            eq(actionLog.tableName, "user"),
-            eq(actionLog.relatedMsg, "Bloodline Changed"),
-          ),
-        }),
-      ]);
+      const [updatedUser, line, historicBloodlines, lastTransfer, monthlySwaps] =
+        await Promise.all([
+          fetchUpdatedUser({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+          }),
+          fetchBloodline(ctx.drizzle, input.bloodlineId),
+          fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId),
+          ctx.drizzle.query.actionLog.findFirst({
+            where: and(
+              eq(actionLog.userId, ctx.userId),
+              eq(actionLog.tableName, "user"),
+              eq(actionLog.relatedMsg, "Bloodline Changed"),
+            ),
+            orderBy: (table, { desc }) => [desc(table.createdAt)],
+          }),
+          fetchMonthlyBloodlineSwaps(ctx.drizzle, ctx.userId),
+        ]);
       const user = updatedUser.user;
       // Guards
       if (!user) return errorResponse("User does not exist");
@@ -143,7 +171,15 @@ export const bloodlineRouter = createTRPCRouter({
       if (user.bloodlineId === line.id) {
         return errorResponse("You already have this bloodline");
       }
-      if (COST_SWAP_BLOODLINE > user.reputationPoints) {
+
+      // Check for free swap eligibility
+      const federalStatus = getUserFederalStatus(user);
+      const freeSwaps = getFreeBloodlineSwaps(federalStatus);
+      const freeSwapsUsed = monthlySwaps.length;
+      const hasFreeSwapAvailable = freeSwapsUsed < freeSwaps;
+      const isFreeSwap = hasFreeSwapAvailable;
+
+      if (!isFreeSwap && COST_SWAP_BLOODLINE > user.reputationPoints) {
         return errorResponse("Not enough reputation points");
       }
       if (!canSwapBloodline(user.role)) {
@@ -165,15 +201,38 @@ export const bloodlineRouter = createTRPCRouter({
         }
       }
 
-      // Update
+      // Update bloodline (this creates the "Bloodline Changed" log entry)
+      const swapCost = isFreeSwap ? 0 : COST_SWAP_BLOODLINE;
+      const swapMessage = `Bloodline Swapped from ${user.bloodline?.name} to ${line.name}`;
       await updateBloodline(
         ctx.drizzle,
         user,
         line,
-        COST_SWAP_BLOODLINE,
-        `Bloodline Swapped from ${user.bloodline?.name} to ${line.name}`,
-      );
-      return { success: true, message: "Bloodline swapped" };
+        swapCost,
+        swapMessage);
+
+      // Log the swap for monthly tracking (separate from the "Bloodline Changed" log)
+      if (isFreeSwap) {
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "bloodlineSwap",
+          changes: [
+            `Bloodline swap (free ${federalStatus} - ${BLOODLINE_SWAP_FREE_DAYS} days)`,
+          ],
+          relatedId: line.id,
+          relatedMsg: `Free swap for Silver/Gold supporter (${BLOODLINE_SWAP_FREE_DAYS} day cooldown)`,
+          relatedImage: user.avatarLight,
+          relatedValue: 0,
+        });
+      }
+
+      return {
+        success: true,
+        message: `Bloodline swapped${
+          isFreeSwap ? ` (Free for ${federalStatus} supporter)` : ""
+        }`,
+      };
     }),
   // Bloodline reskins (staff-only creation & moderation)
   createReskin: protectedProcedure
@@ -848,6 +907,21 @@ export const fetchUserHistoricBloodlines = async (
  * @param bloodlineId Bloodline ID
  * @returns Bloodline
  */
+export const fetchMonthlyBloodlineSwaps = async (client: DrizzleClient, userId: string) => {
+  const results = await client.query.actionLog.findMany({
+    where: and(
+      eq(actionLog.userId, userId),
+      eq(actionLog.tableName, "bloodlineSwap"),
+      gte(
+        actionLog.createdAt,
+        secondsFromDate(-BLOODLINE_SWAP_FREE_DAYS * DAY_S, new Date()),
+      ),
+    ),
+    columns: { id: true, createdAt: true },
+  });
+  return results;
+};
+
 export const fetchBloodline = async (client: DrizzleClient, bloodlineId: string) => {
   return await client.query.bloodline.findFirst({
     where: eq(bloodline.id, bloodlineId),

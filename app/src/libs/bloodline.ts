@@ -1,11 +1,17 @@
 import { PITY_BLOODLINE_ROLLS } from "@/drizzle/constants";
+import {
+  BLOODLINE_SWAP_FREE_AMOUNT,
+  BLOODLINE_SWAP_FREE_NORMAL,
+  BLOODLINE_SWAP_FREE_SILVER,
+  BLOODLINE_SWAP_FREE_GOLD,
+} from "@/drizzle/constants";
 import type {
   Bloodline,
   BloodlineReskin,
   BloodlineRolls,
   UserData,
 } from "@/drizzle/schema";
-import type { LetterRank } from "@/drizzle/constants";
+import type { LetterRank, FederalStatus } from "@/drizzle/constants";
 
 /**
  * Filters and sorts a list of bloodlines based on the specified rank, user data, and previous rolls.
@@ -69,4 +75,22 @@ export const getReskinnedBloodline = <T extends Bloodline>(
     ...(reskin.image && { image: reskin.image }),
     ...(reskin.description && { description: reskin.description }),
   };
+};
+
+/**
+ * Get the number of free bloodline swaps based on the federal status
+ * @param federalStatus
+ * @returns
+ */
+export const getFreeBloodlineSwaps = (federalStatus: FederalStatus) => {
+  switch (federalStatus) {
+    case "GOLD":
+      return BLOODLINE_SWAP_FREE_GOLD;
+    case "SILVER":
+      return BLOODLINE_SWAP_FREE_SILVER;
+    case "NORMAL":
+      return BLOODLINE_SWAP_FREE_NORMAL;
+    default:
+      return BLOODLINE_SWAP_FREE_AMOUNT;
+  }
 };

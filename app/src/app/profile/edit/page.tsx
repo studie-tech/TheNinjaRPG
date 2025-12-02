@@ -57,11 +57,12 @@ import { api } from "@/app/_trpc/client";
 import { useUserSearch } from "@/utils/search";
 import { showMutationToast } from "@/libs/toast";
 import Countdown from "@/layout/Countdown";
-import { secondsFromNow, DAY_S } from "@/utils/time";
+import { secondsFromNow, secondsFromDate, DAY_S } from "@/utils/time";
+import { getTimeLeftStr, getDaysHoursMinutesSeconds } from "@/utils/time";
 import { COST_CHANGE_USERNAME } from "@/drizzle/constants";
 import { COST_CUSTOM_TITLE } from "@/drizzle/constants";
 import { COST_RESET_STATS } from "@/drizzle/constants";
-import { COST_SWAP_BLOODLINE } from "@/drizzle/constants";
+import { COST_SWAP_BLOODLINE, BLOODLINE_SWAP_FREE_DAYS } from "@/drizzle/constants";
 import { COST_SWAP_VILLAGE } from "@/drizzle/constants";
 import { COST_REROLL_ELEMENT } from "@/drizzle/constants";
 import { COST_CHANGE_GENDER } from "@/drizzle/constants";
@@ -1008,13 +1009,19 @@ const SwapBloodline: React.FC = () => {
   // Fetch data
   const { data: bloodlines, isFetching } =
     api.bloodline.getUserHistoricBloodlines.useQuery(undefined);
+  const { data: swapInfo } = api.bloodline.getSwapInfo.useQuery(undefined, {
+    enabled: !!userData,
+  });
 
   // Mutations
   const { mutate: swap, isPending: isSwapping } =
     api.bloodline.swapBloodline.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        await utils.profile.getUser.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.bloodline.getSwapInfo.invalidate(),
+        ]);
       },
       onSettled: () => {
         document.body.style.cursor = "default";
@@ -1027,14 +1034,54 @@ const SwapBloodline: React.FC = () => {
     return <Loader explanation="Loading profile page..." />;
   }
 
+  // Check for free swap eligibility
+  const federalStatus = getUserFederalStatus(userData);
+  const hasFreeSwapEligibility = federalStatus === "SILVER" || federalStatus === "GOLD";
+  const hasFreeSwapAvailable = swapInfo?.isFree ?? false;
+
+  // Calculate when free swap resets (30 days from oldest free swap)
+  const getFreeSwapResetTime = () => {
+    if (!swapInfo?.recentSwaps || swapInfo.recentSwaps.length === 0 || !hasFreeSwapEligibility) return null;
+
+    const oldestFreeSwap = swapInfo.recentSwaps.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    )[0];
+
+    if (!oldestFreeSwap) return null;
+
+    const resetDate = secondsFromDate(
+      BLOODLINE_SWAP_FREE_DAYS * DAY_S,
+      new Date(oldestFreeSwap.createdAt),
+    );
+    const now = new Date();
+    const secondsUntilReset = Math.floor((resetDate.getTime() - now.getTime()) / 1000);
+    return secondsFromNow(secondsUntilReset);
+  };
+
+  const freeSwapResetTime = getFreeSwapResetTime();
+
   // Derived data
   const hasAvailableSwaps = bloodlines && bloodlines.length > 0;
   const isDisabled = !hasAvailableSwaps;
-  const canAfford = userData && userData.reputationPoints >= COST_SWAP_BLOODLINE;
+  const isFreeSwap = hasFreeSwapAvailable;
+  const canAfford = isFreeSwap || (userData && userData.reputationPoints >= COST_SWAP_BLOODLINE);
 
   // Show component
   return (
-    <div className="mt-2">
+    <div className="mt-2 space-y-2">
+      {/* Free Swap Timer */}
+      {hasFreeSwapEligibility && swapInfo && !swapInfo.isFree && freeSwapResetTime && (
+        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4 mb-4">
+          <div className="text-center space-y-2">
+            <p className="text-sm text-muted-foreground">
+              You have used your free bloodline swap. You must wait for the {BLOODLINE_SWAP_FREE_DAYS}-day reset or pay reputation points.
+            </p>
+            <p className="text-lg font-semibold">
+              Next free bloodline swap available: <Countdown targetDate={freeSwapResetTime} />
+            </p>
+          </div>
+        </div>
+      )}
       {!isDisabled && !isFetching && bloodlines && (
         <ActionSelector
           items={bloodlines}
@@ -1068,9 +1115,11 @@ const SwapBloodline: React.FC = () => {
           proceed_label={
             isSwapping
               ? undefined
-              : canAfford
-                ? `Swap for ${COST_SWAP_BLOODLINE} reps`
-                : `Need ${COST_SWAP_BLOODLINE - userData.reputationPoints} reps`
+              : isFreeSwap
+                ? "Swap for free"
+                : canAfford
+                  ? `Swap for ${COST_SWAP_BLOODLINE} reps`
+                  : `Need ${COST_SWAP_BLOODLINE - userData.reputationPoints} reps`
           }
           isOpen={isOpen}
           setIsOpen={setIsOpen}

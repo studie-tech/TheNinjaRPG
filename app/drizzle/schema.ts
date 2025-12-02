@@ -278,6 +278,7 @@ export const battleAction = mysqlTable(
         table.battleRound,
       ),
       createdAtIdx: index("BattleAction_createdAt_idx").on(table.createdAt),
+      battleIdIdx: index("BattleAction_battleId_idx").on(table.battleId),
     };
   },
 );

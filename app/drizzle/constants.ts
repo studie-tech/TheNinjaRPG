@@ -786,6 +786,8 @@ export const COST_EXTRA_JUTSU_SLOT = 50;
 export const COST_REROLL_ELEMENT = 10;
 export const COST_SKILL_RESET = 30;
 export const MAX_EXTRA_JUTSU_SLOTS = 2;
+export const BATTLE_LOG_FULL_LIMIT = 1000;
+export const BATTLE_LOG_DEFAULT_LIMIT = 30;
 export const BLOODLINE_ROLL_TYPES = [
   "NATURAL",
   "ITEM",
@@ -794,7 +796,14 @@ export const BLOODLINE_ROLL_TYPES = [
   "QUEST",
   "REGISTRATION",
 ] as const;
+
+// Bloodline swap config
 export const BLOODLINE_SWAP_COOLDOWN_HOURS = 48;
+export const BLOODLINE_SWAP_FREE_DAYS = 30;
+export const BLOODLINE_SWAP_FREE_AMOUNT = 0;
+export const BLOODLINE_SWAP_FREE_NORMAL = 0;
+export const BLOODLINE_SWAP_FREE_SILVER = 0;
+export const BLOODLINE_SWAP_FREE_GOLD = 1;
 
 // Skill tree config
 export const SKILL_TREE_RESET_FREE_NORMAL = 0;
