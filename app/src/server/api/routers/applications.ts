@@ -277,10 +277,7 @@ export const applicationsRouter = createTRPCRouter({
         }),
       ]);
       // Guards
-      if (!user || !app) return errorResponse("Not found");
-      if (user.role === "USER") return errorResponse("Not allowed");
-      if (app.state !== "PENDING") return errorResponse("Not pending");
-      // Update: record rejection (upsert)
+
       await Promise.all([
         ctx.drizzle
           .insert(staffApplicationApproval)

@@ -108,9 +108,7 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
     });
   };
 
-  // NOTE: pending application counts are now provided by `profile.getUser`.
-  // We intentionally avoid a separate `pendingVoteCount` query here so the
-  // notification logic is centralized in the profile endpoint.
+
 
   // Time diff setting
   useEffect(() => {
