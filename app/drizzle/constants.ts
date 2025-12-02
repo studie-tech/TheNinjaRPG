@@ -788,6 +788,7 @@ export const COST_SKILL_RESET = 30;
 export const MAX_EXTRA_JUTSU_SLOTS = 2;
 export const BATTLE_LOG_FULL_LIMIT = 1000;
 export const BATTLE_LOG_DEFAULT_LIMIT = 30;
+export const MAX_EXTRA_RESKIN_SLOTS = 255;
 export const BLOODLINE_ROLL_TYPES = [
   "NATURAL",
   "ITEM",

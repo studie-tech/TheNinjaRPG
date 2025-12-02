@@ -162,9 +162,15 @@ export function manuallyAssignUserStats(user: UserData, stats: StatSchemaType) {
 }
 
 export const activityStreakRewards = (streak: number) => {
-  const rewards = { money: streak * 100, reputationPoints: 0 };
+  const rewards = { money: streak * 100, reputationPoints: 0, jobExperience: 0, reskinSlot: 0 };
   if (streak % 10 === 0) {
     rewards.reputationPoints = Math.floor(streak / 10);
+  }
+  if (streak % 7 === 0) {
+    rewards.jobExperience = 350;
+  }
+  if (streak % 60 === 0) {
+    rewards.reskinSlot = 1;
   }
   return rewards;
 };

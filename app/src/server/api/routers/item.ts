@@ -28,6 +28,7 @@ import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
   TUTORIAL_ITEM_ID,
+  MAX_EXTRA_RESKIN_SLOTS,
 } from "@/drizzle/constants";
 import { nonCombatConsume } from "@/libs/item";
 import { getRandomElement } from "@/utils/array";
@@ -551,6 +552,19 @@ export const itemRouter = createTRPCRouter({
 
       // Rewards
       const rewards: ObjectiveRewardType[] = [];
+
+      // Check if item would increase reskin slots beyond max
+      const reskinIncreaseEffect = useritem.item.effects.find(
+        (e) => e.type === "noncombatincreasereskins",
+      );
+      if (
+        reskinIncreaseEffect &&
+        user.extraReskinSlots + reskinIncreaseEffect.power > MAX_EXTRA_RESKIN_SLOTS
+      ) {
+        return errorResponse(
+          `Your reskin slots would exceed the maximum! Current: ${user.extraReskinSlots}, Max: ${MAX_EXTRA_RESKIN_SLOTS}`,
+        );
+      }
 
       // Calculations
       const promises: Promise<any>[] = [];

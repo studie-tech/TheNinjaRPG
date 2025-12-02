@@ -95,7 +95,7 @@ import { capUserStats } from "@/libs/profile";
 import { calcActiveUserRegen } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
 import { getShrineBoost } from "@/utils/village";
-import { RYO_CAP } from "@/drizzle/constants";
+import { RYO_CAP, MAX_EXTRA_RESKIN_SLOTS } from "@/drizzle/constants";
 import { USER_CAPS } from "@/drizzle/constants";
 import { getReducedGainsDays } from "@/libs/train";
 import { calculateContentDiff } from "@/utils/diff";
@@ -2094,6 +2094,32 @@ export const fetchUpdatedUser = async (props: {
             `Activity streak reward: ${rewards.reputationPoints} reputation points`,
           );
         }
+        if (rewards.jobExperience > 0) {
+          user.medicalExperience += rewards.jobExperience;
+          user.craftingExperience += rewards.jobExperience;
+          user.huntingExperience += rewards.jobExperience;
+          user.gatheringExperience += rewards.jobExperience;
+          toastMessages.push(
+            `Activity streak reward: ${rewards.jobExperience} experience for all jobs`,
+          );
+        }
+        if (rewards.reskinSlot > 0) {
+          if (user.extraReskinSlots >= MAX_EXTRA_RESKIN_SLOTS) {
+            // User is already at max, don't grant the reward
+            toastMessages.push(
+              `Activity streak reward: Reskin slot (already at max: ${user.extraReskinSlots})`,
+            );
+          } else {
+            const newValue = Math.min(
+              user.extraReskinSlots + rewards.reskinSlot,
+              MAX_EXTRA_RESKIN_SLOTS,
+            );
+            user.extraReskinSlots = newValue;
+            toastMessages.push(
+              `Activity streak reward: ${rewards.reskinSlot} extra reskin slot`,
+            );
+          }
+        }
       }
       user.updatedAt = now;
       user.regenAt = now;
@@ -2131,6 +2157,11 @@ export const fetchUpdatedUser = async (props: {
             status: user.status,
             travelFinishAt: user.travelFinishAt,
             ...(userIp ? { lastIp: userIp } : {}),
+            medicalExperience: user.medicalExperience,
+            craftingExperience: user.craftingExperience,
+            huntingExperience: user.huntingExperience,
+            gatheringExperience: user.gatheringExperience,
+            extraReskinSlots: user.extraReskinSlots,
           })
           .where(eq(userData.userId, userId)),
         ...(newDay
