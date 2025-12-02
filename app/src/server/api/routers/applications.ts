@@ -182,10 +182,6 @@ export const applicationsRouter = createTRPCRouter({
       return { success: true, message: "Application deleted" };
     }),
 
-  // NOTE: `pendingVoteCount` was intentionally removed here; its count is now
-  // included in `profile.getUser` to avoid a separate endpoint and keep
-  // notification logic consolidated. See `profile.getUser` for the query.
-
   approve: protectedProcedure
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
