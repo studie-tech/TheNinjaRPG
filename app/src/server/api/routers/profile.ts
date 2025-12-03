@@ -22,6 +22,8 @@ import {
   poll,
   quest,
   questHistory,
+  staffApplication,
+  staffApplicationApproval,
   userAttribute,
   userBlackList,
   userData,
