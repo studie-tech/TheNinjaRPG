@@ -20,7 +20,7 @@ import { Orientation, Grid, rectangle } from "honeycomb-grid";
 import { defineHex } from "../hexgrid";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
 import { KILLING_NOTORIETY_GAIN } from "@/drizzle/constants";
-import { findWarsWithUser } from "@/libs/war";
+import { findWarsWithUser } from "@/libs/war/shared";
 import { STREAK_LEVEL_DIFF } from "@/drizzle/constants";
 import { getShrineBoost } from "@/utils/village";
 import { spiral, line, ring, fromCoordinates, Direction } from "honeycomb-grid";

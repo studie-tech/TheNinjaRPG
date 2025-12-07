@@ -79,6 +79,10 @@
     {
       "path": "/api/auction-expire",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/shrine-boost",
+      "schedule": "* * * * *"
     }
   ],
   "functions": {

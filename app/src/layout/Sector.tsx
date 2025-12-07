@@ -49,7 +49,7 @@ import {
 } from "@/drizzle/constants";
 import { RANKS_RESTRICTED_FROM_PVP, MEDNIN_MIN_RANK } from "@/drizzle/constants";
 import { WAR_SHRINE_IMAGE } from "@/drizzle/constants";
-import { isWarAllies } from "@/libs/war";
+import { isWarAllies } from "@/libs/war/shared";
 import {
   IMG_SECTOR_INFO,
   IMG_SECTOR_ATTACK,

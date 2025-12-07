@@ -27,7 +27,7 @@ import {
   VILLAGE_SYNDICATE_ID,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
 } from "@/drizzle/constants";
-import { findWarsWithUser } from "@/libs/war";
+import { findWarsWithUser } from "@/libs/war/shared";
 import type { PusherClient } from "@/libs/pusher";
 import type { BattleTypes, BattleDataEntryType } from "@/drizzle/constants";
 import type { DrizzleClient } from "@/server/db";

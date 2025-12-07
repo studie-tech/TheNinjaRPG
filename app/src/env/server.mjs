@@ -6,6 +6,11 @@
 import { serverSchema, serverEnv } from "./schema.mjs";
 import { env as clientEnv, formatErrors } from "./client.mjs";
 
+// If this ever runs in the browser, it means server env was imported into a client bundle.
+if (typeof window !== "undefined") {
+  throw new Error("server env imported in a client bundle (src/env/server.mjs)");
+}
+
 const _serverEnv = serverSchema.safeParse(serverEnv);
 
 if (!_serverEnv.success) {
@@ -19,9 +24,9 @@ if (!_serverEnv.success) {
 for (let key of Object.keys(_serverEnv.data)) {
   if (key.startsWith("NEXT_PUBLIC_")) {
     console.warn("❌ You are exposing a server-side env-variable:", key);
-
     throw new Error("You are exposing a server-side env-variable");
   }
 }
 
 export const env = { ..._serverEnv.data, ...clientEnv };
+
