@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { useForm, useWatch } from "react-hook-form";
 import { useState, useEffect } from "react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
-import { getScriptID, destroySDKScript } from "@paypal/react-paypal-js";
 import { usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { api, onError } from "@/app/_trpc/client";
 import { useInfinitePagination } from "@/libs/pagination";
@@ -85,10 +84,6 @@ export default function PaypalShop() {
   const { data: userData } = useRequiredUserData();
   const [activeTab, setActiveTab] = useState<string>("Reputation");
   const currency = "USD";
-
-  useEffect(() => {
-    destroySDKScript(getScriptID(OPTIONS));
-  }, [activeTab]);
 
   const { data: purchasedReps } = api.paypal.getRecentRepsCount.useQuery(
     { userId: userData?.userId ?? "-" },
