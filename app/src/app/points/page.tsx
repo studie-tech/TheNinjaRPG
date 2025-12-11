@@ -82,13 +82,6 @@ const OPTIONS = {
  */
 export default function PaypalShop() {
   const { data: userData } = useRequiredUserData();
-  const [activeTab, setActiveTab] = useState<string>("Reputation");
-  const currency = "USD";
-
-  const { data: purchasedReps } = api.paypal.getRecentRepsCount.useQuery(
-    { userId: userData?.userId ?? "-" },
-    { enabled: !!userData },
-  );
 
   if (!userData) return <Loader explanation="Loading userdata" />;
 
@@ -99,37 +92,70 @@ export default function PaypalShop() {
           options={{
             ...OPTIONS,
             vault: true,
-            intent: activeTab === "Reputation" ? "capture" : "subscription",
           }}
         >
-          <ContentBox
-            title={activeTab}
-            subtitle={`Monthly Reps [${purchasedReps ?? 0} / ${dynamicMonthlyRepCap(userData)}]`}
-            padding={activeTab === "Log" ? false : true}
-            topRightContent={
-              <>
-                <div className="grow"></div>
-                <NavTabs
-                  current={activeTab}
-                  options={["Reputation", "Federal"]}
-                  setValue={setActiveTab}
-                />
-              </>
-            }
-          >
-            {activeTab === "Reputation" && <ReputationStore currency={currency} />}
-            {activeTab === "Federal" && <FederalStore />}
-          </ContentBox>
-          {activeTab === "Reputation" && (
-            <TransactionHistory userId={userData.userId} />
-          )}
-          {activeTab === "Reputation" && <LookupTransaction />}
-          {activeTab === "Federal" && <SubscriptionsOverview />}
+          <PaypalShopContent userData={userData} />
         </PayPalScriptProvider>
       )}
     </>
   );
 }
+
+/**
+ * PayPal shop content wrapper with proper SDK management
+ */
+const PaypalShopContent = ({
+  userData,
+}: {
+  userData: NonNullable<ReturnType<typeof useRequiredUserData>["data"]>;
+}) => {
+  const [activeTab, setActiveTab] = useState<string>("Reputation");
+  const [{ isPending }, dispatch] = usePayPalScriptReducer();
+  const currency = "USD";
+
+  const { data: purchasedReps } = api.paypal.getRecentRepsCount.useQuery(
+    { userId: userData?.userId ?? "-" },
+    { enabled: !!userData },
+  );
+
+  // Properly update SDK options when tab changes
+  useEffect(() => {
+    dispatch({
+      type: "resetOptions",
+      value: {
+        ...OPTIONS,
+        vault: true,
+        intent: activeTab === "Reputation" ? "capture" : "subscription",
+      },
+    });
+  }, [activeTab, dispatch]);
+
+  return (
+    <>
+      <ContentBox
+        title={activeTab}
+        subtitle={`Monthly Reps [${purchasedReps ?? 0} / ${dynamicMonthlyRepCap(userData)}]`}
+        padding={activeTab === "Log" ? false : true}
+        topRightContent={
+          <>
+            <div className="grow"></div>
+            <NavTabs
+              current={activeTab}
+              options={["Reputation", "Federal"]}
+              setValue={setActiveTab}
+            />
+          </>
+        }
+      >
+        {activeTab === "Reputation" && <ReputationStore currency={currency} />}
+        {activeTab === "Federal" && <FederalStore />}
+      </ContentBox>
+      {activeTab === "Reputation" && <TransactionHistory userId={userData.userId} />}
+      {activeTab === "Reputation" && <LookupTransaction />}
+      {activeTab === "Federal" && <SubscriptionsOverview />}
+    </>
+  );
+};
 
 /**
  * Reputation Store component
