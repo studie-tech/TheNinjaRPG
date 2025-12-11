@@ -110,6 +110,9 @@ const Combat: React.FC<CombatProps> = (props) => {
   const cameraRef = useRef<OrthographicCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const cameraTargetPosition = useRef<{ x: number; y: number } | null>(null);
+  
+  // Track if component is mounted to prevent stale render callbacks
+  const isMounted = useRef<boolean>(false);
 
   // Tutorial step
   const { currentStep, handleNextStepAsync } = useTutorialStep();
@@ -492,6 +495,8 @@ const Combat: React.FC<CombatProps> = (props) => {
     const sceneRef = mountRef.current;
 
     if (sceneRef && battle.current && gameAssets !== undefined) {
+      // Mark component as mounted
+      isMounted.current = true;
       // Used for map size calculations
       const width2height =
         ((battle.current.height + 2) * HEX_ASPECT_RATIO) /
@@ -647,6 +652,9 @@ const Combat: React.FC<CombatProps> = (props) => {
       const clock = new Clock();
       clock.start();
       function render() {
+        // Guard against stale render callbacks after unmount
+        if (!isMounted.current) return;
+        
         // Performance monitor
         performanceMonitor.begin();
 
@@ -797,6 +805,8 @@ const Combat: React.FC<CombatProps> = (props) => {
 
       // Remove the mouseover listener
       return () => {
+        // Mark component as unmounted to prevent stale render callbacks
+        isMounted.current = false;
         if (zoomTimeout) clearTimeout(zoomTimeout);
         void setBattleAtom(undefined);
         window.removeEventListener("resize", handleResize);
