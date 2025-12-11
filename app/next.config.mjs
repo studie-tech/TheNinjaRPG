@@ -19,7 +19,6 @@ const config = {
   reactCompiler: true, // Fix user search, money sending, combat, search jutsu name
   experimental: {
     nextScriptWorkers: true,
-    optimizePackageImports: ["three"],
   },
   turbopack: {
     resolveExtensions: [".tsx", ".ts", ".jsx", ".js"],
