@@ -153,7 +153,7 @@ export default function Profile() {
           <div>
             <b>Reputation</b>
             <p>Reputation points: {userData.reputationPoints}</p>
-            <p>Federal Support: {userData.federalStatus.toLowerCase()}</p>
+            <p>Federal Support: {(userData.federalStatus || "NONE").toLowerCase()}</p>
             <p>Activity Streak: {userData.activityStreak}</p>
             {userData.isOutlaw && <p>Notoriety: {userData.villagePrestige}</p>}
             {!userData.isOutlaw && <p>Village prestige: {userData.villagePrestige}</p>}
