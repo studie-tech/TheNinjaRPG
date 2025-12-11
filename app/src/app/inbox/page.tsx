@@ -167,7 +167,7 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
                     return (
                       <div
                         key={user.userId}
-                        className={`absolute w-14`}
+                        className={`absolute w-14 h-14`}
                         style={{ left: `${i * 2}rem` }}
                       >
                         <AvatarImage
