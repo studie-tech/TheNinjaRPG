@@ -1381,6 +1381,7 @@ export const itemLoadout = mysqlTable(
   {
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
+    battleType: mysqlEnum("battleType", ["PVE", "PVP"]).default("PVP").notNull(),
     itemData: json("itemData")
       .$type<Array<{ itemId: string; slot: ItemSlot }>>()
       .notNull(),
@@ -1391,6 +1392,7 @@ export const itemLoadout = mysqlTable(
   (table) => {
     return {
       userIdIdx: index("ItemLoadout_userId_idx").on(table.userId),
+      battleTypeIdx: index("ItemLoadout_battleType_idx").on(table.battleType),
     };
   },
 );

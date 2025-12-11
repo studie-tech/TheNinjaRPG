@@ -1664,9 +1664,13 @@ export const toggleEquipItem = async (
   };
 };
 
-export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) => {
+export const fetchItemLoadouts = async (
+  client: DrizzleClient,
+  userId: string,
+  battleType: "PVE" | "PVP" = "PVP",
+) => {
   return await client.query.itemLoadout.findMany({
-    where: eq(itemLoadout.userId, userId),
+    where: and(eq(itemLoadout.userId, userId), eq(itemLoadout.battleType, battleType)),
     orderBy: (table) => desc(table.createdAt),
   });
 };
