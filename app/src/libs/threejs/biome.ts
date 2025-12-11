@@ -6,6 +6,7 @@ import {
   DoubleSide,
   AddOperation,
   Texture,
+  SpriteMaterial,
 } from "three";
 import {
   IMG_BG_OCEAN,
@@ -200,6 +201,27 @@ export const getMapSprites = (
   return sprites;
 };
 
+let hasWarnedSpriteMaterialFallback = false;
+
+const resolveSpriteMaterial = (map: Texture, alphaMap?: Texture) => {
+  if (typeof createSpriteMaterial === "function") {
+    return createSpriteMaterial(map, alphaMap);
+  }
+
+  if (!hasWarnedSpriteMaterialFallback) {
+    hasWarnedSpriteMaterialFallback = true;
+    console.warn(
+      "[threejs/biome] createSpriteMaterial unavailable, using SpriteMaterial fallback",
+    );
+  }
+
+  return new SpriteMaterial({
+    map,
+    alphaMap,
+    alphaTest: 0.5,
+  });
+};
+
 const loadSectorAsset = (
   filepath: string,
   rand: number,
@@ -207,7 +229,7 @@ const loadSectorAsset = (
   randomRotation?: boolean,
 ) => {
   const texture = loadTexture(filepath);
-  const material = createSpriteMaterial(texture);
+  const material = resolveSpriteMaterial(texture);
 
   // Add wind effect via shader modification
   if (windAffected) {
