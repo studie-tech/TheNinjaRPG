@@ -54,6 +54,13 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
       links: [
         retryLink({
           retry(opts) {
+            // Retry network-level errors from aborted requests
+            const isNetworkError =
+              opts.error.message?.includes("Load failed") ||
+              opts.error.message?.includes("fetch");
+            if (isNetworkError && opts.op.type === "query") {
+              return opts.attempts <= 3;
+            }
             // Don't retry on non-500s
             if (
               opts.error.data &&
@@ -95,6 +102,13 @@ export const onError = (err: unknown) => {
   if (
     err instanceof TRPCClientError &&
     err.message.includes("Unauthorized for tRPC endpoint")
+  ) {
+    return;
+  }
+  // Ignore network-level errors from aborted requests (race condition between invalidations)
+  if (
+    err instanceof TRPCClientError &&
+    (err.message.includes("Load failed") || err.message.includes("fetch"))
   ) {
     return;
   }

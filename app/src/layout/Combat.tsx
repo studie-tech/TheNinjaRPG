@@ -262,7 +262,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           battleId: result.battleId,
           updatedAt: new Date(),
         });
-        await utils.combat.getBattle.invalidate();
+        await utils.combat.getBattle.invalidate({ cancelRefetch: false });
       } else {
         showMutationToast(result);
       }
@@ -457,7 +457,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           const check2 = createPassed > (COMBAT_LOBBY_SECONDS + COMBAT_SECONDS) * 1000;
           if ((check1 && check2) || changedActor) {
             battle.current.roundStartAt = new Date();
-            void utils.combat.getBattle.invalidate();
+            void utils.combat.getBattle.invalidate({ cancelRefetch: false });
           }
         }
       }
@@ -484,7 +484,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       const channel = pusher.subscribe(battleId);
       channel.bind("event", (data: { version: number }) => {
         if (battle.current?.version !== data.version && !result) {
-          void utils.combat.getBattle.invalidate();
+          void utils.combat.getBattle.invalidate({ cancelRefetch: false });
         }
       });
       return () => {
