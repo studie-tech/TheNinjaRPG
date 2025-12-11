@@ -140,6 +140,25 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Precompute maps for ground effects, user effects, and user positions
   const battleMaps = useBattleMaps(battle.current ?? null);
 
+  // Get effects for hovered element (can include both user and ground effects)
+  const hoveredEffects = useMemo(() => {
+    if (!hoveredEffect) return null;
+
+    const groundEffects =
+      battleMaps.groundEffectsByTile.get(hoveredEffect.tileKey) || [];
+    const userEffects = hoveredEffect.userId
+      ? battleMaps.userEffectsByUserId.get(hoveredEffect.userId) || []
+      : [];
+
+    if (groundEffects.length === 0 && userEffects.length === 0) return null;
+
+    return {
+      groundEffects,
+      userEffects,
+      userId: hoveredEffect.userId,
+    };
+  }, [hoveredEffect, battleMaps]);
+
   // Store precomputed maps in refs for use in render loop
   const battleMapsRef = useRef(battleMaps);
   const setHoveredEffectRef = useRef(setHoveredEffect);
@@ -805,20 +824,36 @@ const Combat: React.FC<CombatProps> = (props) => {
 
       // Remove the mouseover listener
       return () => {
-        // Mark component as unmounted to prevent stale render callbacks
+        // Mark component as unmounted FIRST to prevent stale render callbacks
         isMounted.current = false;
+        
+        // Cancel animation frame before cleanup
+        performanceMonitor.cancelFrame(animationId);
+        
         if (zoomTimeout) clearTimeout(zoomTimeout);
         void setBattleAtom(undefined);
-        window.removeEventListener("resize", handleResize);
-        sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
-        sceneRef.removeEventListener("mouseleave", onDocumentMouseLeave);
-        controls.removeEventListener("change", onZoomChange);
-        rendererElement.removeEventListener("click", onClick, true);
-        if (sceneRef.contains(renderer.domElement)) {
-          sceneRef.removeChild(renderer.domElement);
+        
+        // Remove event listeners safely
+        try {
+          window.removeEventListener("resize", handleResize);
+          sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
+          sceneRef.removeEventListener("mouseleave", onDocumentMouseLeave);
+          controls.removeEventListener("change", onZoomChange);
+          rendererElement.removeEventListener("click", onClick, true);
+        } catch (e) {
+          // Ignore errors if elements are already removed
         }
+        
+        // Safely remove renderer DOM element
+        try {
+          if (renderer.domElement && renderer.domElement.parentNode === sceneRef) {
+            sceneRef.removeChild(renderer.domElement);
+          }
+        } catch (e) {
+          // Ignore errors if element is already removed
+        }
+        
         cleanUp(scene, renderer);
-        performanceMonitor.cancelFrame(animationId);
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -866,24 +901,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     result &&
     result.curHealth <= 0 &&
     !["SPARRING", "RANKED_PVP"].includes(battleType);
-  // Get effects for hovered element (can include both user and ground effects)
-  const hoveredEffects = useMemo(() => {
-    if (!hoveredEffect) return null;
-
-    const groundEffects =
-      battleMaps.groundEffectsByTile.get(hoveredEffect.tileKey) || [];
-    const userEffects = hoveredEffect.userId
-      ? battleMaps.userEffectsByUserId.get(hoveredEffect.userId) || []
-      : [];
-
-    if (groundEffects.length === 0 && userEffects.length === 0) return null;
-
-    return {
-      groundEffects,
-      userEffects,
-      userId: hoveredEffect.userId,
-    };
-  }, [hoveredEffect, battleMaps]);
 
   return (
     <>
