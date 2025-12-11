@@ -127,6 +127,29 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
     />
   );
 
+  // Helper to get serializable form data for AI context
+  const getSerializableFormData = () => {
+    try {
+      // Get form values and serialize through JSON to ensure they're clean
+      // This removes any non-serializable properties like functions, DOM refs, etc.
+      const formValues = form.getValues();
+      const serializedFormValues = JSON.parse(JSON.stringify(formValues));
+      const serializedObjectives = JSON.parse(JSON.stringify(objectives));
+      
+      return {
+        formData: serializedFormValues,
+        objectives: serializedObjectives,
+      };
+    } catch (error) {
+      // Fallback to empty objects if serialization fails
+      console.error("Failed to serialize form data:", error);
+      return {
+        formData: {},
+        objectives: [],
+      };
+    }
+  };
+
   // Helper to render selected objective
   const renderSelectedObjective = () => {
     if (!selectedObjectiveId) return null;
@@ -190,7 +213,10 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
                 }}
                 aiProps={{
                   apiEndpoint: "/api/chat/quest",
-                  systemMessage: `\n                  Current quest data: ${JSON.stringify(form.getValues())}. \n                  Current objectives: ${JSON.stringify(objectives)}\n                `,
+                  systemMessage: (() => {
+                    const serializedData = getSerializableFormData();
+                    return `\n                  Current quest data: ${JSON.stringify(serializedData.formData)}. \n                  Current objectives: ${JSON.stringify(serializedData.objectives)}\n                `;
+                  })(),
                 }}
                 onToolCall={(toolCall) => {
                   const data = toolCall.args as ZodQuestType;
