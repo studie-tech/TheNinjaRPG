@@ -16,6 +16,7 @@ import { IMG_FRONTPAGE_SCREENSHOT_VILLAGE } from "@/drizzle/constants";
 import { api } from "@/app/_trpc/client";
 import { useUser } from "@clerk/nextjs";
 import { cn } from "src/libs/shadui";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 
 const Welcome: React.FC = () => {
   // Snap container for full-height sections
@@ -285,17 +286,17 @@ function SetReferal() {
   useEffect(() => {
     // Set reference user
     const ref = searchParams?.get("ref");
-    if (ref) localStorage.setItem("ref", ref);
+    if (ref) safeLocalStorageSetItem("ref", ref);
     // Source
     const utm_source = searchParams?.get("utm_source");
-    if (utm_source) localStorage.setItem("utm_source", utm_source);
+    if (utm_source) safeLocalStorageSetItem("utm_source", utm_source);
     // Track anonymous visitor once
-    const alreadyTracked = localStorage.getItem("visitor_tracked");
+    const alreadyTracked = safeLocalStorageGetItem("visitor_tracked");
     if (!alreadyTracked && isLoaded && !isSignedIn) {
-      const savedRef = localStorage.getItem("ref") ?? undefined;
-      const savedUtm = localStorage.getItem("utm_source") ?? undefined;
+      const savedRef = safeLocalStorageGetItem("ref") ?? undefined;
+      const savedUtm = safeLocalStorageGetItem("utm_source") ?? undefined;
       trackVisitor({ ref: savedRef, utmSource: savedUtm });
-      localStorage.setItem("visitor_tracked", "1");
+      safeLocalStorageSetItem("visitor_tracked", "1");
     }
   }, [searchParams, isLoaded, isSignedIn, trackVisitor]);
   return null;

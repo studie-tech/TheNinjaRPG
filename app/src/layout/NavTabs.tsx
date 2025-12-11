@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import React from "react";
 import { cn } from "src/libs/shadui";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 
 interface NavTabsProps {
   id?: string;
@@ -19,11 +20,11 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
   // If we do not have a current value, get from localStorage or select first one
   useEffect(() => {
     if (!current && id) {
-      const select = localStorage.getItem(id) || options[0];
+      const select = safeLocalStorageGetItem(id) || options[0];
       if (select) {
         if (setValue) setValue(select);
         if (onChange) onChange(select);
-        localStorage.setItem(id, select);
+        safeLocalStorageSetItem(id, select);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -52,7 +53,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
                 e.preventDefault();
                 if (setValue) setValue(option);
                 if (onChange) onChange(option);
-                if (id) localStorage.setItem(id, option);
+                if (id) safeLocalStorageSetItem(id, option);
               }}
             >
               {option}

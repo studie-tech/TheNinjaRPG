@@ -13,13 +13,34 @@ import fetchRetry from "fetch-retry";
 import { IMG_MAP_HEXASPHERE } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT, IMG_SECTOR_USER_SPRITE_MASK } from "@/drizzle/constants";
 import { loadTexture } from "@/libs/threejs/util";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import type { GlobalPoint } from "@/libs/threejs/types";
 import type { GlobalMapData } from "@/libs/threejs/types";
 
+const MAP_CACHE_KEY = "hexasphere_map_cache";
+const MAP_CACHE_VERSION = "v1"; // Increment to invalidate cache when map data changes
+
 /**
- * Fetches the map data from the server.
+ * Fetches the map data from the server, with localStorage caching.
  */
 export const fetchMap = async () => {
+  // Try to get from localStorage first
+  const cached = safeLocalStorageGetItem(MAP_CACHE_KEY);
+  if (cached) {
+    try {
+      const { version, data } = JSON.parse(cached) as {
+        version: string;
+        data: GlobalMapData;
+      };
+      if (version === MAP_CACHE_VERSION) {
+        return data;
+      }
+    } catch {
+      // Parse error, continue to fetch
+    }
+  }
+
+  // Fetch from server
   const fetch = fetchRetry(global.fetch);
   const response = await fetch(IMG_MAP_HEXASPHERE, {
     retries: 3,
@@ -28,6 +49,13 @@ export const fetchMap = async () => {
     },
   });
   const hexasphere = await response.json().then((data) => data as GlobalMapData);
+
+  // Cache in localStorage for future use
+  safeLocalStorageSetItem(
+    MAP_CACHE_KEY,
+    JSON.stringify({ version: MAP_CACHE_VERSION, data: hexasphere }),
+  );
+
   return hexasphere;
 };
 

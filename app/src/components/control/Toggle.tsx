@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Check, X, Minus } from "lucide-react";
 import { cn } from "src/libs/shadui";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 
 interface ToggleProps {
   id?: string;
@@ -27,7 +28,7 @@ const Toggle: React.FC<ToggleProps> = (props) => {
   const setState = useCallback(
     (newValue: boolean) => {
       setShowActive(newValue);
-      if (id) localStorage.setItem(id, newValue.toString());
+      if (id) safeLocalStorageSetItem(id, newValue.toString());
     },
     [id, setShowActive],
   );
@@ -35,7 +36,7 @@ const Toggle: React.FC<ToggleProps> = (props) => {
   // If we do not have a current value, get from localStorage or select first one
   useEffect(() => {
     if (value === undefined && id) {
-      const select = localStorage.getItem(id) || "true";
+      const select = safeLocalStorageGetItem(id) || "true";
       const newValue = select === "true" ? true : false;
       setState(newValue);
     }

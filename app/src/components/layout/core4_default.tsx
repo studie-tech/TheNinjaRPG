@@ -47,6 +47,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { getCurrentSeason } from "@/utils/time";
 import TutorialAssistant from "@/layout/TutorialAssistant";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import {
   IMG_WALLPAPER_WINTER,
   IMG_WALLPAPER_SPRING,
@@ -106,7 +107,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   // State
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("theme");
+      const savedTheme = safeLocalStorageGetItem("theme");
       return savedTheme === "dark" || savedTheme === "light" ? savedTheme : "light";
     }
     return "light";
@@ -115,7 +116,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   // Light layout mode: hide desktop logo & navbar, use mobile side sheets (persisted)
   const [lightLayout, setLightLayout] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("lightLayout");
+      const saved = safeLocalStorageGetItem("lightLayout");
       if (saved !== null) return JSON.parse(saved) as boolean;
     }
     return false; // default = full layout
@@ -125,7 +126,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
     setLightLayout((prev) => {
       const newState = !prev;
       if (typeof window !== "undefined") {
-        localStorage.setItem("lightLayout", JSON.stringify(newState));
+        safeLocalStorageSetItem("lightLayout", JSON.stringify(newState));
       }
       return newState;
     });
@@ -313,10 +314,10 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
         className={`hover:cursor-pointer h-6 w-6 xl:h-7 xl:w-7 min-w-6 min-h-6 xl:min-w-7 xl:min-h-7 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 rounded-full mx-1 p-1 bg-yellow-100 dark:bg-blue-100`}
         onClick={() => {
           if (!theme || theme === "light") {
-            localStorage.setItem("theme", "dark");
+            safeLocalStorageSetItem("theme", "dark");
             setTheme("dark");
           } else {
-            localStorage.setItem("theme", "light");
+            safeLocalStorageSetItem("theme", "light");
             setTheme("light");
           }
         }}

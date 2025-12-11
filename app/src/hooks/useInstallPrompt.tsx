@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, use, useState, useEffect, type ReactNode } from "react";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -60,7 +61,7 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
       if (!standalone && mobile) {
         const timeoutId = setTimeout(() => {
           // Check for long-term dismissal (60 days)
-          const dismissedLongTime = localStorage.getItem("pwa-install-dismissed-long");
+          const dismissedLongTime = safeLocalStorageGetItem("pwa-install-dismissed-long");
           if (
             dismissedLongTime &&
             Date.now() - parseInt(dismissedLongTime) < 60 * 24 * 60 * 60 * 1000
@@ -69,7 +70,7 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
           }
 
           // Check for short-term dismissal (7 days)
-          const dismissedTime = localStorage.getItem("pwa-install-dismissed");
+          const dismissedTime = safeLocalStorageGetItem("pwa-install-dismissed");
           if (
             dismissedTime &&
             Date.now() - parseInt(dismissedTime) < 7 * 24 * 60 * 60 * 1000
@@ -108,12 +109,12 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
 
   const hidePrompt = () => {
     setIsVisible(false);
-    localStorage.setItem("pwa-install-dismissed", Date.now().toString());
+    safeLocalStorageSetItem("pwa-install-dismissed", Date.now().toString());
   };
 
   const dismissPromptLongTerm = () => {
     setIsVisible(false);
-    localStorage.setItem("pwa-install-dismissed-long", Date.now().toString());
+    safeLocalStorageSetItem("pwa-install-dismissed-long", Date.now().toString());
   };
 
   return (

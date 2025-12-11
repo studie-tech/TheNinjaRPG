@@ -7,6 +7,7 @@ import {
 import { useUserData } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import type { UserWithRelations } from "@/api/routers/profile";
 
 interface UseIframeMuteReturn {
@@ -32,10 +33,8 @@ const getInitialIframeMuteState = (
   }
 
   // Fallback to locally saved preference
-  if (typeof window !== "undefined") {
-    const saved = localStorage.getItem("iframesMuted");
-    if (saved !== null) return JSON.parse(saved) as boolean;
-  }
+  const saved = safeLocalStorageGetItem("iframesMuted");
+  if (saved !== null) return JSON.parse(saved) as boolean;
 
   return false;
 };
@@ -91,8 +90,8 @@ export const useIframeMute = (): UseIframeMuteReturn => {
           preferredGeneral2: userData.preferredGeneral2 ?? null,
           iframesMuted: muted,
         });
-      } else if (typeof window !== "undefined") {
-        localStorage.setItem("iframesMuted", JSON.stringify(muted));
+      } else {
+        safeLocalStorageSetItem("iframesMuted", JSON.stringify(muted));
       }
     },
     [userData, updatePreferences],

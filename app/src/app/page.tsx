@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Loader from "@/layout/Loader";
 import Welcome from "@/layout/Welcome";
 import { api } from "@/app/_trpc/client";
+import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 
 export default function Index() {
   // Fetch data
@@ -22,13 +23,8 @@ export default function Index() {
     // When user is signed in (Clerk) but has not created a character yet, set referral immediately
     if (isSignedIn && !userData && userStatus !== "pending") {
       // attempt to read utm_source from localStorage if present
-      try {
-        const utm =
-          typeof window !== "undefined" ? localStorage.getItem("utm_source") : null;
-        setReferral.mutate({ utmSource: utm ?? undefined });
-      } catch {
-        // ignore
-      }
+      const utm = safeLocalStorageGetItem("utm_source");
+      setReferral.mutate({ utmSource: utm ?? undefined });
     }
     if (userStatus !== "pending" && !userData) {
       if (userStatus === "error") {

@@ -2,6 +2,70 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+/**
+ * Safe localStorage utility functions
+ * These handle cases where localStorage might be null (e.g., in Android WebView without domStorageEnabled)
+ * or in SSR environments where window is not defined.
+ */
+
+/**
+ * Safely gets an item from localStorage
+ * @param key - The key to retrieve
+ * @returns The value from localStorage, or null if localStorage is unavailable or key doesn't exist
+ */
+export const safeLocalStorageGetItem = (key: string): string | null => {
+  try {
+    // Check if we're in a browser environment and localStorage is available
+    if (typeof window !== "undefined" && window.localStorage) {
+      return localStorage.getItem(key);
+    }
+    return null;
+  } catch (error) {
+    // Handle any errors that might occur (e.g., SecurityError, QuotaExceededError)
+    console.warn(`Failed to get item from localStorage: ${key}`, error);
+    return null;
+  }
+};
+
+/**
+ * Safely sets an item in localStorage
+ * @param key - The key to set
+ * @param value - The value to store
+ * @returns true if successful, false otherwise
+ */
+export const safeLocalStorageSetItem = (key: string, value: string): boolean => {
+  try {
+    // Check if we're in a browser environment and localStorage is available
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.setItem(key, value);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    // Handle any errors that might occur (e.g., SecurityError, QuotaExceededError)
+    console.warn(`Failed to set item in localStorage: ${key}`, error);
+    return false;
+  }
+};
+
+/**
+ * Safely removes an item from localStorage
+ * @param key - The key to remove
+ * @returns true if successful, false otherwise
+ */
+export const safeLocalStorageRemoveItem = (key: string): boolean => {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.removeItem(key);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.warn(`Failed to remove item from localStorage: ${key}`, error);
+    return false;
+  }
+};
+
 export const useLocalStorage = <T>(
   key: string,
   initialValue: T,
@@ -30,11 +94,13 @@ export const useLocalStorage = <T>(
       return anchorValue;
     }
 
-    // Fall back to local storage
-    if (typeof window !== "undefined" && localStorage) {
-      const storedValue = localStorage.getItem(key);
-      if (storedValue && storedValue !== "undefined") {
+    // Fall back to local storage using safe utility
+    const storedValue = safeLocalStorageGetItem(key);
+    if (storedValue && storedValue !== "undefined") {
+      try {
         return JSON.parse(storedValue) as T;
+      } catch {
+        return initialValue;
       }
     }
 
@@ -63,11 +129,9 @@ export const useLocalStorage = <T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkUrlAnchor]);
 
-  // Update the local storage when the value changes
+  // Update the local storage when the value changes using safe utility
   useEffect(() => {
-    if (typeof window !== "undefined" && localStorage) {
-      localStorage.setItem(key, JSON.stringify(value));
-    }
+    safeLocalStorageSetItem(key, JSON.stringify(value));
   }, [key, value]);
 
   // When calling the setValue function, remove the URL anchor

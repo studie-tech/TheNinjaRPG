@@ -12,6 +12,7 @@ import { UserRolesWithSkillTreeAccess } from "@/drizzle/constants";
 import { capUserStats } from "@/libs/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { Chart as ChartJS } from "chart.js/auto";
+import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { getUserElements } from "@/validators/user";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
@@ -214,7 +215,7 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
     const generalsCtx = generalsChart?.current?.getContext("2d");
     if (statsCtx && generalsCtx && userData) {
       // Update stats chart
-      const localTheme = localStorage.getItem("theme");
+      const localTheme = safeLocalStorageGetItem("theme");
       ChartJS.defaults.color = localTheme === "dark" ? "#FFFFFF" : "#000000";
       const myStatsChart = new ChartJS(statsCtx, {
         type: "radar",

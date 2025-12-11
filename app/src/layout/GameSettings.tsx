@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { UncontrolledSliderField } from "@/layout/SliderField";
 import { useAudio } from "@/hooks/useAudio";
 import { useIframeMute } from "@/hooks/useIframeMute";
-import { useLocalStorage } from "@/hooks/localstorage";
+import {
+  useLocalStorage,
+  safeLocalStorageGetItem,
+  safeLocalStorageSetItem,
+} from "@/hooks/localstorage";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
 import {
@@ -55,10 +59,8 @@ export const GlobalAudioProvider: React.FC<{
   // Get initial audio preference from user data or localStorage
   const getInitialMusicState = (): boolean => {
     if (userData) return userData.musicOn;
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("musicOn");
-      if (saved !== null) return JSON.parse(saved) as boolean;
-    }
+    const saved = safeLocalStorageGetItem("musicOn");
+    if (saved !== null) return JSON.parse(saved) as boolean;
     return true;
   };
 
@@ -136,10 +138,8 @@ export const useGameSettings = (userData?: UserWithRelations | null) => {
   // SFX preference state
   const getInitialSfxState = (): boolean => {
     if (userData && typeof userData.sfxOn === "boolean") return userData.sfxOn;
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("sfxOn");
-      if (saved !== null) return JSON.parse(saved) as boolean;
-    }
+    const saved = safeLocalStorageGetItem("sfxOn");
+    if (saved !== null) return JSON.parse(saved) as boolean;
     return true;
   };
   const [sfxOn, setSfxOn] = useState<boolean>(() =>
@@ -148,10 +148,8 @@ export const useGameSettings = (userData?: UserWithRelations | null) => {
 
   // SFX volume state
   const getInitialSfxVolumeState = (): number => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("sfxVolume");
-      if (saved !== null) return JSON.parse(saved) as number;
-    }
+    const saved = safeLocalStorageGetItem("sfxVolume");
+    if (saved !== null) return JSON.parse(saved) as number;
     return 0.8;
   };
   const [sfxVolume, setSfxVolume] = useState<number>(() =>
@@ -254,8 +252,8 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
       if (updateUser) {
         await updateUser({ musicOn: checked });
       }
-    } else if (typeof window !== "undefined") {
-      localStorage.setItem("musicOn", JSON.stringify(checked));
+    } else {
+      safeLocalStorageSetItem("musicOn", JSON.stringify(checked));
     }
   };
 
@@ -271,8 +269,8 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
       if (updateUser) {
         void updateUser({ sfxOn: checked });
       }
-    } else if (typeof window !== "undefined") {
-      localStorage.setItem("sfxOn", JSON.stringify(checked));
+    } else {
+      safeLocalStorageSetItem("sfxOn", JSON.stringify(checked));
     }
   };
 
@@ -286,9 +284,7 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
     const safePercent = Math.min(100, Math.max(0, percent));
     const newVolume = safePercent / 100;
     setSfxVolume(newVolume);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("sfxVolume", JSON.stringify(newVolume));
-    }
+    safeLocalStorageSetItem("sfxVolume", JSON.stringify(newVolume));
   };
 
   const isPanel = variant === "panel";

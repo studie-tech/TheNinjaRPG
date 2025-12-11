@@ -37,6 +37,7 @@ import { attributes } from "@/validators/register";
 import { colors, skin_colors } from "@/validators/register";
 import { genders } from "@/validators/register";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
+import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { sendGTMEvent } from "@next/third-parties/google";
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
@@ -120,11 +121,9 @@ const Register: React.FC = () => {
 
   // Get unsigned user settings from localStorage
   const getLocalStorageBoolean = (key: string, defaultValue: boolean): boolean => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem(key);
-      if (saved !== null) {
-        return JSON.parse(saved) as boolean;
-      }
+    const saved = safeLocalStorageGetItem(key);
+    if (saved !== null) {
+      return JSON.parse(saved) as boolean;
     }
     return defaultValue;
   };
@@ -261,12 +260,12 @@ const Register: React.FC = () => {
   // If we have local storage referrer, set it as default value
   useEffect(() => {
     // Recruiter user
-    const referrer = localStorage.getItem("ref");
+    const referrer = safeLocalStorageGetItem("ref");
     if (referrer) {
       form.setValue("recruiter_userid", referrer);
     }
     // Source
-    const source = localStorage.getItem("utm_source");
+    const source = safeLocalStorageGetItem("utm_source");
     if (source) {
       form.setValue("utm_source", source);
     }

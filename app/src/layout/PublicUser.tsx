@@ -74,6 +74,7 @@ import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
 import { useUserEditForm } from "@/hooks/profile";
 import { Chart as ChartJS } from "chart.js/auto";
+import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import type { UpdateUserSchema } from "@/validators/user";
 import { groupBy } from "@/utils/grouping";
 import { Waypoints } from "lucide-react";
@@ -1506,7 +1507,7 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
     const ctx = chart?.current?.getContext("2d");
     if (ctx && datasets) {
       // Update stats chart
-      const localTheme = localStorage.getItem("theme");
+      const localTheme = safeLocalStorageGetItem("theme");
       ChartJS.defaults.color = localTheme === "dark" ? "#FFFFFF" : "#000000";
       const myChart = new ChartJS(ctx, {
         type: "bar",

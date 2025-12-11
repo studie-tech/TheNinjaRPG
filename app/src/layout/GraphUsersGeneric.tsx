@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useCallback, useEffect } from "react";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { getSearchValidator } from "@/validators/register";
@@ -25,7 +26,7 @@ interface GraphUsersGenericProps {
 }
 const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
   // State
-  const localTheme = localStorage.getItem("theme");
+  const localTheme = safeLocalStorageGetItem("theme");
   const cy = useRef<Cytoscape.Core | null>(null);
   const isMounted = useRef(true);
   const color = localTheme === "dark" ? "white" : "black";

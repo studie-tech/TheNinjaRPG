@@ -7,6 +7,7 @@ import { Settings2, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGameSettings } from "@/layout/GameSettings";
 import { SortableList } from "@/components/ui/sortable-list";
+import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import {
   COMBAT_LAYOUT_COMPONENTS,
   DEFAULT_LAYOUT_ORDER,
@@ -48,8 +49,8 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
       if (updateUser) {
         void updateUser({ sfxOn: checked });
       }
-    } else if (typeof window !== "undefined") {
-      localStorage.setItem("sfxOn", JSON.stringify(checked));
+    } else {
+      safeLocalStorageSetItem("sfxOn", JSON.stringify(checked));
     }
   };
 

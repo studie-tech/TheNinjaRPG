@@ -45,7 +45,7 @@ import type { CachedIntersections } from "@/libs/combat/types";
 import type { CombatAction } from "@/libs/combat/types";
 import type { BattleState } from "@/libs/combat/types";
 import type { TerrainHex } from "@/libs/hexgrid";
-import { useLocalStorage } from "@/hooks/localstorage";
+import { useLocalStorage, safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { useBattleMaps } from "@/hooks/combat";
 import type { CombatPreferences } from "@/hooks/combat";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
@@ -634,13 +634,10 @@ const Combat: React.FC<CombatProps> = (props) => {
       // spriteMixer.addEventListener("finished", function (event) {});
 
       // Get SFX volume from localStorage
-      const sfxVolume =
-        typeof window !== "undefined"
-          ? (() => {
-              const saved = localStorage.getItem("sfxVolume");
-              return saved !== null ? (JSON.parse(saved) as number) : 0.8;
-            })()
-          : 0.8;
+      const sfxVolume = (() => {
+        const saved = safeLocalStorageGetItem("sfxVolume");
+        return saved !== null ? (JSON.parse(saved) as number) : 0.8;
+      })();
 
       // Render the image
       let animationId = 0;

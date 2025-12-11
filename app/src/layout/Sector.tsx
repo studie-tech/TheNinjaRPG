@@ -13,7 +13,7 @@ import { LogbookEntry } from "@/layout/Logbook";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "src/components/ui/label";
 import { z } from "zod";
-import { useLocalStorage } from "@/hooks/localstorage";
+import { useLocalStorage, safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import { useForm } from "react-hook-form";
 import { Vector2, OrthographicCamera, Group } from "three";
@@ -462,7 +462,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       const now = Date.now();
       const lastAttackTime = lastAutoAttackTime.current;
       const attackDelaySeconds = parseInt(
-        localStorage.getItem("autoAttackDelay") || "5",
+        safeLocalStorageGetItem("autoAttackDelay") || "5",
       );
       const attackDelayMs = attackDelaySeconds * 1000; // Convert seconds to milliseconds
 
@@ -494,7 +494,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         if (RANKS_RESTRICTED_FROM_PVP.includes(user.rank)) return false;
 
         // Check minimum level requirement
-        const minLevel = parseInt(localStorage.getItem("autoAttackMinLevel") || "1");
+        const minLevel = parseInt(safeLocalStorageGetItem("autoAttackMinLevel") || "1");
         if (user.level < minLevel) return false;
 
         return true;
