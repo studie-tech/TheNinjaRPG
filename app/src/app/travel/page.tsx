@@ -64,6 +64,7 @@ import type { UserItemWithItem } from "@/drizzle/schema";
 
 const Map = dynamic(() => import("@/layout/Map"), { ssr: false });
 const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
+const MapLoadError = dynamic(() => import("@/layout/MapLoadError"), { ssr: false });
 
 export default function Travel() {
   // What is shown on this page
@@ -139,7 +140,7 @@ export default function Travel() {
     : "";
   const globalLink = `Global`;
 
-  useMap(setGlobe);
+  const { hasError: mapLoadError } = useMap(setGlobe);
 
   // Selecting sector to highlight form
   const sectorSelect = z.object({
@@ -490,6 +491,7 @@ export default function Travel() {
             hexasphere={globe}
           />
         )}
+        {isGlobal && mapLoadError && <MapLoadError />}
         {showSector && SectorComponent}
         {!villages && <Loader explanation="Loading data" />}
         {showModal && globe && userData && targetSector && (

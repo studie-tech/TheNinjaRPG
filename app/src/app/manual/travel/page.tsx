@@ -11,10 +11,13 @@ import type { GlobalMapData } from "@/libs/threejs/types";
 const GlobalMap = dynamic(() => import("@/layout/Map"), {
   ssr: false,
 });
+const MapLoadError = dynamic(() => import("@/layout/MapLoadError"), {
+  ssr: false,
+});
 
 export default function ManualTravel() {
   const [globe, setGlobe] = useState<GlobalMapData | null>(null);
-  useMap(setGlobe);
+  const { hasError: mapLoadError } = useMap(setGlobe);
   const { data: villages } = api.village.getAll.useQuery(undefined);
 
   return (
@@ -34,6 +37,7 @@ export default function ManualTravel() {
         {villages && globe && (
           <GlobalMap intersection={false} highlights={villages} hexasphere={globe} />
         )}
+        {mapLoadError && <MapLoadError />}
       </ContentBox>
     </>
   );

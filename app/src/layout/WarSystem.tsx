@@ -60,6 +60,7 @@ import type { ArrayElement } from "@/utils/typeutils";
 import Confirm2 from "@/layout/Confirm2";
 
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
+const MapLoadError = dynamic(() => import("@/layout/MapLoadError"), { ssr: false });
 
 /**
  * Wars Component
@@ -372,7 +373,7 @@ export const WarMap: React.FC<{
     });
 
   // Set globe data
-  useMap(setGlobe);
+  const { hasError: mapLoadError } = useMap(setGlobe);
 
   // Derived
   const isLoading =
@@ -485,6 +486,7 @@ export const WarMap: React.FC<{
           hexasphere={globe}
         />
       )}
+      {mapLoadError && <MapLoadError />}
       {showModal && globe && userData && targetSector && (
         <Modal2
           title={modalTitle}
