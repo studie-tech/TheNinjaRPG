@@ -80,9 +80,16 @@ function ensureBrowserErrorHandler() {
     if (event.reason instanceof Error) {
       Sentry.captureException(event.reason);
     } else {
-      Sentry.captureException(
-        new Error(`UnhandledRejection: ${JSON.stringify(event.reason)}`),
-      );
+      // Safely serialize the rejection reason without circular references or read-only properties
+      let reasonStr: string;
+      try {
+        reasonStr = JSON.stringify(event.reason);
+      } catch (stringifyError) {
+        // If JSON.stringify fails (e.g., circular references), use a fallback
+        reasonStr = String(event.reason);
+      }
+      // Create a completely new Error object without any reference to the original reason
+      Sentry.captureException(new Error(`UnhandledRejection: ${reasonStr}`));
     }
   });
 }
