@@ -11,7 +11,12 @@ import {
   type BufferGeometry,
   type Texture,
 } from "three";
-import { loadTexture, createTexture, createSpriteMaterial } from "@/libs/threejs/util";
+import {
+  loadTexture,
+  createTexture,
+  createSpriteMaterial,
+  withSpriteMaterialFallback,
+} from "@/libs/threejs/util";
 import { playPreloadedAudio } from "@/utils/audio";
 import { getPossibleActionTiles, findHex, PathCalculator } from "../hexgrid";
 import {
@@ -66,6 +71,8 @@ import type { ReturnedUserState, CombatAction } from "@/libs/combat/types";
 import type { ReturnedBattle, CachedIntersections } from "@/libs/combat/types";
 import type { BattleMaps } from "@/hooks/combat";
 import type { SpriteMixer } from "@/libs/threejs/SpriteMixer";
+
+const resolveSpriteMaterial = withSpriteMaterialFallback(createSpriteMaterial);
 
 // Performance optimization: Cache status bar textures to avoid recreating canvases
 // Key format: "width-height-color-stroke"
@@ -498,7 +505,7 @@ export const drawCombatEffect = (info: {
           const obj = gameAssets.find((a) => a.id === effect.staticAssetPath);
           if (obj) {
             const texture = loadTexture(obj.image);
-            const material = createSpriteMaterial(texture);
+            const material = resolveSpriteMaterial(texture);
             const sprite = new Sprite(material);
             sprite.scale.set(w, h, 1);
             sprite.position.set(w / 2, h / 2, 0);
@@ -691,7 +698,7 @@ export const createUserSprite = (
   const texture = loadTexture(IMG_SECTOR_SHADOW);
   texture.generateMipmaps = false;
   texture.minFilter = LinearFilter;
-  const shadow_material = createSpriteMaterial(texture);
+  const shadow_material = resolveSpriteMaterial(texture);
   const shadow_sprite = new Sprite(shadow_material);
   shadow_sprite.scale.set(w * 0.8, h * 0.5, 1);
   shadow_sprite.position.set(w / 2, h * 0.3, USER_LAYER);
@@ -707,7 +714,7 @@ export const createUserSprite = (
       map.repeat.set(-1, 1);
       map.offset.set(1, 0);
     }
-    const material = createSpriteMaterial(map);
+    const material = resolveSpriteMaterial(map);
     material.side = DoubleSide;
     const sprite = new Sprite(material);
     sprite.scale.set(-2 * h * 0.8, 2 * h * 0.8, 1);
@@ -716,7 +723,7 @@ export const createUserSprite = (
     // Star on summons
     if (userData.isSummon && userData.controllerId === playerId) {
       const marker = loadTexture(IMG_BATTLEFIELD_STAR);
-      const markerMat = createSpriteMaterial(marker);
+      const markerMat = resolveSpriteMaterial(marker);
       const markerSprite = new Sprite(markerMat);
       markerSprite.scale.set(h / 2.5, h / 2.5, 1);
       markerSprite.position.set(w / 2, h * 0.2, USER_LAYER);
@@ -725,7 +732,7 @@ export const createUserSprite = (
   } else {
     // Highlight background in village color
     const highlightTexture = loadTexture(IMG_SECTOR_USER_MARKER);
-    const highlightMaterial = createSpriteMaterial(highlightTexture, highlightTexture);
+    const highlightMaterial = resolveSpriteMaterial(highlightTexture, highlightTexture);
 
     // Highlight sprite
     const highlightColor = userData.village
@@ -742,7 +749,7 @@ export const createUserSprite = (
 
     // Marker background in white
     const marker = loadTexture(IMG_SECTOR_USER_MARKER);
-    const markerMat = createSpriteMaterial(marker, marker);
+    const markerMat = resolveSpriteMaterial(marker, marker);
     const markerSprite = new Sprite(markerMat);
     markerSprite.userData.type = "marker";
     markerSprite.scale.set(0.9 * h, h * 1.1, 1);
@@ -754,7 +761,7 @@ export const createUserSprite = (
     const map = loadTexture(userData.avatar ? `${userData.avatar}?1=1` : "");
     map.generateMipmaps = false;
     map.minFilter = LinearFilter;
-    const material = createSpriteMaterial(map, alphaMap);
+    const material = resolveSpriteMaterial(map, alphaMap);
     const sprite = new Sprite(material);
     sprite.scale.set(h * 0.8, h * 0.8, 1);
     sprite.position.set(w / 2, h * 1.0, USER_LAYER);
@@ -772,7 +779,7 @@ export const createUserSprite = (
       clanBorderSprite.scale.set(-1 * h * 0.3 - 2, h * 0.3 + 2, 1);
       clanBorderSprite.position.set(0.9 * w, h * 1.4, USER_LAYER);
       group.add(clanBorderSprite);
-      const clanMaterial = createSpriteMaterial(clanTexture, alphaMap);
+      const clanMaterial = resolveSpriteMaterial(clanTexture, alphaMap);
       const clanSprite = new Sprite(clanMaterial);
       clanSprite.scale.set(-1 * h * 0.3, h * 0.3, 1);
       clanSprite.position.set(0.9 * w, h * 1.4, USER_LAYER);
@@ -783,7 +790,7 @@ export const createUserSprite = (
   // If this is the original and our user (we have SP/CP), then show a star
   if ("curStamina" in userData && userData.isOriginal && !userData.isAi) {
     const marker = loadTexture(IMG_BATTLEFIELD_STAR);
-    const markerMat = createSpriteMaterial(marker);
+    const markerMat = resolveSpriteMaterial(marker);
     const markerSprite = new Sprite(markerMat);
     markerSprite.scale.set(h / 2.5, h / 2.5, 1);
     markerSprite.position.set(w / 2, h * 0.4, USER_LAYER);
@@ -815,7 +822,7 @@ export const createUserSprite = (
 
   // Create tombstone but hide it for now
   const tomb_texture = loadTexture(IMG_BATTLEFIELD_TOMBSTONE);
-  const tomb_material = createSpriteMaterial(tomb_texture);
+  const tomb_material = resolveSpriteMaterial(tomb_texture);
   const tomb_sprite = new Sprite(tomb_material);
   tomb_sprite.name = "tombstone";
   tomb_sprite.scale.set(h * 0.5, h * 0.5, 1);

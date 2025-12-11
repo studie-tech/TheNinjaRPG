@@ -64,6 +64,36 @@ export const createSpriteMaterial = (map: Texture, alphaMap?: Texture) => {
 };
 
 /**
+ * Wraps a sprite material factory with a runtime fallback that instantiates a
+ * `SpriteMaterial` directly when the provided factory is unavailable (e.g.
+ * undefined import because of Turbopack module resolution issues).
+ */
+export const withSpriteMaterialFallback = (
+  factory: ((map: Texture, alphaMap?: Texture) => SpriteMaterial) | undefined,
+) => {
+  let hasWarned = false;
+
+  return (map: Texture, alphaMap?: Texture) => {
+    if (typeof factory === "function") {
+      return factory(map, alphaMap);
+    }
+
+    if (!hasWarned) {
+      console.warn(
+        "[threejs/util] createSpriteMaterial unavailable, using direct SpriteMaterial fallback",
+      );
+      hasWarned = true;
+    }
+
+    return new SpriteMaterial({
+      map,
+      alphaMap,
+      alphaTest: 0.5,
+    });
+  };
+};
+
+/**
  * Preload a set of texture URLs into memory so they are instantly available.
  */
 export const preloadTextures = async (paths: string[]) => {

@@ -6,7 +6,6 @@ import {
   DoubleSide,
   AddOperation,
   Texture,
-  SpriteMaterial,
 } from "three";
 import {
   IMG_BG_OCEAN,
@@ -14,7 +13,11 @@ import {
   IMG_BG_SNOW,
   ASSETS_LAYER,
 } from "@/drizzle/constants";
-import { loadTexture, createSpriteMaterial } from "@/libs/threejs/util";
+import {
+  loadTexture,
+  createSpriteMaterial,
+  withSpriteMaterialFallback,
+} from "@/libs/threejs/util";
 import { applyWindShader } from "@/libs/threejs/shaders";
 import { COMBAT_BIOMES } from "@/drizzle/constants";
 import { getBiomeFromGlobalTile } from "@/libs/travel";
@@ -201,26 +204,7 @@ export const getMapSprites = (
   return sprites;
 };
 
-let hasWarnedSpriteMaterialFallback = false;
-
-const resolveSpriteMaterial = (map: Texture, alphaMap?: Texture) => {
-  if (typeof createSpriteMaterial === "function") {
-    return createSpriteMaterial(map, alphaMap);
-  }
-
-  if (!hasWarnedSpriteMaterialFallback) {
-    hasWarnedSpriteMaterialFallback = true;
-    console.warn(
-      "[threejs/biome] createSpriteMaterial unavailable, using SpriteMaterial fallback",
-    );
-  }
-
-  return new SpriteMaterial({
-    map,
-    alphaMap,
-    alphaTest: 0.5,
-  });
-};
+const resolveSpriteMaterial = withSpriteMaterialFallback(createSpriteMaterial);
 
 const loadSectorAsset = (
   filepath: string,
