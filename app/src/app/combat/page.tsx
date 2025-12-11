@@ -18,7 +18,7 @@ import { useTutorialStep } from "@/hooks/tutorial";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import { useCombatPreferences, type CombatLayoutComponentId } from "@/hooks/combat";
 
-const Combat = dynamic(() => import("@/layout/Combat"));
+const Combat = dynamic(() => import("@/layout/Combat"), { ssr: false });
 
 export default function CombatPage() {
   // State
