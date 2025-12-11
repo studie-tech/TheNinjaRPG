@@ -1,7 +1,7 @@
 // TheNinja-RPG Progressive Web App Service Worker
 
-const CACHE_NAME = "theninja-rpg-v4";
-const STATIC_CACHE_NAME = "theninja-rpg-static-v4";
+const CACHE_NAME = "theninja-rpg-v5";
+const STATIC_CACHE_NAME = "theninja-rpg-static-v5";
 
 // Files to cache for offline functionality
 const STATIC_FILES = ["/manifest.json", "/favicon.ico", "/offline.html"];
@@ -62,35 +62,48 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // For successful responses, just return them without caching app routes
+    (async () => {
+      try {
+        // Try to fetch from network
+        const response = await fetch(event.request);
         return response;
-      })
-      .catch(() => {
+      } catch (error) {
         // Network failed, check if it's a navigation request
-        if (
+        // Add null checks for iOS Safari compatibility
+        const acceptHeader = event.request.headers.get("accept");
+        const isNavigationRequest =
           event.request.mode === "navigate" ||
           event.request.destination === "document" ||
           (event.request.method === "GET" &&
-            event.request.headers.get("accept").includes("text/html"))
-        ) {
+            acceptHeader &&
+            acceptHeader.includes("text/html"));
+
+        if (isNavigationRequest) {
           // For any navigation/page request when offline, serve the offline page
-          return caches.match("/offline.html");
+          const offlineResponse = await caches.match("/offline.html");
+          // Ensure we always return a valid Response, even if offline.html is not cached
+          return (
+            offlineResponse ||
+            new Response("Offline - Please check your internet connection", {
+              status: 503,
+              statusText: "Service Unavailable",
+              headers: { "Content-Type": "text/html" },
+            })
+          );
         }
 
         // For static assets, try to serve from cache
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
 
-          // For other requests that fail, return a generic offline response
-          return new Response("Offline", {
-            status: 503,
-            statusText: "Service Unavailable",
-          });
+        // For other requests that fail, return a generic offline response
+        return new Response("Offline", {
+          status: 503,
+          statusText: "Service Unavailable",
         });
-      }),
+      }
+    })(),
   );
 });
