@@ -632,9 +632,14 @@ export const combatRouter = createTRPCRouter({
               }
             }
 
-            // Stop profiling
+            // Stop profiling and flush Sentry data (non-blocking with error handling)
             Sentry.profiler.stopProfiler();
-            await Sentry.flush(15000);
+            void Sentry.flush(15000).catch((e) => {
+              console.error(
+                `[performAction] An exception was thrown while running Sentry.flush()`,
+                e,
+              );
+            });
 
             // Return the new battle + result state if applicable
             return {
