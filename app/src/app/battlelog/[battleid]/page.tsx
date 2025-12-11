@@ -14,7 +14,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import ReportUser from "@/layout/Report";
 import { Flag } from "lucide-react";
 
-const Combat = dynamic(() => import("@/layout/Combat"));
+const Combat = dynamic(() => import("@/layout/Combat"), { ssr: false });
 
 export default function BattleLog(props: { params: Promise<{ battleid: string }> }) {
   const params = use(props.params);
