@@ -10,6 +10,7 @@ import {
   CanvasTexture,
 } from "three";
 import fetchRetry from "fetch-retry";
+import * as Sentry from "@sentry/nextjs";
 import { IMG_MAP_HEXASPHERE } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT, IMG_SECTOR_USER_SPRITE_MASK } from "@/drizzle/constants";
 import { loadTexture } from "@/libs/threejs/util";
@@ -21,14 +22,110 @@ import type { GlobalMapData } from "@/libs/threejs/types";
  */
 export const fetchMap = async () => {
   const fetch = fetchRetry(global.fetch);
-  const response = await fetch(IMG_MAP_HEXASPHERE, {
-    retries: 3,
-    retryDelay: function (attempt) {
-      return Math.pow(2, attempt) * 1000; // 1000, 2000, 4000
-    },
-  });
-  const hexasphere = await response.json().then((data) => data as GlobalMapData);
-  return hexasphere;
+  
+  try {
+    const response = await fetch(IMG_MAP_HEXASPHERE, {
+      retries: 3,
+      retryDelay: function (attempt) {
+        return Math.pow(2, attempt) * 1000; // 1000, 2000, 4000
+      },
+      retryOn: function (attempt, error, response) {
+        // Retry on network errors (error is not null)
+        if (error !== null) {
+          console.warn(
+            `[fetchMap] Network error on attempt ${attempt}, retrying...`,
+            error
+          );
+          return true;
+        }
+        
+        // Retry on non-OK HTTP responses (e.g., 500, 502, 503, 504)
+        if (response && !response.ok) {
+          console.warn(
+            `[fetchMap] HTTP error ${response.status} on attempt ${attempt}, retrying...`
+          );
+          return true;
+        }
+        
+        // Don't retry if we got a successful response
+        return false;
+      },
+    });
+
+    // Check if response is OK before attempting to parse JSON
+    if (!response.ok) {
+      const errorMessage = `Failed to fetch map data: HTTP ${response.status} ${response.statusText}`;
+      
+      // Try to read response text for additional context
+      let responseText = "";
+      try {
+        responseText = await response.text();
+      } catch (e) {
+        // Ignore errors reading response text
+      }
+      
+      // Log to Sentry with context
+      Sentry.captureException(new Error(errorMessage), {
+        extra: {
+          url: IMG_MAP_HEXASPHERE,
+          status: response.status,
+          statusText: response.statusText,
+          responseText: responseText.substring(0, 500), // Limit to first 500 chars
+          headers: Object.fromEntries(response.headers.entries()),
+        },
+      });
+      
+      throw new Error(errorMessage);
+    }
+
+    // Attempt to parse JSON with error handling
+    let hexasphere: GlobalMapData;
+    try {
+      hexasphere = await response.json();
+    } catch (jsonError) {
+      // Try to get response text for debugging
+      let responseText = "";
+      try {
+        // Clone the response before reading text (can only read body once)
+        const clonedResponse = response.clone();
+        responseText = await clonedResponse.text();
+      } catch (e) {
+        responseText = "(unable to read response text)";
+      }
+      
+      const errorMessage = `Failed to parse map data as JSON: ${
+        jsonError instanceof Error ? jsonError.message : String(jsonError)
+      }`;
+      
+      // Log to Sentry with context
+      Sentry.captureException(jsonError, {
+        extra: {
+          url: IMG_MAP_HEXASPHERE,
+          status: response.status,
+          responseText: responseText.substring(0, 500), // Limit to first 500 chars
+          contentType: response.headers.get("content-type"),
+          errorMessage,
+        },
+      });
+      
+      throw new Error(errorMessage);
+    }
+
+    return hexasphere;
+  } catch (error) {
+    // Log any uncaught errors to Sentry
+    if (error instanceof Error && !error.message.includes("HTTP")) {
+      Sentry.captureException(error, {
+        extra: {
+          url: IMG_MAP_HEXASPHERE,
+          context: "fetchMap",
+        },
+      });
+    }
+    
+    // Re-throw the error so calling code can handle it
+    throw error;
+  }
 };
 
 /**
