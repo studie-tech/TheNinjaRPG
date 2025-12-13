@@ -17,6 +17,7 @@ import InstallPrompt from "@/components/pwa/InstallPrompt";
 import LayoutSwitcher from "@/layout/LayoutSwitcher";
 import { InstallPromptProvider } from "@/hooks/useInstallPrompt";
 import type { Viewport, Metadata } from "next";
+import Script from "next/script";
 
 import "../styles/globals.css";
 import "sonner/dist/styles.css";
@@ -25,6 +26,47 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="h-full">
+        <Script id="safe-storage-polyfill" strategy="beforeInteractive">
+          {`(() => {
+            if (typeof window === "undefined") return;
+            const stores = [
+              ["localStorage", {}],
+              ["sessionStorage", {}],
+            ];
+            stores.forEach(([key, backingStore]) => {
+              const storage = window[key];
+              if (storage && typeof storage.getItem === "function") {
+                return;
+              }
+              const data = backingStore;
+              const memoryStorage = {
+                getItem: (itemKey) => Object.prototype.hasOwnProperty.call(data, itemKey) ? data[itemKey] : null,
+                setItem: (itemKey, value) => {
+                  data[itemKey] = String(value);
+                },
+                removeItem: (itemKey) => {
+                  delete data[itemKey];
+                },
+                clear: () => {
+                  Object.keys(data).forEach((dataKey) => delete data[dataKey]);
+                },
+                key: (index) => {
+                  const keys = Object.keys(data);
+                  return typeof index === "number" && index >= 0 ? keys[index] ?? null : null;
+                },
+                get length() {
+                  return Object.keys(data).length;
+                },
+              };
+              Object.defineProperty(window, key, {
+                value: memoryStorage,
+                configurable: true,
+                enumerable: true,
+                writable: false,
+              });
+            });
+          })();`}
+        </Script>
         <NextSSRPlugin
           /** https://docs.uploadthing.com/getting-started/appdir */
           routerConfig={extractRouterConfig(ourFileRouter)}
