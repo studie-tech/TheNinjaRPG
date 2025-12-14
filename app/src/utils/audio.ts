@@ -2,6 +2,11 @@
  * Audio utility functions for handling browser compatibility and user interactions
  */
 
+import {
+  safeSessionStorageGetItem,
+  safeSessionStorageSetItem,
+} from "@/hooks/localstorage";
+
 /**
  * Detect if the current browser is Safari or iOS
  */
@@ -53,7 +58,7 @@ export const hasUserInteracted = (): boolean => {
   if (typeof window === "undefined") return false;
 
   // Check if we've stored user interaction flag
-  return sessionStorage.getItem("userInteracted") === "true";
+  return safeSessionStorageGetItem("userInteracted") === "true";
 };
 
 /**
@@ -62,7 +67,7 @@ export const hasUserInteracted = (): boolean => {
 export const markUserInteraction = (): void => {
   if (typeof window === "undefined") return;
 
-  sessionStorage.setItem("userInteracted", "true");
+  safeSessionStorageSetItem("userInteracted", "true");
 };
 
 /**

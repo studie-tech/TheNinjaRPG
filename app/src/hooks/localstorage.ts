@@ -66,6 +66,64 @@ export const safeLocalStorageRemoveItem = (key: string): boolean => {
   }
 };
 
+/**
+ * Safely gets an item from sessionStorage
+ * @param key - The key to retrieve
+ * @returns The value from sessionStorage, or null if sessionStorage is unavailable or key doesn't exist
+ */
+export const safeSessionStorageGetItem = (key: string): string | null => {
+  try {
+    // Check if we're in a browser environment and sessionStorage is available
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      return sessionStorage.getItem(key);
+    }
+    return null;
+  } catch (error) {
+    // Handle any errors that might occur (e.g., SecurityError, QuotaExceededError)
+    console.warn(`Failed to get item from sessionStorage: ${key}`, error);
+    return null;
+  }
+};
+
+/**
+ * Safely sets an item in sessionStorage
+ * @param key - The key to set
+ * @param value - The value to store
+ * @returns true if successful, false otherwise
+ */
+export const safeSessionStorageSetItem = (key: string, value: string): boolean => {
+  try {
+    // Check if we're in a browser environment and sessionStorage is available
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      sessionStorage.setItem(key, value);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    // Handle any errors that might occur (e.g., SecurityError, QuotaExceededError)
+    console.warn(`Failed to set item in sessionStorage: ${key}`, error);
+    return false;
+  }
+};
+
+/**
+ * Safely removes an item from sessionStorage
+ * @param key - The key to remove
+ * @returns true if successful, false otherwise
+ */
+export const safeSessionStorageRemoveItem = (key: string): boolean => {
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      sessionStorage.removeItem(key);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.warn(`Failed to remove item from sessionStorage: ${key}`, error);
+    return false;
+  }
+};
+
 export const useLocalStorage = <T>(
   key: string,
   initialValue: T,

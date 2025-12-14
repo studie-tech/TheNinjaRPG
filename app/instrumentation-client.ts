@@ -42,6 +42,7 @@ Sentry.init({
     "https://reactjs.org/docs/error-decoder.html?invariant=425", // There was an error while hydrating...
     "Failed to execute 'send' on 'WebSocket': Still in CONNECTING state.", // WebSocket error
     "Failed to read the 'localStorage' property from 'Window': Access is denied for this document.", // LocalStorage error
+    "Failed to read the 'sessionStorage' property from 'Window': Access is denied for this document.", // SessionStorage error
     "Can't find variable: __firefox__", // Firefox error
     "Failed to load chunk", // New deployment
     "Invalid call to runtime.sendMessage()", // Browser extension error, not from our app
