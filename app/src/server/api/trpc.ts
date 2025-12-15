@@ -42,9 +42,20 @@ export const createAppTRPCContext = async (opts: {
   readHeaders: ReadonlyHeaders;
   readCookies: ReadonlyRequestCookies;
 }) => {
-  // Get user ID - SIMPLE
-  const sesh = await auth();
-  const userId = sesh.userId;
+  // Get user ID - fall back to anonymous if Clerk is temporarily unavailable
+  let userId: string | null | undefined;
+  try {
+    const sesh = await auth();
+    userId = sesh.userId;
+  } catch (error) {
+    userId = null;
+    Sentry.captureException(error, {
+      level: "warning",
+      tags: { scope: "createAppTRPCContext" },
+      extra: { message: "Failed to resolve Clerk session, continuing as anonymous" },
+    });
+    console.warn("Failed to fetch Clerk auth state, treating request as unsigned", error);
+  }
   // Get IP
   const { readHeaders } = opts;
   const ip = readHeaders.get("x-forwarded-for") ?? undefined;
