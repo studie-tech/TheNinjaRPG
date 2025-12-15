@@ -6,9 +6,10 @@ import type {
   GameSetting,
   Clan,
 } from "@/drizzle/schema";
-import { USER_CAPS, HP_PER_LVL, SP_PER_LVL, CP_PER_LVL } from "@/drizzle/constants";
+import { HP_PER_LVL, SP_PER_LVL, CP_PER_LVL } from "@/drizzle/constants";
 import { CLAN_MAX_REGEN_BOOST } from "@/drizzle/constants";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { getUserCaps } from "@/utils/user-caps";
 import { getStrucBoost } from "@/utils/village";
 import { getReducedGainsDays } from "@/libs/train";
 import { getGameSettingBoost } from "@/libs/gamesettings";
@@ -70,20 +71,19 @@ type StatDistribution = {
  * @returns void
  */
 export function capUserStats(user: UserData) {
-  const stats_cap = USER_CAPS[user.rank].STATS_CAP;
-  const gens_cap = USER_CAPS[user.rank].GENS_CAP;
-  if (user.ninjutsuOffence > stats_cap) user.ninjutsuOffence = stats_cap;
-  if (user.genjutsuOffence > stats_cap) user.genjutsuOffence = stats_cap;
-  if (user.taijutsuOffence > stats_cap) user.taijutsuOffence = stats_cap;
-  if (user.bukijutsuOffence > stats_cap) user.bukijutsuOffence = stats_cap;
-  if (user.ninjutsuDefence > stats_cap) user.ninjutsuDefence = stats_cap;
-  if (user.genjutsuDefence > stats_cap) user.genjutsuDefence = stats_cap;
-  if (user.taijutsuDefence > stats_cap) user.taijutsuDefence = stats_cap;
-  if (user.bukijutsuDefence > stats_cap) user.bukijutsuDefence = stats_cap;
-  if (user.strength > gens_cap) user.strength = gens_cap;
-  if (user.speed > gens_cap) user.speed = gens_cap;
-  if (user.intelligence > gens_cap) user.intelligence = gens_cap;
-  if (user.willpower > gens_cap) user.willpower = gens_cap;
+  const { STATS_CAP: statsCap, GENS_CAP: gensCap } = getUserCaps(user.rank);
+  if (user.ninjutsuOffence > statsCap) user.ninjutsuOffence = statsCap;
+  if (user.genjutsuOffence > statsCap) user.genjutsuOffence = statsCap;
+  if (user.taijutsuOffence > statsCap) user.taijutsuOffence = statsCap;
+  if (user.bukijutsuOffence > statsCap) user.bukijutsuOffence = statsCap;
+  if (user.ninjutsuDefence > statsCap) user.ninjutsuDefence = statsCap;
+  if (user.genjutsuDefence > statsCap) user.genjutsuDefence = statsCap;
+  if (user.taijutsuDefence > statsCap) user.taijutsuDefence = statsCap;
+  if (user.bukijutsuDefence > statsCap) user.bukijutsuDefence = statsCap;
+  if (user.strength > gensCap) user.strength = gensCap;
+  if (user.speed > gensCap) user.speed = gensCap;
+  if (user.intelligence > gensCap) user.intelligence = gensCap;
+  if (user.willpower > gensCap) user.willpower = gensCap;
 }
 
 /**
@@ -93,9 +93,8 @@ export function capUserStats(user: UserData) {
  * @returns
  */
 export function getSoftCappedExperience(user: UserData) {
-  const stats_cap = USER_CAPS[user.rank].STATS_CAP;
-  const gens_cap = USER_CAPS[user.rank].GENS_CAP;
-  return 5 * stats_cap + 4 * gens_cap;
+  const { STATS_CAP: statsCap, GENS_CAP: gensCap } = getUserCaps(user.rank);
+  return 5 * statsCap + 4 * gensCap;
 }
 
 /** Scale stats of user, and return total number of experience / stat points */

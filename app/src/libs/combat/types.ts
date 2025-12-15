@@ -7,13 +7,9 @@ import { ElementNames } from "@/drizzle/constants";
 import { DateTimeRegExp } from "@/utils/regex";
 import { StatTypes, GeneralTypes, PoolTypes } from "@/drizzle/constants";
 import { SkillTreeTargets, SkillTreeEntryTypes } from "@/drizzle/constants";
-import {
-  MAX_STATS_CAP,
-  MAX_GENS_CAP,
-  USER_CAPS,
-  AdjustableBasicActions,
-} from "@/drizzle/constants";
+import { MAX_STATS_CAP, MAX_GENS_CAP, AdjustableBasicActions } from "@/drizzle/constants";
 import { rewardFields } from "@/validators/objectives";
+import { getUserCaps } from "@/utils/user-caps";
 import type { StatType, GeneralType, PoolType, ElementName } from "@/drizzle/constants";
 import type { publicState } from "@/libs/combat/constants";
 import type { StatNames, GenNames } from "@/libs/combat/constants";
@@ -1510,8 +1506,9 @@ const roundStat = (stat: number) => {
  * @returns - zod schema
  */
 export const createStatSchema = (min = 10, start = 10, user?: UserData) => {
-  const gens_cap = user ? USER_CAPS[user.rank].GENS_CAP : MAX_GENS_CAP;
-  const stats_cap = user ? USER_CAPS[user.rank].STATS_CAP : MAX_STATS_CAP;
+  const { GENS_CAP: gens_cap, STATS_CAP: stats_cap } = user
+    ? getUserCaps(user.rank)
+    : { GENS_CAP: MAX_GENS_CAP, STATS_CAP: MAX_STATS_CAP };
   return z.object({
     ninjutsuOffence: z.coerce
       .number()

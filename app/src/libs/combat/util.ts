@@ -15,7 +15,6 @@ import {
 import type { BattleType } from "@/drizzle/constants";
 import { KAGE_CHALLENGE_WIN_PRESTIGE } from "@/drizzle/constants";
 import { CLAN_BATTLE_REWARD_POINTS } from "@/drizzle/constants";
-import { USER_CAPS } from "@/drizzle/constants";
 import { Orientation, Grid, rectangle } from "honeycomb-grid";
 import { defineHex } from "../hexgrid";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
@@ -23,6 +22,7 @@ import { KILLING_NOTORIETY_GAIN } from "@/drizzle/constants";
 import { findWarsWithUser } from "@/libs/war";
 import { STREAK_LEVEL_DIFF } from "@/drizzle/constants";
 import { getShrineBoost } from "@/utils/village";
+import { getUserCaps } from "@/utils/user-caps";
 import { spiral, line, ring, fromCoordinates, Direction } from "honeycomb-grid";
 import {
   SHARED_COOLDOWN_TAGS,
@@ -1238,8 +1238,7 @@ export const calcBattleResult = (
           total = 12;
         }
         let assignedExp = 0;
-        const stats_cap = USER_CAPS[user.rank].STATS_CAP;
-        const gens_cap = USER_CAPS[user.rank].GENS_CAP;
+        const { STATS_CAP: stats_cap, GENS_CAP: gens_cap } = getUserCaps(user.rank);
 
         Object.entries(user.usedStats).forEach(([stat, value]) => {
           assignedExp += distributeExpToStat(
