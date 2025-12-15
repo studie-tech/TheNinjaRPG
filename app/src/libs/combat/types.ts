@@ -1512,79 +1512,33 @@ const roundStat = (stat: number) => {
 export const createStatSchema = (min = 10, start = 10, user?: UserData) => {
   const gens_cap = user ? USER_CAPS[user.rank].GENS_CAP : MAX_GENS_CAP;
   const stats_cap = user ? USER_CAPS[user.rank].STATS_CAP : MAX_STATS_CAP;
+
+  const buildStatField = (current: number | undefined, cap: number) => {
+    const normalizedCurrent = Math.min(current ?? 0, cap);
+    const effectiveMin =
+      user && min < 0 ? Math.max(min, -normalizedCurrent) : min;
+
+    return z.coerce
+      .number()
+      .min(effectiveMin)
+      .max(cap - normalizedCurrent)
+      .transform(roundStat)
+      .default(start);
+  };
+
   return z.object({
-    ninjutsuOffence: z.coerce
-      .number()
-      .min(min)
-      .max(stats_cap - Math.min(user?.ninjutsuOffence || 0, stats_cap))
-      .transform(roundStat)
-      .default(start),
-    taijutsuOffence: z.coerce
-      .number()
-      .min(min)
-      .max(stats_cap - Math.min(user?.taijutsuOffence || 0, stats_cap))
-      .transform(roundStat)
-      .default(start),
-    genjutsuOffence: z.coerce
-      .number()
-      .min(min)
-      .max(stats_cap - Math.min(user?.genjutsuOffence || 0, stats_cap))
-      .transform(roundStat)
-      .default(start),
-    bukijutsuOffence: z.coerce
-      .number()
-      .min(min)
-      .max(stats_cap - Math.min(user?.bukijutsuOffence || 0, stats_cap))
-      .transform(roundStat)
-      .default(start),
-    ninjutsuDefence: z.coerce
-      .number()
-      .min(min)
-      .max(stats_cap - Math.min(user?.ninjutsuDefence || 0, stats_cap))
-      .transform(roundStat)
-      .default(start),
-    taijutsuDefence: z.coerce
-      .number()
-      .min(min)
-      .max(stats_cap - Math.min(user?.taijutsuDefence || 0, stats_cap))
-      .transform(roundStat)
-      .default(start),
-    genjutsuDefence: z.coerce
-      .number()
-      .min(min)
-      .max(stats_cap - Math.min(user?.genjutsuDefence || 0, stats_cap))
-      .transform(roundStat)
-      .default(start),
-    bukijutsuDefence: z.coerce
-      .number()
-      .min(min)
-      .max(stats_cap - Math.min(user?.bukijutsuDefence || 0, stats_cap))
-      .transform(roundStat)
-      .default(start),
-    strength: z.coerce
-      .number()
-      .min(min)
-      .max(gens_cap - Math.min(user?.strength || 0, gens_cap))
-      .transform(roundStat)
-      .default(start),
-    speed: z.coerce
-      .number()
-      .min(min)
-      .max(gens_cap - Math.min(user?.speed || 0, gens_cap))
-      .transform(roundStat)
-      .default(start),
-    intelligence: z.coerce
-      .number()
-      .min(min)
-      .max(gens_cap - Math.min(user?.intelligence || 0, gens_cap))
-      .transform(roundStat)
-      .default(start),
-    willpower: z.coerce
-      .number()
-      .min(min)
-      .max(gens_cap - Math.min(user?.willpower || 0, gens_cap))
-      .transform(roundStat)
-      .default(start),
+    ninjutsuOffence: buildStatField(user?.ninjutsuOffence, stats_cap),
+    taijutsuOffence: buildStatField(user?.taijutsuOffence, stats_cap),
+    genjutsuOffence: buildStatField(user?.genjutsuOffence, stats_cap),
+    bukijutsuOffence: buildStatField(user?.bukijutsuOffence, stats_cap),
+    ninjutsuDefence: buildStatField(user?.ninjutsuDefence, stats_cap),
+    taijutsuDefence: buildStatField(user?.taijutsuDefence, stats_cap),
+    genjutsuDefence: buildStatField(user?.genjutsuDefence, stats_cap),
+    bukijutsuDefence: buildStatField(user?.bukijutsuDefence, stats_cap),
+    strength: buildStatField(user?.strength, gens_cap),
+    speed: buildStatField(user?.speed, gens_cap),
+    intelligence: buildStatField(user?.intelligence, gens_cap),
+    willpower: buildStatField(user?.willpower, gens_cap),
   });
 };
 
