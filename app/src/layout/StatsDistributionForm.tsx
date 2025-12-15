@@ -164,6 +164,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
     isRedistribution ? 10 : 0,
     isRedistribution ? 10 : 0,
     isRedistribution ? undefined : userData,
+    { allowZero: !isRedistribution },
   );
   const defaultValues = statSchema.parse(isRedistribution ? userData : {});
 
@@ -339,6 +340,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
     isRedistribution ? 10 : 0,
     isRedistribution ? 10 : 0,
     isRedistribution ? undefined : userData,
+    { allowZero: !isRedistribution },
   );
   const defaultValues = statSchema.parse(isRedistribution ? userData : {});
   const statNames = Object.keys(defaultValues) as (keyof typeof defaultValues)[];

@@ -1154,7 +1154,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Use earned experience points for stats
   useUnusedExperiencePoints: protectedProcedure
-    .input(createStatSchema(0, 0))
+    .input(createStatSchema(0, 0, undefined, { allowZero: true }))
     .output(
       baseServerResponse.extend({
         data: z
