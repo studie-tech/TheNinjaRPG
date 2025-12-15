@@ -63,72 +63,76 @@ export default function Staff() {
         title="TNR Staff"
         subtitle="Structure"
         topRightContent={
-          isStaff ? (
-            <Link href={`/manual/staff/applications`}>
-              <Button>
-                <List className="w-5 h-5 mr-2" />
-                Applications
-              </Button>
-            </Link>
-          ) : pending ? (
-            <Link href={`/manual/staff/applications/${pending.id}`}>
-              <Button>
-                <FileUser className="w-5 h-5 mr-2" />
-                Your Application
-              </Button>
-            </Link>
-          ) : (
-            <Confirm2
-              title="Apply for Staff"
-              proceed_label="Submit Application"
-              button={
+          <div className="flex gap-2">
+            {pending && (
+              <Link href={`/manual/staff/applications/${pending.id}`}>
                 <Button>
                   <FileUser className="w-5 h-5 mr-2" />
-                  Apply
+                  Your Application
                 </Button>
-              }
-              isValid={form.formState.isValid}
-              onAccept={form.handleSubmit((values) => createApp.mutate(values))}
-            >
-              <div className="space-y-3 w-[80vw] max-w-[520px]">
-                <div>
-                  <div className="mb-1 font-semibold">Target Role</div>
-                  <Select
-                    onValueChange={(v) =>
-                      form.setValue("targetRole", v as StaffApplicationTargetRole, {
-                        shouldValidate: true,
-                      })
-                    }
-                    value={form.watch("targetRole")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {StaffApplicationTargetRoles.map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {r.replace("_", " ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              </Link>
+            )}
+            {isStaff && (
+              <Link href={`/manual/staff/applications`}>
+                <Button variant={pending ? "default" : "outline"}>
+                  <List className="w-5 h-5 mr-2" />
+                  Applications
+                </Button>
+              </Link>
+            )}
+            {!pending && (
+              <Confirm2
+                title="Apply for Staff"
+                proceed_label="Submit Application"
+                button={
+                  <Button>
+                    <FileUser className="w-5 h-5 mr-2" />
+                    Apply
+                  </Button>
+                }
+                isValid={form.formState.isValid}
+                onAccept={form.handleSubmit((values) => createApp.mutate(values))}
+              >
+                <div className="space-y-3 w-[80vw] max-w-[520px]">
+                  <div>
+                    <div className="mb-1 font-semibold">Target Role</div>
+                    <Select
+                      onValueChange={(v) =>
+                        form.setValue("targetRole", v as StaffApplicationTargetRole, {
+                          shouldValidate: true,
+                        })
+                      }
+                      value={form.watch("targetRole")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {StaffApplicationTargetRoles.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {r.replace("_", " ")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <div className="mb-1 font-semibold">Motivation & Qualifications</div>
+                    <Textarea
+                      placeholder="Tell us why you want to join the staff..."
+                      value={form.watch("motivation")}
+                      onChange={(e) =>
+                        form.setValue("motivation", e.target.value, {
+                          shouldValidate: true,
+                        })
+                      }
+                      rows={6}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <div className="mb-1 font-semibold">Motivation & Qualifications</div>
-                  <Textarea
-                    placeholder="Tell us why you want to join the staff..."
-                    value={form.watch("motivation")}
-                    onChange={(e) =>
-                      form.setValue("motivation", e.target.value, {
-                        shouldValidate: true,
-                      })
-                    }
-                    rows={6}
-                  />
-                </div>
-              </div>
-            </Confirm2>
-          )
+              </Confirm2>
+            )}
+          </div>
         }
       >
         <div className="flex flex-col gap-2">
