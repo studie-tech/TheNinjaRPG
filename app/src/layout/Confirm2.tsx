@@ -26,6 +26,11 @@ interface Confirm2Props {
 const Confirm2: React.FC<Confirm2Props> = (props) => {
   const [showModal, setShowModal] = useState<boolean>(false);
 
+  const handleClose = () => {
+    props.onClose?.();
+    setShowModal(false);
+  };
+
   return (
     <>
       <span
@@ -40,24 +45,20 @@ const Confirm2: React.FC<Confirm2Props> = (props) => {
         {props.button}
       </span>
 
-      {showModal && (
-        <Modal2
-          id={props.id}
-          title={props.title}
-          isOpen={showModal}
-          setIsOpen={setShowModal}
-          proceed_label={
-            props.proceed_label !== undefined ? props.proceed_label : "Proceed"
-          }
-          confirmClassName={props.confirmClassName}
-          onAccept={props.onAccept}
-          className={props.className}
-          isValid={props.isValid}
-          onClose={props.onClose}
-        >
-          {props.children}
-        </Modal2>
-      )}
+      <Modal2
+        id={props.id}
+        title={props.title}
+        isOpen={showModal}
+        setIsOpen={setShowModal}
+        proceed_label={props.proceed_label !== undefined ? props.proceed_label : "Proceed"}
+        confirmClassName={props.confirmClassName}
+        onAccept={props.onAccept}
+        className={props.className}
+        isValid={props.isValid}
+        onClose={handleClose}
+      >
+        {props.children}
+      </Modal2>
     </>
   );
 };
