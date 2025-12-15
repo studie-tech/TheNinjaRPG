@@ -146,15 +146,19 @@ export const applyWaveShader = (material: MeshBasicMaterial, randomOffset: numbe
     shader.uniforms.waveFrequency = { value: WAVE_CONFIG.frequency };
     shader.uniforms.waveOffset = { value: randomOffset };
 
-    // Inject uniforms at the top of fragment shader (before main)
-    shader.fragmentShader = `
+    // Inject uniforms right before the main function so precision statements stay first
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "void main() {",
+      `
       uniform float time;
       uniform float waveDistortion;
       uniform float waveSpeed;
       uniform float waveFrequency;
       uniform float waveOffset;
-      ${shader.fragmentShader}
-    `;
+      
+      void main() {
+      `,
+    );
 
     // Modify UV coordinates for wiggle/ripple effect in fragment shader
     shader.fragmentShader = shader.fragmentShader.replace(
