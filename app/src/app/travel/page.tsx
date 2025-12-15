@@ -268,6 +268,7 @@ export default function Travel() {
   // Convenience variables
   const onEdge = isAtEdge(currentPosition);
   const isGlobal = activeTab === globalLink;
+  const viewKey = isGlobal ? "global" : "sector";
   const showGlobal = villages && globe && isGlobal;
   const showSector = villages && currentSector && currentTile && !isGlobal;
 
@@ -474,24 +475,34 @@ export default function Travel() {
           </div>
         }
       >
-        {showGlobal && (
-          <Map
-            intersection={true}
-            highlights={villages}
-            usersHighlighted={trackedBounties}
-            userLocation={true}
-            highlightedSector={highlightedSector}
-            showOwnership={showOwnership}
-            onTileClick={(sector) => {
-              setTargetSector(sector);
-              setShowModal(true);
-            }}
-            hexasphere={globe}
-          />
-        )}
-        {mapError && <MapError />}
-        {showSector && SectorComponent}
-        {!villages && <Loader explanation="Loading data" />}
+        <div key={viewKey} className="relative">
+          {isGlobal
+            ? showGlobal
+              ? (
+                  <>
+                    <Map
+                      intersection={true}
+                      highlights={villages}
+                      usersHighlighted={trackedBounties}
+                      userLocation={true}
+                      highlightedSector={highlightedSector}
+                      showOwnership={showOwnership}
+                      onTileClick={(sector) => {
+                        setTargetSector(sector);
+                        setShowModal(true);
+                      }}
+                      hexasphere={globe}
+                    />
+                    {mapError && <MapError />}
+                  </>
+                )
+              : mapError
+                ? <MapError />
+                : !villages && <Loader explanation="Loading data" />
+            : showSector
+              ? SectorComponent
+              : !villages && <Loader explanation="Loading data" />}
+        </div>
         {showModal && globe && userData && targetSector && (
           <Modal2
             id="tutorial-global-travel"
