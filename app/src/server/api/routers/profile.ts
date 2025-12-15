@@ -618,14 +618,32 @@ export const profileRouter = createTRPCRouter({
           color: "red",
         });
       }
-      // Unused experience points
+      // Unused experience points - only show if not all stats are capped
       if (user.earnedExperience > 0) {
-        notifications.push({
-          id: "tutorial-unassigned-stats",
-          href: "/profile/experience",
-          name: "Assign XP",
-          color: "blue",
-        });
+        const stats_cap = USER_CAPS[user.rank].STATS_CAP;
+        const gens_cap = USER_CAPS[user.rank].GENS_CAP;
+        const allStatsCapped =
+          user.ninjutsuOffence >= stats_cap &&
+          user.ninjutsuDefence >= stats_cap &&
+          user.genjutsuOffence >= stats_cap &&
+          user.genjutsuDefence >= stats_cap &&
+          user.taijutsuOffence >= stats_cap &&
+          user.taijutsuDefence >= stats_cap &&
+          user.bukijutsuOffence >= stats_cap &&
+          user.bukijutsuDefence >= stats_cap &&
+          user.strength >= gens_cap &&
+          user.speed >= gens_cap &&
+          user.intelligence >= gens_cap &&
+          user.willpower >= gens_cap;
+        
+        if (!allStatsCapped) {
+          notifications.push({
+            id: "tutorial-unassigned-stats",
+            href: "/profile/experience",
+            name: "Assign XP",
+            color: "blue",
+          });
+        }
       }
       // Check if reduced gains
       const reducedDays = getReducedGainsDays(user);
