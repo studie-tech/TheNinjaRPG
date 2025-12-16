@@ -47,6 +47,7 @@ import { occupationRouter } from "./routers/occupation";
 import { auctionRouter } from "./routers/auction";
 import { supportRouter } from "./routers/support";
 import { applicationsRouter } from "./routers/applications";
+import "@/server/jobs/shrineBoostScheduler";
 
 /**
  * This is the primary router for your server.

@@ -10,3 +10,4 @@ scripts/theninja_rpg_trailer*
 assets/pwa/*
 assets/sfx/*
 **.pyc
+.env.local

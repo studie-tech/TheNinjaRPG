@@ -19,7 +19,9 @@ export const serverSchema = z.object({
   SENDGRID_API_KEY: z.string().optional(),
   CAPTCHA_SALT: z.string().optional(),
   CLERK_SECRET_KEY: z.string().optional(),
+  CRON_SECRET: z.string().min(16),
 });
+
 
 /**
  * You can't destruct `process.env` as a regular object in the Next.js
@@ -40,7 +42,9 @@ export const serverEnv = {
   SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
   CAPTCHA_SALT: process.env.CAPTCHA_SALT,
   CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
+  CRON_SECRET: process.env.CRON_SECRET,
 };
+
 
 /**
  * Specify your client-side environment variables schema here.
