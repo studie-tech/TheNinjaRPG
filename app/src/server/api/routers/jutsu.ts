@@ -1466,6 +1466,14 @@ export const jutsuDatabaseFilter = (input?: JutsuFilteringSchema) => {
     ...(input?.method ? [eq(jutsu.method, input.method)] : []),
     ...(input?.target ? [eq(jutsu.target, input.target)] : []),
 
+    // Battle usage type filter
+    ...(input?.battleUsageType ? [eq(jutsu.battleUsageType, input.battleUsageType)] : []),
+
+    // Action cost filter
+    ...(input?.actionCostPerc !== undefined
+      ? [eq(jutsu.actionCostPerc, input.actionCostPerc)]
+      : []),
+
     // If hidden not specified, show hidden=false
     ...(input?.hidden !== undefined
       ? [eq(jutsu.hidden, input.hidden)]

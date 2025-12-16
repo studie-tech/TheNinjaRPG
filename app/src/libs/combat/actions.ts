@@ -122,6 +122,20 @@ export const availableUserActions = (
     ...(user?.jutsus
       ? user.jutsus
           .filter((userjutsu) => {
+            // Filter by battleUsageType
+            if (battle) {
+              const isPvEBattle =
+                battle.battleType === "QUEST" ||
+                battle.battleType === "RANDOM_ENCOUNTER";
+              // If PvE battle, exclude PVP-only jutsus
+              if (isPvEBattle && userjutsu.jutsu.battleUsageType === "PVP") {
+                return false;
+              }
+              // If PvP battle, exclude PVE-only jutsus
+              if (!isPvEBattle && userjutsu.jutsu.battleUsageType === "PVE") {
+                return false;
+              }
+            }
             // Filter out jutsus with damage tag when stealthed
             if (isStealth) {
               const offensiveTags = new Set(["damage", "pierce", "drain"]);
@@ -156,6 +170,20 @@ export const availableUserActions = (
           .filter((ui) => {
             if (ui.quantity <= 0) return false;
             if (ui.item.preventBattleUsage) return false;
+            // Filter by battleUsageType
+            if (battle) {
+              const isPvEBattle =
+                battle.battleType === "QUEST" ||
+                battle.battleType === "RANDOM_ENCOUNTER";
+              // If PvE battle, exclude PVP-only items
+              if (isPvEBattle && ui.item.battleUsageType === "PVP") {
+                return false;
+              }
+              // If PvP battle, exclude PVE-only items
+              if (!isPvEBattle && ui.item.battleUsageType === "PVE") {
+                return false;
+              }
+            }
             if (NonActionItemTypes.includes(ui.item.itemType)) return false;
             if (ui.equipped === "NONE") return false;
             if (ui.item?.itemType === "WEAPON") {

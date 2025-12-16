@@ -6,6 +6,7 @@ import { StatTypes } from "@/drizzle/constants";
 import { AttackMethods } from "@/drizzle/constants";
 import { AttackTargets } from "@/drizzle/constants";
 import { JutsuTypes } from "@/drizzle/constants";
+import { BattleUsageTypes } from "@/drizzle/constants";
 
 // Basic name/level search
 export const searchJutsuSchema = z.object({
@@ -41,6 +42,8 @@ export const jutsuFilteringSchema = z.object({
   target: z.enum(AttackTargets).optional(),
   hidden: z.boolean().optional(),
   villageId: z.string().nullable().optional(),
+  battleUsageType: z.enum(BattleUsageTypes).optional(),
+  actionCostPerc: z.number().optional(),
 
   // ------------------------------
   // "Exclusion" fields

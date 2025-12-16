@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AttackMethods, AttackTargets, ItemRarities } from "@/drizzle/constants";
 import { ItemSlotTypes, ItemTypes, JutsuTypes } from "@/drizzle/constants";
-import { LetterRanks, UserRanks, WeaponTypes } from "@/drizzle/constants";
+import { LetterRanks, UserRanks, WeaponTypes, BattleUsageTypes } from "@/drizzle/constants";
 import { BloodlineDifficultyRatings } from "@/drizzle/constants";
 import { ElementNames } from "@/drizzle/constants";
 import { DateTimeRegExp } from "@/utils/regex";
@@ -1389,6 +1389,7 @@ export const JutsuValidatorRawSchema = z.object({
   bloodlineId: z.string().nullable(),
   villageId: z.string().nullable(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
+  battleUsageType: z.enum(BattleUsageTypes).default("BOTH"),
 });
 
 // Final validator with additional cross-field checks
@@ -1480,6 +1481,7 @@ export const ItemValidatorRawSchema = z.object({
   canBeTraded: z.coerce.boolean().default(false),
   crystalTargetTypes: z.enum(ItemTypes).nullable(),
   bloodlineId: z.string().nullable(),
+  battleUsageType: z.enum(BattleUsageTypes).default("BOTH"),
   craftingRequirements: z
     .array(
       z.object({

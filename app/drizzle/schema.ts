@@ -1179,6 +1179,9 @@ export const item = mysqlTable(
     canBeTraded: boolean("canBeTraded").default(false).notNull(),
     crystalTargetTypes: mysqlEnum("crystalTargetTypes", consts.ItemTypes),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
+    battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
+      .default("BOTH")
+      .notNull(),
   },
   (table) => {
     return {
@@ -1292,6 +1295,9 @@ export const jutsu = mysqlTable(
     method: mysqlEnum("method", consts.AttackMethods).default("SINGLE").notNull(),
     hidden: boolean("hidden").default(false).notNull(),
     injectableInBattle: boolean("injectableInBattle").default(false).notNull(),
+    battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
+      .default("BOTH")
+      .notNull(),
   },
   (table) => {
     return {

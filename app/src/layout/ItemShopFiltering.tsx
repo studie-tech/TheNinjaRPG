@@ -5,8 +5,9 @@ import {
   defineFilteringSchema,
   toOptions,
 } from "@/layout/ContentFiltering";
-import { ItemRarities, ItemSlotTypes, ItemTypes } from "@/drizzle/constants";
 import { effectFilters } from "@/libs/combat/types";
+import { ItemRarities, ItemSlotTypes, ItemTypes, BattleUsageTypes } from "@/drizzle/constants";
+import { formatBattleUsageType } from "@/utils/string";
 import type { ItemType } from "@/drizzle/schema";
 
 interface ItemShopFilteringProps {
@@ -55,6 +56,25 @@ const makeItemShopSchema = (types: readonly string[]) =>
         options: toOptions(ItemSlotTypes),
         noneOption: { value: "ANY", label: "ANY" },
       },
+      {
+        id: "battleUsageType",
+        label: "Battle Type",
+        type: "single-select",
+        defaultValue: "ANY",
+        includeNone: true,
+        emptyValues: ["ANY"],
+        options: BattleUsageTypes.map((t) => ({
+          value: t,
+          label: formatBattleUsageType(t),
+        })),
+        noneOption: { value: "ANY", label: "ANY" },
+      },
+      {
+        id: "actionCostPerc",
+        label: "Action Cost (%)",
+        type: "number",
+        defaultValue: undefined,
+      },
     ] as const,
   });
 
@@ -92,6 +112,8 @@ export const useShopFiltering = (defaultType: ItemType) => {
     setRarity: cf.setters.itemRarity,
     setSlot: cf.setters.slot,
     setItemType: cf.setters.itemType as React.Dispatch<React.SetStateAction<ItemType>>,
+    setBattleUsageType: cf.setters.battleUsageType,
+    setActionCostPerc: cf.setters.actionCostPerc,
   };
 };
 

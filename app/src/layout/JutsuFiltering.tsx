@@ -13,9 +13,11 @@ import {
   AttackMethods,
   AttackTargets,
   JutsuTypes,
+  BattleUsageTypes,
 } from "@/drizzle/constants";
 import { statFilters, rarities } from "@/libs/train";
 import { effectFilters } from "@/libs/combat/types";
+import { formatBattleUsageType } from "@/utils/string";
 
 // Single-source schema
 const makeJutsuFilteringSchema = () =>
@@ -100,6 +102,24 @@ const makeJutsuFilteringSchema = () =>
         includeNone: true,
         emptyValues: ["None"],
         options: AttackTargets.map((t) => ({ value: t, label: t })),
+      },
+      {
+        id: "battleUsageType",
+        label: "Battle Type",
+        type: "single-select",
+        defaultValue: "None",
+        includeNone: true,
+        emptyValues: ["None"],
+        options: BattleUsageTypes.map((t) => ({
+          value: t,
+          label: formatBattleUsageType(t),
+        })),
+      },
+      {
+        id: "actionCostPerc",
+        label: "Action Cost (%)",
+        type: "number",
+        defaultValue: undefined,
       },
       {
         id: "rank",

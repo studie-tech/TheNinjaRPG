@@ -12,6 +12,7 @@ import { WeaponTypes } from "@/drizzle/constants";
 import { JutsuTypes } from "@/drizzle/constants";
 import { UserRanks } from "@/drizzle/constants";
 import { StatTypes } from "@/drizzle/constants";
+import { BattleUsageTypes } from "@/drizzle/constants";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { ZodJutsuType } from "@/libs/combat/types";
@@ -106,6 +107,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     { id: "jutsuRank", type: "str_array", values: LetterRanks },
     { id: "requiredRank", type: "str_array", values: UserRanks },
     { id: "target", type: "str_array", values: AttackTargets },
+    { id: "battleUsageType", type: "str_array", values: BattleUsageTypes },
     { id: "hidden", type: "boolean" },
     { id: "injectableInBattle", type: "boolean" },
   ];

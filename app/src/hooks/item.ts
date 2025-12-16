@@ -8,6 +8,7 @@ import { AttackMethods } from "@/drizzle/constants";
 import { ItemTypes } from "@/drizzle/constants";
 import { ItemRarities } from "@/drizzle/constants";
 import { ItemSlotTypes } from "@/drizzle/constants";
+import { BattleUsageTypes } from "@/drizzle/constants";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import type { Item, CraftingRequirement } from "@/drizzle/schema";
@@ -119,6 +120,7 @@ export const useItemEditForm = (
     { id: "battleDescription", type: "text", doubleWidth: true },
     { id: "target", type: "str_array", values: AttackTargets },
     { id: "method", type: "str_array", values: AttackMethods },
+    { id: "battleUsageType", type: "str_array", values: BattleUsageTypes },
     { id: "cost", type: "number" },
     { id: "repsCost", type: "number" },
     { id: "seichiSilverCost", type: "number" },

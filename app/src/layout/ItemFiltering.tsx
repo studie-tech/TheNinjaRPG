@@ -13,8 +13,10 @@ import {
   ItemSlotTypes,
   AttackTargets,
   AttackMethods,
+  BattleUsageTypes,
 } from "@/drizzle/constants";
 import { effectFilters } from "@/libs/combat/types";
+import { formatBattleUsageType } from "@/utils/string";
 
 // Inline schema (single source of truth)
 const itemFilteringSchema = defineFilteringSchema({
@@ -76,6 +78,25 @@ const itemFilteringSchema = defineFilteringSchema({
       emptyValues: ["ANY"],
       options: toOptions(AttackMethods),
       noneOption: { value: "ANY", label: "ANY" },
+    },
+    {
+      id: "battleUsageType",
+      label: "Battle Type",
+      type: "single-select",
+      defaultValue: "ANY",
+      includeNone: true,
+      emptyValues: ["ANY"],
+      options: BattleUsageTypes.map((t) => ({
+        value: t,
+        label: formatBattleUsageType(t),
+      })),
+      noneOption: { value: "ANY", label: "ANY" },
+    },
+    {
+      id: "actionCostPerc",
+      label: "Action Cost (%)",
+      type: "number",
+      defaultValue: undefined,
     },
     {
       id: "eventItems",

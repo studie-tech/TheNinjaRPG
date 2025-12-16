@@ -6,6 +6,7 @@ import {
   ItemSlotTypes,
   AttackTargets,
   AttackMethods,
+  BattleUsageTypes,
 } from "@/drizzle/constants";
 
 export const itemFilteringSchema = z.object({
@@ -31,6 +32,8 @@ export const itemFilteringSchema = z.object({
   canBeGathered: z.boolean().optional(),
   canBeTraded: z.boolean().optional(),
   maxLevel: z.number().optional(),
+  battleUsageType: z.enum(BattleUsageTypes).optional(),
+  actionCostPerc: z.number().optional(),
 });
 
 export type ItemFilteringSchema = z.infer<typeof itemFilteringSchema>;

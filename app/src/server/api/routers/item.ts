@@ -1763,6 +1763,14 @@ export const itemDatabaseFilter = (
     ...(input?.maxSeichiSilverCost !== undefined
       ? [lte(item.seichiSilverCost, input.maxSeichiSilverCost)]
       : []),
+
+    // Battle usage type filter
+    ...(input?.battleUsageType ? [eq(item.battleUsageType, input.battleUsageType)] : []),
+
+    // Action cost filter
+    ...(input?.actionCostPerc !== undefined
+      ? [eq(item.actionCostPerc, input.actionCostPerc)]
+      : []),
   ];
 };
 

@@ -2202,11 +2202,21 @@ export const processUsersForBattle = async (
     }
 
     // Set jutsus updatedAt to now (we use it for determining usage cooldowns)
+    const isPvEBattle = battleType === "QUEST" || battleType === "RANDOM_ENCOUNTER";
     user.jutsus = user.jutsus
       .map((userjutsu) => getReskinnedUserJutsu(userjutsu))
       .filter((userjutsu) => {
         // Not if no jutsu
         if (!userjutsu.jutsu) {
+          return false;
+        }
+        // Filter by battleUsageType
+        // If PvE battle, exclude PVP-only jutsus
+        if (isPvEBattle && userjutsu.jutsu.battleUsageType === "PVP") {
+          return false;
+        }
+        // If PvP battle, exclude PVE-only jutsus
+        if (!isPvEBattle && userjutsu.jutsu.battleUsageType === "PVE") {
           return false;
         }
         // Not if cannot train jutsu
@@ -2271,6 +2281,15 @@ export const processUsersForBattle = async (
     user.items
       .filter((ui) => {
         if (!ui.item) return false;
+        // Filter by battleUsageType
+        // If PvE battle, exclude PVP-only items
+        if (isPvEBattle && ui.item.battleUsageType === "PVP") {
+          return false;
+        }
+        // If PvP battle, exclude PVE-only items
+        if (!isPvEBattle && ui.item.battleUsageType === "PVE") {
+          return false;
+        }
         // Always include equipment (ARMOR, ACCESSORY, KEYSTONE) and consumables (WEAPON, CONSUMABLE) as they need to be processed for effects
         if (
           ["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON", "CONSUMABLE"].includes(

@@ -10,6 +10,7 @@ import { useUserData } from "@/utils/UserContext";
 import { SquarePen, Trash2, BarChartBig, Copy, Box } from "lucide-react";
 import { getTagSchema } from "@/libs/combat/types";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { formatBattleUsageType } from "@/utils/string";
 import { showMutationToast } from "@/libs/toast";
 import { cn } from "src/libs/shadui";
 import { api } from "@/app/_trpc/client";
@@ -356,6 +357,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {"jutsuWeapon" in item && item.jutsuWeapon !== "NONE" && (
                 <p>
                   <b>Jutsu Weapon</b>: {capitalizeFirstLetter(item?.jutsuWeapon)}
+                </p>
+              )}
+              {"battleUsageType" in item && item.battleUsageType && (
+                <p className="col-span-2">
+                  <b>Battle Type</b>: {formatBattleUsageType(item.battleUsageType)}
                 </p>
               )}
               {"rarity" in item && item.rarity && (
