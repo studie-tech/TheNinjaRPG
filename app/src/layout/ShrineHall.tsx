@@ -309,7 +309,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
 
   // Mutation
   const { mutate: activateBoost, isPending: isActivatingBoost } =
-    api.shrine.activateBoost.useMutation({
+    api.shrine.scheduleBoost.useMutation({
       onSuccess: (data) => {
         showMutationToast(data);
         if (data.success) {
