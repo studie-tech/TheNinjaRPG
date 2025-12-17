@@ -65,6 +65,10 @@ import type { Battle } from "@/drizzle/schema";
 import type { GameSetting } from "@/drizzle/schema";
 import type { DroppedItem } from "./types";
 
+type BattleExtraState = {
+  settings?: GameSetting[];
+};
+
 /**
  * Check if a single tag is a shared cooldown tag
  */
@@ -659,6 +663,9 @@ export const calcBattleResult = (
   const battleType = battle.battleType;
   const users = battle.usersState;
   const user = users.find((u) => u.userId === userId);
+  const battleSettings =
+    settings ??
+    ((battle.extraState as BattleExtraState | null | undefined)?.settings);
   if (user && !user.leftBattle) {
     // If single village, then friends/targets are the opposing team. If MPvP, separate by village
     const villageIds = [
@@ -744,13 +751,13 @@ export const calcBattleResult = (
       experience *= battle.rewardScaling * shrineBoostFactor;
 
       // Apply battle arena exp multiplier if available
-      if (settings && (battleType === "ARENA" || battleType === "COMBAT")) {
-        const arenaSetting = settings.find((s) => s.name === "battleExpMultiplier");
-        if (arenaSetting) {
-          const secondsLeft = -secondsPassed(arenaSetting.time);
-          if (secondsLeft > 0 && arenaSetting.value > 0) {
-            experience *= arenaSetting.value;
-          }
+      if (battleType === "ARENA" || battleType === "COMBAT") {
+        const arenaMultiplier = getActiveSettingMultiplier(
+          battleSettings,
+          "battleExpMultiplier",
+        );
+        if (arenaMultiplier > 0) {
+          experience *= arenaMultiplier;
         }
       }
 
@@ -1343,6 +1350,21 @@ const distributeExpToStat = (
   const expResult = user[stat] + expRounded > cap ? cap - user[stat] : expRounded;
   result[stat] += expResult;
   return expResult;
+};
+
+const getActiveSettingMultiplier = (
+  settings: GameSetting[] | undefined,
+  name: string,
+) => {
+  if (!settings?.length) return 0;
+  const setting = settings.find((s) => s.name === name);
+  if (!setting) return 0;
+  const secondsLeft = -secondsPassed(setting.time);
+  const numericValue = Number(setting.value);
+  if (!Number.isFinite(numericValue) || numericValue <= 0 || secondsLeft <= 0) {
+    return 0;
+  }
+  return numericValue;
 };
 
 /**
