@@ -2680,63 +2680,102 @@ export const supportReview = mysqlTable("SupportReview", {
     .notNull(),
 });
 
+type VillageShrineSettings = {
+  unlockedAiIds: string[];
+  activeBoosts: Record<string, string>; // boost type -> expiry ISO string
+  activeAiIds: string[];
+};
+
+const timestamps = {
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+} as const;
+
 export const village = mysqlTable(
   "Village",
   {
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
+
     name: varchar("name", { length: 191 }).notNull(),
     mapName: varchar("mapName", { length: 191 }),
     sector: int("sector").default(1).notNull(),
     description: varchar("description", { length: 512 }).default("").notNull(),
+
     kageId: varchar("kageId", { length: 191 }).notNull(),
     tokens: int("tokens").default(0).notNull(),
     type: mysqlEnum("type", consts.SECTOR_TYPES).default("VILLAGE").notNull(),
-    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
-      .default(sql`(CURRENT_TIMESTAMP(3))`)
-      .notNull(),
-    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
-      .default(sql`(CURRENT_TIMESTAMP(3))`)
-      .notNull(),
+
     leaderUpdatedAt: datetime("leaderUpdatedAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
+
     hexColor: varchar("hexColor", { length: 191 }).default("#000000").notNull(),
     populationCount: int("populationCount").default(0).notNull(),
     allianceSystem: boolean("allianceSystem").default(true).notNull(),
     joinable: boolean("joinable").default(true).notNull(),
     pvpDisabled: boolean("pvpDisabled").default(false).notNull(),
+
     villageLogo: varchar("villageLogo", { length: 191 }).default("").notNull(),
     villageGraphic: varchar("villageGraphic", { length: 191 }).default("").notNull(),
+
     lastMaintenancePaidAt: datetime("lastMaintenancePaidAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
+
     wasDowngraded: boolean("wasDowngraded").default(false).notNull(),
+
     openForChallenges: boolean("openForChallenges").default(true).notNull(),
-    openForChallengesAt: datetime("openForChallengesAt", {
-      mode: "date",
-      fsp: 3,
-    })
+    openForChallengesAt: datetime("openForChallengesAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
+
     wallpaperOverwrite: varchar("wallpaperOverwrite", { length: 191 }),
     warExhaustionEndedAt: datetime("warExhaustionEndedAt", { mode: "date", fsp: 3 }),
     lastWarEndedAt: datetime("lastWarEndedAt", { mode: "date", fsp: 3 }),
+
     shrineSettings: json("shrineSettings")
-      .$type<{
-        unlockedAiIds: string[];
-        activeBoosts: Record<string, string>; // boost type -> expiry ISO string
-        activeAiIds: string[];
-      }>()
+      .$type<VillageShrineSettings>()
       .default({ unlockedAiIds: [], activeBoosts: {}, activeAiIds: [] })
       .notNull(),
+
+    ...timestamps,
   },
-  (table) => {
-    return {
-      nameKey: uniqueIndex("Village_name_key").on(table.name),
-      sectorKey: uniqueIndex("Village_sector_key").on(table.sector),
-    };
-  },
+  (table) => ({
+    nameKey: uniqueIndex("Village_name_key").on(table.name),
+    sectorKey: uniqueIndex("Village_sector_key").on(table.sector),
+  }),
 );
+
+// ✅ ShrineBoostSchedule
+export const shrineBoostSchedule = mysqlTable(
+  "ShrineBoostSchedule",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+
+    villageId: varchar("villageId", { length: 191 }).notNull(),
+    boostType: mysqlEnum("boostType", consts.SHRINE_BOOST_TYPES).notNull(),
+
+    startAt: datetime("startAt", { mode: "date", fsp: 3 }).notNull(),
+    endAt: datetime("endAt", { mode: "date", fsp: 3 }).notNull(),
+
+    createdByUserId: varchar("createdByUserId", { length: 191 }).notNull(),
+
+    ...timestamps,
+  },
+  (table) => ({
+    villageIdIdx: index("ShrineBoostSchedule_villageId_idx").on(table.villageId),
+    boostTypeIdx: index("ShrineBoostSchedule_boostType_idx").on(table.boostType),
+    startAtIdx: index("ShrineBoostSchedule_startAt_idx").on(table.startAt),
+    endAtIdx: index("ShrineBoostSchedule_endAt_idx").on(table.endAt),
+  }),
+);
+
+export type ShrineBoostSchedule = InferSelectModel<typeof shrineBoostSchedule>;
+
 export type Village = InferSelectModel<typeof village>;
 
 export const villageRelations = relations(village, ({ many, one }) => ({
