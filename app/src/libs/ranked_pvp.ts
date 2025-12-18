@@ -2,6 +2,7 @@ import {
   RANKED_RANKS,
   RANKED_STREAK_BONUS,
   RANKED_DIVISIONS,
+  RANKED_SANNIN_TOP_PLAYERS,
   RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
   RANKED_LOADOUT_MAX_POISON_JUTSUS,
   RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
@@ -20,12 +21,12 @@ import type { RankedRank } from "@/drizzle/constants";
 /**
  * Determine player rank based on LP and top players
  * @param lp - Player's LP
- * @param topPlayersLP - Array of top 20 players' LP values
+ * @param topPlayersLP - Array of top players' LP values
  * @returns Player's rank
  */
 export function getRankedRank(lp: number, topPlayersLP: number[]): RankedRank {
-  // Sannin rank requires being in top 20 players
-  if (topPlayersLP.length >= 20 && lp >= Math.min(...topPlayersLP)) {
+  // Sannin rank requires being in top players
+  if (topPlayersLP.length >= RANKED_SANNIN_TOP_PLAYERS && lp >= Math.min(...topPlayersLP)) {
     return "Sannin";
   }
   // Find the highest division the player qualifies for

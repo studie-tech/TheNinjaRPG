@@ -41,7 +41,7 @@ export default function AssignExperience() {
       onAccept={updateStats}
       availableStats={userData.earnedExperience}
       title="Assign Experience Points"
-      subtitle={`You have ${userData.earnedExperience} unused experience points`}
+      subtitle={`You have ${userData.earnedExperience.toLocaleString()} unused experience points`}
       defaultBackHref="/profile"
     />
   );

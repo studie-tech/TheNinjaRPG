@@ -199,6 +199,7 @@ export default function Bank() {
       ...entry,
       sender: entry.sender?.username ?? "Unknown",
       receiver: entry.receiver?.username ?? "Unknown",
+      amountFormatted: entry.amount.toLocaleString(),
     }));
   type Transfer = ArrayElement<typeof allTransfers>;
 
@@ -213,7 +214,7 @@ export default function Bank() {
     { key: "sender", header: "Sender", type: "string" },
     { key: "receiver", header: "Receiver", type: "string" },
     { key: "type", header: "Type", type: "string" },
-    { key: "amount", header: "Amount", type: "string" },
+    { key: "amountFormatted", header: "Amount", type: "string" },
     { key: "createdAt", header: "Date", type: "date" },
   ];
 
@@ -253,7 +254,7 @@ export default function Bank() {
         <div className="grid grid-cols-2 text-center my-4">
           <div className="flex flex-col items-center">
             <Coins className="h-20 w-20" />
-            <p className="text-lg">{money} ryo</p>
+            <p className="text-lg">{money.toLocaleString()} ryo</p>
             <h2 className="font-bold text-xl">Money on hand</h2>
             <div className="w-full px-4 pt-3">
               <Form {...toBankForm}>
@@ -283,7 +284,7 @@ export default function Bank() {
           </div>
           <div className="flex flex-col items-center">
             <Landmark className="h-20 w-20" />
-            <p className="text-lg">{bank} ryo</p>
+            <p className="text-lg">{bank.toLocaleString()} ryo</p>
             <h2 className="font-bold text-xl">Money in bank</h2>
             <div className="w-full px-4 pt-3">
               <Form {...toPocketForm}>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
-import { eq, gte, gt, sql, and, inArray, lte, desc } from "drizzle-orm";
+import { eq, gte, gt, sql, and, inArray, lte, desc, asc } from "drizzle-orm";
 import { item, jutsu, rankedLoadout, rankedPvpQueue, userData } from "@/drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import {
@@ -468,7 +468,7 @@ export const pvpRankRouter = createTRPCRouter({
       const [queuedPlayers, topPlayersLP] = await Promise.all([
         ctx.drizzle.query.rankedPvpQueue.findMany({
           with: { user: { columns: { status: true }, with: { rankedLoadout: true } } },
-          orderBy: desc(rankedPvpQueue.queueStartTime),
+          orderBy: asc(rankedPvpQueue.queueStartTime),
         }),
         fetchSanninRankedPlayers(ctx.drizzle),
       ]);
@@ -635,8 +635,16 @@ export const getRankedRadius = (secondsInQueue: number) => {
     return 200;
   } else if (secondsInQueue < 300) {
     return 250;
-  } else {
+  } else if (secondsInQueue < 600) {
     return 300;
+  } else if (secondsInQueue < 900) {
+    return 350;
+  } else if (secondsInQueue < 1200) {
+    return 400;
+  } else if (secondsInQueue < 1500) {
+    return 450;
+  } else {
+    return 500;
   }
 };
 

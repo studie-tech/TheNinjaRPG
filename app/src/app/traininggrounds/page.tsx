@@ -795,7 +795,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                 }
               >
                 <div className="relative">
-                  <p className="pb-3">You have {userData.money} ryo in your pocket</p>
+                  <p className="pb-3">You have {userData.money.toLocaleString()} ryo in your pocket</p>
                   {!isPending && (
                     <ItemWithEffects
                       item={jutsu}

@@ -24,6 +24,7 @@ import {
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
   RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
   RANKED_ENTRY_COST,
+  RANKED_DIVISIONS,
 } from "@/drizzle/constants";
 import { validateJutsuLoadout, validateItemLoadout } from "@/libs/ranked_pvp";
 import { QueueTimer } from "@/layout/Countdown";
@@ -190,6 +191,21 @@ export const RankedArenaMain: React.FC = () => {
         Queue for ranked PvP battles! You will be matched with players of similar LP.
         All battles are fought with level 100 characters with max stats.
       </p>
+      <div className="text-sm text-muted-foreground">
+        <p className="mb-1 font-medium">Rank Requirements:</p>
+        <div className="flex flex-col gap-y-1">
+          {RANKED_DIVISIONS.filter((d) => d.name !== "Unranked").map((division) => (
+            <div key={division.name} className="flex justify-between">
+              <span>{division.name}:</span>
+              <span className="font-mono">
+                {division.rankedLp === Infinity
+                  ? "Top 10"
+                  : `${division.rankedLp.toLocaleString()} LP`}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
       <p className="text-sm text-muted-foreground">
         Current LP: <b>{userData.rankedLp}</b> | Players in queue:{" "}
         <b>{queueData?.queueCount ?? 0}</b>

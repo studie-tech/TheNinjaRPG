@@ -1118,7 +1118,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 >
                   <p>
                     Confirm donating money from pocket to clan bank. You currently have{" "}
-                    {userData.money} ryo in your pocket.
+                    {userData.money.toLocaleString()} ryo in your pocket.
                   </p>
                   {userData.isOutlaw && (
                     <p>

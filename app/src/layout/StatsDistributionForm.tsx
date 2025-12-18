@@ -285,7 +285,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
           >
             <div>
               <p className="mb-2">
-                This will distribute {availableStats} stat points across:
+                This will distribute {availableStats.toLocaleString()} stat points across:
               </p>
               <ul className="list-disc list-inside mb-2">
                 {option.stats.map((stat, index) => {
@@ -368,9 +368,9 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   // Figure out what to show on button, and whether it is disabled or not
   let buttonText = `Assign points`;
   if (misalignment > 0) {
-    buttonText = `Remove ${misalignment} points`;
+    buttonText = `Remove ${misalignment.toLocaleString()} points`;
   } else if (forceUseAll && misalignment < 0) {
-    buttonText = `Place ${-misalignment} more points`;
+    buttonText = `Place ${(-misalignment).toLocaleString()} more points`;
   } else if (isDefault) {
     buttonText = "Nothing changed";
   }
@@ -418,7 +418,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                       <FormLabel>
                         {capitalizeFirstLetter(noCase(stat))}
                         {currentValue
-                          ? ` - Selected: ${currentValue.toFixed(2)} / ${availableStats.toFixed(2)}`
+                          ? ` - Selected: ${Number(currentValue.toFixed(2)).toLocaleString()} / ${Number(availableStats.toFixed(2), ).toLocaleString()}`
                           : ""}
                       </FormLabel>
                     )}

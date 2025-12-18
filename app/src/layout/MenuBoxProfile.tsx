@@ -280,7 +280,7 @@ const MenuBoxProfile: React.FC = () => {
                   className="hover:text-orange-500"
                 >
                   <div className="flex flex-row items-center">
-                    <p className="text-xl mr-3">両</p> {userData?.money ?? "??"}
+                    <p className="text-xl mr-3">両</p>{userData?.money?.toLocaleString() ?? "??"}
                   </div>
                 </Link>
               </TooltipTrigger>

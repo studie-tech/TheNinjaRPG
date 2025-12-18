@@ -120,19 +120,19 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
           <b>Offences</b>
           <div className="flex flex-row items-center">
             <ElementImage element="Ninjutsu" className="w-6 h-6 mr-1 mb-1" />
-            Ninjutsu offence: {userData.ninjutsuOffence.toFixed(2)}
+            Ninjutsu offence: {Number(userData.ninjutsuOffence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Genjutsu" className="w-6 h-6 mr-1 mb-1" />
-            Genjutsu offence: {userData.genjutsuOffence.toFixed(2)}
+            Genjutsu offence: {Number(userData.genjutsuOffence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Taijutsu" className="w-6 h-6 mr-1 mb-1" />
-            Taijutsu offence: {userData.taijutsuOffence.toFixed(2)}
+            Taijutsu offence: {Number(userData.taijutsuOffence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Bukijutsu" className="w-6 h-6 mr-1 mb-1" />
-            Bukijutsu offence: {userData.bukijutsuOffence.toFixed(2)}
+            Bukijutsu offence: {Number(userData.bukijutsuOffence.toFixed(2)).toLocaleString()}
           </div>
         </div>
 
@@ -140,19 +140,19 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
           <b>Defences</b>
           <div className="flex flex-row items-center">
             <ElementImage element="Ninjutsu" className="w-6 h-6 mr-1 mb-1" />
-            Ninjutsu defence: {userData.ninjutsuDefence.toFixed(2)}
+            Ninjutsu defence: {Number(userData.ninjutsuDefence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Genjutsu" className="w-6 h-6 mr-1 mb-1" />
-            Genjutsu defence: {userData.genjutsuDefence.toFixed(2)}
+            Genjutsu defence: {Number(userData.genjutsuDefence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Taijutsu" className="w-6 h-6 mr-1 mb-1" />
-            Taijutsu defence: {userData.taijutsuDefence.toFixed(2)}
+            Taijutsu defence: {Number(userData.taijutsuDefence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Bukijutsu" className="w-6 h-6 mr-1 mb-1" />
-            Bukijutsu defence: {userData.bukijutsuDefence.toFixed(2)}
+            Bukijutsu defence: {Number(userData.bukijutsuDefence.toFixed(2)).toLocaleString()}
           </div>
         </div>
       </div>
@@ -162,19 +162,19 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
             <b>Generals</b>
             <div className="flex flex-row items-center">
               <ElementImage element="Strength" className="w-6 h-6 mr-1 mb-1" />
-              Strength: {userData.strength.toFixed(2)}
+              Strength: {Number(userData.strength.toFixed(2)).toLocaleString()}
             </div>
             <div className="flex flex-row items-center">
               <ElementImage element="Intelligence" className="w-6 h-6 mr-1 mb-1" />
-              Intelligence: {userData.intelligence.toFixed(2)}
+              Intelligence: {Number(userData.intelligence.toFixed(2)).toLocaleString()}
             </div>
             <div className="flex flex-row items-center">
               <ElementImage element="Willpower" className="w-6 h-6 mr-1 mb-1" />
-              Willpower: {userData.willpower.toFixed(2)}
+              Willpower: {Number(userData.willpower.toFixed(2)).toLocaleString()}
             </div>
             <div className="flex flex-row items-center">
               <ElementImage element="Speed" className="w-6 h-6 mr-1 mb-1" />
-              Speed: {userData.speed.toFixed(2)}
+              Speed: {Number(userData.speed.toFixed(2)).toLocaleString()}
             </div>
           </div>
           <div>

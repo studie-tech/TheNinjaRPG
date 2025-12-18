@@ -1187,7 +1187,7 @@ export type UserEffect = BattleEffect & {
   targetId: string;
   fromEffectId?: string;
   fromGround?: boolean;
-  fromType?: "jutsu" | "armor" | "item" | "basic" | "bloodline" | "village" | "skill";
+  fromType?: "jutsu" | "armor" | "item" | "basic" | "bloodline" | "village" | "skill" | "ranked";
   elements?: ElementName[]; // TODO: Remove this, should already be in the tag
   cpSpent?: number;
   spSpent?: number;

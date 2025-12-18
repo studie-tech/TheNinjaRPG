@@ -425,7 +425,7 @@ export default function MyJutsu() {
             }
           >
             <div>
-              <p>- You have {userData.money} ryo in your pocket</p>
+              <p>- You have {userData.money.toLocaleString()} ryo in your pocket</p>
               <p>- Need {JUTSU_XP_TO_LEVEL - userjutsu.experience} XP more to level</p>
             </div>
             {!isPending && (

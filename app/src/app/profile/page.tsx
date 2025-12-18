@@ -84,15 +84,15 @@ export default function Profile() {
             <p>
               Lvl. {userData.level} {showUserRank(userData)}
             </p>
-            <p>Money: {userData.money?.toFixed(2)}</p>
-            <p>Bank: {userData.bank?.toFixed(2)}</p>
+            <p>Money: {userData.money?.toLocaleString()}</p>
+            <p>Bank: {userData.bank?.toLocaleString()}</p>
             <p>Status: {userData.status}</p>
             <p>Regen per minute: {userData.regeneration?.toFixed(2)}</p>
             <p>Gender: {userData.gender}</p>
           </div>
           <div className="flex flex-col items-start">
             <b>Activity</b>
-            <p>Exp: {userData.experience?.toFixed(2)}</p>
+            <p>Exp: {userData.experience?.toLocaleString()}</p>
             <p>Exp for lvl: {expRequired ? expRequired.toFixed(2) : "--"}</p>
             <p>PvE Fights: {userData.pveFights}</p>
             <TooltipProvider delayDuration={50}>
@@ -148,15 +148,15 @@ export default function Profile() {
                 </Tooltip>
               </TooltipProvider>
             )}
-            <p>Medical Exp: {userData.medicalExperience}</p>
+            <p>Medical Exp: {userData.medicalExperience?.toLocaleString()}</p>
           </div>
           <div>
             <b>Reputation</b>
-            <p>Reputation points: {userData.reputationPoints}</p>
+            <p>Reputation points: {userData.reputationPoints?.toLocaleString()}</p>
             <p>Federal Support: {(userData.federalStatus || "NONE").toLowerCase()}</p>
             <p>Activity Streak: {userData.activityStreak}</p>
-            {userData.isOutlaw && <p>Notoriety: {userData.villagePrestige}</p>}
-            {!userData.isOutlaw && <p>Village prestige: {userData.villagePrestige}</p>}
+            {userData.isOutlaw && (<p>Notoriety: {userData.villagePrestige?.toLocaleString()}</p>)}
+            {!userData.isOutlaw && (<p>Village prestige: {userData.villagePrestige?.toLocaleString()}</p>)}
             {userData.joinedVillageAt && (
               <p>
                 Village Member:{" "}

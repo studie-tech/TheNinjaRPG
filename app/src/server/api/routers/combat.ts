@@ -2424,6 +2424,33 @@ export const processUsersForBattle = async (
     }
   }
 
+  // Apply decreasedamagetaken to all users in ranked PvP battles
+  if (battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING") {
+    for (const user of usersState) {
+      const effect = DecreaseDamageTakenTag.parse({
+        target: "SELF",
+        statTypes: StatTypes,
+        generalTypes: GeneralTypes,
+        type: "decreasedamagetaken",
+        power: 150,
+        calculation: "static",
+        rounds: undefined,
+      }) as unknown as UserEffect;
+      const realized = realizeTag({
+        tag: effect,
+        user: user,
+        actionId: "ranked_pvp",
+        target: user,
+        level: user.level,
+      });
+      realized.isNew = false;
+      realized.castThisRound = false;
+      realized.targetId = user.userId;
+      realized.fromType = "ranked";
+      userEffects.push(realized);
+    }
+  }
+
   return { userEffects, usersState };
 };
 

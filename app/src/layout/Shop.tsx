@@ -127,17 +127,17 @@ const Shop: React.FC<ShopProps> = (props) => {
     userData.reputationPoints >= repsCost &&
     userData.seichiSilver >= seichiSilverCost;
   const costs = [
-    ...(ryoCost > 0 ? [`${ryoCost} ryo`] : []),
-    ...(repsCost > 0 ? [`${repsCost} reputation points`] : []),
-    ...(seichiSilverCost > 0 ? [`${seichiSilverCost} seichi silver`] : []),
+    ...(ryoCost > 0 ? [`${ryoCost.toLocaleString()} ryo`] : []),
+    ...(repsCost > 0 ? [`${repsCost.toLocaleString()} reputation points`] : []),
+    ...(seichiSilverCost > 0 ? [`${seichiSilverCost.toLocaleString()} seichi silver`] : []),
   ];
   const missing = [
-    ...(ryoCost > userData.money ? [`${ryoCost - userData.money} more ryo`] : []),
+    ...(ryoCost > userData.money ? [`${(ryoCost - userData.money).toLocaleString()} more ryo`] : []),
     ...(repsCost > userData.reputationPoints
-      ? [`${repsCost - userData.reputationPoints} more reputation points`]
+      ? [`${(repsCost - userData.reputationPoints).toLocaleString()} more reputation points`,] 
       : []),
     ...(seichiSilverCost > userData.seichiSilver
-      ? [`${seichiSilverCost - userData.seichiSilver} more seichi silver`]
+      ? [`${(seichiSilverCost - userData.seichiSilver).toLocaleString()} more seichi silver`]
       : []),
   ];
   // Simple cost string for the purchase button
