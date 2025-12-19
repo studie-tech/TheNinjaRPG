@@ -1,6 +1,6 @@
 import { drizzleDB } from "@/server/db";
 import { shrineBoostSchedule, village } from "@/drizzle/schema";
-import { and, lte, gt, eq, inArray } from "drizzle-orm";
+import { and, lte, gt, eq } from "drizzle-orm";
 
 type ShrineSettings = {
   unlockedAiIds: string[];
@@ -17,6 +17,9 @@ function defaultShrineSettings(): ShrineSettings {
 }
 
 export async function runShrineBoostTick(now: Date = new Date()) {
+  let activeApplied = 0;
+  let expiredProcessed = 0;
+
   // 1) schedules that should be active now
   const activeSchedules = await drizzleDB
     .select()
@@ -51,25 +54,22 @@ export async function runShrineBoostTick(now: Date = new Date()) {
         shrineSettings: { ...shrineSettings, activeBoosts: updatedBoosts },
       })
       .where(eq(village.id, s.villageId));
+
+    activeApplied++;
   }
 
   // 2) schedules that ended (expire boost + delete the schedule row)
-const expiredSchedules = await drizzleDB
-  .select()
-  .from(shrineBoostSchedule)
-  .where(
-    and(
-      lte(shrineBoostSchedule.endAt, now),
-      lte(shrineBoostSchedule.startAt, now),
-    ),
-  );
-
+  const expiredSchedules = await drizzleDB
+    .select()
+    .from(shrineBoostSchedule)
+    .where(and(lte(shrineBoostSchedule.endAt, now), lte(shrineBoostSchedule.startAt, now)));
 
   for (const s of expiredSchedules) {
     const v = await drizzleDB.query.village.findFirst({
       where: eq(village.id, s.villageId),
       columns: { id: true, shrineSettings: true },
     });
+
     if (!v?.shrineSettings) {
       // still delete the expired schedule so it doesn't loop forever
       await drizzleDB.delete(shrineBoostSchedule).where(eq(shrineBoostSchedule.id, s.id));
@@ -96,10 +96,12 @@ const expiredSchedules = await drizzleDB
 
     // IMPORTANT: remove expired schedule so we don't process it every minute forever
     await drizzleDB.delete(shrineBoostSchedule).where(eq(shrineBoostSchedule.id, s.id));
+
+    expiredProcessed++;
   }
 
   return {
-    activeApplied: activeSchedules.length,
-    expiredProcessed: expiredSchedules.length,
+    activeApplied,
+    expiredProcessed,
   };
 }
