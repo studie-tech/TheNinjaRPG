@@ -6,7 +6,7 @@ CREATE TABLE `ShrineBoostSchedule` (
 	`endAt` datetime(3) NOT NULL,
 	`createdByUserId` varchar(191) NOT NULL,
 	`createdAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
-	`updatedAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
+	`updatedAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)) ON UPDATE CURRENT_TIMESTAMP(3),
 	CONSTRAINT `ShrineBoostSchedule_id` PRIMARY KEY(`id`)
 );
 
