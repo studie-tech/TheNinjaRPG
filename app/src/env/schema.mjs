@@ -19,7 +19,7 @@ export const serverSchema = z.object({
   SENDGRID_API_KEY: z.string().optional(),
   CAPTCHA_SALT: z.string().optional(),
   CLERK_SECRET_KEY: z.string().optional(),
-  CRON_SECRET: z.string().min(16),
+  CRON_SECRET: z.string().min(16).optional(),
 });
 
 

@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   const secret = url.searchParams.get("secret");
   const expected = process.env.CRON_SECRET;
 
-  if (expected && secret !== expected) {
+  if (!expected || secret !== expected) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
