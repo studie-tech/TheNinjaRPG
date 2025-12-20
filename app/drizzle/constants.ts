@@ -441,6 +441,24 @@ export const PvpBattleTypes: BattleType[] = [
   "CLAN_BATTLE",
   "TOURNAMENT",
   "RANKED_SPARRING",
+  "KAGE_PVP",
+  "RANKED_PVP",
+];
+
+export const PveBattleTypes: BattleType[] = [
+  "ARENA",
+  "QUEST",
+  "RANDOM_ENCOUNTER",
+  "KAGE_AI",
+  "TRAINING",
+  "VILLAGE_PROTECTOR",
+  "CLAN_CHALLENGE",
+  "SHRINE_WAR",
+];
+
+export const QuestBattleTypes: BattleType[] = [
+  "QUEST",
+  "RANDOM_ENCOUNTER",
 ];
 
 export const BattleUsageTypes = ["PVE", "PVP", "BOTH"] as const;

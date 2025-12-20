@@ -35,7 +35,12 @@ import {
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
 } from "@/drizzle/constants";
 import { COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
-import { RANKS_RESTRICTED_FROM_PVP, AutoBattleTypes } from "@/drizzle/constants";
+import {
+  RANKS_RESTRICTED_FROM_PVP,
+  AutoBattleTypes,
+  PvpBattleTypes,
+  QuestBattleTypes,
+} from "@/drizzle/constants";
 import { NonActionItemTypes, DURABILITY_USABILITY_THR } from "@/drizzle/constants";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
 import { calcBattleResult, maskBattle, alignBattle } from "@/libs/combat/util";
@@ -89,7 +94,6 @@ import { REGEN_SECONDS } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID, MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
 import { StatTypes, GeneralTypes } from "@/drizzle/constants";
 import { BattleTypes } from "@/drizzle/constants";
-import { PvpBattleTypes } from "@/drizzle/constants";
 import { calcActiveUserRegen } from "@/libs/profile";
 import { secondsPassed } from "@/utils/time";
 import { randomInt } from "@/utils/math";
@@ -2202,7 +2206,7 @@ export const processUsersForBattle = async (
     }
 
     // Set jutsus updatedAt to now (we use it for determining usage cooldowns)
-    const isPvEBattle = battleType === "QUEST" || battleType === "RANDOM_ENCOUNTER";
+    const isQuestBattle = QuestBattleTypes.includes(battleType);
     user.jutsus = user.jutsus
       .map((userjutsu) => getReskinnedUserJutsu(userjutsu))
       .filter((userjutsu) => {
@@ -2211,12 +2215,12 @@ export const processUsersForBattle = async (
           return false;
         }
         // Filter by battleUsageType
-        // If PvE battle, exclude PVP-only jutsus
-        if (isPvEBattle && userjutsu.jutsu.battleUsageType === "PVP") {
+        // If quest battle, exclude PVP-only jutsus
+        if (isQuestBattle && userjutsu.jutsu.battleUsageType === "PVP") {
           return false;
         }
-        // If PvP battle, exclude PVE-only jutsus
-        if (!isPvEBattle && userjutsu.jutsu.battleUsageType === "PVE") {
+        // If non-quest battle, exclude PVE-only jutsus
+        if (!isQuestBattle && userjutsu.jutsu.battleUsageType === "PVE") {
           return false;
         }
         // Not if cannot train jutsu
@@ -2282,12 +2286,12 @@ export const processUsersForBattle = async (
       .filter((ui) => {
         if (!ui.item) return false;
         // Filter by battleUsageType
-        // If PvE battle, exclude PVP-only items
-        if (isPvEBattle && ui.item.battleUsageType === "PVP") {
+        // If quest battle, exclude PVP-only items
+        if (isQuestBattle && ui.item.battleUsageType === "PVP") {
           return false;
         }
-        // If PvP battle, exclude PVE-only items
-        if (!isPvEBattle && ui.item.battleUsageType === "PVE") {
+        // If non-quest battle, exclude PVE-only items
+        if (!isQuestBattle && ui.item.battleUsageType === "PVE") {
           return false;
         }
         // Always include equipment (ARMOR, ACCESSORY, KEYSTONE) and consumables (WEAPON, CONSUMABLE) as they need to be processed for effects
