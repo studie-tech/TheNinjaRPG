@@ -418,7 +418,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                       <FormLabel>
                         {capitalizeFirstLetter(noCase(stat))}
                         {currentValue
-                          ? ` - Selected: ${Number(currentValue.toFixed(2)).toLocaleString()} / ${Number(availableStats.toFixed(2), ).toLocaleString()}`
+                          ? ` - Selected: ${Number(currentValue.toFixed(2)).toLocaleString()} / ${Number(availableStats.toFixed(2)).toLocaleString()}`
                           : ""}
                       </FormLabel>
                     )}
