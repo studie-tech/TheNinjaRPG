@@ -10,15 +10,11 @@ import {
   Line,
   LineSegments,
   EdgesGeometry,
+  Texture,
+  SRGBColorSpace,
   type BufferGeometry,
-  type Texture,
 } from "three";
-import {
-  loadTexture,
-  createTexture,
-  createSpriteMaterial,
-  createShadowTexture,
-} from "@/libs/threejs/util";
+import { loadTexture, createTexture, createSpriteMaterial } from "@/libs/threejs/util";
 import { playPreloadedAudio } from "@/utils/audio";
 import { getPossibleActionTiles, findHex, PathCalculator } from "../hexgrid";
 import {
@@ -763,6 +759,57 @@ export const updateStatusBar = (name: string, userSpriteGroup: Group, perc: numb
       bar.visible = false;
     }
   }
+};
+
+/**
+ * Create a procedural shadow texture - an elongated blurred ellipse
+ * Defined inline to avoid Mobile Safari module resolution issues with imports
+ * @param width - Canvas width (default 128)
+ * @param height - Canvas height (default 64)
+ * @param opacity - Maximum opacity at center (default 0.4)
+ * @returns A texture with the procedural shadow
+ */
+const createShadowTexture = (width = 128, height = 64, opacity = 0.4): Texture => {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  if (ctx) {
+    // Create radial gradient for soft elliptical shadow
+    const centerX = width / 2;
+    const radiusX = width / 2;
+    const radiusY = height / 2;
+
+    // Use an elliptical gradient by scaling the context
+    ctx.save();
+    ctx.scale(1, radiusY / radiusX);
+
+    const gradient = ctx.createRadialGradient(
+      centerX,
+      centerX, // Use centerX for both since we're scaling
+      0,
+      centerX,
+      centerX,
+      radiusX,
+    );
+
+    // Soft falloff from center to edges
+    gradient.addColorStop(0, `rgba(0, 0, 0, ${opacity})`);
+    gradient.addColorStop(0.5, `rgba(0, 0, 0, ${opacity * 0.6})`);
+    gradient.addColorStop(0.8, `rgba(0, 0, 0, ${opacity * 0.2})`);
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, width); // Use width for both due to scaling
+
+    ctx.restore();
+  }
+
+  const texture = new Texture(canvas);
+  texture.needsUpdate = true;
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
 };
 
 /**
