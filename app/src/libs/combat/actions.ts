@@ -31,7 +31,11 @@ import {
   isUserImmobilized,
   isUserSummonPrevented,
 } from "@/libs/combat/util";
-import { getUserElementalSeal, isEffectActive } from "@/libs/combat/util";
+import {
+  getUserElementalSeal,
+  isEffectActive,
+  getEffectiveCurPool,
+} from "@/libs/combat/util";
 import { getPower } from "@/libs/combat/tags";
 import { realizeTag, updateStatUsage } from "@/libs/combat/tags";
 import { getPossibleActionTiles } from "@/libs/hexgrid";
@@ -634,7 +638,7 @@ export const handleInjectedJutsus = (
     );
     tagJutsus.forEach((j) => {
       if (!toBeRemovedIds.includes(j.id) && !userCurrentExtraJutsuIds.includes(j.id)) {
-        toBeAddedJutsuPower[j.id] = e.power;
+        toBeAddedJutsuPower[j.id] = e.power ?? 1;
       }
     });
   });
@@ -1175,7 +1179,7 @@ export const actionPointsAfterAction = (
         );
         return actionElements.size === 0
           ? false
-          : effect.elements.some((el) => actionElements.has(el));
+          : effect.elements.some((el: ElementName) => actionElements.has(el));
       }
       return true;
     };
@@ -1214,11 +1218,17 @@ export const actionPointsAfterAction = (
 
 /**
  * Figure out if user is still live and well in battle (not fled, not dead, etc.)
+ * When effects are provided, uses effective health (accounting for pool buffs/debuffs).
+ * Accepts minimal shape when effects is omitted (e.g. ProcessingBattleUser in combat router).
  */
 export const stillInBattle = (
-  user: Pick<ReturnedUserState, "curHealth" | "fledBattle">,
+  user: ReturnedUserState | Pick<ReturnedUserState, "curHealth" | "fledBattle">,
+  effects?: UserEffect[],
 ) => {
-  return user.curHealth > 0 && !user.fledBattle;
+  const health = effects
+    ? getEffectiveCurPool(user as ReturnedUserState, effects, "Health")
+    : user.curHealth;
+  return health > 0 && !user.fledBattle;
 };
 
 /**
@@ -1233,7 +1243,9 @@ export const calcActiveUser = (
   const syncedTime = Date.now() - timeDiff;
   const mseconds = syncedTime - new Date(battle.roundStartAt).getTime();
   const secondsLeft = COMBAT_SECONDS - mseconds / 1000;
-  const usersInBattle = battle.usersState.filter(stillInBattle);
+  const usersInBattle = battle.usersState.filter((u) =>
+    stillInBattle(u, battle.usersEffects),
+  );
   const inBattleuserIds = usersInBattle.map((u) => u.userId);
   let activeUserId = battle.activeUserId ? battle.activeUserId : userId;
   let progressRound = false;

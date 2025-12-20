@@ -219,6 +219,28 @@ export const DecreasePoolCostTag = z.object({
   calculation: z.enum(["static", "percentage"]).default("percentage"),
 });
 
+export const IncreaseMaxPoolsTag = z.object({
+  ...BaseAttributes,
+  ...PowerAttributes,
+  ...PoolAttributes,
+  type: z.literal("increasemaxpools").default("increasemaxpools"),
+  description: msg("Increase maximum and current pool values"),
+  calculation: z.enum(["static", "percentage"]).default("static"),
+  poolsAffected: z.array(z.enum(PoolTypes)).default(["Health"]),
+  target: z.enum(BaseTagTargets).optional().default("SELF"),
+});
+
+export const DecreaseMaxPoolsTag = z.object({
+  ...BaseAttributes,
+  ...PowerAttributes,
+  ...PoolAttributes,
+  type: z.literal("decreasemaxpools").default("decreasemaxpools"),
+  description: msg("Decrease maximum and current pool values"),
+  calculation: z.enum(["static", "percentage"]).default("static"),
+  poolsAffected: z.array(z.enum(PoolTypes)).default(["Health"]),
+  target: z.enum(BaseTagTargets).optional().default("SELF"),
+});
+
 export const TimeCompressionTag = z.object({
   ...BaseAttributes,
   ...IncludeStats,
@@ -778,6 +800,7 @@ export const AllTags = z.union([
   DecreaseDamageTakenTag.default({}),
   DecreaseHealGivenTag.default({}),
   DecreasePoolCostTag.default({}),
+  DecreaseMaxPoolsTag.default({}),
   DecreaseStatTag.default({}),
   DrainTag.default({}),
   ElementalSealTag.default({}),
@@ -794,6 +817,7 @@ export const AllTags = z.union([
   IncreaseReskinSlots.default({}),
   InjectJutsusTag.default({}),
   IncreasePoolCostTag.default({}),
+  IncreaseMaxPoolsTag.default({}),
   IncreaseRangeTag.default({}),
   IncreaseStatTag.default({}),
   ImmunityTag.default({}),
@@ -853,6 +877,7 @@ export const isPositiveUserEffect = (tag: ZodAllTags) => {
       "heal",
       "increasedamagegiven",
       "increaseheal",
+      "increasemaxpools",
       "increasestat",
       "increaserange",
       "decreasecooldown",
@@ -894,6 +919,7 @@ export const isNegativeUserEffect = (tag: ZodAllTags) => {
       "decreasedamagegiven",
       "decreaseheal",
       "decreasestat",
+      "decreasemaxpools",
       "drain",
       "elementalseal",
       "flee",

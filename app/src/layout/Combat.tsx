@@ -785,6 +785,8 @@ const Combat: React.FC<CombatProps> = (props) => {
           const endDrawUsers = profiler?.mark("animate_draw_users") ?? (() => {});
           const isAnyUserMoving = drawCombatUsers({
             group_users: group_users,
+            users: battleRef.current.usersState,
+            usersEffects: battleRef.current.usersEffects,
             grid: gridRef.current,
             playerId: suid,
             userData: userData,

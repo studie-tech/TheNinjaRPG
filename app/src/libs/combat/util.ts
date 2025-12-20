@@ -12,7 +12,7 @@ import {
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   WAR_TORN_SECTOR_BASE_MONEY,
 } from "@/drizzle/constants";
-import type { BattleType } from "@/drizzle/constants";
+import type { BattleType, PoolType } from "@/drizzle/constants";
 import { KAGE_CHALLENGE_WIN_PRESTIGE } from "@/drizzle/constants";
 import { CLAN_BATTLE_REWARD_POINTS } from "@/drizzle/constants";
 import { getUserCaps } from "@/drizzle/constants";
@@ -322,16 +322,207 @@ export const getUserBountySignups = (
 };
 
 /**
+ * Pool property key mappings
+ */
+type PoolMaxKey = "maxHealth" | "maxChakra" | "maxStamina";
+type PoolCurKey = "curHealth" | "curChakra" | "curStamina";
+
+/**
+ * Get the max and cur property keys for a given pool type
+ */
+export const getPoolKeys = (pool: PoolType): { max: PoolMaxKey; cur: PoolCurKey } => {
+  switch (pool) {
+    case "Health":
+      return { max: "maxHealth", cur: "curHealth" };
+    case "Chakra":
+      return { max: "maxChakra", cur: "curChakra" };
+    case "Stamina":
+      return { max: "maxStamina", cur: "curStamina" };
+  }
+};
+
+/**
+ * Get the pools affected from an effect, defaulting to ["Health"]
+ */
+export const getPoolsAffected = (
+  effect: { poolsAffected?: PoolType[] } | UserEffect,
+): PoolType[] => {
+  if ("poolsAffected" in effect && effect.poolsAffected && effect.poolsAffected.length > 0) {
+    return effect.poolsAffected as PoolType[];
+  }
+  return ["Health"];
+};
+
+/**
+ * Calculate total pool adjustment from active increasemaxpools/decreasemaxpools effects.
+ * This is a pure calculation - no mutation occurs.
+ * If no effects are provided, returns 0 (no adjustment).
+ */
+export const getPoolAdjustment = (
+  user: ReturnedUserState,
+  effects: UserEffect[] | undefined,
+  pool: PoolType,
+): number => {
+  if (!effects || effects.length === 0) return 0;
+
+  const { max } = getPoolKeys(pool);
+  const baseMax = user[max];
+  let adjustment = 0;
+
+  effects
+    .filter((e) => e.targetId === user.userId && isEffectActive(e))
+    .forEach((e) => {
+      if (e.type === "increasemaxpools" || e.type === "decreasemaxpools") {
+        const pools = getPoolsAffected(e);
+        if (pools.includes(pool)) {
+          const { power } = getPower(e);
+          const amount =
+            e.calculation === "percentage"
+              ? Math.floor((power / 100) * baseMax)
+              : power;
+          const effectAdjustment = e.type === "increasemaxpools" ? amount : -amount;
+          adjustment += effectAdjustment;
+        }
+      }
+    });
+
+  return adjustment;
+};
+
+/**
+ * Get effective max pool value (base + adjustments from active effects).
+ * Use this wherever you need to display or use max pool values in combat.
+ * If no effects are provided, returns the base max pool value.
+ *
+ * Invariant: user.max* always represents the original base value (never mutated).
+ * Effective = base + getPoolAdjustment()
+ */
+export const getEffectiveMaxPool = (
+  user: ReturnedUserState,
+  effects: UserEffect[] | undefined,
+  pool: PoolType,
+): number => {
+  const { max } = getPoolKeys(pool);
+  // user[max] is always the original base value (never mutated by pool adjustments)
+  const adjustment = getPoolAdjustment(user, effects, pool);
+  return Math.max(1, user[max] + adjustment);
+};
+
+/**
+ * Get effective current pool value.
+ * Use this wherever you need to display or use current pool values in combat.
+ * If no effects are provided, returns the base current pool value.
+ *
+ * Note: Current pool values are directly mutated by applyPoolAdjustmentsToBase,
+ * so we return user[cur] directly. The adjustment has already been applied to
+ * the stored value. We don't clamp to effectiveMax because the backend handles
+ * this correctly - clamping here would cause display issues when effects expire
+ * if there's any timing mismatch between curHealth and effects updates.
+ */
+export const getEffectiveCurPool = (
+  user: ReturnedUserState,
+  effects: UserEffect[] | undefined,
+  pool: PoolType,
+): number => {
+  const { cur } = getPoolKeys(pool);
+  // Current value is already adjusted by applyPoolAdjustmentsToBase
+  return Math.max(0, user[cur]);
+};
+
+/**
+ * Apply pool adjustments to current values using delta-adjustment model.
+ *
+ * Delta-adjustment model (Option 3 - no max mutation):
+ * - Max pool values (maxHealth, maxChakra, maxStamina) are NEVER mutated
+ * - They always represent the original base values
+ * - Frontend uses getEffectiveMaxPool() to calculate display max (base + adjustment)
+ * - Only current values are adjusted by the delta between previous and next adjustments
+ *
+ * This prevents the double-application bug where max was mutated here and then
+ * getEffectiveMaxPool added the adjustment again on the frontend.
+ */
+export const applyPoolAdjustmentsToBase = (
+  target: BattleUserState,
+  usersEffects: UserEffect[],
+) => {
+  // Store previous adjustments to calculate deltas
+  // We track the previous adjustment amount, not the original max
+  const prevHealthAdj = ((target as any)._prevHealthAdj as number) ?? 0;
+  const prevChakraAdj = ((target as any)._prevChakraAdj as number) ?? 0;
+  const prevStaminaAdj = ((target as any)._prevStaminaAdj as number) ?? 0;
+
+  // Calculate next adjustments from active effects
+  const nextHealthAdj = getPoolAdjustment(target, usersEffects, "Health");
+  const nextChakraAdj = getPoolAdjustment(target, usersEffects, "Chakra");
+  const nextStaminaAdj = getPoolAdjustment(target, usersEffects, "Stamina");
+
+  // Calculate deltas (change in adjustment since last call)
+  const healthDelta = nextHealthAdj - prevHealthAdj;
+  const chakraDelta = nextChakraAdj - prevChakraAdj;
+  const staminaDelta = nextStaminaAdj - prevStaminaAdj;
+
+  // Calculate effective max values for clamping (base + adjustment)
+  const effectiveMaxHealth = Math.max(1, target.maxHealth + nextHealthAdj);
+  const effectiveMaxChakra = Math.max(1, target.maxChakra + nextChakraAdj);
+  const effectiveMaxStamina = Math.max(1, target.maxStamina + nextStaminaAdj);
+
+  // Apply delta to current values with proper clamping
+  // Health: dead stays 0, living stays at least 1
+  if (target.curHealth <= 0) {
+    target.curHealth = 0;
+  } else {
+    target.curHealth = Math.min(
+      effectiveMaxHealth,
+      Math.max(1, target.curHealth + healthDelta),
+    );
+  }
+
+  // Chakra: zero stays 0, otherwise at least 1
+  if (target.curChakra <= 0) {
+    target.curChakra = 0;
+  } else {
+    target.curChakra = Math.min(
+      effectiveMaxChakra,
+      Math.max(1, target.curChakra + chakraDelta),
+    );
+  }
+
+  // Stamina: zero stays 0, otherwise at least 1
+  if (target.curStamina <= 0) {
+    target.curStamina = 0;
+  } else {
+    target.curStamina = Math.min(
+      effectiveMaxStamina,
+      Math.max(1, target.curStamina + staminaDelta),
+    );
+  }
+
+  // Store current adjustments for next delta calculation
+  if (nextHealthAdj !== 0 || nextChakraAdj !== 0 || nextStaminaAdj !== 0) {
+    (target as any)._prevHealthAdj = nextHealthAdj;
+    (target as any)._prevChakraAdj = nextChakraAdj;
+    (target as any)._prevStaminaAdj = nextStaminaAdj;
+  } else {
+    // Clear tracking when all adjustments are 0
+    delete (target as any)._prevHealthAdj;
+    delete (target as any)._prevChakraAdj;
+    delete (target as any)._prevStaminaAdj;
+  }
+};
+
+/**
  * Check if a single tag is a shared cooldown tag
  */
-export const tagHasSharedCooldown = (effect: ZodAllTags) => {
+export const tagHasSharedCooldown = (effect: { type: string }) => {
   return SHARED_COOLDOWN_TAGS.some((tag) => effect.type === tag);
 };
 
 /**
  * Check if an action has any of the shared cooldown tags
  */
-export const actionHasSharedCooldown = (action: { effects: ZodAllTags[] }): boolean => {
+export const actionHasSharedCooldown = (action: {
+  effects: Array<{ type: string }>;
+}): boolean => {
   return action.effects.some((effect) => tagHasSharedCooldown(effect));
 };
 
@@ -423,9 +614,11 @@ export const findUser = (
   users: ReturnedUserState[],
   longitude: number,
   latitude: number,
+  effects?: UserEffect[],
 ) => {
   return users.find(
-    (u) => u.longitude === longitude && u.latitude === latitude && stillInBattle(u),
+    (u) =>
+      u.longitude === longitude && u.latitude === latitude && stillInBattle(u, effects),
   );
 };
 
@@ -795,7 +988,7 @@ export const calcPoolCost = (
       if (e.type === "decreasepoolcost" && power > 0) power *= -1;
       // Apply the power to the pools affected
       if ("poolsAffected" in e) {
-        e.poolsAffected?.forEach((pool) => {
+        e.poolsAffected?.forEach((pool: PoolType) => {
           if (pool === "Health") {
             hpCost =
               e.calculation === "static"
@@ -981,15 +1174,17 @@ export const calcBattleResult = (
       targets = users.filter((u) => u.villageId !== user.villageId && !u.isSummon);
       friends = users.filter((u) => u.villageId === user.villageId && !u.isSummon);
     }
-    const survivingTargets = targets.filter(stillInBattle);
-    if (!stillInBattle(user) || survivingTargets.length === 0) {
+    const effects = battle.usersEffects;
+    const survivingTargets = targets.filter((t) => stillInBattle(t, effects));
+    if (!stillInBattle(user, effects) || survivingTargets.length === 0) {
       // Update the user left
       user.leftBattle = true;
 
       // Calculate ELO change
       const uExp = friends.reduce((a, b) => a + b.experience, 0) / friends.length;
       const oExp = targets.reduce((a, b) => a + b.experience, 0) / targets.length;
-      const didWin = user.curHealth > 0 && !user.fledBattle;
+      const effectiveHealth = getEffectiveCurPool(user, effects, "Health");
+      const didWin = effectiveHealth > 0 && !user.fledBattle;
       const maxGain = 32;
 
       // Check if we have a shrine boost - look up village from staticData
@@ -1950,6 +2145,8 @@ export const alignBattle = (
       }
       return true; // Keep active effects
     });
+    // Note: Pool adjustments are handled centrally in applyEffects post-pass
+    // (process.ts) to avoid double-application or drift
   }
   // Update the active user on the battle
   battle.activeUserId = actor.userId;
@@ -2273,15 +2470,20 @@ export const getDistanceToClosestEnemy = (
   if (!user) return null;
 
   // Get all enemy users (different village/controller)
+  const effects = battle.usersEffects;
   const villageIds = [
-    ...new Set(battle.usersState.filter(stillInBattle).map((u) => u.villageId)),
+    ...new Set(
+      battle.usersState
+        .filter((u) => stillInBattle(u, effects))
+        .map((u) => u.villageId),
+    ),
   ];
   const enemies = battle.usersState.filter((u) => {
     const isEnemy =
       villageIds.length > 1
         ? u.villageId !== user.villageId
         : u.controllerId !== user.controllerId;
-    return isEnemy && stillInBattle(u);
+    return isEnemy && stillInBattle(u, effects);
   });
 
   if (enemies.length === 0) return null;

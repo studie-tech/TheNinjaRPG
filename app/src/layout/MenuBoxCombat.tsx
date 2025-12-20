@@ -11,16 +11,23 @@ import { userBattleAtom } from "@/utils/UserContext";
 import { SideBannerTitle } from "@/components/layout/core4_default";
 import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 import { getKeystoneItem, getBloodline } from "@/libs/combat/util";
+import { useEffectivePools } from "@/hooks/useEffectivePools";
 
 const MenuBoxCombat: React.FC = () => {
   // State
   const { data: userData, timeDiff } = useUserData();
   const battle = useAtomValue(userBattleAtom);
 
-  // Battle user state
+  // Battle user state (enemy)
   const battleUser = battle?.usersState.find(
     (u) => u.userId !== userData?.userId && !u.isSummon,
   );
+
+  // Calculate effective pool values with fallbacks
+  const pools = useEffectivePools({
+    battleUser,
+    usersEffects: battle?.usersEffects,
+  });
 
   // Guard
   if (!battleUser) return null;
@@ -50,6 +57,7 @@ const MenuBoxCombat: React.FC = () => {
 
         <div className="pt-5">
           <StatusBar
+            key={`hp-${pools.curHealth}-${pools.maxHealth}`}
             title="HP"
             tooltip="Health"
             color="bg-red-500"
@@ -57,11 +65,12 @@ const MenuBoxCombat: React.FC = () => {
             lastRegenAt={battleUser.regenAt}
             regen={0}
             status={"AWAKE"}
-            current={battleUser?.curHealth}
-            total={battleUser?.maxHealth}
+            current={pools.curHealth}
+            total={pools.maxHealth}
             timeDiff={timeDiff}
           />
           <StatusBar
+            key={`cp-${pools.curChakra}-${pools.maxChakra}`}
             title="CP"
             tooltip="Chakra"
             color="bg-blue-500"
@@ -69,11 +78,12 @@ const MenuBoxCombat: React.FC = () => {
             lastRegenAt={battleUser.regenAt}
             regen={0}
             status={"AWAKE"}
-            current={battleUser?.curChakra}
-            total={battleUser?.maxChakra}
+            current={pools.curChakra}
+            total={pools.maxChakra}
             timeDiff={timeDiff}
           />
           <StatusBar
+            key={`sp-${pools.curStamina}-${pools.maxStamina}`}
             title="SP"
             tooltip="Stamina"
             color="bg-green-500"
@@ -81,8 +91,8 @@ const MenuBoxCombat: React.FC = () => {
             lastRegenAt={battleUser.regenAt}
             regen={0}
             status={"AWAKE"}
-            current={battleUser?.curStamina}
-            total={battleUser?.maxStamina}
+            current={pools.curStamina}
+            total={pools.maxStamina}
             timeDiff={timeDiff}
           />
         </div>

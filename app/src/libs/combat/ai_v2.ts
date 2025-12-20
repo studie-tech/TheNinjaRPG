@@ -2,14 +2,21 @@ import { availableUserActions } from "@/libs/combat/actions";
 import { performBattleAction } from "@/libs/combat/actions";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
 import { stillInBattle } from "@/libs/combat/actions";
-import { findUser, findBarrier, calcPoolCost, getAiProfile } from "@/libs/combat/util";
+import {
+  findUser,
+  findBarrier,
+  calcPoolCost,
+  getAiProfile,
+  getEffectiveCurPool,
+  getEffectiveMaxPool,
+} from "@/libs/combat/util";
 import { PathCalculator, findHex } from "@/libs/hexgrid";
 import { getBarriersBetween } from "@/libs/combat/util";
 import { ActionEndTurn, getBackupRules } from "@/validators/ai";
 import { enforceExtraRules } from "@/validators/ai";
 import { spiral } from "honeycomb-grid";
 import type { ActionEffect, BattleUserState } from "@/libs/combat/types";
-import type { CombatAction, GroundEffect } from "@/libs/combat/types";
+import type { CombatAction, GroundEffect, UserEffect } from "@/libs/combat/types";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { ZodAllTags } from "@/validators/combat";
 import type { TerrainHex } from "../hexgrid";
@@ -80,13 +87,13 @@ export const performAIaction = (
     });
     // User hex
     const origin = findHex(grid, user);
-    // Get user enemies
-    const enemies = getEnemies(battle.usersState, user.userId).map((u) =>
-      mapDistancesToTarget(grid, astar, u, origin),
+    // Get user enemies - use nextBattle to get latest state after earlier actions
+    const enemies = getEnemies(nextBattle.usersState, user.userId, nextBattle.usersEffects).map(
+      (u) => mapDistancesToTarget(grid, astar, u, origin),
     );
-    // Get user allies
-    const allies = getAllies(battle.usersState, user.userId).map((u) =>
-      mapDistancesToTarget(grid, astar, u, origin),
+    // Get user allies - use nextBattle to get latest state after earlier actions
+    const allies = getAllies(nextBattle.usersState, user.userId, nextBattle.usersEffects).map(
+      (u) => mapDistancesToTarget(grid, astar, u, origin),
     );
     // Derived for convenience
     const userWithDistance = { ...user, path: undefined, distance: 0 };
@@ -213,11 +220,15 @@ export const performAIaction = (
       /** ************************ */
       /** CHECK CONDITIONS         */
       /** ************************ */
+      const effects = nextBattle.usersEffects;
       const checked = rule.conditions.every((condition) => {
         const target = getTarget(condition);
         switch (condition.type) {
-          case "health_below":
-            return (user.curHealth / user.maxHealth) * 100 < condition.value;
+          case "health_below": {
+            const curHealth = getEffectiveCurPool(user, effects, "Health");
+            const maxHealth = getEffectiveMaxPool(user, effects, "Health");
+            return (curHealth / maxHealth) * 100 < condition.value;
+          }
           case "distance_higher_than":
             return target ? target.distance >= condition.value : false;
           case "distance_lower_than":
@@ -230,7 +241,10 @@ export const performAIaction = (
             return nextBattle.round < condition.value;
           case "does_not_have_summon":
             return !nextBattle.usersState.find(
-              (u) => u.controllerId === user.userId && u.isSummon && u.curHealth > 0,
+              (u) =>
+                u.controllerId === user.userId &&
+                u.isSummon &&
+                stillInBattle(u, effects),
             );
           case "has_effect": {
             if (condition.threshold === 0) return true;
@@ -419,11 +433,18 @@ export const performAIaction = (
  *
  * @param usersState - An array of `BattleUserState` representing the state of all users in the battle.
  * @param userId - The ID of the user for whom to find enemies.
+ * @param effects - Optional array of user effects for calculating effective health.
  * @returns An array of `BattleUserState` representing the enemy users.
  */
-const getEnemies = (usersState: BattleUserState[], userId: string) => {
+const getEnemies = (
+  usersState: BattleUserState[],
+  userId: string,
+  effects?: UserEffect[],
+) => {
   const villageIds = [
-    ...new Set(usersState.filter(stillInBattle).map((u) => u.villageId)),
+    ...new Set(
+      usersState.filter((u) => stillInBattle(u, effects)).map((u) => u.villageId),
+    ),
   ];
   const user = usersState.find((u) => u.userId === userId);
   return usersState
@@ -432,7 +453,7 @@ const getEnemies = (usersState: BattleUserState[], userId: string) => {
         ? u.villageId !== user?.villageId
         : u.controllerId !== user?.controllerId,
     )
-    .filter((u) => stillInBattle(u));
+    .filter((u) => stillInBattle(u, effects));
 };
 
 /**
@@ -444,11 +465,18 @@ const getEnemies = (usersState: BattleUserState[], userId: string) => {
  *
  * @param usersState - An array of `BattleUserState` objects representing the state of all users in the battle.
  * @param userId - The ID of the user for whom to find allies.
+ * @param effects - Optional array of user effects for calculating effective health.
  * @returns An array of `BattleUserState` objects representing the allies of the specified user.
  */
-const getAllies = (usersState: BattleUserState[], userId: string) => {
+const getAllies = (
+  usersState: BattleUserState[],
+  userId: string,
+  effects?: UserEffect[],
+) => {
   const villageIds = [
-    ...new Set(usersState.filter(stillInBattle).map((u) => u.villageId)),
+    ...new Set(
+      usersState.filter((u) => stillInBattle(u, effects)).map((u) => u.villageId),
+    ),
   ];
   const user = usersState.find((u) => u.userId === userId);
   return usersState
@@ -457,7 +485,7 @@ const getAllies = (usersState: BattleUserState[], userId: string) => {
         ? u.villageId === user?.villageId
         : u.controllerId === user?.controllerId,
     )
-    .filter((u) => stillInBattle(u));
+    .filter((u) => stillInBattle(u, effects));
 };
 
 const getBarriers = (

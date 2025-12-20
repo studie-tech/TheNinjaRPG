@@ -49,6 +49,8 @@ import {
   maskBattle,
   maskBattleDynamic,
   alignBattle,
+  isEffectActive,
+  applyPoolAdjustmentsToBase,
 } from "@/libs/combat/util";
 import { createAction, saveUsage } from "@/libs/combat/database";
 import { fetchUserSkills } from "@/server/api/routers/skillTree";
@@ -1822,6 +1824,20 @@ export const initiateBattle = async (
       isSummon: false,
     });
 
+  // Apply pool adjustments to base values for all users with pool effects at battle start
+  usersState.forEach((user) => {
+    const hasPoolEffects = userEffects.some(
+      (e) =>
+        e.targetId === user.userId &&
+        (e.type === "increasemaxpools" || e.type === "decreasemaxpools") &&
+        isEffectActive(e),
+    );
+    if (hasPoolEffects) {
+      applyPoolAdjustmentsToBase(user, userEffects);
+    }
+  });
+
+
   // Set attacker to be the agressor
   if (usersState[0]) usersState[0].isAggressor = true;
 
@@ -2825,7 +2841,7 @@ export const processUsersForBattle = async (
     for (const pending of pendingSkillEffects) {
       const creator = usersState.find((u) => u.userId === pending.creatorId);
       if (!creator) continue;
-      const targets = usersState.filter(stillInBattle);
+      const targets = usersState.filter((u) => stillInBattle(u));
       for (const target of targets) {
         for (const effect of pending.effects) {
           const realized = realizeTag({

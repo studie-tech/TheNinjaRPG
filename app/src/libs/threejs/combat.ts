@@ -34,7 +34,11 @@ import { getAffectedTiles, getVillage, getClan } from "@/libs/combat/util";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
 import { calcActiveUser } from "@/libs/combat/actions";
 import { stillInBattle } from "@/libs/combat/actions";
-import { getBattleGrid } from "@/libs/combat/util";
+import {
+  getBattleGrid,
+  getEffectiveCurPool,
+  getEffectiveMaxPool,
+} from "@/libs/combat/util";
 import { getTileInfo } from "@/libs/threejs/biome";
 import { applyWaveShader } from "@/libs/threejs/shaders";
 import {
@@ -499,7 +503,7 @@ export const drawCombatEffects = (info: {
   // Draw all user effects
   usersEffects.forEach((effect) => {
     const user = usersState.find((u) => u.userId === effect.targetId);
-    if (user && stillInBattle(user)) {
+    if (user && stillInBattle(user, usersEffects)) {
       const hex = findHex(info.grid, {
         x: user.longitude,
         y: user.latitude,
@@ -1161,6 +1165,8 @@ const updateAssetOpacityForUsers = (
  */
 export const drawCombatUsers = (info: {
   group_users: Group;
+  users: ReturnedUserState[];
+  usersEffects?: UserEffect[];
   grid: Grid<TerrainHex>;
   playerId: string | undefined;
   userData: UserData;
@@ -1173,7 +1179,8 @@ export const drawCombatUsers = (info: {
   const endMark = profiler.mark("drawCombatUsers");
 
   // Destruct
-  const { group_users, grid, playerId, userData, group_assets, battle } = info;
+  const { users, group_users, grid, playerId, userData, group_assets, usersEffects, battle } =
+    info;
   // Cache or create a pathfinder for this group
   const pathFinder = getOrCreatePathFinder(group_users, grid);
 
@@ -1192,7 +1199,7 @@ export const drawCombatUsers = (info: {
 
   // Draw the users
   const drawnIds = new Set<string>();
-  battle.usersState.forEach((user) => {
+  users.forEach((user) => {
     const hex = findHex(grid, {
       x: user.longitude,
       y: user.latitude,
@@ -1259,7 +1266,7 @@ export const drawCombatUsers = (info: {
           anyUserMoving = true;
         }
         // Handle remove users from combat.
-        if (!stillInBattle(user) && user.hidden === undefined) {
+        if (!stillInBattle(user, usersEffects) && user.hidden === undefined) {
           setVisible(userMesh, false);
           if (user.isOriginal) {
             const tombstone = userMesh.getObjectByName("tombstone") as Sprite;
@@ -1267,13 +1274,19 @@ export const drawCombatUsers = (info: {
           }
           user.hidden = true;
         }
-        // userMesh.material.color.offsetHSL(0, 0, 0.1);
-        updateStatusBar("hp_current", userMesh, user.curHealth / user.maxHealth);
-        if (user.curStamina && user.maxStamina) {
-          updateStatusBar("sp_current", userMesh, user.curStamina / user.maxStamina);
+        // Update status bars using effective pool values
+        const maxHealth = getEffectiveMaxPool(user, usersEffects, "Health");
+        const curHealth = getEffectiveCurPool(user, usersEffects, "Health");
+        updateStatusBar("hp_current", userMesh, curHealth / maxHealth);
+        if ("curStamina" in user && "maxStamina" in user) {
+          const maxStamina = getEffectiveMaxPool(user, usersEffects, "Stamina");
+          const curStamina = getEffectiveCurPool(user, usersEffects, "Stamina");
+          updateStatusBar("sp_current", userMesh, curStamina / maxStamina);
         }
-        if (user.curChakra && user.maxChakra) {
-          updateStatusBar("cp_current", userMesh, user.curChakra / user.maxChakra);
+        if ("curChakra" in user && "maxChakra" in user) {
+          const maxChakra = getEffectiveMaxPool(user, usersEffects, "Chakra");
+          const curChakra = getEffectiveCurPool(user, usersEffects, "Chakra");
+          updateStatusBar("cp_current", userMesh, curChakra / maxChakra);
         }
 
         drawnIds.add(userMesh.name);

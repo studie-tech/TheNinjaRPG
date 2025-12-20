@@ -999,6 +999,17 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                               {parsedEffect.direction.toLowerCase()}
                             </span>
                           )}
+                        {"poolsAffected" in parsedEffect &&
+                          parsedEffect.poolsAffected &&
+                          parsedEffect.poolsAffected.length > 0 &&
+                          (effect.type === "increasemaxpools" ||
+                            effect.type === "decreasemaxpools" ||
+                            effect.type === "drain") && (
+                            <span>
+                              <b>Pools Affected: </b>
+                              {parsedEffect.poolsAffected.join(", ")}
+                            </span>
+                          )}
                       </div>
                     </>
                   )}

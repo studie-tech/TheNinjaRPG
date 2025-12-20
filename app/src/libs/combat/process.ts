@@ -1,6 +1,6 @@
 import { dmgConfig as config, damageModifierTypes } from "./constants";
 import { VisualTag } from "@/validators/combat";
-import { findUser, findBarrier, getItem } from "./util";
+import { findUser, findBarrier, getItem, applyPoolAdjustmentsToBase } from "./util";
 import { collapseConsequences, sortEffects, getEffectStage } from "./util";
 import { calcApplyRatio } from "./util";
 import { calcEffectRoundInfo, isEffectActive } from "./util";
@@ -22,7 +22,14 @@ import {
   increaseCooldown,
   decreaseCooldown,
 } from "./tags";
-import { increaseStats, decreaseStats, copy, mirror } from "./tags";
+import {
+  increaseStats,
+  decreaseStats,
+  copy,
+  mirror,
+  increaseMaxPools,
+  decreaseMaxPools,
+} from "./tags";
 import { increaseDamageGiven, decreaseDamageGiven } from "./tags";
 import { increaseDamageTaken, decreaseDamageTaken } from "./tags";
 import { increaseHealGiven, decreaseHealGiven } from "./tags";
@@ -703,6 +710,26 @@ export const applyEffects = (
       }
     });
 
+  // Apply pool adjustments to base values for all users with pool effects
+  newUsersState.forEach((user) => {
+    const hasPoolEffects = newUsersEffects.some(
+      (e) =>
+        e.targetId === user.userId &&
+        (e.type === "increasemaxpools" || e.type === "decreasemaxpools") &&
+        isEffectActive(e),
+    );
+    // Check if we have tracking fields from a previous adjustment
+    const hadPoolEffects =
+      (user as any)._prevHealthAdj !== undefined ||
+      (user as any)._prevChakraAdj !== undefined ||
+      (user as any)._prevStaminaAdj !== undefined;
+
+    // Call if we have pool effects now OR had them last round (to apply delta on expiration)
+    if (hasPoolEffects || hadPoolEffects) {
+      applyPoolAdjustmentsToBase(user, newUsersEffects);
+    }
+  });
+
   return {
     newBattle: {
       ...battle,
@@ -857,6 +884,10 @@ export const applySingleEffect = (
           info = absorb(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "increasestat") {
           info = increaseStats(effect, newUsersEffects, curTarget);
+        } else if (effect.type === "increasemaxpools") {
+          info = increaseMaxPools(effect, newUsersEffects, newTarget);
+        } else if (effect.type === "decreasemaxpools") {
+          info = decreaseMaxPools(effect, newUsersEffects, newTarget);
         } else if (effect.type === "increasecooldown") {
           info = increaseCooldown(effect, usersEffects, curTarget);
         } else if (effect.type === "decreasecooldown") {
@@ -967,7 +998,6 @@ export const applySingleEffect = (
     );
   }
 
-  // Process round reduction & tag removal
   if ((isEffectActive(effect) && !effect.fromGround) || effect.type === "visual") {
     effect.isNew = false;
     newUsersEffects.push(effect);

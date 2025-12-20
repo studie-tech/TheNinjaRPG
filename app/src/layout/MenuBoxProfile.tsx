@@ -18,6 +18,7 @@ import { ShieldCheck, Swords, Moon, Sun, Dumbbell, Star } from "lucide-react";
 import { LayoutList, Atom } from "lucide-react";
 import { sealCheck } from "@/libs/combat/tags";
 import { isEffectActive, getPreventTypeName } from "@/libs/combat/util";
+import { useEffectivePools } from "@/hooks/useEffectivePools";
 import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
 import { useGameMenu } from "@/libs/menus";
 import { secondsFromDate } from "@/utils/time";
@@ -129,6 +130,13 @@ const MenuBoxProfile: React.FC = () => {
   // Battle user state
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
 
+  // Calculate effective pool values with fallbacks (effectivePools → battleUser → userData)
+  const pools = useEffectivePools({
+    battleUser,
+    usersEffects: battle?.usersEffects,
+    userData,
+  });
+
   // Status link
   const statusLink = (status: (typeof UserStatuses)[number] | "UNKNOWN") => {
     switch (status) {
@@ -190,6 +198,7 @@ const MenuBoxProfile: React.FC = () => {
 
           <div className="pt-5">
             <StatusBar
+              key={`hp-${pools.curHealth}-${pools.maxHealth}`}
               title="HP"
               tooltip="Health"
               color="bg-red-500"
@@ -197,11 +206,12 @@ const MenuBoxProfile: React.FC = () => {
               lastRegenAt={userData?.regenAt}
               regen={battleUser ? 0 : userData?.regeneration}
               status={battleUser ? "AWAKE" : userData?.status}
-              current={battleUser?.curHealth || userData?.curHealth}
-              total={battleUser?.maxHealth || userData?.maxHealth}
+              current={pools.curHealth}
+              total={pools.maxHealth}
               timeDiff={timeDiff}
             />
             <StatusBar
+              key={`cp-${pools.curChakra}-${pools.maxChakra}`}
               title="CP"
               tooltip="Chakra"
               color="bg-blue-500"
@@ -209,11 +219,12 @@ const MenuBoxProfile: React.FC = () => {
               lastRegenAt={userData?.regenAt}
               regen={battleUser ? 0 : userData?.regeneration}
               status={battleUser ? "AWAKE" : userData?.status}
-              current={battleUser?.curChakra || userData?.curChakra}
-              total={battleUser?.maxChakra || userData?.maxChakra}
+              current={pools.curChakra}
+              total={pools.maxChakra}
               timeDiff={timeDiff}
             />
             <StatusBar
+              key={`sp-${pools.curStamina}-${pools.maxStamina}`}
               title="SP"
               tooltip="Stamina"
               color="bg-green-500"
@@ -221,8 +232,8 @@ const MenuBoxProfile: React.FC = () => {
               lastRegenAt={userData?.regenAt}
               regen={battleUser ? 0 : userData?.regeneration}
               status={battleUser ? "AWAKE" : userData?.status}
-              current={battleUser?.curStamina || userData?.curStamina}
-              total={battleUser?.maxStamina || userData?.maxStamina}
+              current={pools.curStamina}
+              total={pools.maxStamina}
               timeDiff={timeDiff}
             />
             {expRequired &&
@@ -555,7 +566,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   const sealEffects = filteredEffects.filter((e) => e.type === "seal" && !e.isNew);
 
   // Collapse consequences based on their type & calculation type
-  const collapsedEffects =
+  const collapsedEffects: CollapsedEffect[] =
     filteredEffects
       .filter(isEffectActive)
       .filter((e) => e.targetId === userId)
@@ -566,6 +577,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           ...(("generalTypes" in val && val?.generalTypes) || []),
           ...(("elements" in val && val?.elements) || []),
           ...(("actionsAffected" in val && val?.actionsAffected) || []),
+          ...(("poolsAffected" in val && val?.poolsAffected) || []),
         ];
         const isSealed = sealCheck(val, sealEffects);
         let cats = stats.length === 0 ? ["All"] : stats;
@@ -575,9 +587,13 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           cats.push("All");
         }
         const dual = val.type.includes("increase") || val.type.includes("decrease");
-        const baseType = dual
+        let baseType = dual
           ? val.type.replace("increase", "").replace("decrease", "")
           : val.type;
+        // Normalize maxpools to pools for display
+        if (baseType === "maxpools") {
+          baseType = "pools";
+        }
         const sign = val.type.includes("decrease") ? -1 : 1;
 
         // Clean, targeted handling for wound effects only
@@ -595,7 +611,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         cats.forEach((cat) => {
           const valBlocks = "blocks" in val ? (val.blocks as string) : undefined;
           const found = acc.find(
-            (e) =>
+            (e: CollapsedEffect) =>
               e.type === baseType &&
               e.calculation === val.calculation &&
               e.category === cat &&
@@ -630,6 +646,12 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     // Special handling for heal effects - show as multiplicative
     if (e.type === "heal" && e.calculation === "percentage") {
       return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}%`;
+    }
+    // Special handling for pools - show pool name in the value text
+    if (e.type === "pools") {
+      return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${
+        e.calculation === "percentage" ? "%" : ""
+      }`;
     }
     // Standard handling for all other effects
     return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${
@@ -709,6 +731,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     "timecompression",
     "timedilation",
     "redirection",
+    "pools",
   ]);
 
   // Calculate net multiplicative heal given effects
@@ -762,8 +785,12 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   }
 
   const statusEffects = collapsedEffects.filter((e) => STATUS_TYPES.has(e.type));
-  const damageGivenEffects = collapsedEffects.filter((e) => e.type === "damagegiven");
-  const damageTakenEffects = collapsedEffects.filter((e) => e.type === "damagetaken");
+  const damageGivenEffects = collapsedEffects.filter(
+    (e) => e.type === "damagegiven",
+  );
+  const damageTakenEffects = collapsedEffects.filter(
+    (e) => e.type === "damagetaken",
+  );
   const statEffects = collapsedEffects.filter((e) => e.type === "stat");
   const damageEffects = collapsedEffects.filter(
     (e) => e.type === "damage" || e.type === "wound",
@@ -805,6 +832,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     timecompression: "Time Compression",
     timedilation: "Time Dilation",
     redirection: "Redirection",
+    pools: "Pool",
   };
 
   const getEffectLabel = (e: (typeof statusEffects)[number]) => {
