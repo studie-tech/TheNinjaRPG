@@ -442,18 +442,18 @@ export const PvpBattleTypes: BattleType[] = [
   "TOURNAMENT",
   "RANKED_SPARRING",
   "KAGE_PVP",
+  "KAGE_AI",
   "RANKED_PVP",
+  "SHRINE_WAR",
 ];
 
 export const PveBattleTypes: BattleType[] = [
   "ARENA",
   "QUEST",
   "RANDOM_ENCOUNTER",
-  "KAGE_AI",
   "TRAINING",
   "VILLAGE_PROTECTOR",
   "CLAN_CHALLENGE",
-  "SHRINE_WAR",
 ];
 
 export const QuestBattleTypes: BattleType[] = [
