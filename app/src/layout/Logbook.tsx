@@ -73,7 +73,7 @@ const Logbook: React.FC = () => {
 const LogbookAchievements: React.FC = () => {
   const { data: userData } = useRequiredUserData();
   const [activeElement, setActiveElement] = useState<string>("");
-  const quests = userData?.userQuests.filter((uq) =>
+  const quests = userData?.userQuests?.filter((uq) =>
     ["tier", "achievement"].includes(uq.quest.questType),
   );
 
@@ -89,7 +89,7 @@ const LogbookAchievements: React.FC = () => {
   return (
     <div className="">
       {userData?.userQuests
-        .filter((uq) => ["tier", "achievement"].includes(uq.quest.questType))
+        ?.filter((uq) => ["tier", "achievement"].includes(uq.quest.questType))
         .filter((uq) => uq.completed === 0)
         ?.map((uq, i) => {
           const tracker = userData?.questData?.find((q) => q.id === uq.questId);
@@ -121,7 +121,7 @@ export default Logbook;
 const LogbookActive: React.FC = () => {
   const { data: userData } = useRequiredUserData();
   const [activeElement, setActiveElement] = useState<string>("");
-  const quests = userData?.userQuests.filter(
+  const quests = userData?.userQuests?.filter(
     (uq) => !["tier", "achievement"].includes(uq.quest.questType),
   );
 
