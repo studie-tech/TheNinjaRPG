@@ -16,6 +16,7 @@ import ParticleProvider from "@/components/ui/particles";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import LayoutSwitcher from "@/layout/LayoutSwitcher";
 import { InstallPromptProvider } from "@/hooks/useInstallPrompt";
+import { StoragePolyfill } from "@/components/StoragePolyfill";
 import type { Viewport, Metadata } from "next";
 
 import "../styles/globals.css";
@@ -29,34 +30,36 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           /** https://docs.uploadthing.com/getting-started/appdir */
           routerConfig={extractRouterConfig(ourFileRouter)}
         />
-        <ClerkProvider
-          telemetry={false}
-          appearance={{
-            variables: {
-              colorPrimary: "#ce7e00",
-              colorText: "black",
-            },
-          }}
-        >
-          <MultisessionAppSupport>
-            <TrpcClientProvider>
-              <UserContextProvider>
-                <InstallPromptProvider>
-                  {env.NEXT_PUBLIC_MEASUREMENT_ID && (
-                    <GoogleTagManager gtmId={env.NEXT_PUBLIC_MEASUREMENT_ID} />
-                  )}
-                  <LayoutSwitcher>{children}</LayoutSwitcher>
-                  <Toaster />
-                  <AcceptWarning />
-                  <PWAManager />
-                  <InstallPrompt />
-                  <ParticleProvider />
-                  <SpeedInsights sampleRate={0.03} />
-                </InstallPromptProvider>
-              </UserContextProvider>
-            </TrpcClientProvider>
-          </MultisessionAppSupport>
-        </ClerkProvider>
+        <StoragePolyfill>
+          <ClerkProvider
+            telemetry={false}
+            appearance={{
+              variables: {
+                colorPrimary: "#ce7e00",
+                colorText: "black",
+              },
+            }}
+          >
+            <MultisessionAppSupport>
+              <TrpcClientProvider>
+                <UserContextProvider>
+                  <InstallPromptProvider>
+                    {env.NEXT_PUBLIC_MEASUREMENT_ID && (
+                      <GoogleTagManager gtmId={env.NEXT_PUBLIC_MEASUREMENT_ID} />
+                    )}
+                    <LayoutSwitcher>{children}</LayoutSwitcher>
+                    <Toaster />
+                    <AcceptWarning />
+                    <PWAManager />
+                    <InstallPrompt />
+                    <ParticleProvider />
+                    <SpeedInsights sampleRate={0.03} />
+                  </InstallPromptProvider>
+                </UserContextProvider>
+              </TrpcClientProvider>
+            </MultisessionAppSupport>
+          </ClerkProvider>
+        </StoragePolyfill>
       </body>
     </html>
   );
