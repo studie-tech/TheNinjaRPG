@@ -33,6 +33,7 @@ Sentry.init({
     "Cannot read properties of undefined (reading 'bind')", // Cookiebot error on resize
     "Cannot read properties of null (reading 'parentNode')", // Cookiebot error in calcFadeState when clicking "More Details"
     "null is not an object (evaluating 'element.parentNode')", // Cookiebot error in calcFadeState (Safari format)
+    "Cannot set properties of null (setting 'innerHTML')", // Cookiebot error in sortBannerButtons when dialog not initialized
     "UnrecognizedActionError", // New deployment
     "undefined is not an object (evaluating 'e[a].call')", // Somethign internal never seen by user.
     "Hydration Error", // Based on sentry inspection not seen by user
