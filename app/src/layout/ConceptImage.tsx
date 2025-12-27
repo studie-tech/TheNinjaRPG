@@ -1,8 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "@/layout/Image";
-import { Trash2, Flag, Info, Share2, Copy, Check } from "lucide-react";
+import {
+  Trash2,
+  Flag,
+  Info,
+  Share2,
+  Copy,
+  Check,
+  Loader2,
+  Video,
+  ImageIcon,
+} from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { useUserData } from "@/utils/UserContext";
 import { secondsPassed } from "@/utils/time";
@@ -14,6 +24,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import ReportUser from "@/layout/Report";
 import {
   IMG_ICON_FACEBOOK,
@@ -35,9 +46,45 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   const { image, showDetails } = props;
   const { data: user } = useUserData();
   const [copied, setCopied] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const hasInvalidatedRef = useRef(false);
 
   // tRPC Utility
   const utils = api.useUtils();
+
+  // Check if this is a video that's still processing
+  const isVideo = image?.mediaType === "video";
+  const isProcessing =
+    isVideo && !image?.done && (image?.replicateId || image?.status === "uploading");
+
+  // Poll for video status when processing
+  const { data: videoStatus } = api.conceptart.checkVideoStatus.useQuery(
+    { id: image?.id ?? "" },
+    {
+      enabled: !!isProcessing,
+      refetchInterval: isProcessing ? 5000 : false, // Poll every 5 seconds
+    },
+  );
+
+  // Update progress and refetch when video is ready
+  useEffect(() => {
+    if (videoStatus && "progress" in videoStatus && videoStatus.progress) {
+      setVideoProgress(videoStatus.progress);
+    }
+    if (
+      videoStatus &&
+      "status" in videoStatus &&
+      videoStatus.status === "succeeded" &&
+      "videoUrl" in videoStatus &&
+      videoStatus.videoUrl &&
+      !hasInvalidatedRef.current
+    ) {
+      // Video is ready, invalidate to get updated data (only once)
+      hasInvalidatedRef.current = true;
+      void utils.conceptart.get.invalidate({ id: image?.id ?? "" });
+      void utils.conceptart.getAll.invalidate();
+    }
+  }, [videoStatus, image?.id, utils]);
 
   // Convenience function for refetching data
   const refetch = () => {
@@ -63,19 +110,44 @@ const ConceptImage: React.FC<InputProps> = (props) => {
     },
   });
 
-  // Return skeleton
-  if (!image?.image || !image.done) {
+  // Return loading state for processing videos
+  if (isProcessing) {
+    const statusMessage =
+      videoStatus && "message" in videoStatus && typeof videoStatus.message === "string"
+        ? videoStatus.message
+        : "Generating video...";
+    return (
+      <div className="aspect-256/345 w-full rounded-xl p-4 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-purple-900 to-indigo-900 text-center text-white">
+        <Video className="h-12 w-12 animate-pulse text-purple-300" />
+        <div className="text-sm font-medium">{statusMessage}</div>
+        {videoProgress > 0 && (
+          <div className="w-full max-w-[200px]">
+            <Progress value={videoProgress} className="h-2" />
+            <div className="mt-1 text-xs text-purple-200">{videoProgress}%</div>
+          </div>
+        )}
+        <Loader2 className="h-6 w-6 animate-spin text-purple-300" />
+      </div>
+    );
+  }
+
+  // Return skeleton for other loading states (need at least thumbnail image)
+  if (!image?.image || !image?.done) {
     const secs = secondsPassed(image?.createdAt || new Date());
-    if (image && secs > 20 && image.status === "starting") {
-      image.status = "Starting cluster, this may take up to 1-5 minutes";
+    let status = image?.status;
+    if (image && secs > 20 && status === "starting") {
+      status = "Starting cluster, this may take up to 1-5 minutes";
     }
 
     return (
       <div className="aspect-256/345 w-full rounded-xl p-2 flex animate-pulse flex-row items-center justify-center bg-amber-500 text-center text-black">
-        {image?.status}
+        {status}
       </div>
     );
   }
+
+  // Determine if we should show video (only on detail page when video exists)
+  const showVideo = isVideo && showDetails && image.video;
 
   // Show image
   const hasLike = image?.likes?.find(
@@ -95,17 +167,45 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   return (
     <div>
       <div className="relative">
-        <Image
-          src={image.image}
-          width={props.width || 512}
-          height={props.height || 768}
-          quality={100}
-          unoptimized={true}
-          placeholder="blur"
-          blurDataURL="data:text/plain;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mPU0Mg4AwACvgGGUxJrcQAAAABJRU5ErkJggg=="
-          alt={image.prompt || image.id}
-          className="w-full cursor-pointer rounded-md"
-        />
+        {showVideo ? (
+          <video
+            src={image.video!}
+            width={props.width || 512}
+            height={props.height || 768}
+            className="w-full cursor-pointer rounded-md"
+            controls
+            muted
+            playsInline
+            preload="metadata"
+          />
+        ) : (
+          <div className="relative">
+            <Image
+              src={image.image}
+              width={props.width || 512}
+              height={props.height || 768}
+              quality={100}
+              unoptimized={true}
+              placeholder="blur"
+              blurDataURL="data:text/plain;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mPU0Mg4AwACvgGGUxJrcQAAAABJRU5ErkJggg=="
+              alt={image.prompt || image.id}
+              className="w-full cursor-pointer rounded-md"
+            />
+            {/* Video badge for thumbnails on listing page */}
+            {isVideo && !showDetails && (
+              <div className="absolute top-2 left-2 bg-black/70 rounded px-1.5 py-0.5 flex items-center gap-1">
+                <Video className="h-3 w-3 text-white" />
+                <span className="text-xs text-white">Video</span>
+              </div>
+            )}
+            {!isVideo && !showDetails && (
+              <div className="absolute top-2 left-2 bg-black/70 rounded px-1.5 py-0.5 flex items-center gap-1">
+                <ImageIcon className="h-3 w-3 text-white" />
+                <span className="text-xs text-white">Image</span>
+              </div>
+            )}
+          </div>
+        )}
         <div className="absolute right-2 top-2">
           {image.userId === user?.userId && (
             <Trash2
@@ -119,13 +219,18 @@ const ConceptImage: React.FC<InputProps> = (props) => {
               }}
             />
           )}
-          {image.image && showDetails && (
+          {showDetails && (
             <ReportUser
               user={image.user}
               content={{
                 id: image.id,
-                title: "Purposefully inappropriate image",
-                content: '<img src="' + image.image + '" width="200" />',
+                title: isVideo
+                  ? "Purposefully inappropriate video"
+                  : "Purposefully inappropriate image",
+                content:
+                  isVideo && image.video
+                    ? '<video src="' + image.video + '" width="200" controls />'
+                    : '<img src="' + image.image + '" width="200" />',
               }}
               system="concept_art"
               button={<Flag className="h-6 w-6 hover:text-orange-500 text-white" />}

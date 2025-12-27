@@ -75,7 +75,7 @@
     "@types/draco3dgltf": "^1.4.3",
     "@types/node-fetch": "^2.6.12",
     "@types/stats.js": "^0.17.4",
-    "@uploadthing/react": "^7.3.2",
+    "@uploadthing/react": "^7.3.3",
     "@upstash/ratelimit": "^2.0.5",
     "@upstash/redis": "^1.35.0",
     "@vercel/og": "^0.6.8",
@@ -137,7 +137,7 @@
     "tailwindcss-animate": "^1.0.7",
     "text-to-svg": "^3.1.5",
     "three": "0.181.1",
-    "uploadthing": "7.7.3",
+    "uploadthing": "7.7.4",
     "zod": "3.24.2"
   },
   "devDependencies": {

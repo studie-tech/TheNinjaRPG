@@ -14,13 +14,15 @@ interface ConceptBox_ConceptImageProps
 
 const ConceptBox_ConceptImage: React.FC<ConceptBox_ConceptImageProps> = (props) => {
   // Fetch data
-  const { data: image, isFetching } = api.conceptart.get.useQuery(
+  // Use isLoading (not isFetching) to only show loader on initial load
+  // This prevents unmounting ConceptImage during background refetches
+  const { data: image, isLoading } = api.conceptart.get.useQuery(
     { id: props.imageid ?? "" },
     { enabled: !!props.imageid },
   );
 
-  // Guard
-  if (isFetching) return <Loader explanation="Fetching image" />;
+  // Guard - only show loader on initial load, not background refetches
+  if (isLoading) return <Loader explanation="Fetching media" />;
 
   // Render
   return (

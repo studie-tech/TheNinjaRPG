@@ -64,6 +64,10 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
     );
   }
 
+  // Determine if this is a video with video content available
+  const isVideo = image.mediaType === "video";
+  const hasVideo = isVideo && image.video;
+
   // Check user reactions
   const hasLike = image?.likes?.find(
     (like) => like.userId === user?.userId && like.type === "like",
@@ -79,15 +83,28 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
     <div className="my-2 inline-block max-w-[256px] overflow-hidden rounded-lg border border-slate-600 bg-slate-800/50">
       <div className="relative">
         <Link href={`/conceptart/${image.id}`}>
-          <Image
-            src={image.image}
-            width={256}
-            height={384}
-            quality={80}
-            unoptimized={true}
-            alt={image.prompt || "Concept Art"}
-            className="block w-full cursor-pointer transition-opacity hover:opacity-90"
-          />
+          {hasVideo ? (
+            <video
+              src={image.video!}
+              width={256}
+              height={384}
+              className="block w-full cursor-pointer transition-opacity hover:opacity-90"
+              controls
+              muted
+              playsInline
+              preload="metadata"
+            />
+          ) : (
+            <Image
+              src={image.image}
+              width={256}
+              height={384}
+              quality={80}
+              unoptimized={true}
+              alt={image.prompt || "Concept Art"}
+              className="block w-full cursor-pointer transition-opacity hover:opacity-90"
+            />
+          )}
         </Link>
       </div>
 

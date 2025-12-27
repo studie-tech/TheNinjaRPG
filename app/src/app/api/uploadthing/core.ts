@@ -55,6 +55,11 @@ export const ourFileRouter = {
     .onUploadComplete(({ file }) => {
       return { fileUrl: file.ufsUrl };
     }),
+  conceptArtFrameUploader: f({ image: { maxFileSize: "256KB" } })
+    .middleware(async () => await avatarMiddleware())
+    .onUploadComplete(({ file }) => {
+      return { fileUrl: file.ufsUrl };
+    }),
   modelUploader: f({ "model/gltf-binary": { maxFileSize: "256KB" } })
     .middleware(async () => await avatarMiddleware())
     .onUploadComplete(({ file }) => {

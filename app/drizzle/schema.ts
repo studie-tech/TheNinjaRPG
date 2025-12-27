@@ -3100,6 +3100,9 @@ export const conceptImage = mysqlTable(
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     image: varchar("image", { length: 191 }),
+    video: varchar("video", { length: 191 }),
+    mediaType: mysqlEnum("mediaType", ["image", "video"]).default("image").notNull(),
+    replicateId: varchar("replicateId", { length: 191 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -3123,7 +3126,7 @@ export const conceptImage = mysqlTable(
   },
   (table) => {
     return {
-      avatarKey: uniqueIndex("image_avatar_key").on(table.image),
+      imageKey: uniqueIndex("concept_image_key").on(table.image),
       doneIdx: index("image_done_idx").on(table.done),
       userIdIdx: index("image_userId_idx").on(table.userId),
     };

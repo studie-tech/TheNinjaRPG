@@ -158,6 +158,7 @@ export const uploadToUT = async (url: string) => {
 
 /**
  * Create a fast image from text using Replicate
+ * Uses server-to-server transfer - UploadThing fetches directly from Replicate URL
  * @param prompt - The prompt to create the image from
  * @param disable_safety_checker - Whether to disable the safety checker
  * @returns The URL of the image
@@ -166,19 +167,27 @@ export const fastTxt2imgReplicate = async (config: {
   prompt: string;
   aspect_ratio?: "1:1" | "16:9" | "9:16";
   disable_safety_checker?: boolean;
+  output_quality?: number;
+  mega_pixels?: "0.25" | "1";
 }) => {
-  const { prompt, aspect_ratio = "1:1", disable_safety_checker = false } = config;
+  const {
+    prompt,
+    aspect_ratio = "1:1",
+    disable_safety_checker = false,
+    output_quality = 50,
+    mega_pixels = "0.25",
+  } = config;
   const replicate = new Replicate({
     auth: env.REPLICATE_API_TOKEN,
   });
   const input = {
     prompt: prompt,
     go_fast: true,
-    megapixels: "0.25",
+    megapixels: mega_pixels,
     num_outputs: 1,
     aspect_ratio: aspect_ratio,
     output_format: "webp",
-    output_quality: 50,
+    output_quality: output_quality,
     num_inference_steps: 4,
     disable_safety_checker: disable_safety_checker,
   };
@@ -187,8 +196,11 @@ export const fastTxt2imgReplicate = async (config: {
   })) as FileOutput[];
   const output = outputs?.[0];
   if (!output) throw new Error("No output from AI model");
-  const blob = await output.blob();
-  const uploadedFile = await uploadFileFromReplicate("preview", blob, "webp");
+  // Use URL-based upload - UploadThing fetches directly from Replicate
+  const replicateUrl = output.url();
+  const utapi = new UTApi();
+  const name = `preview-${nanoid()}.webp`;
+  const uploadedFile = await utapi.uploadFilesFromUrl({ url: replicateUrl, name });
   return uploadedFile;
 };
 
@@ -428,14 +440,13 @@ export const uploadFileFromReplicate = async (
 };
 
 /**
- * Generate an audio clip using Replicate stable-audio-open-1.0 and return a Blob
+ * Generate an audio clip using Replicate and return the URL
  */
 export const generateSoundEffectReplicate = async (config: {
   prompt: string;
   negativePrompt?: string;
   secondsTotal: number;
 }) => {
-  console.log(config);
   const replicate = new Replicate({ auth: env.REPLICATE_API_TOKEN });
   const output = (await replicate.run(
     "sepal/audiogen:154b3e5141493cb1b8cec976d9aa90f2b691137e39ad906d2421b74c2a8c52b8",
@@ -450,27 +461,94 @@ export const generateSoundEffectReplicate = async (config: {
   )) as FileOutput;
   const url = output.url();
   if (!url) throw new Error("No output from audio model");
-  const res = await fetch(url);
-  const blob = await res.blob();
-  const contentType = res.headers.get("content-type") || undefined;
-  return { blob, contentType, url } as const;
+  return { url } as const;
 };
 
 /**
  * Generate and upload audio clip to UploadThing; returns URL
+ * Uses server-to-server transfer - UploadThing fetches directly from Replicate
  */
 export const generateAndUploadAudio = async (config: GenerateAudioInput) => {
-  const { blob, contentType, url } = await generateSoundEffectReplicate(config);
-  let extension = "mp3";
-  const lower = contentType?.toLowerCase() || "";
-  if (lower.includes("mpeg")) extension = "mp3";
-  else if (lower.includes("wav")) extension = "wav";
-  else {
-    try {
-      const ext = new URL(url).pathname.split(".").pop();
-      if (ext && ["mp3", "wav", "ogg"].includes(ext)) extension = ext;
-    } catch {}
+  const { url } = await generateSoundEffectReplicate(config);
+  const utapi = new UTApi();
+  const name = `audio-${nanoid()}.mp3`;
+  const uploadedFile = await utapi.uploadFilesFromUrl({ url, name });
+  return uploadedFile.data?.ufsUrl ?? null;
+};
+
+/**
+ * Configuration for video generation using Veo 3.1 Fast
+ */
+type Txt2VideoConfig = {
+  prompt: string;
+  negative_prompt?: string;
+  seed?: number;
+  start_image?: string;
+  last_image?: string;
+};
+
+/**
+ * Start a video generation job using Google's Veo 3.1 Fast model on Replicate
+ * This returns immediately with a prediction ID for status polling
+ * @param config - The configuration for video generation
+ * @returns The prediction object with ID for status tracking
+ */
+export const startVideoGeneration = async (config: Txt2VideoConfig) => {
+  const replicate = new Replicate({ auth: env.REPLICATE_API_TOKEN });
+
+  const input: Record<string, unknown> = {
+    prompt: config.prompt,
+    aspect_ratio: "9:16",
+    duration: 8,
+    resolution: "720p",
+    generate_audio: true,
+  };
+
+  if (config.negative_prompt) {
+    input.negative_prompt = config.negative_prompt;
   }
-  const uploaded = await uploadFileFromReplicate("audio", blob, extension);
-  return uploaded.data?.ufsUrl ?? null;
+
+  if (config.seed !== undefined) {
+    input.seed = config.seed;
+  }
+
+  if (config.start_image) {
+    input.image = config.start_image;
+  }
+
+  if (config.last_image) {
+    input.last_frame = config.last_image;
+  }
+
+  // Start prediction without waiting for completion
+  const prediction = await replicate.predictions.create({
+    model: "google/veo-3.1-fast",
+    input,
+  });
+
+  return prediction;
+};
+
+/**
+ * Check the status of a video generation prediction
+ * @param predictionId - The Replicate prediction ID
+ * @returns The prediction status and output if completed
+ */
+export const getVideoGenerationStatus = async (predictionId: string) => {
+  const replicate = new Replicate({ auth: env.REPLICATE_API_TOKEN });
+  const prediction = await replicate.predictions.get(predictionId);
+  return prediction;
+};
+
+/**
+ * Upload a completed video from Replicate using server-to-server transfer
+ * UploadThing fetches directly from the URL - no download to our server needed
+ * @param outputUrl - The URL of the video from Replicate
+ * @returns The uploaded video URL from UploadThing
+ */
+export const uploadCompletedVideo = async (outputUrl: string) => {
+  const utapi = new UTApi();
+  const name = `video-${nanoid()}.mp4`;
+  const uploadedFile = await utapi.uploadFilesFromUrl({ url: outputUrl, name });
+  return uploadedFile.data?.ufsUrl ?? null;
 };
