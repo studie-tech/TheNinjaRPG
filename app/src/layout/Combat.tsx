@@ -311,13 +311,13 @@ const Combat: React.FC<CombatProps> = (props) => {
         }
       }
       // Update battle history
-      if (battleId && data.logEntries) {
+      if (battleId && data.logEntries && data.battleUpdate) {
         const prevData = utils.combat.getBattleEntries.getData({
           battleId,
           refreshKey: battle.current?.version,
         });
         utils.combat.getBattleEntries.setData(
-          { battleId, refreshKey: data.battle.version },
+          { battleId, refreshKey: data.battleUpdate.version },
           () => {
             if (data.logEntries) {
               return prevData ? [...data.logEntries, ...prevData] : data.logEntries;
@@ -333,11 +333,16 @@ const Combat: React.FC<CombatProps> = (props) => {
           await handleNextStepAsync(currentStep.onCombatLoss);
         }
       }
-      // Update battle state
-      if (data.updateClient) {
-        battle.current = data.battle;
+      // Update battle state - merge dynamic update with existing extraState
+      if (data.updateClient && data.battleUpdate && battle.current?.extraState) {
+        // Merge the dynamic battle update with the existing extraState
+        const mergedBattle = {
+          ...data.battleUpdate,
+          extraState: battle.current.extraState,
+        };
+        battle.current = mergedBattle;
         setBattleState({
-          battle: data.battle,
+          battle: mergedBattle,
           result: data.result,
           isPending: false,
         });
@@ -726,10 +731,10 @@ const Combat: React.FC<CombatProps> = (props) => {
           // Draw all users on the map
           const isAnyUserMoving = drawCombatUsers({
             group_users: group_users,
-            users: battle.current.usersState,
             grid: grid.current,
             playerId: suid,
             userData: userData,
+            battle: battle.current,
             group_assets: group_assets,
             sfxEnabled: Boolean(userData?.sfxOn ?? true),
             sfxVolume: sfxVolume,

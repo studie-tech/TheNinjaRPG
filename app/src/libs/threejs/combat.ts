@@ -27,7 +27,7 @@ import {
   COMBAT_BORDER_TOP,
   COMBAT_BORDER_BOTTOM,
 } from "@/libs/combat/constants";
-import { getAffectedTiles } from "@/libs/combat/util";
+import { getAffectedTiles, getVillage, getClan } from "@/libs/combat/util";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
 import { calcActiveUser } from "@/libs/combat/actions";
 import { stillInBattle } from "@/libs/combat/actions";
@@ -772,6 +772,7 @@ export const createUserSprite = (
   userData: ReturnedUserState,
   hex: TerrainHex,
   playerId: string | undefined,
+  battle: ReturnedBattle,
 ) => {
   // If not there, nope
   if (userData.curHealth <= 0 || userData.fledBattle) return undefined;
@@ -827,8 +828,9 @@ export const createUserSprite = (
     const highlightMaterial = createSpriteMaterial(highlightTexture, highlightTexture);
 
     // Highlight sprite
-    const highlightColor = userData.village
-      ? parseInt(userData.village.hexColor.replace("#", ""), 16)
+    const village = getVillage(battle, userData.villageId);
+    const highlightColor = village
+      ? parseInt(village.hexColor.replace("#", ""), 16)
       : 0x000000;
     const highlightSprite = new Sprite(highlightMaterial);
     highlightSprite.userData.type = "marker";
@@ -862,8 +864,9 @@ export const createUserSprite = (
     group.add(sprite);
 
     // Clan if it is there
-    if (userData.clan?.image) {
-      const clanTexture = loadTexture(userData.clan.image);
+    const clan = getClan(battle, userData.clanId);
+    if (clan?.image) {
+      const clanTexture = loadTexture(clan.image);
       const clanBorderMaterial = new SpriteMaterial({
         map: alphaMap,
         alphaMap: alphaMap,
@@ -1175,17 +1178,17 @@ const updateAssetOpacityForUsers = (
  */
 export const drawCombatUsers = (info: {
   group_users: Group;
-  users: ReturnedUserState[];
   grid: Grid<TerrainHex>;
   playerId: string | undefined;
   userData: UserData;
+  battle: ReturnedBattle;
   group_assets?: Group;
   sfxEnabled?: boolean;
   sfxVolume?: number;
   gameAssets?: GameAsset[];
 }): boolean => {
   // Destruct
-  const { users, group_users, grid, playerId, userData, group_assets } = info;
+  const { group_users, grid, playerId, userData, group_assets, battle } = info;
   // Cache or create a pathfinder for this group
   const pathFinder = getOrCreatePathFinder(group_users, grid);
 
@@ -1204,7 +1207,7 @@ export const drawCombatUsers = (info: {
 
   // Draw the users
   const drawnIds = new Set<string>();
-  users.forEach((user) => {
+  battle.usersState.forEach((user) => {
     const hex = findHex(grid, {
       x: user.longitude,
       y: user.latitude,
@@ -1229,7 +1232,7 @@ export const drawCombatUsers = (info: {
           user.avatarLight = userData.avatarLight;
           user.username = userData.username;
         }
-        userMesh = createUserSprite(user, hex, playerId);
+        userMesh = createUserSprite(user, hex, playerId, battle);
         if (userMesh) {
           group_users.add(userMesh);
           markGroupNeedsSort(group_users);
@@ -1312,7 +1315,7 @@ export const drawCombatUsers = (info: {
 
   // Update asset opacity when users change positions
   if (group_assets && needsOpacityUpdate) {
-    updateAssetOpacityForUsers(group_assets, users, grid);
+    updateAssetOpacityForUsers(group_assets, battle.usersState, grid);
   }
 
   return anyUserMoving;

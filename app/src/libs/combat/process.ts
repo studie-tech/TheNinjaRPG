@@ -1,6 +1,6 @@
 import { dmgConfig as config } from "./constants";
 import { VisualTag } from "./types";
-import { findUser, findBarrier } from "./util";
+import { findUser, findBarrier, getItem } from "./util";
 import { collapseConsequences, sortEffects } from "./util";
 import { calcApplyRatio } from "./util";
 import { calcEffectRoundInfo, isEffectActive } from "./util";
@@ -173,7 +173,7 @@ export const applyEffects = (
     } else {
       // Special handling of clone & summon ground-effects
       if (e.type === "clone") {
-        info = clone(newUsersState, e);
+        info = clone(newUsersState, e, battle.extraState);
       } else if (e.type === "summon") {
         info = summon(newUsersState, e, newUsersEffects, battle);
       } else if (e.type === "barrier") {
@@ -418,11 +418,9 @@ export const applyEffects = (
           if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
             const t = newUsersState.find((u) => u.userId === target.userId);
             t?.items.forEach((ui) => {
-              if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
-                const currentDurability = Math.min(
-                  ui.durability,
-                  ui.item.maxDurability,
-                );
+              const item = getItem(battle, ui.itemId);
+              if (item?.itemType === "ARMOR" && ui.equipped !== "NONE") {
+                const currentDurability = Math.min(ui.durability, item.maxDurability);
                 ui.durability = Math.max(0, currentDurability - 1);
                 if (ui.durability <= DURABILITY_USABILITY_THR) {
                   ui.equipped = "NONE" as const;
@@ -443,11 +441,9 @@ export const applyEffects = (
           if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
             const t = newUsersState.find((u) => u.userId === target.userId);
             t?.items.forEach((ui) => {
-              if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
-                const currentDurability = Math.min(
-                  ui.durability,
-                  ui.item.maxDurability,
-                );
+              const item = getItem(battle, ui.itemId);
+              if (item?.itemType === "ARMOR" && ui.equipped !== "NONE") {
+                const currentDurability = Math.min(ui.durability, item.maxDurability);
                 ui.durability = Math.max(0, currentDurability - 1);
                 if (ui.durability <= DURABILITY_USABILITY_THR) {
                   ui.equipped = "NONE" as const;
@@ -468,11 +464,9 @@ export const applyEffects = (
           if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
             const t = newUsersState.find((u) => u.userId === target.userId);
             t?.items.forEach((ui) => {
-              if (ui.item.itemType === "ARMOR" && ui.equipped !== "NONE") {
-                const currentDurability = Math.min(
-                  ui.durability,
-                  ui.item.maxDurability,
-                );
+              const item = getItem(battle, ui.itemId);
+              if (item?.itemType === "ARMOR" && ui.equipped !== "NONE") {
+                const currentDurability = Math.min(ui.durability, item.maxDurability);
                 ui.durability = Math.max(0, currentDurability - 1);
                 if (ui.durability <= DURABILITY_USABILITY_THR) {
                   ui.equipped = "NONE" as const;

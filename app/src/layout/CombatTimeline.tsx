@@ -27,6 +27,7 @@ import {
 import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects, { type GenericObject } from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
+import { getJutsu, getItem } from "@/libs/combat/util";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { parseHtml } from "@/utils/parse";
 import { availableUserActions } from "@/libs/combat/actions";
@@ -130,9 +131,11 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
             : [];
         const action = actions.find((a) => a.id === entry.actionId);
 
-        const jutsu = user?.jutsus?.find((j) => j.jutsu.id === entry.actionId)?.jutsu;
-        const userItem = user?.items?.find((i) => i.item.id === entry.actionId);
-        const item = userItem?.item;
+        const userJutsu = user?.jutsus?.find((j) => j.jutsuId === entry.actionId);
+        const jutsu =
+          battle && userJutsu ? getJutsu(battle, userJutsu.jutsuId) : undefined;
+        const userItem = user?.items?.find((i) => i.itemId === entry.actionId);
+        const item = battle && userItem ? getItem(battle, userItem.itemId) : undefined;
 
         let actionImage: string | undefined;
         let actionItem: GenericObject;

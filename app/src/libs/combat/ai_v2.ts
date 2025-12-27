@@ -2,7 +2,7 @@ import { availableUserActions } from "@/libs/combat/actions";
 import { performBattleAction } from "@/libs/combat/actions";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
 import { stillInBattle } from "@/libs/combat/actions";
-import { findUser, findBarrier, calcPoolCost } from "@/libs/combat/util";
+import { findUser, findBarrier, calcPoolCost, getAiProfile } from "@/libs/combat/util";
 import { PathCalculator, findHex } from "@/libs/hexgrid";
 import { getBarriersBetween } from "@/libs/combat/util";
 import { ActionEndTurn, getBackupRules } from "@/validators/ai";
@@ -105,17 +105,23 @@ export const performAIaction = (
     );
     astar = new PathCalculator(updateGridWithObstacles(grid, nextBattle));
 
+    // Get AI profile from static data - clone to avoid mutating the shared reference
+    const aiProfileRef = getAiProfile(battle, user.aiProfileId);
+    const aiProfile = aiProfileRef
+      ? { ...aiProfileRef, rules: structuredClone(aiProfileRef.rules) }
+      : undefined;
+
     // If this is a user AI, add the backup rules
-    if (isUser || user.aiProfile.includeDefaultRules) {
+    if (aiProfile && (isUser || aiProfile.includeDefaultRules)) {
       const backupRules = getBackupRules();
-      enforceExtraRules(user.aiProfile.rules, backupRules);
+      enforceExtraRules(aiProfile.rules, backupRules);
     }
 
     // If we only have the last three actions (end turn, wait, and move),
     // available, but more actions in total, then add wait rule
     const nonEffectActions = ["basicHeal", "flee", "wait", "move", "cleanse", "clear"];
-    if (allActions?.find((a) => !nonEffectActions.includes(a.id))) {
-      user.aiProfile.rules.push({
+    if (allActions?.find((a) => !nonEffectActions.includes(a.id)) && aiProfile) {
+      aiProfile.rules.push({
         conditions: [],
         action: ActionEndTurn.parse({}),
       });
@@ -200,7 +206,7 @@ export const performAIaction = (
     };
 
     // Go through rules
-    for (const rule of user.aiProfile.rules) {
+    for (const rule of aiProfile?.rules ?? []) {
       // if (debug) console.log("Rule: ", rule);
 
       /** ************************ */

@@ -9,7 +9,7 @@ import {
 } from "./types";
 import { isEffectActive } from "@/libs/combat/util";
 import { HealTag } from "@/libs/combat/types";
-import type { BattleUserState, Consequence } from "./types";
+import type { BattleUserState, Consequence, ReturnedUserState } from "./types";
 import type { GroundEffect, UserEffect, ActionEffect } from "./types";
 import type { StatNames, GenNames, DmgConfig } from "./constants";
 import type { WeaknessTagType } from "@/libs/combat/types";
@@ -28,9 +28,9 @@ import { noCase } from "change-case";
  */
 export const realizeTag = <T extends BattleEffect>(props: {
   tag: T;
-  user: BattleUserState;
+  user: ReturnedUserState;
   actionId: string;
-  target?: BattleUserState | undefined;
+  target?: ReturnedUserState | undefined;
   level: number | undefined;
   round?: number;
   barrierAbsorb?: number;
@@ -993,7 +993,11 @@ export const cleanse = (
 };
 
 /** Clone user on the battlefield */
-export const clone = (usersState: BattleUserState[], effect: GroundEffect) => {
+export const clone = (
+  usersState: BattleUserState[],
+  effect: GroundEffect,
+  staticData?: { jutsus: Record<string, { effects: unknown[] }> },
+) => {
   const { power } = getPower(effect);
   const perc = power / 100;
   const user = usersState.find((u) => u.userId === effect.creatorId);
@@ -1033,9 +1037,11 @@ export const clone = (usersState: BattleUserState[], effect: GroundEffect) => {
     newAi.intelligence = newAi.intelligence * perc;
     newAi.willpower = newAi.willpower * perc;
     newAi.speed = newAi.speed * perc;
-    // Remove all jutsus with summon/clone
+    // Remove all jutsus with summon/clone (use staticData to look up jutsu effects)
     newAi.jutsus = newAi.jutsus.filter((j) => {
-      const effects = JSON.stringify(j.jutsu.effects);
+      const jutsu = staticData?.jutsus[j.jutsuId];
+      if (!jutsu) return true; // Keep if we can't look up the jutsu
+      const effects = JSON.stringify(jutsu.effects);
       return !effects.includes("summon") && !effects.includes("clone");
     });
     // Push to userState
@@ -2625,7 +2631,6 @@ export const summon = (
         newAi.longitude = effect.longitude;
         newAi.latitude = effect.latitude;
         newAi.villageId = user.villageId;
-        newAi.village = user.village;
         newAi.direction = user.direction;
         // Set level to summoner level
         newAi.level = user.level;

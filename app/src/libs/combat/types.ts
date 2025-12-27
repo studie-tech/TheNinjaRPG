@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { AttackMethods, AttackTargets, ItemRarities } from "@/drizzle/constants";
 import { ItemSlotTypes, ItemTypes, JutsuTypes } from "@/drizzle/constants";
-import { LetterRanks, UserRanks, WeaponTypes, BattleUsageTypes } from "@/drizzle/constants";
+import {
+  LetterRanks,
+  UserRanks,
+  WeaponTypes,
+  BattleUsageTypes,
+} from "@/drizzle/constants";
 import { BloodlineDifficultyRatings } from "@/drizzle/constants";
 import { ElementNames } from "@/drizzle/constants";
 import { DateTimeRegExp } from "@/utils/regex";
@@ -16,23 +21,31 @@ import type { StatNames, GenNames } from "@/libs/combat/constants";
 import type {
   Jutsu,
   Item,
+  ItemSlot,
   VillageAlliance,
   Clan,
   War,
   VillageStructure,
   Village,
   GameSetting,
-  UserJutsuWithRelations,
-  UserItemWithRelations,
+  UserSkill,
+  SkillTree,
+  UserData,
+  AiProfile,
+  AnbuSquad,
+  Bloodline,
+  BloodlineReskin,
+  UserJutsu,
+  UserItem,
+  UserItemImbuement,
+  JutsuReskin,
+  UserQuest,
+  Bounty,
+  BountySignup,
 } from "@/drizzle/schema";
-import type { UserData, AiProfile } from "@/drizzle/schema";
-import type { AnbuSquad } from "@/drizzle/schema";
 import type { CombatBiome } from "@/drizzle/constants";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type { BattleType } from "@/drizzle/constants";
-import type { UserSkill, SkillTree } from "@/drizzle/schema";
-import type { BountyStatus } from "@/drizzle/constants";
-import type { UserWithRelations } from "@/routers/profile";
 import type { Intersection, Object3D } from "three";
 
 export type BattleWar = War & {
@@ -40,6 +53,145 @@ export type BattleWar = War & {
   attackerVillage: { name: string } | null;
   defenderVillage: { name: string } | null;
 };
+
+/**
+ * CombatQueryUserItem - Item type from DB query with relations
+ */
+export type CombatQueryUserItem = UserItem & {
+  item: Item;
+  imbuements: (UserItemImbuement & { item: Item })[];
+};
+
+/**
+ * CombatQueryUserJutsu - Jutsu type from DB query with relations
+ * Note: activeReskin is optional because not all queries include it
+ */
+export type CombatQueryUserJutsu = UserJutsu & {
+  jutsu: Jutsu;
+  activeReskin?: JutsuReskin | null;
+};
+
+/**
+ * CombatQueryVillage - Village type from DB query with relations
+ */
+export type CombatQueryVillage = Village & {
+  structures?: VillageStructure[];
+  sectors?: { sector: number }[];
+};
+
+/**
+ * CombatQueryUserSkill - Skill type from DB query with relations
+ */
+export type CombatQueryUserSkill = UserSkill & { skill: SkillTree };
+
+/**
+ * Partial bounty type matching the combat query columns select
+ */
+export type CombatQueryBounty = Pick<Bounty, "id" | "status" | "amountRyo">;
+
+/**
+ * Partial bounty signup type matching the combat query columns select
+ */
+export type CombatQueryBountySignup = Pick<BountySignup, "id" | "bountyId">;
+
+/**
+ * Partial completed quest type matching the combat query columns select.
+ * Note: completed is always defined when queried (not undefined) because the column has a default.
+ */
+export type CombatQueryCompletedQuest = {
+  id: string;
+  questId: string;
+  completed: number;
+};
+
+/**
+ * CombatQueryUser - The exact shape of user data returned from the combat DB query.
+ * This type matches the `client.query.userData.findMany` with combat relations.
+ * Some fields are optional as they're not included in all combat queries (e.g., summons).
+ */
+export type CombatQueryUser = UserData & {
+  bloodline: Bloodline | null;
+  activeReskin?: BloodlineReskin | null; // For bloodline reskinning
+  village: CombatQueryVillage | null;
+  loadout?: { jutsuIds: string[] } | null;
+  clan?: Clan | null;
+  anbuSquad?: AnbuSquad | null;
+  items: CombatQueryUserItem[];
+  jutsus: CombatQueryUserJutsu[];
+  userSkills: CombatQueryUserSkill[];
+  userQuests?: UserQuest[]; // Full UserQuest with quest relation
+  completedQuests?: CombatQueryCompletedQuest[];
+  aiProfile: AiProfile | null;
+  bounties?: CombatQueryBounty[];
+  bountySignups?: CombatQueryBountySignup[];
+};
+
+/**
+ * ProcessedJutsu - Jutsu with processing fields added
+ */
+export type ProcessedJutsu = CombatQueryUserJutsu & {
+  lastUsedRound: number;
+  originalCooldown: number;
+};
+
+/**
+ * ProcessedItem - Item with processing fields added
+ */
+export type ProcessedItem = CombatQueryUserItem & {
+  lastUsedRound: number;
+  originalCooldown: number;
+};
+
+/**
+ * Combat-specific fields added to users during battle processing.
+ * Shared between ProcessingBattleUser and BattleUserState.
+ */
+export type CombatUserFields = {
+  controllerId: string;
+  direction: "left" | "right";
+  isAggressor: boolean;
+  highestOffence: (typeof StatNames)[number];
+  highestDefence: (typeof StatNames)[number];
+  highestGenerals: (typeof GenNames)[number][];
+  round: number;
+  iAmHere: boolean;
+  originalLevel: number;
+  originalMoney: number;
+  originalLongitude: number;
+  originalLatitude: number;
+  actionPoints: number;
+  isOriginal: boolean;
+  usedGenerals: Record<(typeof GenNames)[number], number>;
+  usedStats: Record<(typeof StatNames)[number], number>;
+  leftBattle: boolean;
+  fledBattle: boolean;
+  moneyStolen: number;
+  allyVillage: boolean;
+  usedActions: { id: string; type: "jutsu" | "item" | "basic" | "bloodline" }[];
+  initiative: number;
+  basicActions: CombatAction[];
+  hex?: TerrainHex;
+  hidden?: boolean;
+  keystoneName?: string | null;
+  // Reference IDs to static data in extraState
+  relationIds: string[];
+  warIds: string[];
+};
+
+/**
+ * ProcessingBattleUser - Intermediate type during battle processing.
+ * Has full relation objects for processing, converted to BattleUserState at end.
+ */
+export type ProcessingBattleUser = Omit<CombatQueryUser, "jutsus" | "items"> &
+  CombatUserFields & {
+    // Full objects needed during processing (not in final BattleUserState)
+    relations?: VillageAlliance[];
+    wars?: BattleWar[];
+    keystoneItem?: Item | null;
+    // Processed jutsus/items with full Jutsu/Item objects
+    jutsus: ProcessedJutsu[];
+    items: ProcessedItem[];
+  };
 
 /**
  * Cached raycaster intersections to avoid redundant calculations
@@ -53,61 +205,57 @@ export type CachedIntersections = {
 };
 
 /**
- * BattleUserState is the data stored in the battle entry about a given user
+ * BattleUserJutsu - Reference type stored in BattleUserState.
+ * Contains only dynamic combat state. Static jutsu data is in extraState.jutsus.
+ * Use lookup functions to get full jutsu data.
  */
-export type BattleUserState = Omit<NonNullable<UserWithRelations>, "items"> & {
-  jutsus: (UserJutsuWithRelations & {
-    origin: "user" | "injected";
-    lastUsedRound: number;
-    originalCooldown: number;
-  })[];
-  village?:
-    | (Village & {
-        structures?: VillageStructure[];
-        sectors?: { sector: number }[];
-      })
-    | null;
-  basicActions: CombatAction[];
-  items: (UserItemWithRelations & {
-    lastUsedRound: number;
-    originalCooldown: number;
-  })[];
-  userSkills?: (UserSkill & { skill: SkillTree })[];
-  aiProfile: AiProfile;
-  round: number;
-  loadout?: { jutsuIds: string[] } | null;
-  relations: VillageAlliance[];
-  wars: BattleWar[];
-  highestOffence: (typeof StatNames)[number];
-  highestDefence: (typeof StatNames)[number];
-  highestGenerals: (typeof GenNames)[number][];
-  iAmHere: boolean;
-  actionPoints: number;
-  hidden?: boolean;
-  isOriginal: boolean;
-  isAggressor: boolean;
-  controllerId: string;
-  leftBattle: boolean;
-  fledBattle: boolean;
-  initiative: number;
-  originalLongitude: number;
-  originalLatitude: number;
-  originalMoney: number;
-  originalLevel: number;
-  direction: "left" | "right";
-  allyVillage: boolean;
-  moneyStolen: number;
-  usedGenerals: Record<(typeof GenNames)[number], number>;
-  usedStats: Record<(typeof StatNames)[number], number>;
-  usedActions: { id: string; type: "jutsu" | "item" | "basic" | "bloodline" }[];
-  hex?: TerrainHex;
-  clan?: Clan | null;
-  anbuSquad?: AnbuSquad | null;
-  keystoneName?: string | null;
-  keystoneItem?: Item | null;
-  bounties?: { id: string; status: BountyStatus; amountRyo: number }[];
-  bountySignups?: { id: string; bountyId: string }[];
+export type BattleUserJutsu = {
+  id: string; // userJutsu.id
+  jutsuId: string; // Reference to extraState.jutsus[jutsuId]
+  level: number;
+  equipped: boolean;
+  experience: number;
+  reskinId?: string | null; // Reference to extraState.jutsuReskins[reskinId]
+  lastUsedRound: number;
+  originalCooldown: number;
+  origin?: "user" | "bloodline" | "injected";
 };
+
+/**
+ * BattleUserItem - Reference type stored in BattleUserState.
+ * Contains only dynamic combat state. Static item data is in extraState.items.
+ * Use lookup functions to get full item data.
+ */
+export type BattleUserItem = {
+  id: string; // userItem.id
+  itemId: string; // Reference to extraState.items[itemId]
+  quantity: number;
+  equipped: ItemSlot;
+  durability: number;
+  dropChancePerc: number;
+  lastUsedRound: number;
+  originalCooldown: number;
+};
+
+/**
+ * BattleUserState - The user state stored in battle.usersState.
+ * Contains ONLY references to static data, not full objects.
+ * Use lookup functions (getJutsu, getItem, getVillage, etc.) to access full data.
+ *
+ * Based on UserData (core user fields) plus combat-specific fields.
+ * Relations (village, clan, etc.) are stored in extraState and referenced by ID.
+ */
+export type BattleUserState = UserData &
+  CombatUserFields & {
+    // Bloodline is stored directly (needed for combat calculations)
+    bloodline: Bloodline | null;
+    // Reference jutsus/items (static data in extraState)
+    jutsus: BattleUserJutsu[];
+    items: BattleUserItem[];
+    // Additional reference IDs to static data
+    aiProfileId?: string | null; // Reference to extraState.aiProfiles[id]
+    keystoneItemId?: string | null; // Reference to extraState.keystoneItems[id]
+  };
 
 /**
  * Basic actions are the actions that are available to a user by default
@@ -122,8 +270,28 @@ export type BasicActions = {
   basicFlee: CombatAction;
 };
 
+/**
+ * Extra battle state containing static data and battle settings.
+ * Static data is stored once at battle initiation and looked up by ID.
+ */
 export type ExtraState = {
-  jutsus?: Jutsu[];
+  // Static data - never changes during battle (looked up by ID)
+  jutsus: Record<string, Jutsu>; // jutsuId -> Jutsu (includes user jutsus + injectable jutsus)
+  jutsuReskins: Record<string, JutsuReskin>; // reskinId -> Reskin data
+  items: Record<string, Item>; // itemId -> Item
+  villages: Record<string, CombatQueryVillage>; // villageId -> Village
+  anbuSquads: Record<string, AnbuSquad>; // anbuId -> AnbuSquad
+  keystoneItems: Record<string, Item>; // itemId -> Item
+  wars: Record<string, BattleWar>; // warId -> War
+  aiProfiles: Record<string, AiProfile>; // aiProfileId or "Default" -> AiProfile
+  relations: Record<string, VillageAlliance>; // relationId -> VillageAlliance
+  clans: Record<string, Clan>; // clanId -> Clan
+  // User-specific static data (keyed by controllerId)
+  userQuests: Record<string, UserQuest[]>; // controllerId -> array of user quests
+  completedQuests: Record<string, CombatQueryCompletedQuest[]>; // controllerId -> array of completed quest refs
+  bounties: Record<string, CombatQueryBounty[]>; // controllerId -> array of bounties on this user
+  bountySignups: Record<string, CombatQueryBountySignup[]>; // controllerId -> array of bounty signups
+  // Battle settings
   settings?: GameSetting[];
   textureAssets?: string[];
   sfxAssets?: string[];
@@ -161,6 +329,20 @@ export type ReturnedUserState = Pick<BattleUserState, (typeof publicState)[numbe
  * A returned battle used on frontend where private information is hidden
  */
 export type ReturnedBattle = Omit<CompleteBattle, "usersState"> & {
+  usersState: ReturnedUserState[];
+};
+
+/**
+ * Dynamic battle state - only the fields that change during battle.
+ * Used for efficient updates from performAction (excludes static extraState).
+ */
+export type BattleDynamicUpdate = Omit<CompleteBattle, "extraState">;
+
+/**
+ * Returned dynamic battle update with masked user state.
+ * Used for performAction responses to avoid sending static extraState.
+ */
+export type ReturnedBattleDynamic = Omit<BattleDynamicUpdate, "usersState"> & {
   usersState: ReturnedUserState[];
 };
 
@@ -1187,7 +1369,15 @@ export type UserEffect = BattleEffect & {
   targetId: string;
   fromEffectId?: string;
   fromGround?: boolean;
-  fromType?: "jutsu" | "armor" | "item" | "basic" | "bloodline" | "village" | "skill" | "ranked";
+  fromType?:
+    | "jutsu"
+    | "armor"
+    | "item"
+    | "basic"
+    | "bloodline"
+    | "village"
+    | "skill"
+    | "ranked";
   elements?: ElementName[]; // TODO: Remove this, should already be in the tag
   cpSpent?: number;
   spSpent?: number;

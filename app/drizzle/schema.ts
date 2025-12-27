@@ -2061,6 +2061,13 @@ export const userData = mysqlTable(
   (table) => {
     return {
       isAiIdx: index("UserData_isAi_idx").on(table.isAi),
+      // Composite index for the frequently-used public users leaderboard query
+      // Covers: WHERE isAi = ? ORDER BY rankedLp DESC, experience DESC LIMIT ?
+      isAiRankedLpExperienceIdx: index("UserData_isAi_rankedLp_experience_idx").on(
+        table.isAi,
+        table.rankedLp,
+        table.experience,
+      ),
       isEventIdx: index("UserData_isEvent_idx").on(table.isEvent),
       inArenaIdx: index("UserData_inArena_idx").on(table.inArena),
       inShrinesIdx: index("UserData_inShrines_idx").on(table.inShrines),
@@ -2320,6 +2327,11 @@ export const userItem = mysqlTable(
       itemIdIdx: index("UserItem_itemId_idx").on(table.itemId),
       quantityIdx: index("UserItem_quantity_idx").on(table.quantity),
       equippedIdx: index("UserItem_equipped_idx").on(table.equipped),
+      // Composite index for fetchUpdatedUser query: WHERE userId = ? AND equipped != 'NONE'
+      userIdEquippedIdx: index("UserItem_userId_equipped_idx").on(
+        table.userId,
+        table.equipped,
+      ),
     };
   },
 );
@@ -3017,6 +3029,16 @@ export const questHistory = mysqlTable(
       endAtIdx: index("QuestHistory_endedAt_idx").on(table.endAt),
       questIdIdx: index("QuestHistory_questId_idx").on(table.questId),
       completedIdx: index("QuestHistory_completed_idx").on(table.completed),
+      // Composite index for completedQuests: WHERE userId = ? AND completed >= 1
+      userIdCompletedIdx: index("QuestHistory_userId_completed_idx").on(
+        table.userId,
+        table.completed,
+      ),
+      // Composite index for userQuests: WHERE userId = ? AND questType = 'achievement'
+      userIdQuestTypeIdx: index("QuestHistory_userId_questType_idx").on(
+        table.userId,
+        table.questType,
+      ),
     };
   },
 );

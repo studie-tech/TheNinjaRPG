@@ -32,14 +32,15 @@ export const dmgConfig = {
 export type DmgConfig = typeof dmgConfig;
 
 /**
- * Which user state is public
+ * Which user state is public (using ID references - full data is in extraState)
  */
 export const publicState = [
   "actionPoints",
+  "anbuId",
   "avatar",
   "basicActions",
   "bloodline",
-  "clan",
+  "clanId",
   "controllerId",
   "curChakra",
   "curHealth",
@@ -55,7 +56,7 @@ export const publicState = [
   "items",
   "jutsus",
   "keystoneName",
-  "keystoneItem",
+  "keystoneItemId",
   "latitude",
   "leftBattle",
   "level",
@@ -66,14 +67,15 @@ export const publicState = [
   "maxStamina",
   "medicalExperience",
   "rank",
+  "relationIds",
   "round",
   "regeneration",
   "sector",
   "updatedAt",
   "userId",
   "username",
-  "village",
   "villageId",
+  "warIds",
 ] as const;
 
 /**

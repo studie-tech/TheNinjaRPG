@@ -10,6 +10,7 @@ import { useAtomValue } from "jotai";
 import { userBattleAtom } from "@/utils/UserContext";
 import { SideBannerTitle } from "@/components/layout/core4_default";
 import { VisualizeEffects } from "@/layout/MenuBoxProfile";
+import { getKeystoneItem } from "@/libs/combat/util";
 
 const MenuBoxCombat: React.FC = () => {
   // State
@@ -104,26 +105,29 @@ const MenuBoxCombat: React.FC = () => {
           </PopoverContent>
         </Popover>
       )}
-      {battleUser?.keystoneName && (
-        <Popover>
-          <PopoverTrigger>
-            <div className="flex flex-row items-center hover:text-orange-500 hover:cursor-pointer">
-              <Gem className="h-6 w-6 mr-2" /> {battleUser.keystoneName}
-            </div>
-          </PopoverTrigger>
-          <PopoverContent className="w-[320px]">
-            <div className="p-4">
-              {battleUser.keystoneItem && (
+      {(() => {
+        if (!battleUser?.keystoneName || !battle) return null;
+        const keystoneItem = getKeystoneItem(battle, battleUser.keystoneItemId);
+        if (!keystoneItem) return null;
+        return (
+          <Popover>
+            <PopoverTrigger>
+              <div className="flex flex-row items-center hover:text-orange-500 hover:cursor-pointer">
+                <Gem className="h-6 w-6 mr-2" /> {battleUser.keystoneName}
+              </div>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px]">
+              <div className="p-4">
                 <ItemWithEffects
-                  item={battleUser.keystoneItem}
-                  key={battleUser.keystoneItem.id}
+                  item={keystoneItem}
+                  key={keystoneItem.id}
                   hideDetails
                 />
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-      )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        );
+      })()}
       {/* Active Effects on opponent */}
       {battle?.usersEffects && (
         <div className="mt-2">

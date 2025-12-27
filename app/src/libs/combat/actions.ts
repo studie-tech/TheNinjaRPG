@@ -7,7 +7,7 @@ import {
 } from "@/libs/combat/types";
 import { ClearTag, CleanseTag } from "@/libs/combat/types";
 import { nanoid } from "nanoid";
-import { getAffectedTiles } from "@/libs/combat/util";
+import { getAffectedTiles, getJutsu, getItem } from "@/libs/combat/util";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { checkFriendlyFire } from "@/libs/combat/process";
 import { applyEffects } from "@/libs/combat/process";
@@ -54,13 +54,14 @@ import {
   QuestBattleTypes,
 } from "@/drizzle/constants";
 import type { AttackTargets, ElementName } from "@/drizzle/constants";
+import type { Jutsu } from "@/drizzle/schema";
 import type { BattleUserState, ReturnedUserState } from "@/libs/combat/types";
+import type { BattleUserJutsu, BattleUserItem } from "@/libs/combat/types";
 import type { CompleteBattle, ReturnedBattle } from "@/libs/combat/types";
 import type { Grid } from "honeycomb-grid";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type { CombatAction, BasicActions } from "@/libs/combat/types";
 import type { GroundEffect, UserEffect } from "@/libs/combat/types";
-import type { UserJutsu, Jutsu, UserItem, Item } from "@/drizzle/schema";
 
 /**
  * Given a user, return a list of actions that the user can perform
@@ -80,6 +81,7 @@ export const availableUserActions = (
   const isImmobilized = isUserImmobilized(userId, battle?.usersEffects);
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
   const basicActions = getActiveBasicActions(battle, user);
+  const isQuestBattle = battle ? QuestBattleTypes.includes(battle.battleType) : false;
 
   // Handle injected jutsus
   if (battle && user) {
@@ -120,76 +122,76 @@ export const availableUserActions = (
           },
         ]
       : []),
-    ...(user?.jutsus
+    ...(user?.jutsus && battle
       ? user.jutsus
           .filter((userjutsu) => {
-            // Filter by battleUsageType
-            if (battle) {
-              const isQuestBattle = QuestBattleTypes.includes(battle.battleType);
-              // If quest battle, exclude PVP-only jutsus
-              if (isQuestBattle && userjutsu.jutsu.battleUsageType === "PVP") {
-                return false;
-              }
-              // If non-quest battle, exclude PVE-only jutsus
-              if (!isQuestBattle && userjutsu.jutsu.battleUsageType === "PVE") {
-                return false;
-              }
+            const jutsu = getJutsu(battle, userjutsu.jutsuId);
+            if (!jutsu) return false;
+
+            // If quest battle, exclude PVP-only jutsus
+            if (isQuestBattle && jutsu.battleUsageType === "PVP") {
+              return false;
+            }
+            // If non-quest battle, exclude PVE-only jutsus
+            if (!isQuestBattle && jutsu.battleUsageType === "PVE") {
+              return false;
             }
             // Filter out jutsus with damage tag when stealthed
             if (isStealth) {
               const offensiveTags = new Set(["damage", "pierce", "drain"]);
-              const hasOffensiveTag = userjutsu.jutsu.effects.some((e) =>
+              const hasOffensiveTag = jutsu.effects.some((e: { type: string }) =>
                 offensiveTags.has(e.type),
               );
               if (hasOffensiveTag) return false;
             }
             // Filter out summon jutsu when summonPrevent is active
             if (isSummonPrevented) {
-              const hasSummonTag = userjutsu.jutsu.effects.some(
-                (e) => e.type === "summon",
+              const hasSummonTag = jutsu.effects.some(
+                (e: { type: string }) => e.type === "summon",
               );
               if (hasSummonTag) return false;
             }
             // Filter out jutsus removed by elemental seal
             if (!elementalSeal?.elements?.length) return true;
-            const jutsuElements = new Set(
-              userjutsu.jutsu.effects.flatMap((effect) =>
-                "elements" in effect ? effect.elements : [],
-              ),
-            );
+            const jutsuElements = new Set<string>();
+            for (const effect of jutsu.effects) {
+              if ("elements" in effect && Array.isArray(effect.elements)) {
+                for (const el of effect.elements) {
+                  jutsuElements.add(el);
+                }
+              }
+            }
             return (
               jutsuElements.size === 0 ||
               !elementalSeal.elements.some((e: ElementName) => jutsuElements.has(e))
             );
           })
-          .map(userJutsuToAction)
+          .map((uj) => userJutsuToAction(uj, battle))
       : []),
-    ...(user?.items && !isStealth
+    ...(user?.items && !isStealth && battle
       ? user.items
           .filter((ui) => {
             if (ui.quantity <= 0) return false;
-            if (ui.item.preventBattleUsage) return false;
-            // Filter by battleUsageType
-            if (battle) {
-              const isQuestBattle = QuestBattleTypes.includes(battle.battleType);
-              // If quest battle, exclude PVP-only items
-              if (isQuestBattle && ui.item.battleUsageType === "PVP") {
-                return false;
-              }
-              // If non-quest battle, exclude PVE-only items
-              if (!isQuestBattle && ui.item.battleUsageType === "PVE") {
-                return false;
-              }
+            const item = getItem(battle, ui.itemId);
+            if (!item) return false;
+            if (item.preventBattleUsage) return false;
+            // If quest battle, exclude PVP-only items
+            if (isQuestBattle && item.battleUsageType === "PVP") {
+              return false;
             }
-            if (NonActionItemTypes.includes(ui.item.itemType)) return false;
+            // If non-quest battle, exclude PVE-only items
+            if (!isQuestBattle && item.battleUsageType === "PVE") {
+              return false;
+            }
+            if (NonActionItemTypes.includes(item.itemType)) return false;
             if (ui.equipped === "NONE") return false;
-            if (ui.item?.itemType === "WEAPON") {
-              const current = Math.min(ui.durability, ui.item.maxDurability);
+            if (item.itemType === "WEAPON") {
+              const current = Math.min(ui.durability, item.maxDurability);
               return current > DURABILITY_USABILITY_THR;
             }
             return true;
           })
-          .map((ui) => userItemToAction(ui, user))
+          .map((ui) => userItemToAction(ui, user, battle))
       : []),
   ];
   // If we only have move & end turn action, also add basic attack
@@ -220,15 +222,15 @@ export const availableUserActions = (
         a.cooldown = a.originalCooldown;
         a.lastUsedRound = -a.originalCooldown;
         if (a.type === "jutsu") {
-          const entry = user?.jutsus?.find((j) => j.jutsu.id === a.id);
+          const entry = user?.jutsus?.find((j) => j.jutsuId === a.id);
           if (entry) {
-            entry.jutsu.cooldown = a.originalCooldown;
+            entry.originalCooldown = a.originalCooldown;
             entry.lastUsedRound = -a.originalCooldown;
           }
         } else if (a.type === "item") {
-          const entry = user?.items?.find((i) => i.item.id === a.id);
+          const entry = user?.items?.find((i) => i.itemId === a.id);
           if (entry) {
-            entry.item.cooldown = a.originalCooldown;
+            entry.originalCooldown = a.originalCooldown;
             entry.lastUsedRound = -a.originalCooldown;
           }
         }
@@ -496,91 +498,86 @@ export const getDefaultBasicActions = (
  * Convert a user item to a combat action
  * @param useritem - The user item to convert
  * @param user - The user to convert the item for
+ * @param battle - The battle for looking up item data
  * @returns The combat action
  */
 export const userItemToAction = (
-  useritem: UserItem & { item: Item; lastUsedRound: number; originalCooldown: number },
+  useritem: BattleUserItem,
   user: ReturnedUserState,
-): CombatAction => {
+  battle: ReturnedBattle | CompleteBattle,
+) => {
+  const item = getItem(battle, useritem.itemId);
+  if (!item) throw new Error(`Item not found: ${useritem.itemId}`);
   return {
-    id: useritem.item.id,
-    name: useritem.item.name,
-    image: useritem.item.image,
-    battleDescription: useritem.item.battleDescription,
+    id: item.id,
+    name: item.name,
+    image: item.image,
+    battleDescription: item.battleDescription,
     type: "item" as const,
-    target: useritem.item.target,
-    method: useritem.item.method,
-    range: useritem.item.range,
-    updatedAt: new Date(useritem.updatedAt).getTime(),
-    cooldown: useritem.item.cooldown,
+    target: item.target,
+    method: item.method,
+    range: item.range,
+    updatedAt: Date.now(),
+    cooldown: item.cooldown,
     originalCooldown: useritem.originalCooldown,
     lastUsedRound: useritem.lastUsedRound,
     level: user.level,
-    healthCost: Math.max(
-      0,
-      useritem.item.healthCost - useritem.item.healthCostReducePerLvl * user.level,
-    ),
-    chakraCost: Math.max(
-      0,
-      useritem.item.chakraCost - useritem.item.chakraCostReducePerLvl * user.level,
-    ),
+    healthCost: Math.max(0, item.healthCost - item.healthCostReducePerLvl * user.level),
+    chakraCost: Math.max(0, item.chakraCost - item.chakraCostReducePerLvl * user.level),
     staminaCost: Math.max(
       0,
-      useritem.item.staminaCost - useritem.item.staminaCostReducePerLvl * user.level,
+      item.staminaCost - item.staminaCostReducePerLvl * user.level,
     ),
-    actionCostPerc: useritem.item.actionCostPerc,
-    effects: useritem.item.effects,
+    actionCostPerc: item.actionCostPerc,
+    effects: item.effects,
     quantity: useritem.quantity,
-    data: useritem.item,
+    data: item,
     durability: useritem.durability,
-    maxDurability: useritem.item.maxDurability,
+    maxDurability: item.maxDurability,
   };
 };
 
 /**
  * Convert a user jutsu to a combat action
  * @param userjutsu - The user jutsu to convert
+ * @param battle - The battle for looking up jutsu data
  * @returns The combat action
  */
 export const userJutsuToAction = (
-  userjutsu: UserJutsu & {
-    jutsu: Jutsu;
-    lastUsedRound: number;
-    originalCooldown: number;
-  },
-): CombatAction => {
+  userjutsu: BattleUserJutsu,
+  battle: ReturnedBattle | CompleteBattle,
+) => {
+  const jutsu = getJutsu(battle, userjutsu.jutsuId);
+  if (!jutsu) throw new Error(`Jutsu not found: ${userjutsu.jutsuId}`);
   return {
-    id: userjutsu.jutsu.id,
-    name: userjutsu.jutsu.name,
-    image: userjutsu.jutsu.image,
-    battleDescription: userjutsu.jutsu.battleDescription,
+    id: jutsu.id,
+    name: jutsu.name,
+    image: jutsu.image,
+    battleDescription: jutsu.battleDescription,
     type: "jutsu" as const,
-    target: userjutsu.jutsu.target,
-    method: userjutsu.jutsu.method,
-    range: userjutsu.jutsu.range,
-    updatedAt: new Date(userjutsu.updatedAt).getTime(),
-    cooldown: userjutsu.jutsu.cooldown,
+    target: jutsu.target,
+    method: jutsu.method,
+    range: jutsu.range,
+    updatedAt: Date.now(),
+    cooldown: jutsu.cooldown,
     originalCooldown: userjutsu.originalCooldown,
     lastUsedRound: userjutsu.lastUsedRound,
     healthCost: Math.max(
       0,
-      userjutsu.jutsu.healthCost -
-        userjutsu.jutsu.healthCostReducePerLvl * userjutsu.level,
+      jutsu.healthCost - jutsu.healthCostReducePerLvl * userjutsu.level,
     ),
     chakraCost: Math.max(
       0,
-      userjutsu.jutsu.chakraCost -
-        userjutsu.jutsu.chakraCostReducePerLvl * userjutsu.level,
+      jutsu.chakraCost - jutsu.chakraCostReducePerLvl * userjutsu.level,
     ),
     staminaCost: Math.max(
       0,
-      userjutsu.jutsu.staminaCost -
-        userjutsu.jutsu.staminaCostReducePerLvl * userjutsu.level,
+      jutsu.staminaCost - jutsu.staminaCostReducePerLvl * userjutsu.level,
     ),
-    actionCostPerc: userjutsu.jutsu.actionCostPerc,
-    effects: userjutsu.jutsu.effects,
+    actionCostPerc: jutsu.actionCostPerc,
+    effects: jutsu.effects,
     level: userjutsu.level,
-    data: userjutsu.jutsu,
+    data: jutsu,
   };
 };
 
@@ -599,15 +596,19 @@ export const handleInjectedJutsus = (
     ?.filter((e) => e.type === "injectjutsus");
 
   // Inject jutsus (and remove expired ones) before processing actions
-  const extraJutsus = battle?.extraState.jutsus ?? [];
+  // extraState.jutsus is now a Record<string, Jutsu> containing all jutsus
+  const allJutsus = battle?.extraState.jutsus ?? {};
   const userCurrentExtraJutsuIds =
-    user?.jutsus?.filter((j) => j.origin === "injected").map((j) => j.jutsu.id) ?? [];
+    user?.jutsus?.filter((j) => j.origin === "injected").map((j) => j.jutsuId) ?? [];
   let toBeRemovedIds: string[] = [];
   let toBeAddedIds: string[] = [];
   const toBeAddedJutsuPower: Record<string, number> = {};
   injectEffects?.forEach((e) => {
     const jutsuIds = InjectJutsusTag.parse(e).jutsuIds;
-    const tagJutsus = extraJutsus?.filter((j) => jutsuIds.includes(j.id)) ?? [];
+    // Filter jutsus that are in the inject effect and exist in allJutsus
+    const tagJutsus = jutsuIds
+      .map((id) => allJutsus[id])
+      .filter((j): j is Jutsu => j !== undefined);
     const tagJutsuIds = tagJutsus.map((j) => j.id);
     toBeRemovedIds.push(
       ...(userCurrentExtraJutsuIds.filter((id) => !tagJutsuIds.includes(id)) ?? []),
@@ -623,26 +624,21 @@ export const handleInjectedJutsus = (
 
   // Define the user available jutsus
   const activeJutsus = [
-    ...(user?.jutsus?.filter((j) => !toBeRemovedIds.includes(j.jutsu.id)) ?? []),
-    ...(extraJutsus
-      ?.filter((j) => toBeAddedIds.includes(j.id))
+    ...(user?.jutsus?.filter((j) => !toBeRemovedIds.includes(j.jutsuId)) ?? []),
+    ...toBeAddedIds
+      .map((id) => allJutsus[id])
+      .filter((j): j is Jutsu => j !== undefined)
       .map((jutsu) => ({
         id: nanoid(),
-        userId: user.userId,
         jutsuId: jutsu.id,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        finishTraining: null,
         level: toBeAddedJutsuPower[jutsu.id] ?? 1,
         experience: 0,
         equipped: true,
         origin: "injected" as const,
         lastUsedRound: -jutsu.cooldown,
         originalCooldown: jutsu.cooldown,
-        jutsu,
         reskinId: null,
-        activeReskin: null,
-      })) ?? []),
+      })),
   ];
   return activeJutsus;
 };
@@ -841,10 +837,11 @@ export const insertAction = (info: {
     if (affectedTiles.size > 0) {
       // If this was an item, check if we should destroy on use
       if (action.type === "item") {
-        const useritem = user.items.find((i) => i.item.id === action.id);
+        const useritem = user.items.find((i) => i.itemId === action.id);
+        const itemData = useritem ? getItem(battle, useritem.itemId) : undefined;
         if (
           useritem &&
-          useritem.item.destroyOnUse &&
+          itemData?.destroyOnUse &&
           battle.battleType !== "SPARRING" &&
           battle.battleType !== "RANKED_PVP" &&
           battle.battleType !== "RANKED_SPARRING"
@@ -989,9 +986,10 @@ export const performBattleAction = (props: {
     action.type === "item" &&
     !NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)
   ) {
-    const used = user.items.find((i) => i.item.id === action.id);
-    if (used && used.item.itemType === "WEAPON") {
-      const currentDurability = Math.min(used.durability, used.item.maxDurability);
+    const used = user.items.find((i) => i.itemId === action.id);
+    const usedItem = used ? getItem(battle, used.itemId) : undefined;
+    if (used && usedItem?.itemType === "WEAPON") {
+      const currentDurability = Math.min(used.durability, usedItem.maxDurability);
       used.durability = Math.max(0, currentDurability - 3);
       if (used.durability <= DURABILITY_USABILITY_THR) {
         used.equipped = "NONE" as const;
@@ -999,99 +997,95 @@ export const performBattleAction = (props: {
     }
   }
 
-  // Update the action state, so as keep state for technique cooldowns
-  if (action.cooldown && action.cooldown > 0) {
-    // Update the last used round for the action
-    let actionPerformed;
+  // Helper to find the performed action entry (lookup by jutsuId/itemId/id based on type)
+  const findPerformedAction = () => {
     switch (action.type) {
       case "jutsu":
-        actionPerformed = user.jutsus.find((j) => j.jutsu.id === action.id);
-        break;
+        return user.jutsus.find((j) => j.jutsuId === action.id);
       case "item":
-        actionPerformed = user.items.find((i) => i.item.id === action.id);
-        break;
+        return user.items.find((i) => i.itemId === action.id);
       case "basic":
-        actionPerformed = user.basicActions.find((ba) => ba.id === action.id);
-        break;
+        return user.basicActions.find((ba) => ba.id === action.id);
     }
-    if (actionPerformed) actionPerformed.lastUsedRound = battle.round;
+  };
 
-    // If this action has shared cooldown, update the rounds for all related actions
-    if (actionHasSharedCooldown(action)) {
-      // Get all shared cooldown tags from the current action
-      const actionSharedTags = action.effects
-        .filter((effect) => tagHasSharedCooldown(effect))
-        .map((effect) => effect.type);
+  // Always update the last used round for the performed action
+  const actionPerformed = findPerformedAction();
+  if (actionPerformed) actionPerformed.lastUsedRound = battle.round;
 
-      const sharedActions = [
-        ...user.jutsus.filter((jutsu) =>
-          jutsu.jutsu.effects
-            .filter((effect) => tagHasSharedCooldown(effect))
-            .some((effect) => actionSharedTags.includes(effect.type)),
-        ),
-        ...user.items.filter((item) =>
-          item.item.effects
-            .filter((effect) => tagHasSharedCooldown(effect))
-            .some((effect) => actionSharedTags.includes(effect.type)),
-        ),
-        ...user.basicActions.filter((basic) =>
-          basic.effects
-            .filter((effect) => tagHasSharedCooldown(effect))
-            .some((effect) => actionSharedTags.includes(effect.type)),
-        ),
-      ];
-      sharedActions
-        .filter((a) => a.id !== action.id)
-        .forEach((a) => {
-          let cooldown = 0;
-          let lastUsedRound = 0;
-          if ("jutsu" in a && a.jutsu) {
-            cooldown = a.jutsu.cooldown;
-            lastUsedRound = a.lastUsedRound || 0;
-          } else if ("item" in a && a.item) {
-            cooldown = a.item.cooldown;
-            lastUsedRound = a.lastUsedRound || 0;
-          } else if ("cooldown" in a) {
-            cooldown = a.cooldown;
-            lastUsedRound = a.lastUsedRound || 0;
+  // If this action has a cooldown AND shared cooldown effects, apply GCD to related actions
+  if (action.cooldown && action.cooldown > 0 && actionHasSharedCooldown(action)) {
+    // Get all shared cooldown tags from the current action
+    const actionSharedTags = action.effects
+      .filter((effect) => tagHasSharedCooldown(effect))
+      .map((effect) => effect.type);
+
+    // Collect all actions with matching shared cooldown tags into a unified array
+    // Each entry includes the state object to mutate + lookup data for cooldown calc
+    const sharedActions = [
+      // Jutsus
+      ...user.jutsus
+        .filter((uj) => {
+          const jutsu = getJutsu(battle, uj.jutsuId);
+          if (!jutsu) return false;
+          return jutsu.effects
+            .filter((e) => tagHasSharedCooldown(e))
+            .some((e) => actionSharedTags.includes(e.type));
+        })
+        .map((uj) => ({
+          type: "jutsu" as const,
+          actionId: uj.jutsuId,
+          state: uj,
+          cooldown: getJutsu(battle, uj.jutsuId)?.cooldown ?? 0,
+        })),
+      // Items
+      ...user.items
+        .filter((ui) => {
+          const item = getItem(battle, ui.itemId);
+          if (!item) return false;
+          return item.effects
+            .filter((e) => tagHasSharedCooldown(e))
+            .some((e) => actionSharedTags.includes(e.type));
+        })
+        .map((ui) => ({
+          type: "item" as const,
+          actionId: ui.itemId,
+          state: ui,
+          cooldown: getItem(battle, ui.itemId)?.cooldown ?? 0,
+        })),
+      // Basic actions
+      ...user.basicActions
+        .filter((ba) =>
+          ba.effects
+            .filter((e) => tagHasSharedCooldown(e))
+            .some((e) => actionSharedTags.includes(e.type)),
+        )
+        .map((ba) => ({
+          type: "basic" as const,
+          actionId: ba.id,
+          state: ba,
+          cooldown: ba.cooldown ?? 0,
+        })),
+    ];
+
+    // Apply GCD to all shared actions (excluding the one just used)
+    sharedActions
+      .filter((a) => a.actionId !== action.id)
+      .forEach((a) => {
+        const lastUsedRound = a.state.lastUsedRound || 0;
+        const roundsSinceLastUsed = battle.round - lastUsedRound;
+        const isOnCooldown = roundsSinceLastUsed < a.cooldown;
+        const turnsRemaining = a.cooldown - roundsSinceLastUsed;
+        if (!isOnCooldown || (isOnCooldown && turnsRemaining < 3)) {
+          a.state.lastUsedRound = battle.round;
+          // For basic actions, update cooldown directly; for jutsus/items, use originalCooldown
+          if (a.type === "basic") {
+            a.state.cooldown = 3;
+          } else {
+            a.state.originalCooldown = 3;
           }
-
-          // Check if this action is currently on cooldown
-          const roundsSinceLastUsed = battle.round - lastUsedRound;
-          const isOnCooldown = roundsSinceLastUsed < cooldown;
-          const turnsRemaining = cooldown - roundsSinceLastUsed;
-
-          // Apply GCD to actions that are not on cooldown, or extend cooldown if less than 3 turns remain
-          if (!isOnCooldown || (isOnCooldown && turnsRemaining < 3)) {
-            // Apply GCD - set to current round and override cooldown to 3
-            a.lastUsedRound = battle.round;
-
-            // Set cooldown of shared tag to 3
-            if ("jutsu" in a && a.jutsu) {
-              a.jutsu.cooldown = 3;
-            } else if ("item" in a && a.item) {
-              a.item.cooldown = 3;
-            } else if ("cooldown" in a) {
-              a.cooldown = 3;
-            }
-          }
-        });
-    }
-  } else {
-    // For actions with no cooldown, just update the last used round without triggering shared cooldowns
-    let actionPerformed;
-    switch (action.type) {
-      case "jutsu":
-        actionPerformed = user.jutsus.find((j) => j.jutsu.id === action.id);
-        break;
-      case "item":
-        actionPerformed = user.items.find((i) => i.item.id === action.id);
-        break;
-      case "basic":
-        actionPerformed = user.basicActions.find((ba) => ba.id === action.id);
-        break;
-    }
-    if (actionPerformed) actionPerformed.lastUsedRound = battle.round;
+        }
+      });
   }
 
   // Apply relevant effects, and get back new state + active effects

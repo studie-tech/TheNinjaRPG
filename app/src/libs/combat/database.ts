@@ -18,7 +18,7 @@ import {
 } from "@/drizzle/schema";
 import { kageDefendedChallenges, village, clan, anbuSquad } from "@/drizzle/schema";
 import { dataBattleAction } from "@/drizzle/schema";
-import { getNewTrackers, getUserQuests } from "@/libs/quest";
+import { getNewTrackers } from "@/libs/quest";
 import { battleJutsuExp } from "@/libs/train";
 import { updateUserOnMap } from "@/libs/pusher";
 import { JUTSU_XP_TO_LEVEL } from "@/drizzle/constants";
@@ -28,6 +28,13 @@ import {
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
 } from "@/drizzle/constants";
 import { findWarsWithUser } from "@/libs/war";
+import {
+  getWarsArray,
+  getItem,
+  getVillage,
+  getUserQuestsFromBattle,
+  hydrateUserForQuests,
+} from "@/libs/combat/util";
 import type { PusherClient } from "@/libs/pusher";
 import type { BattleTypes, BattleDataEntryType } from "@/drizzle/constants";
 import type { DrizzleClient } from "@/server/db";
@@ -352,17 +359,21 @@ export const updateWars = async (
   if (!result) return;
   // Skip war updates if kill happened in war-torn sector
   if (user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR) return;
+  // Get user's wars from static data
+  const userWars = getWarsArray(curBattle, user);
+
   // Fetch target with whom the user is in a war
   const warResults = curBattle.usersState
     .filter((t) => t.userId !== userId)
     .filter((t) => !t.isSummon)
-    .filter((t) => findWarsWithUser(t.wars, user.wars, t.villageId, userVillageId))
     .map((target) => {
+      const targetWars = getWarsArray(curBattle, target);
       return {
         target,
-        wars: findWarsWithUser(target.wars, user.wars, target.villageId, userVillageId),
+        wars: findWarsWithUser(targetWars, userWars, target.villageId, userVillageId),
       };
-    });
+    })
+    .filter((wr) => wr.wars.length > 0);
 
   // Mutate
   await Promise.all(
@@ -518,24 +529,25 @@ export const updateUser = async (
   const user = curBattle.usersState.find((u) => u.userId === userId);
   if (result && user) {
     // Check if user has active PvP quests with pvp_kills or defeat_opponents objectives
-    const activeQuests = getUserQuests(user);
+    // Get user quests from extraState (static data that doesn't change during battle)
+    const activeQuests = getUserQuestsFromBattle(curBattle, user.controllerId);
     const activePvpQuests = activeQuests.filter((q) => q.questType === "pvp");
-    const hasPvpKillsInPvpQuest = activePvpQuests.some((quest) =>
-      quest.content.objectives.some((obj) => obj.task === "pvp_kills"),
+    const hasPvpKillsInPvpQuest = activePvpQuests.some((uq) =>
+      uq.quest.content.objectives.some((obj) => obj.task === "pvp_kills"),
     );
-    const hasDefeatOpponentsInPvpQuest = activePvpQuests.some((quest) =>
-      quest.content.objectives.some((obj) => obj.task === "defeat_opponents"),
+    const hasDefeatOpponentsInPvpQuest = activePvpQuests.some((uq) =>
+      uq.quest.content.objectives.some((obj) => obj.task === "defeat_opponents"),
     );
     // Check if user has non-PvP quests with these objectives (should increment normally)
     const hasPvpKillsInNonPvpQuest = activeQuests
       .filter((q) => q.questType !== "pvp")
-      .some((quest) =>
-        quest.content.objectives.some((obj) => obj.task === "pvp_kills"),
+      .some((uq) =>
+        uq.quest.content.objectives.some((obj) => obj.task === "pvp_kills"),
       );
     const hasDefeatOpponentsInNonPvpQuest = activeQuests
       .filter((q) => q.questType !== "pvp")
-      .some((quest) =>
-        quest.content.objectives.some((obj) => obj.task === "defeat_opponents"),
+      .some((uq) =>
+        uq.quest.content.objectives.some((obj) => obj.task === "defeat_opponents"),
       );
     const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
     // Only increment pvp_kills if:
@@ -606,8 +618,9 @@ export const updateUser = async (
     trackerTasks.push(...trackerEvents);
 
     // Single call to getNewTrackers with all tasks
+    const hydratedUser = hydrateUserForQuests(curBattle, user);
     const { trackers, notifications, questIdsUpdated } = getNewTrackers(
-      user,
+      hydratedUser,
       trackerTasks,
     );
     updatedQuestIds.push(...questIdsUpdated);
@@ -621,15 +634,16 @@ export const updateUser = async (
     const updateItems = user.items.filter((ui) => ui.quantity > 0);
     if (isInWarTornSector && result.didWin === 0 && result.outcome === "Lost") {
       updateItems.forEach((ui) => {
+        const item = getItem(curBattle, ui.itemId);
         // Only reduce durability for equipped items (not "NONE") that are not consumables
         if (
           ui.equipped !== "NONE" &&
-          ui.item.itemType !== "CONSUMABLE" &&
-          ui.item.maxDurability &&
-          ui.item.maxDurability > 0
+          item?.itemType !== "CONSUMABLE" &&
+          item?.maxDurability &&
+          item.maxDurability > 0
         ) {
           // Reduce durability by 50, ensuring it doesn't go below 0
-          const currentDurability = ui.durability ?? ui.item.maxDurability;
+          const currentDurability = ui.durability ?? item.maxDurability;
           ui.durability = Math.max(0, currentDurability - 50);
         }
       });
@@ -639,18 +653,19 @@ export const updateUser = async (
     const initialDurability = curBattle.extraState.initialDurability;
     if (initialDurability && initialDurability[userId]) {
       const userInitialDurability = initialDurability[userId];
-      user.items.forEach((item) => {
-        if (item.item.maxDurability && item.item.maxDurability > 0) {
-          const initial = userInitialDurability[item.id];
-          const final = item.durability;
-          const max = item.item.maxDurability;
+      user.items.forEach((battleItem) => {
+        const item = getItem(curBattle, battleItem.itemId);
+        if (item?.maxDurability && item.maxDurability > 0) {
+          const initial = userInitialDurability[battleItem.id];
+          const final = battleItem.durability;
+          const max = item.maxDurability;
           if (initial === undefined) return;
           const initialPct = Math.round((initial / max) * 100);
           const finalPct = Math.round((final / max) * 100);
           // Broken: now at 0
           if (initial > 0 && final <= 0) {
             result.notifications.push(
-              `${item.item.name} has broken and cannot be used until repaired!`,
+              `${item.name} has broken and cannot be used until repaired!`,
             );
           } else if (
             // Urgent warning: crossed down to <=25%
@@ -659,7 +674,7 @@ export const updateUser = async (
             final > 0
           ) {
             result.notifications.push(
-              `${item.item.name} durability is critically low at ${finalPct}%! Repair it soon to prevent it from breaking!`,
+              `${item.name} durability is critically low at ${finalPct}%! Repair it soon to prevent it from breaking!`,
             );
           } else if (
             // Regular warning: crossed down to <=50% (but still above 25%)
@@ -669,7 +684,7 @@ export const updateUser = async (
             final > 0
           ) {
             result.notifications.push(
-              `${item.item.name} durability is now ${finalPct}%. Consider repairing it soon!`,
+              `${item.name} durability is now ${finalPct}%. Consider repairing it soon!`,
             );
           }
         }
@@ -818,7 +833,9 @@ export const updateUser = async (
                 status: "HOSPITALIZED",
                 longitude: HOSPITAL_LONG,
                 latitude: HOSPITAL_LAT,
-                sector: user.allyVillage ? user.sector : user.village?.sector,
+                sector: user.allyVillage
+                  ? user.sector
+                  : getVillage(curBattle, user.villageId)?.sector,
                 immunityUntil:
                   curBattle.battleType === "COMBAT"
                     ? sql`NOW() + INTERVAL 1 MINUTE`

@@ -57,13 +57,241 @@ import { checkCoLeader, checkAssassin } from "@/validators/clan";
 import type { PathCalculator } from "../hexgrid";
 import type { TerrainHex } from "../hexgrid";
 import type { CombatResult, CompleteBattle, ReturnedBattle } from "./types";
-import type { ReturnedUserState, Consequence } from "./types";
+import type {
+  ReturnedUserState,
+  Consequence,
+  BattleWar,
+  ReturnedBattleDynamic,
+} from "./types";
 import type { CombatAction, BattleUserState } from "./types";
 import type { ZodAllTags } from "./types";
 import type { GroundEffect, UserEffect, BattleEffect } from "@/libs/combat/types";
-import type { Battle } from "@/drizzle/schema";
-import type { GameSetting } from "@/drizzle/schema";
+import type { Battle, UserItem } from "@/drizzle/schema";
+import type { GameSetting, VillageAlliance } from "@/drizzle/schema";
 import type { DroppedItem } from "./types";
+
+// =============================================================================
+// STATIC DATA LOOKUP FUNCTIONS
+// These functions retrieve full data from extraState using IDs.
+// Use these whenever you need the full object instead of just the reference.
+// =============================================================================
+
+/**
+ * Get full Jutsu data from extraState by jutsuId
+ */
+export const getJutsu = (battle: CompleteBattle | ReturnedBattle, jutsuId: string) => {
+  return battle.extraState.jutsus?.[jutsuId];
+};
+
+/**
+ * Get full Jutsu data - throws if not found (use when jutsu MUST exist)
+ */
+export const getJutsuOrThrow = (
+  battle: CompleteBattle | ReturnedBattle,
+  jutsuId: string,
+) => {
+  const jutsu = getJutsu(battle, jutsuId);
+  if (!jutsu) throw new Error(`Jutsu not found in staticData: ${jutsuId}`);
+  return jutsu;
+};
+
+/**
+ * Get jutsu reskin data from extraState by reskinId
+ */
+export const getJutsuReskin = (
+  battle: CompleteBattle | ReturnedBattle,
+  reskinId: string | null | undefined,
+) => {
+  if (!reskinId) return undefined;
+  return battle.extraState.jutsuReskins?.[reskinId];
+};
+
+/**
+ * Get full Item data from extraState by itemId
+ */
+export const getItem = (battle: CompleteBattle | ReturnedBattle, itemId: string) => {
+  return battle.extraState.items?.[itemId];
+};
+
+/**
+ * Get full Item data - throws if not found
+ */
+export const getItemOrThrow = (
+  battle: CompleteBattle | ReturnedBattle,
+  itemId: string,
+) => {
+  const item = getItem(battle, itemId);
+  if (!item) throw new Error(`Item not found in staticData: ${itemId}`);
+  return item;
+};
+
+/**
+ * Get full Village data from extraState by villageId
+ */
+export const getVillage = (
+  battle: CompleteBattle | ReturnedBattle,
+  villageId: string | null | undefined,
+) => {
+  if (!villageId) return undefined;
+  return battle.extraState.villages?.[villageId];
+};
+
+/**
+ * Get AnbuSquad data from extraState by anbuId
+ */
+export const getAnbuSquad = (
+  battle: CompleteBattle | ReturnedBattle,
+  anbuId: string | null | undefined,
+) => {
+  if (!anbuId) return undefined;
+  return battle.extraState.anbuSquads?.[anbuId];
+};
+
+/**
+ * Get Clan data from extraState by clanId
+ */
+export const getClan = (
+  battle: CompleteBattle | ReturnedBattle,
+  clanId: string | null | undefined,
+) => {
+  if (!clanId) return undefined;
+  return battle.extraState.clans?.[clanId];
+};
+
+/**
+ * Get War data from extraState by warId
+ */
+export const getWar = (battle: CompleteBattle | ReturnedBattle, warId: string) => {
+  return battle.extraState.wars?.[warId];
+};
+
+/**
+ * Get all wars for a user as array
+ */
+export const getWarsArray = (
+  battle: CompleteBattle | ReturnedBattle,
+  user: BattleUserState,
+) => {
+  return (user.warIds ?? [])
+    .map((id) => battle.extraState.wars?.[id])
+    .filter((w): w is BattleWar => Boolean(w));
+};
+
+/**
+ * Get VillageAlliance (relation) from extraState by relationId
+ */
+export const getRelation = (
+  battle: CompleteBattle | ReturnedBattle,
+  relationId: string,
+) => {
+  return battle.extraState.relations?.[relationId];
+};
+
+/**
+ * Get all relations for a user as array
+ */
+export const getRelationsArray = (
+  battle: CompleteBattle | ReturnedBattle,
+  user: BattleUserState,
+) => {
+  return (user.relationIds ?? [])
+    .map((id) => battle.extraState.relations?.[id])
+    .filter((r): r is VillageAlliance => Boolean(r));
+};
+
+/**
+ * Get AiProfile from extraState by aiProfileId
+ */
+export const getAiProfile = (
+  battle: CompleteBattle | ReturnedBattle,
+  aiProfileId: string | null | undefined,
+) => {
+  if (!aiProfileId) return undefined;
+  return battle.extraState.aiProfiles?.[aiProfileId];
+};
+
+/**
+ * Get keystone Item from extraState by keystoneItemId
+ */
+export const getKeystoneItem = (
+  battle: CompleteBattle | ReturnedBattle,
+  keystoneItemId: string | null | undefined,
+) => {
+  if (!keystoneItemId) return undefined;
+  return battle.extraState.keystoneItems?.[keystoneItemId];
+};
+
+/**
+ * Get user quests from extraState for a user
+ */
+export const getUserQuestsFromBattle = (
+  battle: CompleteBattle | ReturnedBattle,
+  controllerId: string,
+) => {
+  return battle.extraState.userQuests?.[controllerId] ?? [];
+};
+
+/**
+ * Get completed quests from extraState for a user
+ */
+export const getCompletedQuestsFromBattle = (
+  battle: CompleteBattle | ReturnedBattle,
+  controllerId: string,
+) => {
+  return battle.extraState.completedQuests?.[controllerId] ?? [];
+};
+
+/**
+ * Hydrate a BattleUserState with data from extraState for use with e.g. getNewTrackers.
+ */
+export const hydrateUserForQuests = (battle: CompleteBattle, user: BattleUserState) => {
+  const userQuests = getUserQuestsFromBattle(battle, user.controllerId);
+  const completedQuests = getCompletedQuestsFromBattle(battle, user.controllerId);
+  const village = user.villageId ? getVillage(battle, user.villageId) : undefined;
+
+  // Omit BattleUserState.items (BattleUserItem[]) to replace with UserItem[] for type compatibility
+  const { items: battleItems, ...userWithoutItems } = user;
+
+  // Convert BattleUserItem[] to UserItem[] by adding missing fields
+  const now = new Date();
+  const items: UserItem[] = battleItems.map((bi) => ({
+    ...bi,
+    createdAt: now,
+    updatedAt: now,
+    userId: user.userId,
+    storedAtHome: false,
+    craftingFinishedAt: null,
+    isInAuction: false,
+  }));
+
+  return {
+    ...userWithoutItems,
+    userQuests,
+    completedQuests,
+    village,
+    items,
+  };
+};
+
+/**
+ * Get bounties from extraState for a user
+ */
+export const getUserBounties = (
+  battle: CompleteBattle | ReturnedBattle,
+  controllerId: string,
+) => {
+  return battle.extraState.bounties?.[controllerId] ?? [];
+};
+
+/**
+ * Get bounty signups from extraState for a user
+ */
+export const getUserBountySignups = (
+  battle: CompleteBattle | ReturnedBattle,
+  controllerId: string,
+) => {
+  return battle.extraState.bountySignups?.[controllerId] ?? [];
+};
 
 /**
  * Check if a single tag is a shared cooldown tag
@@ -628,23 +856,51 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
 };
 
 /**
+ * Masks user state to hide private information from other players.
+ * Returns public state for opponents and full state for the session user.
+ */
+const maskUsersState = (
+  usersState: BattleUserState[],
+  userId: string,
+): ReturnedUserState[] => {
+  return usersState.map((user) => {
+    if (user.controllerId !== userId) {
+      return Object.fromEntries(
+        publicState.map((key) => [key, user[key]]),
+      ) as unknown as ReturnedUserState;
+    } else {
+      return Object.fromEntries(
+        allState.map((key) => [key, user[key]]),
+      ) as unknown as ReturnedUserState;
+    }
+  });
+};
+
+/**
  * Masks information from a battle prior to returning it to the frontend,
  * i.e. do not leak opponents stats
  */
 export const maskBattle = (battle: Battle, userId: string) => {
   return {
     ...battle,
-    usersState: (battle.usersState as ReturnedUserState[]).map((user) => {
-      if (user.controllerId !== userId) {
-        return Object.fromEntries(
-          publicState.map((key) => [key, user[key]]),
-        ) as unknown as ReturnedUserState;
-      } else {
-        return Object.fromEntries(
-          allState.map((key) => [key, user[key]]),
-        ) as unknown as ReturnedUserState;
-      }
-    }),
+    usersState: maskUsersState(battle.usersState, userId),
+  };
+};
+
+/**
+ * Masks a battle for returning dynamic updates (excludes extraState).
+ * Used by performAction to send only the fields that changed during combat.
+ * Frontend should merge this with existing extraState from initial battle fetch.
+ */
+export const maskBattleDynamic = (
+  battle: Battle,
+  userId: string,
+): ReturnedBattleDynamic => {
+  const { extraState: _extraState, ...dynamicBattle } = battle;
+  void _extraState; // Intentionally excluded from dynamic updates
+  return {
+    ...dynamicBattle,
+    usersState: maskUsersState(dynamicBattle.usersState, userId),
   };
 };
 
@@ -657,6 +913,7 @@ export const calcBattleResult = (
   settings?: GameSetting[],
 ): CombatResult | null => {
   const battleType = battle.battleType;
+  // Use users directly from battle state - lookup functions get full data when needed
   const users = battle.usersState;
   const user = users.find((u) => u.userId === userId);
   if (user && !user.leftBattle) {
@@ -687,20 +944,22 @@ export const calcBattleResult = (
       const didWin = user.curHealth > 0 && !user.fledBattle;
       const maxGain = 32;
 
-      // Check if we have a shrine boost, add it to reward scaling in case
-      const sectors = user.village?.sectors?.length || 0;
-      const shrineBoost = getShrineBoost(sectors, "PVP", user.village);
+      // Check if we have a shrine boost - look up village from staticData
+      const village = getVillage(battle, user.villageId);
+      const sectors = village?.sectors?.length || 0;
+      const shrineBoost = getShrineBoost(sectors, "PVP", village);
       const shrineBoostFactor = shrineBoost ? 1 + shrineBoost : 1;
 
       // Experience boost
       let expBoost = 1;
       if (battleType === "ARENA") {
-        user.village?.structures?.forEach((s) => {
+        village?.structures?.forEach((s) => {
           expBoost += (s.arenaRewardPerLvl * s.level) / 100;
         });
       }
-      if (user?.clan?.trainingBoost && user.clan.trainingBoost > 0) {
-        expBoost += user.clan.trainingBoost / 100;
+      const userClan = getClan(battle, user.clanId);
+      if (userClan?.trainingBoost && userClan.trainingBoost > 0) {
+        expBoost += userClan.trainingBoost / 100;
       }
 
       // Calculate ELO change if user had won.
@@ -792,7 +1051,7 @@ export const calcBattleResult = (
       let deltaEarnedExperience = 0;
 
       // Money/ryo calculation
-      const moneyBoost = user?.clan?.ryoBoost ? 1 + user.clan.ryoBoost / 100 : 1;
+      const moneyBoost = userClan?.ryoBoost ? 1 + userClan.ryoBoost / 100 : 1;
       const isCombatOrWarBattle =
         battleType === "COMBAT" || battleType === "SHRINE_WAR";
       let moneyDelta = didWin
@@ -853,7 +1112,8 @@ export const calcBattleResult = (
           } else {
             // Prestige deduction for killing allies (skip if in war-torn sector)
             if (!isInWarTornSector) {
-              const isAlly = target.relations
+              const targetRelations = getRelationsArray(battle, target);
+              const isAlly = targetRelations
                 .filter((r) => r.status === "ALLY")
                 .find(
                   (r) =>
@@ -866,9 +1126,10 @@ export const calcBattleResult = (
           }
 
           // Base prestige for PvP kill (only for enemies, even in war-torn sector)
+          const targetRelationsAll = getRelationsArray(battle, target);
           if (
             user.isOutlaw ||
-            !target.relations.some(
+            !targetRelationsAll.some(
               (r) =>
                 (r.status === "ALLY" &&
                   ((r.villageIdA === vilId && r.villageIdB === target.villageId) ||
@@ -877,7 +1138,7 @@ export const calcBattleResult = (
             )
           ) {
             const isUserAssassin =
-              user.isOutlaw && checkAssassin(user.userId, user.clan);
+              user.isOutlaw && checkAssassin(user.userId, userClan);
 
             deltaPrestige += user.anbuId
               ? PVP_KILL_PRESTIGE_REWARD_ANBU
@@ -900,7 +1161,7 @@ export const calcBattleResult = (
 
           // Additional village tokens for killing enemies
           deltaTokens +=
-            target.relations
+            targetRelationsAll
               .filter((r) => r.status === "ENEMY")
               .filter(
                 (r) =>
@@ -917,6 +1178,7 @@ export const calcBattleResult = (
       let shrineChangeHp = 0;
       // Skip war updates if kill happened in war-torn sector
       const isInWarTornSectorForWar = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
+      const userWars = getWarsArray(battle, user);
       if (!user.fledBattle && !isInWarTornSectorForWar) {
         targets
           .filter((t) => !t.isSummon)
@@ -926,9 +1188,10 @@ export const calcBattleResult = (
             const userVillageId = user.villageId;
             const targetVillageId = target.villageId;
             // Get the war from the target, and also search through warAllies
+            const targetWars = getWarsArray(battle, target);
             const wars = findWarsWithUser(
-              target.wars,
-              user.wars,
+              targetWars,
+              userWars,
               targetVillageId,
               userVillageId,
             );
@@ -951,21 +1214,23 @@ export const calcBattleResult = (
               }
               // Derived
               const isUserFactionColeader =
-                user.isOutlaw && checkCoLeader(user.userId, user.clan);
+                user.isOutlaw && checkCoLeader(user.userId, userClan);
+              const targetClan = getClan(battle, target.clanId);
               const isTargetFactionColeader =
-                target.isOutlaw && checkCoLeader(target.userId, target.clan);
+                target.isOutlaw && checkCoLeader(target.userId, targetClan);
               const isUserAssassin =
-                user.isOutlaw && checkAssassin(user.userId, user.clan);
+                user.isOutlaw && checkAssassin(user.userId, userClan);
               const isTargetAssassin =
-                target.isOutlaw && checkAssassin(target.userId, target.clan);
+                target.isOutlaw && checkAssassin(target.userId, targetClan);
 
               // Village wars & raids
               if (
                 ["VILLAGE_WAR", "WAR_RAID"].includes(war.type) &&
                 battleType === "COMBAT"
               ) {
+                const targetVillage = getVillage(battle, target.villageId);
                 if (didWin) {
-                  if (user.village?.kageId === user.userId) {
+                  if (village?.kageId === user.userId) {
                     townhallChangeHP += WAR_TOWNHALL_HP_KAGE_RECOVER;
                     townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_KAGE_RECOVER;
                     townhallInfo[targetVillageName]! -= WAR_TOWNHALL_HP_KAGE_REMOVE;
@@ -990,12 +1255,12 @@ export const calcBattleResult = (
                     townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_RECOVER;
                     townhallInfo[targetVillageName]! -= WAR_TOWNHALL_HP_REMOVE;
                   }
-                  if (target.village?.kageId === target.userId) {
+                  if (targetVillage?.kageId === target.userId) {
                     townhallInfo[targetVillageName]! -=
                       WAR_TOWNHALL_HP_KAGEDEATH_REMOVE;
                   }
                 } else {
-                  if (target.village?.kageId === target.userId) {
+                  if (targetVillage?.kageId === target.userId) {
                     townhallChangeHP -= WAR_TOWNHALL_HP_KAGE_REMOVE;
                     townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_KAGE_REMOVE;
                   } else if (target.rank === "ELDER") {
@@ -1014,7 +1279,7 @@ export const calcBattleResult = (
                     townhallChangeHP -= WAR_TOWNHALL_HP_REMOVE;
                     townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_REMOVE;
                   }
-                  if (user.village?.kageId === user.userId) {
+                  if (village?.kageId === user.userId) {
                     townhallChangeHP -= WAR_TOWNHALL_HP_KAGEDEATH_REMOVE;
                     townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_KAGEDEATH_REMOVE;
                   }
@@ -1070,8 +1335,11 @@ export const calcBattleResult = (
       if (Math.abs(user.level - maxTargetLevel) > STREAK_LEVEL_DIFF) {
         // Check if any kage was killed in this battle
         const targetKageLost =
-          targets.some((target) => target.village?.kageId === target.userId) && didWin;
-        const userKageLost = user.village?.kageId === user.userId && !didWin;
+          targets.some((target) => {
+            const tVillage = getVillage(battle, target.villageId);
+            return tVillage?.kageId === target.userId;
+          }) && didWin;
+        const userKageLost = village?.kageId === user.userId && !didWin;
         const kageLost = targetKageLost || userKageLost;
         const strongestWon = user.level > maxTargetLevel && didWin;
         const weakestLost = user.level < maxTargetLevel && !didWin;
@@ -1125,11 +1393,16 @@ export const calcBattleResult = (
         amountRyo: number;
       }[] = [];
       if (battleType === "COMBAT" && didWin) {
-        user.bountySignups?.forEach((signup) => {
+        const userBountySignups = getUserBountySignups(battle, user.controllerId);
+        userBountySignups.forEach((signup) => {
           targets
-            .filter((t) => t.bounties?.find((b) => b.id === signup.bountyId))
+            .filter((t) => {
+              const targetBounties = getUserBounties(battle, t.controllerId);
+              return targetBounties.find((b) => b.id === signup.bountyId);
+            })
             .forEach((t) => {
-              const bounty = t.bounties?.find((b) => b.id === signup.bountyId);
+              const targetBounties = getUserBounties(battle, t.controllerId);
+              const bounty = targetBounties.find((b) => b.id === signup.bountyId);
               if (bounty) {
                 bountiesClaimed.push({
                   bountyId: bounty.id,
@@ -1150,9 +1423,10 @@ export const calcBattleResult = (
             t.items.forEach((ui) => {
               const chance = ui.dropChancePerc ?? 0;
               if (chance > 0 && Math.random() * 100 < chance) {
+                const itemData = getItem(battle, ui.itemId);
                 droppedItems.push({
                   itemId: ui.itemId,
-                  name: ui.item?.name ?? "Item",
+                  name: itemData?.name ?? "Item",
                   userItemId: ui.id,
                   fromUserId: t.userId,
                 });
@@ -1305,7 +1579,7 @@ export const calcBattleResult = (
         outcome !== "Fled"
       ) {
         // Calculate what the user would have gotten if they won (same calculation as winner)
-        const loserMoneyBoost = user?.clan?.ryoBoost ? 1 + user.clan.ryoBoost / 100 : 1;
+        const loserMoneyBoost = userClan?.ryoBoost ? 1 + userClan.ryoBoost / 100 : 1;
         let loserMoneyGain = WAR_TORN_SECTOR_BASE_MONEY * loserMoneyBoost;
         loserMoneyGain *= 1.5; // COMBAT multiplier
         loserMoneyGain *= battle.rewardScaling;
@@ -1506,26 +1780,35 @@ export const calcApReduction = (
   return apReduction || 0;
 };
 
+/** User fields required for initiative calculation */
+type InitiativeUser = {
+  level?: number | null;
+  sector?: number | null;
+  pvpStreak?: number | null;
+};
+
 export const rollInitiative = (
-  user: BattleUserState,
-  opponents?: BattleUserState[],
+  user: InitiativeUser,
+  opponents?: InitiativeUser[],
+  villageSector?: number | null,
 ) => {
   // Get a random number between 1 and 20
   let roll = randomInt(1, 20);
   // Calculate level bonus
   if (opponents) {
-    const avgLevel = opponents.reduce((a, b) => a + b.level, 0) / opponents.length;
-    const levelBonus = Math.max((user.level - avgLevel) * 0.03, 0);
+    const avgLevel =
+      opponents.reduce((a, b) => a + (b.level ?? 1), 0) / opponents.length;
+    const levelBonus = Math.max(((user.level ?? 1) - avgLevel) * 0.03, 0);
     roll = roll * (1 + levelBonus);
   }
   // Calculate territory bonus
-  const ownTerritory = user.sector === user.village?.sector;
+  const ownTerritory = user.sector === villageSector;
   const territoryBonus = ownTerritory ? 0.1 : -0.1;
   roll = roll * (1 + territoryBonus);
   // PvP bonus
-  if (user.pvpStreak > 0) {
+  if ((user.pvpStreak ?? 0) > 0) {
     let pvpBonus = 0;
-    for (let i = 1; i <= user.pvpStreak; i++) {
+    for (let i = 1; i <= (user.pvpStreak ?? 0); i++) {
       switch (i) {
         case 1:
           pvpBonus += 0.02;
