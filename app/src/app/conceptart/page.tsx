@@ -362,7 +362,18 @@ const ImageCreationForm: React.FC<{
           <FormItem>
             <FormLabel>Seed value</FormLabel>
             <FormControl>
-              <Input placeholder="Seed value" type="number" {...field} />
+              <Input
+                placeholder="Seed value"
+                type="number"
+                value={field.value ?? ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  field.onChange(value === "" ? undefined : Number(value));
+                }}
+                onBlur={field.onBlur}
+                name={field.name}
+                ref={field.ref}
+              />
             </FormControl>
             <FormDescription>Use the same seed to get similar results</FormDescription>
             <FormMessage />
@@ -416,7 +427,18 @@ const VideoCreationForm: React.FC<{
           <FormItem>
             <FormLabel>Seed value</FormLabel>
             <FormControl>
-              <Input placeholder="Seed value" type="number" {...field} />
+              <Input
+                placeholder="Seed value"
+                type="number"
+                value={field.value ?? ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  field.onChange(value === "" ? undefined : Number(value));
+                }}
+                onBlur={field.onBlur}
+                name={field.name}
+                ref={field.ref}
+              />
             </FormControl>
             <FormDescription>Use the same seed to get similar results</FormDescription>
             <FormMessage />

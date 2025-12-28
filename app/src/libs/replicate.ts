@@ -494,7 +494,7 @@ type Txt2VideoConfig = {
  * @returns The prediction object with ID for status tracking
  */
 export const startVideoGeneration = async (config: Txt2VideoConfig) => {
-  const replicate = new Replicate({ auth: env.REPLICATE_API_TOKEN });
+  const replicate = getReplicateInstance();
 
   const input: Record<string, unknown> = {
     prompt: config.prompt,
@@ -529,15 +529,85 @@ export const startVideoGeneration = async (config: Txt2VideoConfig) => {
   return prediction;
 };
 
+// Singleton Replicate instance to avoid connection pool exhaustion
+let replicateInstance: Replicate | null = null;
+const getReplicateInstance = () => {
+  if (!replicateInstance) {
+    replicateInstance = new Replicate({ auth: env.REPLICATE_API_TOKEN });
+  }
+  return replicateInstance;
+};
+
+// In-memory cache for video generation status to avoid excessive API calls
+const videoStatusCache = new Map<
+  string,
+  {
+    prediction: Awaited<ReturnType<Replicate["predictions"]["get"]>>;
+    timestamp: number;
+  }
+>();
+const CACHE_TTL_MS = 3000; // Cache for 3 seconds
+const API_TIMEOUT_MS = 10000; // 10 second timeout for API calls
+
+// Helper to add timeout to a promise
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Request timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+};
+
 /**
  * Check the status of a video generation prediction
+ * Uses a singleton instance and caching to prevent blocking
  * @param predictionId - The Replicate prediction ID
  * @returns The prediction status and output if completed
  */
 export const getVideoGenerationStatus = async (predictionId: string) => {
-  const replicate = new Replicate({ auth: env.REPLICATE_API_TOKEN });
-  const prediction = await replicate.predictions.get(predictionId);
-  return prediction;
+  const now = Date.now();
+  const cached = videoStatusCache.get(predictionId);
+
+  // Return cached result if still valid
+  if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+    return cached.prediction;
+  }
+
+  // Use singleton instance with timeout
+  const replicate = getReplicateInstance();
+
+  try {
+    const prediction = await withTimeout(
+      replicate.predictions.get(predictionId),
+      API_TIMEOUT_MS,
+    );
+
+    // Cache the result
+    videoStatusCache.set(predictionId, { prediction, timestamp: now });
+
+    // Clean up old cache entries periodically
+    if (videoStatusCache.size > 100) {
+      const keysToDelete: string[] = [];
+      videoStatusCache.forEach((value, key) => {
+        if (now - value.timestamp > CACHE_TTL_MS * 10) {
+          keysToDelete.push(key);
+        }
+      });
+      keysToDelete.forEach((key) => videoStatusCache.delete(key));
+    }
+
+    return prediction;
+  } catch (error) {
+    // If we have a stale cache, return it on timeout/error
+    if (cached) {
+      console.warn(
+        `Replicate API timeout/error, returning cached status for ${predictionId}`,
+      );
+      return cached.prediction;
+    }
+    throw error;
+  }
 };
 
 /**
@@ -549,6 +619,8 @@ export const getVideoGenerationStatus = async (predictionId: string) => {
 export const uploadCompletedVideo = async (outputUrl: string) => {
   const utapi = new UTApi();
   const name = `video-${nanoid()}.mp4`;
+  console.log("Uploading video to UploadThing", outputUrl, name);
   const uploadedFile = await utapi.uploadFilesFromUrl({ url: outputUrl, name });
+  console.log("Uploaded video to UploadThing", uploadedFile.data?.ufsUrl);
   return uploadedFile.data?.ufsUrl ?? null;
 };

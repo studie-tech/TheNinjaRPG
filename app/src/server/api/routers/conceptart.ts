@@ -214,7 +214,8 @@ export const conceptartRouter = createTRPCRouter({
         return errorResponse(message);
       }
     }),
-  checkVideoStatus: protectedProcedure
+  // Read-only query for polling video status - no DB updates or uploads
+  checkVideoStatusRead: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       // Query the concept image
@@ -230,8 +231,9 @@ export const conceptartRouter = createTRPCRouter({
         return {
           success: true,
           message: "Video ready",
-          status: "succeeded",
+          status: "succeeded" as const,
           videoUrl: record.video,
+          readyToFinalize: false,
         };
       }
       // If status is "uploading", the video is being uploaded - just wait
@@ -239,52 +241,39 @@ export const conceptartRouter = createTRPCRouter({
         return {
           success: true,
           message: "Uploading video...",
-          status: "uploading",
+          status: "uploading" as const,
           progress: 95,
+          readyToFinalize: false,
+        };
+      }
+      // If failed or canceled, return that status
+      if (record.status === "failed" || record.status === "canceled") {
+        return {
+          success: false,
+          message: `Video generation ${record.status}`,
+          status: record.status,
+          readyToFinalize: false,
         };
       }
       // If no replicateId, something went wrong
       if (!record.replicateId) {
         return errorResponse("No prediction ID found");
       }
-      // Check status with Replicate
+      // Check status with Replicate (read-only)
       const prediction = await getVideoGenerationStatus(record.replicateId);
-      // Handle different statuses
+      // If succeeded, signal that finalize mutation should be called
       if (prediction.status === "succeeded" && prediction.output) {
-        // Get the output URL (could be string or array)
-        const outputUrl = Array.isArray(prediction.output)
-          ? prediction.output[0]
-          : prediction.output;
-        if (typeof outputUrl === "string") {
-          // Mark as uploading FIRST to prevent duplicate uploads
-          await ctx.drizzle
-            .update(conceptImage)
-            .set({ status: "uploading" })
-            .where(
-              and(eq(conceptImage.id, input.id), eq(conceptImage.status, "processing")),
-            );
-          // Upload to UploadThing (this can be slow)
-          const uploadedVideoUrl = await uploadCompletedVideo(outputUrl);
-          if (uploadedVideoUrl) {
-            // Update database with video URL
-            await ctx.drizzle
-              .update(conceptImage)
-              .set({ video: uploadedVideoUrl, status: "success", done: true })
-              .where(eq(conceptImage.id, input.id));
-            return {
-              success: true,
-              message: "Video ready",
-              status: "succeeded",
-              videoUrl: uploadedVideoUrl,
-            };
-          }
-        }
-        return errorResponse("Failed to process video output");
-      } else if (prediction.status === "failed" || prediction.status === "canceled") {
-        await ctx.drizzle
-          .update(conceptImage)
-          .set({ status: prediction.status, done: true })
-          .where(eq(conceptImage.id, input.id));
+        return {
+          success: true,
+          message: "Video ready for upload",
+          status: "succeeded" as const,
+          progress: 100,
+          readyToFinalize: true,
+          replicateId: record.replicateId,
+        };
+      }
+      // If failed or canceled from Replicate
+      if (prediction.status === "failed" || prediction.status === "canceled") {
         const errorMessage =
           typeof prediction.error === "string"
             ? prediction.error
@@ -293,13 +282,13 @@ export const conceptartRouter = createTRPCRouter({
           success: false,
           message: errorMessage,
           status: prediction.status,
+          readyToFinalize: true, // Call mutation to update DB status
+          replicateId: record.replicateId,
         };
       }
       // Still processing
-      // Calculate progress from logs if available
       let progress = 0;
       if (prediction.logs) {
-        // Try to parse progress from logs (varies by model)
         const progressMatch = prediction.logs.match(/(\d+)%/);
         if (progressMatch?.[1]) {
           progress = parseInt(progressMatch[1], 10);
@@ -310,7 +299,93 @@ export const conceptartRouter = createTRPCRouter({
         message: "Video is being generated...",
         status: prediction.status,
         progress,
+        readyToFinalize: false,
       };
+    }),
+  // Mutation to finalize video upload - performs DB updates and upload
+  finalizeVideoUpload: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .output(baseServerResponse.extend({ videoUrl: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const record = await ctx.drizzle.query.conceptImage.findFirst({
+        where: eq(conceptImage.id, input.id),
+      });
+      // Guard
+      if (!record) return errorResponse("Video not found");
+      if (record.userId !== ctx.userId) return errorResponse("Not authorized");
+      if (record.mediaType !== "video") return errorResponse("Not a video");
+      // If already done, return success
+      if (record.done && record.video) {
+        return {
+          success: true,
+          message: "Video already finalized",
+          videoUrl: record.video,
+        };
+      }
+      // If already uploading, prevent duplicate
+      if (record.status === "uploading") {
+        return { success: true, message: "Upload already in progress" };
+      }
+      // If no replicateId, something went wrong
+      if (!record.replicateId) {
+        return errorResponse("No prediction ID found");
+      }
+      // Check status with Replicate
+      const prediction = await getVideoGenerationStatus(record.replicateId);
+      // Handle failed/canceled
+      if (prediction.status === "failed" || prediction.status === "canceled") {
+        await ctx.drizzle
+          .update(conceptImage)
+          .set({ status: prediction.status, done: true })
+          .where(eq(conceptImage.id, input.id));
+        const errorMessage =
+          typeof prediction.error === "string"
+            ? prediction.error
+            : "Video generation failed";
+        return errorResponse(errorMessage);
+      }
+      // Handle succeeded - perform upload
+      if (prediction.status === "succeeded" && prediction.output) {
+        const outputUrl = Array.isArray(prediction.output)
+          ? prediction.output[0]
+          : prediction.output;
+        if (typeof outputUrl === "string") {
+          // Mark as uploading FIRST to prevent duplicate uploads
+          const updateResult = await ctx.drizzle
+            .update(conceptImage)
+            .set({ status: "uploading" })
+            .where(
+              and(eq(conceptImage.id, input.id), eq(conceptImage.status, "processing")),
+            );
+          // If no rows affected, another process is already handling this
+          if (updateResult.rowsAffected === 0) {
+            return { success: true, message: "Upload already in progress" };
+          }
+          // Upload to UploadThing
+          const uploadedVideoUrl = await uploadCompletedVideo(outputUrl);
+          if (uploadedVideoUrl) {
+            await ctx.drizzle
+              .update(conceptImage)
+              .set({ video: uploadedVideoUrl, status: "success", done: true })
+              .where(eq(conceptImage.id, input.id));
+            return {
+              success: true,
+              message: "Video uploaded",
+              videoUrl: uploadedVideoUrl,
+            };
+          }
+          // Upload failed - reset status so it can be retried
+          await ctx.drizzle
+            .update(conceptImage)
+            .set({ status: "processing" })
+            .where(eq(conceptImage.id, input.id));
+          return errorResponse("Failed to upload video");
+        }
+        return errorResponse("Failed to process video output");
+      }
+      // Not ready yet
+      return errorResponse("Video not ready for upload");
     }),
   getAll: publicProcedure
     .input(

@@ -57,20 +57,54 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   const isProcessing =
     isVideo && !image?.done && (image?.replicateId || image?.status === "uploading");
 
-  // Poll for video status when processing
-  const { data: videoStatus } = api.conceptart.checkVideoStatus.useQuery(
+  // Track if finalization has been triggered
+  const hasTriggeredFinalizeRef = useRef(false);
+
+  // Mutation to finalize video upload
+  const { mutate: finalizeUpload, isPending: isFinalizingUpload } =
+    api.conceptart.finalizeVideoUpload.useMutation({
+      onSuccess: (result) => {
+        if (result.success && result.videoUrl) {
+          // Video is ready, invalidate to get updated data
+          hasInvalidatedRef.current = true;
+          void utils.conceptart.get.invalidate({ id: image?.id ?? "" });
+          void utils.conceptart.getAll.invalidate();
+        }
+      },
+    });
+
+  // Only poll when processing AND not currently finalizing
+  const shouldPoll =
+    isProcessing && !isFinalizingUpload && !hasTriggeredFinalizeRef.current;
+
+  // Poll for video status when processing (read-only query)
+  const { data: videoStatus } = api.conceptart.checkVideoStatusRead.useQuery(
     { id: image?.id ?? "" },
     {
-      enabled: !!isProcessing,
-      refetchInterval: isProcessing ? 5000 : false, // Poll every 5 seconds
+      enabled: !!shouldPoll,
+      refetchInterval: shouldPoll ? 5000 : false, // Poll every 5 seconds
     },
   );
 
-  // Update progress and refetch when video is ready
+  // Update progress and trigger finalization when ready
   useEffect(() => {
     if (videoStatus && "progress" in videoStatus && videoStatus.progress) {
       setVideoProgress(videoStatus.progress);
     }
+    // When video is ready for finalization, call the mutation
+    if (
+      videoStatus &&
+      "readyToFinalize" in videoStatus &&
+      videoStatus.readyToFinalize &&
+      !hasInvalidatedRef.current &&
+      !hasTriggeredFinalizeRef.current &&
+      !isFinalizingUpload &&
+      image?.id
+    ) {
+      hasTriggeredFinalizeRef.current = true;
+      finalizeUpload({ id: image.id });
+    }
+    // If video is already complete (from previous finalization), invalidate
     if (
       videoStatus &&
       "status" in videoStatus &&
@@ -79,12 +113,11 @@ const ConceptImage: React.FC<InputProps> = (props) => {
       videoStatus.videoUrl &&
       !hasInvalidatedRef.current
     ) {
-      // Video is ready, invalidate to get updated data (only once)
       hasInvalidatedRef.current = true;
       void utils.conceptart.get.invalidate({ id: image?.id ?? "" });
       void utils.conceptart.getAll.invalidate();
     }
-  }, [videoStatus, image?.id, utils]);
+  }, [videoStatus, image?.id, utils, finalizeUpload, isFinalizingUpload]);
 
   // Convenience function for refetching data
   const refetch = () => {
