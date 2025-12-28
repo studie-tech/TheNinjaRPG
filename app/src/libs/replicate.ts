@@ -25,6 +25,15 @@ import type { FileOutput } from "replicate";
 import type { IMG_ORIENTATION } from "@/drizzle/constants";
 import type { GenerateAudioInput } from "@/validators/audio";
 
+// Singleton Replicate instance to avoid connection pool exhaustion
+let replicateInstance: Replicate | null = null;
+const getReplicateInstance = () => {
+  if (!replicateInstance) {
+    replicateInstance = new Replicate({ auth: env.REPLICATE_API_TOKEN });
+  }
+  return replicateInstance;
+};
+
 /**
  * Compress a gltf file
  * @param url The URL of the gltf file to compress
@@ -177,9 +186,7 @@ export const fastTxt2imgReplicate = async (config: {
     output_quality = 50,
     mega_pixels = "0.25",
   } = config;
-  const replicate = new Replicate({
-    auth: env.REPLICATE_API_TOKEN,
-  });
+  const replicate = getReplicateInstance();
   const input = {
     prompt: prompt,
     go_fast: true,
@@ -281,7 +288,7 @@ export const txt2imgGPT = async (config: Txt2ImgConfig) => {
  * Mirrors txt2imgGPT flow and returns uploaded URL(s)
  */
 export const txt2imgNanoBanana = async (config: Txt2ImgConfig) => {
-  const replicate = new Replicate({ auth: env.REPLICATE_API_TOKEN });
+  const replicate = getReplicateInstance();
 
   const composedPrompt = `
       <system prompt>
@@ -325,7 +332,7 @@ export const txt2imgNanoBanana = async (config: Txt2ImgConfig) => {
  * Remove background from an image using lucataco/remove-bg on Replicate
  */
 export const removeBackgroundReplicate = async (imageUrl: string) => {
-  const replicate = new Replicate({ auth: env.REPLICATE_API_TOKEN });
+  const replicate = getReplicateInstance();
   const output = (await replicate.run(
     "lucataco/remove-bg:95fcc2a26d3899cd6c2691c900465aaeff466285a65c14638cc5f36f34befaf1",
     {
@@ -341,9 +348,7 @@ export const removeBackgroundReplicate = async (imageUrl: string) => {
  * @param url The URL of the image to create a 3D model from
  */
 export const img2model = async (url: string) => {
-  const replicate = new Replicate({
-    auth: env.REPLICATE_API_TOKEN,
-  });
+  const replicate = getReplicateInstance();
   const output = await replicate.predictions.create({
     version: "4876f2a8da1c544772dffa32e8889da4a1bab3a1f5c1937bfcfccb99ae347251",
     input: {
@@ -447,7 +452,7 @@ export const generateSoundEffectReplicate = async (config: {
   negativePrompt?: string;
   secondsTotal: number;
 }) => {
-  const replicate = new Replicate({ auth: env.REPLICATE_API_TOKEN });
+  const replicate = getReplicateInstance();
   const output = (await replicate.run(
     "sepal/audiogen:154b3e5141493cb1b8cec976d9aa90f2b691137e39ad906d2421b74c2a8c52b8",
     {
@@ -527,15 +532,6 @@ export const startVideoGeneration = async (config: Txt2VideoConfig) => {
   });
 
   return prediction;
-};
-
-// Singleton Replicate instance to avoid connection pool exhaustion
-let replicateInstance: Replicate | null = null;
-const getReplicateInstance = () => {
-  if (!replicateInstance) {
-    replicateInstance = new Replicate({ auth: env.REPLICATE_API_TOKEN });
-  }
-  return replicateInstance;
 };
 
 // In-memory cache for video generation status to avoid excessive API calls
