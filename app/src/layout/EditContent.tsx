@@ -39,6 +39,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { nanoid } from "nanoid";
 import { cn } from "src/libs/shadui";
 import { InstantTasks } from "@/validators/objectives";
+import { useUserData } from "@/utils/UserContext";
+import { canAwardReputation } from "@/utils/permissions";
 import type { Quest } from "@/drizzle/schema";
 import type { DeepPartial } from "@/utils/typeutils";
 import type { Path, PathValue } from "react-hook-form";
@@ -63,6 +65,7 @@ export type FormEntry<K> = {
   doubleWidth?: boolean;
   resetButton?: boolean;
   searchable?: boolean;
+  readonly?: boolean;
 } & (
   | { type: "text" }
   | { type: "richinput" }
@@ -560,6 +563,7 @@ export const EditContent = <
                                 id={id}
                                 type={type}
                                 isDirty={fieldState.isDirty}
+                                readOnly={formEntry.readonly}
                                 {...field}
                               />
                             </FormControl>
@@ -1391,6 +1395,11 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   // Destructure props
   const { tag, idx, effects, formClassName, setEffects } = props;
 
+  // Get user data for permission checks
+  const { data: userData } = useUserData();
+  const userRole = userData?.role ?? "USER";
+  const hasReputationPermission = canAwardReputation(userRole);
+
   // Get the schema & parse the tag
   const tagSchema = getTagSchema(tag.type);
   const parsedTag = tagSchema.safeParse(tag);
@@ -1736,7 +1745,14 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       ) {
         return { id: value, label: value, type: "text" };
       } else if (innerType instanceof z.ZodNumber) {
-        return { id: value, label: value, type: "number" };
+        // Only noncombatconsumereward tag allows reward_reputation field
+        const isReputationField = watchType === "noncombatconsumereward" && String(value) === "reward_reputation";
+        return { 
+          id: value, 
+          label: value, 
+          type: "number",
+          readonly: isReputationField && !hasReputationPermission,
+        };
       } else if (innerType instanceof z.ZodEnum) {
         return {
           id: value,
@@ -1804,6 +1820,11 @@ interface ObjectiveFormWrapperProps {
 export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props) => {
   // Destructure props
   const { idx, objective, objectives, formClassName, setObjectives } = props;
+
+  // Get user data for permission checks
+  const { data: userData } = useUserData();
+  const userRole = userData?.role ?? "USER";
+  const hasReputationPermission = canAwardReputation(userRole);
 
   // Get the schema & parse the tag
   const objectiveSchema = getObjectiveSchema(objective.task as string);
@@ -2131,7 +2152,15 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
       ) {
         return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "text" };
       } else if (innerType instanceof z.ZodNumber) {
-        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "number" };
+        // Check if this is the reward_reputation field
+        const valueStr = String(value);
+        const isReputationField = valueStr === "reward_reputation";
+        return { 
+          id: value, 
+          label: FORM_LABEL_MAP[value] ?? value, 
+          type: "number",
+          readonly: isReputationField && !hasReputationPermission,
+        };
       } else if (innerType instanceof z.ZodEnum) {
         return {
           id: value,

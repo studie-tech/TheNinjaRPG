@@ -17,6 +17,8 @@ import { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { IMG_AVATAR_DEFAULT, IMG_BADGE_DIALOG } from "@/drizzle/constants";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
+import { useUserData } from "@/utils/UserContext";
+import { canAwardReputation } from "@/utils/permissions";
 import type { AllObjectivesType } from "@/validators/objectives";
 import type { Quest } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
@@ -35,6 +37,11 @@ export type ZodCombinedQuest = ZodQuestType &
  * @param data
  */
 export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
+  // Get user data for permission checks
+  const { data: userData } = useUserData();
+  const userRole = userData?.role ?? "USER";
+  const hasReputationPermission = canAwardReputation(userRole);
+
   // Schema used
   const schema = QuestValidator._def.schema.merge(ObjectiveReward).merge(
     z.object({
@@ -303,7 +310,11 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   formData.push({ id: "reward_exp", type: "number" });
   formData.push({ id: "reward_tokens", type: "number" });
   formData.push({ id: "reward_prestige", type: "number" });
-  formData.push({ id: "reward_reputation", type: "number" });
+  formData.push({ 
+    id: "reward_reputation", 
+    type: "number",
+    readonly: !hasReputationPermission,
+  });
   formData.push({ id: "reward_skillpoints", type: "number" });
   formData.push({ id: "reward_medical_experience", type: "number" });
   formData.push({ id: "reward_hunting_experience", type: "number" });

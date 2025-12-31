@@ -51,7 +51,7 @@ export const canViewRevenueAnalytics = (role: UserRole) => {
 };
 
 export const canPlayHiddenQuests = (role: UserRole) => {
-  return ["CONTENT", "EVENT", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
+  return ["CONTENT", "EVENT", "CODER", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
 };
 
 export const canSubmitNotification = (role: UserRole) => {
@@ -290,8 +290,6 @@ export const canEditPublicUser = (user: UserData) => {
     "CONTENT-ADMIN",
     "EVENT-ADMIN",
     "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
     "MODERATOR-ADMIN",
     "CODER",
   ].includes(user.role);
@@ -440,8 +438,6 @@ export const canEditUsername = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "HEAD_MODERATOR",
@@ -454,8 +450,6 @@ export const canEditCustomTitle = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -466,8 +460,6 @@ export const canEditBloodline = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -478,8 +470,6 @@ export const canEditVillage = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -490,8 +480,6 @@ export const canEditRank = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -502,8 +490,6 @@ export const canEditJutsus = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -514,8 +500,6 @@ export const canEditItems = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -526,8 +510,6 @@ export const canEditQuests = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -551,8 +533,6 @@ export const canEditRankedLp = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
-    "CONTENT",
-    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",

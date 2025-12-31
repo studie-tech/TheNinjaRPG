@@ -38,6 +38,8 @@ import { rankedSeasonSchema, rewardSchema } from "@/validators/pvpRank";
 import { STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
 import { getRewardArray } from "@/libs/objectives";
 import { EditContent, type FormEntry } from "@/layout/EditContent";
+import { useUserData } from "@/utils/UserContext";
+import { canAwardReputation } from "@/utils/permissions";
 import type { UseFormReturn } from "react-hook-form";
 
 type FormValues = z.infer<typeof rankedSeasonSchema>;
@@ -56,6 +58,11 @@ export default function SeasonForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingDivisionIndex, setEditingDivisionIndex] = useState<number | null>(null);
   const utils = api.useUtils();
+
+  // Get user data for permission checks
+  const { data: userData } = useUserData();
+  const userRole = userData?.role ?? "USER";
+  const hasReputationPermission = canAwardReputation(userRole);
 
   // Queries used in reward editor dialogs
   const { data: items } = api.item.getAllNames.useQuery(undefined);
@@ -137,7 +144,11 @@ export default function SeasonForm({
       { id: "reward_exp", type: "number" },
       { id: "reward_tokens", type: "number" },
       { id: "reward_prestige", type: "number" },
-      { id: "reward_reputation", type: "number" },
+      { 
+        id: "reward_reputation", 
+        type: "number",
+        readonly: !hasReputationPermission,
+      },
       { id: "reward_rank", type: "str_array", values: UserRanks },
       { id: "reward_village_membership", type: "str_array", values: STARTER_VILLAGES },
     ];
