@@ -88,8 +88,13 @@ export const auctionRouter = createTRPCRouter({
       // Build where conditions
       const whereConditions = [
         eq(auctionListing.status, status || "ACTIVE"),
-        gte(auctionListing.expiresAt, new Date()),
       ];
+
+      // Only filter by expire time for ACTIVE listings
+      // Other statuses (SOLD, EXPIRED, CANCELLED) should show even after expiration
+      if (status === "ACTIVE" || !status) {
+        whereConditions.push(gte(auctionListing.expiresAt, new Date()));
+      }
 
       if (listingType) {
         whereConditions.push(eq(auctionListing.listingType, listingType));
@@ -109,6 +114,8 @@ export const auctionRouter = createTRPCRouter({
       }
 
       // Get auction listings with joins for filtering
+      const currentCursor = cursor ?? 0;
+      const skip = currentCursor * limit;
       const listings = await ctx.drizzle
         .select({ id: auctionListing.id })
         .from(auctionListing)
@@ -117,7 +124,7 @@ export const auctionRouter = createTRPCRouter({
         .where(and(...whereConditions))
         .orderBy(desc(auctionListing.expiresAt))
         .limit(limit)
-        .offset(cursor ? parseInt(cursor) : 0);
+        .offset(skip);
 
       // Fetch full related data for the filtered results
       const listingIds = listings.map((listing) => listing.id);
@@ -152,10 +159,10 @@ export const auctionRouter = createTRPCRouter({
             })
           : [];
 
+      const nextCursor = listings.length < limit ? null : currentCursor + 1;
       return {
         data: fullListings,
-        nextCursor:
-          listings.length === limit ? (cursor ? parseInt(cursor) : 0) + limit : null,
+        nextCursor,
       };
     }),
 

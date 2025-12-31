@@ -2,7 +2,7 @@
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { useRequireInVillage, useRequiredUserData } from "@/utils/UserContext";
 import Loader from "@/layout/Loader";
@@ -24,6 +24,7 @@ import { createAuctionListingSchema } from "@/validators/auction";
 import type { CreateAuctionListingSchema } from "@/validators/auction";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { AUCTION_LISTING_STATES, AUCTION_LISTING_TYPES, TRADEABLE_CURRENCY_TYPES } from "@/drizzle/constants";
+import { useInfinitePagination } from "@/libs/pagination";
 import {
   Select,
   SelectContent,
@@ -116,24 +117,37 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
   const [maxPrice, setMaxPrice] = useState("");
   const [selectedAuction, setSelectedAuction] = useState<string | null>(null);
   const [showDialog, setShowDialog] = useState(false);
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Queries
-  const { data: listings, isLoading } = api.auction.getAuctionListings.useQuery(
+  const {
+    data: listings,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+  } = api.auction.getAuctionListings.useInfiniteQuery(
     {
       itemName: searchTerm || undefined,
       minPrice: minPrice ? parseFloat(minPrice) : undefined,
       maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
       status: selectedStatus as "ACTIVE" | "SOLD" | "EXPIRED" | "CANCELLED",
-      limit: 20,
+      limit: 10,
     },
     {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
       refetchInterval: 10000,
     },
   );
 
+  // Infinite pagination
+  useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
+
+  // Flatten all pages data
+  const allListings = listings?.pages.map((page) => page.data).flat() ?? [];
+
   // Transform data to include JSX directly in the objects
   const transformedData =
-    listings?.data?.map((listing) => ({
+    allListings.map((listing) => ({
       ...listing,
       itemIcon: listing.userItem.item.image,
       itemName: (
@@ -256,17 +270,26 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
 
       {/* Auction Listings Table */}
       <div>
-        {isLoading ? (
+        {isLoading && transformedData.length === 0 ? (
           <Loader />
         ) : (
-          <Table
-            data={transformedData}
-            columns={columns}
-            onRowClick={(row) => {
-              setSelectedAuction(row.id);
-              setShowDialog(true);
-            }}
-          />
+          <>
+            <Table
+              data={transformedData}
+              columns={columns}
+              onRowClick={(row) => {
+                setSelectedAuction(row.id);
+                setShowDialog(true);
+              }}
+            />
+            {/* Infinite scroll trigger */}
+            <div ref={setLastElement} className="h-4" />
+            {isLoading && transformedData.length > 0 && (
+              <div className="flex justify-center p-4">
+                <Loader explanation="Loading more auctions..." />
+              </div>
+            )}
+          </>
         )}
       </div>
 

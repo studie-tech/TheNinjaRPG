@@ -42,8 +42,8 @@ export const createAuctionListingSchema = z.object({
 });
 
 export const getAuctionListingsSchema = z.object({
-  limit: z.number().min(1).max(100).default(20),
-  cursor: z.string().optional(),
+  limit: z.number().min(1).max(100).default(10),
+  cursor: z.number().nullish(),
   itemName: z.string().optional(),
   minPrice: z.number().min(0).optional(),
   maxPrice: z.number().min(0).optional(),
