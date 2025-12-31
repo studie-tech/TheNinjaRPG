@@ -85,6 +85,10 @@ export const canModifyEventGains = (role: UserRole) => {
   return ["CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN", "CONTENT"].includes(role);
 };
 
+export const canEnableGlobalTavern = (role: UserRole) => {
+  return ["CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN", "MODERATOR-ADMIN"].includes(role);
+};
+
 export const canChangeDefaultAiProfile = (role: UserRole) => {
   return ["CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
 };

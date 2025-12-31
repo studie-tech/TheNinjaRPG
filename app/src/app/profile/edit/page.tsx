@@ -74,6 +74,7 @@ import { canSwapBloodline } from "@/utils/permissions";
 import { canSwapVillage, canUnequipAllUsers } from "@/utils/permissions";
 import { canClearSectors } from "@/utils/permissions";
 import { canAwardExperience } from "@/utils/permissions";
+import { canEnableGlobalTavern } from "@/utils/permissions";
 import { canChangeContent } from "@/utils/permissions";
 import { useInfinitePagination } from "@/libs/pagination";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
@@ -1836,6 +1837,16 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
   // Utility
   const utils = api.useUtils();
 
+  // Global tavern toggle
+  const { data: globalTavernEnabled = true } = api.misc.getGlobalTavernEnabled.useQuery();
+  const { mutate: toggleGlobalTavern, isPending: isTogglingTavern } =
+    api.misc.toggleGlobalTavern.useMutation({
+      onSuccess: (result) => {
+        showMutationToast(result);
+        void utils.misc.getGlobalTavernEnabled.invalidate();
+      },
+    });
+
   // Mutations
   const { mutate: unequipAllGear, isPending: isUnequipping } =
     api.staff.unequipAllGear.useMutation({
@@ -2066,6 +2077,27 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
             </p>
           </div>
         </Confirm2>
+      )}
+      {canEnableGlobalTavern(user.role) && (
+        <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
+          <div>
+            <Label htmlFor="globalTavernToggle" className="text-base font-medium">
+              Global Tavern
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              {globalTavernEnabled ? "Enabled" : "Disabled"}
+            </p>
+          </div>
+          <Switch
+            id="globalTavernToggle"
+            checked={!!globalTavernEnabled}
+            onCheckedChange={(checked) => {
+              toggleGlobalTavern({ enabled: checked });
+            }}
+            disabled={isTogglingTavern}
+            aria-label="Toggle global tavern"
+          />
+        </div>
       )}
     </div>
   );

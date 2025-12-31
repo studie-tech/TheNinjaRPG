@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
 import NavTabs from "@/layout/NavTabs";
 import Conversation, { ConversationSkeleton } from "@/layout/Conversation";
@@ -36,27 +36,34 @@ export default function Tavern() {
     { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
     { enabled: !!userData },
   );
+  const { data: globalTavernEnabled = true } = api.misc.getGlobalTavernEnabled.useQuery();
 
   // Tavern name based on user village
-  let localTavern =
-    ["OUTLAW", "TOWN", "VILLAGE"].includes(userData?.village?.type ?? "") &&
-    userData?.village?.name
-      ? userData?.village?.name
-      : "Syndicate";
+  const localTavern = useMemo(() => {
+    let tavern =
+      ["OUTLAW", "TOWN", "VILLAGE"].includes(userData?.village?.type ?? "") &&
+      userData?.village?.name
+        ? userData?.village?.name
+        : "Syndicate";
 
-  // Change to ally tavern if relevant
-  if (sectorVillage && userData) {
-    const relationship = findVillageUserRelationship(
-      sectorVillage,
-      userData.villageId ?? "syndicate",
-    );
-    if (relationship?.status === "ALLY") {
-      localTavern = sectorVillage.name;
+    // Change to ally tavern if relevant
+    if (sectorVillage && userData) {
+      const relationship = findVillageUserRelationship(
+        sectorVillage,
+        userData.villageId ?? "syndicate",
+      );
+      if (relationship?.status === "ALLY") {
+        tavern = sectorVillage.name;
+      }
     }
-  }
+    return tavern;
+  }, [userData, sectorVillage]);
+
+  // Check if user can access global tavern (enabled OR non-USER role)
+  const canAccessGlobal = globalTavernEnabled || userData?.role !== "USER";
 
   // Check available taverns
-  const availTaverns = ["Global", localTavern];
+  const availTaverns = canAccessGlobal ? ["Global", localTavern] : [localTavern];
   if (userData?.role !== "USER") {
     villages
       ?.filter((v) => ["OUTLAW", "VILLAGE"].includes(v.type))
@@ -68,13 +75,21 @@ export default function Tavern() {
   // If no tavern defined, set the tavern
   useEffect(() => {
     if (userData && !activeTab) {
-      setActiveTab("Global");
+      setActiveTab(canAccessGlobal ? "Global" : localTavern);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userData, localTavern]);
+  }, [userData, localTavern, canAccessGlobal]);
+
+  // Redirect to village tavern if global is disabled and user is on Global (only for USER role)
+  useEffect(() => {
+    if (userData && userData.role === "USER" && !globalTavernEnabled && activeTab === "Global") {
+      setActiveTab(localTavern);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userData, globalTavernEnabled, activeTab, localTavern]);
 
   // Derived
-  const conversation = activeTab ?? "Global";
+  const conversation = activeTab ?? (canAccessGlobal ? "Global" : localTavern);
   const convoProps = {
     refreshKey: 0,
     title: conversation + " Tavern",

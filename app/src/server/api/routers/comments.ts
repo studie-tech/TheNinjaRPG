@@ -11,6 +11,7 @@ import {
   forumPost,
   forumThread,
   userData,
+  gameSetting,
 } from "@/drizzle/schema";
 import { user2conversation, conversationComment } from "@/drizzle/schema";
 import {
@@ -647,6 +648,16 @@ export const commentsRouter = createTRPCRouter({
       }
       if (!canViewConversation(convo, ctx.userId, user.role)) {
         return errorResponse("You are not allowed to view this conversation");
+      }
+      // Check if trying to send to Global tavern when it's disabled (for USER role only)
+      if (convo.title === "Global" && user.role === "USER") {
+        const globalTavernSetting = await ctx.drizzle.query.gameSetting.findFirst({
+          where: eq(gameSetting.name, "global-tavern-enabled"),
+        });
+        const globalTavernEnabled = globalTavernSetting ? globalTavernSetting.value === 1 : true;
+        if (!globalTavernEnabled) {
+          return errorResponse("The global tavern is currently disabled.");
+        }
       }
       quotes.forEach((quote) => {
         if (quote.conversationId !== convo.id) {

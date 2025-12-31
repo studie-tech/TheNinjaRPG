@@ -15,7 +15,7 @@ import {
   visitorLog,
   abEvent,
 } from "@/drizzle/schema";
-import { canAwardReputation } from "@/utils/permissions";
+import { canAwardReputation, canEnableGlobalTavern } from "@/utils/permissions";
 import { nanoid } from "nanoid";
 import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
 import { canSubmitNotification, canModifyEventGains } from "@/utils/permissions";
@@ -161,6 +161,35 @@ export const miscRouter = createTRPCRouter({
         where: eq(gameSetting.name, input.name),
       });
       return setting ?? null;
+    }),
+  getGlobalTavernEnabled: publicProcedure.query(async ({ ctx }) => {
+    const setting = await ctx.drizzle.query.gameSetting.findFirst({
+      where: eq(gameSetting.name, "global-tavern-enabled"),
+    });
+    // Default to enabled (value 1) if not set
+    if (!setting) return true;
+    return setting.value === 1;
+  }),
+  toggleGlobalTavern: protectedProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Guards
+      if (!canEnableGlobalTavern(user.role)) return errorResponse("Not allowed");
+      if (!user) return errorResponse("User not found");
+      // Update
+      await updateGameSetting(
+        ctx.drizzle,
+        "global-tavern-enabled",
+        input.enabled ? 1 : 0,
+        new Date(),
+      );
+      return {
+        success: true,
+        message: `Global tavern ${input.enabled ? "enabled" : "disabled"}`,
+      };
     }),
   getActivePlayers24h: publicProcedure.output(z.number()).query(async ({ ctx }) => {
     const setting = await getGameSetting(ctx.drizzle, "hourly-active-players");
