@@ -37,8 +37,7 @@ import { canSilenceUsers } from "@/utils/permissions";
 import { canWarnUsers } from "@/utils/permissions";
 import { canEscalateBan } from "@/utils/permissions";
 import { canClearReport } from "@/utils/permissions";
-import { TimeUnits } from "@/drizzle/constants";
-import { TERR_BOT_ID } from "@/drizzle/constants";
+import { TimeUnits, REPORT_CONTEXT_WINDOW, TERR_BOT_ID } from "@/drizzle/constants";
 import type { ReportCommentSchema } from "@/validators/reports";
 import type { TimeUnit } from "@/drizzle/constants";
 import type { BaseServerResponse } from "@/server/api/trpc";
@@ -448,7 +447,10 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
       {report.additionalContext.length > 0 && (
         <ContentBox
           title="Conversation Context"
-          subtitle="Latest 10 messages leading up to report"
+          subtitle={`Latest ${Math.min(
+            REPORT_CONTEXT_WINDOW,
+            report.additionalContext.length,
+          )} messages leading up to report`}
           initialBreak
         >
           {report.additionalContext.map((context, i) => (

@@ -1310,7 +1310,7 @@ export const SECTOR_TYPES = [
 
 // Conversation config
 export const CONVERSATION_QUIET_MINS = 5;
-export const REPORT_CONTEXT_WINDOW = 10;
+export const REPORT_CONTEXT_WINDOW = 20;
 
 // Kage config
 export const FRIENDLY_PRESTIGE_COST = 10000; // Prestige cost of killing friendly
