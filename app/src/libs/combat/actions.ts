@@ -518,7 +518,7 @@ export const userItemToAction = (
     method: item.method,
     range: item.range,
     updatedAt: Date.now(),
-    cooldown: item.cooldown,
+    cooldown: useritem.originalCooldown,
     originalCooldown: useritem.originalCooldown,
     lastUsedRound: useritem.lastUsedRound,
     level: user.level,
@@ -559,7 +559,7 @@ export const userJutsuToAction = (
     method: jutsu.method,
     range: jutsu.range,
     updatedAt: Date.now(),
-    cooldown: jutsu.cooldown,
+    cooldown: userjutsu.originalCooldown,
     originalCooldown: userjutsu.originalCooldown,
     lastUsedRound: userjutsu.lastUsedRound,
     healthCost: Math.max(
@@ -1011,7 +1011,23 @@ export const performBattleAction = (props: {
 
   // Always update the last used round for the performed action
   const actionPerformed = findPerformedAction();
-  if (actionPerformed) actionPerformed.lastUsedRound = battle.round;
+  if (actionPerformed) {
+    actionPerformed.lastUsedRound = battle.round;
+    // Restore originalCooldown to base cooldown when action is used (in case it was modified by GCD)
+    if ("jutsuId" in actionPerformed) {
+      // It's a BattleUserJutsu
+      const jutsu = getJutsu(battle, actionPerformed.jutsuId);
+      if (jutsu) {
+        actionPerformed.originalCooldown = jutsu.cooldown;
+      }
+    } else if ("itemId" in actionPerformed) {
+      // It's a BattleUserItem
+      const item = getItem(battle, actionPerformed.itemId);
+      if (item) {
+        actionPerformed.originalCooldown = item.cooldown;
+      }
+    }
+  }
 
   // If this action has a cooldown AND shared cooldown effects, apply GCD to related actions
   if (action.cooldown && action.cooldown > 0 && actionHasSharedCooldown(action)) {
