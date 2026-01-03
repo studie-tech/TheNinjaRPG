@@ -664,7 +664,7 @@ export const bloodlineRouter = createTRPCRouter({
       });
       // Guard
       if (!PITY_SYSTEM_ENABLED) return errorResponse("Pity system is disabled");
-      const prevRoll = previousRolls.find((r) => r.goal === input.rank);
+      const prevRoll = previousRolls.find((r) => r.goal === input.rank && !r.bloodlineId,);
       if (!prevRoll) return errorResponse("No previous roll found");
       const availablePityRolls = getPityRolls(prevRoll);
       if (availablePityRolls <= 0) return errorResponse("No pity rolls available");
