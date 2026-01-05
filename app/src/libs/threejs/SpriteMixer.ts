@@ -227,6 +227,16 @@ export class SpriteMixer {
     return new Action(sprite, indexStart, indexEnd, tileDisplayDuration);
   }
 
+  /**
+   * Unregister an ActionSprite so it's no longer updated.
+   */
+  public removeActionSprite(sprite: ActionSprite): void {
+    const idx = this.actionSprites.indexOf(sprite);
+    if (idx !== -1) {
+      this.actionSprites.splice(idx, 1);
+    }
+  }
+
   /* --------------------------------------------- event management */
 
   /**
@@ -241,6 +251,21 @@ export class SpriteMixer {
       throw new Error("addEventListener: missing arguments");
     }
     this.listeners.push({ eventName, callback });
+  }
+
+  /**
+   * Remove a previously added listener.
+   */
+  public removeEventListener(
+    eventName: EventName,
+    callback: (e: SpriteMixerEvent) => void,
+  ): void {
+    const idx = this.listeners.findIndex(
+      (l) => l.eventName === eventName && l.callback === callback,
+    );
+    if (idx !== -1) {
+      this.listeners.splice(idx, 1);
+    }
   }
 
   /* ----------------------------------------------------- main tick */

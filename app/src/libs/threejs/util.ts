@@ -7,6 +7,8 @@ import {
   Raycaster,
   Vector2,
   SpriteMaterial,
+  Sprite,
+  LinearFilter,
 } from "three";
 import type { RefObject } from "react";
 import type {
@@ -15,10 +17,15 @@ import type {
   PerspectiveCamera,
   Material,
   BufferGeometry,
+  Group,
 } from "three";
 
 // Simple in-memory cache for textures to avoid re-fetching
 let textureLoaderInstance: TextureLoader | null = null;
+
+// Performance optimization: Cache status bar textures to avoid recreating canvases
+// Key format: "width-height-color-stroke"
+const statusBarTextureCache = new Map<string, Texture>();
 
 /**
  * Transforms image URLs to use the CDN endpoint.
@@ -44,6 +51,7 @@ export const getTextureLoader = (): TextureLoader => {
   return textureLoaderInstance;
 };
 const textureCache = new Map<string, Texture>();
+const materialCache = new Map<string, SpriteMaterial>();
 const pendingLoads = new Map<string, Promise<Texture>>();
 
 /**
@@ -73,15 +81,29 @@ export const loadTexture = (path: string, width = 50) => {
 
 /**
  * Create a sprite material
+ * PERFORMANCE OPTIMIZATION: Caches materials to allow ThreeJS to batch sprites.
  * @param texture - The texture to create a sprite material for
  * @returns The sprite material
  */
-export const createSpriteMaterial = (map: Texture, alphaMap?: Texture) => {
-  return new SpriteMaterial({
+export const createSpriteMaterial = (
+  map: Texture,
+  alphaMap?: Texture,
+  options: Partial<SpriteMaterial> = {},
+) => {
+  // Only cache if no alphaMap is provided for simplicity
+  const cacheKey = `${map.uuid}-${alphaMap?.uuid ?? "none"}-${JSON.stringify(options)}`;
+  const cached = materialCache.get(cacheKey);
+  if (cached) return cached;
+
+  const material = new SpriteMaterial({
     map: map,
     alphaMap: alphaMap ?? null,
     alphaTest: 0.5,
   });
+  Object.assign(material, options);
+
+  materialCache.set(cacheKey, material);
+  return material;
 };
 
 /**
@@ -141,8 +163,12 @@ export const createTexture = (canvas: HTMLCanvasElement) => {
   return texture;
 };
 
+// Performance optimization: Cache shadow textures
+const shadowTextureCache = new Map<string, Texture>();
+
 /**
  * Create a procedural shadow texture - an elongated blurred ellipse
+ * PERFORMANCE OPTIMIZATION: Caches textures to avoid canvas redraws and re-uploads.
  * @param width - Canvas width (default 128)
  * @param height - Canvas height (default 64)
  * @param opacity - Maximum opacity at center (default 0.4)
@@ -153,6 +179,10 @@ export const createShadowTexture = (
   height = 64,
   opacity = 0.4,
 ): Texture => {
+  const cacheKey = `${width}-${height}-${opacity}`;
+  const cached = shadowTextureCache.get(cacheKey);
+  if (cached) return cached;
+
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -192,7 +222,163 @@ export const createShadowTexture = (
   const texture = new Texture(canvas);
   texture.needsUpdate = true;
   texture.colorSpace = SRGBColorSpace;
+  shadowTextureCache.set(cacheKey, texture);
   return texture;
+};
+
+/**
+ * Draw a status bar on user
+ * Performance optimization: Uses texture cache to avoid recreating canvases
+ */
+export const drawStatusBar = (info: {
+  width: number;
+  height: number;
+  yPosition: number;
+  color: string;
+  stroke: boolean;
+  name: string;
+  yOffset: number;
+  layer: number;
+}) => {
+  const { width, height, yPosition, color, stroke, name, yOffset, layer } = info;
+  const r = 3;
+  const L = width / 2;
+  const canvasWidth = r * L;
+  const canvasHeight = (r * height) / 10;
+
+  // Create cache key for this specific status bar configuration
+  const cacheKey = `${canvasWidth}-${canvasHeight}-${color}-${stroke}`;
+
+  // Check if we already have a cached texture for this configuration
+  let texture = statusBarTextureCache.get(cacheKey);
+
+  if (!texture) {
+    // Create new canvas and texture if not cached
+    const canvas = document.createElement("canvas");
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const context = canvas.getContext("2d");
+    if (context) {
+      context.fillStyle = color;
+      // Scale line width proportionally to canvas size, but keep reasonable bounds
+      const lineWidth = Math.max(1, Math.min(4, canvasHeight / 6));
+      context.lineWidth = lineWidth;
+      context.strokeStyle = "black";
+      if (stroke) {
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.strokeRect(0, 0, canvas.width, canvas.height);
+      } else {
+        const padding = lineWidth / 2;
+        context.fillRect(
+          padding,
+          padding,
+          canvas.width - 2 * padding,
+          canvas.height - 2 * padding,
+        );
+      }
+    }
+    texture = createTexture(canvas);
+    texture.generateMipmaps = false;
+    texture.minFilter = LinearFilter;
+    texture.needsUpdate = true;
+
+    // Cache the texture for reuse
+    statusBarTextureCache.set(cacheKey, texture);
+  }
+
+  const bar_material = createSpriteMaterial(texture);
+  const bar_sprite = new Sprite(bar_material);
+  bar_sprite.position.set(L, yPosition - (yOffset * (canvasHeight - 2)) / r, layer);
+  bar_sprite.scale.set(L, canvasHeight / r, 1);
+  bar_sprite.name = name;
+  bar_sprite.userData.full_width = L;
+  bar_sprite.userData.originalX = L; // Store original local X
+  bar_sprite.userData.yPosition = yPosition - (yOffset * (canvasHeight - 2)) / r;
+  bar_sprite.userData.scaleY = canvasHeight / r;
+  bar_sprite.userData.layer = layer;
+  bar_sprite.userData.previousValue = undefined; // Track previous value for change detection
+  bar_sprite.visible = false;
+  return bar_sprite;
+};
+
+/**
+ * Update status bar of a user sprite
+ * Performance optimization: Only updates if value changed (dirty flag system)
+ */
+export const updateStatusBar = (name: string, userSpriteGroup: Group, perc: number) => {
+  const bar = userSpriteGroup.getObjectByName(name);
+  if (bar) {
+    // Check if value actually changed (dirty flag optimization)
+    const previousValue = bar.userData.previousValue as number | undefined;
+    if (previousValue !== undefined && Math.abs(previousValue - perc) < 0.001) {
+      // Value hasn't changed significantly, skip update
+      return;
+    }
+    // Store current value for next frame comparison
+    bar.userData.previousValue = perc;
+    // Perform the actual update
+    const width = bar.userData.full_width as number;
+    const originalX = bar.userData.originalX as number;
+    const newWidth = width * perc;
+    const newPosition = originalX - (width * (1 - perc)) / 2;
+    bar.scale.set(newWidth, bar.scale.y, 1);
+    bar.position.set(newPosition, bar.position.y, bar.position.z);
+    if (perc === 0) {
+      bar.visible = false;
+    }
+  }
+};
+
+import type { SpriteMixer } from "@/libs/threejs/SpriteMixer";
+import type { GameAsset } from "@/drizzle/schema";
+
+/**
+ * Show animation on the hex
+ */
+export const showAnimation = (info: {
+  gameAsset: GameAsset;
+  spriteMixer: SpriteMixer;
+  playInfinite?: boolean;
+  scale: number;
+  position: { x: number; y: number };
+  layer: number;
+}) => {
+  const { gameAsset, spriteMixer, playInfinite, scale, position, layer } = info;
+  const texture = loadTexture(gameAsset.image);
+  const actionSprite = spriteMixer.createActionSprite(texture, 1, gameAsset.frames);
+  const action = spriteMixer.createAction(
+    actionSprite,
+    0,
+    gameAsset.frames - 1,
+    gameAsset.speed,
+  );
+  if (action) {
+    action.hideWhenFinished = true;
+    if (playInfinite) {
+      action.playLoop();
+    } else {
+      action.playOnce();
+      // Auto-cleanup when finished
+      const onFinished = (e: { action: unknown }) => {
+        if (e.action === action) {
+          spriteMixer.removeEventListener("finished", onFinished);
+          if (actionSprite.parent) {
+            actionSprite.parent.remove(actionSprite);
+          }
+          spriteMixer.removeActionSprite(actionSprite);
+          // Clean up texture/material
+          if (actionSprite.material) {
+            if (actionSprite.material.map) actionSprite.material.map.dispose();
+            actionSprite.material.dispose();
+          }
+        }
+      };
+      spriteMixer.addEventListener("finished", onFinished);
+    }
+  }
+  actionSprite.scale.set(scale, scale, 1);
+  actionSprite.position.set(position.x, position.y, layer);
+  return actionSprite;
 };
 
 /**
@@ -271,6 +457,180 @@ export const setRaycasterFromMouse = (
   pointer.x = (event.offsetX / width) * 2 - 1;
   pointer.y = -(event.offsetY / height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
+};
+
+/**
+ * Performance profiler for benchmarking code segments.
+ * Provides detailed timing, frame budget analysis, and renderer stats.
+ * Only active in development mode.
+ */
+export const profiler = {
+  enabled: process.env.NODE_ENV === "development",
+  data: new Map<string, { total: number; count: number; max: number; min: number }>(),
+  counts: new Map<string, number>(),
+  lastLog: typeof performance !== "undefined" ? performance.now() : 0,
+
+  // Frame time tracking
+  frameTimes: [] as number[],
+  lastFrameTime: typeof performance !== "undefined" ? performance.now() : 0,
+  frameCount: 0,
+
+  // Renderer stats (set externally from WebGLRenderer.info)
+  rendererInfo: null as {
+    render: { calls: number; triangles: number; points: number; lines: number };
+    memory: { geometries: number; textures: number };
+    programs: number | null;
+  } | null,
+
+  mark: function (name: string) {
+    if (!this.enabled) return () => {};
+    const start = performance.now();
+    return () => {
+      const duration = performance.now() - start;
+      const entry = this.data.get(name) || {
+        total: 0,
+        count: 0,
+        max: 0,
+        min: Infinity,
+      };
+      entry.total += duration;
+      entry.count += 1;
+      entry.max = Math.max(entry.max, duration);
+      entry.min = Math.min(entry.min, duration);
+      this.data.set(name, entry);
+    };
+  },
+
+  /**
+   * Track frame time for FPS analysis.
+   * Call this at the start of each frame.
+   */
+  beginFrame: function () {
+    if (!this.enabled) return;
+    const now = performance.now();
+    if (this.lastFrameTime > 0) {
+      const frameTime = now - this.lastFrameTime;
+      this.frameTimes.push(frameTime);
+      // Keep last 120 frames for rolling average
+      if (this.frameTimes.length > 120) {
+        this.frameTimes.shift();
+      }
+    }
+    this.lastFrameTime = now;
+    this.frameCount++;
+  },
+
+  /**
+   * Set renderer info for GPU stats tracking.
+   * Call this with renderer.info after render.
+   */
+  setRendererInfo: function (info: typeof this.rendererInfo) {
+    if (!this.enabled) return;
+    this.rendererInfo = info;
+  },
+
+  /**
+   * Report the number of objects/draw calls for a specific category.
+   * This is reset every log interval.
+   */
+  reportCount: function (name: string, count: number) {
+    if (!this.enabled) return;
+    this.counts.set(name, count);
+  },
+
+  log: function (intervalMs = 5000) {
+    if (!this.enabled) return;
+    const now = performance.now();
+    if (now - this.lastLog > intervalMs) {
+      if (this.data.size > 0 || this.counts.size > 0 || this.frameTimes.length > 0) {
+        console.group(
+          `🎮 Performance Profile (last ${(intervalMs / 1000).toFixed(1)}s)`,
+        );
+
+        // Frame time analysis
+        if (this.frameTimes.length > 0) {
+          const avgFrameTime =
+            this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
+          const maxFrameTime = Math.max(...this.frameTimes);
+          const minFrameTime = Math.min(...this.frameTimes);
+          const fps = 1000 / avgFrameTime;
+          const framesBudgetExceeded = this.frameTimes.filter((t) => t > 16.67).length;
+          const percentOverBudget =
+            (framesBudgetExceeded / this.frameTimes.length) * 100;
+
+          console.log(
+            `📊 FPS: ${fps.toFixed(1)} | Frame Time: ${avgFrameTime.toFixed(2)}ms avg, ${minFrameTime.toFixed(2)}ms min, ${maxFrameTime.toFixed(2)}ms max`,
+          );
+          console.log(
+            `⏱️ Budget (16.67ms): ${percentOverBudget.toFixed(1)}% frames over budget (${framesBudgetExceeded}/${this.frameTimes.length})`,
+          );
+        }
+
+        // Renderer stats
+        if (this.rendererInfo) {
+          const { render, memory } = this.rendererInfo;
+          console.log(
+            `🖼️ Render: ${render.calls} calls, ${render.triangles} tris | Memory: ${memory.geometries} geom, ${memory.textures} tex`,
+          );
+        }
+
+        // Timing breakdown with percentage of frame budget
+        if (this.data.size > 0) {
+          const avgFrameTime =
+            this.frameTimes.length > 0
+              ? this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length
+              : 16.67;
+
+          const timings = Array.from(this.data.entries())
+            .map(([key, value]) => {
+              const avgMs = value.total / value.count;
+              const budgetPercent = (avgMs / avgFrameTime) * 100;
+              return {
+                Name: key,
+                "Avg (ms)": avgMs.toFixed(3),
+                "Min (ms)": value.min.toFixed(3),
+                "Max (ms)": value.max.toFixed(3),
+                "% Budget": budgetPercent.toFixed(1) + "%",
+                Calls: value.count,
+              };
+            })
+            .sort((a, b) => parseFloat(b["Avg (ms)"]) - parseFloat(a["Avg (ms)"]));
+
+          console.log("⏰ Timing Breakdown (sorted by avg time):");
+          console.table(timings);
+          this.data.clear();
+        }
+
+        // Object/draw call counts
+        if (this.counts.size > 0) {
+          console.log("📦 Object/Draw Call Counts:");
+          console.table(
+            Array.from(this.counts.entries()).map(([key, value]) => ({
+              Metric: key,
+              Value: value,
+            })),
+          );
+          this.counts.clear();
+        }
+
+        console.groupEnd();
+      }
+      this.lastLog = now;
+      this.frameCount = 0;
+    }
+  },
+
+  /**
+   * Reset all profiler data (call on scene cleanup).
+   */
+  reset: function () {
+    this.data.clear();
+    this.counts.clear();
+    this.frameTimes = [];
+    this.lastFrameTime = 0;
+    this.frameCount = 0;
+    this.rendererInfo = null;
+  },
 };
 
 /**

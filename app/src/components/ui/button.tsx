@@ -96,6 +96,8 @@ const Button = ({
     }
   }, [variant]);
   // Button element
+  // When asChild is true, Slot requires exactly one child element,
+  // so we only render children without any additional elements
   let element = (
     <Comp
       className={cn(
@@ -106,12 +108,18 @@ const Button = ({
       ref={ref}
       {...props}
     >
-      {children}
-      {loading && <Loader size={20} />}
-      {count !== undefined && count > 0 && (
-        <div className="absolute top-0 right-[-3] flex items-center justify-center text-xs text-orange-100 bg-orange-500 rounded-full w-5 h-5 z-50">
-          {count}
-        </div>
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {children}
+          {loading && <Loader size={20} />}
+          {count !== undefined && count > 0 && (
+            <div className="absolute top-0 right-[-3] flex items-center justify-center text-xs text-orange-100 bg-orange-500 rounded-full w-5 h-5 z-50">
+              {count}
+            </div>
+          )}
+        </>
       )}
     </Comp>
   );

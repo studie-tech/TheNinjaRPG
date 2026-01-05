@@ -167,6 +167,48 @@ deps-upgrade: # Upgrade all dependencies to their latest version
 	@echo "${YELLOW}Upgrading all dependencies ${RESET}"
 	cd app && npx npm-check-updates -u
 
+-------------SpacetimeDB---------------: # -------------------------------------------------------
+.PHONY: spacetime-install
+spacetime-install: # Install SpacetimeDB CLI
+	@echo "${YELLOW}Installing SpacetimeDB CLI${RESET}"
+	curl -sSf https://install.spacetimedb.com | bash -s -- --yes
+
+.PHONY: spacetime-start
+spacetime-start: # Start local SpacetimeDB server on port 3001
+	@echo "${GREEN}Starting local SpacetimeDB server on port 3001${RESET}"
+	~/.local/bin/spacetime start --listen-addr 127.0.0.1:3001
+
+.PHONY: spacetime-build
+spacetime-build: # Build SpacetimeDB Rust module
+	@echo "${GREEN}Building SpacetimeDB module (Rust)${RESET}"
+	export PATH="$$HOME/.cargo/bin:$$PATH" && cd app/spacetimedb && ~/.local/bin/spacetime build
+
+.PHONY: spacetime-publish-local
+spacetime-publish-local: # Build, publish, and generate TypeScript bindings
+	@echo "${GREEN}Publishing SpacetimeDB module to local server${RESET}"
+	export PATH="$$HOME/.cargo/bin:$$PATH" && cd app/spacetimedb && ~/.local/bin/spacetime build && echo "y" | ~/.local/bin/spacetime publish --server local3001 --delete-data towerdefense
+	@echo "${GREEN}Generating TypeScript bindings${RESET}"
+	rm -rf app/src/libs/spacetimedb/bindings/*.ts
+	export PATH="$$HOME/.cargo/bin:$$PATH" && cd app/spacetimedb && ~/.local/bin/spacetime generate --lang typescript --out-dir ../src/libs/spacetimedb/bindings
+	@echo "${GREEN}Patching imports for SDK compatibility${RESET}"
+	cd app/src/libs/spacetimedb/bindings && for f in *.ts; do sed -i '' 's/from "spacetimedb";/from "spacetimedb\/sdk";/g' "$$f" 2>/dev/null || true; done
+	@echo "${GREEN}Done! Module published and bindings generated${RESET}"
+
+.PHONY: spacetime-publish-prod
+spacetime-publish-prod: spacetime-build # Publish SpacetimeDB module to production
+	@echo "${GREEN}Publishing SpacetimeDB module to production${RESET}"
+	export PATH="$$HOME/.cargo/bin:$$PATH" && cd app/spacetimedb && ~/.local/bin/spacetime publish towerdefense
+
+.PHONY: spacetime-logs
+spacetime-logs: # View SpacetimeDB module logs
+	@echo "${GREEN}Viewing SpacetimeDB logs${RESET}"
+	~/.local/bin/spacetime logs --server local3001 towerdefense
+
+.PHONY: spacetime-logs-follow
+spacetime-logs-follow: # Follow SpacetimeDB module logs in real-time
+	@echo "${GREEN}Following SpacetimeDB logs${RESET}"
+	~/.local/bin/spacetime logs --server local3001 -f towerdefense
+
 ---------------Git--------------------: # -------------------------------------------------------
 .PHONY: uncommit
 uncommit: # Undo the last N commits (keeping changes staged), usage: make uncommit N

@@ -45,6 +45,10 @@ import type { AiRuleType } from "@/validators/ai";
 import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import type { AdditionalContext } from "@/validators/reports";
 import type { CoreMessage } from "ai";
+import type {
+  TowerDefenseState,
+  CharacterAssetConfig,
+} from "@/validators/towerDefense";
 
 export const vector = customType<{
   data: ArrayBuffer;
@@ -2055,6 +2059,7 @@ export const userData = mysqlTable(
     rankedWins: int("rankedWins").default(0).notNull(),
     rankedStreak: int("rankedStreak").default(0).notNull(),
     skillPoints: int("skillPoints").default(0).notNull(),
+    towerDefensePoints: int("towerDefensePoints").default(0).notNull(),
     occupation: mysqlEnum("occupation", consts.OCCUPATIONS),
     occupationSignupAt: datetime("occupationSignupAt", { mode: "date", fsp: 3 }),
   },
@@ -4127,3 +4132,158 @@ export const visitorLog = mysqlTable(
   },
 );
 export type VisitorLog = InferSelectModel<typeof visitorLog>;
+
+// ============================================
+// Tower Defense Tables
+// ============================================
+
+export const towerDefenseUpgrade = mysqlTable(
+  "TowerDefenseUpgrade",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    description: text("description").notNull(),
+    maxLevel: int("maxLevel").default(10).notNull(),
+    baseCost: int("baseCost").default(100).notNull(),
+    costMultiplier: double("costMultiplier").default(1.5).notNull(),
+    upgradeType: mysqlEnum("upgradeType", consts.TowerDefenseUpgradeTypes).notNull(),
+    effectValue: double("effectValue").default(0.1).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      nameIdx: index("TowerDefenseUpgrade_name_idx").on(table.name),
+      upgradeTypeIdx: index("TowerDefenseUpgrade_upgradeType_idx").on(
+        table.upgradeType,
+      ),
+    };
+  },
+);
+export type TowerDefenseUpgrade = InferSelectModel<typeof towerDefenseUpgrade>;
+
+export const userTowerDefenseUpgrade = mysqlTable(
+  "UserTowerDefenseUpgrade",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    upgradeId: varchar("upgradeId", { length: 191 }).notNull(),
+    level: int("level").default(1).notNull(),
+    purchasedAt: datetime("purchasedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("UserTowerDefenseUpgrade_userId_idx").on(table.userId),
+      upgradeIdIdx: index("UserTowerDefenseUpgrade_upgradeId_idx").on(table.upgradeId),
+      userUpgradeKey: uniqueIndex("UserTowerDefenseUpgrade_userId_upgradeId_key").on(
+        table.userId,
+        table.upgradeId,
+      ),
+    };
+  },
+);
+export type UserTowerDefenseUpgrade = InferSelectModel<typeof userTowerDefenseUpgrade>;
+
+export const userTowerDefenseUpgradeRelations = relations(
+  userTowerDefenseUpgrade,
+  ({ one }) => ({
+    user: one(userData, {
+      fields: [userTowerDefenseUpgrade.userId],
+      references: [userData.userId],
+    }),
+    upgrade: one(towerDefenseUpgrade, {
+      fields: [userTowerDefenseUpgrade.upgradeId],
+      references: [towerDefenseUpgrade.id],
+    }),
+  }),
+);
+
+export const towerDefenseRun = mysqlTable(
+  "TowerDefenseRun",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    seed: varchar("seed", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    startedAt: datetime("startedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    endedAt: datetime("endedAt", { mode: "date", fsp: 3 }),
+    wave: int("wave").default(0).notNull(),
+    score: int("score").default(0).notNull(),
+    gridSize: int("gridSize").default(5).notNull(),
+    status: mysqlEnum("status", consts.TowerDefenseRunStatuses)
+      .default("ACTIVE")
+      .notNull(),
+    state: json("state").$type<TowerDefenseState>().notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("TowerDefenseRun_userId_idx").on(table.userId),
+      statusIdx: index("TowerDefenseRun_status_idx").on(table.status),
+      userStatusIdx: index("TowerDefenseRun_userId_status_idx").on(
+        table.userId,
+        table.status,
+      ),
+      scoreIdx: index("TowerDefenseRun_score_idx").on(table.score),
+      startedAtIdx: index("TowerDefenseRun_startedAt_idx").on(table.startedAt),
+    };
+  },
+);
+export type TowerDefenseRun = InferSelectModel<typeof towerDefenseRun>;
+
+export const towerDefenseRunRelations = relations(towerDefenseRun, ({ one }) => ({
+  user: one(userData, {
+    fields: [towerDefenseRun.userId],
+    references: [userData.userId],
+  }),
+}));
+
+export const towerDefenseCharacter = mysqlTable(
+  "TowerDefenseCharacter",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    // Whether this is a player character or an enemy
+    isPlayer: boolean("isPlayer").default(false).notNull(),
+    // Combat stats
+    baseHealth: int("baseHealth").default(10).notNull(),
+    baseSpeed: double("baseSpeed").default(0.4).notNull(),
+    baseDamage: int("baseDamage").default(10).notNull(),
+    attackCooldown: double("attackCooldown").default(1.0).notNull(),
+    // Scaling factors (only used for enemies)
+    healthScaling: double("healthScaling").default(0.15).notNull(),
+    speedScaling: double("speedScaling").default(0.02).notNull(),
+    damageScaling: double("damageScaling").default(2.0).notNull(),
+    // Spawn configuration (only used for enemies)
+    firstAppearWave: int("firstAppearWave").default(1).notNull(),
+    baseCount: int("baseCount").default(3).notNull(),
+    countScaling: double("countScaling").default(1.5).notNull(),
+    // Visual scale factor
+    scaleFactor: double("scaleFactor").default(2.8).notNull(),
+    // Asset configuration (JSON field for CharacterAssetConfig)
+    assetConfig: json("assetConfig").$type<CharacterAssetConfig | null>().default(null),
+    // Timestamps
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      nameIdx: index("TowerDefenseCharacter_name_idx").on(table.name),
+      firstAppearWaveIdx: index("TowerDefenseCharacter_firstAppearWave_idx").on(
+        table.firstAppearWave,
+      ),
+      isPlayerIdx: index("TowerDefenseCharacter_isPlayer_idx").on(table.isPlayer),
+    };
+  },
+);
+export type TowerDefenseCharacterDb = InferSelectModel<typeof towerDefenseCharacter>;

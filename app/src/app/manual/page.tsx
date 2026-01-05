@@ -23,16 +23,23 @@ import {
   IMG_MANUAL_BALANCE,
   IMG_MANUAL_BACKUP,
   IMG_MANUAL_STAFF,
+  IMG_MANUAL_TOWER_UPGRADES,
+  IMG_MANUAL_TOWER_ENEMIES,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { useUserData } from "@/utils/UserContext";
-import { canControlBackups, canViewRecruitmentAnalytics } from "@/utils/permissions";
+import {
+  canControlBackups,
+  canViewRecruitmentAnalytics,
+  canChangeContent,
+} from "@/utils/permissions";
 
 export default function ManualMain() {
   const { data: userData } = useUserData();
   const role = userData?.role ?? "USER";
   const hasBackupAccess = canControlBackups(role);
   const canSeeRecruitment = canViewRecruitmentAnalytics(role);
+  const canEditContent = canChangeContent(role);
 
   const baseEntries = [
     // recruitment added conditionally below
@@ -56,9 +63,17 @@ export default function ManualMain() {
     { name: "staff", img: IMG_MANUAL_STAFF },
   ];
 
-  const withRecruitment = canSeeRecruitment
-    ? [{ name: "recruitment", img: IMG_MANUAL_RECRUITMENT }, ...baseEntries]
+  // Add tower defense admin entries for content editors
+  const withTowerDefense = canEditContent
+    ? [
+        ...baseEntries,
+        { name: "towerDefenseCharacter", img: IMG_MANUAL_TOWER_ENEMIES },
+        { name: "towerDefenseUpgrade", img: IMG_MANUAL_TOWER_UPGRADES },
+      ]
     : baseEntries;
+  const withRecruitment = canSeeRecruitment
+    ? [{ name: "recruitment", img: IMG_MANUAL_RECRUITMENT }, ...withTowerDefense]
+    : withTowerDefense;
   const entries = hasBackupAccess
     ? [{ name: "content_backups", img: IMG_MANUAL_BACKUP }, ...withRecruitment]
     : withRecruitment;

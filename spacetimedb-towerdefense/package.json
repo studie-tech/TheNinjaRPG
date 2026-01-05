@@ -1,0 +1,19 @@
+{
+  "name": "towerdefense-spacetimedb",
+  "version": "1.0.0",
+  "description": "SpacetimeDB module for Tower Defense game - authoritative server-side game logic",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "spacetime build",
+    "publish:local": "spacetime publish --server local towerdefense",
+    "publish:prod": "spacetime publish towerdefense",
+    "generate": "spacetime generate --lang typescript --out-dir ../app/src/libs/spacetimedb/bindings"
+  },
+  "dependencies": {
+    "spacetimedb": "^1.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}

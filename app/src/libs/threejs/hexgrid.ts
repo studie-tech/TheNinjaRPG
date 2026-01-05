@@ -6,7 +6,18 @@ import {
   type LineBasicMaterial,
   type Material,
 } from "three";
+import { HEX_ASPECT_RATIO, HEX_STACKING_DISPLACEMENT } from "@/drizzle/constants";
 import type { TerrainHex } from "../hexgrid";
+
+/**
+ * Calculates the width to height ratio for a hex grid based on its dimensions.
+ * Used for maintaining proper aspect ratio in orthographic views.
+ */
+export const calculateWidth2Height = (width: number, height: number): number => {
+  return (
+    (height * HEX_ASPECT_RATIO) / (width - HEX_STACKING_DISPLACEMENT * (width - 1))
+  );
+};
 
 /**
  * Returns the standard hex point indices used for tile face and ground geometry
@@ -157,7 +168,7 @@ export const createGroundCorners = (
  * Creates the top face geometry for a hex tile
  */
 export const createTileGeometry = (info: {
-  corners: Array<{ x: number; y: number }>;
+  corners: Array<{ x: number; y: number }> | ReadonlyArray<{ x: number; y: number }>;
   points: number[];
   tileUVArray: Float32Array | null;
   offsetLength: number;
@@ -166,15 +177,27 @@ export const createTileGeometry = (info: {
 }) => {
   const { corners, points, tileUVArray, offsetLength, offsetLayer, layer } = info;
   const geometry = new BufferGeometry();
-  const vertices = new Float32Array(
-    points
-      .map((p) => corners[p])
-      .flatMap((p) => (p ? [p.x, p.y + offsetLength, layer + offsetLayer] : [])),
-  );
-  geometry.setAttribute("position", new BufferAttribute(vertices, 3));
+
+  // Safety: ensure corners exist and points are valid
+  if (!corners || corners.length === 0) {
+    return geometry;
+  }
+
+  const vertices: number[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const pIdx = points[i];
+    const p = pIdx !== undefined ? corners[pIdx] : undefined;
+    if (p) {
+      vertices.push(p.x, p.y + offsetLength, layer + offsetLayer);
+    }
+  }
+
+  geometry.setAttribute("position", new BufferAttribute(new Float32Array(vertices), 3));
   if (tileUVArray) {
     geometry.setAttribute("uv", new BufferAttribute(tileUVArray, 2));
   }
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
   return geometry;
 };
 

@@ -1,6 +1,7 @@
 import {
   Vector3,
   MeshBasicMaterial,
+  SpriteMaterial,
   Sprite,
   RepeatWrapping,
   DoubleSide,
@@ -38,8 +39,14 @@ export const snowColors = [0xffffff, 0xeeeeee, 0xfefefe] as const;
 /**
  * Helper function to create textured materials from colors and texture URL
  * Adds subtle lightness variation for variety
+ * Falls back to simple color materials on server-side (no window)
  */
 const createTexturedMaterials = (colors: readonly number[], textureUrl: string) => {
+  // Fallback to simple materials on server-side where window is not available
+  if (typeof window === "undefined") {
+    return colors.map((color) => new MeshBasicMaterial({ color }));
+  }
+
   return colors.map((color) => {
     const texture = loadTexture(textureUrl);
     texture.wrapS = texture.wrapT = RepeatWrapping;
@@ -51,8 +58,14 @@ const createTexturedMaterials = (colors: readonly number[], textureUrl: string) 
 /**
  * Helper function to create textured materials from colors and texture URL
  * Adds subtle lightness variation for variety
+ * Falls back to simple color materials on server-side (no document)
  */
 const createNoisedMaterials = (colors: readonly number[]) => {
+  // Fallback to simple materials on server-side where document is not available
+  if (typeof document === "undefined") {
+    return colors.map((color) => new MeshBasicMaterial({ color }));
+  }
+
   return colors.map((color) => {
     // Create a small canvas for the noisy texture
     const size = 64;
@@ -200,6 +213,9 @@ export const getMapSprites = (
   return sprites;
 };
 
+// Performance optimization: Cache materials for wind-affected assets to allow sharing
+const windMaterialCache = new Map<string, MeshBasicMaterial | SpriteMaterial>();
+
 const loadSectorAsset = (
   filepath: string,
   rand: number,
@@ -207,20 +223,41 @@ const loadSectorAsset = (
   randomRotation?: boolean,
 ) => {
   const texture = loadTexture(filepath);
-  const material = createSpriteMaterial(texture);
 
-  // Add wind effect via shader modification
+  let material: SpriteMaterial;
+
   if (windAffected) {
-    // Generate random offset for this specific sprite (0 to 2*PI)
-    const randomOffset = rand * Math.PI * 2;
-    applyWindShader(material, randomOffset);
+    // Use one of 8 wind variants to allow material sharing while maintaining desynchronization
+    const numVariants = 4;
+    const variantIndex = Math.floor(rand * numVariants);
+    const variantOffset = (variantIndex / numVariants) * Math.PI * 2;
+    const cacheKey = `${filepath}-wind-${variantIndex}`;
+
+    const cached = windMaterialCache.get(cacheKey) as SpriteMaterial | undefined;
+    if (cached) {
+      material = cached;
+    } else {
+      // Create a fresh material for this variant
+      // We don't use the standard createSpriteMaterial here because we're modifying it
+      material = new SpriteMaterial({
+        map: texture,
+        alphaTest: 0.5,
+      });
+      applyWindShader(material, variantOffset);
+      windMaterialCache.set(cacheKey, material);
+    }
+  } else {
+    // For non-wind assets, use standard sharing
+    material = createSpriteMaterial(texture);
   }
 
   const sprite = new Sprite(material);
 
   // Apply random rotation if specified
   if (randomRotation) {
-    sprite.material.rotation = 100 * rand * Math.PI * 2;
+    // PERFORMANCE OPTIMIZATION: Store rotation in userData to be used by InstancedMesh
+    // This avoids cloning materials just for rotation
+    sprite.userData.rotation = rand * Math.PI * 2;
   }
 
   return sprite;

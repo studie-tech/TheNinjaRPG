@@ -30,6 +30,8 @@ export const serverSchema = z.object({
   SENDGRID_API_KEY: z.string().optional(),
   CAPTCHA_SALT: z.string().optional(),
   CLERK_SECRET_KEY: z.string().optional(),
+  // Tower Defense HMAC secret for signing session data
+  TOWER_DEFENSE_HMAC_SECRET: z.string().optional(),
 });
 
 /**
@@ -62,6 +64,8 @@ export const serverEnv = {
   SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
   CAPTCHA_SALT: process.env.CAPTCHA_SALT,
   CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
+  // Tower Defense HMAC secret for signing session data
+  TOWER_DEFENSE_HMAC_SECRET: process.env.TOWER_DEFENSE_HMAC_SECRET,
 };
 
 /**
@@ -75,6 +79,9 @@ export const clientSchema = z.object({
   NEXT_PUBLIC_BASE_URL: z.string().url(),
   NEXT_PUBLIC_MEASUREMENT_ID: z.string().optional(),
   NEXT_PUBLIC_NODE_ENV: z.enum(["development", "test", "production"]),
+  // SpacetimeDB for Tower Defense
+  NEXT_PUBLIC_SPACETIMEDB_HOST: z.string().optional(),
+  NEXT_PUBLIC_SPACETIMEDB_MODULE: z.string().optional(),
 });
 
 /**
@@ -89,4 +96,7 @@ export const clientEnv = {
   NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
   NEXT_PUBLIC_MEASUREMENT_ID: process.env.NEXT_PUBLIC_MEASUREMENT_ID,
   NEXT_PUBLIC_NODE_ENV: process.env.NODE_ENV,
+  // SpacetimeDB for Tower Defense
+  NEXT_PUBLIC_SPACETIMEDB_HOST: process.env.NEXT_PUBLIC_SPACETIMEDB_HOST,
+  NEXT_PUBLIC_SPACETIMEDB_MODULE: process.env.NEXT_PUBLIC_SPACETIMEDB_MODULE,
 };

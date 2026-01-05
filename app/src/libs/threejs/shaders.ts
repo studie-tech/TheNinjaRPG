@@ -1,5 +1,4 @@
-import type { SpriteMaterial, MeshBasicMaterial, Group } from "three";
-import { Sprite, Mesh } from "three";
+import type { SpriteMaterial, MeshBasicMaterial } from "three";
 
 // Wind effect parameters
 export const WIND_CONFIG = {
@@ -24,8 +23,16 @@ export const WAVE_CONFIG = {
  * @param material - The SpriteMaterial to apply the wind effect to
  * @param randomOffset - A random offset (0 to 2*PI) to desynchronize the animation
  */
-export const applyWindShader = (material: SpriteMaterial, randomOffset: number) => {
+export const applyWindShader = (
+  material: SpriteMaterial | MeshBasicMaterial,
+  randomOffset: number,
+) => {
   if (!WIND_CONFIG.enabled) return;
+
+  // Mark as animated BEFORE onBeforeCompile runs (for detection in callbacks)
+  material.userData.isAnimated = true;
+  material.userData.animationType = "wind";
+  material.userData.windOffset = randomOffset;
 
   material.onBeforeCompile = (shader) => {
     // Add uniforms for wind animation
@@ -138,6 +145,11 @@ export const applyBlurShader = (material: SpriteMaterial, blurAmount = 0.003) =>
 export const applyWaveShader = (material: MeshBasicMaterial, randomOffset: number) => {
   if (!WAVE_CONFIG.enabled) return;
 
+  // Mark as animated BEFORE onBeforeCompile runs (for detection in callbacks)
+  material.userData.isAnimated = true;
+  material.userData.animationType = "wave";
+  material.userData.waveOffset = randomOffset;
+
   material.onBeforeCompile = (shader) => {
     // Add uniforms for wave animation
     shader.uniforms.time = { value: 0 };
@@ -198,43 +210,63 @@ export const applyWaveShader = (material: MeshBasicMaterial, randomOffset: numbe
 };
 
 /**
- * Updates the wind animation time for all sprites in a group
- * Call this in your animation loop to animate the wind effect
+ * Helper to update shader time for an object (Sprite, Mesh, or material)
  */
-export const updateWindAnimation = (group: Group, time: number) => {
-  if (!WIND_CONFIG.enabled) return;
-
-  group.traverse((object) => {
-    if (object instanceof Sprite) {
-      const shader = object.material.userData.shader;
-      if (shader?.uniforms?.time) {
-        shader.uniforms.time.value = time;
-      }
-    }
-  });
+const updateShaderTime = (item: any, time: number) => {
+  if (!item) return;
+  // Get shader - either from material.userData or directly from userData
+  const shader = item.material?.userData?.shader ?? item.userData?.shader;
+  if (shader?.uniforms?.time) {
+    shader.uniforms.time.value = time;
+  }
 };
 
 /**
- * Updates the wave animation time for all ocean tiles in a group
- * Call this in your animation loop to animate the wave effect
- *
- * @param group - The group containing mesh tiles
- * @param time - The current animation time
+ * Updates the wind animation time for all materials/sprites in a list or group
+ * Supports both: array of materials (TowerDefense) and Group (Sector/Combat)
  */
-export const updateWaveAnimation = (group: Group, time: number) => {
+export const updateWindAnimation = (items: any[] | any, time: number) => {
+  if (!WIND_CONFIG.enabled) return;
+
+  // If items has a traverse method (it's a Group/Object3D), use it for recursive traversal
+  if (typeof items?.traverse === "function") {
+    items.traverse((object: any) => {
+      // Only process Sprites (they have isSprite property)
+      if (object.isSprite) {
+        updateShaderTime(object, time);
+      }
+    });
+    return;
+  }
+
+  // Otherwise treat as array of materials
+  if (!Array.isArray(items)) return;
+  for (let i = 0; i < items.length; i++) {
+    updateShaderTime(items[i], time);
+  }
+};
+
+/**
+ * Updates the wave animation time for all materials/tiles in a list or group
+ * Supports both: array of materials (TowerDefense) and Group (Sector/Combat)
+ */
+export const updateWaveAnimation = (items: any[] | any, time: number) => {
   if (!WAVE_CONFIG.enabled) return;
 
-  group.traverse((object) => {
-    if (object instanceof Mesh) {
-      if (object.userData?.tile?.asset === "ocean") {
-        const material = object.material as MeshBasicMaterial;
-        const shader = material.userData?.shader;
-        if (shader?.uniforms?.time) {
-          shader.uniforms.time.value = time;
-        } else if (time < 0.1) {
-          console.log("Ocean mesh found but no shader:", object.userData.tile);
-        }
+  // If items has a traverse method (it's a Group/Object3D), use it for recursive traversal
+  if (typeof items?.traverse === "function") {
+    items.traverse((object: any) => {
+      // Only process Meshes with ocean tiles
+      if (object.isMesh && object.userData?.tile?.asset === "ocean") {
+        updateShaderTime(object, time);
       }
-    }
-  });
+    });
+    return;
+  }
+
+  // Otherwise treat as array of materials
+  if (!Array.isArray(items)) return;
+  for (let i = 0; i < items.length; i++) {
+    updateShaderTime(items[i], time);
+  }
 };

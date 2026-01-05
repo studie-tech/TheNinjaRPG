@@ -11,13 +11,15 @@ import {
   LineSegments,
   EdgesGeometry,
   type BufferGeometry,
-  type Texture,
 } from "three";
 import {
   loadTexture,
   createTexture,
   createSpriteMaterial,
   createShadowTexture,
+  drawStatusBar,
+  updateStatusBar,
+  showAnimation,
 } from "@/libs/threejs/util";
 import { playPreloadedAudio } from "@/utils/audio";
 import { getPossibleActionTiles, findHex, PathCalculator } from "../hexgrid";
@@ -73,9 +75,10 @@ import type { ReturnedBattle, CachedIntersections } from "@/libs/combat/types";
 import type { BattleMaps } from "@/hooks/combat";
 import type { SpriteMixer } from "@/libs/threejs/SpriteMixer";
 
-// Performance optimization: Cache status bar textures to avoid recreating canvases
-// Key format: "width-height-color-stroke"
-const statusBarTextureCache = new Map<string, Texture>();
+// Queue for non-movement SFX that should play after movement completes
+type PendingSfx = { url: string; volume: number };
+let pendingSfxQueue: PendingSfx[] = [];
+let wasMovingLastFrame = false;
 
 /**
  * Validates whether an action can be performed on a target tile.
@@ -149,37 +152,6 @@ export const validateActionTarget = (info: {
   const isValid = greenTiles.size > 0 && !redTiles.has(target);
 
   return { isValid, origin, possibleTiles, greenTiles, redTiles };
-};
-
-/**
- * Show animation on the hex
- */
-export const showAnimation = (
-  animation: GameAsset,
-  hex: TerrainHex,
-  spriteMixer: SpriteMixer,
-  playInfinite = false,
-) => {
-  const { height: h, width: w } = hex;
-  const texture = loadTexture(animation.image);
-  const actionSprite = spriteMixer.createActionSprite(texture, 1, animation.frames);
-  const action = spriteMixer.createAction(
-    actionSprite,
-    0,
-    animation.frames - 1,
-    animation.speed,
-  );
-  if (action) {
-    action.hideWhenFinished = true;
-    if (playInfinite) {
-      action.playLoop();
-    } else {
-      action.playOnce();
-    }
-  }
-  actionSprite.scale.set(50, 50, 1);
-  actionSprite.position.set(w / 2, h / 2, 5);
-  return actionSprite;
 };
 
 /**
@@ -450,11 +422,6 @@ export const drawCombatBackground = (
   };
 };
 
-// Queue for non-movement SFX that should play after movement completes
-type PendingSfx = { url: string; volume: number };
-let pendingSfxQueue: PendingSfx[] = [];
-let wasMovingLastFrame = false;
-
 /**
  * Draw/update the users on the map. Should be called on every render
  */
@@ -603,7 +570,13 @@ export const drawCombatEffect = (info: {
         if (effect.appearAnimation && animationId !== 0) {
           const obj = gameAssets.find((a) => a.id === effect.appearAnimation);
           if (obj) {
-            const actionSprite = showAnimation(obj, hex, spriteMixer);
+            const actionSprite = showAnimation({
+              gameAsset: obj,
+              spriteMixer,
+              scale: 50,
+              position: { x: w / 2, y: h / 2 },
+              layer: 5,
+            });
             if (actionSprite) asset.add(actionSprite);
           }
         }
@@ -621,18 +594,41 @@ export const drawCombatEffect = (info: {
         if (effect.staticAnimation) {
           const obj = gameAssets.find((a) => a.id === effect.staticAnimation);
           if (obj) {
-            const actionSprite = showAnimation(obj, hex, spriteMixer, true);
+            const actionSprite = showAnimation({
+              gameAsset: obj,
+              spriteMixer,
+              playInfinite: true,
+              scale: 50,
+              position: { x: w / 2, y: h / 2 },
+              layer: 5,
+            });
             if (actionSprite) asset.add(actionSprite);
           }
         }
         // Status bar
         if (effect.type === "barrier") {
-          const hp_back = drawStatusBar(w, h, "gray", true, "hp_background", 1);
-          const hp_bar = drawStatusBar(w, h, "firebrick", true, "hp_current", h);
+          const hp_back = drawStatusBar({
+            width: w,
+            height: h,
+            yPosition: h + w / 3,
+            color: "gray",
+            stroke: true,
+            name: "hp_background",
+            yOffset: 0,
+            layer: STATUS_LAYER,
+          });
+          const hp_bar = drawStatusBar({
+            width: w,
+            height: h,
+            yPosition: h + w / 3,
+            color: "firebrick",
+            stroke: true,
+            name: "hp_current",
+            yOffset: 0,
+            layer: STATUS_LAYER,
+          });
           asset.add(hp_back);
           asset.add(hp_bar);
-          hp_bar.position.set(hp_bar.position.x, h, 0);
-          hp_back.position.set(hp_back.position.x, h, 0);
           hp_bar.visible = false;
           hp_back.visible = false;
         }
@@ -662,105 +658,6 @@ export const drawCombatEffect = (info: {
           drawnIds.add(asset.name);
         }
       }
-    }
-  }
-};
-
-/**
- * Draw a status bar on user
- * Performance optimization: Uses texture cache to avoid recreating canvases
- */
-export const drawStatusBar = (
-  w: number,
-  h: number,
-  color: string,
-  stroke: boolean,
-  name: string,
-  yOffset: number,
-) => {
-  const r = 3;
-  const L = w / 2;
-  const canvasWidth = r * L;
-  const canvasHeight = (r * h) / 10;
-
-  // Create cache key for this specific status bar configuration
-  const cacheKey = `${canvasWidth}-${canvasHeight}-${color}-${stroke}`;
-
-  // Check if we already have a cached texture for this configuration
-  let texture = statusBarTextureCache.get(cacheKey);
-
-  if (!texture) {
-    // Create new canvas and texture if not cached
-    const canvas = document.createElement("canvas");
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
-    const context = canvas.getContext("2d");
-    if (context) {
-      context.fillStyle = color;
-      // Scale line width proportionally to canvas size, but keep reasonable bounds
-      const lineWidth = Math.max(1, Math.min(4, canvasHeight / 6));
-      context.lineWidth = lineWidth;
-      context.strokeStyle = "black";
-      if (stroke) {
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        context.strokeRect(0, 0, canvas.width, canvas.height);
-      } else {
-        const padding = lineWidth / 2;
-        context.fillRect(
-          padding,
-          padding,
-          canvas.width - 2 * padding,
-          canvas.height - 2 * padding,
-        );
-      }
-    }
-    texture = createTexture(canvas);
-    texture.generateMipmaps = false;
-    texture.minFilter = LinearFilter;
-    texture.needsUpdate = true;
-
-    // Cache the texture for reuse
-    statusBarTextureCache.set(cacheKey, texture);
-  }
-
-  const bar_material = new SpriteMaterial({ map: texture });
-  const bar_sprite = new Sprite(bar_material);
-  bar_sprite.position.set(
-    L,
-    h * 1.58 - (yOffset * (canvasHeight - 2)) / r,
-    STATUS_LAYER,
-  );
-  bar_sprite.scale.set(L, canvasHeight / r, 1);
-  bar_sprite.name = name;
-  bar_sprite.userData.full_width = L;
-  bar_sprite.userData.previousValue = undefined; // Track previous value for change detection
-  bar_sprite.visible = false;
-  return bar_sprite;
-};
-
-/**
- * Update status bar of a user sprite
- * Performance optimization: Only updates if value changed (dirty flag system)
- */
-export const updateStatusBar = (name: string, userSpriteGroup: Group, perc: number) => {
-  const bar = userSpriteGroup.getObjectByName(name);
-  if (bar) {
-    // Check if value actually changed (dirty flag optimization)
-    const previousValue = bar.userData.previousValue as number | undefined;
-    if (previousValue !== undefined && Math.abs(previousValue - perc) < 0.001) {
-      // Value hasn't changed significantly, skip update
-      return;
-    }
-    // Store current value for next frame comparison
-    bar.userData.previousValue = perc;
-    // Perform the actual update
-    const width = bar.userData.full_width as number;
-    const newWidth = width * perc;
-    const newPosition = width - (width * (1 - perc)) / 2;
-    bar.scale.set(newWidth, bar.scale.y, 1);
-    bar.position.set(newPosition, bar.position.y, bar.position.z);
-    if (perc === 0) {
-      bar.visible = false;
     }
   }
 };
@@ -896,23 +793,77 @@ export const createUserSprite = (
 
   // Health bar is shown on all
   const t = noMarker ? h / 8 : 0;
-  const hp_background = drawStatusBar(w, h, "gray", true, "hp_background", t);
-  const hp_bar = drawStatusBar(w, h, "firebrick", true, "hp_current", t);
+  const hp_background = drawStatusBar({
+    width: w,
+    height: h,
+    yPosition: h + w / 3,
+    color: "gray",
+    stroke: true,
+    name: "hp_background",
+    yOffset: t,
+    layer: STATUS_LAYER,
+  });
+  const hp_bar = drawStatusBar({
+    width: w,
+    height: h,
+    yPosition: h + w / 3,
+    color: "firebrick",
+    stroke: true,
+    name: "hp_current",
+    yOffset: t,
+    layer: STATUS_LAYER,
+  });
   group.add(hp_background);
   group.add(hp_bar);
 
   // Stamina Bar if available
   if ("curStamina" in userData && "maxStamina" in userData) {
-    const sp_background = drawStatusBar(w, h, "gray", true, "sp_background", t + 1);
-    const sp_bar = drawStatusBar(w, h, "green", true, "sp_current", t + 1);
+    const sp_background = drawStatusBar({
+      width: w,
+      height: h,
+      yPosition: h + w / 3,
+      color: "gray",
+      stroke: true,
+      name: "sp_background",
+      yOffset: t + 1,
+      layer: STATUS_LAYER,
+    });
+    const sp_bar = drawStatusBar({
+      width: w,
+      height: h,
+      yPosition: h + w / 3,
+      color: "green",
+      stroke: true,
+      name: "sp_current",
+      yOffset: t + 1,
+      layer: STATUS_LAYER,
+    });
     group.add(sp_background);
     group.add(sp_bar);
   }
 
   // Chakra Bar if available
   if ("curChakra" in userData && "maxChakra" in userData) {
-    const cp_background = drawStatusBar(w, h, "gray", true, "cp_background", t + 2);
-    const cp_bar = drawStatusBar(w, h, "blue", true, "cp_current", t + 2);
+    const cp_background = drawStatusBar({
+      width: w,
+      height: h,
+      yPosition: h + w / 3,
+      color: "gray",
+      stroke: true,
+      name: "cp_background",
+      yOffset: t + 2,
+      layer: STATUS_LAYER,
+    });
+    const cp_bar = drawStatusBar({
+      width: w,
+      height: h,
+      yPosition: h + w / 3,
+      color: "blue",
+      stroke: true,
+      name: "cp_current",
+      yOffset: t + 2,
+      layer: STATUS_LAYER,
+    });
     group.add(cp_background);
     group.add(cp_bar);
   }

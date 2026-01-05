@@ -1601,6 +1601,10 @@ export const IMG_HOME_SLEEP =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu8FpvZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
 export const IMG_HOME_AWAKE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1BKctL6bo95WClq4K0wxZUmJcvThgdVenO3P";
+export const IMG_MANUAL_TOWER_UPGRADES =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPuGZOwpKeUGyX2kj6u45AOQiSa1zYH0mqZoc";
+export const IMG_MANUAL_TOWER_ENEMIES =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTIK3RW5IU29dZYJPoOKSh5vmlqatMub3EigH";
 export const IMG_MANUAL_RANKED =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAa3ucxOoZUC4muiGcQNzjfEndY5y1w20B8hT";
 export const IMG_MANUAL_AWARDS =
@@ -2106,3 +2110,104 @@ export function getUserCaps(rank?: UserRank | null) {
     };
   return { stats_cap: caps.STATS_CAP, gens_cap: caps.GENS_CAP, lvl_cap: caps.LVL_CAP };
 }
+
+// ============================================
+// Tower Defense Constants
+// ============================================
+
+export const TD_ENEMY_DIRECTIONS = [
+  "n",
+  "ne",
+  "e",
+  "se",
+  "s",
+  "sw",
+  "w",
+  "nw",
+] as const;
+export type TDEnemyDirection = (typeof TD_ENEMY_DIRECTIONS)[number];
+
+export const TowerDefenseUpgradeTypes = [
+  // Attack upgrades
+  "DAMAGE",
+  "ATTACK_SPEED",
+  "RANGE",
+  "CRIT_CHANCE",
+  "DAMAGE_PER_TILE",
+  // Defense upgrades
+  "HEALTH",
+  "HEALTH_REGEN",
+  "DEFENSE_PERCENT",
+  "DEFENSE_FLAT",
+  "LIFESTEAL",
+  "KNOCKBACK_CHANCE",
+  "KNOCKBACK_FORCE",
+  // Utility upgrades
+  "TOKENS_PER_WAVE",
+  "TOKENS_PER_KILL",
+  "INTEREST_PER_WAVE",
+  "SKIP_ENEMY_CHANCE",
+  // Ability unlocks
+  "ABILITY_UNLOCK",
+] as const;
+export type TowerDefenseUpgradeType = (typeof TowerDefenseUpgradeTypes)[number];
+
+// Upgrade categories for UI organization
+export const TowerDefenseUpgradeCategories: Record<
+  string,
+  readonly TowerDefenseUpgradeType[]
+> = {
+  ATTACK: ["DAMAGE", "ATTACK_SPEED", "RANGE", "CRIT_CHANCE", "DAMAGE_PER_TILE"],
+  DEFENSE: [
+    "HEALTH",
+    "DEFENSE_FLAT",
+    "DEFENSE_PERCENT",
+    "HEALTH_REGEN",
+    "LIFESTEAL",
+    "KNOCKBACK_CHANCE",
+    "KNOCKBACK_FORCE",
+  ],
+  UTILITY: [
+    "TOKENS_PER_KILL",
+    "TOKENS_PER_WAVE",
+    "INTEREST_PER_WAVE",
+    "SKIP_ENEMY_CHANCE",
+  ],
+  ABILITIES: ["ABILITY_UNLOCK"],
+} as const;
+export type TowerDefenseUpgradeCategory = keyof typeof TowerDefenseUpgradeCategories;
+
+export const TowerDefenseRunStatuses = ["ACTIVE", "COMPLETED", "ABANDONED"] as const;
+export type TowerDefenseRunStatus = (typeof TowerDefenseRunStatuses)[number];
+
+// Game balance constants
+export const TD_INITIAL_GRID_SIZE = 7;
+export const TD_MAX_GRID_SIZE = 15;
+export const TD_GRID_EXPAND_EVERY_N_WAVES = 5;
+export const TD_WAVE_ENEMY_BASE = 3;
+export const TD_WAVE_ENEMY_SCALING = 1.2;
+export const TD_SCORE_PER_KILL = 10;
+export const TD_SCORE_TO_POINTS_RATIO = 100; // 100 score = 1 permanent point
+export const TD_PLAYER_BASE_HEALTH = 100;
+export const TD_SHURIKEN_BASE_DAMAGE = 10;
+export const TD_SHURIKEN_BASE_RANGE = 2;
+export const TD_SHURIKEN_BASE_COOLDOWN = 500; // ms
+export const TD_BASE_CRIT_CHANCE = 0; // Base critical hit chance (0%)
+export const TD_BASE_DAMAGE_PER_TILE = 0; // Extra damage per tile distance traveled (0)
+export const TD_WAVE_END_GRACE_PERIOD_MS = 200; // Grace period after last enemy dies before transitioning to wave-end
+export const TD_RANGE_VISUAL_FACTOR = 0.85; // Range visual factor for ellipse-based range checking
+export const TD_EXISTING_SESSION_CHECK_TIMEOUT_MS = 500; // Time to wait for SpacetimeDB to send existing session data
+export const TD_HIT_EVENT_DURATION_MS = 500; // Duration for hit event animations
+
+// Ability IDs
+export const TD_ABILITY_IDS = {
+  SHURIKEN: "shuriken",
+} as const;
+export type TDAbilityId = (typeof TD_ABILITY_IDS)[keyof typeof TD_ABILITY_IDS];
+
+// Visual & Effect Constants
+export const TD_DAMAGE_NUMBER_POOL_SIZE = 20;
+export const TD_DAMAGE_NUMBER_LIFETIME = 0.8; // seconds
+export const TD_DAMAGE_NUMBER_RISE_SPEED_FACTOR = 0.48; // relative to hexWidth
+export const TD_SHURIKEN_IMAGE_URL = "/towerdefence/shuriken.png";
+export const TD_HEX_SIZE = 100;
