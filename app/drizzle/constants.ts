@@ -2209,5 +2209,6 @@ export type TDAbilityId = (typeof TD_ABILITY_IDS)[keyof typeof TD_ABILITY_IDS];
 export const TD_DAMAGE_NUMBER_POOL_SIZE = 20;
 export const TD_DAMAGE_NUMBER_LIFETIME = 0.8; // seconds
 export const TD_DAMAGE_NUMBER_RISE_SPEED_FACTOR = 0.48; // relative to hexWidth
-export const TD_SHURIKEN_IMAGE_URL = "/towerdefence/shuriken.png";
+export const TD_SHURIKEN_IMAGE_URL =
+  "https://uploadthing.b-cdn.net/f/4a3100e5-97c6-4e5a-96e2-1c3520838179-gwm3dh.svg";
 export const TD_HEX_SIZE = 100;

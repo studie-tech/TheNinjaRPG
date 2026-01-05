@@ -8,7 +8,7 @@ import {
   t as __t,
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
-} from "spacetimedb/sdk";
+} from "spacetimedb";
 
 export default __t.object("GameLoopSchedule", {
   scheduledId: __t.u64(),

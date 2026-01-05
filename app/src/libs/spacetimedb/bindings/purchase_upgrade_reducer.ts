@@ -8,7 +8,7 @@ import {
   t as __t,
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
-} from "spacetimedb/sdk";
+} from "spacetimedb";
 
 export default {
   sessionId: __t.u64(),

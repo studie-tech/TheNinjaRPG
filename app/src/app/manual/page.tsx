@@ -24,7 +24,6 @@ import {
   IMG_MANUAL_BACKUP,
   IMG_MANUAL_STAFF,
   IMG_MANUAL_TOWER_UPGRADES,
-  IMG_MANUAL_TOWER_ENEMIES,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { useUserData } from "@/utils/UserContext";
@@ -63,13 +62,9 @@ export default function ManualMain() {
     { name: "staff", img: IMG_MANUAL_STAFF },
   ];
 
-  // Add tower defense admin entries for content editors
+  // Add tower defense admin entry for content editors
   const withTowerDefense = canEditContent
-    ? [
-        ...baseEntries,
-        { name: "towerDefenseCharacter", img: IMG_MANUAL_TOWER_ENEMIES },
-        { name: "towerDefenseUpgrade", img: IMG_MANUAL_TOWER_UPGRADES },
-      ]
+    ? [...baseEntries, { name: "towerDefense", img: IMG_MANUAL_TOWER_UPGRADES }]
     : baseEntries;
   const withRecruitment = canSeeRecruitment
     ? [{ name: "recruitment", img: IMG_MANUAL_RECRUITMENT }, ...withTowerDefense]

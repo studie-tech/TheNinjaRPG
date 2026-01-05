@@ -33,7 +33,7 @@ export default function ManualTowerDefenseCharacters() {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success && data.id) {
-          router.push(`/manual/towerDefenseCharacter/edit/${data.id}`);
+          router.push(`/manual/towerDefense/characters/edit/${data.id}`);
         }
         await refetch();
       },
@@ -59,7 +59,7 @@ export default function ManualTowerDefenseCharacters() {
       <ContentBox
         title="Tower Defense Characters"
         subtitle="Character Configuration"
-        defaultBackHref="/manual"
+        defaultBackHref="/manual/towerDefense"
       >
         <p className="mb-4">
           Configure character types for the Tower Defense minigame. This includes both
@@ -208,7 +208,7 @@ const CharacterCard: React.FC<CharacterCardProps> = ({ character, canEdit, onDel
       {canEdit && (
         <div className="mt-3 flex gap-2">
           <Link
-            href={`/manual/towerDefenseCharacter/edit/${character.id}`}
+            href={`/manual/towerDefense/characters/edit/${character.id}`}
             className="flex-1"
           >
             <Button variant="outline" size="sm" className="w-full">

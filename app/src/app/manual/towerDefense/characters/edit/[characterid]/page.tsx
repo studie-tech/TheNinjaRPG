@@ -89,7 +89,7 @@ const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
       <ContentBox
         title="Content Panel"
         subtitle={`${typeLabel} Configuration`}
-        defaultBackHref="/manual/towerDefenseCharacter"
+        defaultBackHref="/manual/towerDefense/characters"
       >
         <EditContent
           schema={form}

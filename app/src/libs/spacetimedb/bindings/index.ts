@@ -28,7 +28,7 @@ import {
   type RemoteModule as __RemoteModule,
   type SubscriptionEventContextInterface as __SubscriptionEventContextInterface,
   type SubscriptionHandleImpl as __SubscriptionHandleImpl,
-} from "spacetimedb/sdk";
+} from "spacetimedb";
 
 // Import and reexport all reducer arg types
 import AbandonSessionReducer from "./abandon_session_reducer";

@@ -77,4 +77,3 @@ export const validateUrlForSsrf = async (
     return false;
   }
 };
-

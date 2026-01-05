@@ -32,7 +32,7 @@ export default function ManualTowerDefenseUpgrades() {
       <ContentBox
         title="Tower Defense Upgrades"
         subtitle="Permanent Upgrade Configuration"
-        defaultBackHref="/manual"
+        defaultBackHref="/manual/towerDefense"
       >
         <p className="mb-4">
           Configure permanent upgrades for the Tower Defense minigame. These upgrades
@@ -123,7 +123,7 @@ const UpgradeCard: React.FC<UpgradeCardProps> = ({ upgrade, canEdit }) => {
 
       {canEdit && (
         <div className="mt-3">
-          <Link href={`/manual/towerDefenseUpgrade/edit/${upgrade.id}`}>
+          <Link href={`/manual/towerDefense/upgrades/edit/${upgrade.id}`}>
             <Button variant="outline" size="sm" className="w-full">
               Edit
             </Button>

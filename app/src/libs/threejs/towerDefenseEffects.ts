@@ -217,7 +217,7 @@ export const spawnProjectile = (info: {
   if (objectsMap) objectsMap.set(projectile.id, sprite);
   sprite.renderOrder = 1000; // High render order to ensure it's drawn last (on top)
 
-  const scale = hexWidth * 0.4;
+  const scale = hexWidth * 0.2;
   sprite.scale.set(scale, scale, 1);
   sprite.position.set(originTile.x, originTile.y, PROJECTILE_LAYER);
   sprite.matrixAutoUpdate = false;

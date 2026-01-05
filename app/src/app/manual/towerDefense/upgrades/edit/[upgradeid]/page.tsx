@@ -58,7 +58,7 @@ const SingleEditUpgrade: React.FC<SingleEditUpgradeProps> = ({ upgrade, refetch 
     <ContentBox
       title="Content Panel"
       subtitle="Upgrade Configuration"
-      defaultBackHref="/manual/towerDefenseUpgrade"
+      defaultBackHref="/manual/towerDefense/upgrades"
     >
       {/* Upgrade Icon Display */}
       <div className="flex items-center gap-3 mb-6 p-4 bg-muted/50 rounded-lg">

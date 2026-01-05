@@ -58,7 +58,7 @@ const PAGE_TITLE = `${GAME_NAME} (Unstable Preview)`;
 const PAGE_SUBTITLE = "For experimentation with TNR tech, visuals & performance.";
 
 const TowerDefensePage: React.FC = () => {
-  const { data: userData } = useUserData();
+  const { data: userData, status } = useUserData();
   const [upgradeTab, setUpgradeTab] = useLocalStorage<TowerDefenseUpgradeCategory>(
     "towerDefenseUpgradeTab",
     "ATTACK",
@@ -162,6 +162,9 @@ const TowerDefensePage: React.FC = () => {
     },
     [throwShuriken],
   );
+
+  // Loader
+  if (status === "pending") return <Loader explanation="Loading user data..." />;
 
   // Lobby mode
   if (gameState.mode === "lobby") {

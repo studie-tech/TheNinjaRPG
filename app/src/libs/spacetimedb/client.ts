@@ -31,10 +31,15 @@ const DEBUG = false;
 export const getSpacetimeDBConfig = (): SpacetimeDBConfig => {
   const isProd = process.env.NODE_ENV === "production";
 
+  // DEFAULT HOSTS:
+  // - Local: ws://127.0.0.1:3001
+  // - SaaS (Testnet/Maincloud): wss://maincloud.spacetimedb.com
+  const defaultHost = isProd
+    ? "wss://maincloud.spacetimedb.com"
+    : "ws://127.0.0.1:3001";
+
   return {
-    host:
-      process.env.NEXT_PUBLIC_SPACETIMEDB_HOST ??
-      (isProd ? "wss://spacetimedb.com" : "ws://127.0.0.1:3001"),
+    host: process.env.NEXT_PUBLIC_SPACETIMEDB_HOST ?? defaultHost,
     moduleName: process.env.NEXT_PUBLIC_SPACETIMEDB_MODULE ?? "towerdefense",
   };
 };
