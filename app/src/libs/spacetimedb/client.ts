@@ -3,6 +3,12 @@
  *
  * Uses the auto-generated bindings from SpacetimeDB to connect and manage
  * Tower Defense game sessions.
+ *
+ * COST OPTIMIZATIONS:
+ * - EnemySpawn table separates static path data (sent once) from volatile enemy data
+ * - Projectile progress computed client-side from spawned_at timestamp
+ * - Enemy updates use threshold-based movement (25%, 50%, 75%, 100%)
+ * - Tick rate increased to 150ms with client-side interpolation
  */
 
 import { DbConnection, type ErrorContext, type SubscriptionHandle } from "./bindings";
@@ -21,6 +27,17 @@ export type Enemy = Infer<typeof EnemyType>;
 export type Projectile = Infer<typeof ProjectileType>;
 export type CompletedRun = Infer<typeof CompletedRunType>;
 export type SessionUpgrade = Infer<typeof SessionUpgradeType>;
+
+// COST OPTIMIZATION: EnemySpawn contains static data sent once per enemy
+// This type mirrors the Rust struct - will be auto-generated after binding regeneration
+export interface EnemySpawn {
+  enemyId: bigint;
+  sessionId: bigint;
+  spawnCol: number;
+  spawnRow: number;
+  maxHealth: number;
+  path: Array<{ col: number; row: number }>;
+}
 
 export interface SpacetimeDBConfig {
   host: string;
@@ -53,6 +70,7 @@ export type ConnectionState = "disconnected" | "connecting" | "connected" | "err
 
 /**
  * Event types for state subscriptions
+ * COST OPTIMIZATION: Added enemy_spawn events for static path data
  */
 export type SpacetimeDBEvent =
   | { type: "connection_state"; state: ConnectionState }
@@ -60,11 +78,12 @@ export type SpacetimeDBEvent =
   | { type: "session_delete"; sessionId: bigint }
   | { type: "session_state_update"; state: SessionState }
   | { type: "session_state_delete"; sessionId: bigint }
+  | { type: "enemy_spawn_insert"; spawn: EnemySpawn }
+  | { type: "enemy_spawn_delete"; enemyId: bigint }
   | { type: "enemy_insert"; enemy: Enemy }
   | { type: "enemy_update"; enemy: Enemy }
   | { type: "enemy_delete"; enemyId: bigint }
   | { type: "projectile_insert"; projectile: Projectile }
-  | { type: "projectile_update"; projectile: Projectile }
   | { type: "projectile_delete"; projectileId: bigint }
   | { type: "session_upgrade_insert"; upgrade: SessionUpgrade }
   | { type: "session_upgrade_update"; upgrade: SessionUpgrade }
@@ -215,7 +234,7 @@ export class SpacetimeDBConnection {
   }
 
   /**
-   * Subscribe to session-specific data (enemies, projectiles, upgrades)
+   * Subscribe to session-specific data (enemies, projectiles, upgrades, enemy spawns)
    * PERFORMANCE: Only called after session is created/resumed
    * This is the key optimization - we only receive entity updates for OUR session
    */
@@ -231,7 +250,7 @@ export class SpacetimeDBConnection {
     this.currentSessionId = sessionId;
 
     // COST OPTIMIZATION: Filter all entity tables by session_id
-    // This prevents receiving enemy/projectile updates from other players
+    // Including enemy_spawn for static path data
     this.sessionSubscription = this.connection
       .subscriptionBuilder()
       .onApplied(() => {
@@ -248,6 +267,7 @@ export class SpacetimeDBConnection {
       })
       .subscribe([
         `SELECT * FROM enemy WHERE session_id = ${sessionId}`,
+        `SELECT * FROM enemy_spawn WHERE session_id = ${sessionId}`,
         `SELECT * FROM projectile WHERE session_id = ${sessionId}`,
         `SELECT * FROM session_upgrade WHERE session_id = ${sessionId}`,
         `SELECT * FROM session_state WHERE session_id = ${sessionId}`,
@@ -313,7 +333,30 @@ export class SpacetimeDBConnection {
       this.emit({ type: "session_state_delete", sessionId: row.sessionId });
     });
 
-    // Enemy events
+    // COST OPTIMIZATION: Enemy spawn events (static path data, sent once)
+    // These are only insert/delete, never update
+    if ("enemySpawn" in db) {
+      const enemySpawnTable = db.enemySpawn as {
+        onInsert: (cb: (ctx: unknown, row: EnemySpawn) => void) => void;
+        onDelete: (cb: (ctx: unknown, row: EnemySpawn) => void) => void;
+      };
+
+      enemySpawnTable.onInsert((ctx, row) => {
+        if (DEBUG) {
+          console.log("[SpacetimeDB] EnemySpawn inserted:", row.enemyId);
+        }
+        this.emit({ type: "enemy_spawn_insert", spawn: row });
+      });
+
+      enemySpawnTable.onDelete((ctx, row) => {
+        if (DEBUG) {
+          console.log("[SpacetimeDB] EnemySpawn deleted:", row.enemyId);
+        }
+        this.emit({ type: "enemy_spawn_delete", enemyId: row.enemyId });
+      });
+    }
+
+    // Enemy events (volatile data only, no path)
     db.enemy.onInsert((ctx, row) => {
       this.emit({ type: "enemy_insert", enemy: row as Enemy });
     });
@@ -327,13 +370,13 @@ export class SpacetimeDBConnection {
     });
 
     // Projectile events
+    // COST OPTIMIZATION: No more projectile_update events - progress computed client-side
     db.projectile.onInsert((ctx, row) => {
       this.emit({ type: "projectile_insert", projectile: row as Projectile });
     });
 
-    db.projectile.onUpdate((ctx, oldRow, newRow) => {
-      this.emit({ type: "projectile_update", projectile: newRow as Projectile });
-    });
+    // Note: projectile_update removed - server no longer sends progress updates
+    // Client computes progress from spawned_at timestamp
 
     db.projectile.onDelete((ctx, row) => {
       this.emit({ type: "projectile_delete", projectileId: row.id });

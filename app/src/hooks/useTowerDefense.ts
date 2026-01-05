@@ -151,7 +151,12 @@ import {
   type SessionUpgrade,
   type CompletedRun,
   type SpacetimeDBEvent,
+  type EnemySpawn,
 } from "@/libs/spacetimedb/client";
+
+// COST OPTIMIZATION: Projectile speed constant for client-side interpolation
+// Must match the server-side PROJECTILE_SPEED in lib.rs (5.0 tiles/sec)
+const PROJECTILE_SPEED = 5.0;
 import { getDefaultPlayerBonuses } from "@/libs/towerDefense/abilities";
 import {
   towerDefenseEnemySchema,
@@ -204,13 +209,20 @@ const initialGameState = towerDefenseGameStateSchema.parse({
   enemyCount: 0, // PERFORMANCE: Synced at throttled 10fps rate for HUD display
 });
 
-const createEntityStore = (): EntityStore => ({
+// COST OPTIMIZATION: Extended EntityStore to include enemy spawn data
+// Enemy spawn data (path, maxHealth) is stored separately and never updated
+interface ExtendedEntityStore extends EntityStore {
+  enemySpawns: Map<string, EnemySpawn>;
+}
+
+const createEntityStore = (): ExtendedEntityStore => ({
   enemies: new Map(),
   projectiles: new Map(),
   enemiesArray: [],
   projectilesArray: [],
   enemiesVersion: 0,
   projectilesVersion: 0,
+  enemySpawns: new Map(),
 });
 
 const createRuntimeState = (): RuntimeState => ({
@@ -227,17 +239,26 @@ const createRuntimeState = (): RuntimeState => ({
 
 /**
  * Convert SpacetimeDB Enemy to TowerDefenseEnemy format for rendering
+ * COST OPTIMIZATION: Path and maxHealth come from separate EnemySpawn table
+ * which is only sent once per enemy (never updated)
  */
-const convertEnemy = (e: Enemy): TowerDefenseEnemy => {
+const convertEnemy = (
+  e: Enemy,
+  spawnData: EnemySpawn | undefined,
+): TowerDefenseEnemy => {
+  // Use spawn data for static fields, with fallbacks
+  const path = spawnData?.path ?? [];
+  const maxHealth = spawnData?.maxHealth ?? e.health;
+
   return towerDefenseEnemySchema.parse({
     id: `enemy-${e.id}`,
     aiUserId: "",
     enemyType: e.enemyType as "standard" | "heavy",
     position: { col: e.col, row: e.row },
-    path: e.path.map((p) => ({ col: p.col, row: p.row })),
+    path: path.map((p) => ({ col: p.col, row: p.row })),
     pathIndex: e.pathIndex,
     health: e.health,
-    maxHealth: e.maxHealth,
+    maxHealth,
     speed: e.speed,
     damage: e.damage,
     attackCooldown: e.attackCooldown,
@@ -247,19 +268,43 @@ const convertEnemy = (e: Enemy): TowerDefenseEnemy => {
   });
 };
 
+// Extended projectile type that includes clientSpawnTime for client-side interpolation
+type TowerDefenseProjectileWithSpawn = TowerDefenseProjectile & {
+  clientSpawnTime: number;
+};
+
 /**
  * Convert SpacetimeDB Projectile to TowerDefenseProjectile format for rendering
+ * COST OPTIMIZATION: Progress is computed client-side from client spawn timestamp
+ * Server only sends insert/delete events, no progress updates
+ *
+ * @param p - The projectile from SpacetimeDB
+ * @param existingClientSpawnTime - If updating an existing projectile, use its original spawn time
  */
-const convertProjectile = (p: Projectile): TowerDefenseProjectile =>
-  towerDefenseProjectileSchema.parse({
+const convertProjectile = (
+  p: Projectile,
+  existingClientSpawnTime?: number,
+): TowerDefenseProjectileWithSpawn => {
+  // COST OPTIMIZATION: Use CLIENT timestamp when projectile is first inserted
+  // This avoids server/client clock skew issues
+  // If this is an existing projectile (update), preserve its original client spawn time
+  const clientSpawnTime = existingClientSpawnTime ?? Date.now();
+  const elapsed = (Date.now() - clientSpawnTime) / 1000;
+  const computedProgress = Math.min(elapsed * PROJECTILE_SPEED, 1.0);
+
+  const base = towerDefenseProjectileSchema.parse({
     id: `projectile-${p.id}`,
     abilityType: "shuriken",
     origin: { col: p.originCol, row: p.originRow },
     target: { col: p.targetCol, row: p.targetRow },
-    progress: p.progress,
+    progress: computedProgress,
     damage: p.damage,
     critRoll: p.critRoll,
   });
+
+  // Return extended type with clientSpawnTime for future progress calculations
+  return { ...base, clientSpawnTime };
+};
 
 /**
  * Convert SpacetimeDB session state to TowerDefenseState for compatibility
@@ -290,7 +335,8 @@ export const useTowerDefense = (userId?: string) => {
 
   // PERFORMANCE: Entity store lives outside React state
   // Animation loop reads directly from this - no re-renders on entity updates
-  const entitiesRef = useRef<EntityStore>(createEntityStore());
+  // COST OPTIMIZATION: Extended to include enemySpawns for static path data
+  const entitiesRef = useRef<ExtendedEntityStore>(createEntityStore());
 
   // PERFORMANCE: Runtime state lives outside React state
   // All game data updates here immediately, React state syncs on throttle
@@ -665,13 +711,32 @@ export const useTowerDefense = (userId?: string) => {
   );
 
   /**
+   * COST OPTIMIZATION: Store enemy spawn data (path, maxHealth)
+   * This data is sent once per enemy and never updated, saving bandwidth
+   */
+  const insertEnemySpawn = useCallback((spawn: EnemySpawn) => {
+    const store = entitiesRef.current;
+    const id = `enemy-${spawn.enemyId}`;
+    store.enemySpawns.set(id, spawn);
+  }, []);
+
+  const deleteEnemySpawn = useCallback((enemyId: bigint) => {
+    const store = entitiesRef.current;
+    const id = `enemy-${enemyId}`;
+    store.enemySpawns.delete(id);
+  }, []);
+
+  /**
    * Update enemy in store directly (no React state, no re-renders).
    * PERFORMANCE CRITICAL: This is called for every SpacetimeDB entity event.
+   * COST OPTIMIZATION: Uses separate spawn data for path/maxHealth
    */
   const updateEnemyInStore = useCallback((enemy: Enemy) => {
     const store = entitiesRef.current;
     const id = `enemy-${enemy.id}`;
-    store.enemies.set(id, convertEnemy(enemy));
+    // Look up spawn data for path and maxHealth
+    const spawnData = store.enemySpawns.get(id);
+    store.enemies.set(id, convertEnemy(enemy, spawnData));
     store.enemiesArray = Array.from(store.enemies.values());
     store.enemiesVersion++;
     // Update runtime enemy count for throttled UI sync
@@ -694,16 +759,28 @@ export const useTowerDefense = (userId?: string) => {
       ];
     }
     store.enemies.delete(id);
+    // Also delete spawn data
+    store.enemySpawns.delete(id);
     store.enemiesArray = Array.from(store.enemies.values());
     store.enemiesVersion++;
     // Update runtime enemy count for throttled UI sync
     runtimeStateRef.current.enemyCount = store.enemies.size;
   }, []);
 
+  /**
+   * COST OPTIMIZATION: Projectiles no longer receive update events from server
+   * Progress is computed client-side from client spawn timestamp
+   * We preserve the original client spawn time if the projectile already exists
+   */
   const updateProjectileInStore = useCallback((projectile: Projectile) => {
     const store = entitiesRef.current;
     const id = `projectile-${projectile.id}`;
-    store.projectiles.set(id, convertProjectile(projectile));
+    // Preserve existing client spawn time if this projectile was already in the store
+    const existing = store.projectiles.get(id) as
+      | TowerDefenseProjectileWithSpawn
+      | undefined;
+    const existingClientSpawnTime = existing?.clientSpawnTime;
+    store.projectiles.set(id, convertProjectile(projectile, existingClientSpawnTime));
     store.projectilesArray = Array.from(store.projectiles.values());
     store.projectilesVersion++;
   }, []);
@@ -720,6 +797,7 @@ export const useTowerDefense = (userId?: string) => {
     const store = entitiesRef.current;
     store.enemies.clear();
     store.projectiles.clear();
+    store.enemySpawns.clear();
     store.enemiesArray = [];
     store.projectilesArray = [];
     store.enemiesVersion++;
@@ -773,6 +851,15 @@ export const useTowerDefense = (userId?: string) => {
           // Handled by session_delete
           break;
 
+        // COST OPTIMIZATION: Enemy spawn events for static path data (sent once)
+        case "enemy_spawn_insert":
+          insertEnemySpawn(event.spawn);
+          break;
+
+        case "enemy_spawn_delete":
+          deleteEnemySpawn(event.enemyId);
+          break;
+
         // PERFORMANCE: Entity events update refs directly - minimal React re-renders
         case "enemy_insert":
           updateEnemyInStore(event.enemy);
@@ -789,11 +876,9 @@ export const useTowerDefense = (userId?: string) => {
           syncHudStore(); // Enemy count changed
           break;
 
+        // COST OPTIMIZATION: Projectile progress computed client-side
+        // No more projectile_update events - only insert/delete
         case "projectile_insert":
-          updateProjectileInStore(event.projectile);
-          break;
-
-        case "projectile_update":
           updateProjectileInStore(event.projectile);
           break;
 
@@ -844,6 +929,8 @@ export const useTowerDefense = (userId?: string) => {
     handleSessionUpdate,
     handleSessionStateUpdate,
     handleSessionUpgrade,
+    insertEnemySpawn,
+    deleteEnemySpawn,
     updateEnemyInStore,
     deleteEnemyFromStore,
     updateProjectileInStore,
@@ -1179,23 +1266,26 @@ export const useTowerDefense = (userId?: string) => {
   const returnToLobby = useCallback(async () => {
     // If we have a completed run with points, claim it first (only for logged-in users)
     const completedRun = completedRunRef.current;
+    const session = staticSessionRef.current;
     const isGuest = isGuestRef.current;
     if (
       gameState.mode === "game-over" &&
       gameState.runId &&
       completedRun &&
+      session &&
       !isGuest &&
       userId
     ) {
       try {
-        // Pass all data from SpacetimeDB for signature verification
+        // COST OPTIMIZATION: CompletedRun now stores definitions_hash instead of full JSON
+        // We pass the original definitions from the session for signature verification
         await claimRunMutation.mutateAsync({
           spacetimeSessionId: gameState.runId,
           sessionSignature: completedRun.sessionSignature,
           nonce: completedRun.nonce,
-          // Definitions for signature verification
-          upgradeDefinitionsJson: completedRun.upgradeDefinitionsJson,
-          enemyDefinitionsJson: completedRun.enemyDefinitionsJson,
+          // Get definitions from original session (not from completedRun which has hash)
+          upgradeDefinitionsJson: session.upgradeDefinitionsJson,
+          enemyDefinitionsJson: session.enemyDefinitionsJson,
           // Original session params for signature verification
           abilityDamage: completedRun.abilityDamage,
           abilityRange: completedRun.abilityRange,
@@ -1282,12 +1372,23 @@ export const useTowerDefense = (userId?: string) => {
   /**
    * Get current entities directly from refs.
    * PERFORMANCE: This doesn't trigger re-renders - animation loop can call this freely.
+   * COST OPTIMIZATION: Projectile progress is recomputed each call based on clientSpawnTime
    */
   const getEntities = useCallback(() => {
     const store = entitiesRef.current;
+    const now = Date.now();
+
+    // COST OPTIMIZATION: Recompute projectile progress client-side
+    // Server only sends spawn/delete events, progress computed locally from clientSpawnTime
+    const projectilesWithProgress = store.projectilesArray.map((p) => {
+      const proj = p as TowerDefenseProjectileWithSpawn;
+      const elapsed = (now - proj.clientSpawnTime) / 1000;
+      return { ...p, progress: Math.min(elapsed * PROJECTILE_SPEED, 1.0) };
+    });
+
     return {
       enemies: store.enemiesArray,
-      projectiles: store.projectilesArray,
+      projectiles: projectilesWithProgress,
       playerHitEvents: playerHitEventsRef.current,
       enemyHitEvents: enemyHitEventsRef.current,
     };

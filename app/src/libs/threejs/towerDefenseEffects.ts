@@ -22,6 +22,13 @@ import type {
   TowerDefenseProjectile,
   TowerDefenseEnemy,
 } from "@/validators/towerDefense";
+
+// COST OPTIMIZATION: Projectile speed for client-side interpolation
+// Must match the server-side PROJECTILE_SPEED in lib.rs (5.0 tiles/sec)
+const PROJECTILE_SPEED = 5.0;
+
+// Extended projectile type that includes clientSpawnTime for client-side interpolation
+type ProjectileWithClientSpawn = TowerDefenseProjectile & { clientSpawnTime?: number };
 import type { SpriteMixer } from "@/libs/threejs/SpriteMixer";
 import type { GameAsset } from "@/drizzle/schema";
 
@@ -91,11 +98,13 @@ export const createEnemyPositionMap = (
 
 /**
  * Update projectiles - move them towards targets and detect hits.
+ * COST OPTIMIZATION: Progress is computed client-side from clientSpawnTime
+ * to avoid server/client clock skew issues.
  */
 export const updateProjectiles = (info: {
   group_projectiles: Group;
   objectsMap?: Map<string, Sprite>;
-  projectiles: TowerDefenseProjectile[];
+  projectiles: ProjectileWithClientSpawn[];
   enemies: readonly TowerDefenseEnemy[];
   grid: Grid<TerrainHex>;
   delta: number;
@@ -111,6 +120,8 @@ export const updateProjectiles = (info: {
     delta,
     enemyPositionMap,
   } = info;
+
+  const now = Date.now();
 
   for (const projectile of projectiles) {
     const sprite = (
@@ -167,8 +178,16 @@ export const updateProjectiles = (info: {
         }
       }
 
-      const x = originTile.x + (targetX - originTile.x) * projectile.progress;
-      const y = originTile.y + (targetY - originTile.y) * projectile.progress;
+      // COST OPTIMIZATION: Compute progress from clientSpawnTime each frame
+      // This avoids relying on server timestamps and handles client-side interpolation
+      let progress = projectile.progress; // Fallback to stored progress
+      if (projectile.clientSpawnTime !== undefined) {
+        const elapsed = (now - projectile.clientSpawnTime) / 1000;
+        progress = Math.min(elapsed * PROJECTILE_SPEED, 1.0);
+      }
+
+      const x = originTile.x + (targetX - originTile.x) * progress;
+      const y = originTile.y + (targetY - originTile.y) * progress;
 
       sprite.position.set(x, y, PROJECTILE_LAYER);
       sprite.material.rotation += delta * 10; // Rotate shuriken

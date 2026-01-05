@@ -9,21 +9,18 @@ import {
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
 } from "spacetimedb";
+import HexPosition from "./hex_position_type";
 
-export default __t.object("Enemy", {
-  id: __t.u64(),
+
+export default __t.object("EnemySpawn", {
+  enemyId: __t.u64(),
   sessionId: __t.u64(),
-  enemyType: __t.string(),
-  col: __t.u32(),
-  row: __t.u32(),
-  health: __t.i32(),
-  speed: __t.f64(),
-  damage: __t.i32(),
-  attackCooldown: __t.f64(),
-  lastAttackTime: __t.u64(),
-  movementProgress: __t.f64(),
-  direction: __t.string(),
-  pathIndex: __t.u32(),
+  spawnCol: __t.u32(),
+  spawnRow: __t.u32(),
+  maxHealth: __t.i32(),
+  get path() {
+    return __t.array(HexPosition);
+  },
 });
 
 

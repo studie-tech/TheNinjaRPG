@@ -9,15 +9,16 @@ import {
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
 } from "spacetimedb";
+import HexPosition from "./hex_position_type";
+
 
 export default __t.row({
-  id: __t.u64().primaryKey(),
+  enemyId: __t.u64().primaryKey().name("enemy_id"),
   sessionId: __t.u64().name("session_id"),
-  originCol: __t.u32().name("origin_col"),
-  originRow: __t.u32().name("origin_row"),
-  targetCol: __t.u32().name("target_col"),
-  targetRow: __t.u32().name("target_row"),
-  spawnedAt: __t.u64().name("spawned_at"),
-  damage: __t.u32(),
-  critRoll: __t.f64().name("crit_roll"),
+  spawnCol: __t.u32().name("spawn_col"),
+  spawnRow: __t.u32().name("spawn_row"),
+  maxHealth: __t.i32().name("max_health"),
+  get path() {
+    return __t.array(HexPosition);
+  },
 });

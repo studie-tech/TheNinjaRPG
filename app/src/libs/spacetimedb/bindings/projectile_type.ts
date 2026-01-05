@@ -17,7 +17,7 @@ export default __t.object("Projectile", {
   originRow: __t.u32(),
   targetCol: __t.u32(),
   targetRow: __t.u32(),
-  progress: __t.f64(),
+  spawnedAt: __t.u64(),
   damage: __t.u32(),
   critRoll: __t.f64(),
 });

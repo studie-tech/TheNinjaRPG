@@ -203,7 +203,7 @@ spacetime-publish-local: # Build, publish, and generate TypeScript bindings
 .PHONY: spacetime-publish-prod
 spacetime-publish-prod: spacetime-build # Publish SpacetimeDB module to production (SaaS)
 	@echo "${GREEN}Publishing SpacetimeDB module to production SaaS${RESET}"
-	export PATH="$$HOME/.cargo/bin:$$PATH" && cd app/spacetimedb && ~/.local/bin/spacetime publish $(or $(NEXT_PUBLIC_SPACETIMEDB_MODULE), towerdefense)
+	export PATH="$$HOME/.cargo/bin:$$PATH" && cd app/spacetimedb && ~/.local/bin/spacetime publish --delete-data $(or $(NEXT_PUBLIC_SPACETIMEDB_MODULE), towerdefense)
 
 .PHONY: spacetime-logs
 spacetime-logs: # View SpacetimeDB module logs

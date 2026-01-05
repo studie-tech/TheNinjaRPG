@@ -53,6 +53,8 @@ import CompletedRunRow from "./completed_run_table";
 export { CompletedRunRow };
 import EnemyRow from "./enemy_table";
 export { EnemyRow };
+import EnemySpawnRow from "./enemy_spawn_table";
+export { EnemySpawnRow };
 import GameLoopScheduleRow from "./game_loop_schedule_table";
 export { GameLoopScheduleRow };
 import GameSessionRow from "./game_session_table";
@@ -69,6 +71,8 @@ import CompletedRun from "./completed_run_type";
 export { CompletedRun };
 import Enemy from "./enemy_type";
 export { Enemy };
+import EnemySpawn from "./enemy_spawn_type";
+export { EnemySpawn };
 import GameLoopSchedule from "./game_loop_schedule_type";
 export { GameLoopSchedule };
 import GameSession from "./game_session_type";
@@ -106,6 +110,17 @@ const tablesSchema = __schema(
       { name: 'enemy_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, EnemyRow),
+  __table({
+    name: 'enemy_spawn',
+    indexes: [
+      { name: 'enemy_id', algorithm: 'btree', columns: [
+        'enemyId',
+      ] },
+    ],
+    constraints: [
+      { name: 'enemy_spawn_enemy_id_key', constraint: 'unique', columns: ['enemyId'] },
+    ],
+  }, EnemySpawnRow),
   __table({
     name: 'game_loop_schedule',
     indexes: [
