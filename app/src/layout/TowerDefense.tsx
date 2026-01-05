@@ -144,6 +144,11 @@ const TowerDefenseInner = forwardRef<TowerDefenseHandle, TowerDefenseProps>(
     const gridRef = useRef<Grid<TerrainHex> | null>(null);
     const mouseHexRef = useRef<TerrainHex | null>(null);
     const isMountedRef = useRef<boolean>(false);
+    const onTileClickRef = useRef(onTileClick);
+
+    useEffect(() => {
+      onTileClickRef.current = onTileClick;
+    }, [onTileClick]);
 
     // PERFORMANCE: Track initialization without useState to avoid re-renders
     const isInitializedRef = useRef<boolean>(false);
@@ -454,9 +459,6 @@ const TowerDefenseInner = forwardRef<TowerDefenseHandle, TowerDefenseProps>(
       // Draw initial grid (use ref to avoid stale closure)
       updateFunctionsRef.current.updateGrid(initialGridSize);
 
-      // Interaction handlers - use stable callback ref
-      const onTileClickRef = onTileClick;
-
       const onMouseMove = (event: MouseEvent) => {
         if (!rendererRef.current || !cameraRef.current || !raycasterRef.current) return;
         setRaycasterFromMouse(raycasterRef.current, mount, event, cameraRef.current);
@@ -476,7 +478,7 @@ const TowerDefenseInner = forwardRef<TowerDefenseHandle, TowerDefenseProps>(
 
       const onClick = () => {
         if (mouseHexRef.current) {
-          onTileClickRef({
+          onTileClickRef.current({
             col: mouseHexRef.current.col,
             row: mouseHexRef.current.row,
           });

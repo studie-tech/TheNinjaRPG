@@ -649,7 +649,7 @@ fn internal_start_wave(ctx: &ReducerContext, session: GameSession) {
         let health_multiplier = 1.0 + (next_wave - 1) as f64 * def.health_scaling;
         let health = (def.base_health as f64 * health_multiplier) as i32;
         let speed = def.base_speed + (next_wave - 1) as f64 * def.speed_scaling;
-        let damage = def.base_damage + (next_wave - 1) as i32 * def.damage_scaling as i32;
+        let damage = ((def.base_damag as f64e as f64 + (next_wave f64) as f64 * def.damage)_scaling) as i32;
         
         for _ in 0..count {
             // Skip enemy chance

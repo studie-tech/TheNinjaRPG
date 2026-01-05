@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, and, desc, sql, asc } from "drizzle-orm";
+import { eq, and, desc, sql, asc, gte, lt } from "drizzle-orm";
 import { timingSafeEqual } from "crypto";
 import {
   towerDefenseUpgrade,
@@ -30,6 +30,7 @@ import {
 } from "../trpc";
 import { ratelimitMiddleware, hasUserMiddleware } from "../trpc";
 import { canChangeContent } from "@/utils/permissions";
+import { validateUrlForSsrf } from "@/utils/ssrf";
 import {
   purchaseUpgradeInputSchema,
   playerBonusesSchema,
@@ -217,7 +218,7 @@ export const towerDefenseRouter = createTRPCRouter({
       const runs = await ctx.drizzle.query.towerDefenseRun.findMany({
         where: and(
           eq(towerDefenseRun.userId, ctx.userId),
-          input.cursor ? sql`${towerDefenseRun.id} < ${input.cursor}` : undefined,
+          input.cursor ? lt(towerDefenseRun.id, input.cursor) : undefined,
         ),
         orderBy: [desc(towerDefenseRun.startedAt)],
         limit: input.limit + 1,
@@ -304,31 +305,32 @@ export const towerDefenseRouter = createTRPCRouter({
         currentLevel,
       );
 
-      if (user.towerDefensePoints < cost) {
-        return errorResponse(
-          `Insufficient points. Need ${cost}, have ${user.towerDefensePoints}.`,
+      // Guarded update to deduct points
+      const result = await ctx.drizzle
+        .update(userData)
+        .set({
+          towerDefensePoints: sql`${userData.towerDefensePoints} - ${cost}`,
+        })
+        .where(
+          and(eq(userData.userId, ctx.userId), gte(userData.towerDefensePoints, cost)),
         );
+
+      if (result.rowsAffected === 0) {
+        return errorResponse("Insufficient points.");
       }
 
-      await Promise.all([
-        ctx.drizzle
-          .insert(userTowerDefenseUpgrade)
-          .values({
-            id: nanoid(),
-            userId: ctx.userId,
-            upgradeId: input.upgradeId,
-            level: currentLevel + 1,
-          })
-          .onDuplicateKeyUpdate({
-            set: { level: currentLevel + 1 },
-          }),
-        ctx.drizzle
-          .update(userData)
-          .set({
-            towerDefensePoints: sql`${userData.towerDefensePoints} - ${cost}`,
-          })
-          .where(eq(userData.userId, ctx.userId)),
-      ]);
+      // Upsert the upgrade
+      await ctx.drizzle
+        .insert(userTowerDefenseUpgrade)
+        .values({
+          id: nanoid(),
+          userId: ctx.userId,
+          upgradeId: input.upgradeId,
+          level: currentLevel + 1,
+        })
+        .onDuplicateKeyUpdate({
+          set: { level: currentLevel + 1 },
+        });
 
       return {
         success: true,
@@ -707,6 +709,14 @@ export const towerDefenseRouter = createTRPCRouter({
       }
 
       try {
+        // SSRF protection
+        const isValid = await validateUrlForSsrf(input.zipUrl, [
+          "https://ui0arpl8sm.ufs.sh/f/",
+        ]);
+        if (!isValid) {
+          return errorResponse("Invalid or disallowed zipUrl");
+        }
+
         // Fetch the zip file
         const response = await fetch(input.zipUrl);
         if (!response.ok) {

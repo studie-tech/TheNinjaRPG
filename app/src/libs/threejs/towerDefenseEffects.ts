@@ -70,7 +70,9 @@ export const showImpactAnimation = (info: {
     layer: EFFECTS_LAYER + 0.1,
   });
 
-  group_effects.add(actionSprite);
+  if (actionSprite) {
+    group_effects.add(actionSprite);
+  }
 };
 
 /**

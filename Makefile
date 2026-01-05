@@ -191,7 +191,13 @@ spacetime-publish-local: # Build, publish, and generate TypeScript bindings
 	rm -rf app/src/libs/spacetimedb/bindings/*.ts
 	export PATH="$$HOME/.cargo/bin:$$PATH" && cd app/spacetimedb && ~/.local/bin/spacetime generate --lang typescript --out-dir ../src/libs/spacetimedb/bindings
 	@echo "${GREEN}Patching imports for SDK compatibility${RESET}"
-	cd app/src/libs/spacetimedb/bindings && for f in *.ts; do sed -i '' 's/from "spacetimedb";/from "spacetimedb\/sdk";/g' "$$f" 2>/dev/null || true; done
+	cd app/src/libs/spacetimedb/bindings && for f in *.ts; do \
+		if [[ "$OSTYPE" == "darwin"* ]]; then \
+			sed -i '' 's/from "spacetimedb";/from "spacetimedb\/sdk";/g' "$f"; \
+		else \
+			sed -i 's/from "spacetimedb";/from "spacetimedb\/sdk";/g' "$f"; \
+		fi \
+	done 2>/dev/null || true
 	@echo "${GREEN}Done! Module published and bindings generated${RESET}"
 
 .PHONY: spacetime-publish-prod

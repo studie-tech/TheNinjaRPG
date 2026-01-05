@@ -15,7 +15,7 @@
  * 7. Server re-calculates signature and verifies before awarding points
  */
 
-import { createHmac } from "crypto";
+import { createHmac, randomBytes } from "crypto";
 import { env } from "@/env/server.mjs";
 import type {
   SignedUpgradeDefinition,
@@ -28,8 +28,17 @@ const getSecretKey = (): string => {
   if (env.TOWER_DEFENSE_HMAC_SECRET) {
     return env.TOWER_DEFENSE_HMAC_SECRET;
   }
-  // Fall back to deriving from CAPTCHA_SALT or a constant
-  // In production, you should always set TOWER_DEFENSE_HMAC_SECRET
+
+  // In production, TOWER_DEFENSE_HMAC_SECRET is REQUIRED
+  if (env.NODE_ENV === "production") {
+    const errorMsg =
+      "TOWER_DEFENSE_HMAC_SECRET is missing in production environment. " +
+      "A dedicated TOWER_DEFENSE_HMAC_SECRET must be configured in production for secure session signing.";
+    console.error(`❌ ${errorMsg}`);
+    throw new Error(errorMsg);
+  }
+
+  // Fall back to deriving from CAPTCHA_SALT or a constant (non-production only)
   const baseSecret = env.CAPTCHA_SALT ?? "tower-defense-default-secret";
   return createHmac("sha256", baseSecret)
     .update("tower-defense-hmac-key-v1")
@@ -164,10 +173,10 @@ export const signSessionParams = (params: SessionParams): string => {
 
 /**
  * Generate a unique nonce for a session.
- * Includes timestamp and random component for uniqueness.
+ * Includes timestamp and a cryptographically secure random component for uniqueness.
  */
 export const generateSessionNonce = (): string => {
   const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 10);
+  const random = randomBytes(8).toString("hex");
   return `${timestamp}-${random}`;
 };

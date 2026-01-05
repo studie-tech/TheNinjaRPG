@@ -596,7 +596,10 @@ const GameHUD = memo(function GameHUD() {
                         <span>Attack Speed</span>
                       </div>
                       <span className="font-medium">
-                        {(1000 / ability.cooldownMs).toFixed(1)}/s
+                        {ability.cooldownMs > 0
+                          ? (1000 / ability.cooldownMs).toFixed(1)
+                          : "∞"}
+                        /s
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
