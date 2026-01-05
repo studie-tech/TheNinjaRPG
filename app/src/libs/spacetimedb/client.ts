@@ -8,6 +8,7 @@
 import { DbConnection, type ErrorContext, type SubscriptionHandle } from "./bindings";
 import type { Infer } from "spacetimedb/sdk";
 import type GameSessionType from "./bindings/game_session_type";
+import type SessionStateType from "./bindings/session_state_type";
 import type EnemyType from "./bindings/enemy_type";
 import type ProjectileType from "./bindings/projectile_type";
 import type CompletedRunType from "./bindings/completed_run_type";
@@ -15,6 +16,7 @@ import type SessionUpgradeType from "./bindings/session_upgrade_type";
 
 // Re-export types from bindings for use in useTowerDefense hook
 export type GameSession = Infer<typeof GameSessionType>;
+export type SessionState = Infer<typeof SessionStateType>;
 export type Enemy = Infer<typeof EnemyType>;
 export type Projectile = Infer<typeof ProjectileType>;
 export type CompletedRun = Infer<typeof CompletedRunType>;
@@ -56,6 +58,8 @@ export type SpacetimeDBEvent =
   | { type: "connection_state"; state: ConnectionState }
   | { type: "session_update"; session: GameSession }
   | { type: "session_delete"; sessionId: bigint }
+  | { type: "session_state_update"; state: SessionState }
+  | { type: "session_state_delete"; sessionId: bigint }
   | { type: "enemy_insert"; enemy: Enemy }
   | { type: "enemy_update"; enemy: Enemy }
   | { type: "enemy_delete"; enemyId: bigint }
@@ -81,9 +85,11 @@ export class SpacetimeDBConnection {
   private connectionState: ConnectionState = "disconnected";
   private eventHandlers: Set<SpacetimeDBEventHandler> = new Set();
   private connection: DbConnection | null = null;
-  private subscription: SubscriptionHandle | null = null;
+  private globalSubscription: SubscriptionHandle | null = null;
+  private sessionSubscription: SubscriptionHandle | null = null;
   private identity: string | null = null;
   private currentSessionId: bigint | null = null;
+  private currentUserId: string | null = null;
 
   constructor(config: SpacetimeDBConfig) {
     this.config = config;
@@ -91,12 +97,23 @@ export class SpacetimeDBConnection {
 
   /**
    * Connect to SpacetimeDB
+   * @param userId - The user's ID for filtered subscriptions (use "guest" for unauthenticated)
    */
-  async connect(): Promise<void> {
+  async connect(userId?: string): Promise<void> {
     if (this.connectionState === "connected" || this.connectionState === "connecting") {
+      // If already connected but userId changed, update subscriptions
+      if (
+        this.connectionState === "connected" &&
+        userId &&
+        userId !== this.currentUserId
+      ) {
+        this.currentUserId = userId;
+        this.setupGlobalSubscriptions();
+      }
       return;
     }
 
+    this.currentUserId = userId ?? "guest";
     this.connectionState = "connecting";
     this.emit({ type: "connection_state", state: "connecting" });
 
@@ -115,8 +132,9 @@ export class SpacetimeDBConnection {
           this.connectionState = "connected";
           this.emit({ type: "connection_state", state: "connected" });
 
-          // Set up subscriptions after connection
-          this.setupSubscriptions();
+          // Set up filtered subscriptions after connection
+          // PERFORMANCE: Only subscribe to this user's data
+          this.setupGlobalSubscriptions();
         })
         .onDisconnect((ctx, error) => {
           if (DEBUG) {
@@ -156,33 +174,96 @@ export class SpacetimeDBConnection {
   }
 
   /**
-   * Set up table subscriptions
+   * Set up global subscriptions (user-level, not session-specific)
+   * PERFORMANCE: Only subscribe to user's own sessions, not all data
    */
-  private setupSubscriptions() {
-    if (!this.connection) return;
+  private setupGlobalSubscriptions() {
+    if (!this.connection || !this.currentUserId) return;
 
-    // Subscribe to all game tables
-    this.subscription = this.connection
+    // COST OPTIMIZATION: Only subscribe to this user's sessions
+    // This prevents receiving data from other players' games
+    const queries =
+      this.currentUserId === "guest"
+        ? [] // Guests don't need to check for existing sessions
+        : [
+            `SELECT * FROM game_session WHERE ninjarpg_user_id = '${this.currentUserId}'`,
+            `SELECT * FROM session_state`,
+            `SELECT * FROM completed_run WHERE ninjarpg_user_id = '${this.currentUserId}'`,
+          ];
+
+    if (queries.length === 0) {
+      // For guests, skip global subscription - they'll get session subscription directly
+      this.setupTableHandlers();
+      return;
+    }
+
+    this.globalSubscription = this.connection
       .subscriptionBuilder()
       .onApplied(() => {
         if (DEBUG) {
-          console.log("[SpacetimeDB] Subscription applied");
+          console.log("[SpacetimeDB] Global subscription applied");
         }
       })
       .onError((ctx: ErrorContext) => {
-        console.error("[SpacetimeDB] Subscription error:", ctx);
-        this.emit({ type: "error", message: "Subscription error" });
+        console.error("[SpacetimeDB] Global subscription error:", ctx);
+        this.emit({ type: "error", message: "Global subscription error" });
       })
-      .subscribe([
-        "SELECT * FROM game_session",
-        "SELECT * FROM enemy",
-        "SELECT * FROM projectile",
-        "SELECT * FROM completed_run",
-        "SELECT * FROM session_upgrade",
-      ]);
+      .subscribe(queries);
 
     // Set up table event handlers
     this.setupTableHandlers();
+  }
+
+  /**
+   * Subscribe to session-specific data (enemies, projectiles, upgrades)
+   * PERFORMANCE: Only called after session is created/resumed
+   * This is the key optimization - we only receive entity updates for OUR session
+   */
+  subscribeToSession(sessionId: bigint): void {
+    if (!this.connection) return;
+
+    // Unsubscribe from previous session if any
+    if (this.sessionSubscription) {
+      this.sessionSubscription.unsubscribe();
+      this.sessionSubscription = null;
+    }
+
+    this.currentSessionId = sessionId;
+
+    // COST OPTIMIZATION: Filter all entity tables by session_id
+    // This prevents receiving enemy/projectile updates from other players
+    this.sessionSubscription = this.connection
+      .subscriptionBuilder()
+      .onApplied(() => {
+        if (DEBUG) {
+          console.log(
+            "[SpacetimeDB] Session subscription applied for:",
+            sessionId.toString(),
+          );
+        }
+      })
+      .onError((ctx: ErrorContext) => {
+        console.error("[SpacetimeDB] Session subscription error:", ctx);
+        this.emit({ type: "error", message: "Session subscription error" });
+      })
+      .subscribe([
+        `SELECT * FROM enemy WHERE session_id = ${sessionId}`,
+        `SELECT * FROM projectile WHERE session_id = ${sessionId}`,
+        `SELECT * FROM session_upgrade WHERE session_id = ${sessionId}`,
+        `SELECT * FROM session_state WHERE session_id = ${sessionId}`,
+        `SELECT * FROM game_session WHERE id = ${sessionId}`,
+      ]);
+  }
+
+  /**
+   * Unsubscribe from session-specific data
+   */
+  unsubscribeFromSession(): void {
+    if (this.sessionSubscription) {
+      this.sessionSubscription.unsubscribe();
+      this.sessionSubscription = null;
+    }
+    this.currentSessionId = null;
   }
 
   /**
@@ -217,6 +298,19 @@ export class SpacetimeDBConnection {
         this.currentSessionId = null;
       }
       this.emit({ type: "session_delete", sessionId: row.id });
+    });
+
+    // Session state events
+    db.sessionState.onInsert((ctx, row) => {
+      this.emit({ type: "session_state_update", state: row as SessionState });
+    });
+
+    db.sessionState.onUpdate((ctx, oldRow, newRow) => {
+      this.emit({ type: "session_state_update", state: newRow as SessionState });
+    });
+
+    db.sessionState.onDelete((ctx, row) => {
+      this.emit({ type: "session_state_delete", sessionId: row.sessionId });
     });
 
     // Enemy events
@@ -288,9 +382,13 @@ export class SpacetimeDBConnection {
    * Disconnect from SpacetimeDB
    */
   disconnect(): void {
-    if (this.subscription) {
-      this.subscription.unsubscribe();
-      this.subscription = null;
+    if (this.sessionSubscription) {
+      this.sessionSubscription.unsubscribe();
+      this.sessionSubscription = null;
+    }
+    if (this.globalSubscription) {
+      this.globalSubscription.unsubscribe();
+      this.globalSubscription = null;
     }
     if (this.connection) {
       this.connection.disconnect();
@@ -298,6 +396,7 @@ export class SpacetimeDBConnection {
     }
     this.connectionState = "disconnected";
     this.currentSessionId = null;
+    this.currentUserId = null;
     this.emit({ type: "connection_state", state: "disconnected" });
     if (DEBUG) {
       console.log("[SpacetimeDB] Disconnected");
@@ -437,6 +536,20 @@ export class SpacetimeDBConnection {
     this.connection.reducers.purchaseUpgrade({ sessionId, upgradeId });
     if (DEBUG) {
       console.log("[SpacetimeDB] purchaseUpgrade called:", upgradeId);
+    }
+  }
+
+  /**
+   * Delete a completed run record after claiming
+   */
+  async deleteCompletedRun(sessionId: bigint): Promise<void> {
+    if (!this.connection) {
+      throw new Error("Not connected to SpacetimeDB");
+    }
+
+    this.connection.reducers.deleteCompletedRun({ sessionId });
+    if (DEBUG) {
+      console.log("[SpacetimeDB] deleteCompletedRun called:", sessionId);
     }
   }
 

@@ -9,6 +9,8 @@ import {
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
 } from "spacetimedb";
+import HexPosition from "./hex_position_type";
+
 
 export default __t.object("Enemy", {
   id: __t.u64(),
@@ -24,7 +26,9 @@ export default __t.object("Enemy", {
   lastAttackTime: __t.u64(),
   movementProgress: __t.f64(),
   direction: __t.string(),
-  pathJson: __t.string(),
+  get path() {
+    return __t.array(HexPosition);
+  },
   pathIndex: __t.u32(),
 });
 

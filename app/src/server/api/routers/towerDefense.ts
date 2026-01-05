@@ -88,6 +88,21 @@ export const towerDefenseRouter = createTRPCRouter({
   }),
 
   /**
+   * Get all character asset configs for rendering
+   */
+  getAssetConfigs: publicProcedure.query(async ({ ctx }) => {
+    const characters = await ctx.drizzle.query.towerDefenseCharacter.findMany();
+    return {
+      enemyAssetConfigs: getCharacterAssetConfigs(
+        characters.filter((c) => !c.isPlayer),
+      ),
+      playerAssetConfigs: getCharacterAssetConfigs(
+        characters.filter((c) => c.isPlayer),
+      ),
+    };
+  }),
+
+  /**
    * Get user's purchased permanent upgrades
    */
   getUserUpgrades: protectedProcedure

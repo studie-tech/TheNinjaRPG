@@ -145,6 +145,7 @@ import {
 import {
   getSpacetimeDBConnection,
   type GameSession,
+  type SessionState,
   type Enemy,
   type Projectile,
   type SessionUpgrade,
@@ -228,18 +229,12 @@ const createRuntimeState = (): RuntimeState => ({
  * Convert SpacetimeDB Enemy to TowerDefenseEnemy format for rendering
  */
 const convertEnemy = (e: Enemy): TowerDefenseEnemy => {
-  let path: HexPosition[] = [];
-  try {
-    path = JSON.parse(e.pathJson) as HexPosition[];
-  } catch {
-    path = [];
-  }
   return towerDefenseEnemySchema.parse({
     id: `enemy-${e.id}`,
     aiUserId: "",
     enemyType: e.enemyType as "standard" | "heavy",
     position: { col: e.col, row: e.row },
-    path,
+    path: e.path.map((p) => ({ col: p.col, row: p.row })),
     pathIndex: e.pathIndex,
     health: e.health,
     maxHealth: e.maxHealth,
@@ -267,18 +262,18 @@ const convertProjectile = (p: Projectile): TowerDefenseProjectile =>
   });
 
 /**
- * Convert SpacetimeDB session to TowerDefenseState for compatibility
+ * Convert SpacetimeDB session state to TowerDefenseState for compatibility
  */
-const sessionToState = (
-  session: GameSession,
+const sessionStateToState = (
+  state: SessionState,
   activeUpgrades: Record<string, number> = {},
 ): TowerDefenseState =>
   towerDefenseStateSchema.parse({
-    playerHealth: session.playerHealth,
-    playerPosition: { col: session.playerCol, row: session.playerRow },
-    inRunCurrency: session.inRunCurrency,
+    playerHealth: state.playerHealth,
+    playerPosition: { col: state.playerCol, row: state.playerRow },
+    inRunCurrency: state.inRunCurrency,
     activeUpgrades,
-    gridSize: session.gridSize,
+    gridSize: state.gridSize,
   });
 
 /**
@@ -303,6 +298,8 @@ export const useTowerDefense = (userId?: string) => {
 
   // Ref for SpacetimeDB connection
   const connectionRef = useRef(getSpacetimeDBConnection());
+  // Ref for the static session data
+  const staticSessionRef = useRef<GameSession | null>(null);
   // Ref for session ID
   const sessionIdRef = useRef<bigint | null>(null);
   // Ref for completed run data for claim verification
@@ -353,6 +350,33 @@ export const useTowerDefense = (userId?: string) => {
   });
   const { data: upgradeDefinitions } = api.towerDefense.getUpgrades.useQuery();
 
+  // Query for asset configs (needed for both start and resume)
+  const { data: assetConfigs } = api.towerDefense.getAssetConfigs.useQuery(undefined, {
+    staleTime: Infinity, // These don't change often
+  });
+
+  // Register asset configs when data arrives
+  useEffect(() => {
+    if (assetConfigs) {
+      clearEnemyAssetConfigCache();
+      clearPlayerAssetConfigCache();
+      if (assetConfigs.enemyAssetConfigs) {
+        for (const {
+          enemyType,
+          assetConfig,
+          scaleFactor,
+        } of assetConfigs.enemyAssetConfigs) {
+          registerEnemyAssetConfig(enemyType, assetConfig, scaleFactor);
+        }
+      }
+      if (assetConfigs.playerAssetConfigs) {
+        for (const { assetConfig, scaleFactor } of assetConfigs.playerAssetConfigs) {
+          registerPlayerAssetConfig(assetConfig, scaleFactor);
+        }
+      }
+    }
+  }, [assetConfigs]);
+
   // Mutation for initiating secure session (logged in users)
   const initiateSessionMutation = api.towerDefense.initiateSecureSession.useMutation();
   // Mutation for initiating guest session (unauthenticated users)
@@ -360,20 +384,82 @@ export const useTowerDefense = (userId?: string) => {
     api.towerDefense.initiateGuestSession.useMutation();
 
   /**
-   * Handle session update from SpacetimeDB
-   * PERFORMANCE: Updates runtime ref immediately, React state only for mode changes
+   * Handle session update from SpacetimeDB (Static Data)
    */
   const handleSessionUpdate = useCallback(
     (session: GameSession) => {
       const sessionIdStr = session.id.toString();
-      const isActiveSession = session.status === "active";
-      const isOurTrackedSession =
-        sessionIdRef.current !== null && session.id === sessionIdRef.current;
       const isOurUserSession = userId && session.ninjarpgUserId === userId;
+      const isGuestSession = !userId && session.ninjarpgUserId === "guest";
+      const isOurSession = isOurUserSession || isGuestSession;
 
-      // Build new runtime state from session
-      const newState = sessionToState(
-        session,
+      if (isOurSession || sessionIdRef.current === session.id) {
+        staticSessionRef.current = session;
+      }
+
+      // Lobby mode: check for existing sessions
+      if (currentModeRef.current === "lobby" && sessionIdRef.current === null) {
+        if (isOurUserSession) {
+          // We don't have the volatile state yet, but we can show that a session exists
+          // It will be fully updated when the session_state_update arrives
+          setGameState((prev) => ({
+            ...prev,
+            seed: session.seed, // Set seed even in lobby, so it's ready for resume
+            existingSession: prev.existingSession || {
+              id: sessionIdStr,
+              wave: 0,
+              score: 0,
+              health: 0,
+              maxHealth: session.initialPlayerMaxHealth,
+            },
+          }));
+        }
+      }
+
+      // If we are connecting/resuming, subscribe to session-specific data
+      // PERFORMANCE: This filters entity updates to only our session
+      if (currentModeRef.current === "connecting" && isOurSession) {
+        // Set session ID ref immediately so we track this session
+        sessionIdRef.current = session.id;
+        // Subscribe to this session's entities (enemies, projectiles, upgrades)
+        connectionRef.current.subscribeToSession(session.id);
+        setGameState((prev) => ({
+          ...prev,
+          seed: session.seed,
+        }));
+      }
+
+      // If we already have this session tracked, ensure seed is set
+      if (sessionIdRef.current === session.id && isOurSession) {
+        setGameState((prev) => ({
+          ...prev,
+          seed: session.seed,
+        }));
+      }
+    },
+    [userId],
+  );
+
+  /**
+   * Handle session state update from SpacetimeDB (Volatile Data)
+   * PERFORMANCE: Updates runtime ref immediately, React state only for mode changes
+   */
+  const handleSessionStateUpdate = useCallback(
+    (state: SessionState) => {
+      const sessionIdStr = state.sessionId.toString();
+      const isActiveSession = state.status === "active";
+      const isOurTrackedSession =
+        sessionIdRef.current !== null && state.sessionId === sessionIdRef.current;
+
+      const session = staticSessionRef.current;
+      if (!session || session.id !== state.sessionId) {
+        // We need the static session info to process the state
+        return;
+      }
+
+      // Build new runtime state from session state
+      const newState = sessionStateToState(
+        state,
         runtimeStateRef.current.state?.activeUpgrades ?? {},
       );
 
@@ -381,34 +467,34 @@ export const useTowerDefense = (userId?: string) => {
         towerDefenseAbilitySchema.parse({
           id: "shuriken",
           name: "Shuriken Throw",
-          damage: session.abilityDamage,
-          range: session.abilityRange,
-          cooldownMs: session.abilityCooldownMs,
-          critChance: session.abilityCritChance,
-          damagePerTile: session.abilityDamagePerTile,
+          damage: state.abilityDamage,
+          range: state.abilityRange,
+          cooldownMs: state.abilityCooldownMs,
+          critChance: state.abilityCritChance,
+          damagePerTile: state.abilityDamagePerTile,
           lastUsedAt:
-            session.abilityLastUsedAt > BigInt(0)
-              ? Number(session.abilityLastUsedAt)
+            state.abilityLastUsedAt > BigInt(0)
+              ? Number(state.abilityLastUsedAt)
               : undefined,
         }),
       ];
       const newBonuses = playerBonusesSchema.parse({
-        healthRegen: session.healthRegen,
-        defensePercent: session.defensePercent,
-        defenseFlat: session.defenseFlat,
-        lifestealPercent: session.lifestealPercent,
-        knockbackChance: session.knockbackChance,
-        knockbackForce: session.knockbackForce,
-        tokensPerWave: session.tokensPerWave,
-        tokensPerKill: session.tokensPerKill,
-        interestPerWave: session.interestPerWave,
-        skipEnemyChance: session.skipEnemyChance,
+        healthRegen: state.healthRegen,
+        defensePercent: state.defensePercent,
+        defenseFlat: state.defenseFlat,
+        lifestealPercent: state.lifestealPercent,
+        knockbackChance: state.knockbackChance,
+        knockbackForce: state.knockbackForce,
+        tokensPerWave: state.tokensPerWave,
+        tokens_per_kill: state.tokensPerKill,
+        interestPerWave: state.interestPerWave,
+        skipEnemyChance: state.skipEnemyChance,
       });
 
       // Check for player hit (needs to happen before updating runtime state)
       const playerJustHit =
         runtimeStateRef.current.state &&
-        session.playerHealth < runtimeStateRef.current.state.playerHealth;
+        state.playerHealth < runtimeStateRef.current.state.playerHealth;
 
       if (playerJustHit) {
         // Add to ref for animation loop access (no React state update needed)
@@ -416,7 +502,7 @@ export const useTowerDefense = (userId?: string) => {
           ...playerHitEventsRef.current,
           {
             id: `player-hit-${Date.now()}`,
-            position: { col: session.playerCol, row: session.playerRow },
+            position: { col: state.playerCol, row: state.playerRow },
             timestamp: Date.now(),
           },
         ];
@@ -425,11 +511,11 @@ export const useTowerDefense = (userId?: string) => {
       // Update runtime state ref IMMEDIATELY (no re-render)
       if (isOurTrackedSession || sessionIdRef.current === null) {
         runtimeStateRef.current = {
-          score: session.score,
-          currentWave: session.wave,
-          waveInProgress: session.waveInProgress,
-          waveStartTime: Number(session.waveStartTime),
-          maxHealth: session.playerMaxHealth,
+          score: state.score,
+          currentWave: state.wave,
+          waveInProgress: state.waveInProgress,
+          waveStartTime: Number(state.waveStartTime),
+          maxHealth: state.playerMaxHealth,
           state: newState,
           abilities: newAbilities,
           playerBonuses: newBonuses,
@@ -444,21 +530,21 @@ export const useTowerDefense = (userId?: string) => {
 
       // Lobby mode: check for existing sessions
       if (currentMode === "lobby" && sessionIdRef.current === null) {
-        if (isActiveSession && isOurUserSession) {
+        if (isActiveSession && userId && session.ninjarpgUserId === userId) {
           if (
             currentExistingSession?.id === sessionIdStr &&
-            currentExistingSession?.wave === session.wave &&
-            currentExistingSession?.score === session.score &&
-            currentExistingSession?.health === session.playerHealth
+            currentExistingSession?.wave === state.wave &&
+            currentExistingSession?.score === state.score &&
+            currentExistingSession?.health === state.playerHealth
           ) {
             return; // No change needed
           }
           const newExistingSession = {
             id: sessionIdStr,
-            wave: session.wave,
-            score: session.score,
-            health: session.playerHealth,
-            maxHealth: session.playerMaxHealth,
+            wave: state.wave,
+            score: state.score,
+            health: state.playerHealth,
+            maxHealth: state.playerMaxHealth,
           };
           currentExistingSessionRef.current = newExistingSession;
           setGameState((prev) => ({
@@ -471,18 +557,17 @@ export const useTowerDefense = (userId?: string) => {
 
       // Tracked session: check for mode changes
       if (isOurTrackedSession || currentMode === "connecting") {
-        sessionIdRef.current = session.id;
+        sessionIdRef.current = state.sessionId;
 
-        const isGameOver = session.status === "completed";
-        const waveJustEnded = currentWaveInProgress && !session.waveInProgress;
-        const isNewSession =
-          currentMode === "connecting" && session.status === "active";
+        const isGameOver = state.status === "completed";
+        const waveJustEnded = currentWaveInProgress && !state.waveInProgress;
+        const isNewSession = currentMode === "connecting" && state.status === "active";
 
         // Calculate new mode
         let newMode: GameMode = currentMode;
         if (isGameOver) {
           newMode = "game-over";
-        } else if (session.waveInProgress) {
+        } else if (state.waveInProgress) {
           newMode = "playing";
         } else if (waveJustEnded) {
           newMode = "wave-end";
@@ -497,18 +582,19 @@ export const useTowerDefense = (userId?: string) => {
         if (needsImmediateUpdate) {
           // Full state sync for mode changes - update refs first
           currentModeRef.current = newMode;
-          currentWaveInProgressRef.current = session.waveInProgress;
+          currentWaveInProgressRef.current = state.waveInProgress;
           currentExistingSessionRef.current = null;
           setGameState((prev) => ({
             ...prev,
             mode: newMode,
             runId: sessionIdStr,
-            currentWave: session.wave,
-            score: session.score,
+            seed: prev.seed || session.seed, // Ensure seed is preserved/updated
+            currentWave: state.wave,
+            score: state.score,
             state: newState,
-            waveInProgress: session.waveInProgress,
-            waveStartTime: Number(session.waveStartTime),
-            maxHealth: session.playerMaxHealth,
+            waveInProgress: state.waveInProgress,
+            waveStartTime: Number(state.waveStartTime),
+            maxHealth: state.playerMaxHealth,
             existingSession: null,
             abilities: newAbilities,
             playerBonuses: newBonuses,
@@ -530,10 +616,10 @@ export const useTowerDefense = (userId?: string) => {
         } else {
           const updatedExistingSession = {
             id: sessionIdStr,
-            wave: session.wave,
-            score: session.score,
-            health: session.playerHealth,
-            maxHealth: session.playerMaxHealth,
+            wave: state.wave,
+            score: state.score,
+            health: state.playerHealth,
+            maxHealth: state.playerMaxHealth,
           };
           currentExistingSessionRef.current = updatedExistingSession;
           setGameState((prev) => ({
@@ -579,7 +665,7 @@ export const useTowerDefense = (userId?: string) => {
   );
 
   /**
-   * Update entity store directly (no React state, no re-renders).
+   * Update enemy in store directly (no React state, no re-renders).
    * PERFORMANCE CRITICAL: This is called for every SpacetimeDB entity event.
    */
   const updateEnemyInStore = useCallback((enemy: Enemy) => {
@@ -670,6 +756,10 @@ export const useTowerDefense = (userId?: string) => {
           handleSessionUpdate(event.session);
           break;
 
+        case "session_state_update":
+          handleSessionStateUpdate(event.state);
+          break;
+
         case "session_delete":
           setGameState((prev) => {
             if (prev.existingSession?.id === event.sessionId.toString()) {
@@ -677,6 +767,10 @@ export const useTowerDefense = (userId?: string) => {
             }
             return prev;
           });
+          break;
+
+        case "session_state_delete":
+          // Handled by session_delete
           break;
 
         // PERFORMANCE: Entity events update refs directly - minimal React re-renders
@@ -748,6 +842,7 @@ export const useTowerDefense = (userId?: string) => {
   }, [
     userId,
     handleSessionUpdate,
+    handleSessionStateUpdate,
     handleSessionUpgrade,
     updateEnemyInStore,
     deleteEnemyFromStore,
@@ -783,30 +878,10 @@ export const useTowerDefense = (userId?: string) => {
       // Track if this is a guest session
       isGuestRef.current = !userId;
 
-      // Register enemy asset configs for rendering
-      clearEnemyAssetConfigCache();
-      clearPlayerAssetConfigCache();
-      if (secureSession.enemyAssetConfigs) {
-        for (const {
-          enemyType,
-          assetConfig,
-          scaleFactor,
-        } of secureSession.enemyAssetConfigs) {
-          registerEnemyAssetConfig(enemyType, assetConfig, scaleFactor);
-        }
-      }
-
-      // Register player character asset config if available
-      if (secureSession.playerCharacter?.assetConfig) {
-        registerPlayerAssetConfig(
-          secureSession.playerCharacter.assetConfig,
-          secureSession.playerCharacter.scaleFactor,
-        );
-      }
-
-      // Step 2: Connect to SpacetimeDB
+      // Step 2: Connect to SpacetimeDB with userId for filtered subscriptions
+      // PERFORMANCE: This ensures we only receive data for our user's sessions
       const connection = connectionRef.current;
-      await connection.connect();
+      await connection.connect(userId);
 
       // Step 3: Create session on SpacetimeDB with signed parameters
       // The signature proves these values AND all definitions were calculated server-side
@@ -883,10 +958,19 @@ export const useTowerDefense = (userId?: string) => {
       hudStore.reset();
 
       const connection = connectionRef.current;
-      await connection.connect();
+      await connection.connect(userId);
 
       // Set the session ID reference to the existing session
-      sessionIdRef.current = BigInt(gameState.existingSession.id);
+      const existingSessionId = BigInt(gameState.existingSession.id);
+      sessionIdRef.current = existingSessionId;
+
+      // PERFORMANCE: Subscribe to session-specific data (enemies, projectiles)
+      connection.subscribeToSession(existingSessionId);
+
+      // Get existing session data if we have it in ref
+      const existingStatic = staticSessionRef.current;
+      const seed =
+        existingStatic?.id === existingSessionId ? existingStatic.seed : null;
 
       // Transition to wave-end mode so the user can start the next wave
       // The session data will be updated from SpacetimeDB events
@@ -894,6 +978,7 @@ export const useTowerDefense = (userId?: string) => {
         ...prev,
         mode: "wave-end",
         runId: prev.existingSession?.id ?? null,
+        seed: seed,
         currentWave: prev.existingSession?.wave ?? 0,
         score: prev.existingSession?.score ?? 0,
         maxHealth: prev.existingSession?.maxHealth ?? TD_PLAYER_BASE_HEALTH,
@@ -913,7 +998,7 @@ export const useTowerDefense = (userId?: string) => {
         error: error instanceof Error ? error.message : "Failed to resume run",
       }));
     }
-  }, [gameState.existingSession]);
+  }, [gameState.existingSession, userId]);
 
   /**
    * Cancel an existing session without playing
@@ -925,11 +1010,14 @@ export const useTowerDefense = (userId?: string) => {
 
     try {
       const connection = connectionRef.current;
-      await connection.connect();
+      // PERFORMANCE: Pass userId for filtered subscriptions
+      await connection.connect(userId);
 
       await connection.abandonSession(BigInt(gameState.existingSession.id));
-      connection.disconnect();
-
+      // NOTE: We don't disconnect immediately anymore.
+      // The server will delete the session, which triggers a 'session_delete' event
+      // that handles the UI cleanup and then we can disconnect in returnToLobby
+      // if needed, or just let it stay for the next action.
       setGameState((prev) => ({
         ...prev,
         existingSession: null,
@@ -940,15 +1028,19 @@ export const useTowerDefense = (userId?: string) => {
         error: error instanceof Error ? error.message : "Failed to cancel session",
       }));
     }
-  }, [gameState.existingSession]);
+  }, [gameState.existingSession, userId]);
 
   /**
    * Check for existing sessions by connecting briefly
    */
   const checkForExistingSession = useCallback(async () => {
+    // Guests don't have existing sessions to check
+    if (!userId) return;
+
     try {
       const connection = connectionRef.current;
-      await connection.connect();
+      // PERFORMANCE: Pass userId for filtered subscriptions
+      await connection.connect(userId);
 
       // Check local cache for existing sessions
       const sessions = connection.getAllSessions();
@@ -965,7 +1057,7 @@ export const useTowerDefense = (userId?: string) => {
       // Silently fail - this is just a check
       console.log("[useTowerDefense] Failed to check for existing session:", error);
     }
-  }, [handleSessionUpdate]);
+  }, [handleSessionUpdate, userId]);
 
   /**
    * Start a new wave
@@ -1042,18 +1134,22 @@ export const useTowerDefense = (userId?: string) => {
 
     try {
       await connectionRef.current.abandonSession(sessionId);
+      // PERFORMANCE: Unsubscribe from session data before disconnecting
+      connectionRef.current.unsubscribeFromSession();
       connectionRef.current.disconnect();
       sessionIdRef.current = null;
       clearEntityStore();
       setGameState(initialGameState);
-      void utils.towerDefense.getUserUpgrades.invalidate();
+      if (userId) {
+        void utils.towerDefense.getUserUpgrades.invalidate();
+      }
     } catch (error) {
       setGameState((prev) => ({
         ...prev,
         error: error instanceof Error ? error.message : "Failed to abandon run",
       }));
     }
-  }, [utils, clearEntityStore]);
+  }, [utils, clearEntityStore, userId]);
 
   /**
    * Submit wave (auto-handled by SpacetimeDB, provided for interface compatibility)
@@ -1128,12 +1224,19 @@ export const useTowerDefense = (userId?: string) => {
           finalScore: completedRun.finalScore,
           pointsEarned: completedRun.pointsEarned,
         });
+
+        // Step 2: Delete from SpacetimeDB to save storage costs
+        if (sessionIdRef.current) {
+          await connectionRef.current.deleteCompletedRun(sessionIdRef.current);
+        }
       } catch (error) {
         console.error("[useTowerDefense] Failed to claim run:", error);
         // Continue to lobby even if claim fails
       }
     }
 
+    // PERFORMANCE: Unsubscribe from session data before disconnecting
+    connectionRef.current.unsubscribeFromSession();
     connectionRef.current.disconnect();
     sessionIdRef.current = null;
     completedRunRef.current = null;

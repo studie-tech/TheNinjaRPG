@@ -35,6 +35,8 @@ import AbandonSessionReducer from "./abandon_session_reducer";
 export { AbandonSessionReducer };
 import CreateSessionReducer from "./create_session_reducer";
 export { CreateSessionReducer };
+import DeleteCompletedRunReducer from "./delete_completed_run_reducer";
+export { DeleteCompletedRunReducer };
 import GameLoopReducer from "./game_loop_reducer";
 export { GameLoopReducer };
 import PurchaseUpgradeReducer from "./purchase_upgrade_reducer";
@@ -57,6 +59,8 @@ import GameSessionRow from "./game_session_table";
 export { GameSessionRow };
 import ProjectileRow from "./projectile_table";
 export { ProjectileRow };
+import SessionStateRow from "./session_state_table";
+export { SessionStateRow };
 import SessionUpgradeRow from "./session_upgrade_table";
 export { SessionUpgradeRow };
 
@@ -69,8 +73,12 @@ import GameLoopSchedule from "./game_loop_schedule_type";
 export { GameLoopSchedule };
 import GameSession from "./game_session_type";
 export { GameSession };
+import HexPosition from "./hex_position_type";
+export { HexPosition };
 import Projectile from "./projectile_type";
 export { Projectile };
+import SessionState from "./session_state_type";
+export { SessionState };
 import SessionUpgrade from "./session_upgrade_type";
 export { SessionUpgrade };
 
@@ -132,6 +140,17 @@ const tablesSchema = __schema(
     ],
   }, ProjectileRow),
   __table({
+    name: 'session_state',
+    indexes: [
+      { name: 'session_id', algorithm: 'btree', columns: [
+        'sessionId',
+      ] },
+    ],
+    constraints: [
+      { name: 'session_state_session_id_key', constraint: 'unique', columns: ['sessionId'] },
+    ],
+  }, SessionStateRow),
+  __table({
     name: 'session_upgrade',
     indexes: [
       { name: 'id', algorithm: 'btree', columns: [
@@ -148,6 +167,7 @@ const tablesSchema = __schema(
 const reducersSchema = __reducers(
   __reducerSchema("abandon_session", AbandonSessionReducer),
   __reducerSchema("create_session", CreateSessionReducer),
+  __reducerSchema("delete_completed_run", DeleteCompletedRunReducer),
   __reducerSchema("game_loop", GameLoopReducer),
   __reducerSchema("purchase_upgrade", PurchaseUpgradeReducer),
   __reducerSchema("start_wave", StartWaveReducer),
