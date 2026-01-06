@@ -315,6 +315,9 @@ pub struct HexPosition {
 // ============================================
 
 fn get_grid_size_for_wave(wave: u32, initial_grid_size: u32, max_grid_size: u32, expand_freq: u32) -> u32 {
+    if expand_freq == 0 {
+        return initial_grid_size.min(max_grid_size);
+    }
     let expansions = (wave.saturating_sub(1)) / expand_freq;
     (initial_grid_size + expansions * 2).min(max_grid_size)
 }
@@ -588,6 +591,24 @@ pub fn create_session(
     grid_expand_freq: u32,
     range_visual_factor: f64,
 ) {
+    // Validate critical balance parameters
+    if grid_expand_freq == 0 {
+        log::error!("grid_expand_freq must be greater than zero to avoid division by zero");
+        return;
+    }
+    if score_to_points_ratio == 0 {
+        log::error!("score_to_points_ratio must be greater than zero to avoid division by zero");
+        return;
+    }
+    if initial_grid_size == 0 || max_grid_size == 0 {
+        log::error!("Grid size parameters must be greater than zero");
+        return;
+    }
+    if range_visual_factor <= 0.0 {
+        log::error!("range_visual_factor must be greater than zero");
+        return;
+    }
+
     // Validate signature and definitions are present
     if session_signature.is_empty() || nonce.is_empty() {
         log::error!("Session creation requires valid signature and nonce from tRPC server");
@@ -1280,10 +1301,13 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
             }
             
             // Calculate server-side progress for hit detection
+            let origin = HexPosition { col: proj.origin_col, row: proj.origin_row };
+            let target = HexPosition { col: proj.target_col, row: proj.target_row };
+            let distance = calculate_hex_distance(&origin, &target) as f64;
             let time_elapsed = now.saturating_sub(proj.spawned_at) as f64 / 1000.0;
             let server_progress = time_elapsed * projectile_speed;
             
-            if server_progress >= 1.0 {
+            if server_progress >= distance {
                 // Projectile reached target - process hit
                 let target_pos = HexPosition { col: proj.target_col, row: proj.target_row };
                 
@@ -1439,7 +1463,11 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
         
         // Check for game over
         if player_health <= 0 {
-            let points_earned = score / session.score_to_points_ratio;
+            let points_earned = if session.score_to_points_ratio > 0 {
+                score / session.score_to_points_ratio
+            } else {
+                0
+            };
             
             // COST OPTIMIZATION: Use hash instead of full JSON for definitions
             let definitions_hash = hash_definitions(

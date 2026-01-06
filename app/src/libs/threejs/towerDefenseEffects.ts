@@ -13,6 +13,7 @@ import {
   TD_DAMAGE_NUMBER_RISE_SPEED_FACTOR,
   TD_SHURIKEN_IMAGE_URL,
 } from "@/drizzle/constants";
+import { calculateHexDistance } from "@/libs/towerDefense/game";
 
 // Projectiles should render above users/enemies (STATUS_LAYER is in front)
 const PROJECTILE_LAYER = STATUS_LAYER - 0.5;
@@ -183,7 +184,14 @@ export const updateProjectiles = (info: {
       let progress = projectile.progress; // Fallback to stored progress
       if (projectile.clientSpawnTime !== undefined) {
         const elapsed = (now - projectile.clientSpawnTime) / 1000;
-        progress = Math.min(elapsed * PROJECTILE_SPEED, 1.0);
+        const distance = calculateHexDistance(
+          projectile.origin,
+          projectile.target,
+        );
+        progress =
+          distance > 0
+            ? Math.min((elapsed * PROJECTILE_SPEED) / distance, 1.0)
+            : 1.0;
       }
 
       const x = originTile.x + (targetX - originTile.x) * progress;

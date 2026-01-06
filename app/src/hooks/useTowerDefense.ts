@@ -27,6 +27,7 @@ import {
   type EnemySpawn,
 } from "@/libs/spacetimedb/client";
 import { getDefaultPlayerBonuses } from "@/libs/towerDefense/abilities";
+import { calculateHexDistance } from "@/libs/towerDefense/game";
 import {
   towerDefenseEnemySchema,
   towerDefenseProjectileSchema,
@@ -263,13 +264,17 @@ const convertProjectile = (
 ): TowerDefenseProjectileWithSpawn => {
   const clientSpawnTime = existingClientSpawnTime ?? Date.now();
   const elapsed = (Date.now() - clientSpawnTime) / 1000;
-  const computedProgress = Math.min(elapsed * TD_PROJECTILE_SPEED, 1.0);
+  const origin = { col: p.originCol, row: p.originRow };
+  const target = { col: p.targetCol, row: p.targetRow };
+  const distance = calculateHexDistance(origin, target);
+  const computedProgress =
+    distance > 0 ? Math.min((elapsed * TD_PROJECTILE_SPEED) / distance, 1.0) : 1.0;
 
   const base = towerDefenseProjectileSchema.parse({
     id: `projectile-${p.id}`,
     abilityType: "shuriken",
-    origin: { col: p.originCol, row: p.originRow },
-    target: { col: p.targetCol, row: p.targetRow },
+    origin,
+    target,
     progress: computedProgress,
     damage: p.damage,
     critRoll: p.critRoll,
@@ -1427,7 +1432,10 @@ export const useTowerDefense = (userId?: string) => {
     const projectilesWithProgress = store.projectilesArray.map((p) => {
       const proj = p as TowerDefenseProjectileWithSpawn;
       const elapsed = (now - proj.clientSpawnTime) / 1000;
-      return { ...p, progress: Math.min(elapsed * TD_PROJECTILE_SPEED, 1.0) };
+      const distance = calculateHexDistance(p.origin, p.target);
+      const progress =
+        distance > 0 ? Math.min((elapsed * TD_PROJECTILE_SPEED) / distance, 1.0) : 1.0;
+      return { ...p, progress };
     });
 
     return {

@@ -11,7 +11,7 @@
     "generate": "spacetime generate --lang typescript --out-dir ../app/src/libs/spacetimedb/bindings"
   },
   "dependencies": {
-    "spacetimedb": "^1.2.0"
+    "spacetimedb": "1.11.1"
   },
   "devDependencies": {
     "typescript": "^5.3.0"
