@@ -36,7 +36,8 @@ export default function Tavern() {
     { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
     { enabled: !!userData },
   );
-  const { data: globalTavernEnabled = true } = api.misc.getGlobalTavernEnabled.useQuery();
+  const { data: globalTavernEnabled = true, isPending: isLoadingGlobalTavern } =
+    api.misc.getGlobalTavernEnabled.useQuery();
 
   // Tavern name based on user village
   const localTavern = useMemo(() => {
@@ -98,7 +99,9 @@ export default function Tavern() {
   };
 
   // Blockers
-  if (!userData || isPending) return <ConversationSkeleton {...convoProps} />;
+  if (!userData || isPending || isLoadingGlobalTavern) {
+    return <ConversationSkeleton {...convoProps} />;
+  }
   if (userData.isBanned || userData.isSilenced) return <BanInfo />;
 
   // Tavern selector

@@ -2079,24 +2079,24 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         </Confirm2>
       )}
       {canEnableGlobalTavern(user.role) && (
-        <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
-          <div>
-            <Label htmlFor="globalTavernToggle" className="text-base font-medium">
-              Global Tavern
-            </Label>
-            <p className="text-sm text-muted-foreground">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md bg-popover border">
+          <Label htmlFor="globalTavernToggle" className="text-sm font-medium">
+            Global Tavern
+          </Label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
               {globalTavernEnabled ? "Enabled" : "Disabled"}
-            </p>
+            </span>
+            <Switch
+              id="globalTavernToggle"
+              checked={!!globalTavernEnabled}
+              onCheckedChange={(checked) => {
+                toggleGlobalTavern({ enabled: checked });
+              }}
+              disabled={isTogglingTavern}
+              aria-label="Toggle global tavern"
+            />
           </div>
-          <Switch
-            id="globalTavernToggle"
-            checked={!!globalTavernEnabled}
-            onCheckedChange={(checked) => {
-              toggleGlobalTavern({ enabled: checked });
-            }}
-            disabled={isTogglingTavern}
-            aria-label="Toggle global tavern"
-          />
         </div>
       )}
     </div>

@@ -1,0 +1,1 @@
+ALTER TABLE `Conversation` ADD `isEnabled` boolean DEFAULT true NOT NULL;

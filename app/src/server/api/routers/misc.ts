@@ -14,6 +14,7 @@ import {
   supportReview,
   visitorLog,
   abEvent,
+  conversation,
 } from "@/drizzle/schema";
 import { canAwardReputation, canEnableGlobalTavern } from "@/utils/permissions";
 import { nanoid } from "nanoid";
@@ -163,29 +164,32 @@ export const miscRouter = createTRPCRouter({
       return setting ?? null;
     }),
   getGlobalTavernEnabled: publicProcedure.query(async ({ ctx }) => {
-    const setting = await ctx.drizzle.query.gameSetting.findFirst({
-      where: eq(gameSetting.name, "global-tavern-enabled"),
+    const convo = await ctx.drizzle.query.conversation.findFirst({
+      where: eq(conversation.title, "Global"),
     });
-    // Default to enabled (value 1) if not set
-    if (!setting) return true;
-    return setting.value === 1;
+    // Default to enabled if conversation not found
+    return convo?.isEnabled ?? true;
   }),
   toggleGlobalTavern: protectedProcedure
     .input(z.object({ enabled: z.boolean() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, convo] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.conversation.findFirst({
+          where: eq(conversation.title, "Global"),
+        }),
+      ]);
       // Guards
       if (!canEnableGlobalTavern(user.role)) return errorResponse("Not allowed");
       if (!user) return errorResponse("User not found");
-      // Update
-      await updateGameSetting(
-        ctx.drizzle,
-        "global-tavern-enabled",
-        input.enabled ? 1 : 0,
-        new Date(),
-      );
+      if (!convo) return errorResponse("Global conversation not found");
+      // Update the Global conversation's isEnabled field
+      await ctx.drizzle
+        .update(conversation)
+        .set({ isEnabled: input.enabled })
+        .where(eq(conversation.id, convo.id));
       return {
         success: true,
         message: `Global tavern ${input.enabled ? "enabled" : "disabled"}`,

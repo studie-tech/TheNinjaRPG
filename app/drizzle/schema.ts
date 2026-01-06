@@ -862,6 +862,7 @@ export const conversation = mysqlTable(
     isLocked: boolean("isLocked").default(false).notNull(),
     isPublic: boolean("isPublic").default(true).notNull(),
     isStaffAvailable: boolean("isStaffAvailable").default(false).notNull(),
+    isEnabled: boolean("isEnabled").default(true).notNull(),
   },
   (table) => {
     return {
