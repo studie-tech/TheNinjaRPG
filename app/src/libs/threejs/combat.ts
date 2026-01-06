@@ -20,6 +20,7 @@ import {
   drawStatusBar,
   updateStatusBar,
   showAnimation,
+  profiler,
 } from "@/libs/threejs/util";
 import { playPreloadedAudio } from "@/utils/audio";
 import { getPossibleActionTiles, findHex, PathCalculator } from "../hexgrid";
@@ -79,6 +80,12 @@ import type { SpriteMixer } from "@/libs/threejs/SpriteMixer";
 type PendingSfx = { url: string; volume: number };
 let pendingSfxQueue: PendingSfx[] = [];
 let wasMovingLastFrame = false;
+
+// PERFORMANCE: Cache for effect meshes to avoid getObjectByName calls
+const effectMeshCache = new Map<string, Group>();
+
+// PERFORMANCE: Cache for user meshes to avoid getObjectByName calls
+const userMeshCache = new Map<string, Group>();
 
 /**
  * Validates whether an action can be performed on a target tile.
@@ -436,6 +443,8 @@ export const drawCombatEffects = (info: {
   sfxVolume?: number;
   isAnyUserMoving?: boolean;
 }) => {
+  const endMark = profiler.mark("drawCombatEffects");
+
   // Destructure
   const { battle, groupEffects, spriteMixer, animationId, gameAssets } = info;
   const { groundEffects, usersEffects, usersState } = battle;
@@ -502,8 +511,13 @@ export const drawCombatEffects = (info: {
   groupEffects.children.forEach((object) => {
     if (!drawnIds.has(object.name)) {
       object.visible = false;
+      // PERFORMANCE: Remove from cache when hidden
+      effectMeshCache.delete(object.name);
     }
   });
+
+  profiler.reportCount("combat_effects", drawnIds.size);
+  endMark();
 };
 
 /**
@@ -547,7 +561,12 @@ export const drawCombatEffect = (info: {
       effect.disappearSfx
     ) {
       const { height: h, width: w } = hex;
-      let asset = groupEffects.getObjectByName(effect.id) as Group;
+      // PERFORMANCE: Use cache instead of getObjectByName
+      let asset = effectMeshCache.get(effect.id) as Group | undefined;
+      if (!asset) {
+        asset = groupEffects.getObjectByName(effect.id) as Group | undefined;
+        if (asset) effectMeshCache.set(effect.id, asset);
+      }
       if (!asset) {
         // Group for the asset
         asset = new Group();
@@ -632,8 +651,9 @@ export const drawCombatEffect = (info: {
           hp_bar.visible = false;
           hp_back.visible = false;
         }
-        // Add to group
+        // Add to group and cache
         groupEffects.add(asset);
+        effectMeshCache.set(effect.id, asset);
       }
 
       // Set visibility
@@ -1138,6 +1158,8 @@ export const drawCombatUsers = (info: {
   sfxVolume?: number;
   gameAssets?: GameAsset[];
 }): boolean => {
+  const endMark = profiler.mark("drawCombatUsers");
+
   // Destruct
   const { group_users, grid, playerId, userData, group_assets, battle } = info;
   // Cache or create a pathfinder for this group
@@ -1174,8 +1196,12 @@ export const drawCombatUsers = (info: {
         needsOpacityUpdate = true;
       }
 
-      // Fetch / create the user mesh
-      let userMesh = group_users.getObjectByName(user.userId) as Group | undefined;
+      // PERFORMANCE: Use cache instead of getObjectByName
+      let userMesh = userMeshCache.get(user.userId) as Group | undefined;
+      if (!userMesh) {
+        userMesh = group_users.getObjectByName(user.userId) as Group | undefined;
+        if (userMesh) userMeshCache.set(user.userId, userMesh);
+      }
       if (!userMesh && hex) {
         // Always unhide current user
         if (user.userId === userData.userId) {
@@ -1186,6 +1212,7 @@ export const drawCombatUsers = (info: {
         userMesh = createUserSprite(user, hex, playerId, battle);
         if (userMesh) {
           group_users.add(userMesh);
+          userMeshCache.set(user.userId, userMesh);
           markGroupNeedsSort(group_users);
           needsOpacityUpdate = true;
         }
@@ -1257,6 +1284,8 @@ export const drawCombatUsers = (info: {
   group_users.children.forEach((object) => {
     if (!drawnIds.has(object.name)) {
       object.visible = false;
+      // PERFORMANCE: Remove from cache when hidden
+      userMeshCache.delete(object.name);
     }
   });
 
@@ -1268,6 +1297,9 @@ export const drawCombatUsers = (info: {
   if (group_assets && needsOpacityUpdate) {
     updateAssetOpacityForUsers(group_assets, battle.usersState, grid);
   }
+
+  profiler.reportCount("combat_users", drawnIds.size);
+  endMark();
 
   return anyUserMoving;
 };
@@ -1373,6 +1405,8 @@ export const highlightTiles = (info: {
   currentHighlights: Set<string>;
   precomputedActions?: CombatAction[];
 }) => {
+  const endMark = profiler.mark("highlightTiles");
+
   // Definitions
   const {
     group_tiles,
@@ -1567,6 +1601,8 @@ export const highlightTiles = (info: {
       }
     }
   });
+
+  endMark();
   return new Set([...newHighlights, ...newSelection]);
 };
 
@@ -1581,6 +1617,8 @@ export const highlightUsers = (info: {
   users: ReturnedUserState[];
   currentHighlights: Set<string>;
 }) => {
+  const endMark = profiler.mark("highlightUsers");
+
   // Definitions
   const { group_users, users, userId, currentHighlights } = info;
   const battleTileIntersects = info.cachedIntersections.battleTiles;
@@ -1617,6 +1655,8 @@ export const highlightUsers = (info: {
       if (userMesh) setStatusBarVisibility(userMesh, false);
     }
   });
+
+  endMark();
   return newSelection;
 };
 

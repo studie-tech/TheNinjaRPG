@@ -7,13 +7,14 @@ import {
   Sprite,
   Group,
   Mesh,
+  MeshBasicMaterial,
   Line,
   LineSegments,
   EdgesGeometry,
   type Raycaster,
   type BufferGeometry,
 } from "three";
-import { loadTexture, createTexture } from "@/libs/threejs/util";
+import { loadTexture, createTexture, profiler } from "@/libs/threejs/util";
 import { applyBlurShader, applyWaveShader } from "@/libs/threejs/shaders";
 import { createNoise2D } from "simplex-noise";
 import { Grid, rectangle, Orientation } from "honeycomb-grid";
@@ -31,7 +32,6 @@ import {
   createTileGeometry,
   createGroundGeometry,
   createGroundEdges,
-  createTileMesh,
   mergeBufferGeometries,
 } from "@/libs/threejs/hexgrid";
 import {
@@ -66,24 +66,34 @@ import type { SectorUser, GlobalTile } from "@/libs/threejs/types";
 import type { SectorVillage } from "@/routers/travel";
 import type { VillageStructure } from "@/drizzle/schema";
 
+// Cache for meshes to avoid getObjectByName every frame
+const meshCache = new Map<string, Group>();
+
 export const drawQuest = (info: {
   group_quest: Group;
   grid: Grid<TerrainHex>;
   user: NonNullable<UserWithRelations>;
 }) => {
+  const endMark = profiler.mark("drawQuest");
   const { user, grid, group_quest } = info;
   const activeObjectives = getActiveObjectives(user);
   const drawnIds = new Set<string>();
+
   activeObjectives
     .filter((o) => "sector" in o && Number(o.sector) === user.sector)
-    .map((objective) => {
-      let mesh = group_quest.getObjectByName(objective.id);
+    .forEach((objective) => {
+      let mesh = meshCache.get(objective.id);
+      if (mesh && mesh.parent !== group_quest) {
+        mesh = undefined; // Force recreate if parent changed
+      }
+
       const { latitude: y, longitude: x } = objective as ComplexObjectiveFields;
       const hex = findHex(grid, { x, y });
-      if (!hex) return null;
+      if (!hex) return;
+
       if (!mesh) {
         // Check if should be drawn
-        if (!("image" in objective) || !objective.image) return null;
+        if (!("image" in objective) || !objective.image) return;
         const { height: h, width: w } = hex;
         mesh = new Group();
         mesh.name = objective.id;
@@ -127,16 +137,21 @@ export const drawQuest = (info: {
         Object.assign(sprite.position, new Vector3(w / 2, h * 1.0, USER_LAYER));
         mesh.add(sprite);
         group_quest.add(mesh);
+        meshCache.set(objective.id, mesh);
       }
+      mesh.visible = true;
       mesh.position.set(-hex.center.x, -hex.center.y, 0);
-      drawnIds.add(mesh.name);
+      drawnIds.add(objective.id);
     });
+
   // Hide all user counters which are not used anymore
   group_quest.children.forEach((object) => {
     if (!drawnIds.has(object.name)) {
       object.visible = false;
     }
   });
+  profiler.reportCount("sector_quests", drawnIds.size);
+  endMark();
 };
 
 /**
@@ -149,6 +164,7 @@ export const drawSector = (
   globalTile: GlobalTile,
   lightLayout = false,
 ) => {
+  const endMark = profiler.mark("drawSector");
   // Calculate hex size
   const hexsize =
     width / (SECTOR_WIDTH - HEX_STACKING_DISPLACEMENT * (SECTOR_WIDTH - 1));
@@ -216,6 +232,7 @@ export const drawSector = (
   const group_tiles = new Group();
   const group_edges = new Group();
   const group_assets = new Group();
+  const group_interaction = new Group();
 
   // Get hex points for geometry construction
   const { points, groundPoints, groundEdges } = getHexPoints();
@@ -235,6 +252,16 @@ export const drawSector = (
   const groundGeometries: BufferGeometry[] = [];
   const groundEdgeGeometries: BufferGeometry[] = [];
   const tileEdgeGeometries: BufferGeometry[] = [];
+
+  // Track shared materials to reduce draw calls
+  const materialGroups = new Map<MeshBasicMaterial, BufferGeometry[]>();
+
+  // Map for ocean materials with different wave offsets (to allow batching while maintaining variety)
+  const oceanMaterialPool: MeshBasicMaterial[] = [];
+  const numOceanVariants = 8;
+
+  // Track animated materials for efficient uniform updates
+  const animatedMaterials = new Set<MeshBasicMaterial>();
 
   // Draw the tiles
   grid.forEach((tile) => {
@@ -274,26 +301,58 @@ export const drawSector = (
         layer: TILES_LAYER,
       });
 
-      const clonedMaterial = material?.clone();
+      // Assign to material group for merging
+      if (material) {
+        let materialToUse = material;
 
-      // Apply wave shader to ocean tiles (must be done after cloning)
-      if (asset === "ocean" && clonedMaterial) {
-        // Generate random offset (0 to 2*PI) for this tile to desynchronize waves
-        const randomOffset = Math.random() * Math.PI * 2;
-        applyWaveShader(clonedMaterial, randomOffset);
+        // Special handling for ocean tiles to desynchronize waves while still allowing batching
+        if (asset === "ocean" && !lightLayout) {
+          const variantIndex = Math.floor(prng() * numOceanVariants);
+          if (!oceanMaterialPool[variantIndex]) {
+            const variantMaterial = material.clone();
+            const randomOffset = (variantIndex / numOceanVariants) * Math.PI * 2;
+            applyWaveShader(variantMaterial, randomOffset);
+            oceanMaterialPool[variantIndex] = variantMaterial;
+            animatedMaterials.add(variantMaterial);
+          }
+          materialToUse = oceanMaterialPool[variantIndex]!;
+        }
+
+        const group = materialGroups.get(materialToUse) || [];
+        group.push(geometry);
+        materialGroups.set(materialToUse, group);
       }
-
-      const mesh = createTileMesh({
-        tile,
-        geometry,
-        material: clonedMaterial,
-        originalColor: material?.color.getHex(),
-      });
-      group_tiles.add(mesh);
 
       // Collect tile edge geometry for merging (performance optimization)
       const edgeGeometry = new EdgesGeometry(geometry);
       tileEdgeGeometries.push(edgeGeometry);
+
+      // Interaction mesh (invisible, for raycasting)
+      // PERFORMANCE: This mesh is never rendered, only used for mouse detection
+      const interactionGeometry = createTileGeometry({
+        corners,
+        points,
+        tileUVArray: null,
+        offsetLength,
+        offsetLayer,
+        layer: TILES_LAYER,
+      });
+      const interactionMaterial = new MeshBasicMaterial({ visible: false });
+      const interactionMesh = new Mesh(interactionGeometry, interactionMaterial);
+      interactionMesh.name = `${tile.row},${tile.col}`;
+      interactionMesh.userData.type = "tile";
+      interactionMesh.userData.tile = tile;
+      interactionMesh.userData.highlight = false;
+      // Store original color for highlighting
+      const { material: originalMaterial } = getTileInfo(
+        prng,
+        tile,
+        globalTile,
+        lightLayout,
+      );
+      interactionMesh.userData.hex = originalMaterial?.color.getHex() || 0x000000;
+      interactionMesh.matrixAutoUpdate = false;
+      group_interaction.add(interactionMesh);
 
       // Ground part of the tile
       if (!lightLayout) {
@@ -321,6 +380,15 @@ export const drawSector = (
         });
       }
     }
+  });
+
+  // Create merged meshes for each material group (huge performance gain!)
+  materialGroups.forEach((geometries, material) => {
+    const mergedGeometry = mergeBufferGeometries(geometries);
+    const mesh = new Mesh(mergedGeometry, material);
+    mesh.userData.type = "tiles_merged";
+    mesh.matrixAutoUpdate = false;
+    group_tiles.add(mesh);
   });
 
   // Merge all ground geometries into a single mesh (huge performance gain)
@@ -353,7 +421,18 @@ export const drawSector = (
     group_edges.add(mergedTileEdgeMesh);
   }
 
-  return { group_dirt, group_tiles, group_edges, group_assets, honeycombGrid: grid };
+  profiler.reportCount("sector_tiles", grid.size);
+  profiler.reportCount("sector_draw_calls_tiles", materialGroups.size);
+  endMark();
+  return {
+    group_dirt,
+    group_tiles,
+    group_edges,
+    group_assets,
+    group_interaction,
+    animatedMaterials: Array.from(animatedMaterials),
+    honeycombGrid: grid,
+  };
 };
 
 /**
@@ -680,6 +759,9 @@ export const drawVillage = (
     });
 };
 
+// Cache for user/battle meshes to avoid getObjectByName every frame
+const userMeshCache = new Map<string, Group>();
+
 /**
  * Draw/update the users on the map. Should be called on every render
  */
@@ -691,6 +773,7 @@ export const drawUsers = (info: {
   angle: number;
   minLevel: number;
 }) => {
+  const endMark = profiler.mark("drawUsers");
   // Group the users by their location
   const groups = groupBy(
     info.users
@@ -722,13 +805,18 @@ export const drawUsers = (info: {
       if (hex) {
         // Loop through the users in the group who are awake
         awakeUsers.forEach((user, i) => {
-          let userMesh = info.group_users.getObjectByName(user.userId);
-          if (!userMesh && hex) {
+          let userMesh = userMeshCache.get(user.userId);
+          if (userMesh && userMesh.parent !== info.group_users) {
+            userMesh = undefined;
+          }
+
+          if (!userMesh) {
             userMesh = createUserSprite(user, hex);
             info.group_users.add(userMesh);
+            userMeshCache.set(user.userId, userMesh);
           }
           // Get location
-          if (userMesh && info.grid) {
+          if (userMesh) {
             userMesh.visible = true;
             userMesh.userData.tile = hex;
             let { x, y } = hex.center;
@@ -739,7 +827,7 @@ export const drawUsers = (info: {
               y -= spread * hex.height * Math.cos(angleChange);
             }
             userMesh.position.set(-x, -y, 0);
-            drawnIds.add(userMesh.name);
+            drawnIds.add(user.userId);
           }
         });
         // Loop through the users in the group who are awake
@@ -750,12 +838,17 @@ export const drawUsers = (info: {
           const firstUser = tileCombatUsers[0];
           const secondUser = tileCombatUsers[1];
           if (firstUser && secondUser && battleId) {
-            let userMesh = info.group_users.getObjectByName(battleId);
-            if (!userMesh && hex) {
+            let userMesh = userMeshCache.get(battleId);
+            if (userMesh && userMesh.parent !== info.group_users) {
+              userMesh = undefined;
+            }
+
+            if (!userMesh) {
               userMesh = createCombatSprite(firstUser, secondUser, battleId, hex);
               info.group_users.add(userMesh);
+              userMeshCache.set(battleId, userMesh);
             }
-            if (userMesh && info.grid) {
+            if (userMesh) {
               userMesh.visible = true;
               userMesh.userData.tile = hex;
               let { x, y } = hex.center;
@@ -766,20 +859,26 @@ export const drawUsers = (info: {
                 y -= spread * hex.height * Math.cos(angleChange);
               }
               userMesh.position.set(-x, -y, 0);
-              drawnIds.add(userMesh.name);
+              drawnIds.add(battleId);
             }
           }
         });
         // Add indicator of how many users are there if more than 1
         if (nUsers > 2 && awakeUsers) {
           const indicatorName = `${hex.col}-${hex.row}-${nUsers}`;
-          let indicatorMesh = info.group_users.getObjectByName(indicatorName);
+          let indicatorMesh = userMeshCache.get(indicatorName);
+          if (indicatorMesh && indicatorMesh.parent !== info.group_users) {
+            indicatorMesh = undefined;
+          }
+
           if (!indicatorMesh) {
             indicatorMesh = createMultipleUserSprite(nUsers, "test", hex);
             indicatorMesh.name = indicatorName;
             indicatorMesh.position.set(-hex.center.x, -hex.center.y, 0);
             info.group_users.add(indicatorMesh);
-          } else {
+            userMeshCache.set(indicatorName, indicatorMesh);
+          }
+          if (indicatorMesh) {
             indicatorMesh.visible = true;
           }
           drawnIds.add(indicatorName);
@@ -795,6 +894,9 @@ export const drawUsers = (info: {
     }
   });
 
+  profiler.reportCount("sector_users", info.users.length);
+  profiler.reportCount("sector_visible_users", drawnIds.size);
+  endMark();
   // Return new counters + angle
   return phi;
 };
@@ -811,6 +913,7 @@ export const intersectUsers = (info: {
   userData: NonNullable<UserWithRelations>;
   currentTooltips: Set<string>;
 }) => {
+  const endMark = profiler.mark("intersectUsers");
   const { group_users, allyAttack, raycaster, users, userData, currentTooltips } = info;
   const intersects = raycaster.intersectObjects(group_users.children);
   const newUserTooltips = new Set<string>();
@@ -883,8 +986,12 @@ export const intersectUsers = (info: {
     document.body.style.cursor = "default";
   }
 
+  endMark();
   return newUserTooltips;
 };
+
+// Track the last intersected tile to avoid redundant pathfinding
+let lastIntersectedTileName: string | null = null;
 
 export const intersectTiles = (info: {
   group_tiles: Group;
@@ -893,13 +1000,23 @@ export const intersectTiles = (info: {
   origin: TerrainHex;
   currentHighlights: Set<string>;
 }) => {
+  const endMark = profiler.mark("intersectTiles");
   const { group_tiles, raycaster, origin, pathFinder, currentHighlights } = info;
   const intersects = raycaster.intersectObjects(group_tiles.children);
   const newHighlights = new Set<string>();
+
   if (intersects.length > 0 && intersects[0]) {
     const intersected = intersects[0].object as HexagonalFaceMesh;
-    // Fetch the shortest path on the map using A*
     const target = intersected.userData.tile;
+
+    // PERFORMANCE OPTIMIZATION: Only recalculate path if target changed
+    if (intersected.name === lastIntersectedTileName) {
+      endMark();
+      return currentHighlights;
+    }
+    lastIntersectedTileName = intersected.name;
+
+    // Fetch the shortest path on the map using A*
     const shortestPath = origin && pathFinder.getShortestPath(origin, target);
     // Highlight the path
     void shortestPath?.forEach((tile) => {
@@ -912,7 +1029,10 @@ export const intersectTiles = (info: {
       }
       newHighlights.add(mesh.name);
     });
+  } else {
+    lastIntersectedTileName = null;
   }
+
   // Remove highlights from tiles that are no longer in the path
   currentHighlights.forEach((name) => {
     if (!newHighlights.has(name)) {
@@ -921,6 +1041,7 @@ export const intersectTiles = (info: {
       mesh.material.color.setHex(mesh.userData.hex);
     }
   });
+  endMark();
   return newHighlights;
 };
 

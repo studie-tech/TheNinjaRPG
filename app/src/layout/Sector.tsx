@@ -28,6 +28,7 @@ import {
   setupScene,
   setRaycasterFromMouse,
   smoothCameraFollow,
+  profiler,
 } from "@/libs/threejs/util";
 import { drawSector, drawVillage, drawUsers, drawQuest } from "@/libs/threejs/sector";
 import { intersectUsers } from "@/libs/threejs/sector";
@@ -87,8 +88,8 @@ const Sector: React.FC<SectorProps> = (props) => {
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>("lightLayout", false);
 
-  // Performance monitoring (unbounded for max FPS testing in dev)
-  const performanceMonitor = usePerformanceMonitor(true);
+  // Performance monitoring
+  const performanceMonitor = usePerformanceMonitor(false);
 
   // State pertaining to the sector
   const [webglError, setWebglError] = useState<boolean>(false);
@@ -679,8 +680,15 @@ const Sector: React.FC<SectorProps> = (props) => {
       cameraRef.current = camera;
 
       // Draw the map
-      const { group_dirt, group_tiles, group_edges, group_assets, honeycombGrid } =
-        drawSector(WIDTH, prng, villageData, props.tile, lightLayout);
+      const {
+        group_dirt,
+        group_tiles,
+        group_edges,
+        group_assets,
+        group_interaction,
+        animatedMaterials,
+        honeycombGrid,
+      } = drawSector(WIDTH, prng, villageData, props.tile, lightLayout);
       grid.current = honeycombGrid;
 
       // Draw any village in this sector
@@ -740,12 +748,18 @@ const Sector: React.FC<SectorProps> = (props) => {
       scene.add(group_assets);
       scene.add(group_quest);
       scene.add(group_users);
+      scene.add(group_interaction);
 
       // Capture clicks to update move direction
       const onClick = (e: MouseEvent) => {
         // Find intersects with the scene
         setRaycasterFromMouse(raycaster, sceneRef, e, camera);
-        const intersects = raycaster.intersectObjects(scene.children);
+        // PERFORMANCE: Only raycast against interaction and users/quest groups
+        const intersects = raycaster.intersectObjects([
+          group_interaction,
+          group_users,
+          group_quest,
+        ]);
         intersects
           .filter((i) => i.object.visible)
           .every((i) => {
@@ -815,9 +829,26 @@ const Sector: React.FC<SectorProps> = (props) => {
       let lastTime = Date.now();
       let animationId = 0;
       let userAngle = 0;
+
+      // PERFORMANCE: Cache dimensions to avoid getBoundingClientRect reflows in render loop
+      let cachedWidth = WIDTH;
+      let cachedHeight = HEIGHT;
+
+      const onResizeInternal = () => {
+        handleResize();
+        if (mountRef.current) {
+          const rect = mountRef.current.getBoundingClientRect();
+          cachedWidth = rect.width;
+          cachedHeight = rect.width * width2height;
+        }
+      };
+      window.addEventListener("resize", onResizeInternal);
+
       function render() {
         // Performance monitor
+        profiler.beginFrame();
         performanceMonitor.begin();
+        const endTotal = profiler.mark("animate_total");
 
         // Use raycaster to detect mouse intersections
         raycaster.setFromCamera(mouse, camera);
@@ -825,6 +856,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         // Assume we have user, users and a grid
         if (userRef.current && users.current && grid.current) {
           // Draw all users on the map + indicators for positions with multiple users
+          const endUsers = profiler.mark("animate_users");
           userAngle = drawUsers({
             group_users: group_users,
             users: showUsers.current
@@ -836,8 +868,10 @@ const Sector: React.FC<SectorProps> = (props) => {
             minLevel: minLevelDraw.current,
           });
           lastTime = Date.now();
+          endUsers();
 
           // Draw interactions with user sprites
+          const endIntersectUsers = profiler.mark("animate_intersect_users");
           currentTooltips = intersectUsers({
             group_users,
             raycaster,
@@ -846,49 +880,67 @@ const Sector: React.FC<SectorProps> = (props) => {
             userData: userRef.current,
             currentTooltips,
           });
+          endIntersectUsers();
 
           // Draw quests
+          const endQuest = profiler.mark("animate_quest");
           drawQuest({ group_quest, user: userRef.current, grid: grid.current });
+          endQuest();
         }
 
         // Detect intersections with tiles for movement
         if (pathFinder.current && origin.current) {
+          const endIntersectTiles = profiler.mark("animate_intersect_tiles");
           highlights = intersectTiles({
-            group_tiles,
+            group_tiles: group_interaction, // PERFORMANCE: Raycast against interaction meshes
             raycaster,
             pathFinder: pathFinder.current,
             origin: origin.current,
             currentHighlights: highlights,
           });
+          endIntersectTiles();
         }
 
         // Smooth camera following
         if (cameraRef.current && controlsRef.current) {
-          const WIDTH = mountRef.current?.getBoundingClientRect().width || 0;
-          const HEIGHT = WIDTH * width2height;
+          const endCamera = profiler.mark("animate_camera");
           smoothCameraFollow({
             camera: cameraRef.current,
             controls: controlsRef.current,
             targetPosition: cameraTargetPosition.current,
-            width: WIDTH,
-            height: HEIGHT,
+            width: cachedWidth,
+            height: cachedHeight,
           });
+          endCamera();
         }
 
         // Trackball updates
+        const endControls = profiler.mark("animate_controls");
         controls.update();
+        endControls();
 
         // Update wind animation for sprites
         if (!lightLayout) {
+          const endShaders = profiler.mark("animate_shaders");
+          // PERFORMANCE: Update only relevant materials
           updateWindAnimation(group_assets, performance.now() / 1000);
-          updateWaveAnimation(group_tiles, performance.now() / 1000);
+          updateWaveAnimation(animatedMaterials, performance.now() / 1000);
+          endShaders();
         }
 
         // Render the scene
+        const endRender = profiler.mark("animate_render");
         renderer?.render(scene, camera);
+        endRender();
+
+        if (renderer) {
+          profiler.setRendererInfo(renderer.info);
+        }
 
         // Performance monitor
         performanceMonitor.end();
+        endTotal();
+        profiler.log(2000);
 
         animationId = performanceMonitor.requestFrame(render);
       }
@@ -905,6 +957,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         // Remove event listeners safely
         try {
           window.removeEventListener("resize", handleResize);
+          window.removeEventListener("resize", onResizeInternal);
           document.removeEventListener("keydown", onDocumentKeyDown, false);
           sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
           controls.removeEventListener("change", onZoomChange);
@@ -922,6 +975,7 @@ const Sector: React.FC<SectorProps> = (props) => {
           // Ignore errors if element is already removed
         }
 
+        profiler.reset();
         cleanUp(scene, renderer);
       };
     }

@@ -806,12 +806,7 @@ const TowerDefenseInner = forwardRef<TowerDefenseHandle, TowerDefenseProps>(
           rendererRef.current.render(sceneRef.current, cameraRef.current);
           endRender();
 
-          const info = rendererRef.current.info;
-          profiler.setRendererInfo({
-            render: info.render,
-            memory: info.memory,
-            programs: info.programs?.length ?? null,
-          });
+          profiler.setRendererInfo(rendererRef.current.info);
         }
 
         endTotal();

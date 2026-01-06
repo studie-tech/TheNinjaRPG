@@ -20,6 +20,7 @@ import {
   setupScene,
   setRaycasterFromMouse,
   smoothCameraFollow,
+  profiler,
 } from "@/libs/threejs/util";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import { highlightTiles } from "@/libs/threejs/combat";
@@ -704,6 +705,19 @@ const Combat: React.FC<CombatProps> = (props) => {
         return saved !== null ? (JSON.parse(saved) as number) : 0.8;
       })();
 
+      // PERFORMANCE: Cache dimensions to prevent layout thrashing in render loop
+      let cachedWidth = WIDTH;
+      let cachedHeight = HEIGHT;
+
+      // Update cached dimensions on resize
+      const updateCachedDimensions = () => {
+        if (sceneRef) {
+          cachedWidth = sceneRef.getBoundingClientRect().width;
+          cachedHeight = cachedWidth * width2height;
+        }
+      };
+      window.addEventListener("resize", updateCachedDimensions);
+
       // Render the image
       let animationId = 0;
       const clock = new Clock();
@@ -712,11 +726,15 @@ const Combat: React.FC<CombatProps> = (props) => {
         // Guard against stale render callbacks after unmount
         if (!isMounted.current) return;
 
-        // Performance monitor
+        // Performance profiling
+        profiler.beginFrame();
         performanceMonitor.begin();
+        const endTotal = profiler.mark("animate_total");
 
         // Use clock for animating sprites
+        const endSpriteMixer = profiler.mark("animate_sprite_mixer");
         spriteMixer.update(clock.getDelta());
+        endSpriteMixer();
 
         // Use raycaster to detect mouse intersections
         raycaster.setFromCamera(mouse, camera);
@@ -729,6 +747,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           );
 
           // Draw all users on the map
+          const endDrawUsers = profiler.mark("animate_draw_users");
           const isAnyUserMoving = drawCombatUsers({
             group_users: group_users,
             grid: grid.current,
@@ -740,6 +759,7 @@ const Combat: React.FC<CombatProps> = (props) => {
             sfxVolume: sfxVolume,
             gameAssets: gameAssets ?? [],
           });
+          endDrawUsers();
 
           // Update camera target to follow player's character
           if (user && cameraRef.current && cameraRef.current.zoom > 1.5) {
@@ -754,6 +774,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           }
 
           // Draw all ground effects on the map (non-movement SFX delayed until movement completes)
+          const endDrawEffects = profiler.mark("animate_draw_effects");
           drawCombatEffects({
             groupEffects: group_effects,
             battle: battle.current,
@@ -765,16 +786,20 @@ const Combat: React.FC<CombatProps> = (props) => {
             sfxVolume: sfxVolume,
             isAnyUserMoving,
           });
+          endDrawEffects();
 
           // Performance optimization: Run raycaster intersections once per frame
+          const endRaycast = profiler.mark("animate_raycast");
           const tilesIntersects = raycaster.intersectObjects(group_tiles.children);
           const cachedIntersections: CachedIntersections = {
             tiles: tilesIntersects,
             battleTiles: tilesIntersects,
             ground: raycaster.intersectObjects(group_effects.children),
           };
+          endRaycast();
 
           // Highlight information on user hover
+          const endHighlightUsers = profiler.mark("animate_highlight_users");
           userHighlights = highlightUsers({
             group_users,
             cachedIntersections,
@@ -782,9 +807,11 @@ const Combat: React.FC<CombatProps> = (props) => {
             users: battle.current.usersState,
             currentHighlights: userHighlights,
           });
+          endHighlightUsers();
 
           // Detect intersections with tiles for movement/action
           if (user) {
+            const endHighlightTiles = profiler.mark("animate_highlight_tiles");
             highlights = highlightTiles({
               group_tiles,
               group_highlight_edges,
@@ -797,9 +824,11 @@ const Combat: React.FC<CombatProps> = (props) => {
               currentHighlights: highlights,
               precomputedActions,
             });
+            endHighlightTiles();
           }
 
           // Highlight tooltips when hovering on battlefield
+          const endHighlightTooltips = profiler.mark("animate_highlight_tooltips");
           tooltips = highlightTooltips({
             group_ground,
             cachedIntersections,
@@ -827,35 +856,48 @@ const Combat: React.FC<CombatProps> = (props) => {
               }
             },
           });
+          endHighlightTooltips();
         }
 
         // Smooth camera following
         if (cameraRef.current && controlsRef.current) {
-          const WIDTH = mountRef.current?.getBoundingClientRect().width || 0;
-          const HEIGHT = WIDTH * width2height;
+          const endCamera = profiler.mark("animate_camera");
           smoothCameraFollow({
             camera: cameraRef.current,
             controls: controlsRef.current,
             targetPosition: cameraTargetPosition.current,
-            width: WIDTH,
-            height: HEIGHT,
+            width: cachedWidth,
+            height: cachedHeight,
           });
+          endCamera();
         }
 
         // Trackball updates
+        const endControls = profiler.mark("animate_controls");
         controls.update();
+        endControls();
 
         // Update wind and wave animations for sprites and tiles
         if (!lightLayout) {
+          const endShaders = profiler.mark("animate_shaders");
           updateWindAnimation(group_assets, performance.now() / 1000);
           updateWaveAnimation(group_tiles, performance.now() / 1000);
+          endShaders();
         }
 
         // Render the scene
+        const endRender = profiler.mark("animate_render");
         renderer?.render(scene, camera);
+        endRender();
+
+        if (renderer) {
+          profiler.setRendererInfo(renderer.info);
+        }
 
         // Performance monitor
         performanceMonitor.end();
+        endTotal();
+        profiler.log(2000);
 
         animationId = performanceMonitor.requestFrame(render);
       }
@@ -869,12 +911,16 @@ const Combat: React.FC<CombatProps> = (props) => {
         // Cancel animation frame before cleanup
         performanceMonitor.cancelFrame(animationId);
 
+        // Reset profiler data
+        profiler.reset();
+
         if (zoomTimeout) clearTimeout(zoomTimeout);
         void setBattleAtom(undefined);
 
         // Remove event listeners safely
         try {
           window.removeEventListener("resize", handleResize);
+          window.removeEventListener("resize", updateCachedDimensions);
           sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
           sceneRef.removeEventListener("mouseleave", onDocumentMouseLeave);
           sceneRef.removeEventListener("touchstart", onDocumentTouchStart);

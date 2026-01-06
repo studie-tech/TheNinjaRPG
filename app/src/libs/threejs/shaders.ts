@@ -224,16 +224,22 @@ const updateShaderTime = (item: any, time: number) => {
 /**
  * Updates the wind animation time for all materials/sprites in a list or group
  * Supports both: array of materials (TowerDefense) and Group (Sector/Combat)
+ * PERFORMANCE OPTIMIZATION: Uses a Set to ensure each material is only updated once.
  */
 export const updateWindAnimation = (items: any[] | any, time: number) => {
   if (!WIND_CONFIG.enabled) return;
+
+  const processedMaterials = new Set<any>();
 
   // If items has a traverse method (it's a Group/Object3D), use it for recursive traversal
   if (typeof items?.traverse === "function") {
     items.traverse((object: any) => {
       // Only process Sprites (they have isSprite property)
-      if (object.isSprite) {
-        updateShaderTime(object, time);
+      if (object.isSprite && object.material) {
+        if (!processedMaterials.has(object.material)) {
+          updateShaderTime(object, time);
+          processedMaterials.add(object.material);
+        }
       }
     });
     return;
@@ -242,23 +248,33 @@ export const updateWindAnimation = (items: any[] | any, time: number) => {
   // Otherwise treat as array of materials
   if (!Array.isArray(items)) return;
   for (let i = 0; i < items.length; i++) {
-    updateShaderTime(items[i], time);
+    const material = items[i];
+    if (material && !processedMaterials.has(material)) {
+      updateShaderTime(material, time);
+      processedMaterials.add(material);
+    }
   }
 };
 
 /**
  * Updates the wave animation time for all materials/tiles in a list or group
  * Supports both: array of materials (TowerDefense) and Group (Sector/Combat)
+ * PERFORMANCE OPTIMIZATION: Uses a Set to ensure each material is only updated once.
  */
 export const updateWaveAnimation = (items: any[] | any, time: number) => {
   if (!WAVE_CONFIG.enabled) return;
+
+  const processedMaterials = new Set<any>();
 
   // If items has a traverse method (it's a Group/Object3D), use it for recursive traversal
   if (typeof items?.traverse === "function") {
     items.traverse((object: any) => {
       // Only process Meshes with ocean tiles
-      if (object.isMesh && object.userData?.tile?.asset === "ocean") {
-        updateShaderTime(object, time);
+      if (object.isMesh && object.material) {
+        if (!processedMaterials.has(object.material)) {
+          updateShaderTime(object, time);
+          processedMaterials.add(object.material);
+        }
       }
     });
     return;
@@ -267,6 +283,10 @@ export const updateWaveAnimation = (items: any[] | any, time: number) => {
   // Otherwise treat as array of materials
   if (!Array.isArray(items)) return;
   for (let i = 0; i < items.length; i++) {
-    updateShaderTime(items[i], time);
+    const material = items[i];
+    if (material && !processedMaterials.has(material)) {
+      updateShaderTime(material, time);
+      processedMaterials.add(material);
+    }
   }
 };

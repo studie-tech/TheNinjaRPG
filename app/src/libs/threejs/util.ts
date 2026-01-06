@@ -18,6 +18,7 @@ import type {
   Material,
   BufferGeometry,
   Group,
+  WebGLInfo,
 } from "three";
 
 // Simple in-memory cache for textures to avoid re-fetching
@@ -476,11 +477,7 @@ export const profiler = {
   frameCount: 0,
 
   // Renderer stats (set externally from WebGLRenderer.info)
-  rendererInfo: null as {
-    render: { calls: number; triangles: number; points: number; lines: number };
-    memory: { geometries: number; textures: number };
-    programs: number | null;
-  } | null,
+  rendererInfo: null as WebGLInfo | null,
 
   mark: function (name: string) {
     if (!this.enabled) return () => {};
@@ -510,10 +507,13 @@ export const profiler = {
     const now = performance.now();
     if (this.lastFrameTime > 0) {
       const frameTime = now - this.lastFrameTime;
-      this.frameTimes.push(frameTime);
-      // Keep last 120 frames for rolling average
-      if (this.frameTimes.length > 120) {
-        this.frameTimes.shift();
+      // PERFORMANCE: Ignore massive deltas (tab inactive or initial load) to keep stats accurate
+      if (frameTime < 1000) {
+        this.frameTimes.push(frameTime);
+        // Keep last 120 frames for rolling average
+        if (this.frameTimes.length > 120) {
+          this.frameTimes.shift();
+        }
       }
     }
     this.lastFrameTime = now;
@@ -524,7 +524,7 @@ export const profiler = {
    * Set renderer info for GPU stats tracking.
    * Call this with renderer.info after render.
    */
-  setRendererInfo: function (info: typeof this.rendererInfo) {
+  setRendererInfo: function (info: WebGLInfo) {
     if (!this.enabled) return;
     this.rendererInfo = info;
   },
