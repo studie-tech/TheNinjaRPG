@@ -2200,6 +2200,7 @@ export const TD_BASE_CRIT_CHANCE = 0; // Base critical hit chance (0%)
 export const TD_BASE_DAMAGE_PER_TILE = 0; // Extra damage per tile distance traveled (0)
 export const TD_WAVE_END_GRACE_PERIOD_MS = 200; // Grace period after last enemy dies before transitioning to wave-end
 export const TD_RANGE_VISUAL_FACTOR = 0.85; // Range visual factor for ellipse-based range checking
+export const TD_PROJECTILE_SPEED = 5.0; // tiles/sec - must match lib.rs
 export const TD_EXISTING_SESSION_CHECK_TIMEOUT_MS = 500; // Time to wait for SpacetimeDB to send existing session data
 export const TD_HIT_EVENT_DURATION_MS = 500; // Duration for hit event animations
 

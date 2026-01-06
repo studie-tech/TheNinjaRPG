@@ -31,6 +31,20 @@ export type TowerDefenseState = z.infer<typeof towerDefenseStateSchema>;
 export const enemyTypeSchema = z.string();
 export type EnemyType = z.infer<typeof enemyTypeSchema>;
 
+/**
+ * Enemy spawn data (static fields sent once per enemy)
+ * COST OPTIMIZATION: Path and maxHealth are sent in this table to save bandwidth
+ */
+export const enemySpawnSchema = z.object({
+  enemyId: z.string(),
+  sessionId: z.string(),
+  spawnCol: z.number().int().min(0),
+  spawnRow: z.number().int().min(0),
+  maxHealth: z.number().int().min(1),
+  path: z.array(hexPositionSchema),
+});
+export type EnemySpawn = z.infer<typeof enemySpawnSchema>;
+
 export const enemyDirectionSchema = z.enum(TD_ENEMY_DIRECTIONS);
 export type EnemyDirection = z.infer<typeof enemyDirectionSchema>;
 
@@ -105,6 +119,19 @@ export type PlayerBonuses = z.infer<typeof playerBonusesSchema>;
 // ============================================
 // UI & Game State
 // ============================================
+export const hudValuesSchema = z.object({
+  score: z.number().int().min(0),
+  currentWave: z.number().int().min(0),
+  waveInProgress: z.boolean(),
+  maxHealth: z.number().int().min(1),
+  enemyCount: z.number().int().min(0),
+  playerHealth: z.number().int().min(0),
+  abilities: z.array(towerDefenseAbilitySchema),
+  activeUpgrades: z.record(z.string(), z.number().int().min(0)),
+  inRunCurrency: z.number().int().min(0),
+});
+export type HudValues = z.infer<typeof hudValuesSchema>;
+
 export const gameModes = [
   "lobby",
   "connecting",

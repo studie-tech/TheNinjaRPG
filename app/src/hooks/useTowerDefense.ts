@@ -7,32 +7,56 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { api } from "@/app/_trpc/client";
+import { profiler } from "@/libs/threejs/util";
+import {
+  registerEnemyAssetConfig,
+  clearEnemyAssetConfigCache,
+  registerPlayerAssetConfig,
+  clearPlayerAssetConfigCache,
+} from "@/libs/threejs/towerDefense";
+import {
+  getSpacetimeDBConnection,
+  type GameSession,
+  type SessionState,
+  type Enemy,
+  type Projectile,
+  type SessionUpgrade,
+  type CompletedRun,
+  type SpacetimeDBEvent,
+  type EnemySpawn,
+} from "@/libs/spacetimedb/client";
+import { getDefaultPlayerBonuses } from "@/libs/towerDefense/abilities";
+import {
+  towerDefenseEnemySchema,
+  towerDefenseProjectileSchema,
+  towerDefenseStateSchema,
+  towerDefenseAbilitySchema,
+  playerBonusesSchema,
+  towerDefenseGameStateSchema,
+} from "@/validators/towerDefense";
+import type {
+  TowerDefenseState,
+  TowerDefenseEnemy,
+  TowerDefenseProjectile,
+  HexPosition,
+  TowerDefenseGameState,
+  GameMode,
+  EntityStore,
+  RuntimeState,
+  HudValues,
+} from "@/validators/towerDefense";
+import {
+  TD_EXISTING_SESSION_CHECK_TIMEOUT_MS,
+  TD_HIT_EVENT_DURATION_MS,
+  TD_PLAYER_BASE_HEALTH,
+  TD_PROJECTILE_SPEED,
+} from "@/drizzle/constants";
 
 // ============================================================================
 // MODULE-LEVEL HUD STORE (Global Singleton)
 // Uses global/window storage to survive Hot Module Replacement
 // ============================================================================
-type HudValues = {
-  score: number;
-  currentWave: number;
-  waveInProgress: boolean;
-  maxHealth: number;
-  enemyCount: number;
-  playerHealth: number;
-  abilities: Array<{
-    id: string;
-    name: string;
-    damage: number;
-    range: number;
-    cooldownMs: number;
-    critChance?: number;
-    damagePerTile?: number;
-    lastUsedAt?: number;
-  }>;
-  activeUpgrades: Record<string, number>;
-  inRunCurrency: number;
-};
-
 type HudStore = {
   subscribe: (listener: () => void) => () => void;
   getSnapshot: () => number;
@@ -134,53 +158,6 @@ export const useHudStoreValues = (): HudValues => {
     hudStore.getValues,
   );
 };
-import { api } from "@/app/_trpc/client";
-import { profiler } from "@/libs/threejs/util";
-import {
-  registerEnemyAssetConfig,
-  clearEnemyAssetConfigCache,
-  registerPlayerAssetConfig,
-  clearPlayerAssetConfigCache,
-} from "@/libs/threejs/towerDefense";
-import {
-  getSpacetimeDBConnection,
-  type GameSession,
-  type SessionState,
-  type Enemy,
-  type Projectile,
-  type SessionUpgrade,
-  type CompletedRun,
-  type SpacetimeDBEvent,
-  type EnemySpawn,
-} from "@/libs/spacetimedb/client";
-
-// COST OPTIMIZATION: Projectile speed constant for client-side interpolation
-// Must match the server-side PROJECTILE_SPEED in lib.rs (5.0 tiles/sec)
-const PROJECTILE_SPEED = 5.0;
-import { getDefaultPlayerBonuses } from "@/libs/towerDefense/abilities";
-import {
-  towerDefenseEnemySchema,
-  towerDefenseProjectileSchema,
-  towerDefenseStateSchema,
-  towerDefenseAbilitySchema,
-  playerBonusesSchema,
-  towerDefenseGameStateSchema,
-} from "@/validators/towerDefense";
-import type {
-  TowerDefenseState,
-  TowerDefenseEnemy,
-  TowerDefenseProjectile,
-  HexPosition,
-  TowerDefenseGameState,
-  GameMode,
-  EntityStore,
-  RuntimeState,
-} from "@/validators/towerDefense";
-import {
-  TD_EXISTING_SESSION_CHECK_TIMEOUT_MS,
-  TD_HIT_EVENT_DURATION_MS,
-  TD_PLAYER_BASE_HEALTH,
-} from "@/drizzle/constants";
 
 /**
  * Game state interface - maintains compatibility with rendering components
@@ -246,14 +223,13 @@ const convertEnemy = (
   e: Enemy,
   spawnData: EnemySpawn | undefined,
 ): TowerDefenseEnemy => {
-  // Use spawn data for static fields, with fallbacks
   const path = spawnData?.path ?? [];
   const maxHealth = spawnData?.maxHealth ?? e.health;
 
   return towerDefenseEnemySchema.parse({
     id: `enemy-${e.id}`,
     aiUserId: "",
-    enemyType: e.enemyType as "standard" | "heavy",
+    enemyType: e.enemyType,
     position: { col: e.col, row: e.row },
     path: path.map((p) => ({ col: p.col, row: p.row })),
     pathIndex: e.pathIndex,
@@ -264,7 +240,7 @@ const convertEnemy = (
     attackCooldown: e.attackCooldown,
     lastAttackTime: e.lastAttackTime > BigInt(0) ? Number(e.lastAttackTime) : undefined,
     movementProgress: e.movementProgress,
-    direction: e.direction as TowerDefenseEnemy["direction"],
+    direction: e.direction,
   });
 };
 
@@ -285,12 +261,9 @@ const convertProjectile = (
   p: Projectile,
   existingClientSpawnTime?: number,
 ): TowerDefenseProjectileWithSpawn => {
-  // COST OPTIMIZATION: Use CLIENT timestamp when projectile is first inserted
-  // This avoids server/client clock skew issues
-  // If this is an existing projectile (update), preserve its original client spawn time
   const clientSpawnTime = existingClientSpawnTime ?? Date.now();
   const elapsed = (Date.now() - clientSpawnTime) / 1000;
-  const computedProgress = Math.min(elapsed * PROJECTILE_SPEED, 1.0);
+  const computedProgress = Math.min(elapsed * TD_PROJECTILE_SPEED, 1.0);
 
   const base = towerDefenseProjectileSchema.parse({
     id: `projectile-${p.id}`,
@@ -302,7 +275,6 @@ const convertProjectile = (
     critRoll: p.critRoll,
   });
 
-  // Return extended type with clientSpawnTime for future progress calculations
   return { ...base, clientSpawnTime };
 };
 
@@ -1316,16 +1288,14 @@ export const useTowerDefense = (userId?: string) => {
         error: error instanceof Error ? error.message : "Failed to abandon run",
       }));
     }
-  }, [utils, resetGameRefs, userId, syncHudStore]);
+  }, [utils, resetGameRefs, userId]);
 
   /**
    * Submit wave (auto-handled by SpacetimeDB, provided for interface compatibility)
    */
   const submitWave = useCallback(async () => {
-    // Wave completion is automatic with SpacetimeDB
-    // Just start the next wave
     await startWave();
-  }, [startWave, syncHudStore]);
+  }, [startWave]);
 
   // Mutation for claiming completed runs
   const claimRunMutation = api.towerDefense.claimCompletedRun.useMutation({
@@ -1457,7 +1427,7 @@ export const useTowerDefense = (userId?: string) => {
     const projectilesWithProgress = store.projectilesArray.map((p) => {
       const proj = p as TowerDefenseProjectileWithSpawn;
       const elapsed = (now - proj.clientSpawnTime) / 1000;
-      return { ...p, progress: Math.min(elapsed * PROJECTILE_SPEED, 1.0) };
+      return { ...p, progress: Math.min(elapsed * TD_PROJECTILE_SPEED, 1.0) };
     });
 
     return {

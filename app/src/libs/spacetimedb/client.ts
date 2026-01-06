@@ -217,16 +217,16 @@ export class SpacetimeDBConnection {
 
   /**
    * Set up global subscriptions (user-level, not session-specific)
-   * PERFORMANCE: Only subscribe to user's own sessions, not all data
+   * PERFORMANCE: Filtered subscriptions to only receive this user's data.
    */
   private setupGlobalSubscriptions() {
     if (!this.connection || !this.currentUserId) return;
 
-    // COST OPTIMIZATION: Only subscribe to this user's sessions
-    // This prevents receiving data from other players' games
+    // Only subscribe to this user's sessions and completed runs.
+    // User ID is validated by SAFE_USER_ID_PATTERN to prevent SQL injection.
     const queries =
       this.currentUserId === "guest"
-        ? [] // Guests don't need to check for existing sessions
+        ? []
         : [
             `SELECT * FROM game_session WHERE ninjarpg_user_id = '${this.currentUserId}'`,
             `SELECT * FROM session_state`,
