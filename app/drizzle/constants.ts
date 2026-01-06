@@ -67,6 +67,8 @@ export const ContentTypes = [
   "quest",
   "user",
   "skillTree",
+  "towerDefenseCharacter",
+  "towerDefenseUpgrade",
 ] as const;
 export type ContentType = (typeof ContentTypes)[number];
 
@@ -1602,9 +1604,11 @@ export const IMG_HOME_SLEEP =
 export const IMG_HOME_AWAKE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1BKctL6bo95WClq4K0wxZUmJcvThgdVenO3P";
 export const IMG_MANUAL_TOWER_UPGRADES =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPuGZOwpKeUGyX2kj6u45AOQiSa1zYH0mqZoc";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HMAwecnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b";
 export const IMG_MANUAL_TOWER_ENEMIES =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTIK3RW5IU29dZYJPoOKSh5vmlqatMub3EigH";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwA3KPoT2j854CWbaITZyegfXimvd7s16cO0h";
+export const IMG_MANUAL_TOWER_LEADERBOARD =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGdSeVPRfoVrha0LP4mAS5KM7wtiZbUNXJxdC";
 export const IMG_MANUAL_RANKED =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAa3ucxOoZUC4muiGcQNzjfEndY5y1w20B8hT";
 export const IMG_MANUAL_AWARDS =

@@ -39,5 +39,7 @@ export default __t.row({
   waveInProgress: __t.bool().name("wave_in_progress"),
   waveStartTime: __t.u64().name("wave_start_time"),
   healthRegenAccumulator: __t.f64().name("health_regen_accumulator"),
+  nextSpawnAt: __t.u64().name("next_spawn_at"),
+  spawnDelayMs: __t.u32().name("spawn_delay_ms"),
   status: __t.string(),
 });

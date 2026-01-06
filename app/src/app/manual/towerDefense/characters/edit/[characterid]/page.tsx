@@ -9,6 +9,7 @@ import { api } from "@/app/_trpc/client";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import { useTowerDefenseCharacterEditForm } from "@/hooks/towerDefenseCharacter";
+import { insertTowerDefenseCharacterSchema } from "@/validators/towerDefense";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { showMutationToast } from "@/libs/toast";
 import { Button } from "@/components/ui/button";
@@ -92,7 +93,7 @@ const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
         defaultBackHref="/manual/towerDefense/characters"
       >
         <EditContent
-          schema={form}
+          schema={insertTowerDefenseCharacterSchema}
           form={form}
           formData={formData}
           showSubmit={true}

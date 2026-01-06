@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 // COST OPTIMIZATION: Increased from 100ms (10 TPS) to 150ms (~6.7 TPS)
 // Combined with client-side interpolation, this maintains smooth visuals
 // while reducing compute costs by ~33%.
-const GAME_TICK_MS: u64 = 150;
+const GAME_TICK_MS: u64 = 100;
 const HEX_ASPECT_RATIO: f64 = 0.866;
 
 
@@ -156,6 +156,8 @@ pub struct SessionState {
     pub wave_in_progress: bool,
     pub wave_start_time: u64,
     pub health_regen_accumulator: f64,
+    pub next_spawn_at: u64,
+    pub spawn_delay_ms: u32,
     pub status: String, // "active", "completed", "abandoned"
 }
 
@@ -168,6 +170,23 @@ pub struct SessionUpgrade {
     pub session_id: u64,
     pub upgrade_id: String,
     pub level: u32,
+}
+
+/// Queued enemies to be spawned during a wave
+#[table(name = enemy_queued, public)]
+pub struct EnemyQueued {
+    #[primary_key]
+    #[auto_inc]
+    pub id: u64,
+    pub session_id: u64,
+    pub enemy_type: String,
+    pub health: i32,
+    pub speed: f64,
+    pub damage: i32,
+    pub attack_cooldown: f64,
+    pub spawn_col: u32,
+    pub spawn_row: u32,
+    pub path: Vec<HexPosition>,
 }
 
 /// COST OPTIMIZATION: Static enemy spawn data (path, max_health, etc.)
@@ -684,6 +703,8 @@ pub fn create_session(
         wave_in_progress: false,
         wave_start_time: 0,
         health_regen_accumulator: 0.0,
+        next_spawn_at: 0,
+        spawn_delay_ms: 0,
         status: "active".to_string(),
     });
     
@@ -724,6 +745,7 @@ fn internal_start_wave(ctx: &ReducerContext, session: GameSession, state: Sessio
     
     // Generate enemies from definitions (from MySQL database, not hardcoded)
     let mut enemy_index = 0;
+    let spawn_delay_ms = 500_u32.saturating_sub((next_wave.saturating_sub(1) * 50) as u32).max(50);
     
     for def in &enemy_definitions {
         if next_wave < def.first_appear_wave {
@@ -747,33 +769,18 @@ fn internal_start_wave(ctx: &ReducerContext, session: GameSession, state: Sessio
             
             let spawn_pos = &edge_tiles[enemy_index % edge_tiles.len()];
             let path = compute_path(spawn_pos, &center, new_grid_size);
-            let first_waypoint = path.first().unwrap_or(&center);
-            let direction = calculate_direction(spawn_pos.col, spawn_pos.row, first_waypoint.col, first_waypoint.row);
             
-            // COST OPTIMIZATION: Insert enemy with volatile data only (no path)
-            let inserted_enemy = ctx.db.enemy().insert(Enemy {
+            // Queue the enemy instead of spawning immediately
+            ctx.db.enemy_queued().insert(EnemyQueued {
                 id: 0,
                 session_id,
                 enemy_type: def.enemy_type.clone(),
-                col: spawn_pos.col,
-                row: spawn_pos.row,
                 health,
                 speed,
                 damage,
                 attack_cooldown: def.attack_cooldown,
-                last_attack_time: 0,
-                movement_progress: 0.0,
-                direction,
-                path_index: 0,
-            });
-            
-            // COST OPTIMIZATION: Insert static spawn data separately (sent once, never updated)
-            ctx.db.enemy_spawn().insert(EnemySpawn {
-                enemy_id: inserted_enemy.id,
-                session_id,
                 spawn_col: spawn_pos.col,
                 spawn_row: spawn_pos.row,
-                max_health: health,
                 path,
             });
             
@@ -798,6 +805,8 @@ fn internal_start_wave(ctx: &ReducerContext, session: GameSession, state: Sessio
         wave_in_progress: true,
         wave_start_time: now,
         health_regen_accumulator: 0.0,
+        next_spawn_at: now, // Start spawning immediately
+        spawn_delay_ms,
         ..state
     });
     
@@ -1083,6 +1092,17 @@ fn internal_delete_session(ctx: &ReducerContext, session_id: u64) {
         ctx.db.session_upgrade().id().delete(id);
     }
 
+    // Clean up queued enemies
+    let mut queued_to_delete = Vec::new();
+    for queued in ctx.db.enemy_queued().iter() {
+        if queued.session_id == session_id {
+            queued_to_delete.push(queued.id);
+        }
+    }
+    for id in queued_to_delete {
+        ctx.db.enemy_queued().id().delete(id);
+    }
+
     // Clean up completed runs
     let mut runs_to_delete = Vec::new();
     for run in ctx.db.completed_run().iter() {
@@ -1139,6 +1159,59 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
         let mut health_regen_accum = state.health_regen_accumulator;
         let mut total_damage_dealt = 0i32;
         let mut ability_last_used_at = state.ability_last_used_at;
+        let mut next_spawn_at = state.next_spawn_at;
+        
+        // Process spawn queue
+        if now >= next_spawn_at {
+            // Find one queued enemy for this session
+            let mut queued_enemy = None;
+            for q in ctx.db.enemy_queued().iter() {
+                if q.session_id == session_id {
+                    queued_enemy = Some(q);
+                    break;
+                }
+            }
+            
+            if let Some(q) = queued_enemy {
+                let first_waypoint = q.path.first().unwrap_or(&player_pos);
+                let direction = calculate_direction(q.spawn_col, q.spawn_row, first_waypoint.col, first_waypoint.row);
+                
+                // Spawn the enemy
+                let inserted_enemy = ctx.db.enemy().insert(Enemy {
+                    id: 0,
+                    session_id,
+                    enemy_type: q.enemy_type,
+                    col: q.spawn_col,
+                    row: q.spawn_row,
+                    health: q.health,
+                    speed: q.speed,
+                    damage: q.damage,
+                    attack_cooldown: q.attack_cooldown,
+                    last_attack_time: 0,
+                    movement_progress: 0.0,
+                    direction,
+                    path_index: 0,
+                });
+                
+                // Insert static spawn data
+                ctx.db.enemy_spawn().insert(EnemySpawn {
+                    enemy_id: inserted_enemy.id,
+                    session_id,
+                    spawn_col: q.spawn_col,
+                    spawn_row: q.spawn_row,
+                    max_health: q.health,
+                    path: q.path,
+                });
+                
+                // Remove from queue
+                ctx.db.enemy_queued().id().delete(q.id);
+                
+                // Set next spawn time
+                next_spawn_at = now + state.spawn_delay_ms as u64;
+                
+                log::info!("Spawned queued enemy {} for session {}", inserted_enemy.id, session_id);
+            }
+        }
         
         // Health regeneration
         if state.health_regen > 0.0 && player_health < state.player_max_health {
@@ -1361,7 +1434,8 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
         // Check if wave is complete
         let enemies_remaining = ctx.db.enemy().iter().filter(|e| e.session_id == session_id && e.health > 0).count();
         let projectiles_remaining = ctx.db.projectile().iter().filter(|p| p.session_id == session_id).count();
-        let wave_complete = enemies_remaining == 0 && projectiles_remaining == 0;
+        let queued_remaining = ctx.db.enemy_queued().iter().filter(|e| e.session_id == session_id).count();
+        let wave_complete = enemies_remaining == 0 && projectiles_remaining == 0 && queued_remaining == 0;
         
         // Check for game over
         if player_health <= 0 {
@@ -1448,6 +1522,7 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
                 wave_in_progress: false,
                 health_regen_accumulator: health_regen_accum,
                 ability_last_used_at,
+                next_spawn_at,
                 ..state
             });
             
@@ -1459,7 +1534,8 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
             let changed = player_health != state.player_health || 
                           in_run_currency != state.in_run_currency || 
                           score != state.score ||
-                          ability_last_used_at != state.ability_last_used_at;
+                          ability_last_used_at != state.ability_last_used_at ||
+                          next_spawn_at != state.next_spawn_at;
 
             if changed {
                 ctx.db.session_state().session_id().update(SessionState {
@@ -1468,6 +1544,7 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
                     score,
                     health_regen_accumulator: health_regen_accum,
                     ability_last_used_at,
+                    next_spawn_at,
                     ..state
                 });
             }

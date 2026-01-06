@@ -9,7 +9,7 @@ import type { TowerDefenseUpgrade } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
 
 // Schema for editing tower defense upgrades
-const updateTowerDefenseUpgradeSchema = z.object({
+export const updateTowerDefenseUpgradeSchema = z.object({
   name: z.string().min(1).max(191),
   description: z.string(),
   maxLevel: z.coerce.number().int().min(1),
@@ -84,4 +84,3 @@ export const useTowerDefenseUpgradeEditForm = (
     handleUpgradeSubmit,
   };
 };
-

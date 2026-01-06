@@ -39,6 +39,8 @@ export default __t.object("SessionState", {
   waveInProgress: __t.bool(),
   waveStartTime: __t.u64(),
   healthRegenAccumulator: __t.f64(),
+  nextSpawnAt: __t.u64(),
+  spawnDelayMs: __t.u32(),
   status: __t.string(),
 });
 

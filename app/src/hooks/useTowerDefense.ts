@@ -342,6 +342,11 @@ export const useTowerDefense = (userId?: string) => {
   // All game data updates here immediately, React state syncs on throttle
   const runtimeStateRef = useRef<RuntimeState>(createRuntimeState());
 
+  // PERFORMANCE: Track in-run upgrades in a ref to ensure they are available
+  // even if session_upgrade events arrive before session_state events.
+  // This also prevents upgrades from leaking between runs.
+  const sessionUpgradesRef = useRef<Record<string, number>>({});
+
   // Ref for SpacetimeDB connection
   const connectionRef = useRef(getSpacetimeDBConnection());
   // Ref for the static session data
@@ -371,6 +376,31 @@ export const useTowerDefense = (userId?: string) => {
   }, [gameState.mode, gameState.existingSession, gameState.waveInProgress]);
 
   /**
+   * Reset all game refs for a fresh session or when returning to lobby.
+   * PERFORMANCE: This ensures no data leaks between runs.
+   */
+  const resetGameRefs = useCallback(() => {
+    // Clear entities
+    const store = entitiesRef.current;
+    store.enemies.clear();
+    store.projectiles.clear();
+    store.enemySpawns.clear();
+    store.enemiesArray = [];
+    store.projectilesArray = [];
+    store.enemiesVersion++;
+    store.projectilesVersion++;
+
+    // Reset runtime and session data
+    runtimeStateRef.current = createRuntimeState();
+    sessionUpgradesRef.current = {};
+    staticSessionRef.current = null;
+    sessionIdRef.current = null;
+    completedRunRef.current = null;
+    playerHitEventsRef.current = [];
+    enemyHitEventsRef.current = [];
+  }, []);
+
+  /**
    * Update the module-level HUD store with current runtime state.
    * Called after runtimeStateRef is updated to sync HUD components.
    */
@@ -384,7 +414,7 @@ export const useTowerDefense = (userId?: string) => {
       enemyCount: runtime.enemyCount,
       playerHealth: runtime.state?.playerHealth ?? 0,
       abilities: runtime.abilities,
-      activeUpgrades: runtime.state?.activeUpgrades ?? {},
+      activeUpgrades: sessionUpgradesRef.current,
       inRunCurrency: runtime.state?.inRunCurrency ?? 0,
     };
     hudStore.update(newValues);
@@ -453,6 +483,8 @@ export const useTowerDefense = (userId?: string) => {
             seed: session.seed, // Set seed even in lobby, so it's ready for resume
             existingSession: prev.existingSession || {
               id: sessionIdStr,
+              seed: session.seed,
+              gridSize: session.initialGridSize,
               wave: 0,
               score: 0,
               health: 0,
@@ -498,16 +530,22 @@ export const useTowerDefense = (userId?: string) => {
         sessionIdRef.current !== null && state.sessionId === sessionIdRef.current;
 
       const session = staticSessionRef.current;
+      const currentMode = currentModeRef.current;
+      const isResuming =
+        currentMode === "connecting" && sessionIdRef.current === state.sessionId;
+
       if (!session || session.id !== state.sessionId) {
-        // We need the static session info to process the state
-        return;
+        // If we are already tracking this session, we can proceed even if static data hasn't arrived
+        if (!isResuming && !isOurTrackedSession) {
+          return;
+        }
       }
 
+      // Preserve existing session data for fallback when session is null
+      const prevExistingSession = currentExistingSessionRef.current;
+
       // Build new runtime state from session state
-      const newState = sessionStateToState(
-        state,
-        runtimeStateRef.current.state?.activeUpgrades ?? {},
-      );
+      const newState = sessionStateToState(state, sessionUpgradesRef.current);
 
       const newAbilities = [
         towerDefenseAbilitySchema.parse({
@@ -532,7 +570,7 @@ export const useTowerDefense = (userId?: string) => {
         knockbackChance: state.knockbackChance,
         knockbackForce: state.knockbackForce,
         tokensPerWave: state.tokensPerWave,
-        tokens_per_kill: state.tokensPerKill,
+        tokensPerKill: state.tokensPerKill,
         interestPerWave: state.interestPerWave,
         skipEnemyChance: state.skipEnemyChance,
       });
@@ -567,16 +605,21 @@ export const useTowerDefense = (userId?: string) => {
           playerBonuses: newBonuses,
           enemyCount: runtimeStateRef.current.enemyCount, // Preserve current enemy count
         };
+        // CRITICAL: Ensure waveInProgress ref is also updated immediately
+        currentWaveInProgressRef.current = state.waveInProgress;
       }
 
       // PERFORMANCE: Use refs to read current state without triggering setGameState
-      const currentMode = currentModeRef.current;
       const currentExistingSession = currentExistingSessionRef.current;
       const currentWaveInProgress = currentWaveInProgressRef.current;
 
       // Lobby mode: check for existing sessions
       if (currentMode === "lobby" && sessionIdRef.current === null) {
-        if (isActiveSession && userId && session.ninjarpgUserId === userId) {
+        if (
+          isActiveSession &&
+          userId &&
+          (session?.ninjarpgUserId === userId || isResuming)
+        ) {
           if (
             currentExistingSession?.id === sessionIdStr &&
             currentExistingSession?.wave === state.wave &&
@@ -587,6 +630,8 @@ export const useTowerDefense = (userId?: string) => {
           }
           const newExistingSession = {
             id: sessionIdStr,
+            seed: session?.seed || prevExistingSession?.seed || "",
+            gridSize: state.gridSize,
             wave: state.wave,
             score: state.score,
             health: state.playerHealth,
@@ -606,8 +651,6 @@ export const useTowerDefense = (userId?: string) => {
         sessionIdRef.current = state.sessionId;
 
         const isGameOver = state.status === "completed";
-        const waveJustEnded = currentWaveInProgress && !state.waveInProgress;
-        const isNewSession = currentMode === "connecting" && state.status === "active";
 
         // Calculate new mode
         let newMode: GameMode = currentMode;
@@ -615,15 +658,14 @@ export const useTowerDefense = (userId?: string) => {
           newMode = "game-over";
         } else if (state.waveInProgress) {
           newMode = "playing";
-        } else if (waveJustEnded) {
-          newMode = "wave-end";
-        } else if (isNewSession) {
+        } else if (currentMode === "playing" || currentMode === "connecting") {
+          // Wave is not in progress, and we were playing or connecting -> wave has ended
           newMode = "wave-end";
         }
 
         // PERFORMANCE: Only update React state if mode changed or critical update needed
         const modeChanged = newMode !== currentMode;
-        const needsImmediateUpdate = modeChanged || isNewSession || isGameOver;
+        const needsImmediateUpdate = modeChanged || isGameOver;
 
         if (needsImmediateUpdate) {
           // Full state sync for mode changes - update refs first
@@ -634,7 +676,7 @@ export const useTowerDefense = (userId?: string) => {
             ...prev,
             mode: newMode,
             runId: sessionIdStr,
-            seed: prev.seed || session.seed, // Ensure seed is preserved/updated
+            seed: prev.seed || session?.seed || prevExistingSession?.seed || null, // Ensure seed is preserved/updated
             currentWave: state.wave,
             score: state.score,
             state: newState,
@@ -662,6 +704,8 @@ export const useTowerDefense = (userId?: string) => {
         } else {
           const updatedExistingSession = {
             id: sessionIdStr,
+            seed: session?.seed || prevExistingSession?.seed || "",
+            gridSize: state.gridSize,
             wave: state.wave,
             score: state.score,
             health: state.playerHealth,
@@ -689,17 +733,20 @@ export const useTowerDefense = (userId?: string) => {
         return;
       }
 
-      // Update runtime state ref immediately (no re-render)
+      // Update the upgrades ref directly (independent of runtime state)
+      sessionUpgradesRef.current = {
+        ...sessionUpgradesRef.current,
+        [upgrade.upgradeId]: upgrade.level,
+      };
+
+      // Also update runtime state if it exists (for compatibility)
       const runtime = runtimeStateRef.current;
       if (runtime.state) {
         runtimeStateRef.current = {
           ...runtime,
           state: {
             ...runtime.state,
-            activeUpgrades: {
-              ...runtime.state.activeUpgrades,
-              [upgrade.upgradeId]: upgrade.level,
-            },
+            activeUpgrades: sessionUpgradesRef.current,
           },
         };
       }
@@ -953,7 +1000,8 @@ export const useTowerDefense = (userId?: string) => {
       // SpacetimeDB sends back the session_update event
       currentModeRef.current = "connecting";
       setGameState((prev) => ({ ...prev, mode: "connecting", error: null }));
-      // Reset HUD store for fresh run
+      // PERFORMANCE: Reset all refs and HUD store for fresh run
+      resetGameRefs();
       hudStore.reset();
 
       // Step 1: Get server-calculated stats with HMAC signature
@@ -1006,20 +1054,35 @@ export const useTowerDefense = (userId?: string) => {
 
       // The session_update event will trigger and update the game state to "playing"
       // Set initial local state while waiting for server response
+      const center = Math.floor(secureSession.params.initialGridSize / 2);
+      const initialState = {
+        playerHealth: secureSession.params.playerMaxHealth,
+        playerPosition: { col: center, row: center },
+        inRunCurrency: 0,
+        activeUpgrades: {},
+        gridSize: secureSession.params.initialGridSize,
+      };
+
+      // PERFORMANCE: Update runtime ref IMMEDIATELY so ThreeJS sees it on mount
+      runtimeStateRef.current = {
+        ...runtimeStateRef.current,
+        maxHealth: secureSession.params.playerMaxHealth,
+        state: initialState,
+        abilities: [secureSession.ability],
+        playerBonuses: secureSession.playerBonuses,
+      };
+
       setGameState((prev) => ({
         ...prev,
         seed: secureSession.seed,
         abilities: [secureSession.ability],
         playerBonuses: secureSession.playerBonuses,
         maxHealth: secureSession.params.playerMaxHealth,
-        state: {
-          playerHealth: secureSession.params.playerMaxHealth,
-          playerPosition: { col: 2, row: 2 },
-          inRunCurrency: 0,
-          activeUpgrades: {},
-          gridSize: 5,
-        },
+        state: initialState,
       }));
+
+      // PERFORMANCE: Sync HUD store so UI updates immediately
+      syncHudStore();
     } catch (error) {
       setGameState((prev) => ({
         ...prev,
@@ -1027,13 +1090,14 @@ export const useTowerDefense = (userId?: string) => {
         error: error instanceof Error ? error.message : "Failed to start run",
       }));
     }
-  }, [initiateSessionMutation, initiateGuestSessionMutation, userId]);
+  }, [initiateSessionMutation, initiateGuestSessionMutation, userId, resetGameRefs]);
 
   /**
    * Resume an existing active session
    */
   const resumeRun = useCallback(async () => {
-    if (!gameState.existingSession) {
+    const sessionToResume = gameState.existingSession;
+    if (!sessionToResume) {
       return;
     }
 
@@ -1041,43 +1105,57 @@ export const useTowerDefense = (userId?: string) => {
       // CRITICAL: Update mode ref SYNCHRONOUSLY before any async operations
       currentModeRef.current = "connecting";
       setGameState((prev) => ({ ...prev, mode: "connecting", error: null }));
-      // Reset HUD store for resumed run
+
+      // PERFORMANCE: Reset all refs and HUD store for resumed run
+      resetGameRefs();
       hudStore.reset();
 
       const connection = connectionRef.current;
       await connection.connect(userId);
 
       // Set the session ID reference to the existing session
-      const existingSessionId = BigInt(gameState.existingSession.id);
+      const existingSessionId = BigInt(sessionToResume.id);
       sessionIdRef.current = existingSessionId;
 
       // PERFORMANCE: Subscribe to session-specific data (enemies, projectiles)
       connection.subscribeToSession(existingSessionId);
 
-      // Get existing session data if we have it in ref
-      const existingStatic = staticSessionRef.current;
-      const seed =
-        existingStatic?.id === existingSessionId ? existingStatic.seed : null;
+      // Transition to connecting mode and set initial state
+      // The mode will be corrected to "playing" or "wave-end" when session_state arrives
+      const center = Math.floor(sessionToResume.gridSize / 2);
+      const initialState = {
+        playerHealth: sessionToResume.health,
+        playerPosition: { col: center, row: center },
+        inRunCurrency: 0,
+        activeUpgrades: {},
+        gridSize: sessionToResume.gridSize,
+      };
 
-      // Transition to wave-end mode so the user can start the next wave
-      // The session data will be updated from SpacetimeDB events
+      // PERFORMANCE: Update runtime ref IMMEDIATELY so ThreeJS sees it on mount
+      // We use current values from ref for abilities/bonuses since we don't have them in existingSession yet
+      // They will be updated by the first session_state event.
+      runtimeStateRef.current = {
+        ...runtimeStateRef.current,
+        currentWave: sessionToResume.wave,
+        score: sessionToResume.score,
+        maxHealth: sessionToResume.maxHealth,
+        state: initialState,
+      };
+
       setGameState((prev) => ({
         ...prev,
-        mode: "wave-end",
-        runId: prev.existingSession?.id ?? null,
-        seed: seed,
-        currentWave: prev.existingSession?.wave ?? 0,
-        score: prev.existingSession?.score ?? 0,
-        maxHealth: prev.existingSession?.maxHealth ?? TD_PLAYER_BASE_HEALTH,
-        state: {
-          playerHealth: prev.existingSession?.health ?? TD_PLAYER_BASE_HEALTH,
-          playerPosition: { col: 2, row: 2 }, // Will be updated by server
-          inRunCurrency: 0,
-          activeUpgrades: {},
-          gridSize: 5,
-        },
+        mode: "connecting",
+        runId: sessionToResume.id,
+        seed: sessionToResume.seed,
+        currentWave: sessionToResume.wave,
+        score: sessionToResume.score,
+        maxHealth: sessionToResume.maxHealth,
+        state: initialState,
         existingSession: null,
       }));
+
+      // PERFORMANCE: Sync HUD store so UI updates immediately
+      syncHudStore();
     } catch (error) {
       setGameState((prev) => ({
         ...prev,
@@ -1085,7 +1163,7 @@ export const useTowerDefense = (userId?: string) => {
         error: error instanceof Error ? error.message : "Failed to resume run",
       }));
     }
-  }, [gameState.existingSession, userId]);
+  }, [gameState.existingSession, userId, resetGameRefs]);
 
   /**
    * Cancel an existing session without playing
@@ -1224,9 +1302,11 @@ export const useTowerDefense = (userId?: string) => {
       // PERFORMANCE: Unsubscribe from session data before disconnecting
       connectionRef.current.unsubscribeFromSession();
       connectionRef.current.disconnect();
-      sessionIdRef.current = null;
-      clearEntityStore();
+
+      // Reset all game data
+      resetGameRefs();
       setGameState(initialGameState);
+
       if (userId) {
         void utils.towerDefense.getUserUpgrades.invalidate();
       }
@@ -1236,7 +1316,7 @@ export const useTowerDefense = (userId?: string) => {
         error: error instanceof Error ? error.message : "Failed to abandon run",
       }));
     }
-  }, [utils, clearEntityStore, userId]);
+  }, [utils, resetGameRefs, userId, syncHudStore]);
 
   /**
    * Submit wave (auto-handled by SpacetimeDB, provided for interface compatibility)
@@ -1245,7 +1325,7 @@ export const useTowerDefense = (userId?: string) => {
     // Wave completion is automatic with SpacetimeDB
     // Just start the next wave
     await startWave();
-  }, [startWave]);
+  }, [startWave, syncHudStore]);
 
   // Mutation for claiming completed runs
   const claimRunMutation = api.towerDefense.claimCompletedRun.useMutation({
@@ -1328,22 +1408,16 @@ export const useTowerDefense = (userId?: string) => {
     // PERFORMANCE: Unsubscribe from session data before disconnecting
     connectionRef.current.unsubscribeFromSession();
     connectionRef.current.disconnect();
-    sessionIdRef.current = null;
-    completedRunRef.current = null;
+
+    // Reset all game data
+    resetGameRefs();
     isGuestRef.current = false;
-    clearEntityStore();
     setGameState(initialGameState);
+
     if (userId) {
       void utils.towerDefense.getUserUpgrades.invalidate();
     }
-  }, [
-    gameState.mode,
-    gameState.runId,
-    claimRunMutation,
-    utils,
-    clearEntityStore,
-    userId,
-  ]);
+  }, [gameState.mode, gameState.runId, claimRunMutation, utils, resetGameRefs, userId]);
 
   /**
    * Clear error

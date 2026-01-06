@@ -169,7 +169,18 @@ const TowerDefensePage: React.FC = () => {
   // Lobby mode
   if (gameState.mode === "lobby") {
     return (
-      <ContentBox title={PAGE_TITLE} subtitle={PAGE_SUBTITLE}>
+      <ContentBox
+        title={PAGE_TITLE}
+        subtitle={PAGE_SUBTITLE}
+        topRightContent={
+          <Link href="/manual/towerDefense/leaderboard">
+            <Button size="sm">
+              <Trophy className="mr-2 h-4 w-4" />
+              Leaderboard
+            </Button>
+          </Link>
+        }
+      >
         {/* Guest Mode Notice */}
         {isGuest && (
           <div className="mb-6 rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
@@ -231,11 +242,13 @@ const TowerDefensePage: React.FC = () => {
                     <Button
                       onClick={resumeRun}
                       disabled={isStarting}
-                      className="flex-1"
+                      className="flex-1 truncate"
                       variant="default"
                     >
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      {isStarting ? "Connecting..." : "Resume Run"}
+                      <RefreshCw className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="inline-block max-w-[8rem] truncate align-middle">
+                        {isStarting ? "Connecting..." : "Resume"}
+                      </span>
                     </Button>
                     <Button
                       onClick={cancelExistingSession}
@@ -243,8 +256,7 @@ const TowerDefensePage: React.FC = () => {
                       variant="outline"
                       className="border-destructive/50 text-destructive hover:bg-destructive/10"
                     >
-                      <X className="mr-2 h-4 w-4" />
-                      Cancel
+                      <X className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -354,6 +366,14 @@ const TowerDefensePage: React.FC = () => {
       title={`${GAME_NAME} - Wave ${gameState.currentWave}`}
       subtitle={
         gameState.mode === "wave-end" ? "Wave Complete!" : `Score: ${gameState.score}`
+      }
+      topRightContent={
+        <Link href="/manual/towerDefense/leaderboard">
+          <Button size="sm">
+            <Trophy className="mr-2 h-4 w-4" />
+            Leaderboard
+          </Button>
+        </Link>
       }
     >
       {/* Game HUD - Subscribes directly to module-level hudStore, parent never re-renders */}

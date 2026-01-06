@@ -27,18 +27,13 @@ import {
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { useUserData } from "@/utils/UserContext";
-import {
-  canControlBackups,
-  canViewRecruitmentAnalytics,
-  canChangeContent,
-} from "@/utils/permissions";
+import { canControlBackups, canViewRecruitmentAnalytics } from "@/utils/permissions";
 
 export default function ManualMain() {
   const { data: userData } = useUserData();
   const role = userData?.role ?? "USER";
   const hasBackupAccess = canControlBackups(role);
   const canSeeRecruitment = canViewRecruitmentAnalytics(role);
-  const canEditContent = canChangeContent(role);
 
   const baseEntries = [
     // recruitment added conditionally below
@@ -60,12 +55,11 @@ export default function ManualMain() {
     { name: "pvp_rank", img: IMG_MANUAL_RANKED },
     { name: "balance", img: IMG_MANUAL_BALANCE },
     { name: "staff", img: IMG_MANUAL_STAFF },
+    { name: "towerDefense", img: IMG_MANUAL_TOWER_UPGRADES },
   ];
 
   // Add tower defense admin entry for content editors
-  const withTowerDefense = canEditContent
-    ? [...baseEntries, { name: "towerDefense", img: IMG_MANUAL_TOWER_UPGRADES }]
-    : baseEntries;
+  const withTowerDefense = baseEntries;
   const withRecruitment = canSeeRecruitment
     ? [{ name: "recruitment", img: IMG_MANUAL_RECRUITMENT }, ...withTowerDefense]
     : withTowerDefense;

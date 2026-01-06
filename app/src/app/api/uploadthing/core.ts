@@ -148,7 +148,6 @@ export const ourFileRouter = {
   // Tower Defense character animation zip uploader
   towerDefenseCharacterZip: f({
     "application/zip": { maxFileSize: "32MB" },
-    "application/x-zip-compressed": { maxFileSize: "32MB" },
   })
     .input(z.object({ characterId: z.string() }))
     .middleware(async ({ input }) => {

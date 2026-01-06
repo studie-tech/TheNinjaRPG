@@ -670,10 +670,8 @@ const TowerDefenseInner = forwardRef<TowerDefenseHandle, TowerDefenseProps>(
           endProjectiles();
 
           // Get player position from runtime ref
-          const playerPosition = runtimeState?.state?.playerPosition ?? {
-            col: 0,
-            row: 0,
-          };
+          const playerPosition =
+            runtimeState?.state?.playerPosition ?? currentPlayerPositionRef.current;
           currentPlayerPositionRef.current = playerPosition;
 
           // Update player direction based on closest enemy

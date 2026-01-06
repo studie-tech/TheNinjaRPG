@@ -628,6 +628,8 @@ export const drawTowerDefensePlayer = (info: {
 
     // Store config in userData for later reference
     playerGroup.userData.assetConfig = playerConfig;
+    playerGroup.userData.currentDirection = playerState.direction;
+    playerGroup.userData.currentState = "idle";
 
     // Shadow - scale proportionally to player size (uses cached material)
     const shadowSprite = new Sprite(getCharacterShadowMaterial());
@@ -670,7 +672,7 @@ export const drawTowerDefensePlayer = (info: {
       frameAnimator.setDirection(playerId, spriteDirection);
     }
 
-    // Handle throw animation
+    // Handle throw animation transitions
     if (playerState.isThrowingAnimation && currentState !== "throw") {
       playerGroup.userData.currentState = "throw";
       const assetConfig =
@@ -678,8 +680,16 @@ export const drawTowerDefensePlayer = (info: {
         getPlayerAssetConfig().config;
       frameAnimator.playOnce(playerId, "throw", assetConfig);
     } else if (!playerState.isThrowingAnimation && currentState === "throw") {
-      // Animation finished callback will handle returning to idle
+      // If we are no longer in throwing state but userData still says "throw",
+      // force return to idle to prevent getting stuck in throw animation.
+      // We check getState to avoid restarting the idle animation if it's already playing.
       playerGroup.userData.currentState = "idle";
+      if (frameAnimator.getState(playerId) !== "idle") {
+        const assetConfig =
+          (playerGroup.userData.assetConfig as CharacterAssetConfig) ??
+          getPlayerAssetConfig().config;
+        frameAnimator.setState(playerId, "idle", assetConfig);
+      }
     }
 
     // Update position (in case it changed)

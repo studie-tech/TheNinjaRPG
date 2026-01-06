@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   IMG_MANUAL_TOWER_UPGRADES,
   IMG_MANUAL_TOWER_ENEMIES,
+  IMG_MANUAL_TOWER_LEADERBOARD,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { useUserData } from "@/utils/UserContext";
@@ -17,27 +18,25 @@ export default function TowerDefenseManual() {
   const canEditContent = canChangeContent(role);
 
   if (!userData) return <Loader explanation="Loading user data..." />;
-  if (!canEditContent) {
-    return (
-      <ContentBox title="Unauthorized" subtitle="You do not have permission">
-        Please return to the main manual page.
-      </ContentBox>
-    );
-  }
 
   const entries = [
-    { name: "characters", img: IMG_MANUAL_TOWER_ENEMIES },
-    { name: "upgrades", img: IMG_MANUAL_TOWER_UPGRADES },
+    { name: "leaderboard", img: IMG_MANUAL_TOWER_LEADERBOARD, public: true },
+    { name: "characters", img: IMG_MANUAL_TOWER_ENEMIES, public: false },
+    { name: "upgrades", img: IMG_MANUAL_TOWER_UPGRADES, public: false },
   ];
+
+  const visibleEntries = entries.filter((e) => e.public || canEditContent);
 
   return (
     <ContentBox
       title="Tower Defense Manual"
-      subtitle="Manage tower defense content"
+      subtitle={
+        canEditContent ? "Manage tower defense content" : "Tower defense information"
+      }
       defaultBackHref="/manual"
     >
       <div className="grid grid-cols-4 gap-4 text-center font-bold">
-        {entries
+        {visibleEntries
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((page) => (
             <Link

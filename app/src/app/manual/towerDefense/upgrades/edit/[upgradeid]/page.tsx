@@ -8,7 +8,10 @@ import { EditContent } from "@/layout/EditContent";
 import { api } from "@/app/_trpc/client";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
-import { useTowerDefenseUpgradeEditForm } from "@/hooks/towerDefenseUpgrade";
+import {
+  useTowerDefenseUpgradeEditForm,
+  updateTowerDefenseUpgradeSchema,
+} from "@/hooks/towerDefenseUpgrade";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { getUpgradeIcon, getUpgradeColor } from "@/libs/towerDefense/upgrades";
 import type { TowerDefenseUpgrade } from "@/drizzle/schema";
@@ -76,7 +79,7 @@ const SingleEditUpgrade: React.FC<SingleEditUpgradeProps> = ({ upgrade, refetch 
       </div>
 
       <EditContent
-        schema={form}
+        schema={updateTowerDefenseUpgradeSchema}
         form={form}
         formData={formData}
         showSubmit={true}

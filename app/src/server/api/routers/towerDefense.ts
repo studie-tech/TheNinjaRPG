@@ -489,19 +489,32 @@ export const towerDefenseRouter = createTRPCRouter({
       }
 
       // Check if this run was already claimed (prevent double-claiming)
+      // We use a combination of spacetimeSessionId and nonce to ensure uniqueness
+      // even if SpacetimeDB session IDs are reused (e.g. after a reset).
+      const claimId = `spacetime-${input.spacetimeSessionId}-${input.nonce}`;
       const existingRun = await ctx.drizzle.query.towerDefenseRun.findFirst({
-        where: eq(towerDefenseRun.seed, `spacetime-${input.spacetimeSessionId}`),
+        where: eq(towerDefenseRun.seed, claimId),
       });
 
       if (existingRun) {
         return errorResponse("This run has already been claimed.");
       }
 
-      await Promise.all([
+      // Update database in parallel: create run record and award points
+      const [updateResult] = await Promise.all([
+        // Award points if any
+        input.pointsEarned > 0
+          ? ctx.drizzle
+              .update(userData)
+              .set({
+                towerDefensePoints: sql`${userData.towerDefensePoints} + ${input.pointsEarned}`,
+              })
+              .where(eq(userData.userId, ctx.userId))
+          : Promise.resolve({ rowsAffected: 1 }), // Mock result for 0 points
         // Create run record in MySQL for leaderboards
         ctx.drizzle.insert(towerDefenseRun).values({
           id: nanoid(),
-          seed: `spacetime-${input.spacetimeSessionId}`,
+          seed: claimId,
           userId: ctx.userId,
           wave: input.finalWave,
           score: input.finalScore,
@@ -516,16 +529,11 @@ export const towerDefenseRouter = createTRPCRouter({
           },
           endedAt: new Date(),
         }),
-        // Award points if any
-        input.pointsEarned > 0
-          ? ctx.drizzle
-              .update(userData)
-              .set({
-                towerDefensePoints: sql`${userData.towerDefensePoints} + ${input.pointsEarned}`,
-              })
-              .where(eq(userData.userId, ctx.userId))
-          : Promise.resolve(),
       ]);
+
+      if (updateResult.rowsAffected === 0) {
+        return errorResponse("Failed to award points. User data might be missing.");
+      }
 
       return {
         success: true,

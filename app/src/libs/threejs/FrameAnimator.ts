@@ -5,8 +5,8 @@ import {
   SpriteMaterial,
   type Texture,
 } from "three";
-import type { SpriteDirection } from "@/libs/towerDefense/game";
 import type {
+  SpriteDirection,
   CharacterAssetConfig as DbCharacterAssetConfig,
   CharacterAnimationState,
 } from "@/validators/towerDefense";
@@ -565,8 +565,9 @@ export class FrameAnimator {
 
   /**
    * Update the sprite's texture based on current state and direction.
+   * @param reset - Whether to reset animation to first frame (default: true)
    */
-  private updateSpriteTexture(animation: FrameAnimation): void {
+  private updateSpriteTexture(animation: FrameAnimation, reset: boolean = true): void {
     const { currentState, currentDirection, sprite } = animation;
 
     // Try to get animation textures for current state and direction
@@ -575,13 +576,21 @@ export class FrameAnimator {
       const dirTextures = stateTextures.get(currentDirection);
       if (dirTextures && dirTextures.length > 0) {
         animation.currentTextures = dirTextures;
-        animation.currentFrame = 0;
-        animation.elapsedTime = 0;
+        if (reset) {
+          animation.currentFrame = 0;
+          animation.elapsedTime = 0;
+        } else {
+          // Ensure current frame is within bounds of the new texture set
+          animation.currentFrame = animation.currentFrame % dirTextures.length;
+        }
         animation.playing = true;
 
-        // Show first frame
-        (sprite.material as SpriteMaterial).map = dirTextures[0]!;
-        (sprite.material as SpriteMaterial).needsUpdate = true;
+        // Show current frame
+        const texture = dirTextures[animation.currentFrame];
+        if (texture) {
+          (sprite.material as SpriteMaterial).map = texture;
+          (sprite.material as SpriteMaterial).needsUpdate = true;
+        }
         return;
       }
     }
@@ -610,7 +619,8 @@ export class FrameAnimator {
 
     if (animation.currentDirection !== direction) {
       animation.currentDirection = direction;
-      this.updateSpriteTexture(animation);
+      // PERFORMANCE: Don't reset animation frame when just changing direction
+      this.updateSpriteTexture(animation, false);
     }
   }
 
@@ -696,6 +706,13 @@ export class FrameAnimator {
         }
       }
     });
+  }
+
+  /**
+   * Get the current animation state for an entity.
+   */
+  getState(id: string): AnimationState | undefined {
+    return this.animations.get(id)?.currentState;
   }
 
   /**

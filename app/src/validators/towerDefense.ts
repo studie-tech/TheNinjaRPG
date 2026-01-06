@@ -144,6 +144,8 @@ export const towerDefenseGameStateSchema = z.object({
   existingSession: z
     .object({
       id: z.string(),
+      seed: z.string(),
+      gridSize: z.number().int().min(5),
       wave: z.number().int().min(0),
       score: z.number().int().min(0),
       health: z.number().int().min(0),
