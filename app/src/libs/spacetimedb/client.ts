@@ -46,6 +46,26 @@ export interface SpacetimeDBConfig {
 
 const DEBUG = false;
 
+/**
+ * Validate user ID to prevent SQL injection in SpacetimeDB queries.
+ * Only allows alphanumerics, dashes, and underscores.
+ * Returns the validated ID or null if invalid.
+ */
+const SAFE_USER_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+function validateUserId(userId: string | undefined | null): string | null {
+  if (!userId) return null;
+  if (userId === "guest") return "guest";
+  if (!SAFE_USER_ID_PATTERN.test(userId)) {
+    console.warn(
+      "[SpacetimeDB] Invalid user ID rejected - contains unsafe characters:",
+      userId.substring(0, 20),
+    );
+    return null;
+  }
+  return userId;
+}
+
 // Environment-based config
 export const getSpacetimeDBConfig = (): SpacetimeDBConfig => {
   const isProd = process.env.NODE_ENV === "production";
@@ -126,13 +146,16 @@ export class SpacetimeDBConnection {
         userId &&
         userId !== this.currentUserId
       ) {
-        this.currentUserId = userId;
-        this.setupGlobalSubscriptions();
+        const validatedId = validateUserId(userId);
+        if (validatedId) {
+          this.currentUserId = validatedId;
+          this.setupGlobalSubscriptions();
+        }
       }
       return;
     }
 
-    this.currentUserId = userId ?? "guest";
+    this.currentUserId = validateUserId(userId) ?? "guest";
     this.connectionState = "connecting";
     this.emit({ type: "connection_state", state: "connecting" });
 

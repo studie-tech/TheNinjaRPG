@@ -11,6 +11,7 @@ import {
   drawCombatBackground,
   drawCombatEffects,
   validateActionTarget,
+  resetCombatCaches,
 } from "@/libs/threejs/combat";
 import { OrbitControls } from "@/libs/threejs/OrbitControls";
 import { COMBAT_SECONDS, COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
@@ -911,8 +912,9 @@ const Combat: React.FC<CombatProps> = (props) => {
         // Cancel animation frame before cleanup
         performanceMonitor.cancelFrame(animationId);
 
-        // Reset profiler data
+        // Reset profiler and combat caches
         profiler.reset();
+        resetCombatCaches();
 
         if (zoomTimeout) clearTimeout(zoomTimeout);
         void setBattleAtom(undefined);

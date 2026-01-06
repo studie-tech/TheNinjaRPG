@@ -88,6 +88,17 @@ const effectMeshCache = new Map<string, Group>();
 const userMeshCache = new Map<string, Group>();
 
 /**
+ * Reset combat caches - call this when combat component unmounts
+ * to prevent stale references on next combat start
+ */
+export const resetCombatCaches = () => {
+  effectMeshCache.clear();
+  userMeshCache.clear();
+  pendingSfxQueue = [];
+  wasMovingLastFrame = false;
+};
+
+/**
  * Validates whether an action can be performed on a target tile.
  * Used by both click handlers (for mobile compatibility) and tile highlighting.
  * Returns validation result along with computed data for reuse.
