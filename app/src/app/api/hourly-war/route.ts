@@ -41,8 +41,13 @@ export async function GET() {
 
     // Check if daily decay should run (separate from hourly tasks)
     const dailyDecayTimer = await getGameSetting(drizzleDB, DAILY_DECAY_TIMER);
-    const isNewDay = now.getUTCDate() !== dailyDecayTimer.time.getUTCDate();
-    const shouldRunDailyDecay = isNewDay;
+    const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const prevUTC = Date.UTC(
+      dailyDecayTimer.time.getUTCFullYear(),
+      dailyDecayTimer.time.getUTCMonth(),
+      dailyDecayTimer.time.getUTCDate(),
+    );
+    const shouldRunDailyDecay = nowUTC !== prevUTC;
 
     let activeWars = await fetchActiveWars(drizzleDB);
     // Filter to VILLAGE_WAR and WAR_RAID for decay (include Outlaws/Factions)
@@ -194,6 +199,9 @@ export async function GET() {
 
       // Update daily decay timer
       await updateGameSetting(drizzleDB, DAILY_DECAY_TIMER, 0, now);
+
+      // Refetch active wars after decay since handleWarEnd might have been called
+      activeWars = await fetchActiveWars(drizzleDB);
     }
 
     // =============================================

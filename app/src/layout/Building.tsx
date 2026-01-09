@@ -42,7 +42,7 @@ const Building: React.FC<BuildingProps> = (props) => {
 
   // Calculate effective level (includes war victory bonus)
   const effectiveLevel = getEffectiveStructureLevel(structure);
-  const hasBonus = effectiveLevel > structure.level;
+  const delta = effectiveLevel - structure.level;
 
   // Blocks
   const TextBlock = (
@@ -51,7 +51,8 @@ const Building: React.FC<BuildingProps> = (props) => {
       <div className="flex flex-row items-center justify-center gap-1">
         <p>
           Lvl. {structure.level}
-          {hasBonus && <span className="text-green-500"> (+{effectiveLevel - structure.level})</span>}
+          {delta > 0 && <span className="text-green-500"> (+{delta})</span>}
+          {delta < 0 && <span className="text-red-500"> (−{Math.abs(delta)})</span>}
         </p>{" "}
         <TooltipProvider delayDuration={50}>
           <Tooltip>
@@ -219,14 +220,15 @@ export const StructureRewardEntries = (structure: VillageStructure) => {
   const baseLevel = structure.level;
   const effectiveLevel = getEffectiveStructureLevel(structure);
   const bonusLevel = effectiveLevel - baseLevel;
-  const hasBonus = bonusLevel > 0;
 
   // Helper to format value with bonus
   const formatValue = (perLvl: number, suffix: string = "") => {
     const baseValue = perLvl * baseLevel;
     const bonusValue = perLvl * bonusLevel;
-    if (hasBonus && bonusValue > 0) {
+    if (bonusLevel > 0) {
       return `${baseValue}${suffix} (+${bonusValue}${suffix})`;
+    } else if (bonusLevel < 0) {
+      return `${baseValue}${suffix} (−${Math.abs(bonusValue)}${suffix})`;
     }
     return `${baseValue}${suffix}`;
   };
@@ -241,10 +243,16 @@ export const StructureRewardEntries = (structure: VillageStructure) => {
     }
     if (structure.bankInterestPerLvl > 0) {
       const baseInterest = calcBankInterest(structure.bankInterestPerLvl * baseLevel);
-      const effectiveInterest = calcBankInterest(structure.bankInterestPerLvl * effectiveLevel);
+      const effectiveInterest = calcBankInterest(
+        structure.bankInterestPerLvl * effectiveLevel,
+      );
       const bonusInterest = effectiveInterest - baseInterest;
-      if (hasBonus && bonusInterest > 0) {
+      if (bonusInterest > 0) {
         msgs.push(`Bank Interest: +${baseInterest}% (+${bonusInterest.toFixed(1)}%)`);
+      } else if (bonusInterest < 0) {
+        msgs.push(
+          `Bank Interest: +${baseInterest}% (−${Math.abs(bonusInterest).toFixed(1)}%)`,
+        );
       } else {
         msgs.push(`Bank Interest: +${baseInterest}%`);
       }
@@ -257,31 +265,41 @@ export const StructureRewardEntries = (structure: VillageStructure) => {
       msgs.push(`Clans: +${formatValue(clansPerLvl)}`);
     }
     if (structure.hospitalSpeedupPerLvl > 0) {
-      msgs.push(`Hospital Speed: +${formatValue(structure.hospitalSpeedupPerLvl, "%")}`);
+      msgs.push(
+        `Hospital Speed: +${formatValue(structure.hospitalSpeedupPerLvl, "%")}`,
+      );
     }
     if (structure.itemDiscountPerLvl > 0) {
       msgs.push(`Item discount: ${formatValue(structure.itemDiscountPerLvl, "%")}`);
     }
     if (structure.patrolsPerLvl > 0) {
-      msgs.push(`Patrol attacking enemies: +${formatValue(structure.patrolsPerLvl, "%")}`);
+      msgs.push(
+        `Patrol attacking enemies: +${formatValue(structure.patrolsPerLvl, "%")}`,
+      );
     }
     if (structure.ramenDiscountPerLvl > 0) {
       msgs.push(`Ramen discount: ${formatValue(structure.ramenDiscountPerLvl, "%")}`);
     }
     if (structure.regenIncreasePerLvl > 0) {
-      msgs.push(`Regen in Village: +${formatValue(structure.regenIncreasePerLvl, "%")}`);
+      msgs.push(
+        `Regen in Village: +${formatValue(structure.regenIncreasePerLvl, "%")}`,
+      );
     }
     if (structure.sleepRegenPerLvl > 0) {
       msgs.push(`Sleep Regen: +${formatValue(structure.sleepRegenPerLvl, "%")}`);
     }
     if (structure.structureDiscountPerLvl > 0) {
-      msgs.push(`Structure Discount: ${formatValue(structure.structureDiscountPerLvl, "%")}`);
+      msgs.push(
+        `Structure Discount: ${formatValue(structure.structureDiscountPerLvl, "%")}`,
+      );
     }
     if (structure.trainBoostPerLvl > 0) {
       msgs.push(`Training Boost: +${formatValue(structure.trainBoostPerLvl, "%")}`);
     }
     if (structure.villageDefencePerLvl > 0) {
-      msgs.push(`Village Defence: +${formatValue(structure.villageDefencePerLvl, "%")}`);
+      msgs.push(
+        `Village Defence: +${formatValue(structure.villageDefencePerLvl, "%")}`,
+      );
     }
   }
   if (msgs.length === 0) msgs.push("No rewards for this structure");

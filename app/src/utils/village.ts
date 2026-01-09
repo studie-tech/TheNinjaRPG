@@ -78,13 +78,17 @@ export type StructureAttribute =
 /**
  * Calculates the effective level of a structure, including temporary bonuses from war victories.
  * @param structure - The village structure.
+ * @param now - The current date (optional, defaults to now)
  * @returns The effective level including temporary bonus if not expired.
  */
-export const getEffectiveStructureLevel = (structure: VillageStructure): number => {
-  const now = new Date();
+export const getEffectiveStructureLevel = (
+  structure: VillageStructure,
+  now: Date = new Date(),
+): number => {
   const bonusExpiry = structure.temporaryLevelBonusExpiresAt;
   const bonusActive = bonusExpiry && new Date(bonusExpiry) > now;
-  return structure.level + (bonusActive ? structure.temporaryLevelBonus : 0);
+  const level = structure.level + (bonusActive ? structure.temporaryLevelBonus : 0);
+  return Math.max(0, level);
 };
 
 /**
@@ -171,10 +175,10 @@ export const calcStructureUpgrade = (
   const subTotal = cost + tax;
   // Discount (uses effective level for benefits)
   const townHall = village?.structures.find((s) => s.name === "Town Hall");
-  const discountLevel = !!townHall
-    ? getEffectiveStructureLevel(townHall) * townHall?.structureDiscountPerLvl
-    : 1;
-  const discount = Math.floor(subTotal * (0 + discountLevel / 100));
+  const discountLevel = townHall
+    ? getEffectiveStructureLevel(townHall) * (townHall.structureDiscountPerLvl ?? 0)
+    : 0;
+  const discount = Math.floor(subTotal * (discountLevel / 100));
   // Return result & infor on calculation
   return { cost, tax, discount, total: subTotal - discount };
 };
