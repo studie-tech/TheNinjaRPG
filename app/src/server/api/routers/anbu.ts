@@ -611,7 +611,7 @@ export const anbuRouter = createTRPCRouter({
           const healthPercentage = Math.round(
             (structure.curSp / structure.maxSp) * 100,
           );
-          return `<li>${structure.name} (Level ${structure.level}) - ${healthPercentage}% Health</li>`;
+          return `<li>${structure.name} (Level ${getEffectiveStructureLevel(structure)}) - ${healthPercentage}% Health</li>`;
         })
         .join("");
 

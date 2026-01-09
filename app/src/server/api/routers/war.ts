@@ -336,7 +336,6 @@ export const warRouter = createTRPCRouter({
           sector: input.sectorId,
           shrineHp: getShrineHpByLevel(targetSector?.shrineLevel),
           shrineMaxHp: getShrineHpByLevel(targetSector?.shrineLevel),
-          dailyTokenReduction: 1000,
         }),
         ...(!targetSector
           ? [
@@ -527,7 +526,6 @@ export const warRouter = createTRPCRouter({
           defenderVillageId: input.targetVillageId,
           status: "ACTIVE",
           type: warType,
-          dailyTokenReduction: 1000,
           targetStructureRoute: structure.route,
         }),
       ]);

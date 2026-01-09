@@ -65,7 +65,7 @@
       "schedule": "0 * * * *"
     },
     {
-      "path": "/api/daily-war",
+      "path": "/api/hourly-war",
       "schedule": "0 * * * *"
     },
     {

@@ -3456,7 +3456,6 @@ export const war = mysqlTable(
     shrineMaxHp: smallint("shrineMaxHp")
       .default(consts.SHRINE_HP_BY_LEVEL[1])
       .notNull(),
-    dailyTokenReduction: int("dailyTokenReduction").default(1000).notNull(),
     lastTokenReductionAt: datetime("lastTokenReductionAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),

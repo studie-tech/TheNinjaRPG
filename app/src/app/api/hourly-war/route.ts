@@ -136,7 +136,7 @@ export async function GET() {
           defenderHealthAfterDrain <= 0
         ) {
           // Apply the health drain before ending war so handleWarEnd sees accurate values
-          await drizzleDB
+          const result = await drizzleDB
             .update(war)
             .set({
               attackerWarHealth: sql`GREATEST(attackerWarHealth - ${totalHealthDrain}, 0)`,
@@ -144,34 +144,52 @@ export async function GET() {
             })
             .where(and(eq(war.id, activeWar.id), isNull(war.endedAt)));
 
-          // Refetch the war to get updated health values
-          const updatedWars = await fetchActiveWars(drizzleDB);
-          const updatedWar = updatedWars.find((w) => w.id === activeWar.id);
-          if (updatedWar) {
-            await handleWarEnd(updatedWar);
+          // Only proceed if the war update actually modified a row (guarded update)
+          if (result.rowsAffected > 0) {
+            // Update token counts
+            await Promise.all([
+              drizzleDB
+                .update(village)
+                .set({ tokens: activeWar.attackerVillage.tokens })
+                .where(eq(village.id, activeWar.attackerVillage.id)),
+              drizzleDB
+                .update(village)
+                .set({ tokens: activeWar.defenderVillage.tokens })
+                .where(eq(village.id, activeWar.defenderVillage.id)),
+            ]);
+
+            // Refetch the war to get updated health values
+            const updatedWars = await fetchActiveWars(drizzleDB);
+            const updatedWar = updatedWars.find((w) => w.id === activeWar.id);
+            if (updatedWar) {
+              await handleWarEnd(updatedWar);
+            }
           }
           continue;
         }
 
         // Update token counts, war health drain, and last reduction time
-        await Promise.all([
-          drizzleDB
-            .update(village)
-            .set({ tokens: activeWar.attackerVillage.tokens })
-            .where(eq(village.id, activeWar.attackerVillage.id)),
-          drizzleDB
-            .update(village)
-            .set({ tokens: activeWar.defenderVillage.tokens })
-            .where(eq(village.id, activeWar.defenderVillage.id)),
-          drizzleDB
-            .update(war)
-            .set({
-              lastTokenReductionAt: now,
-              attackerWarHealth: sql`GREATEST(attackerWarHealth - ${totalHealthDrain}, 0)`,
-              defenderWarHealth: sql`GREATEST(defenderWarHealth - ${totalHealthDrain}, 0)`,
-            })
-            .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
-        ]);
+        const result = await drizzleDB
+          .update(war)
+          .set({
+            lastTokenReductionAt: now,
+            attackerWarHealth: sql`GREATEST(attackerWarHealth - ${totalHealthDrain}, 0)`,
+            defenderWarHealth: sql`GREATEST(defenderWarHealth - ${totalHealthDrain}, 0)`,
+          })
+          .where(and(eq(war.id, activeWar.id), isNull(war.endedAt)));
+
+        if (result.rowsAffected > 0) {
+          await Promise.all([
+            drizzleDB
+              .update(village)
+              .set({ tokens: activeWar.attackerVillage.tokens })
+              .where(eq(village.id, activeWar.attackerVillage.id)),
+            drizzleDB
+              .update(village)
+              .set({ tokens: activeWar.defenderVillage.tokens })
+              .where(eq(village.id, activeWar.defenderVillage.id)),
+          ]);
+        }
       }
 
       // Update daily decay timer
