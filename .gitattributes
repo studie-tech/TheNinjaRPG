@@ -1,0 +1,2 @@
+# Mark Drizzle snapshots as generated to exclude them from GitHub contribution stats
+app/drizzle/migrations/meta/*.json linguist-generated
