@@ -142,7 +142,7 @@ export async function GET() {
               attackerWarHealth: sql`GREATEST(attackerWarHealth - ${totalHealthDrain}, 0)`,
               defenderWarHealth: sql`GREATEST(defenderWarHealth - ${totalHealthDrain}, 0)`,
             })
-            .where(eq(war.id, activeWar.id));
+            .where(and(eq(war.id, activeWar.id), isNull(war.endedAt)));
 
           // Refetch the war to get updated health values
           const updatedWars = await fetchActiveWars(drizzleDB);
@@ -170,7 +170,7 @@ export async function GET() {
               attackerWarHealth: sql`GREATEST(attackerWarHealth - ${totalHealthDrain}, 0)`,
               defenderWarHealth: sql`GREATEST(defenderWarHealth - ${totalHealthDrain}, 0)`,
             })
-            .where(eq(war.id, activeWar.id)),
+            .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
         ]);
       }
 

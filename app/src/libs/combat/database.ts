@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { eq, and, or, sql, lt, gte, inArray } from "drizzle-orm";
+import { eq, and, or, sql, lt, gte, inArray, isNull } from "drizzle-orm";
 import { HOSPITAL_LONG, HOSPITAL_LAT } from "@/drizzle/constants";
 import {
   battle,
@@ -415,7 +415,7 @@ export const updateWars = async (
                       .set({
                         shrineHp: sql`GREATEST(LEAST(shrineHp + ${result.shrineChangeHp}, shrineMaxHp), 0)`,
                       })
-                      .where(eq(war.id, w.id)),
+                      .where(and(eq(war.id, w.id), isNull(war.endedAt))),
                   ]
                 : []),
               // Update war health if we're in a village war or raid
@@ -429,7 +429,7 @@ export const updateWars = async (
                             .set({
                               attackerWarHealth: sql`GREATEST(LEAST(attackerWarHealth + ${result.warHealthChange}, attackerWarHealthMax), 0)`,
                             })
-                            .where(eq(war.id, w.id)),
+                            .where(and(eq(war.id, w.id), isNull(war.endedAt))),
                         ]
                       : [
                           client
@@ -437,7 +437,7 @@ export const updateWars = async (
                             .set({
                               defenderWarHealth: sql`GREATEST(LEAST(defenderWarHealth + ${result.warHealthChange}, defenderWarHealthMax), 0)`,
                             })
-                            .where(eq(war.id, w.id)),
+                            .where(and(eq(war.id, w.id), isNull(war.endedAt))),
                         ]),
                   ]
                 : []),

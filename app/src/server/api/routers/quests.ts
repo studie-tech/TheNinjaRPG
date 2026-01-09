@@ -1586,7 +1586,7 @@ export const updateRewards = async (info: {
                 .set({
                   defenderWarHealth: sql`GREATEST(defenderWarHealth - ${rewards.reward_war_damage}, 0)`,
                 })
-                .where(eq(war.id, activeWar.id)),
+                .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
             );
           } else {
             // Defender damages attacker's war health
@@ -1596,7 +1596,7 @@ export const updateRewards = async (info: {
                 .set({
                   attackerWarHealth: sql`GREATEST(attackerWarHealth - ${rewards.reward_war_damage}, 0)`,
                 })
-                .where(eq(war.id, activeWar.id)),
+                .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
             );
           }
         }
@@ -1611,7 +1611,7 @@ export const updateRewards = async (info: {
                 .set({
                   attackerWarHealth: sql`LEAST(attackerWarHealth + ${rewards.reward_war_healing}, attackerWarHealthMax)`,
                 })
-                .where(eq(war.id, activeWar.id)),
+                .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
             );
           } else {
             // Defender heals defender's war health
@@ -1621,7 +1621,7 @@ export const updateRewards = async (info: {
                 .set({
                   defenderWarHealth: sql`LEAST(defenderWarHealth + ${rewards.reward_war_healing}, defenderWarHealthMax)`,
                 })
-                .where(eq(war.id, activeWar.id)),
+                .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
             );
           }
         }

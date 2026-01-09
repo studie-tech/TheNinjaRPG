@@ -35,7 +35,8 @@ import {
   SHRINE_MAX_PER_VILLAGE,
   SHRINE_BOOST_COST,
   SHRINE_BOOST_TYPES,
-  SHRINE_BOOST_PERC,
+  SHRINE_BOOST_BASE_PERC,
+  SHRINE_BOOST_PER_SHRINE_PERC,
   SHRINE_WEEKLY_MAINTENANCE_COST,
   SHRINE_AI_UNLOCK_COST,
   SHRINE_UPGRADE_COST,
@@ -334,7 +335,11 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
       return { boostType, secondsLeft };
     })
     .filter(({ secondsLeft }) => secondsLeft > 0);
-  const boostPercentage = level3Shrines * SHRINE_BOOST_PERC;
+  // Base 10% with 1+ shrines, plus ~3.33% per additional shrine (10-20% range)
+  const boostPercentage =
+    level3Shrines > 0
+      ? SHRINE_BOOST_BASE_PERC + (level3Shrines - 1) * SHRINE_BOOST_PER_SHRINE_PERC
+      : 0;
 
   return (
     <div className={cn("grid grid-cols-1 gap-4 p-3")}>

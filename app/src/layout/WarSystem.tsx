@@ -23,8 +23,8 @@ import { WAR_FUNDS_COST } from "@/drizzle/constants";
 import { WAR_DECLARATION_COST } from "@/drizzle/constants";
 import {
   WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
-  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4,
-  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8,
 } from "@/drizzle/constants";
 import { WAR_VICTORY_TOKEN_BONUS } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
@@ -706,8 +706,8 @@ export const DeclareSectorWarDialogContent: React.FC<DialogContentProps> = (prop
         The cost of declaring war is {WAR_DECLARATION_COST.toLocaleString()} Village
         Tokens. Each day at war reduces your tokens by{" "}
         {WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}% (increasing to{" "}
-        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4}% after 4 days and{" "}
-        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10}% after 10 days).
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5}% after 5 days and{" "}
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8}% after 8 days).
       </p>
       <p>Do you confirm?</p>
     </div>
@@ -785,8 +785,8 @@ export const InitiateVillageWarDialogContent: React.FC<DialogContentProps> = (
         You are about to declare war on {props.sectorVillage.name}. Are you sure? The
         cost of declaring war is {WAR_DECLARATION_COST.toLocaleString()} Village Tokens.
         Each day at war reduces your tokens by {WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}%
-        (increasing to {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4}% after 4 days and{" "}
-        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10}% after 10 days).
+        (increasing to {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5}% after 5 days and{" "}
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8}% after 8 days).
       </p>
     </div>
   );
@@ -804,8 +804,8 @@ export const InitiateRaidDialogContent: React.FC<DialogContentProps> = (props) =
         structure. The cost of starting a raid is{" "}
         {WAR_DECLARATION_COST.toLocaleString()} tokens. Each day at war reduces your
         tokens by {WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}% (increasing to{" "}
-        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4}% after 4 days and{" "}
-        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10}% after 10 days). If you win, the
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5}% after 5 days and{" "}
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8}% after 8 days). If you win, the
         structure level will be reduced by 3 and you will receive{" "}
         {WAR_VICTORY_TOKEN_BONUS.toLocaleString()} tokens.
       </div>

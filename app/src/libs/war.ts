@@ -1,7 +1,7 @@
 import { drizzleDB } from "@/server/db";
 import { war, village, villageStructure, userRequest } from "@/drizzle/schema";
 import { userData, notification, gameSetting, sector } from "@/drizzle/schema";
-import { eq, and, or, ne } from "drizzle-orm";
+import { eq, and, or, ne, isNull } from "drizzle-orm";
 import { sql, inArray, notInArray } from "drizzle-orm";
 import {
   WAR_VICTORY_TOKEN_BONUS,
@@ -275,7 +275,10 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
   // Run updates
   await Promise.all([
     // General updates
-    drizzleDB.update(war).set({ status, endedAt }).where(eq(war.id, activeWar.id)),
+    drizzleDB
+      .update(war)
+      .set({ status, endedAt })
+      .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
     drizzleDB.insert(notification).values({
       userId: TERR_BOT_ID,
       content: notificationContent,
@@ -322,7 +325,13 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
           drizzleDB
             .update(war)
             .set({ status: "DEFENDER_VICTORY", endedAt })
-            .where(and(ne(war.id, activeWar.id), eq(war.sector, activeWar.sector))),
+            .where(
+              and(
+                ne(war.id, activeWar.id),
+                eq(war.sector, activeWar.sector),
+                isNull(war.endedAt),
+              ),
+            ),
           // Damage loser's townhall when losing a sector
           drizzleDB
             .update(villageStructure)
