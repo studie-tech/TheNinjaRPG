@@ -4,7 +4,6 @@ import { userData, notification, gameSetting, sector } from "@/drizzle/schema";
 import { eq, and, or, ne } from "drizzle-orm";
 import { sql, inArray, notInArray } from "drizzle-orm";
 import {
-  WAR_STRUCTURE_UPGRADE_BLOCK_DAYS,
   WAR_VICTORY_TOKEN_BONUS,
   WAR_WINNING_BOOST_DAYS,
   WAR_WINNING_BOOST_REGEN_PERC,
@@ -16,6 +15,7 @@ import {
   WAR_VICTORY_STRUCTURE_BOOST_DAYS,
   WAR_VICTORY_BOOSTED_STRUCTURES,
   WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
+  WAR_DEFEAT_STRUCTURE_PENALTY_DAYS,
   WAR_SECTOR_LOSS_TOWNHALL_DAMAGE,
 } from "@/drizzle/constants";
 import { getUnique } from "@/utils/grouping";
@@ -198,10 +198,6 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
     WAR_WINNING_COOLDOWN_DAYS * DAY_S,
     endedAt,
   );
-  const structureUpgradeBlock = secondsFromDate(
-    WAR_STRUCTURE_UPGRADE_BLOCK_DAYS * DAY_S,
-    endedAt,
-  );
   const boostEndAt = secondsFromNow(WAR_WINNING_BOOST_DAYS * DAY_S);
 
   // Check if war should end based on tokens OR war health
@@ -211,21 +207,42 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
   const defenderLost =
     activeWar.defenderVillage.tokens <= 0 || activeWar.defenderWarHealth <= 0;
 
-  // If neither side has lost, return without ending
-  if (!attackerLost && !defenderLost) {
-    return activeWar;
+  // Determine winner - handles normal end (tokens/health <= 0) and 14-day auto-resolution
+  let isDraw = false;
+  let winnerVillageId: string;
+  let loserVillageId: string;
+
+  if (attackerLost && defenderLost) {
+    // Both sides lost simultaneously - draw
+    isDraw = true;
+    winnerVillageId = activeWar.attackerVillage.id;
+    loserVillageId = activeWar.defenderVillage.id;
+  } else if (attackerLost) {
+    // Attacker lost
+    winnerVillageId = activeWar.defenderVillage.id;
+    loserVillageId = activeWar.attackerVillage.id;
+  } else if (defenderLost) {
+    // Defender lost
+    winnerVillageId = activeWar.attackerVillage.id;
+    loserVillageId = activeWar.defenderVillage.id;
+  } else {
+    // Neither side lost (14-day auto-resolution) - determine winner by war health
+    if (activeWar.attackerWarHealth === activeWar.defenderWarHealth) {
+      // Equal health - draw
+      isDraw = true;
+      winnerVillageId = activeWar.attackerVillage.id;
+      loserVillageId = activeWar.defenderVillage.id;
+    } else if (activeWar.attackerWarHealth > activeWar.defenderWarHealth) {
+      // Attacker has more health - attacker wins
+      winnerVillageId = activeWar.attackerVillage.id;
+      loserVillageId = activeWar.defenderVillage.id;
+    } else {
+      // Defender has more health - defender wins
+      winnerVillageId = activeWar.defenderVillage.id;
+      loserVillageId = activeWar.attackerVillage.id;
+    }
   }
 
-  // Get IDs of villages & factions that lost and won
-  // Note both villages could be losing if they both got their points/health deducted simultaneously
-  const isDraw = attackerLost && defenderLost;
-  const winnerVillageId = !attackerLost
-    ? activeWar.attackerVillage.id
-    : activeWar.defenderVillage.id;
-  const loserVillageId =
-    winnerVillageId === activeWar.attackerVillage.id
-      ? activeWar.defenderVillage.id
-      : activeWar.attackerVillage.id;
   const status: WarState = isDraw
     ? "DRAW"
     : winnerVillageId === activeWar.attackerVillage.id
@@ -331,13 +348,16 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
                 lastWarEndedAt: endedAt,
               })
               .where(inArray(village.id, [loserVillageId, winnerVillageId])),
-            // Enhanced punishment: -3 levels on structures for both sides in a draw
+            // Enhanced punishment: -3 temporary levels on structures for both sides in a draw
             // VILLAGE_WAR: ALL structures, WAR_RAID: only targeted structure
             drizzleDB
               .update(villageStructure)
               .set({
-                level: sql`GREATEST(level - ${WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS}, 1)`,
-                lastUpgradedAt: structureUpgradeBlock,
+                temporaryLevelBonus: -WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
+                temporaryLevelBonusExpiresAt: secondsFromDate(
+                  WAR_DEFEAT_STRUCTURE_PENALTY_DAYS * DAY_S,
+                  endedAt,
+                ),
               })
               .where(
                 activeWar.type === "WAR_RAID"
@@ -418,13 +438,16 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
                 lastWarEndedAt: endedAt,
               })
               .where(eq(village.id, winnerVillageId)),
-            // Enhanced punishment: -3 levels on structures for loser
+            // Enhanced punishment: -3 temporary levels on structures for loser
             // VILLAGE_WAR: ALL structures, WAR_RAID: only targeted structure
             drizzleDB
               .update(villageStructure)
               .set({
-                level: sql`GREATEST(level - ${WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS}, 1)`,
-                lastUpgradedAt: structureUpgradeBlock,
+                temporaryLevelBonus: -WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
+                temporaryLevelBonusExpiresAt: secondsFromDate(
+                  WAR_DEFEAT_STRUCTURE_PENALTY_DAYS * DAY_S,
+                  endedAt,
+                ),
               })
               .where(
                 activeWar.type === "WAR_RAID"

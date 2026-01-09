@@ -7,13 +7,14 @@ import {
   questHistory,
   userData,
 } from "@/drizzle/schema";
-import { eq, gt, lt, and, isNotNull, isNull, inArray } from "drizzle-orm";
+import { eq, lt, and, isNotNull, isNull, inArray } from "drizzle-orm";
 import {
   WAR_TOKEN_REDUCTION_INTERVAL_HOURS,
   WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
-  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4,
-  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8,
   WAR_DAILY_HEALTH_DRAIN,
+  WAR_MAX_DURATION_DAYS,
 } from "@/drizzle/constants";
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -81,13 +82,19 @@ export async function GET() {
           (now.getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24),
         );
 
+        // Check if war has exceeded max duration (14 days) - auto-resolve
+        if (warDuration >= WAR_MAX_DURATION_DAYS) {
+          await handleWarEnd(activeWar);
+          continue;
+        }
+
         // Calculate decay percentage based on war duration
-        // Day 1-3: 3%, Day 4-9: 6%, Day 10+: 10%
+        // Day 1-4: 3%, Day 5-7: 6%, Day 8+: 10%
         let decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_BASE;
-        if (warDuration >= 10) {
-          decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10;
-        } else if (warDuration >= 4) {
-          decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4;
+        if (warDuration >= 8) {
+          decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8;
+        } else if (warDuration >= 5) {
+          decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5;
         }
 
         // Calculate token reduction as percentage of current tokens
@@ -190,7 +197,8 @@ export async function GET() {
 }
 
 /**
- * Clear expired temporary structure level bonuses from war victories
+ * Clear expired temporary structure level bonuses from war victories/defeats
+ * Handles both positive bonuses (winner) and negative bonuses (loser penalties)
  */
 async function clearExpiredStructureBonuses(now: Date) {
   await drizzleDB
@@ -201,7 +209,7 @@ async function clearExpiredStructureBonuses(now: Date) {
     })
     .where(
       and(
-        gt(villageStructure.temporaryLevelBonus, 0),
+        isNotNull(villageStructure.temporaryLevelBonusExpiresAt),
         lt(villageStructure.temporaryLevelBonusExpiresAt, now),
       ),
     );

@@ -1177,8 +1177,8 @@ export const WAR_WINNING_BOOST_DAYS = 3;
 export const WAR_WINNING_BOOST_REGEN_PERC = 40;
 export const WAR_WINNING_BOOST_TRAINING_PERC = 20;
 export const WAR_TOKEN_REDUCTION_INTERVAL_HOURS = 24; // How often tokens should be reduced
-export const WAR_LOSING_COOLDOWN_DAYS = 4; // Cooldown for losing a war
-export const WAR_WINNING_COOLDOWN_DAYS = 2; // Cooldown for winning a war
+export const WAR_LOSING_COOLDOWN_DAYS = 10; // Cooldown for losing a war
+export const WAR_WINNING_COOLDOWN_DAYS = 3; // Cooldown for winning a war
 export const WAR_STRUCTURE_UPGRADE_BLOCK_DAYS = 7; // Structure upgrade block duration
 export const WAR_VICTORY_TOKEN_BONUS = 500000; // Victory bonus tokens
 export const WAR_PURCHASE_SHRINE_TOKEN_COST = 100000; // Cost in village tokens to purchase a shrine
@@ -1206,12 +1206,12 @@ export const WAR_HEALTH_KAGEDEATH_REMOVE = 50;
 
 // Sector control impact on townhall
 export const WAR_SECTOR_LOSS_TOWNHALL_DAMAGE = 300; // Townhall HP lost when losing a sector
-export const WAR_SECTOR_RECAPTURE_TOWNHALL_HEAL = 100; // Townhall HP recovered when recapturing a sector
+export const WAR_SECTOR_RECAPTURE_TOWNHALL_HEAL = 150; // Townhall HP recovered when recapturing a sector
 export const WAR_SECTOR_RECAPTURE_WINDOW_DAYS = 7; // Days within which recapture bonus applies
 
 // Enhanced rewards
 export const WAR_VICTORY_STRUCTURE_BOOST_LEVELS = 3; // Temporary level boost for structures on war victory
-export const WAR_VICTORY_STRUCTURE_BOOST_DAYS = 7; // Days the structure boost lasts
+export const WAR_VICTORY_STRUCTURE_BOOST_DAYS = 5; // Days the structure boost lasts
 export const WAR_VICTORY_BOOSTED_STRUCTURES = [
   "/traininggrounds",
   "/ramenshop",
@@ -1222,14 +1222,18 @@ export const WAR_VICTORY_BOOSTED_STRUCTURES = [
 
 // Enhanced punishment
 export const WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS = 3; // Levels lost on all structures when losing a war
+export const WAR_DEFEAT_STRUCTURE_PENALTY_DAYS = 7; // Days the structure penalty lasts (temporary)
 
 // Percentage-based token decay
 export const WAR_DAILY_TOKEN_DECAY_PERCENT_BASE = 3; // 3% daily decay
-export const WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4 = 6; // 6% daily decay after 4 days
-export const WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10 = 10; // 10% daily decay after 10 days
+export const WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5 = 6; // 6% daily decay after 5 days
+export const WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8 = 10; // 10% daily decay after 8 days
 
 // Daily war health drain (affects both sides equally each day)
-export const WAR_DAILY_HEALTH_DRAIN = 100; // War health drained from both sides daily
+export const WAR_DAILY_HEALTH_DRAIN = 400; // War health drained from both sides daily
+
+// War duration limit
+export const WAR_MAX_DURATION_DAYS = 14; // Maximum war duration before auto-resolution
 
 // Skill point leveling constants
 export const SKILL_POINT_MIN_LEVEL = 21; // Minimum level to start gaining skill points from leveling
@@ -1254,7 +1258,8 @@ export const WAR_SHRINE_MAINTENANCE_DAYS = 7;
 export const WAR_TYPES = ["VILLAGE_WAR", "SECTOR_WAR", "WAR_RAID"] as const;
 export const SHRINE_MAX_PER_VILLAGE = 4;
 export const SHRINE_BOOST_COST = 15_000;
-export const SHRINE_BOOST_PERC = 2;
+export const SHRINE_BOOST_BASE_PERC = 10; // Base shrine boost with 1+ shrines (10%)
+export const SHRINE_BOOST_PER_SHRINE_PERC = 3.33; // Additional boost per shrine (~3.33% per additional shrine for 10-20% range)
 export const SHRINE_UPGRADE_COST = 60_000;
 export const SHRINE_BOOST_DURATION_HOURS = 2;
 export const SHRINE_AI_UNLOCK_COST = 10_000;

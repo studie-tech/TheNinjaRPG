@@ -8,7 +8,8 @@ import {
   FED_NORMAL_BANK_INTEREST,
   FED_SILVER_BANK_INTEREST,
   FED_GOLD_BANK_INTEREST,
-  SHRINE_BOOST_PERC,
+  SHRINE_BOOST_BASE_PERC,
+  SHRINE_BOOST_PER_SHRINE_PERC,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 
@@ -104,6 +105,8 @@ export const getStrucBoost = (
 
 /**
  * Calculates the boost factor for a given shrine boost type.
+ * Uses base boost of 10% with 1+ shrines, plus ~3.33% per additional shrine
+ * for a range of 10% (1 shrine) to 20% (4 shrines).
  * @param village - The village to calculate the boost for.
  * @param sectors - The number of sectors in the village.
  * @param boostType - The type of boost to calculate.
@@ -118,8 +121,11 @@ export const getShrineBoost = (
   const shrineBoost = village?.shrineSettings?.activeBoosts?.[boostType];
   const expiry = shrineBoost ? new Date(shrineBoost) : now;
   if (expiry < now) return 0;
-  const shrineBoostFactor = shrineBoost ? (sectors * SHRINE_BOOST_PERC) / 100 : 0;
-  return shrineBoostFactor;
+  if (!shrineBoost || sectors <= 0) return 0;
+  // Base 10% with 1+ shrines, plus ~3.33% per additional shrine (10-20% range)
+  const boostPercentage =
+    SHRINE_BOOST_BASE_PERC + (sectors - 1) * SHRINE_BOOST_PER_SHRINE_PERC;
+  return boostPercentage / 100;
 };
 
 /**
