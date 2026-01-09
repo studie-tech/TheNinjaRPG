@@ -1092,5 +1092,7 @@ export const createGenericStructure = (info: {
     structureDiscountPerLvl: 0,
     trainBoostPerLvl: 0,
     villageDefencePerLvl: 0,
+    temporaryLevelBonus: 0,
+    temporaryLevelBonusExpiresAt: null,
   };
 };

@@ -20,9 +20,12 @@ import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { canAdministrateWars } from "@/utils/permissions";
 import { findRelationship } from "@/utils/alliance";
 import { WAR_FUNDS_COST } from "@/drizzle/constants";
-import { WAR_DECLARATION_COST, WAR_DAILY_TOKEN_REDUCTION } from "@/drizzle/constants";
-import { WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_3_DAYS } from "@/drizzle/constants";
-import { WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_7_DAYS } from "@/drizzle/constants";
+import { WAR_DECLARATION_COST } from "@/drizzle/constants";
+import {
+  WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10,
+} from "@/drizzle/constants";
 import { WAR_VICTORY_TOKEN_BONUS } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { WAR_ALLY_OFFER_MIN } from "@/drizzle/constants";
@@ -701,11 +704,10 @@ export const DeclareSectorWarDialogContent: React.FC<DialogContentProps> = (prop
       </p>
       <p className="py-2">
         The cost of declaring war is {WAR_DECLARATION_COST.toLocaleString()} Village
-        Tokens, and each day at war reduces your tokens by{" "}
-        {WAR_DAILY_TOKEN_REDUCTION.toLocaleString()} (increasing by{" "}
-        {Math.floor((WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_3_DAYS - 1) * 100)}% after 3
-        days and {Math.floor((WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_7_DAYS - 1) * 100)}%
-        after 7 days).
+        Tokens. Each day at war reduces your tokens by{" "}
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}% (increasing to{" "}
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4}% after 4 days and{" "}
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10}% after 10 days).
       </p>
       <p>Do you confirm?</p>
     </div>
@@ -781,12 +783,10 @@ export const InitiateVillageWarDialogContent: React.FC<DialogContentProps> = (
       <SectorVillageDialogContent {...props} />
       <p>
         You are about to declare war on {props.sectorVillage.name}. Are you sure? The
-        cost of declaring war is {WAR_DECLARATION_COST.toLocaleString()} Village Tokens,
-        and each day at war reduces your tokens by{" "}
-        {WAR_DAILY_TOKEN_REDUCTION.toLocaleString()} (increasing by{" "}
-        {Math.floor((WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_3_DAYS - 1) * 100)}% after 3
-        days and {Math.floor((WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_7_DAYS - 1) * 100)}%
-        after 7 days).
+        cost of declaring war is {WAR_DECLARATION_COST.toLocaleString()} Village Tokens.
+        Each day at war reduces your tokens by {WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}%
+        (increasing to {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4}% after 4 days and{" "}
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10}% after 10 days).
       </p>
     </div>
   );
@@ -800,14 +800,14 @@ export const InitiateRaidDialogContent: React.FC<DialogContentProps> = (props) =
     <div className="border p-4 rounded-lg text-center relative">
       <SectorVillageDialogContent {...props} />
       <div>
-        You have the option of initiating a raid in this sector, targeting a giving
+        You have the option of initiating a raid in this sector, targeting a given
         structure. The cost of starting a raid is{" "}
-        {WAR_DECLARATION_COST.toLocaleString()} tokens, and each day at war reduces your
-        tokens by {WAR_DAILY_TOKEN_REDUCTION.toLocaleString()} (increasing by{" "}
-        {Math.floor((WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_3_DAYS - 1) * 100)}% after 3
-        days and {Math.floor((WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_7_DAYS - 1) * 100)}%
-        after 7 days). If you win, the structure level will be reduced by 1 and you will
-        received {WAR_VICTORY_TOKEN_BONUS.toLocaleString()} tokens.
+        {WAR_DECLARATION_COST.toLocaleString()} tokens. Each day at war reduces your
+        tokens by {WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}% (increasing to{" "}
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4}% after 4 days and{" "}
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10}% after 10 days). If you win, the
+        structure level will be reduced by 3 and you will receive{" "}
+        {WAR_VICTORY_TOKEN_BONUS.toLocaleString()} tokens.
       </div>
       <div className="space-y-2">
         <p className="font-semibold">Select Target Structure:</p>
@@ -1206,16 +1206,24 @@ export const VillageWar: React.FC<{
         </div>
       </Modal2>
 
-      <div className="grid grid-cols-2 gap-8 items-center justify-center">
+      <div className="grid grid-cols-2 gap-8 items-start justify-center">
         <WarSide
           structure={isAttacker ? attackerStructure : defenderStructure}
           village={isAttacker ? war.attackerVillage : war.defenderVillage}
           war={war}
+          warHealth={isAttacker ? war.attackerWarHealth : war.defenderWarHealth}
+          warHealthMax={
+            isAttacker ? war.attackerWarHealthMax : war.defenderWarHealthMax
+          }
         />
         <WarSide
           structure={isAttacker ? defenderStructure : attackerStructure}
           village={isAttacker ? war.defenderVillage : war.attackerVillage}
           war={war}
+          warHealth={isAttacker ? war.defenderWarHealth : war.attackerWarHealth}
+          warHealthMax={
+            isAttacker ? war.defenderWarHealthMax : war.attackerWarHealthMax
+          }
         />
       </div>
 
@@ -1335,19 +1343,31 @@ const WarSide: React.FC<{
   structure: VillageStructure;
   war: FetchActiveWarsReturnType;
   village: Village;
-}> = ({ structure, war, village }) => {
+  warHealth: number;
+  warHealthMax: number;
+}> = ({ structure, war, village, warHealth, warHealthMax }) => {
   return (
     <div className="flex flex-col items-center justify-center">
-      <h5 className="font-bold mb-2">
-        {structure.name} ({village.name})
-      </h5>
-      <div className="w-full md:w-3/5 lg:w-3/4">
+      <h5 className="font-bold mb-2">{village.name}</h5>
+      {war.status === "ACTIVE" && (
+        <div className="w-full mb-2">
+          <StatusBar
+            title="War Health"
+            tooltip="War Health - Depletes from PvP kills"
+            color="bg-red-500"
+            showText={true}
+            current={warHealth}
+            total={warHealthMax}
+          />
+        </div>
+      )}
+      <div className="w-full md:w-3/5 lg:w-3/4 aspect-square">
         <Building
           structure={structure}
           village={village}
           textPosition="bottom"
-          showBar={war.status === "ACTIVE"}
-          showNumbers={war.status === "ACTIVE"}
+          showBar={false}
+          showNumbers={false}
         />
       </div>
       {/* Show our supporting factions */}

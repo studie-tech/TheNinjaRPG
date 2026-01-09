@@ -22,23 +22,23 @@ import { actionPointsAfterAction } from "@/libs/combat/actions";
 import { KILLING_NOTORIETY_GAIN } from "@/drizzle/constants";
 import { findWarsWithUser } from "@/libs/war";
 import { STREAK_LEVEL_DIFF } from "@/drizzle/constants";
-import { getShrineBoost } from "@/utils/village";
+import { getShrineBoost, getEffectiveStructureLevel } from "@/utils/village";
 import { spiral, line, ring, fromCoordinates, Direction } from "honeycomb-grid";
 import {
   SHARED_COOLDOWN_TAGS,
-  WAR_TOWNHALL_HP_REMOVE,
-  WAR_TOWNHALL_HP_RECOVER,
-  WAR_TOWNHALL_HP_ANBU_REMOVE,
-  WAR_TOWNHALL_HP_ANBU_RECOVER,
-  WAR_TOWNHALL_HP_ASSASSIN_REMOVE,
-  WAR_TOWNHALL_HP_ASSASSIN_RECOVER,
-  WAR_TOWNHALL_HP_ELDER_REMOVE,
-  WAR_TOWNHALL_HP_ELDER_RECOVER,
-  WAR_TOWNHALL_HP_COLEADER_REMOVE,
-  WAR_TOWNHALL_HP_COLEADER_RECOVER,
-  WAR_TOWNHALL_HP_KAGE_REMOVE,
-  WAR_TOWNHALL_HP_KAGE_RECOVER,
-  WAR_TOWNHALL_HP_KAGEDEATH_REMOVE,
+  WAR_HEALTH_REMOVE,
+  WAR_HEALTH_RECOVER,
+  WAR_HEALTH_ANBU_REMOVE,
+  WAR_HEALTH_ANBU_RECOVER,
+  WAR_HEALTH_ASSASSIN_REMOVE,
+  WAR_HEALTH_ASSASSIN_RECOVER,
+  WAR_HEALTH_ELDER_REMOVE,
+  WAR_HEALTH_ELDER_RECOVER,
+  WAR_HEALTH_COLEADER_REMOVE,
+  WAR_HEALTH_COLEADER_RECOVER,
+  WAR_HEALTH_KAGE_REMOVE,
+  WAR_HEALTH_KAGE_RECOVER,
+  WAR_HEALTH_KAGEDEATH_REMOVE,
   WAR_SECTORWAR_AI_SHRINE_REDUCE,
   WAR_SECTORWAR_AI_SHRINE_RECOVER,
   WAR_SECTORWAR_PVP_SHRINE_REDUCE,
@@ -985,7 +985,7 @@ export const calcBattleResult = (
       let expBoost = 1;
       if (battleType === "ARENA") {
         village?.structures?.forEach((s) => {
-          expBoost += (s.arenaRewardPerLvl * s.level) / 100;
+          expBoost += (s.arenaRewardPerLvl * getEffectiveStructureLevel(s)) / 100;
         });
       }
       const userClan = getClan(battle, user.clanId);
@@ -1203,9 +1203,9 @@ export const calcBattleResult = (
       }
 
       // Determine war kills bonus
-      const townhallInfo: Record<string, number> = {};
+      const warHealthInfo: Record<string, number> = {};
       const shrineInfo: Record<number, number> = {};
-      let townhallChangeHP = 0;
+      let warHealthChange = 0;
       let shrineChangeHp = 0;
       // Skip war updates if kill happened in war-torn sector
       const isInWarTornSectorForWar = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
@@ -1236,12 +1236,12 @@ export const calcBattleResult = (
                 war.attackerVillageId === targetVillageId
                   ? war?.attackerVillage?.name || ""
                   : war?.defenderVillage?.name || "";
-              // Reset to 0 if not in townhallInfo
-              if (targetVillageName && !(targetVillageName in townhallInfo)) {
-                townhallInfo[targetVillageName] = 0;
+              // Reset to 0 if not in warHealthInfo
+              if (targetVillageName && !(targetVillageName in warHealthInfo)) {
+                warHealthInfo[targetVillageName] = 0;
               }
-              if (userVillageName && !(userVillageName in townhallInfo)) {
-                townhallInfo[userVillageName] = 0;
+              if (userVillageName && !(userVillageName in warHealthInfo)) {
+                warHealthInfo[userVillageName] = 0;
               }
               // Derived
               const isUserFactionColeader =
@@ -1262,57 +1262,57 @@ export const calcBattleResult = (
                 const targetVillage = getVillage(battle, target.villageId);
                 if (didWin) {
                   if (village?.kageId === user.userId) {
-                    townhallChangeHP += WAR_TOWNHALL_HP_KAGE_RECOVER;
-                    townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_KAGE_RECOVER;
-                    townhallInfo[targetVillageName]! -= WAR_TOWNHALL_HP_KAGE_REMOVE;
+                    warHealthChange += WAR_HEALTH_KAGE_RECOVER;
+                    warHealthInfo[userVillageName]! += WAR_HEALTH_KAGE_RECOVER;
+                    warHealthInfo[targetVillageName]! -= WAR_HEALTH_KAGE_REMOVE;
                   } else if (user.rank === "ELDER") {
-                    townhallChangeHP += WAR_TOWNHALL_HP_ELDER_RECOVER;
-                    townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_ELDER_RECOVER;
-                    townhallInfo[targetVillageName]! -= WAR_TOWNHALL_HP_ELDER_REMOVE;
+                    warHealthChange += WAR_HEALTH_ELDER_RECOVER;
+                    warHealthInfo[userVillageName]! += WAR_HEALTH_ELDER_RECOVER;
+                    warHealthInfo[targetVillageName]! -= WAR_HEALTH_ELDER_REMOVE;
                   } else if (isUserFactionColeader) {
-                    townhallChangeHP += WAR_TOWNHALL_HP_COLEADER_RECOVER;
-                    townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_COLEADER_RECOVER;
-                    townhallInfo[targetVillageName]! -= WAR_TOWNHALL_HP_COLEADER_REMOVE;
+                    warHealthChange += WAR_HEALTH_COLEADER_RECOVER;
+                    warHealthInfo[userVillageName]! += WAR_HEALTH_COLEADER_RECOVER;
+                    warHealthInfo[targetVillageName]! -= WAR_HEALTH_COLEADER_REMOVE;
                   } else if (user.anbuId) {
-                    townhallChangeHP += WAR_TOWNHALL_HP_ANBU_RECOVER;
-                    townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_ANBU_RECOVER;
-                    townhallInfo[targetVillageName]! -= WAR_TOWNHALL_HP_ANBU_REMOVE;
+                    warHealthChange += WAR_HEALTH_ANBU_RECOVER;
+                    warHealthInfo[userVillageName]! += WAR_HEALTH_ANBU_RECOVER;
+                    warHealthInfo[targetVillageName]! -= WAR_HEALTH_ANBU_REMOVE;
                   } else if (isUserAssassin) {
-                    townhallChangeHP += WAR_TOWNHALL_HP_ASSASSIN_RECOVER;
-                    townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_ASSASSIN_RECOVER;
-                    townhallInfo[targetVillageName]! -= WAR_TOWNHALL_HP_ASSASSIN_REMOVE;
+                    warHealthChange += WAR_HEALTH_ASSASSIN_RECOVER;
+                    warHealthInfo[userVillageName]! += WAR_HEALTH_ASSASSIN_RECOVER;
+                    warHealthInfo[targetVillageName]! -= WAR_HEALTH_ASSASSIN_REMOVE;
                   } else {
-                    townhallChangeHP += WAR_TOWNHALL_HP_RECOVER;
-                    townhallInfo[userVillageName]! += WAR_TOWNHALL_HP_RECOVER;
-                    townhallInfo[targetVillageName]! -= WAR_TOWNHALL_HP_REMOVE;
+                    warHealthChange += WAR_HEALTH_RECOVER;
+                    warHealthInfo[userVillageName]! += WAR_HEALTH_RECOVER;
+                    warHealthInfo[targetVillageName]! -= WAR_HEALTH_REMOVE;
                   }
                   if (targetVillage?.kageId === target.userId) {
-                    townhallInfo[targetVillageName]! -=
-                      WAR_TOWNHALL_HP_KAGEDEATH_REMOVE;
+                    warHealthInfo[targetVillageName]! -=
+                      WAR_HEALTH_KAGEDEATH_REMOVE;
                   }
                 } else {
                   if (targetVillage?.kageId === target.userId) {
-                    townhallChangeHP -= WAR_TOWNHALL_HP_KAGE_REMOVE;
-                    townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_KAGE_REMOVE;
+                    warHealthChange -= WAR_HEALTH_KAGE_REMOVE;
+                    warHealthInfo[userVillageName]! -= WAR_HEALTH_KAGE_REMOVE;
                   } else if (target.rank === "ELDER") {
-                    townhallChangeHP -= WAR_TOWNHALL_HP_ELDER_REMOVE;
-                    townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_ELDER_REMOVE;
+                    warHealthChange -= WAR_HEALTH_ELDER_REMOVE;
+                    warHealthInfo[userVillageName]! -= WAR_HEALTH_ELDER_REMOVE;
                   } else if (isTargetFactionColeader) {
-                    townhallChangeHP -= WAR_TOWNHALL_HP_COLEADER_REMOVE;
-                    townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_COLEADER_REMOVE;
+                    warHealthChange -= WAR_HEALTH_COLEADER_REMOVE;
+                    warHealthInfo[userVillageName]! -= WAR_HEALTH_COLEADER_REMOVE;
                   } else if (target.anbuId) {
-                    townhallChangeHP -= WAR_TOWNHALL_HP_ANBU_REMOVE;
-                    townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_ANBU_REMOVE;
+                    warHealthChange -= WAR_HEALTH_ANBU_REMOVE;
+                    warHealthInfo[userVillageName]! -= WAR_HEALTH_ANBU_REMOVE;
                   } else if (isTargetAssassin) {
-                    townhallChangeHP -= WAR_TOWNHALL_HP_ASSASSIN_REMOVE;
-                    townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_ASSASSIN_REMOVE;
+                    warHealthChange -= WAR_HEALTH_ASSASSIN_REMOVE;
+                    warHealthInfo[userVillageName]! -= WAR_HEALTH_ASSASSIN_REMOVE;
                   } else {
-                    townhallChangeHP -= WAR_TOWNHALL_HP_REMOVE;
-                    townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_REMOVE;
+                    warHealthChange -= WAR_HEALTH_REMOVE;
+                    warHealthInfo[userVillageName]! -= WAR_HEALTH_REMOVE;
                   }
                   if (village?.kageId === user.userId) {
-                    townhallChangeHP -= WAR_TOWNHALL_HP_KAGEDEATH_REMOVE;
-                    townhallInfo[userVillageName]! -= WAR_TOWNHALL_HP_KAGEDEATH_REMOVE;
+                    warHealthChange -= WAR_HEALTH_KAGEDEATH_REMOVE;
+                    warHealthInfo[userVillageName]! -= WAR_HEALTH_KAGEDEATH_REMOVE;
                   }
                 }
               }
@@ -1353,12 +1353,12 @@ export const calcBattleResult = (
 
       // Scale everything based on reward scaling
       shrineChangeHp *= battle.rewardScaling;
-      townhallChangeHP *= battle.rewardScaling;
+      warHealthChange *= battle.rewardScaling;
       Object.keys(shrineInfo).forEach((sector) => {
         shrineInfo[sector as unknown as number]! *= battle.rewardScaling;
       });
-      Object.keys(townhallInfo).forEach((name) => {
-        townhallInfo[name]! *= battle.rewardScaling;
+      Object.keys(warHealthInfo).forEach((name) => {
+        warHealthInfo[name]! *= battle.rewardScaling;
       });
 
       // Adjust shrine & townhall datamage based on level different
@@ -1379,16 +1379,16 @@ export const calcBattleResult = (
           if (shrineChangeHp !== 0) {
             shrineChangeHp /= Math.abs(shrineChangeHp);
           }
-          if (townhallChangeHP !== 0) {
-            townhallChangeHP /= Math.abs(townhallChangeHP);
+          if (warHealthChange !== 0) {
+            warHealthChange /= Math.abs(warHealthChange);
           }
           Object.keys(shrineInfo).forEach((sector) => {
             const abs = Math.abs(shrineInfo[sector as unknown as number]!);
             if (abs !== 0) shrineInfo[sector as unknown as number]! /= abs;
           });
-          Object.keys(townhallInfo).forEach((name) => {
-            const abs = Math.abs(townhallInfo[name]!);
-            if (abs !== 0) townhallInfo[name]! /= abs;
+          Object.keys(warHealthInfo).forEach((name) => {
+            const abs = Math.abs(warHealthInfo[name]!);
+            if (abs !== 0) warHealthInfo[name]! /= abs;
           });
         }
       }
@@ -1497,10 +1497,10 @@ export const calcBattleResult = (
         targetsLeft: targetsLeft.length,
         villageTokens: deltaTokens,
         anbuPoints: deltaAnbuPoints,
-        townhallChangeHP: townhallChangeHP,
+        warHealthChange: warHealthChange,
         shrineChangeHp: shrineChangeHp,
         shrineInfo: shrineInfo,
-        townhallInfo: townhallInfo,
+        warHealthInfo: warHealthInfo,
         clanPoints: clanPoints * battle.rewardScaling,
         notifications: [],
         bountiesClaimed: bountiesClaimed,

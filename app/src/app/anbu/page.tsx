@@ -31,6 +31,7 @@ import AutoAttackModal from "@/layout/AutoAttackModal";
 import type { z } from "zod";
 import type { AnbuCreateSchema } from "@/validators/anbu";
 import type { ArrayElement } from "@/utils/typeutils";
+import { getEffectiveStructureLevel } from "@/utils/village";
 
 export default function ANBU() {
   // Utils
@@ -149,7 +150,7 @@ export default function ANBU() {
   // Derived
   const isKage = userData.userId === sectorVillage.kageId;
   const isElder = userData.rank === "ELDER";
-  const canCreateMore = allSquads && allSquads?.length < structure.level;
+  const canCreateMore = allSquads && allSquads?.length < getEffectiveStructureLevel(structure);
 
   return (
     <>

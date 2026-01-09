@@ -262,6 +262,12 @@ export const Reward: React.FC<RewardProps> = (props) => {
   if (info?.reward_gathering_experience) {
     rewards += `${rewards ? ", " : ""} ${info.reward_gathering_experience} Gathering Experience`;
   }
+  if (info?.reward_war_damage) {
+    rewards += `${rewards ? ", " : ""} ${info.reward_war_damage} War Damage to Enemy`;
+  }
+  if (info?.reward_war_healing) {
+    rewards += `${rewards ? ", " : ""} ${info.reward_war_healing} War Health Restored`;
+  }
   return (
     <>
       {rewards && (

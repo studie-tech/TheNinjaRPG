@@ -11,7 +11,6 @@ import {
   userItemImbuement,
   userJutsu,
   mpvpBattleQueue,
-  villageStructure,
   warKill,
   bounty,
   war,
@@ -381,7 +380,7 @@ export const updateWars = async (
       .map((warResult) => {
         return warResult.wars
           .map((w) => {
-            const townhallVillageId =
+            const killerSideVillageId =
               w.attackerVillageId === user.villageId ||
               w.warAllies.some(
                 (a) =>
@@ -403,7 +402,7 @@ export const updateWars = async (
                       victimVillageId: warResult.target.villageId || "unknonwn",
                       sector: user.sector,
                       shrineHpChange: result.shrineChangeHp,
-                      townhallHpChange: result.townhallChangeHP,
+                      townhallHpChange: result.warHealthChange,
                       killedAt: new Date(),
                     }),
                   ]
@@ -419,21 +418,27 @@ export const updateWars = async (
                       .where(eq(war.id, w.id)),
                   ]
                 : []),
-              // Update townhall if we're in a village war
-              ...(result.townhallChangeHP !== 0 &&
+              // Update war health if we're in a village war or raid
+              ...(result.warHealthChange !== 0 &&
               ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
                 ? [
-                    client
-                      .update(villageStructure)
-                      .set({
-                        curSp: sql`LEAST(maxSp, curSp + ${result.townhallChangeHP})`,
-                      })
-                      .where(
-                        and(
-                          eq(villageStructure.villageId, townhallVillageId),
-                          eq(villageStructure.route, w.targetStructureRoute),
-                        ),
-                      ),
+                    ...(killerSideVillageId === w.attackerVillageId
+                      ? [
+                          client
+                            .update(war)
+                            .set({
+                              attackerWarHealth: sql`GREATEST(LEAST(attackerWarHealth + ${result.warHealthChange}, attackerWarHealthMax), 0)`,
+                            })
+                            .where(eq(war.id, w.id)),
+                        ]
+                      : [
+                          client
+                            .update(war)
+                            .set({
+                              defenderWarHealth: sql`GREATEST(LEAST(defenderWarHealth + ${result.warHealthChange}, defenderWarHealthMax), 0)`,
+                            })
+                            .where(eq(war.id, w.id)),
+                        ]),
                   ]
                 : []),
             ];

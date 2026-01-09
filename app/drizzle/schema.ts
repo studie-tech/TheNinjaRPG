@@ -2816,6 +2816,11 @@ export const villageStructure = mysqlTable(
     structureDiscountPerLvl: tinyint("structureDiscountPerLvl").default(0).notNull(),
     trainBoostPerLvl: tinyint("trainBoostPerLvl").default(0).notNull(),
     villageDefencePerLvl: tinyint("villageDefencePerLvl").default(0).notNull(),
+    temporaryLevelBonus: int("temporaryLevelBonus").default(0).notNull(),
+    temporaryLevelBonusExpiresAt: datetime("temporaryLevelBonusExpiresAt", {
+      mode: "date",
+      fsp: 3,
+    }),
   },
   (table) => {
     return {
@@ -3457,6 +3462,18 @@ export const war = mysqlTable(
       .notNull(),
     targetStructureRoute: varchar("targetStructureRoute", { length: 191 })
       .default("/townhall")
+      .notNull(),
+    attackerWarHealth: int("attackerWarHealth")
+      .default(consts.WAR_INSTANCE_HEALTH)
+      .notNull(),
+    defenderWarHealth: int("defenderWarHealth")
+      .default(consts.WAR_INSTANCE_HEALTH)
+      .notNull(),
+    attackerWarHealthMax: int("attackerWarHealthMax")
+      .default(consts.WAR_INSTANCE_HEALTH)
+      .notNull(),
+    defenderWarHealthMax: int("defenderWarHealthMax")
+      .default(consts.WAR_INSTANCE_HEALTH)
       .notNull(),
   },
   (table) => {

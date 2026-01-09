@@ -985,18 +985,13 @@ export const fetchActiveWars = async (client: DrizzleClient, villageId?: string)
     activeWars
       .filter((war) => war.attackerVillage && war.defenderVillage)
       .map((war) => {
-        // If townhall is destroyed, set tokens to 0 (without updating database), which will trigger war end
+        // For village wars and raids, check war health instead of townhall
         if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
-          const attackerTownhall = war.attackerVillage.structures.find(
-            (s) => s.route === war.targetStructureRoute,
-          );
-          const defenderTownhall = war.defenderVillage?.structures.find(
-            (s) => s.route === war.targetStructureRoute,
-          );
-          if (attackerTownhall && attackerTownhall.curSp <= 0) {
+          // Set tokens to 0 when war health reaches 0 to trigger war end
+          if (war.attackerWarHealth <= 0) {
             war.attackerVillage.tokens = 0;
           }
-          if (defenderTownhall && defenderTownhall.curSp <= 0) {
+          if (war.defenderWarHealth <= 0) {
             war.defenderVillage.tokens = 0;
           }
         }

@@ -278,6 +278,16 @@ export const showRewardToast = (
               {rewards.reward_items.join(", ")}
             </span>
           )}
+          {rewards.reward_war_damage > 0 && (
+            <span className="whitespace-nowrap">
+              <b>War damage to enemy:</b> {rewards.reward_war_damage}
+            </span>
+          )}
+          {rewards.reward_war_healing > 0 && (
+            <span className="whitespace-nowrap">
+              <b>War health restored:</b> {rewards.reward_war_healing}
+            </span>
+          )}
         </div>
         <div className="basis-1/3 flex flex-col">
           {badges?.map((badge, i) => (

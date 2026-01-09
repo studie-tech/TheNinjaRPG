@@ -1174,18 +1174,18 @@ const Combat: React.FC<CombatProps> = (props) => {
                   </p>
                 );
               })}
-              {Object.entries(result.townhallInfo).map(([villageName, change]) => {
+              {Object.entries(result.warHealthInfo).map(([villageName, change]) => {
                 const key = `${villageName}-${change}`;
                 if (change > 0) {
                   return (
                     <p key={key} className="text-green-500">
-                      {villageName} Structure HP: +{change.toFixed(2)}
+                      {villageName} War HP: +{change.toFixed(2)}
                     </p>
                   );
                 } else if (change < 0) {
                   return (
                     <p key={key} className="text-red-500">
-                      {villageName} Structure HP: {change.toFixed(2)}
+                      {villageName} War HP: {change.toFixed(2)}
                     </p>
                   );
                 }

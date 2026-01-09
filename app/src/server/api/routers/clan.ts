@@ -43,6 +43,7 @@ import type { inferRouterOutputs } from "@trpc/server";
 import type { DrizzleClient } from "@/server/db";
 import type { UserData } from "@/drizzle/schema";
 import { secondsFromDate } from "@/utils/time";
+import { getEffectiveStructureLevel } from "@/utils/village";
 
 const pusher = getServerPusher();
 
@@ -501,7 +502,7 @@ export const clanRouter = createTRPCRouter({
         if (user.clanId) return errorResponse(`Already in a ${groupLabel}`);
       if (user.isAi) return errorResponse("AI cannot be leader");
       if (user.money < CLAN_CREATE_RYO_COST) return errorResponse("Not enough ryo");
-      if (clans.length > structure.level * CLANS_PER_STRUCTURE_LEVEL) {
+      if (clans.length > getEffectiveStructureLevel(structure) * CLANS_PER_STRUCTURE_LEVEL) {
         return errorResponse(`Max ${user.isOutlaw ? "factions" : "clans"} reached`);
       }
       if (user.villagePrestige < CLAN_CREATE_PRESTIGE_REQUIREMENT) {

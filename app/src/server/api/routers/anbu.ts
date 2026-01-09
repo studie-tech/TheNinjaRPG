@@ -12,6 +12,7 @@ import { getServerPusher } from "@/libs/pusher";
 import { anbuCreateSchema } from "@/validators/anbu";
 import { hasRequiredRank } from "@/libs/train";
 import { secondsFromDate } from "@/utils/time";
+import { getEffectiveStructureLevel } from "@/utils/village";
 import {
   fetchRequest,
   fetchRequests,
@@ -214,7 +215,7 @@ export const anbuRouter = createTRPCRouter({
       if (!isKage && !isElder) return errorResponse("Not kage or elder");
       if (villageId !== user.villageId) return errorResponse("Wrong user village");
       if (villageId !== leader.villageId) return errorResponse("Wrong leader village");
-      if (anbus.length > structure.level) return errorResponse("Max squads reached");
+      if (anbus.length > getEffectiveStructureLevel(structure)) return errorResponse("Max squads reached");
       if (leader.anbuId) return errorResponse("Leader already in a squad");
       if (leader.isAi) return errorResponse("AI cannot be leader");
       if (leader.userId === village.kageId) return errorResponse("Cannot choose kage");

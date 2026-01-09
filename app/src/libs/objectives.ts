@@ -498,5 +498,11 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
       rewards.push(`drop any gathering materials`);
     }
   }
+  if (questReward.reward_war_damage) {
+    rewards.push(`${questReward.reward_war_damage} war damage to enemy`);
+  }
+  if (questReward.reward_war_healing) {
+    rewards.push(`${questReward.reward_war_healing} war health restored`);
+  }
   return rewards;
 };

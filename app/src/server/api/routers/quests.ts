@@ -79,6 +79,8 @@ import {
 } from "@/libs/quest";
 import { QuestTypes } from "@/drizzle/constants";
 import { QuestTracker } from "@/validators/objectives";
+import { war } from "@/drizzle/schema";
+import { fetchActiveWars } from "@/routers/war";
 import type { QuestCounterFieldName } from "@/validators/user";
 import type { QuestType } from "@/drizzle/constants";
 import type { UserData, Quest } from "@/drizzle/schema";
@@ -935,6 +937,8 @@ export const questsRouter = createTRPCRouter({
             reward_gathering_items: false,
             reward_hunter_items_ids: [],
             reward_gathering_items_ids: [],
+            reward_war_damage: 0,
+            reward_war_healing: 0,
           },
         },
       });
@@ -1287,81 +1291,94 @@ export const updateRewards = async (info: {
 }) => {
   // Destructure
   const { client, user, rewards, questCounterField, reason } = info;
+  // Check if we need to fetch war data
+  const hasWarRewards =
+    (rewards.reward_war_damage > 0 || rewards.reward_war_healing > 0) && user.villageId;
   // Fetch names from the database
-  const [villageData, hunterItems, gatheringItems, items, jutsus, bloodlines, badges] =
-    await Promise.all([
-      // Fetch villages if needed
-      rewards.reward_village_membership !== "NONE"
-        ? client
-            .select({ id: village.id, name: village.name })
-            .from(village)
-            .where(eq(village.name, rewards.reward_village_membership))
-            .then((v) => v[0])
-        : undefined,
-      // Fetch hunter items if needed
-      rewards.reward_hunter_items && user.occupation === "HUNTER"
-        ? client
-            .select({ id: item.id, name: item.name, rarity: item.rarity })
-            .from(item)
-            .where(eq(item.canBeHunted, true))
-        : undefined,
-      // Fetch gathering items if needed
-      rewards.reward_gathering_items && user.occupation === "GATHERING"
-        ? client
-            .select({ id: item.id, name: item.name, rarity: item.rarity })
-            .from(item)
-            .where(eq(item.canBeGathered, true))
-        : undefined,
-      // Fetch names from the database
-      rewards.reward_items.length > 0
-        ? client
-            .select({ id: item.id, name: item.name, rarity: item.rarity })
-            .from(item)
-            .where(inArray(item.id, rewards.reward_items))
-        : [],
-      rewards.reward_jutsus.length > 0
-        ? client
-            .select({ id: jutsu.id, name: jutsu.name })
-            .from(jutsu)
-            .leftJoin(
-              userJutsu,
-              and(eq(jutsu.id, userJutsu.jutsuId), eq(userJutsu.userId, user.userId)),
-            )
-            .where(
-              and(inArray(jutsu.id, rewards.reward_jutsus), isNull(userJutsu.userId)),
-            )
-        : [],
-      rewards.reward_bloodlines.length > 0
-        ? client
-            .select({ id: bloodline.id, name: bloodline.name, rank: bloodline.rank })
-            .from(bloodline)
-            .leftJoin(
-              bloodlineRolls,
-              and(
-                eq(bloodline.id, bloodlineRolls.bloodlineId),
-                eq(bloodlineRolls.userId, user.userId),
-              ),
-            )
-            .where(
-              and(
-                inArray(bloodline.id, rewards.reward_bloodlines),
-                isNull(bloodlineRolls.userId),
-              ),
-            )
-        : [],
-      rewards.reward_badges.length > 0
-        ? client
-            .select({ id: badge.id, name: badge.name, image: badge.image })
-            .from(badge)
-            .leftJoin(
-              userBadge,
-              and(eq(badge.id, userBadge.badgeId), eq(userBadge.userId, user.userId)),
-            )
-            .where(
-              and(inArray(badge.id, rewards.reward_badges), isNull(userBadge.userId)),
-            )
-        : [],
-    ]);
+  const [
+    villageData,
+    hunterItems,
+    gatheringItems,
+    items,
+    jutsus,
+    bloodlines,
+    badges,
+    activeWars,
+  ] = await Promise.all([
+    // Fetch villages if needed
+    rewards.reward_village_membership !== "NONE"
+      ? client
+          .select({ id: village.id, name: village.name })
+          .from(village)
+          .where(eq(village.name, rewards.reward_village_membership))
+          .then((v) => v[0])
+      : undefined,
+    // Fetch hunter items if needed
+    rewards.reward_hunter_items && user.occupation === "HUNTER"
+      ? client
+          .select({ id: item.id, name: item.name, rarity: item.rarity })
+          .from(item)
+          .where(eq(item.canBeHunted, true))
+      : undefined,
+    // Fetch gathering items if needed
+    rewards.reward_gathering_items && user.occupation === "GATHERING"
+      ? client
+          .select({ id: item.id, name: item.name, rarity: item.rarity })
+          .from(item)
+          .where(eq(item.canBeGathered, true))
+      : undefined,
+    // Fetch names from the database
+    rewards.reward_items.length > 0
+      ? client
+          .select({ id: item.id, name: item.name, rarity: item.rarity })
+          .from(item)
+          .where(inArray(item.id, rewards.reward_items))
+      : [],
+    rewards.reward_jutsus.length > 0
+      ? client
+          .select({ id: jutsu.id, name: jutsu.name })
+          .from(jutsu)
+          .leftJoin(
+            userJutsu,
+            and(eq(jutsu.id, userJutsu.jutsuId), eq(userJutsu.userId, user.userId)),
+          )
+          .where(
+            and(inArray(jutsu.id, rewards.reward_jutsus), isNull(userJutsu.userId)),
+          )
+      : [],
+    rewards.reward_bloodlines.length > 0
+      ? client
+          .select({ id: bloodline.id, name: bloodline.name, rank: bloodline.rank })
+          .from(bloodline)
+          .leftJoin(
+            bloodlineRolls,
+            and(
+              eq(bloodline.id, bloodlineRolls.bloodlineId),
+              eq(bloodlineRolls.userId, user.userId),
+            ),
+          )
+          .where(
+            and(
+              inArray(bloodline.id, rewards.reward_bloodlines),
+              isNull(bloodlineRolls.userId),
+            ),
+          )
+      : [],
+    rewards.reward_badges.length > 0
+      ? client
+          .select({ id: badge.id, name: badge.name, image: badge.image })
+          .from(badge)
+          .leftJoin(
+            userBadge,
+            and(eq(badge.id, userBadge.badgeId), eq(userBadge.userId, user.userId)),
+          )
+          .where(
+            and(inArray(badge.id, rewards.reward_badges), isNull(userBadge.userId)),
+          )
+      : [],
+    // Fetch active wars if user has war rewards
+    hasWarRewards ? fetchActiveWars(client, user.villageId!) : undefined,
+  ]);
 
   // If we are rewarding hunter items, only select based on hunter rank
   const droppedHunterItems = getHuntingItemDrops(
@@ -1532,6 +1549,86 @@ export const updateRewards = async (info: {
           })),
         ),
     ],
+    // Handle war rewards (damage to enemy war health or healing to own war health)
+    // Updates ALL active wars the user is involved in
+    ...(() => {
+      if (!activeWars || activeWars.length === 0) return [];
+      // Find ALL applicable wars (VILLAGE_WAR or WAR_RAID)
+      const applicableWars = activeWars.filter(
+        (w) =>
+          ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
+          (w.attackerVillageId === user.villageId ||
+            w.defenderVillageId === user.villageId ||
+            w.warAllies.some((a) => a.villageId === user.villageId)),
+      );
+      if (applicableWars.length === 0) return [];
+
+      const warUpdates: Promise<unknown>[] = [];
+
+      // Process each war the user is involved in
+      for (const activeWar of applicableWars) {
+        // Determine if user is on attacker or defender side for this war
+        const isOnAttackerSide =
+          activeWar.attackerVillageId === user.villageId ||
+          activeWar.warAllies.some(
+            (a) =>
+              a.villageId === user.villageId &&
+              a.supportVillageId === activeWar.attackerVillageId,
+          );
+
+        // Apply war damage (damages opponent's war health)
+        if (rewards.reward_war_damage > 0) {
+          if (isOnAttackerSide) {
+            // Attacker damages defender's war health
+            warUpdates.push(
+              client
+                .update(war)
+                .set({
+                  defenderWarHealth: sql`GREATEST(defenderWarHealth - ${rewards.reward_war_damage}, 0)`,
+                })
+                .where(eq(war.id, activeWar.id)),
+            );
+          } else {
+            // Defender damages attacker's war health
+            warUpdates.push(
+              client
+                .update(war)
+                .set({
+                  attackerWarHealth: sql`GREATEST(attackerWarHealth - ${rewards.reward_war_damage}, 0)`,
+                })
+                .where(eq(war.id, activeWar.id)),
+            );
+          }
+        }
+
+        // Apply war healing (heals own side's war health)
+        if (rewards.reward_war_healing > 0) {
+          if (isOnAttackerSide) {
+            // Attacker heals attacker's war health
+            warUpdates.push(
+              client
+                .update(war)
+                .set({
+                  attackerWarHealth: sql`LEAST(attackerWarHealth + ${rewards.reward_war_healing}, attackerWarHealthMax)`,
+                })
+                .where(eq(war.id, activeWar.id)),
+            );
+          } else {
+            // Defender heals defender's war health
+            warUpdates.push(
+              client
+                .update(war)
+                .set({
+                  defenderWarHealth: sql`LEAST(defenderWarHealth + ${rewards.reward_war_healing}, defenderWarHealthMax)`,
+                })
+                .where(eq(war.id, activeWar.id)),
+            );
+          }
+        }
+      }
+
+      return warUpdates;
+    })(),
   ]);
   // Update rewards for readability
   return { items: itemsToInsert, jutsus, bloodlines, badges };

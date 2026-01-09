@@ -12,6 +12,11 @@ import {
   SHRINE_HP_BY_LEVEL,
   WAR_LOSING_COOLDOWN_DAYS,
   WAR_WINNING_COOLDOWN_DAYS,
+  WAR_VICTORY_STRUCTURE_BOOST_LEVELS,
+  WAR_VICTORY_STRUCTURE_BOOST_DAYS,
+  WAR_VICTORY_BOOSTED_STRUCTURES,
+  WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
+  WAR_SECTOR_LOSS_TOWNHALL_DAMAGE,
 } from "@/drizzle/constants";
 import { getUnique } from "@/utils/grouping";
 import type { WarState } from "@/drizzle/constants";
@@ -189,23 +194,34 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
   // Timer calculations
   const endedAt = new Date();
   const losingCooldownEnd = secondsFromDate(WAR_LOSING_COOLDOWN_DAYS * DAY_S, endedAt);
-  const winningCooldownEnd = secondsFromDate(WAR_WINNING_COOLDOWN_DAYS * DAY_S, endedAt);
-  const structureUpgradeBlock = secondsFromDate(WAR_STRUCTURE_UPGRADE_BLOCK_DAYS * DAY_S, endedAt);
+  const winningCooldownEnd = secondsFromDate(
+    WAR_WINNING_COOLDOWN_DAYS * DAY_S,
+    endedAt,
+  );
+  const structureUpgradeBlock = secondsFromDate(
+    WAR_STRUCTURE_UPGRADE_BLOCK_DAYS * DAY_S,
+    endedAt,
+  );
   const boostEndAt = secondsFromNow(WAR_WINNING_BOOST_DAYS * DAY_S);
 
-  // If both villages have >= 0 tokens, just return without ending
-  if (activeWar.attackerVillage.tokens > 0 && activeWar.defenderVillage.tokens > 0) {
+  // Check if war should end based on tokens OR war health
+  // War ends when either side's tokens OR war health reaches 0
+  const attackerLost =
+    activeWar.attackerVillage.tokens <= 0 || activeWar.attackerWarHealth <= 0;
+  const defenderLost =
+    activeWar.defenderVillage.tokens <= 0 || activeWar.defenderWarHealth <= 0;
+
+  // If neither side has lost, return without ending
+  if (!attackerLost && !defenderLost) {
     return activeWar;
   }
 
-  // Get IDs of villages & factions that lost (less than 0 tokens) and won (more than 0 tokens)
-  // Note both villages could be losing if they both got their points deducted simultaneously
-  const isDraw =
-    activeWar.attackerVillage.tokens <= 0 && activeWar.defenderVillage.tokens <= 0;
-  const winnerVillageId =
-    activeWar.attackerVillage.tokens > 0
-      ? activeWar.attackerVillage.id
-      : activeWar.defenderVillage.id;
+  // Get IDs of villages & factions that lost and won
+  // Note both villages could be losing if they both got their points/health deducted simultaneously
+  const isDraw = attackerLost && defenderLost;
+  const winnerVillageId = !attackerLost
+    ? activeWar.attackerVillage.id
+    : activeWar.defenderVillage.id;
   const loserVillageId =
     winnerVillageId === activeWar.attackerVillage.id
       ? activeWar.defenderVillage.id
@@ -271,6 +287,7 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
     // Handle sector wars
     ...(activeWar.type === "SECTOR_WAR"
       ? [
+          // Update sector ownership
           drizzleDB
             .update(sector)
             .set({
@@ -284,10 +301,23 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
                 ne(sector.villageId, winnerVillageId),
               ),
             ),
+          // End other wars for this sector
           drizzleDB
             .update(war)
             .set({ status: "DEFENDER_VICTORY", endedAt })
             .where(and(ne(war.id, activeWar.id), eq(war.sector, activeWar.sector))),
+          // Damage loser's townhall when losing a sector
+          drizzleDB
+            .update(villageStructure)
+            .set({
+              curSp: sql`GREATEST(curSp - ${WAR_SECTOR_LOSS_TOWNHALL_DAMAGE}, 0)`,
+            })
+            .where(
+              and(
+                eq(villageStructure.villageId, loserVillageId),
+                eq(villageStructure.route, "/townhall"),
+              ),
+            ),
         ]
       : []),
     // Handle village wars
@@ -301,29 +331,38 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
                 lastWarEndedAt: endedAt,
               })
               .where(inArray(village.id, [loserVillageId, winnerVillageId])),
+            // Enhanced punishment: -3 levels on structures for both sides in a draw
+            // VILLAGE_WAR: ALL structures, WAR_RAID: only targeted structure
             drizzleDB
               .update(villageStructure)
               .set({
-                level: sql`GREATEST(level - 1, 1)`,
+                level: sql`GREATEST(level - ${WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS}, 1)`,
                 lastUpgradedAt: structureUpgradeBlock,
               })
               .where(
-                and(
-                  inArray(villageStructure.villageId, [
-                    loserVillageId,
-                    winnerVillageId,
-                  ]),
-                  eq(villageStructure.route, activeWar.targetStructureRoute),
-                ),
+                activeWar.type === "WAR_RAID"
+                  ? and(
+                      inArray(villageStructure.villageId, [
+                        loserVillageId,
+                        winnerVillageId,
+                      ]),
+                      eq(villageStructure.route, activeWar.targetStructureRoute),
+                    )
+                  : inArray(villageStructure.villageId, [
+                      loserVillageId,
+                      winnerVillageId,
+                    ]),
               ),
           ]
         : [
+            // Winner gets tokens
             drizzleDB
               .update(village)
               .set({
                 tokens: sql`tokens + ${winningPoints}`,
               })
               .where(inArray(village.id, [...winningAllies, winnerVillageId])),
+            // Winner gets regen boost
             drizzleDB
               .update(gameSetting)
               .set({
@@ -336,6 +375,7 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
                   [...winningAllies, winnerVillageId].map((id) => `war-${id}-regen`),
                 ),
               ),
+            // Winner gets training boost
             drizzleDB
               .update(gameSetting)
               .set({
@@ -343,6 +383,26 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
                 time: boostEndAt,
               })
               .where(eq(gameSetting.name, `war-${winnerVillageId}-train`)),
+            // Enhanced rewards: +3 temporary levels on specific structures for winner
+            drizzleDB
+              .update(villageStructure)
+              .set({
+                temporaryLevelBonus: WAR_VICTORY_STRUCTURE_BOOST_LEVELS,
+                temporaryLevelBonusExpiresAt: secondsFromDate(
+                  WAR_VICTORY_STRUCTURE_BOOST_DAYS * DAY_S,
+                  endedAt,
+                ),
+              })
+              .where(
+                and(
+                  eq(villageStructure.villageId, winnerVillageId),
+                  inArray(
+                    villageStructure.route,
+                    WAR_VICTORY_BOOSTED_STRUCTURES as unknown as string[],
+                  ),
+                ),
+              ),
+            // Loser gets war exhaustion
             drizzleDB
               .update(village)
               .set({
@@ -350,6 +410,7 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
                 lastWarEndedAt: endedAt,
               })
               .where(eq(village.id, loserVillageId)),
+            // Winner gets shorter exhaustion
             drizzleDB
               .update(village)
               .set({
@@ -357,23 +418,43 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
                 lastWarEndedAt: endedAt,
               })
               .where(eq(village.id, winnerVillageId)),
+            // Enhanced punishment: -3 levels on structures for loser
+            // VILLAGE_WAR: ALL structures, WAR_RAID: only targeted structure
             drizzleDB
               .update(villageStructure)
               .set({
-                level: sql`GREATEST(level - 1, 1)`,
+                level: sql`GREATEST(level - ${WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS}, 1)`,
                 lastUpgradedAt: structureUpgradeBlock,
               })
               .where(
-                and(
-                  eq(villageStructure.villageId, loserVillageId),
-                  ...(activeWar.type === "WAR_RAID"
-                    ? [eq(villageStructure.route, activeWar.targetStructureRoute)]
-                    : []),
-                ),
+                activeWar.type === "WAR_RAID"
+                  ? and(
+                      eq(villageStructure.villageId, loserVillageId),
+                      eq(villageStructure.route, activeWar.targetStructureRoute),
+                    )
+                  : eq(villageStructure.villageId, loserVillageId),
               ),
           ]
       : []),
   ]);
+
+  // Clean up incomplete war quests for users in villages involved in this war
+  // Run separately after other operations to avoid deadlock (this query joins QuestHistory with UserData)
+  // Daily cron will reassign if they're still in another war
+  await drizzleDB.execute(sql`
+    DELETE qh FROM QuestHistory qh
+    INNER JOIN UserData ud ON qh.userId = ud.userId
+    WHERE qh.questType = 'war'
+      AND qh.completed = 0
+      AND ud.villageId IN (${sql.join(
+        [
+          activeWar.attackerVillageId,
+          activeWar.defenderVillageId,
+          ...activeWar.warAllies.map((a) => a.villageId),
+        ].map((id) => sql`${id}`),
+        sql`, `,
+      )})
+  `);
 
   // Return updated war
   return { ...activeWar, status, endedAt } as FetchActiveWarsReturnType;
@@ -401,19 +482,19 @@ export const getShrineHpByLevel = (level?: number | null) => {
 export const isVillageInvolvedInAnyWar = (
   activeWars: FetchActiveWarsReturnType[],
   villageId: string,
-  excludeWarId?: string
+  excludeWarId?: string,
 ): boolean => {
   return activeWars.some((war) => {
     // Skip the excluded war if provided
     if (excludeWarId && war.id === excludeWarId) {
       return false;
     }
-    
+
     // Check if village is attacker or defender
     if (war.attackerVillageId === villageId || war.defenderVillageId === villageId) {
       return true;
     }
-    
+
     // Check if village is an ally in the war
     return war.warAllies.some((ally) => ally.villageId === villageId);
   });

@@ -550,6 +550,7 @@ export const QuestTypes = [
   "battlepyramid",
   "pvp",
   "achievement",
+  "war",
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
 export const QUESTS_CONCURRENT_LIMIT = 4;
@@ -1170,35 +1171,63 @@ export const WAR_VILLAGE_MAX_SECTORS = 12;
 export const WAR_FACTION_MAX_SECTORS = 6;
 export const WAR_MINIMUM_TOKENS_FOR_BEING_ATTACKABLE = 10000;
 export const WAR_MINIMUM_MEMBERS_REQUIRED = 10; // Minimum members required for war participation
-export const WAR_TOWNHALL_HP_REMOVE = 5;
-export const WAR_TOWNHALL_HP_RECOVER = 2;
-export const WAR_TOWNHALL_HP_ANBU_REMOVE = 10;
-export const WAR_TOWNHALL_HP_ANBU_RECOVER = 5;
-export const WAR_TOWNHALL_HP_ASSASSIN_REMOVE = 10;
-export const WAR_TOWNHALL_HP_ASSASSIN_RECOVER = 5;
-export const WAR_TOWNHALL_HP_ELDER_REMOVE = 15;
-export const WAR_TOWNHALL_HP_ELDER_RECOVER = 10;
-export const WAR_TOWNHALL_HP_COLEADER_REMOVE = 15;
-export const WAR_TOWNHALL_HP_COLEADER_RECOVER = 10;
-export const WAR_TOWNHALL_HP_KAGE_REMOVE = 35;
-export const WAR_TOWNHALL_HP_KAGE_RECOVER = 15;
-export const WAR_TOWNHALL_HP_KAGEDEATH_REMOVE = 50;
 export const WAR_WINNING_BOOST_DAYS = 3;
 export const WAR_WINNING_BOOST_REGEN_PERC = 40;
 export const WAR_WINNING_BOOST_TRAINING_PERC = 20;
-export const WAR_DAILY_STRUCTURE_HP_DRAIN = 100; // Structure hp drain per day
 export const WAR_TOKEN_REDUCTION_INTERVAL_HOURS = 24; // How often tokens should be reduced
-export const WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_3_DAYS = 1.3; // 30% increase after 3 days
-export const WAR_TOKEN_REDUCTION_MULTIPLIER_AFTER_7_DAYS = 1.5; // 50% increase after 7 days
 export const WAR_LOSING_COOLDOWN_DAYS = 4; // Cooldown for losing a war
 export const WAR_WINNING_COOLDOWN_DAYS = 2; // Cooldown for winning a war
 export const WAR_STRUCTURE_UPGRADE_BLOCK_DAYS = 7; // Structure upgrade block duration
-export const WAR_VICTORY_TOKEN_BONUS = 100000; // Victory bonus tokens
+export const WAR_VICTORY_TOKEN_BONUS = 500000; // Victory bonus tokens
 export const WAR_PURCHASE_SHRINE_TOKEN_COST = 100000; // Cost in village tokens to purchase a shrine
 export const WAR_DECLARATION_COST = 15000; // Cost in village tokens to declare war
-export const WAR_DAILY_TOKEN_REDUCTION = 1000; // Daily token reduction during war
 export const WAR_ALLY_OFFER_MIN = 1000; // Minimum token offer for allies
 export const WAR_ALLY_MAX_PAYMENT_PERCENTAGE = 0.2; // Maximum payment as percentage of village tokens (20%)
+
+// War health system (per-instance health pools)
+export const WAR_INSTANCE_HEALTH = 10000; // Base war health per war instance
+
+// War health damage/recovery per kill by rank
+export const WAR_HEALTH_REMOVE = 5; // Base war health damage per kill
+export const WAR_HEALTH_RECOVER = 2; // Base war health recovery per kill
+export const WAR_HEALTH_ANBU_REMOVE = 10;
+export const WAR_HEALTH_ANBU_RECOVER = 5;
+export const WAR_HEALTH_ASSASSIN_REMOVE = 10;
+export const WAR_HEALTH_ASSASSIN_RECOVER = 5;
+export const WAR_HEALTH_ELDER_REMOVE = 15;
+export const WAR_HEALTH_ELDER_RECOVER = 10;
+export const WAR_HEALTH_COLEADER_REMOVE = 15;
+export const WAR_HEALTH_COLEADER_RECOVER = 10;
+export const WAR_HEALTH_KAGE_REMOVE = 35;
+export const WAR_HEALTH_KAGE_RECOVER = 15;
+export const WAR_HEALTH_KAGEDEATH_REMOVE = 50;
+
+// Sector control impact on townhall
+export const WAR_SECTOR_LOSS_TOWNHALL_DAMAGE = 300; // Townhall HP lost when losing a sector
+export const WAR_SECTOR_RECAPTURE_TOWNHALL_HEAL = 100; // Townhall HP recovered when recapturing a sector
+export const WAR_SECTOR_RECAPTURE_WINDOW_DAYS = 7; // Days within which recapture bonus applies
+
+// Enhanced rewards
+export const WAR_VICTORY_STRUCTURE_BOOST_LEVELS = 3; // Temporary level boost for structures on war victory
+export const WAR_VICTORY_STRUCTURE_BOOST_DAYS = 7; // Days the structure boost lasts
+export const WAR_VICTORY_BOOSTED_STRUCTURES = [
+  "/traininggrounds",
+  "/ramenshop",
+  "/missionhall",
+  "/home",
+  "/battlearena",
+] as const;
+
+// Enhanced punishment
+export const WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS = 3; // Levels lost on all structures when losing a war
+
+// Percentage-based token decay
+export const WAR_DAILY_TOKEN_DECAY_PERCENT_BASE = 3; // 3% daily decay
+export const WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_4 = 6; // 6% daily decay after 4 days
+export const WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_10 = 10; // 10% daily decay after 10 days
+
+// Daily war health drain (affects both sides equally each day)
+export const WAR_DAILY_HEALTH_DRAIN = 100; // War health drained from both sides daily
 
 // Skill point leveling constants
 export const SKILL_POINT_MIN_LEVEL = 21; // Minimum level to start gaining skill points from leveling

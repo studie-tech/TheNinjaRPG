@@ -16,7 +16,7 @@ import { RefreshCw } from "lucide-react";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
-import { calcStructureUpgrade } from "@/utils/village";
+import { calcStructureUpgrade, getEffectiveStructureLevel } from "@/utils/village";
 import { CLANS_PER_STRUCTURE_LEVEL } from "@/drizzle/constants";
 import { calcBankInterest } from "@/utils/village";
 import { cn } from "src/libs/shadui";
@@ -40,12 +40,19 @@ const Building: React.FC<BuildingProps> = (props) => {
   // State
   const { data: userData } = useRequiredUserData();
 
+  // Calculate effective level (includes war victory bonus)
+  const effectiveLevel = getEffectiveStructureLevel(structure);
+  const hasBonus = effectiveLevel > structure.level;
+
   // Blocks
   const TextBlock = (
     <div className="text-xs">
       <p className="font-bold">{structure.name}</p>
       <div className="flex flex-row items-center justify-center gap-1">
-        <p>Lvl. {structure.level}</p>{" "}
+        <p>
+          Lvl. {structure.level}
+          {hasBonus && <span className="text-green-500"> (+{effectiveLevel - structure.level})</span>}
+        </p>{" "}
         <TooltipProvider delayDuration={50}>
           <Tooltip>
             <TooltipTrigger>
@@ -209,52 +216,72 @@ const UpgradeButton = ({
  * @returns An array of reward messages.
  */
 export const StructureRewardEntries = (structure: VillageStructure) => {
-  const { level } = structure;
-  const msgs: string[] = [];
-  if (level > 0) {
+  const baseLevel = structure.level;
+  const effectiveLevel = getEffectiveStructureLevel(structure);
+  const bonusLevel = effectiveLevel - baseLevel;
+  const hasBonus = bonusLevel > 0;
+
+  // Helper to format value with bonus
+  const formatValue = (perLvl: number, suffix: string = "") => {
+    const baseValue = perLvl * baseLevel;
+    const bonusValue = perLvl * bonusLevel;
+    if (hasBonus && bonusValue > 0) {
+      return `${baseValue}${suffix} (+${bonusValue}${suffix})`;
+    }
+    return `${baseValue}${suffix}`;
+  };
+
+  const msgs: React.ReactNode[] = [];
+  if (effectiveLevel > 0) {
     if (structure.anbuSquadsPerLvl > 0) {
-      msgs.push(`Anbu Squads: +${structure.anbuSquadsPerLvl * level}`);
+      msgs.push(`Anbu Squads: +${formatValue(structure.anbuSquadsPerLvl)}`);
     }
     if (structure.arenaRewardPerLvl > 0) {
-      msgs.push(`Arena Rewards: +${structure.arenaRewardPerLvl * level}%`);
+      msgs.push(`Arena Rewards: +${formatValue(structure.arenaRewardPerLvl, "%")}`);
     }
     if (structure.bankInterestPerLvl > 0) {
-      msgs.push(
-        `Bank Interest: +${calcBankInterest(structure.bankInterestPerLvl * level)}%`,
-      );
+      const baseInterest = calcBankInterest(structure.bankInterestPerLvl * baseLevel);
+      const effectiveInterest = calcBankInterest(structure.bankInterestPerLvl * effectiveLevel);
+      const bonusInterest = effectiveInterest - baseInterest;
+      if (hasBonus && bonusInterest > 0) {
+        msgs.push(`Bank Interest: +${baseInterest}% (+${bonusInterest.toFixed(1)}%)`);
+      } else {
+        msgs.push(`Bank Interest: +${baseInterest}%`);
+      }
     }
     if (structure.blackDiscountPerLvl > 0) {
-      msgs.push(`Market discount: ${structure.blackDiscountPerLvl * level}%`);
+      msgs.push(`Market discount: ${formatValue(structure.blackDiscountPerLvl, "%")}`);
     }
     if (structure.clansPerLvl > 0) {
-      msgs.push(`Clans: +${structure.clansPerLvl * level * CLANS_PER_STRUCTURE_LEVEL}`);
+      const clansPerLvl = structure.clansPerLvl * CLANS_PER_STRUCTURE_LEVEL;
+      msgs.push(`Clans: +${formatValue(clansPerLvl)}`);
     }
     if (structure.hospitalSpeedupPerLvl > 0) {
-      msgs.push(`Hospital Speed: +${structure.hospitalSpeedupPerLvl * level}%`);
+      msgs.push(`Hospital Speed: +${formatValue(structure.hospitalSpeedupPerLvl, "%")}`);
     }
     if (structure.itemDiscountPerLvl > 0) {
-      msgs.push(`Item discount: ${structure.itemDiscountPerLvl * level}%`);
+      msgs.push(`Item discount: ${formatValue(structure.itemDiscountPerLvl, "%")}`);
     }
     if (structure.patrolsPerLvl > 0) {
-      msgs.push(`Patrol attacking enemies: +${structure.patrolsPerLvl * level}%`);
+      msgs.push(`Patrol attacking enemies: +${formatValue(structure.patrolsPerLvl, "%")}`);
     }
     if (structure.ramenDiscountPerLvl > 0) {
-      msgs.push(`Ramen discount: ${structure.ramenDiscountPerLvl * level}%`);
+      msgs.push(`Ramen discount: ${formatValue(structure.ramenDiscountPerLvl, "%")}`);
     }
     if (structure.regenIncreasePerLvl > 0) {
-      msgs.push(`Regen in Village: +${structure.regenIncreasePerLvl * level}%`);
+      msgs.push(`Regen in Village: +${formatValue(structure.regenIncreasePerLvl, "%")}`);
     }
     if (structure.sleepRegenPerLvl > 0) {
-      msgs.push(`Sleep Regen: +${structure.sleepRegenPerLvl * level}%`);
+      msgs.push(`Sleep Regen: +${formatValue(structure.sleepRegenPerLvl, "%")}`);
     }
     if (structure.structureDiscountPerLvl > 0) {
-      msgs.push(`Structure Discount: ${structure.structureDiscountPerLvl * level}%`);
+      msgs.push(`Structure Discount: ${formatValue(structure.structureDiscountPerLvl, "%")}`);
     }
     if (structure.trainBoostPerLvl > 0) {
-      msgs.push(`Training Boost: +${structure.trainBoostPerLvl * level}%`);
+      msgs.push(`Training Boost: +${formatValue(structure.trainBoostPerLvl, "%")}`);
     }
     if (structure.villageDefencePerLvl > 0) {
-      msgs.push(`Village Defence: +${structure.villageDefencePerLvl * level}%`);
+      msgs.push(`Village Defence: +${formatValue(structure.villageDefencePerLvl, "%")}`);
     }
   }
   if (msgs.length === 0) msgs.push("No rewards for this structure");

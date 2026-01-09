@@ -400,9 +400,9 @@ export type CombatResult = {
   targetsLeft: number;
   villageTokens: number;
   anbuPoints: number;
-  townhallChangeHP: number;
+  warHealthChange: number;
   shrineChangeHp: number;
-  townhallInfo: Record<string, number>;
+  warHealthInfo: Record<string, number>;
   shrineInfo: Record<number, number>;
   clanPoints: number;
   notifications: string[];

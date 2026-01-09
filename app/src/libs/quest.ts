@@ -194,6 +194,12 @@ export const getReward = (
           rawRewards.reward_gathering_experience +=
             objective.reward_gathering_experience;
         }
+        if (objective.reward_war_damage) {
+          rawRewards.reward_war_damage += objective.reward_war_damage;
+        }
+        if (objective.reward_war_healing) {
+          rawRewards.reward_war_healing += objective.reward_war_healing;
+        }
         if (objective.reward_jutsus) {
           rawRewards.reward_jutsus.push(...objective.reward_jutsus);
         }
@@ -367,6 +373,8 @@ export const collapseRewards = (
     reward_gathering_items: false,
     reward_hunter_items_ids: [],
     reward_gathering_items_ids: [],
+    reward_war_damage: 0,
+    reward_war_healing: 0,
   };
 
   rewards.forEach((reward) => {
@@ -409,6 +417,12 @@ export const collapseRewards = (
     }
     if (reward.reward_gathering_experience) {
       collapsed.reward_gathering_experience += reward.reward_gathering_experience;
+    }
+    if (reward.reward_war_damage) {
+      collapsed.reward_war_damage += reward.reward_war_damage;
+    }
+    if (reward.reward_war_healing) {
+      collapsed.reward_war_healing += reward.reward_war_healing;
     }
 
     // Only set reward hunter items to true if any of the rewards have it

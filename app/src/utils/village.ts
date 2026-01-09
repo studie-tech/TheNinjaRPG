@@ -75,6 +75,18 @@ export type StructureAttribute =
   | "villageDefencePerLvl";
 
 /**
+ * Calculates the effective level of a structure, including temporary bonuses from war victories.
+ * @param structure - The village structure.
+ * @returns The effective level including temporary bonus if not expired.
+ */
+export const getEffectiveStructureLevel = (structure: VillageStructure): number => {
+  const now = new Date();
+  const bonusExpiry = structure.temporaryLevelBonusExpiresAt;
+  const bonusActive = bonusExpiry && new Date(bonusExpiry) > now;
+  return structure.level + (bonusActive ? structure.temporaryLevelBonus : 0);
+};
+
+/**
  * Calculates the total boost for a given structure attribute in a village.
  * @param attribute - The attribute to calculate the boost for.
  * @param structures - An optional array of village structures.
@@ -84,7 +96,10 @@ export const getStrucBoost = (
   attribute: StructureAttribute,
   structures?: VillageStructure[],
 ) => {
-  return structures?.reduce((a, b) => a + b[attribute] * b.level, 0) ?? 0;
+  return (
+    structures?.reduce((a, b) => a + b[attribute] * getEffectiveStructureLevel(b), 0) ??
+    0
+  );
 };
 
 /**
@@ -140,7 +155,7 @@ export const calcStructureUpgrade = (
   structure: VillageStructure,
   village: Village & { structures: VillageStructure[] },
 ) => {
-  // Base cost
+  // Base cost (uses base level, not effective level - upgrades are based on permanent level)
   const cost = Math.floor(structure.baseCost * (structure.level + 1));
   // Village tax
   const population = village.populationCount;
@@ -148,10 +163,11 @@ export const calcStructureUpgrade = (
   const taxPerc = Math.min(hundredsOver200 * 0.05, 0.25);
   const tax = Math.floor(cost * taxPerc);
   const subTotal = cost + tax;
-  //discount
+  // Discount (uses effective level for benefits)
   const townHall = village?.structures.find((s) => s.name === "Town Hall");
-  const discountLevel =
-    townHall !== undefined ? townHall?.level * townHall?.structureDiscountPerLvl : 1;
+  const discountLevel = !!townHall
+    ? getEffectiveStructureLevel(townHall) * townHall?.structureDiscountPerLvl
+    : 1;
   const discount = Math.floor(subTotal * (0 + discountLevel / 100));
   // Return result & infor on calculation
   return { cost, tax, discount, total: subTotal - discount };
