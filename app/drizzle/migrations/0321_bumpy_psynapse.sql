@@ -6,3 +6,4 @@ ALTER TABLE `War` ADD `attackerWarHealth` int DEFAULT 10000 NOT NULL;
 ALTER TABLE `War` ADD `defenderWarHealth` int DEFAULT 10000 NOT NULL;
 ALTER TABLE `War` ADD `attackerWarHealthMax` int DEFAULT 10000 NOT NULL;
 ALTER TABLE `War` ADD `defenderWarHealthMax` int DEFAULT 10000 NOT NULL;
+UPDATE `Village` SET `allianceSystem` = 1 WHERE `type` IN ('HIDEOUT', 'TOWN');

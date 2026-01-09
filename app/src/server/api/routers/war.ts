@@ -584,8 +584,8 @@ export const warRouter = createTRPCRouter({
       if (activeWar.status !== "ACTIVE") {
         return errorResponse("War is not active");
       }
-      if (activeWar.type !== "VILLAGE_WAR") {
-        return errorResponse("War is not a village war");
+      if (!["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
+        return errorResponse("War ally offers only available for village wars and raids");
       }
       if (
         ![activeWar.attackerVillageId, activeWar.defenderVillageId].includes(
@@ -773,8 +773,8 @@ export const warRouter = createTRPCRouter({
       if (activeWar.status !== "ACTIVE") {
         return errorResponse("War is not active");
       }
-      if (activeWar.type !== "VILLAGE_WAR") {
-        return errorResponse("War is not a village war");
+      if (!["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
+        return errorResponse("War ally offers only available for village wars and raids");
       }
       if (request.receiverId !== user.userId) {
         return errorResponse("This offer is not for your village");

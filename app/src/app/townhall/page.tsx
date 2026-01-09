@@ -42,10 +42,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { Village, VillageAlliance } from "@/drizzle/schema";
 import type { UserWithRelations } from "@/routers/profile";
-import type { AllianceState } from "@/drizzle/constants";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Modal2 from "@/layout/Modal2";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { calculateEnemyConsequences } from "@/utils/alliance";
 import {
   Form,
@@ -821,9 +827,8 @@ const AllianceHall: React.FC<{
 
   if (isPending || !data) return <Loader explanation="Loading alliances" />;
 
-  const villages = data.villages.filter(
-    (v) => ["OUTLAW", "VILLAGE"].includes(v.type) && v.allianceSystem,
-  );
+  // All villages and factions with alliance system enabled
+  const allVillages = data.villages.filter((v) => v.allianceSystem);
   const relationships = data.relationships;
   const requests = data.requests;
 
@@ -832,53 +837,15 @@ const AllianceHall: React.FC<{
       <ContentBox
         id="tutorial-townhall-alliance"
         title={user.isOutlaw ? "Rumours" : "Town Hall"}
-        subtitle="Villages & factions"
+        subtitle="Alliances & Relations"
         defaultBackHref="/village"
         topRightContent={navTabs}
       >
-        <div className="overflow-auto">
-          <div className="grid grid-cols-7 items-center text-center min-w-[400px]">
-            <div>
-              <p className="font-bold">Kage</p>
-              <p className="py-4">&</p>
-              <p className="font-bold">Village</p>
-            </div>
-            {villages.map((village, i) => (
-              <div key={i} className="h-full flex flex-col justify-end">
-                {village.kage?.avatar && (
-                  <Link href={`/userid/${village.kageId}`}>
-                    <AvatarImage
-                      href={village.kage.avatar}
-                      alt={village.kage.username}
-                      hover_effect={true}
-                      size={200}
-                    />
-                  </Link>
-                )}
-                <p className="font-bold pt-1">{village.name}</p>
-                <VillageBlock village={village} user={user} />
-              </div>
-            ))}
-            {villages.map((villageRow, i) => {
-              const elements: React.ReactNode[] = [
-                <VillageBlock key={`row-${i}`} village={villageRow} user={user} />,
-              ];
-              villages.map((villageCol, j) => {
-                elements.push(
-                  <AllianceBlock
-                    relationships={relationships}
-                    villages={villages}
-                    villageRow={villageRow}
-                    villageCol={villageCol}
-                    user={user}
-                    key={j}
-                  />,
-                );
-              });
-              return elements;
-            })}
-          </div>
-        </div>
+        <AllianceList
+          user={user}
+          villages={allVillages}
+          relationships={relationships}
+        />
       </ContentBox>
       {requests && requests.length > 0 && (
         <ContentBox
@@ -901,20 +868,56 @@ const AllianceHall: React.FC<{
   );
 };
 
-const AllianceBlock: React.FC<{
-  relationships: VillageAlliance[];
+/**
+ * Alliance List Component
+ * Displays a searchable/filterable list of all villages and factions with alliance actions
+ */
+const AllianceList: React.FC<{
+  user: NonNullable<UserWithRelations>;
   villages: Village[];
-  villageRow: Village;
-  villageCol: Village;
-  user: UserWithRelations;
-}> = ({ relationships, villages, villageRow, villageCol, user }) => {
-  // Default
-  const sameVillage = villageRow.id === villageCol.id;
-  const otherVillage = villageRow.id === user?.villageId ? villageCol : villageRow;
-  let status: AllianceState = sameVillage ? "ALLY" : "NEUTRAL";
-
-  // tRPC utility
+  relationships: VillageAlliance[];
+}> = ({ user, villages, relationships }) => {
   const utils = api.useUtils();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "ALL" | "ALLY" | "ENEMY" | "NEUTRAL"
+  >("ALL");
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "VILLAGE" | "FACTION">("ALL");
+
+  // Filter all villages/factions (exclude user's own)
+  const allEntities = villages.filter(
+    (v) => v.allianceSystem && v.id !== user.villageId,
+  );
+
+  // Apply search, status, and type filters
+  const filteredEntities = allEntities
+    .filter((entity) => {
+      // Search filter
+      const matchesSearch = entity.name.toLowerCase().includes(search.toLowerCase());
+      if (!matchesSearch) return false;
+
+      // Type filter
+      if (typeFilter === "VILLAGE" && !["VILLAGE", "OUTLAW"].includes(entity.type)) {
+        return false;
+      }
+      if (typeFilter === "FACTION" && !["HIDEOUT", "TOWN"].includes(entity.type)) {
+        return false;
+      }
+
+      // Status filter
+      if (statusFilter === "ALL") return true;
+      const relationship = findRelationship(relationships, user.villageId, entity.id);
+      const status = relationship?.status || "NEUTRAL";
+      return status === statusFilter;
+    })
+    // Sort: villages first, then factions, alphabetically within each group
+    .sort((a, b) => {
+      const aIsVillage = ["VILLAGE", "OUTLAW"].includes(a.type);
+      const bIsVillage = ["VILLAGE", "OUTLAW"].includes(b.type);
+      if (aIsVillage && !bIsVillage) return -1;
+      if (!aIsVillage && bIsVillage) return 1;
+      return a.name.localeCompare(b.name);
+    });
 
   // Mutations
   const { mutate: create, isPending: isCreating } =
@@ -948,124 +951,210 @@ const AllianceBlock: React.FC<{
       },
     });
 
-  // Check alliances
-  const relationship = findRelationship(relationships, villageCol.id, villageRow.id);
-  if (relationship) status = relationship.status;
+  const isKage = user.userId === user.village?.kageId;
+  const isLoading = isCreating || isLeaving || isAttacking;
 
-  // Check outlaw
-  const isOutlaw = villageRow.type === "OUTLAW" || villageCol.type === "OUTLAW";
-  if (isOutlaw) status = "ENEMY";
-
-  // Is sending, show loader
-  if (isCreating || isLeaving || isAttacking)
-    return <Loader explanation="Processing" />;
-
-  // Box background based on status
-  let background = "bg-slate-300";
-  if (status === "ALLY") background = "bg-green-300";
-  if (status === "ENEMY") background = "bg-red-400";
-
-  // Permissions
-  const isKage = [villageRow.kageId, villageCol.kageId].includes(user?.userId ?? "");
-  const { ally, enemy, newEnemies, newNeutrals } = calculateEnemyConsequences(
-    relationships,
-    villages,
-    villageRow.id,
-    villageCol.id,
-  );
-
-  // Derived
-  const doHighlight = [villageRow.id, villageCol.id].includes(user?.villageId ?? "");
-  const highlight = doHighlight ? "" : "opacity-50";
-
-  // Render
   return (
-    <div
-      className={`relative aspect-square ${background} ${highlight} flex items-center justify-center font-bold border-2`}
-    >
-      {!isOutlaw && isKage && relationship && !sameVillage && status === "ALLY" && (
-        <Button
-          className="absolute top-1 left-1 px-1"
-          variant="ghost"
-          onClick={() => leave({ allianceId: relationship.id })}
+    <div className="space-y-4">
+      {/* Search and Filters */}
+      <div className="flex flex-wrap gap-2">
+        <Input
+          placeholder="Search villages & factions..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 min-w-[150px]"
+        />
+        <Select
+          value={typeFilter}
+          onValueChange={(v) => setTypeFilter(v as "ALL" | "VILLAGE" | "FACTION")}
         >
-          <DoorOpen className=" h-6 w-6 hover:text-orange-500" />
-        </Button>
-      )}
-      {!isOutlaw && isKage && !sameVillage && enemy.success && (
-        <Confirm2
-          title="Confirm Enemy Declaration"
-          button={
-            <Button className="absolute top-1 right-1 px-1" variant="ghost">
-              <Swords className=" h-6 w-6 hover:text-orange-500" />
-            </Button>
+          <SelectTrigger className="w-[110px]">
+            <SelectValue placeholder="Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Types</SelectItem>
+            <SelectItem value="VILLAGE">Villages</SelectItem>
+            <SelectItem value="FACTION">Factions</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) =>
+            setStatusFilter(v as "ALL" | "ALLY" | "ENEMY" | "NEUTRAL")
           }
-          onAccept={(e) => {
-            e.preventDefault();
-            attack({ villageId: otherVillage.id });
-          }}
         >
-          <p>You are about to declare {otherVillage.name} an enemy. Are you sure?</p>
-          <p>
-            The cost of declaring a village as enemy is {WAR_FUNDS_COST} village tokens.
+          <SelectTrigger className="w-[110px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Status</SelectItem>
+            <SelectItem value="ALLY">Allies</SelectItem>
+            <SelectItem value="ENEMY">Enemies</SelectItem>
+            <SelectItem value="NEUTRAL">Neutral</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Entity List */}
+      <div className="space-y-2">
+        {filteredEntities.map((entity) => (
+          <AllianceCard
+            key={entity.id}
+            entity={entity}
+            user={user}
+            relationships={relationships}
+            villages={villages}
+            isKage={isKage}
+            onCreate={create}
+            onLeave={leave}
+            onAttack={attack}
+            isLoading={isLoading}
+          />
+        ))}
+        {filteredEntities.length === 0 && (
+          <p className="text-center text-muted-foreground py-4">
+            No villages or factions found
           </p>
-          {newEnemies.length > 0 && (
-            <p>
-              <span className="font-bold">Additional Enemies: </span>
-              <span className="font-normal">
-                {newEnemies.map((v) => v.name).join(", ")} will become enemies
-              </span>
-            </p>
-          )}
-          {newNeutrals.length > 0 && (
-            <p>
-              <span className="font-bold">Broken Alliances: </span>
-              <span className="font-normal">
-                {newNeutrals.map((v) => v.name).join(", ")} will become neutral
-              </span>
-            </p>
-          )}
-        </Confirm2>
-      )}
-      {!isOutlaw && isKage && status === "ENEMY" && (
-        <Button
-          className="absolute top-1 left-1 px-1"
-          variant="ghost"
-          onClick={() => create({ targetId: otherVillage.id, type: "SURRENDER" })}
-        >
-          <LandPlot className=" h-6 w-6 hover:text-orange-500" />
-        </Button>
-      )}
-      {!isOutlaw && isKage && ally.success && (
-        <Button
-          className="absolute top-1 left-1 px-1"
-          variant="ghost"
-          onClick={() => create({ targetId: otherVillage.id, type: "ALLIANCE" })}
-        >
-          <Handshake className=" h-6 w-6 hover:text-orange-500" />
-        </Button>
-      )}
-      <p className="absolute bottom-3 text-xs sm:text-base md:text-sm">
-        {capitalizeFirstLetter(status)}
-      </p>
+        )}
+      </div>
     </div>
   );
 };
 
-const VillageBlock: React.FC<{ village: Village; user: UserWithRelations }> = ({
-  village,
+/**
+ * Alliance Card Component
+ * Displays a single village or faction with its alliance status and actions
+ */
+const AllianceCard: React.FC<{
+  entity: Village;
+  user: NonNullable<UserWithRelations>;
+  relationships: VillageAlliance[];
+  villages: Village[];
+  isKage: boolean;
+  onCreate: (params: { targetId: string; type: "ALLIANCE" | "SURRENDER" }) => void;
+  onLeave: (params: { allianceId: string }) => void;
+  onAttack: (params: { villageId: string }) => void;
+  isLoading: boolean;
+}> = ({
+  entity,
   user,
+  relationships,
+  villages,
+  isKage,
+  onCreate,
+  onLeave,
+  onAttack,
+  isLoading,
 }) => {
-  const highlight = village.id === user?.villageId ? "" : "opacity-50";
+  const relationship = findRelationship(relationships, user.villageId, entity.id);
+  const status = relationship?.status || "NEUTRAL";
+  const { ally, enemy, newEnemies, newNeutrals } = calculateEnemyConsequences(
+    relationships,
+    villages,
+    user.villageId ?? "",
+    entity.id,
+  );
+
+  // Determine entity type display
+  const isVillage = ["VILLAGE", "OUTLAW"].includes(entity.type);
+  const typeLabel = isVillage ? "Village" : "Faction";
+  const typeColors = isVillage
+    ? "text-blue-600 bg-blue-100"
+    : "text-purple-600 bg-purple-100";
+
+  const statusColors: Record<string, string> = {
+    ALLY: "text-green-600 bg-green-100",
+    ENEMY: "text-red-600 bg-red-100",
+    NEUTRAL: "text-slate-600 bg-slate-100",
+  };
+
   return (
-    <div className={`aspect-square ${highlight}`}>
-      <Image
-        src={village.villageLogo}
-        alt={village.name}
-        className="p-1"
-        width={100}
-        height={100}
-      />
+    <div className="flex items-center justify-between p-3 border rounded-lg">
+      <div className="flex items-center gap-3">
+        <Image
+          src={entity.villageGraphic}
+          alt={entity.name}
+          width={40}
+          height={40}
+          className="rounded"
+        />
+        <div>
+          <p className="font-bold">{entity.name}</p>
+          <div className="flex gap-1">
+            <span className={`text-xs px-2 py-0.5 rounded ${typeColors}`}>
+              {typeLabel}
+            </span>
+            <span className={`text-xs px-2 py-0.5 rounded ${statusColors[status]}`}>
+              {capitalizeFirstLetter(status)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {isKage && !isLoading && (
+        <div className="flex gap-2">
+          {ally.success && status === "NEUTRAL" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onCreate({ targetId: entity.id, type: "ALLIANCE" })}
+              title="Request Alliance"
+            >
+              <Handshake className="h-4 w-4" />
+            </Button>
+          )}
+          {status === "ALLY" && relationship && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onLeave({ allianceId: relationship.id })}
+              title="Leave Alliance"
+            >
+              <DoorOpen className="h-4 w-4" />
+            </Button>
+          )}
+          {enemy.success && status !== "ENEMY" && (
+            <Confirm2
+              title="Declare Enemy"
+              onAccept={(e) => {
+                e.preventDefault();
+                onAttack({ villageId: entity.id });
+              }}
+              button={
+                <Button size="sm" variant="outline" title="Declare Enemy">
+                  <Swords className="h-4 w-4" />
+                </Button>
+              }
+            >
+              <p>
+                Declare {entity.name} as enemy? Cost: {WAR_FUNDS_COST.toLocaleString()}{" "}
+                tokens.
+              </p>
+              {newEnemies.length > 0 && (
+                <p className="text-red-500">
+                  Additional enemies: {newEnemies.map((v) => v.name).join(", ")}
+                </p>
+              )}
+              {newNeutrals.length > 0 && (
+                <p className="text-yellow-500">
+                  Broken alliances: {newNeutrals.map((v) => v.name).join(", ")}
+                </p>
+              )}
+            </Confirm2>
+          )}
+          {status === "ENEMY" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onCreate({ targetId: entity.id, type: "SURRENDER" })}
+              title="Request Surrender"
+            >
+              <LandPlot className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      )}
+      {isLoading && <Loader explanation="" />}
     </div>
   );
 };

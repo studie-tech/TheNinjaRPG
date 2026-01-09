@@ -29,9 +29,10 @@ import { canAdministrateWars } from "@/utils/permissions";
 import { canSwapVillage } from "@/utils/permissions";
 import { VILLAGE_LEAVE_REQUIRED_RANK } from "@/drizzle/constants";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { ALLIANCE_VILLAGE_TYPES } from "@/drizzle/constants";
 import { actionLog } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import type { AllianceState } from "@/drizzle/constants";
+import type { AllianceState, AllianceVillageType } from "@/drizzle/constants";
 import type { VillageAlliance } from "@/drizzle/schema";
 
 const availRequests = ["SURRENDER", "ALLIANCE"];
@@ -408,8 +409,13 @@ export const villageRouter = createTRPCRouter({
       if (!target.kageId) return errorResponse("Target village does not have kage");
       if (!user || !villageId) return errorResponse("Not in this village");
       if (!isKage(user)) return errorResponse("You are not kage");
-      if (target.type !== "VILLAGE") return errorResponse("Only for villages");
-      if (user.village?.type !== "VILLAGE") return errorResponse("Only for villages");
+      if (!ALLIANCE_VILLAGE_TYPES.includes(target.type as AllianceVillageType))
+        return errorResponse("Invalid target type for alliance");
+      if (
+        !user.village?.type ||
+        !ALLIANCE_VILLAGE_TYPES.includes(user.village.type as AllianceVillageType)
+      )
+        return errorResponse("Your village/faction cannot form alliances");
       if (!user.village.allianceSystem) return errorResponse("User Alliance disabled");
       if (!target.allianceSystem) return errorResponse("Target Alliance disabled");
 
@@ -618,8 +624,10 @@ export const villageRouter = createTRPCRouter({
       if (!target) return errorResponse("Target village not found");
       if (!user || !villageId) return errorResponse("Not in this village");
       if (!isKage(user)) return errorResponse("You are not kage");
-      if (target.type !== "VILLAGE") return errorResponse("Only for villages");
-      if (userVillage.type !== "VILLAGE") return errorResponse("Only for villages");
+      if (!ALLIANCE_VILLAGE_TYPES.includes(target.type as AllianceVillageType))
+        return errorResponse("Invalid target type for alliance");
+      if (!ALLIANCE_VILLAGE_TYPES.includes(userVillage.type as AllianceVillageType))
+        return errorResponse("Your village/faction cannot declare enemies");
       if (!userVillage.allianceSystem) return errorResponse("User Alliance disabled");
       if (!target.allianceSystem) return errorResponse("Target Alliance disabled");
 

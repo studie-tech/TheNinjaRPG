@@ -1227,9 +1227,11 @@ export const VillageWar: React.FC<{
         />
       </div>
 
-      {isKage && war.status === "ACTIVE" && war.type === "VILLAGE_WAR" && (
-        <div className="mt-4">
-          <h5 className="font-bold mb-2">Send War Alliance Offers</h5>
+      {isKage &&
+        war.status === "ACTIVE" &&
+        ["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && (
+          <div className="mt-4">
+            <h5 className="font-bold mb-2">Send War Alliance Offers</h5>
           <p className="text-sm text-muted-foreground mb-4">
             Send offers to factions or allied villages to join your war effort.
           </p>
@@ -1371,7 +1373,7 @@ const WarSide: React.FC<{
         />
       </div>
       {/* Show our supporting factions */}
-      {war.type === "VILLAGE_WAR" && (
+      {["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && (
         <div className="mt-4">
           <h6 className="font-semibold text-sm mb-2">Supporting Forces:</h6>
           <div className="flex flex-wrap gap-2 justify-center">

@@ -133,7 +133,7 @@ export const clanRouter = createTRPCRouter({
           kageId: fetchedClan.leaderId,
           type: "HIDEOUT",
           joinable: false,
-          allianceSystem: false,
+          allianceSystem: true,
           villageGraphic: IMG_VILLAGE_FACTION,
         }),
       ]);
