@@ -11,7 +11,7 @@ import ApplicationsFiltering, {
   getApplicationsFilter,
   useApplicationsFiltering,
 } from "@/layout/ApplicationsFiltering";
-import { canDeleteStaffApplication } from "@/utils/permissions";
+import { canDeleteStaffApplication, canApproveApplications } from "@/utils/permissions";
 import Confirm2 from "@/layout/Confirm2";
 import { Button } from "@/components/ui/button";
 

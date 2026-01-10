@@ -408,6 +408,14 @@ export const canDeleteStaffApplication = (role: UserRole) => {
   return role === "CODING-ADMIN";
 };
 
+export const canViewAllApplications = (role: UserRole) => {
+  return role.includes("ADMIN") || role === "CODER";
+};
+
+export const canApproveApplications = (role: UserRole) => {
+  return role.includes("ADMIN") || role === "CODER";
+};
+
 export const canUnequipAllUsers = (user: UserData) => {
   return [
     "CONTENT-ADMIN",

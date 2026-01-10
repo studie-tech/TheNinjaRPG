@@ -1,6 +1,7 @@
 "use client";
 
 import { useUserData } from "@/utils/UserContext";
+import { canViewAllApplications } from "@/utils/permissions";
 import {
   ContentFiltering,
   useContentFiltering,
@@ -64,7 +65,8 @@ const makeApplicationsFilteringSchema = () =>
 
 const ApplicationsFiltering: React.FC<ApplicationsFilteringProps> = (props) => {
   const { data: userData } = useUserData();
-  const context = { role: userData?.role };
+  const canViewAll = userData?.role ? canViewAllApplications(userData.role) : false;
+  const context = { role: userData?.role, canViewAll };
   return (
     <ContentFiltering
       schema={makeApplicationsFilteringSchema()}

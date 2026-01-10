@@ -12,6 +12,7 @@ import Link from "next/link";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { showMutationToast } from "@/libs/toast";
 import { Badge } from "@/components/ui/badge";
+import { canApproveApplications } from "@/utils/permissions";
 
 export default function ApplicationDetailPage() {
   // State
@@ -21,6 +22,7 @@ export default function ApplicationDetailPage() {
 
   // Derived
   const isStaff = me?.role && me.role !== "USER";
+  const canApprove = me?.role ? canApproveApplications(me.role) : false;
 
   // Query for application
   const { data: app, isPending } = api.applications.get.useQuery({ id: applicationId });
@@ -37,7 +39,10 @@ export default function ApplicationDetailPage() {
         Not found or you do not have access to this application.
       </ContentBox>
     );
-  const staffVote = isStaff && app?.approvals?.find((a) => a.group === me?.role)?.state;
+  // For CODER, check CODING-ADMIN approvals since CODER votes are stored under that group
+  const approvalGroup = me?.role === "CODER" ? "CODING-ADMIN" : me?.role;
+  const staffVote =
+    canApprove && app?.approvals?.find((a) => a.group === approvalGroup)?.state;
 
   return (
     <>
@@ -46,7 +51,7 @@ export default function ApplicationDetailPage() {
         subtitle={`Status: ${app.state.toLowerCase()}`}
         defaultBackHref={isStaff ? "/applications" : "/manual/staff"}
         topRightContent={
-          isStaff && app.state !== "APPROVED" ? (
+          canApprove && app.state !== "APPROVED" ? (
             <div className="flex gap-2">
               {staffVote !== "APPROVED" && <ApproveButton applicationId={app.id} />}
               {staffVote !== "REJECTED" && <RejectButton applicationId={app.id} />}
