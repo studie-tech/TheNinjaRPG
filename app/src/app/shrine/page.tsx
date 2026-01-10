@@ -8,7 +8,7 @@ import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { Swords, Users } from "lucide-react";
+import { Swords, Users, Shield } from "lucide-react";
 import Image from "@/layout/Image";
 import StatusBar from "@/layout/StatusBar";
 import { WAR_SHRINE_IMAGE, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
@@ -59,6 +59,9 @@ export default function Shrine() {
   const canShowMpvpOption =
     sectorOwnerVillageId && sectorOwnerVillageId !== userData.villageId;
 
+  // Check if user is queued - if so, show the lobby so they can see/leave queue
+  const isUserQueued = userData.status === "QUEUED";
+
   if (!activeWars || activeWars.length === 0) {
     return (
       <>
@@ -67,7 +70,7 @@ export default function Shrine() {
           subtitle={sectorData.sectorData ? "Sector is Claimed" : "Unclaimed Sector"}
           defaultBackHref="/travel"
         >
-          {canShowMpvpOption ? (
+          {canShowMpvpOption || isUserQueued ? (
             <Tabs defaultValue="team" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="team">
@@ -75,15 +78,23 @@ export default function Shrine() {
                   Team Battle
                 </TabsTrigger>
                 <TabsTrigger value="info">
-                  <Swords className="mr-2 h-4 w-4" />
+                  <Shield className="mr-2 h-4 w-4" />
                   Sector Info
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="team" className="mt-4">
-                <div className="mb-4 text-sm text-muted-foreground">
-                  Form a team to attack this shrine together! Up to 3 attackers can join
-                  the assault, and defenders from the owning village can queue to defend.
-                </div>
+                {canShowMpvpOption ? (
+                  <div className="mb-4 text-sm text-muted-foreground">
+                    Form a team to attack this shrine together! Up to 3 attackers can
+                    join the assault, and defenders from the owning village can queue to
+                    defend.
+                  </div>
+                ) : isUserQueued ? (
+                  <div className="mb-4 text-sm text-muted-foreground">
+                    You are queued for a shrine battle. You can view your queue status or
+                    leave the queue below.
+                  </div>
+                ) : null}
                 <ShrineBattleLobby
                   sectorNumber={userData.sector}
                   userId={userData.userId}
@@ -93,12 +104,26 @@ export default function Shrine() {
               </TabsContent>
               <TabsContent value="info" className="mt-4">
                 <div className="flex flex-col items-center">
-                  <p>
-                    This sector is claimed by{" "}
-                    <strong>{sectorData.sectorData?.village.name}</strong>. The leader
-                    of your village or faction can attack the shrine to try and defeat
-                    it and claim the sector.
-                  </p>
+                  {sectorData.sectorData ? (
+                    sectorOwnerVillageId === userData.villageId ? (
+                      <p>
+                        This sector is owned by your village. You can defend it when other
+                        villages attack.
+                      </p>
+                    ) : (
+                      <p>
+                        This sector is claimed by{" "}
+                        <strong>{sectorData.sectorData?.village.name}</strong>. The
+                        leader of your village or faction can attack the shrine to try
+                        and defeat it and claim the sector.
+                      </p>
+                    )
+                  ) : (
+                    <p>
+                      This sector is unclaimed. The leader of your village or faction can
+                      attack the shrine to try and defeat it and claim the sector.
+                    </p>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>
@@ -138,6 +163,14 @@ export default function Shrine() {
       war.defenderVillageId !== userData.villageId,
   );
 
+  // Check if user is an attacker in any of their wars (for Team Battle tab)
+  const userIsAttacker = userWars.some(
+    (war) => war.attackerVillageId === userData.villageId,
+  );
+  const userIsDefender = userWars.some(
+    (war) => war.defenderVillageId === userData.villageId,
+  );
+
   return (
     <div className="space-y-8">
       {userWars.length > 0 && (
@@ -173,16 +206,38 @@ export default function Shrine() {
                 </div>
               </TabsContent>
               <TabsContent value="team">
-                <div className="mb-4 text-sm text-muted-foreground">
-                  Form a team to attack this shrine together! Up to 3 attackers can join
-                  the assault, and defenders from the owning village can queue to defend.
-                </div>
-                <ShrineBattleLobby
-                  sectorNumber={userData.sector}
-                  userId={userData.userId}
-                  userVillageId={userData.villageId}
-                  defenderVillageId={sectorOwnerVillageId}
-                />
+                {userIsAttacker ? (
+                  <>
+                    <div className="mb-4 text-sm text-muted-foreground">
+                      Form a team to attack this shrine together! Up to 3 attackers can
+                      join the assault, and defenders from the owning village can queue
+                      to defend.
+                    </div>
+                    <ShrineBattleLobby
+                      sectorNumber={userData.sector}
+                      userId={userData.userId}
+                      userVillageId={userData.villageId}
+                      defenderVillageId={sectorOwnerVillageId}
+                    />
+                  </>
+                ) : userIsDefender ? (
+                  <>
+                    <div className="mb-4 text-sm text-muted-foreground">
+                      Your village is defending this shrine. You can join as a defender
+                      when attackers start a team battle.
+                    </div>
+                    <ShrineBattleLobby
+                      sectorNumber={userData.sector}
+                      userId={userData.userId}
+                      userVillageId={userData.villageId}
+                      defenderVillageId={sectorOwnerVillageId}
+                    />
+                  </>
+                ) : (
+                  <div className="text-center text-muted-foreground">
+                    No active team battles for this sector.
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </ContentBox>
@@ -229,9 +284,11 @@ const WarCard = ({
   onAttack: () => void;
   isAttacking: boolean;
 }) => {
-  const isUserWar =
-    war.attackerVillageId === villageId || war.defenderVillageId === villageId;
-  const canAttack = isUserWar && war.shrineHp > 0;
+  const isAttacker = war.attackerVillageId === villageId;
+  const isDefender = war.defenderVillageId === villageId;
+  const isUserWar = isAttacker || isDefender;
+  // Only attackers can attack the shrine - defenders shouldn't attack their own shrine
+  const canAttack = isAttacker && war.shrineHp > 0;
 
   return (
     <div className="flex flex-col items-center gap-4 p-4">
