@@ -118,27 +118,6 @@ export const isWarAllies = (
 };
 
 /**
- * Resets the wartime townhalls
- * @param activeWars - The active wars
- */
-export const resetStructuresWhenNotInWar = async (
-  activeWars: FetchActiveWarsReturnType[],
-) => {
-  const villagesInWars = activeWars.flatMap((war) => [
-    war.attackerVillageId,
-    war.defenderVillageId,
-  ]);
-  await drizzleDB
-    .update(villageStructure)
-    .set({ curSp: sql`maxSp` })
-    .where(
-      villagesInWars.length > 0
-        ? notInArray(villageStructure.villageId, villagesInWars)
-        : undefined,
-    );
-};
-
-/**
  * Checks if a village can join a war
  * @param activeWar - The war to check
  * @param relationships - The relationships between villages

@@ -560,6 +560,40 @@ export const getNewTrackers = (
               status.sector = user?.village?.sector || user.sector;
             } else if (objective.sectorType === "current_sector") {
               status.sector = user.sector;
+            } else if (objective.sectorType === "enemy_village") {
+              // Find enemy village from active wars
+              const userVillageId = user.villageId;
+              const activeWars = user.activeWars ?? [];
+
+              // Find an active war and get the enemy village sector
+              for (const w of activeWars) {
+                // Check if user is direct participant
+                if (w.attackerVillageId === userVillageId) {
+                  status.sector = w.defenderVillage.sector;
+                  break;
+                } else if (w.defenderVillageId === userVillageId) {
+                  status.sector = w.attackerVillage.sector;
+                  break;
+                }
+
+                // Check if user is an ally - find which side they support
+                const allyEntry = w.warAllies?.find((a) => a.villageId === userVillageId);
+                if (allyEntry) {
+                  // supportVillageId is the village the user's village is supporting
+                  // If supporting attacker, enemy is defender. If supporting defender, enemy is attacker.
+                  if (allyEntry.supportVillageId === w.attackerVillageId) {
+                    status.sector = w.defenderVillage.sector;
+                  } else {
+                    status.sector = w.attackerVillage.sector;
+                  }
+                  break;
+                }
+              }
+
+              // Fallback to random sector if no war found
+              if (status.sector === undefined) {
+                status.sector = Math.ceil(Math.random() * (MAP_TOTAL_SECTORS - 1));
+              }
             }
             if (status.sector !== undefined) {
               consequences.push({ type: "update_user", ids: ["location_update"] });

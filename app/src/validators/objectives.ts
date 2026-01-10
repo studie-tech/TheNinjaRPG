@@ -213,6 +213,7 @@ const SECTOR_TYPES = [
   "from_list",
   "user_village",
   "current_sector",
+  "enemy_village",
 ] as const;
 export type SectorType = (typeof SECTOR_TYPES)[number];
 export const LOCATION_TYPES = ["specific", "random"] as const;

@@ -33,7 +33,6 @@ import {
 import {
   handleWarEnd,
   canJoinWar,
-  resetStructuresWhenNotInWar,
   getShrineHpByLevel,
   isVillageInvolvedInAnyWar,
 } from "@/libs/war";
@@ -191,7 +190,7 @@ export const warRouter = createTRPCRouter({
       const attackerVillage = villages.find((v) => v.id === user?.village?.id);
       const defenderVillage = villages.find((v) => v.id === targetSector?.villageId);
       const defenderVillageId = defenderVillage?.id || VILLAGE_SYNDICATE_ID;
-      
+
       // Check minimum member count for war participation (after we know village IDs)
       const [attackerMemberCount, actualDefenderCount] = await Promise.all([
         attackerVillage ? getVillageMemberCount(ctx.drizzle, attackerVillage.id) : 0,
@@ -288,12 +287,12 @@ export const warRouter = createTRPCRouter({
       ) {
         return errorResponse("You are already at war against the owner village.");
       }
-      
+
       // Check if attacker village is already involved in any active war
       if (isVillageInvolvedInAnyWar(activeWars, user?.village?.id)) {
         return errorResponse("Your village is already involved in an active war");
       }
-      
+
       // Check if target village is already involved in any active war
       if (isVillageInvolvedInAnyWar(activeWars, defenderVillageId)) {
         return errorResponse("Target village is already involved in an active war");
@@ -301,10 +300,14 @@ export const warRouter = createTRPCRouter({
 
       // Check minimum member count for war participation
       if (attackerVillage && attackerMemberCount < WAR_MINIMUM_MEMBERS_REQUIRED) {
-        return errorResponse(`Your village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to declare sector war`);
+        return errorResponse(
+          `Your village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to declare sector war`,
+        );
       }
       if (defenderVillage && actualDefenderCount < WAR_MINIMUM_MEMBERS_REQUIRED) {
-        return errorResponse(`Target village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to be attacked`);
+        return errorResponse(
+          `Target village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to be attacked`,
+        );
       }
 
       // Re-check just before creation to avoid races
@@ -386,7 +389,7 @@ export const warRouter = createTRPCRouter({
       const warType = isRaid ? "WAR_RAID" : "VILLAGE_WAR";
       const relationshipStatus = isRaid ? "ENEMY" : relationship?.status;
       const structure = structures.find((s) => s.route === input.targetStructureRoute);
-      
+
       // Check minimum member count for war participation (after we know village IDs)
       const [attackerMemberCount, defenderMemberCount] = await Promise.all([
         attackerVillage ? getVillageMemberCount(ctx.drizzle, attackerVillage.id) : 0,
@@ -481,12 +484,12 @@ export const warRouter = createTRPCRouter({
       ) {
         return errorResponse("You are already raiding this village structure");
       }
-      
+
       // Check if attacker village is already involved in any active war
       if (isVillageInvolvedInAnyWar(activeWars, user?.village?.id)) {
         return errorResponse("Your village is already involved in an active war");
       }
-      
+
       // Check if target village is already involved in any active war
       if (isVillageInvolvedInAnyWar(activeWars, input.targetVillageId)) {
         return errorResponse("Target village is already involved in an active war");
@@ -494,10 +497,14 @@ export const warRouter = createTRPCRouter({
 
       // Check minimum member count for war participation
       if (attackerMemberCount < WAR_MINIMUM_MEMBERS_REQUIRED) {
-        return errorResponse(`Your village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to declare war`);
+        return errorResponse(
+          `Your village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to declare war`,
+        );
       }
       if (defenderMemberCount < WAR_MINIMUM_MEMBERS_REQUIRED) {
-        return errorResponse(`Target village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to be attacked`);
+        return errorResponse(
+          `Target village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to be attacked`,
+        );
       }
 
       // Re-check just before creation to avoid races
@@ -551,19 +558,20 @@ export const warRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user }, activeWar, villages, relationships, allActiveWars] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchActiveWar(ctx.drizzle, input.warId),
-        fetchVillages(ctx.drizzle),
-        fetchAlliances(ctx.drizzle),
-        fetchActiveWars(ctx.drizzle),
-      ]);
+      const [{ user }, activeWar, villages, relationships, allActiveWars] =
+        await Promise.all([
+          fetchUpdatedUser({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+          }),
+          fetchActiveWar(ctx.drizzle, input.warId),
+          fetchVillages(ctx.drizzle),
+          fetchAlliances(ctx.drizzle),
+          fetchActiveWars(ctx.drizzle),
+        ]);
       // Derived
       const targetVillage = villages.find((v) => v.id === input.targetVillageId);
-      
+
       // Check minimum member count for war participation (after we know village IDs)
       const [userVillageMemberCount, targetVillageMemberCount] = await Promise.all([
         user?.villageId ? getVillageMemberCount(ctx.drizzle, user.villageId) : 0,
@@ -583,7 +591,9 @@ export const warRouter = createTRPCRouter({
         return errorResponse("War is not active");
       }
       if (!["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
-        return errorResponse("War ally offers only available for village wars and raids");
+        return errorResponse(
+          "War ally offers only available for village wars and raids",
+        );
       }
       if (
         ![activeWar.attackerVillageId, activeWar.defenderVillageId].includes(
@@ -595,13 +605,15 @@ export const warRouter = createTRPCRouter({
       if (user.village.tokens < input.tokenOffer) {
         return errorResponse("Not enough tokens to create offer");
       }
-      
+
       // Check if payment exceeds max percentage of village tokens
-      const maxPayment = Math.floor(user.village.tokens * WAR_ALLY_MAX_PAYMENT_PERCENTAGE);
+      const maxPayment = Math.floor(
+        user.village.tokens * WAR_ALLY_MAX_PAYMENT_PERCENTAGE,
+      );
       const maxPercentage = WAR_ALLY_MAX_PAYMENT_PERCENTAGE * 100;
       if (input.tokenOffer > maxPayment) {
         return errorResponse(
-          `Payment cannot exceed ${maxPercentage}% of village tokens (max: ${maxPayment.toLocaleString()})`
+          `Payment cannot exceed ${maxPercentage}% of village tokens (max: ${maxPayment.toLocaleString()})`,
         );
       }
       if (!targetVillage) {
@@ -614,17 +626,25 @@ export const warRouter = createTRPCRouter({
       ) {
         return errorResponse("Cannot create offer for a village already in the war");
       }
-      
+
       // Check if target village is already involved in any other active war
-      if (isVillageInvolvedInAnyWar(allActiveWars, input.targetVillageId, activeWar.id)) {
-        return errorResponse("Target village is already involved in another active war");
+      if (
+        isVillageInvolvedInAnyWar(allActiveWars, input.targetVillageId, activeWar.id)
+      ) {
+        return errorResponse(
+          "Target village is already involved in another active war",
+        );
       }
 
       if (userVillageMemberCount < WAR_MINIMUM_MEMBERS_REQUIRED) {
-        return errorResponse(`Your village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to create ally offers`);
+        return errorResponse(
+          `Your village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to create ally offers`,
+        );
       }
       if (targetVillageMemberCount < WAR_MINIMUM_MEMBERS_REQUIRED) {
-        return errorResponse(`Target village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to be invited to war`);
+        return errorResponse(
+          `Target village needs at least ${WAR_MINIMUM_MEMBERS_REQUIRED} members to be invited to war`,
+        );
       }
 
       // Final checks
@@ -772,7 +792,9 @@ export const warRouter = createTRPCRouter({
         return errorResponse("War is not active");
       }
       if (!["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
-        return errorResponse("War ally offers only available for village wars and raids");
+        return errorResponse(
+          "War ally offers only available for village wars and raids",
+        );
       }
       if (request.receiverId !== user.userId) {
         return errorResponse("This offer is not for your village");
@@ -868,7 +890,10 @@ export const warRouter = createTRPCRouter({
       } else if (warAllyData) {
         // Ally surrendering
         const endedAt = new Date();
-        const warExhaustionEnd = secondsFromDate(WAR_LOSING_COOLDOWN_DAYS * DAY_S, endedAt);
+        const warExhaustionEnd = secondsFromDate(
+          WAR_LOSING_COOLDOWN_DAYS * DAY_S,
+          endedAt,
+        );
         await Promise.all([
           ctx.drizzle.delete(warAlly).where(eq(warAlly.id, warAllyData.id)),
           ctx.drizzle
@@ -1007,10 +1032,6 @@ export const fetchActiveWars = async (client: DrizzleClient, villageId?: string)
     }
     return war.status === "ACTIVE";
   });
-  // Reset wartime townhalls if we're fetching all of them
-  if (!villageId) {
-    await resetStructuresWhenNotInWar(activeWars);
-  }
 
   // Return active wars
   return activeWars;
@@ -1089,7 +1110,10 @@ export type GetActiveWarsReturnType = NonNullable<
  * @param villageId - The ID of the village
  * @returns The number of members in the village
  */
-const getVillageMemberCount = async (client: DrizzleClient, villageId: string): Promise<number> => {
+const getVillageMemberCount = async (
+  client: DrizzleClient,
+  villageId: string,
+): Promise<number> => {
   const result = await client
     .select({ count: sql<number>`count(*)` })
     .from(userData)

@@ -37,6 +37,7 @@ import {
   village,
   userActivityEvent,
   supportTicket,
+  war,
 } from "@/drizzle/schema";
 import { canSeeSecretData, canDeleteUsers, canSeeIps } from "@/utils/permissions";
 import { canChangeContent, canModerateRoles } from "@/utils/permissions";
@@ -1939,71 +1940,81 @@ export const fetchUpdatedUser = async (props: {
   const now = new Date();
 
   // Ensure we can fetch the user
-  const [achievements, settings, user, hasUnvotedPolls] = await Promise.all([
-    client
-      .select()
-      .from(quest)
-      .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
-    client.select().from(gameSetting),
-    client.query.userData.findFirst({
-      where: eq(userData.userId, userId),
-      with: {
-        bloodline: true,
-        activeReskin: true,
-        clan: true,
-        village: {
-          with: {
-            structures: true,
-            relationshipA: true,
-            relationshipB: true,
-            sectors: { columns: { sector: true } },
+  const [achievements, settings, user, hasUnvotedPolls, allActiveWars] =
+    await Promise.all([
+      client
+        .select()
+        .from(quest)
+        .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
+      client.select().from(gameSetting),
+      client.query.userData.findFirst({
+        where: eq(userData.userId, userId),
+        with: {
+          bloodline: true,
+          activeReskin: true,
+          clan: true,
+          village: {
+            with: {
+              structures: true,
+              relationshipA: true,
+              relationshipB: true,
+              sectors: { columns: { sector: true } },
+            },
           },
+          anbuSquad: {
+            columns: { name: true },
+          },
+          loadout: {
+            columns: { jutsuIds: true },
+          },
+          promotions: {
+            limit: 1,
+          },
+          items: { where: ne(userItem.equipped, "NONE") },
+          userQuests: {
+            where: or(
+              and(isNull(questHistory.endAt), eq(questHistory.completed, 0)),
+              eq(questHistory.questType, "achievement"),
+            ),
+            with: {
+              quest: true,
+            },
+            orderBy: sql`FIELD(${questHistory.questType}, 'daily', 'tier') ASC`,
+          },
+          completedQuests: {
+            columns: { id: true, questId: true, completed: true },
+            where: gte(questHistory.completed, 1),
+          },
+          votes: true,
         },
-        anbuSquad: {
-          columns: { name: true },
-        },
-        loadout: {
-          columns: { jutsuIds: true },
-        },
-        promotions: {
-          limit: 1,
-        },
-        items: { where: ne(userItem.equipped, "NONE") },
-        userQuests: {
-          where: or(
-            and(isNull(questHistory.endAt), eq(questHistory.completed, 0)),
-            eq(questHistory.questType, "achievement"),
+      }),
+      client
+        .select({ id: poll.id })
+        .from(poll)
+        .leftJoin(
+          userPollVote,
+          and(eq(userPollVote.pollId, poll.id), eq(userPollVote.userId, userId)),
+        )
+        .where(
+          and(
+            eq(poll.isActive, true),
+            // Either endDate is null or endDate is in the future
+            or(isNull(poll.endDate), sql`${poll.endDate} > ${now}`),
+            // User hasn't voted on this poll
+            isNull(userPollVote.id),
           ),
-          with: {
-            quest: true,
-          },
-          orderBy: sql`FIELD(${questHistory.questType}, 'daily', 'tier') ASC`,
+        )
+        .limit(1),
+      // Fetch all active wars for enemy_village sector type resolution
+      client.query.war.findMany({
+        where: isNull(war.endedAt),
+        with: {
+          attackerVillage: { columns: { id: true, sector: true } },
+          defenderVillage: { columns: { id: true, sector: true } },
+          warAllies: true,
         },
-        completedQuests: {
-          columns: { id: true, questId: true, completed: true },
-          where: gte(questHistory.completed, 1),
-        },
-        votes: true,
-      },
-    }),
-    client
-      .select({ id: poll.id })
-      .from(poll)
-      .leftJoin(
-        userPollVote,
-        and(eq(userPollVote.pollId, poll.id), eq(userPollVote.userId, userId)),
-      )
-      .where(
-        and(
-          eq(poll.isActive, true),
-          // Either endDate is null or endDate is in the future
-          or(isNull(poll.endDate), sql`${poll.endDate} > ${now}`),
-          // User hasn't voted on this poll
-          isNull(userPollVote.id),
-        ),
-      )
-      .limit(1),
-  ]);
+      }),
+    ]);
 
   // Reskin bloodline if needed
   if (user?.bloodline && user?.activeReskin) {
@@ -2027,6 +2038,19 @@ export const fetchUpdatedUser = async (props: {
     user.userQuests = user.userQuests
       .filter((q) => q.quest)
       .filter((q) => isAvailableUserQuests({ ...q.quest, ...q }, user, true).check);
+  }
+
+  // Filter and attach active wars for enemy_village sector type resolution
+  if (user?.villageId) {
+    const userActiveWars = allActiveWars.filter(
+      (w) =>
+        // Direct participation
+        w.attackerVillageId === user.villageId ||
+        w.defenderVillageId === user.villageId ||
+        // Ally participation
+        w.warAllies.some((a) => a.villageId === user.villageId),
+    );
+    (user as NonNullable<UserWithRelations>).activeWars = userActiveWars;
   }
 
   if (user) {
@@ -2474,6 +2498,13 @@ export type UserWithRelations =
       userQuests: (UserQuest & { quest: Quest })[];
       completedQuests: { id: string; questId: string; completed: number }[];
       votes?: UserVote | null;
+      activeWars?: {
+        attackerVillageId: string;
+        defenderVillageId: string;
+        attackerVillage: { id: string; sector: number };
+        defenderVillage: { id: string; sector: number };
+        warAllies?: { villageId: string; supportVillageId: string }[];
+      }[];
     })
   | undefined;
 
