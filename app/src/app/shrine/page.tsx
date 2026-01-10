@@ -181,11 +181,7 @@ export default function Shrine() {
                   sectorNumber={userData.sector}
                   userId={userData.userId}
                   userVillageId={userData.villageId}
-                  defenderVillageId={
-                    userWars[0]?.attackerVillageId === userData.villageId
-                      ? userWars[0]?.defenderVillageId
-                      : userWars[0]?.attackerVillageId
-                  }
+                  defenderVillageId={sectorOwnerVillageId}
                 />
               </TabsContent>
             </Tabs>

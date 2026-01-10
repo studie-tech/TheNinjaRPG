@@ -677,19 +677,17 @@ export const mpvpBattleQueue = mysqlTable(
   "MpvpBattleQueue",
   {
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
-    // Legacy fields for backward compatibility with clan battles
-    clan1Id: varchar("clan1Id", { length: 191 }),
-    clan2Id: varchar("clan2Id", { length: 191 }),
     winnerId: varchar("winnerId", { length: 191 }),
     battleId: varchar("battleId", { length: 191 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
-    // New fields for generalized MPVP battles
     battleType: mysqlEnum("battleType", consts.MPVP_BATTLE_TYPES)
       .default("CLAN_BATTLE")
       .notNull(),
     // Primary entity identifiers - used for both clan and shrine battles
+    // For clan battles: attackerEntityId = challenger clan, defenderEntityId = defender clan
+    // For shrine battles: attackerEntityId = attacker village, defenderEntityId = defender village
     attackerEntityId: varchar("attackerEntityId", { length: 191 }).notNull(),
     defenderEntityId: varchar("defenderEntityId", { length: 191 }).notNull(),
     sector: smallint("sector"),
@@ -697,11 +695,15 @@ export const mpvpBattleQueue = mysqlTable(
   (table) => {
     return {
       battleIdIdx: index("MpvpBattleQueue_battleId_idx").on(table.battleId),
-      clan1IdIdx: index("MpvpBattleQueue_clan1Id_idx").on(table.clan1Id),
-      clan2IdIdx: index("MpvpBattleQueue_clan2Id_idx").on(table.clan2Id),
       winnerIdIdx: index("MpvpBattleQueue_winnerId_idx").on(table.winnerId),
       battleTypeIdx: index("MpvpBattleQueue_battleType_idx").on(table.battleType),
       sectorIdx: index("MpvpBattleQueue_sector_idx").on(table.sector),
+      attackerEntityIdIdx: index("MpvpBattleQueue_attackerEntityId_idx").on(
+        table.attackerEntityId,
+      ),
+      defenderEntityIdIdx: index("MpvpBattleQueue_defenderEntityId_idx").on(
+        table.defenderEntityId,
+      ),
     };
   },
 );
@@ -710,14 +712,6 @@ export const mpvpBattleQueueRelations = relations(mpvpBattleQueue, ({ one, many 
   battle: one(battle, {
     fields: [mpvpBattleQueue.battleId],
     references: [battle.id],
-  }),
-  clan1: one(clan, {
-    fields: [mpvpBattleQueue.clan1Id],
-    references: [clan.id],
-  }),
-  clan2: one(clan, {
-    fields: [mpvpBattleQueue.clan2Id],
-    references: [clan.id],
   }),
   winner: one(clan, {
     fields: [mpvpBattleQueue.winnerId],
@@ -735,14 +729,22 @@ export const mpvpBattleUser = mysqlTable(
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
-    // New field for shrine battles (clan battles derive side from clan membership)
+    // Side field for both shrine and clan battles
     side: mysqlEnum("side", consts.MPVP_BATTLE_SIDES),
+    // Slot number (0-based) for capacity enforcement per side
+    slot: tinyint("slot"),
   },
   (table) => {
     return {
       clanBattleIdIdx: index("MpvpBattleUser_clanBattleId_idx").on(table.clanBattleId),
       userIdIdx: index("MpvpBattleUser_userId_idx").on(table.userId),
       sideIdx: index("MpvpBattleUser_side_idx").on(table.side),
+      // Unique constraint to prevent race conditions on slot allocation
+      sideSlotKey: uniqueIndex("MpvpBattleUser_clanBattleId_side_slot_key").on(
+        table.clanBattleId,
+        table.side,
+        table.slot,
+      ),
     };
   },
 );

@@ -449,8 +449,9 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
 
   // Prepare data for table
   const clanBattles = data.map((battle) => {
-    const challengers = battle.queue.filter((q) => q.user.clanId === battle.clan1Id);
-    const defenders = battle.queue.filter((q) => q.user.clanId === battle.clan2Id);
+    // Use side field to determine attackers/defenders
+    const challengers = battle.queue.filter((q) => q.side === "ATTACKER");
+    const defenders = battle.queue.filter((q) => q.side === "DEFENDER");
     const startTime = secondsFromDate(CLAN_LOBBY_SECONDS, battle.createdAt);
     const inBattle = battle.queue.some((q) => q.userId === userData.userId);
     const userClan = userData.clanId;
@@ -459,8 +460,8 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     const hasConcluded = !!battle.winnerId;
     return {
       ...battle,
-      clan1name: showClanSide(battle.id, userClan, battle.clan1, winnerId, challengers),
-      clan2name: showClanSide(battle.id, userClan, battle.clan2, winnerId, defenders),
+      clan1name: showClanSide(battle.id, userClan, battle.attackerClan, winnerId, challengers),
+      clan2name: showClanSide(battle.id, userClan, battle.defenderClan, winnerId, defenders),
       countdown: (
         <div className="flex flex-col gap-1">
           {isInitiating ? (

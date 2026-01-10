@@ -1107,8 +1107,6 @@ export const clanRouter = createTRPCRouter({
       await Promise.all([
         ctx.drizzle.insert(mpvpBattleQueue).values({
           id: clanBattleId,
-          clan1Id: challenger.id,
-          clan2Id: defender.id,
           createdAt: new Date(),
           battleType: "CLAN_BATTLE",
           attackerEntityId: challenger.id,
@@ -1119,6 +1117,7 @@ export const clanRouter = createTRPCRouter({
           userId: user.userId,
           clanBattleId: clanBattleId,
           side: "ATTACKER",
+          slot: 0, // First attacker gets slot 0
         }),
       ]);
       // Notify all clan members of both clans
@@ -1155,26 +1154,50 @@ export const clanRouter = createTRPCRouter({
       if (user.status !== "AWAKE") return errorResponse("Must be awake to join");
       if (queries.length > 0) return errorResponse("Already in queue");
       if (
-        clanBattleData.clan1Id !== user.clanId &&
-        clanBattleData.clan2Id !== user.clanId
+        clanBattleData.attackerEntityId !== user.clanId &&
+        clanBattleData.defenderEntityId !== user.clanId
       ) {
         return errorResponse("Not in the clan battle");
       }
+      // Derive side based on clan membership
+      const side = clanBattleData.attackerEntityId === user.clanId ? "ATTACKER" : "DEFENDER";
+
+      // Find available slots for this side
+      const existingSlots = clanBattleData.queue
+        .filter((q) => q.side === side)
+        .map((q) => q.slot)
+        .filter((s): s is number => s !== null);
+
+      // Find first available slot (0-based) - clan battles have no max limit like shrine battles
+      let availableSlot = 0;
+      while (existingSlots.includes(availableSlot)) {
+        availableSlot++;
+      }
+
       // Mutation 1: update user early & ensure status
       const result = await ctx.drizzle
         .update(userData)
         .set({ status: "QUEUED" })
         .where(and(eq(userData.userId, user.userId), eq(userData.status, "AWAKE")));
       if (result.rowsAffected === 0) return errorResponse("Was not awake?");
-      // Derive side based on clan membership
-      const side = clanBattleData.clan1Id === user.clanId ? "ATTACKER" : "DEFENDER";
-      // Mutation 2
-      await ctx.drizzle.insert(mpvpBattleUser).values({
-        id: nanoid(),
-        userId: user.userId,
-        clanBattleId: input.clanBattleId,
-        side: side,
-      });
+
+      // Mutation 2: insert with slot - unique constraint prevents race conditions
+      try {
+        await ctx.drizzle.insert(mpvpBattleUser).values({
+          id: nanoid(),
+          userId: user.userId,
+          clanBattleId: input.clanBattleId,
+          side: side,
+          slot: availableSlot,
+        });
+      } catch (error) {
+        // If insert failed due to slot conflict, revert user status and return error
+        await ctx.drizzle
+          .update(userData)
+          .set({ status: "AWAKE" })
+          .where(eq(userData.userId, user.userId));
+        return errorResponse("Slot was taken. Please try again.");
+      }
       return { success: true, message: `Joined ${groupLabel} battle` };
     }),
   leaveClanBattle: protectedProcedure
@@ -1257,37 +1280,33 @@ export const clanRouter = createTRPCRouter({
         fetchClanBattle(ctx.drizzle, input.clanBattleId),
       ]);
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
-      // Derived
-      clanBattleData?.queue.sort(
-        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-      );
-      const allIds = clanBattleData?.queue.map((q) => q.userId);
-      const challengers = clanBattleData?.queue.filter(
-        (q) => q.user.clanId === clanBattleData.clan1Id,
-      );
-      const defenders = clanBattleData?.queue.filter(
-        (q) => q.user.clanId === clanBattleData.clan2Id,
-      );
-      if (!challengers || !defenders) return errorResponse("No users");
-      // Limit challengers & defenders to maximum allowed
-      const maxOnEachSide = Math.min(challengers.length ?? 0, defenders.length ?? 0);
-      const challengerIds = challengers.slice(0, maxOnEachSide).map((u) => u.userId);
-      const defenderIds = defenders.slice(0, maxOnEachSide).map((u) => u.userId);
       // Guards
       if (!user) return errorResponse("User not found");
       if (!clanBattleData) return errorResponse(`${groupLabel} battle not found`);
       if (clanBattleData.battleId) return errorResponse("Battle already initiated");
-      if (!allIds) return errorResponse("No users");
-      if (maxOnEachSide === 0) return errorResponse("Not enough users");
       if (
-        clanBattleData.clan1Id !== user.clanId &&
-        clanBattleData.clan2Id !== user.clanId
+        clanBattleData.attackerEntityId !== user.clanId &&
+        clanBattleData.defenderEntityId !== user.clanId
       ) {
         return errorResponse(`Not in the ${groupLabel} battle`);
       }
       if (new Date() < secondsFromDate(CLAN_LOBBY_SECONDS, clanBattleData.createdAt)) {
         return errorResponse(`${groupLabel} battle not started yet`);
       }
+      // Derived - use side field for determining attackers/defenders
+      clanBattleData.queue.sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      );
+      const allIds = clanBattleData.queue.map((q) => q.userId);
+      const challengers = clanBattleData.queue.filter((q) => q.side === "ATTACKER");
+      const defenders = clanBattleData.queue.filter((q) => q.side === "DEFENDER");
+      if (challengers.length === 0 || defenders.length === 0) {
+        return errorResponse("Not enough users on both sides");
+      }
+      // Limit challengers & defenders to maximum allowed
+      const maxOnEachSide = Math.min(challengers.length, defenders.length);
+      const challengerIds = challengers.slice(0, maxOnEachSide).map((u) => u.userId);
+      const defenderIds = defenders.slice(0, maxOnEachSide).map((u) => u.userId);
       // Start the battle
       const result = await initiateBattle(
         {
@@ -1310,7 +1329,7 @@ export const clanRouter = createTRPCRouter({
                 ctx.drizzle
                   .update(userData)
                   .set({
-                    status: sql`CASE WHEN status = "QUEUED" THEN "AWAKE" ELSE status END`,
+                    status: sql`CASE WHEN status = 'QUEUED' THEN 'AWAKE' ELSE status END`,
                   })
                   .where(inArray(userData.userId, allIds)),
               ]
@@ -1570,7 +1589,7 @@ export const fetchClanBattle = async (client: DrizzleClient, clanBattleId: strin
     where: eq(mpvpBattleQueue.id, clanBattleId),
     with: {
       queue: {
-        columns: { userId: true, createdAt: true },
+        columns: { userId: true, createdAt: true, side: true, slot: true },
         with: { user: { columns: { clanId: true, avatar: true, username: true } } },
       },
     },
@@ -1584,11 +1603,18 @@ export const fetchClanBattle = async (client: DrizzleClient, clanBattleId: strin
  * @returns A promise that resolves to an array of clan battles.
  */
 export const fetchClanBattles = async (client: DrizzleClient, clanId: string) => {
-  return await client.query.mpvpBattleQueue.findMany({
-    where: or(eq(mpvpBattleQueue.clan1Id, clanId), eq(mpvpBattleQueue.clan2Id, clanId)),
+  // Fetch battles where this clan is either attacker or defender
+  const battles = await client.query.mpvpBattleQueue.findMany({
+    where: and(
+      eq(mpvpBattleQueue.battleType, "CLAN_BATTLE"),
+      or(
+        eq(mpvpBattleQueue.attackerEntityId, clanId),
+        eq(mpvpBattleQueue.defenderEntityId, clanId),
+      ),
+    ),
     with: {
       queue: {
-        columns: { userId: true },
+        columns: { userId: true, side: true },
         with: {
           user: {
             columns: {
@@ -1602,11 +1628,29 @@ export const fetchClanBattles = async (client: DrizzleClient, clanId: string) =>
           },
         },
       },
-      clan1: { columns: { id: true, name: true, image: true } },
-      clan2: { columns: { id: true, name: true, image: true } },
     },
     orderBy: (mpvpBattleQueue, { desc }) => [desc(mpvpBattleQueue.createdAt)],
   });
+
+  // Fetch clan details for attacker and defender entities
+  const clanIds = [
+    ...new Set(battles.flatMap((b) => [b.attackerEntityId, b.defenderEntityId])),
+  ];
+  const clans =
+    clanIds.length > 0
+      ? await client.query.clan.findMany({
+          where: inArray(clan.id, clanIds),
+          columns: { id: true, name: true, image: true },
+        })
+      : [];
+  const clanMap = new Map(clans.map((c) => [c.id, c]));
+
+  // Return battles with clan info attached
+  return battles.map((b) => ({
+    ...b,
+    attackerClan: clanMap.get(b.attackerEntityId),
+    defenderClan: clanMap.get(b.defenderEntityId),
+  }));
 };
 
 /**

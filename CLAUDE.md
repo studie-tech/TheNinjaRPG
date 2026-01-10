@@ -119,6 +119,7 @@ The combat system is the most complex feature, with dedicated files:
 - Avoid transactions; use guards with where-statements instead
 - Schema is centralized in `@/drizzle/schema.ts`
 - We use the react compiler, and therefore must use useWatch hook, not watch, for react-hook-form.
+- **No Legacy Fields**: When refactoring database schema, fully remove legacy/deprecated fields rather than keeping them for backward compatibility. Do not leave legacy fields in the schema - migrate all code to use new field names immediately.
 
 ## tRPC Patterns
 

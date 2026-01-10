@@ -3,104 +3,79 @@
 ## Overview
 This task implements the MPVP Shrine Wars feature which allows players to team up and challenge shrines together, as specified in Issue #659.
 
-## Current State
-The PR has implemented basic backend functionality but has the following gaps:
-1. Legacy `clan1Id`/`clan2Id` fields are still required and used alongside new `attackerEntityId`/`defenderEntityId` fields
-2. Frontend components for the team-based shrine battle lobby are missing
-3. The shrine page only supports 1v1 battles, not the new MPVP team battles
+## Implementation Complete - Final Updates
 
-## Implementation Plan
+This PR implements full MPVP shrine battle support with the following improvements:
 
-### Phase 1: Schema Refactoring
-1. **Make `clan1Id`/`clan2Id` nullable in `mpvpBattleQueue` table**
-   - These fields should become optional since shrine battles use village IDs, not clan IDs
-   - The new `attackerEntityId`/`defenderEntityId` fields are more generic and should be the primary fields
+### 1. Schema Refactoring (Fully Removed Legacy Fields)
+- **Removed** `clan1Id`/`clan2Id` fields from `mpvpBattleQueue` table entirely (no legacy fields)
+- `attackerEntityId`/`defenderEntityId` are now the sole identifiers for all MPVP battles
+- Added `slot` field to `mpvpBattleUser` for race condition protection
+- Added unique constraint on `(clanBattleId, side, slot)` to prevent slot conflicts
 
-2. **Update relations**
-   - The clan1/clan2 relations reference clan table, but shrine battles reference villages
-   - May need to conditionally handle relations based on `battleType`
+### 2. Backend Updates
 
-### Phase 2: Backend Updates
-1. **Update clan router (`clan.ts`)**
-   - Modify `challengeClan` to set `clan1Id` and `clan2Id` only when needed for backward compatibility
-   - Use `attackerEntityId`/`defenderEntityId` as primary identifiers
+#### Shrine Router (`shrine.ts`)
+- `challengeShrine`: Creates queue with only `attackerEntityId`/`defenderEntityId`
+- `joinShrineBattle`: Slot-based allocation with unique constraint protection
+- `leaveShrineBattle`: Uses DB-truth count check instead of stale snapshot
+- `initiateShrineBattle`:
+  - Only attackers can initiate (defenders cannot)
+  - Removed double-query (uses `shrineBattle.sector` directly)
+  - Added `battleId IS NULL` guard to prevent double-start races
+  - Fixed SQL CASE quoting (uses single quotes for MySQL compatibility)
 
-2. **Update shrine router (`shrine.ts`)**
-   - Remove redundant `clan1Id`/`clan2Id` assignments when creating shrine battles
-   - The shrine battles should only use `attackerEntityId`/`defenderEntityId`
+#### Clan Router (`clan.ts`)
+- Updated `challengeClan` to only use `attackerEntityId`/`defenderEntityId`
+- Updated `joinClanBattle` to derive side from entity fields instead of legacy fields
+- Updated `initiateClanBattle` to use `side` field for attacker/defender filtering
+- Updated `fetchClanBattles` to query by entity fields and return `attackerClan`/`defenderClan`
+- Added slot-based allocation for race condition protection
+- Fixed SQL CASE quoting
 
-### Phase 3: Frontend Implementation
-1. **Create ShrineBattleLobby component**
-   - Display active shrine battle lobbies for a sector
-   - Show attackers and defenders with join/leave buttons
-   - Timer showing lobby countdown (60 seconds)
-   - Initiate battle button (enabled when min 2 attackers and lobby time passed)
+### 3. Frontend Updates
 
-2. **Update shrine page (`app/src/app/shrine/page.tsx`)**
-   - Add support for MPVP shrine battles alongside existing 1v1 battles
-   - Show available shrine battle lobbies
-   - Allow creating new shrine battle challenges
-   - Allow joining existing lobbies as attacker or defender
+#### Clan.tsx
+- Updated to use `side` field for attacker/defender filtering
+- Uses `attackerClan`/`defenderClan` from updated query
 
-### Phase 4: Migration & Testing
-1. Generate database migration for nullable `clan1Id`/`clan2Id`
-2. Run linting to ensure code quality
-3. Verify TypeScript types are correct
+#### Shrine Page (`page.tsx`)
+- Fixed `defenderVillageId` prop to use `sectorOwnerVillageId` instead of non-deterministic `userWars[0]`
 
-## Files to Modify
-
-### Schema
-- `app/drizzle/schema.ts` - Make clan1Id/clan2Id nullable
-
-### Backend
-- `app/src/server/api/routers/clan.ts` - Update challengeClan to use new entity fields
-- `app/src/server/api/routers/shrine.ts` - Remove legacy field assignments
-
-### Frontend
-- `app/src/app/shrine/page.tsx` - Add MPVP shrine battle UI
-- Create new component for shrine battle lobby
+### 4. Policy Update (CLAUDE.md)
+- Added "No Legacy Fields" policy to Database Patterns section
+- Clarifies that legacy fields should be fully removed during refactoring
 
 ## Key Design Decisions
 
-1. **Backward Compatibility**: Clan battles will continue to set `clan1Id`/`clan2Id` for relations to work, but primary logic uses new entity fields
-2. **Shrine Battles**: Only use `attackerEntityId`/`defenderEntityId` since clans are not involved
-3. **AI Defenders**: When no player defenders join, AI defenders from village's `shrineSettings.activeAiIds` are used
+1. **No Legacy Fields**: Completely removed `clan1Id`/`clan2Id` - all code now uses `attackerEntityId`/`defenderEntityId`
+2. **Slot-Based Capacity**: Added `slot` field with unique constraint to prevent race conditions when multiple users try to join simultaneously
+3. **Only Attackers Initiate**: Defenders cannot start the battle, only attackers can
+4. **DB-Truth for Cleanup**: Queue deletion uses fresh count from DB, not stale snapshot
 
 ## Constants (from constants.ts)
 - `SHRINE_BATTLE_MIN_ATTACKERS = 2` - Minimum attackers to start
 - `SHRINE_BATTLE_MAX_USERS_PER_SIDE = 3` - Maximum per side
 - `SHRINE_BATTLE_LOBBY_SECONDS = 60` - Lobby wait time
 
-## Progress
+## Files Modified
 
-- [x] Phase 1: Schema Refactoring
-- [x] Phase 2: Backend Updates
-- [x] Phase 3: Frontend Implementation
-- [ ] Phase 4: Migration & Testing (migration generation requires manual approval)
+### Schema
+- `app/drizzle/schema.ts` - Removed legacy fields, added slot + unique constraint
 
-## Changes Made
+### Backend
+- `app/src/server/api/routers/clan.ts` - Migrated to entity fields, added slot support
+- `app/src/server/api/routers/shrine.ts` - Fixed CodeRabbit concerns, added slot support
 
-### Schema (`app/drizzle/schema.ts`)
-- Made `clan1Id`/`clan2Id` nullable in `mpvpBattleQueue` table
-- Made `attackerEntityId`/`defenderEntityId` required (now primary identifiers)
-- Added comments explaining the legacy vs new fields
+### Frontend
+- `app/src/app/shrine/page.tsx` - Fixed defenderVillageId prop
+- `app/src/layout/Clan.tsx` - Updated to use side field
 
-### Backend (`app/src/server/api/routers/shrine.ts`)
-- Removed legacy `clan1Id`/`clan2Id` field assignments from `challengeShrine` mutation
-- Shrine battles now only use `attackerEntityId`/`defenderEntityId`
+### Documentation
+- `CLAUDE.md` - Added no legacy fields policy
 
-### Frontend - New Component (`app/src/layout/ShrineBattleLobby.tsx`)
-- Created comprehensive shrine battle lobby component
-- Shows attacker and defender slots (up to 3 per side)
-- Join/Leave functionality for both sides
-- Countdown timer for lobby wait time (60 seconds)
-- Start battle button with minimum attacker requirement check (2 minimum)
-- User avatar popovers with level/rank info
-- Empty slot indicators with join-on-click functionality
-- AI defender fallback notification
-
-### Frontend - Updated Page (`app/src/app/shrine/page.tsx`)
-- Added tabs to switch between "Solo Battle" and "Team Battle" modes
-- Integrated ShrineBattleLobby component
-- Team battle tab shows when user can attack a shrine owned by another village
-- Both tabs available during active wars for maximum flexibility
+## Migration Notes
+Database migration generation (`make makemigrations`) needs to be run locally to generate migration for:
+1. Removal of `clan1Id`/`clan2Id` columns from `MpvpBattleQueue`
+2. Addition of `slot` column to `MpvpBattleUser`
+3. Addition of unique constraint on `(clanBattleId, side, slot)`
