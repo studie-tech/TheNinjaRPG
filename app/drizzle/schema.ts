@@ -684,6 +684,13 @@ export const mpvpBattleQueue = mysqlTable(
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
+    // New fields for generalized MPVP battles
+    battleType: mysqlEnum("battleType", consts.MPVP_BATTLE_TYPES)
+      .default("CLAN_BATTLE")
+      .notNull(),
+    attackerEntityId: varchar("attackerEntityId", { length: 191 }),
+    defenderEntityId: varchar("defenderEntityId", { length: 191 }),
+    sector: smallint("sector"),
   },
   (table) => {
     return {
@@ -691,6 +698,8 @@ export const mpvpBattleQueue = mysqlTable(
       clan1IdIdx: index("MpvpBattleQueue_clan1Id_idx").on(table.clan1Id),
       clan2IdIdx: index("MpvpBattleQueue_clan2Id_idx").on(table.clan2Id),
       winnerIdIdx: index("MpvpBattleQueue_winnerId_idx").on(table.winnerId),
+      battleTypeIdx: index("MpvpBattleQueue_battleType_idx").on(table.battleType),
+      sectorIdx: index("MpvpBattleQueue_sector_idx").on(table.sector),
     };
   },
 );
@@ -724,11 +733,14 @@ export const mpvpBattleUser = mysqlTable(
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
+    // New field for shrine battles (clan battles derive side from clan membership)
+    side: mysqlEnum("side", consts.MPVP_BATTLE_SIDES),
   },
   (table) => {
     return {
       clanBattleIdIdx: index("MpvpBattleUser_clanBattleId_idx").on(table.clanBattleId),
       userIdIdx: index("MpvpBattleUser_userId_idx").on(table.userId),
+      sideIdx: index("MpvpBattleUser_side_idx").on(table.side),
     };
   },
 );

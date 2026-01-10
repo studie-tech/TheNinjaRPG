@@ -1290,6 +1290,18 @@ export const PVP_KILL_PRESTIGE_REWARD_ASSASSIN = 300; // Prestige for PvP kill b
 export const PVP_KILL_ANBU_POINTS_REWARD = 5; // ANBU points for PvP kill by ANBU member
 export const WAR_TORN_SECTOR_BASE_MONEY = 2000; // Base money reward for battles in war-torn sector (sector 335)
 
+// MPVP Battle Types (for generalized multiplayer PvP battles)
+export const MPVP_BATTLE_TYPES = ["CLAN_BATTLE", "SHRINE_BATTLE"] as const;
+export type MpvpBattleType = (typeof MPVP_BATTLE_TYPES)[number];
+
+export const MPVP_BATTLE_SIDES = ["ATTACKER", "DEFENDER"] as const;
+export type MpvpBattleSide = (typeof MPVP_BATTLE_SIDES)[number];
+
+// Shrine Battle Config
+export const SHRINE_BATTLE_MIN_ATTACKERS = 2;
+export const SHRINE_BATTLE_MAX_USERS_PER_SIDE = 3;
+export const SHRINE_BATTLE_LOBBY_SECONDS = 60;
+
 // Clans config
 export const CLAN_MPVP_MAX_USERS_PER_SIDE = 3;
 export const CLAN_CREATE_PRESTIGE_REQUIREMENT = 100;

@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { nanoid } from "nanoid";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { baseServerResponse, errorResponse } from "../trpc";
-import { eq, and, gte, sql, asc } from "drizzle-orm";
+import { eq, and, gte, sql, asc, isNull, desc, inArray } from "drizzle-orm";
 import {
   SHRINE_UPGRADE_COST,
   SHRINE_BOOST_DURATION_HOURS,
@@ -12,10 +13,15 @@ import {
   SHRINE_BOOST_TYPES,
   SHRINE_BOOST_COST,
   WAR_SHRINE_MAINTENANCE_DAYS,
+  SHRINE_BATTLE_MIN_ATTACKERS,
+  SHRINE_BATTLE_MAX_USERS_PER_SIDE,
+  SHRINE_BATTLE_LOBBY_SECONDS,
 } from "@/drizzle/constants";
-import { sector, village, userData } from "@/drizzle/schema";
+import { sector, village, userData, mpvpBattleQueue, mpvpBattleUser } from "@/drizzle/schema";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
+import { initiateBattle } from "@/routers/combat";
+import { pusher } from "@/libs/pusher";
 
 export const shrineRouter = createTRPCRouter({
   // Get all AI names
@@ -384,5 +390,403 @@ export const shrineRouter = createTRPCRouter({
         success: true,
         message: `Weekly maintenance paid for sector ${targetSector.sector}: ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens`,
       };
+    }),
+
+  // ============================================
+  // MPVP Shrine Battle Endpoints
+  // ============================================
+
+  // Get active shrine battles for a sector
+  getShrineBattles: protectedProcedure
+    .input(z.object({ sectorNumber: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const battles = await ctx.drizzle.query.mpvpBattleQueue.findMany({
+        where: and(
+          eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+          eq(mpvpBattleQueue.sector, input.sectorNumber),
+          isNull(mpvpBattleQueue.battleId),
+        ),
+        with: {
+          queue: {
+            with: {
+              user: {
+                columns: {
+                  username: true,
+                  level: true,
+                  rank: true,
+                  avatar: true,
+                  villageId: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: desc(mpvpBattleQueue.createdAt),
+      });
+      return battles;
+    }),
+
+  // Challenge a shrine (create a new shrine battle queue)
+  challengeShrine: protectedProcedure
+    .input(z.object({ sectorNumber: z.number() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Fetch user and sector data
+      const [{ user }, targetSector, existingQueues] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        ctx.drizzle.query.sector.findFirst({
+          where: eq(sector.sector, input.sectorNumber),
+          with: {
+            village: true,
+          },
+        }),
+        ctx.drizzle.query.mpvpBattleQueue.findMany({
+          where: and(
+            eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+            eq(mpvpBattleQueue.sector, input.sectorNumber),
+            isNull(mpvpBattleQueue.battleId),
+          ),
+          with: {
+            queue: true,
+          },
+        }),
+      ]);
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (user.status !== "AWAKE") return errorResponse("Must be awake to challenge");
+      if (!user.villageId) return errorResponse("You must be in a village");
+      if (!targetSector) return errorResponse("Sector not found");
+      if (!targetSector.villageId)
+        return errorResponse("This sector has no shrine to attack");
+      if (targetSector.villageId === user.villageId)
+        return errorResponse("Cannot attack your own village's shrine");
+
+      // Check if user is already in a queue
+      const alreadyQueued = existingQueues.some((q) =>
+        q.queue.some((u) => u.userId === user.userId),
+      );
+      if (alreadyQueued) return errorResponse("Already in a shrine battle queue");
+
+      // Create new shrine battle queue
+      const shrineBattleId = nanoid();
+      const result = await ctx.drizzle
+        .update(userData)
+        .set({ status: "QUEUED" })
+        .where(and(eq(userData.userId, user.userId), eq(userData.status, "AWAKE")));
+      if (result.rowsAffected === 0) return errorResponse("Was not awake?");
+
+      await Promise.all([
+        ctx.drizzle.insert(mpvpBattleQueue).values({
+          id: shrineBattleId,
+          clan1Id: user.villageId, // Legacy field, use attackerEntityId
+          clan2Id: targetSector.villageId, // Legacy field, use defenderEntityId
+          createdAt: new Date(),
+          battleType: "SHRINE_BATTLE",
+          attackerEntityId: user.villageId,
+          defenderEntityId: targetSector.villageId,
+          sector: input.sectorNumber,
+        }),
+        ctx.drizzle.insert(mpvpBattleUser).values({
+          id: nanoid(),
+          userId: user.userId,
+          clanBattleId: shrineBattleId,
+          side: "ATTACKER",
+        }),
+      ]);
+
+      return {
+        success: true,
+        message: `Shrine attack party created! Waiting for more attackers (min ${SHRINE_BATTLE_MIN_ATTACKERS})`,
+      };
+    }),
+
+  // Join a shrine battle queue
+  joinShrineBattle: protectedProcedure
+    .input(
+      z.object({
+        shrineBattleId: z.string(),
+        side: z.enum(["ATTACKER", "DEFENDER"]),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Fetch user and battle data
+      const [{ user }, shrineBattle] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        ctx.drizzle.query.mpvpBattleQueue.findFirst({
+          where: and(
+            eq(mpvpBattleQueue.id, input.shrineBattleId),
+            eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+          ),
+          with: {
+            queue: {
+              with: {
+                user: {
+                  columns: {
+                    username: true,
+                    villageId: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+      ]);
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (user.status !== "AWAKE") return errorResponse("Must be awake to join");
+      if (!user.villageId) return errorResponse("You must be in a village");
+      if (!shrineBattle) return errorResponse("Shrine battle not found");
+      if (shrineBattle.battleId)
+        return errorResponse("Shrine battle already started");
+
+      // Check if user is already in queue
+      const alreadyQueued = shrineBattle.queue.some((q) => q.userId === user.userId);
+      if (alreadyQueued) return errorResponse("Already in this shrine battle queue");
+
+      // Validate side based on village
+      if (input.side === "ATTACKER") {
+        if (user.villageId === shrineBattle.defenderEntityId) {
+          return errorResponse("Defenders cannot join as attackers");
+        }
+        const attackerCount = shrineBattle.queue.filter(
+          (q) => q.side === "ATTACKER",
+        ).length;
+        if (attackerCount >= SHRINE_BATTLE_MAX_USERS_PER_SIDE) {
+          return errorResponse(`Maximum ${SHRINE_BATTLE_MAX_USERS_PER_SIDE} attackers allowed`);
+        }
+      } else {
+        if (user.villageId !== shrineBattle.defenderEntityId) {
+          return errorResponse("Only shrine village members can defend");
+        }
+        const defenderCount = shrineBattle.queue.filter(
+          (q) => q.side === "DEFENDER",
+        ).length;
+        if (defenderCount >= SHRINE_BATTLE_MAX_USERS_PER_SIDE) {
+          return errorResponse(`Maximum ${SHRINE_BATTLE_MAX_USERS_PER_SIDE} defenders allowed`);
+        }
+      }
+
+      // Update user status
+      const result = await ctx.drizzle
+        .update(userData)
+        .set({ status: "QUEUED" })
+        .where(and(eq(userData.userId, user.userId), eq(userData.status, "AWAKE")));
+      if (result.rowsAffected === 0) return errorResponse("Was not awake?");
+
+      // Add user to queue
+      await ctx.drizzle.insert(mpvpBattleUser).values({
+        id: nanoid(),
+        userId: user.userId,
+        clanBattleId: input.shrineBattleId,
+        side: input.side,
+      });
+
+      return {
+        success: true,
+        message: `Joined shrine battle as ${input.side.toLowerCase()}`,
+      };
+    }),
+
+  // Leave a shrine battle queue
+  leaveShrineBattle: protectedProcedure
+    .input(z.object({ shrineBattleId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Fetch user and battle data
+      const [{ user }, shrineBattle] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        ctx.drizzle.query.mpvpBattleQueue.findFirst({
+          where: and(
+            eq(mpvpBattleQueue.id, input.shrineBattleId),
+            eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+          ),
+          with: {
+            queue: true,
+          },
+        }),
+      ]);
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (!shrineBattle) return errorResponse("Shrine battle not found");
+      if (shrineBattle.battleId) return errorResponse("Shrine battle already started");
+      if (user.status !== "QUEUED") return errorResponse("Not queued");
+
+      const queued = shrineBattle.queue.some((q) => q.userId === user.userId);
+      if (!queued) return errorResponse("Not in this shrine battle queue");
+
+      // Remove user from queue
+      await Promise.all([
+        ctx.drizzle
+          .delete(mpvpBattleUser)
+          .where(
+            and(
+              eq(mpvpBattleUser.clanBattleId, input.shrineBattleId),
+              eq(mpvpBattleUser.userId, user.userId),
+            ),
+          ),
+        ctx.drizzle
+          .update(userData)
+          .set({ status: "AWAKE" })
+          .where(eq(userData.userId, user.userId)),
+      ]);
+
+      // If no one left in queue, delete the battle queue
+      const remainingQueue = shrineBattle.queue.filter((q) => q.userId !== user.userId);
+      if (remainingQueue.length === 0) {
+        await ctx.drizzle
+          .delete(mpvpBattleQueue)
+          .where(eq(mpvpBattleQueue.id, input.shrineBattleId));
+      }
+
+      return { success: true, message: "Left shrine battle queue" };
+    }),
+
+  // Initiate shrine battle (start the battle after lobby time)
+  initiateShrineBattle: protectedProcedure
+    .input(z.object({ shrineBattleId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Fetch user and battle data
+      const [{ user }, shrineBattle, targetSector] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        ctx.drizzle.query.mpvpBattleQueue.findFirst({
+          where: and(
+            eq(mpvpBattleQueue.id, input.shrineBattleId),
+            eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+          ),
+          with: {
+            queue: {
+              with: {
+                user: {
+                  columns: {
+                    username: true,
+                    villageId: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+        // Will fetch sector separately
+        ctx.drizzle.query.mpvpBattleQueue
+          .findFirst({
+            where: eq(mpvpBattleQueue.id, input.shrineBattleId),
+          })
+          .then((battle) =>
+            battle?.sector
+              ? ctx.drizzle.query.sector.findFirst({
+                  where: eq(sector.sector, battle.sector),
+                  with: { village: true },
+                })
+              : null,
+          ),
+      ]);
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (!shrineBattle) return errorResponse("Shrine battle not found");
+      if (shrineBattle.battleId) return errorResponse("Battle already initiated");
+
+      // Check if user is in the queue
+      const queued = shrineBattle.queue.some((q) => q.userId === user.userId);
+      if (!queued) return errorResponse("Not in this shrine battle");
+
+      // Check lobby time has passed
+      if (
+        new Date() < secondsFromDate(SHRINE_BATTLE_LOBBY_SECONDS, shrineBattle.createdAt)
+      ) {
+        return errorResponse("Shrine battle lobby time has not passed yet");
+      }
+
+      // Get attackers and defenders
+      const attackers = shrineBattle.queue.filter((q) => q.side === "ATTACKER");
+      const defenders = shrineBattle.queue.filter((q) => q.side === "DEFENDER");
+      const allUserIds = shrineBattle.queue.map((q) => q.userId);
+
+      // Check minimum attackers
+      if (attackers.length < SHRINE_BATTLE_MIN_ATTACKERS) {
+        return errorResponse(
+          `Need at least ${SHRINE_BATTLE_MIN_ATTACKERS} attackers to start`,
+        );
+      }
+
+      // Prepare attacker and defender IDs
+      const attackerIds = attackers.map((a) => a.userId);
+      let defenderIds: string[] = defenders.map((d) => d.userId);
+
+      // If no player defenders, use AI defenders
+      if (defenderIds.length === 0) {
+        // Fetch AI defenders from the village's shrine settings
+        if (targetSector?.village?.shrineSettings?.activeAiIds) {
+          defenderIds = targetSector.village.shrineSettings.activeAiIds.slice(
+            0,
+            SHRINE_BATTLE_MAX_USERS_PER_SIDE,
+          );
+        }
+        // If still no defenders, return error
+        if (defenderIds.length === 0) {
+          return errorResponse("No defenders available (AI defenders not configured)");
+        }
+      }
+
+      // Start the battle
+      const result = await initiateBattle(
+        {
+          userIds: attackerIds,
+          targetIds: defenderIds,
+          client: ctx.drizzle,
+          biome: "default",
+        },
+        "SHRINE_WAR",
+      );
+
+      if (result.success && result.battleId) {
+        await Promise.all([
+          ctx.drizzle
+            .update(mpvpBattleQueue)
+            .set({ battleId: result.battleId })
+            .where(eq(mpvpBattleQueue.id, input.shrineBattleId)),
+          ...(allUserIds.length > 0
+            ? [
+                ctx.drizzle
+                  .update(userData)
+                  .set({
+                    status: sql`CASE WHEN status = "QUEUED" THEN "AWAKE" ELSE status END`,
+                  })
+                  .where(inArray(userData.userId, allUserIds)),
+              ]
+            : []),
+        ]);
+
+        // Notify participants
+        allUserIds.forEach((userId) => {
+          void pusher.trigger(userId, "event", {
+            type: "userMessage",
+            message: "Shrine battle has started!",
+            route: "/combat",
+            routeText: "To Combat",
+          });
+        });
+
+        return { success: true, message: "Shrine battle initiated!" };
+      }
+
+      return errorResponse("Failed to initiate shrine battle");
     }),
 });

@@ -1110,11 +1110,15 @@ export const clanRouter = createTRPCRouter({
           clan1Id: challenger.id,
           clan2Id: defender.id,
           createdAt: new Date(),
+          battleType: "CLAN_BATTLE",
+          attackerEntityId: challenger.id,
+          defenderEntityId: defender.id,
         }),
         ctx.drizzle.insert(mpvpBattleUser).values({
           id: nanoid(),
           userId: user.userId,
           clanBattleId: clanBattleId,
+          side: "ATTACKER",
         }),
       ]);
       // Notify all clan members of both clans
@@ -1162,11 +1166,14 @@ export const clanRouter = createTRPCRouter({
         .set({ status: "QUEUED" })
         .where(and(eq(userData.userId, user.userId), eq(userData.status, "AWAKE")));
       if (result.rowsAffected === 0) return errorResponse("Was not awake?");
+      // Derive side based on clan membership
+      const side = clanBattleData.clan1Id === user.clanId ? "ATTACKER" : "DEFENDER";
       // Mutation 2
       await ctx.drizzle.insert(mpvpBattleUser).values({
         id: nanoid(),
         userId: user.userId,
         clanBattleId: input.clanBattleId,
+        side: side,
       });
       return { success: true, message: `Joined ${groupLabel} battle` };
     }),
