@@ -1,6 +1,6 @@
-import { UserRoles } from "@/drizzle/constants";
+import { UserRoles, StaffApprovalGroups } from "@/drizzle/constants";
+import type { StaffApprovalGroup, UserRole } from "@/drizzle/constants";
 import type { UserData, UserRank, UserReport } from "@/drizzle/schema";
-import type { UserRole } from "@/drizzle/constants";
 import type { SupportTicket } from "@/drizzle/schema";
 import { SUPPORT_TICKET_STATUS_TRANSITIONS } from "@/drizzle/constants";
 import type { SupportTicketStatus } from "@/drizzle/constants";
@@ -414,6 +414,17 @@ export const canViewAllApplications = (role: UserRole) => {
 
 export const canApproveApplications = (role: UserRole) => {
   return role.includes("ADMIN") || role === "CODER";
+};
+
+/**
+ * Helper to get the approval group for a user role
+ */
+export const getApprovalGroup = (role: UserRole): StaffApprovalGroup | null => {
+  if (role === "CODER") return "CODING-ADMIN";
+  if (StaffApprovalGroups.includes(role as StaffApprovalGroup)) {
+    return role as StaffApprovalGroup;
+  }
+  return null;
 };
 
 export const canUnequipAllUsers = (user: UserData) => {

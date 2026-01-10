@@ -19,6 +19,7 @@ import {
   canDeleteStaffApplication,
   canViewAllApplications,
   canApproveApplications,
+  getApprovalGroup,
 } from "@/utils/permissions";
 
 export const applicationsRouter = createTRPCRouter({
@@ -79,8 +80,8 @@ export const applicationsRouter = createTRPCRouter({
       // Guards
       if (!user || !app) return null;
       const isOwner = app.applicantUserId === user.userId;
-      const isStaff = user.role !== "USER";
-      if (!isOwner && !isStaff) return null;
+      const canViewAll = canViewAllApplications(user.role);
+      if (!isOwner && !canViewAll) return null;
       // Return
       return app;
     }),
@@ -211,9 +212,8 @@ export const applicationsRouter = createTRPCRouter({
         return errorResponse("Only admins and coders can approve applications");
 
       // Update: record approval (upsert)
-      // CODER role approves under CODING-ADMIN group
-      const approvalGroup: StaffApprovalGroup =
-        user.role === "CODER" ? "CODING-ADMIN" : (user.role as StaffApprovalGroup);
+      const approvalGroup = getApprovalGroup(user.role);
+      if (!approvalGroup) return errorResponse("No approval group found for user role");
       await ctx.drizzle
         .insert(staffApplicationApproval)
         .values({
@@ -289,9 +289,9 @@ export const applicationsRouter = createTRPCRouter({
       if (!canApproveApplications(user.role))
         return errorResponse("Only admins and coders can reject applications");
       // Mutate: record rejection (upsert)
-      // CODER role rejects under CODING-ADMIN group
-      const rejectionGroup: StaffApprovalGroup =
-        user.role === "CODER" ? "CODING-ADMIN" : (user.role as StaffApprovalGroup);
+      const rejectionGroup = getApprovalGroup(user.role);
+      if (!rejectionGroup)
+        return errorResponse("No approval group found for user role");
       await Promise.all([
         ctx.drizzle
           .insert(staffApplicationApproval)

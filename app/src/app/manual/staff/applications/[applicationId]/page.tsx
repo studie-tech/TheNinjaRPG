@@ -12,7 +12,7 @@ import Link from "next/link";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { showMutationToast } from "@/libs/toast";
 import { Badge } from "@/components/ui/badge";
-import { canApproveApplications } from "@/utils/permissions";
+import { canApproveApplications, getApprovalGroup } from "@/utils/permissions";
 
 export default function ApplicationDetailPage() {
   // State
@@ -39,10 +39,11 @@ export default function ApplicationDetailPage() {
         Not found or you do not have access to this application.
       </ContentBox>
     );
-  // For CODER, check CODING-ADMIN approvals since CODER votes are stored under that group
-  const approvalGroup = me?.role === "CODER" ? "CODING-ADMIN" : me?.role;
+  const approvalGroup = me?.role ? getApprovalGroup(me.role) : null;
   const staffVote =
-    canApprove && app?.approvals?.find((a) => a.group === approvalGroup)?.state;
+    canApprove && approvalGroup
+      ? app?.approvals?.find((a) => a.group === approvalGroup)?.state
+      : undefined;
 
   return (
     <>
