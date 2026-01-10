@@ -448,69 +448,83 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   if (!userData) return <Loader explanation="Loading user data" />;
 
   // Prepare data for table
-  const clanBattles = data.map((battle) => {
-    // Use side field to determine attackers/defenders
-    const challengers = battle.queue.filter((q) => q.side === "ATTACKER");
-    const defenders = battle.queue.filter((q) => q.side === "DEFENDER");
-    const startTime = secondsFromDate(CLAN_LOBBY_SECONDS, battle.createdAt);
-    const inBattle = battle.queue.some((q) => q.userId === userData.userId);
-    const userClan = userData.clanId;
-    const winnerId = battle.winnerId;
-    const hasStarted = !!battle.battleId;
-    const hasConcluded = !!battle.winnerId;
-    return {
-      ...battle,
-      clan1name: showClanSide(battle.id, userClan, battle.attackerClan, winnerId, challengers),
-      clan2name: showClanSide(battle.id, userClan, battle.defenderClan, winnerId, defenders),
-      countdown: (
-        <div className="flex flex-col gap-1">
-          {isInitiating ? (
-            <Loader explanation="Starting battle" />
-          ) : (
-            inBattle &&
-            !hasStarted && (
-              <>
-                <Button
-                  className="w-full"
-                  onClick={() => initiate({ clanBattleId: battle.id })}
-                >
-                  <CirclePlay className="h-6 w-6 mr-2" /> Start
+  const clanBattles = data
+    .filter((b) => b.attackerClan && b.defenderClan)
+    .map((battle) => {
+      // Use side field to determine attackers/defenders
+      const challengers = battle.queue.filter((q) => q.side === "ATTACKER");
+      const defenders = battle.queue.filter((q) => q.side === "DEFENDER");
+      const startTime = secondsFromDate(CLAN_LOBBY_SECONDS, battle.createdAt);
+      const inBattle = battle.queue.some((q) => q.userId === userData.userId);
+      const userClan = userData.clanId;
+      const winnerId = battle.winnerId;
+      const hasStarted = !!battle.battleId;
+      const hasConcluded = !!battle.winnerId;
+      return {
+        ...battle,
+        clan1name: showClanSide(
+          battle.id,
+          userClan,
+          battle.attackerClan!,
+          winnerId,
+          challengers,
+        ),
+        clan2name: showClanSide(
+          battle.id,
+          userClan,
+          battle.defenderClan!,
+          winnerId,
+          defenders,
+        ),
+        countdown: (
+          <div className="flex flex-col gap-1">
+            {isInitiating ? (
+              <Loader explanation="Starting battle" />
+            ) : (
+              inBattle &&
+              !hasStarted && (
+                <>
+                  <Button
+                    className="w-full"
+                    onClick={() => initiate({ clanBattleId: battle.id })}
+                  >
+                    <CirclePlay className="h-6 w-6 mr-2" /> Start
+                  </Button>
+                  <Button
+                    className="w-full"
+                    onClick={() => leave({ clanBattleId: battle.id })}
+                  >
+                    <DoorOpen className="h-6 w-6 mr-2" /> Leave
+                  </Button>
+                </>
+              )
+            )}
+            {hasStarted && (
+              <Link href={`/battlelog/${battle.battleId}`}>
+                <Button className={cn(hasConcluded ? "grayscale" : "", "w-full")}>
+                  <ScanEye className="h-6 w-6 mr-2" />{" "}
+                  {hasConcluded ? "Review" : "Spectate"}
                 </Button>
-                <Button
-                  className="w-full"
-                  onClick={() => leave({ clanBattleId: battle.id })}
-                >
-                  <DoorOpen className="h-6 w-6 mr-2" /> Leave
-                </Button>
-              </>
-            )
-          )}
-          {hasStarted && (
-            <Link href={`/battlelog/${battle.battleId}`}>
-              <Button className={cn(hasConcluded ? "grayscale" : "", "w-full")}>
-                <ScanEye className="h-6 w-6 mr-2" />{" "}
-                {hasConcluded ? "Review" : "Spectate"}
-              </Button>
-            </Link>
-          )}
-          {hasConcluded && (
-            <div>
-              {battle.winnerId === clanId ? (
-                <Badge className="bg-green-600 w-full">
-                  <Medal className="h-6 w-6 mr-2" /> Victory
-                </Badge>
-              ) : (
-                <Badge className="bg-red-600 w-full">
-                  <HeartCrack className="h-6 w-6 mr-2" /> Defeat
-                </Badge>
-              )}
-            </div>
-          )}
-          <Countdown targetDate={startTime} timeDiff={timeDiff} onEndShow=" " />
-        </div>
-      ),
-    };
-  });
+              </Link>
+            )}
+            {hasConcluded && (
+              <div>
+                {battle.winnerId === clanId ? (
+                  <Badge className="bg-green-600 w-full">
+                    <Medal className="h-6 w-6 mr-2" /> Victory
+                  </Badge>
+                ) : (
+                  <Badge className="bg-red-600 w-full">
+                    <HeartCrack className="h-6 w-6 mr-2" /> Defeat
+                  </Badge>
+                )}
+              </div>
+            )}
+            <Countdown targetDate={startTime} timeDiff={timeDiff} onEndShow=" " />
+          </div>
+        ),
+      };
+    });
 
   // {
   //   !isInitiating && initiate({ clanBattleId: battle.id });

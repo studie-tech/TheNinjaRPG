@@ -47,7 +47,9 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           use_bedrock: "true"
-          claude_args: "--model us.anthropic.claude-opus-4-5-20251101-v1:0"
+          claude_args: |
+            --model us.anthropic.claude-opus-4-5-20251101-v1:0
+            --allowedTools "Edit,MultiEdit,Glob,Grep,LS,Read,Write,mcp__github_comment__update_claude_comment,mcp__github_ci__get_ci_status,mcp__github_ci__get_workflow_run_details,mcp__github_ci__download_job_log,Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git rm:*),Bash(make:*),Bash(bun:*)"
         env:
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
           CLAUDE_CODE_USE_BEDROCK: 1

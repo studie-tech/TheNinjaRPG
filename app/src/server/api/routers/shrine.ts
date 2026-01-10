@@ -17,11 +17,20 @@ import {
   SHRINE_BATTLE_MAX_USERS_PER_SIDE,
   SHRINE_BATTLE_LOBBY_SECONDS,
 } from "@/drizzle/constants";
-import { sector, village, userData, mpvpBattleQueue, mpvpBattleUser } from "@/drizzle/schema";
+import {
+  sector,
+  village,
+  userData,
+  mpvpBattleQueue,
+  mpvpBattleUser,
+} from "@/drizzle/schema";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
 import { initiateBattle } from "@/routers/combat";
-import { pusher } from "@/libs/pusher";
+import { getServerPusher } from "@/libs/pusher";
+
+// Pusher instance
+const pusher = getServerPusher();
 
 export const shrineRouter = createTRPCRouter({
   // Get all AI names
@@ -550,8 +559,7 @@ export const shrineRouter = createTRPCRouter({
       if (user.status !== "AWAKE") return errorResponse("Must be awake to join");
       if (!user.villageId) return errorResponse("You must be in a village");
       if (!shrineBattle) return errorResponse("Shrine battle not found");
-      if (shrineBattle.battleId)
-        return errorResponse("Shrine battle already started");
+      if (shrineBattle.battleId) return errorResponse("Shrine battle already started");
 
       // Check if user is already in queue
       const alreadyQueued = shrineBattle.queue.some((q) => q.userId === user.userId);
@@ -584,7 +592,9 @@ export const shrineRouter = createTRPCRouter({
       }
 
       if (availableSlot === null) {
-        return errorResponse(`Maximum ${SHRINE_BATTLE_MAX_USERS_PER_SIDE} ${input.side.toLowerCase()}s allowed`);
+        return errorResponse(
+          `Maximum ${SHRINE_BATTLE_MAX_USERS_PER_SIDE} ${input.side.toLowerCase()}s allowed`,
+        );
       }
 
       // Update user status
@@ -603,7 +613,7 @@ export const shrineRouter = createTRPCRouter({
           side: input.side,
           slot: availableSlot,
         });
-      } catch (error) {
+      } catch {
         // If insert failed due to slot conflict, revert user status and return error
         await ctx.drizzle
           .update(userData)
@@ -666,10 +676,11 @@ export const shrineRouter = createTRPCRouter({
       ]);
 
       // If no one left in queue, delete the battle queue (use DB-truth, not stale snapshot)
-      const [{ remaining }] = await ctx.drizzle
+      const counts = await ctx.drizzle
         .select({ remaining: sql<number>`count(*)` })
         .from(mpvpBattleUser)
         .where(eq(mpvpBattleUser.clanBattleId, input.shrineBattleId));
+      const remaining = counts[0]?.remaining ?? 0;
 
       if (remaining === 0) {
         // Only delete if battleId is still null (battle hasn't started)
@@ -731,7 +742,8 @@ export const shrineRouter = createTRPCRouter({
 
       // Check lobby time has passed
       if (
-        new Date() < secondsFromDate(SHRINE_BATTLE_LOBBY_SECONDS, shrineBattle.createdAt)
+        new Date() <
+        secondsFromDate(SHRINE_BATTLE_LOBBY_SECONDS, shrineBattle.createdAt)
       ) {
         return errorResponse("Shrine battle lobby time has not passed yet");
       }

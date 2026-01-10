@@ -1,0 +1,14 @@
+ALTER TABLE `MpvpBattleQueue` RENAME COLUMN `clan1Id` TO `attackerEntityId`;
+ALTER TABLE `MpvpBattleQueue` RENAME COLUMN `clan2Id` TO `defenderEntityId`;
+DROP INDEX `MpvpBattleQueue_clan1Id_idx` ON `MpvpBattleQueue`;
+DROP INDEX `MpvpBattleQueue_clan2Id_idx` ON `MpvpBattleQueue`;
+ALTER TABLE `MpvpBattleQueue` ADD `battleType` enum('CLAN_BATTLE','SHRINE_BATTLE') DEFAULT 'CLAN_BATTLE' NOT NULL;
+ALTER TABLE `MpvpBattleQueue` ADD `sector` smallint;
+ALTER TABLE `MpvpBattleUser` ADD `side` enum('ATTACKER','DEFENDER');
+ALTER TABLE `MpvpBattleUser` ADD `slot` tinyint;
+ALTER TABLE `MpvpBattleUser` ADD CONSTRAINT `MpvpBattleUser_clanBattleId_side_slot_key` UNIQUE(`clanBattleId`,`side`,`slot`);
+CREATE INDEX `MpvpBattleQueue_battleType_idx` ON `MpvpBattleQueue` (`battleType`);
+CREATE INDEX `MpvpBattleQueue_sector_idx` ON `MpvpBattleQueue` (`sector`);
+CREATE INDEX `MpvpBattleQueue_attackerEntityId_idx` ON `MpvpBattleQueue` (`attackerEntityId`);
+CREATE INDEX `MpvpBattleQueue_defenderEntityId_idx` ON `MpvpBattleQueue` (`defenderEntityId`);
+CREATE INDEX `MpvpBattleUser_side_idx` ON `MpvpBattleUser` (`side`);
