@@ -52,7 +52,10 @@ export default function Shrine() {
   if (!userData.villageId) return <Loader explanation="No village found" />;
 
   // Check if there's an active war in this sector
-  const activeWars = sectorData.warData;
+  // Filter to only show wars for the current sector
+  const activeWars = sectorData.warData?.filter(
+    (war) => war.sector === userData.sector,
+  );
 
   // Determine if this sector is owned by another village (for MPVP attacks)
   const sectorOwnerVillageId = sectorData.sectorData?.villageId ?? null;
