@@ -8,11 +8,13 @@ import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { Swords } from "lucide-react";
+import { Swords, Users } from "lucide-react";
 import Image from "@/layout/Image";
 import StatusBar from "@/layout/StatusBar";
 import { WAR_SHRINE_IMAGE, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import RamenShop from "@/layout/RamenShop";
+import ShrineBattleLobby from "@/layout/ShrineBattleLobby";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type War } from "@/drizzle/schema";
 
 export default function Shrine() {
@@ -51,6 +53,12 @@ export default function Shrine() {
 
   // Check if there's an active war in this sector
   const activeWars = sectorData.warData;
+
+  // Determine if this sector is owned by another village (for MPVP attacks)
+  const sectorOwnerVillageId = sectorData.sectorData?.villageId ?? null;
+  const canShowMpvpOption =
+    sectorOwnerVillageId && sectorOwnerVillageId !== userData.villageId;
+
   if (!activeWars || activeWars.length === 0) {
     return (
       <>
@@ -59,22 +67,59 @@ export default function Shrine() {
           subtitle={sectorData.sectorData ? "Sector is Claimed" : "Unclaimed Sector"}
           defaultBackHref="/travel"
         >
-          <div className="flex flex-col items-center">
-            {sectorData.sectorData ? (
-              <p>
-                {" "}
-                This sector is claimed by{" "}
-                <strong>{sectorData.sectorData.village.name}</strong>. The leader of
-                your village or faction can attack the shrine to try and defeat it and
-                claim the sector.
-              </p>
-            ) : (
-              <p>
-                This sector is unclaimed. The leader of your village or faction can
-                attack the shrine to try and defeat it and claim the sector.
-              </p>
-            )}
-          </div>
+          {canShowMpvpOption ? (
+            <Tabs defaultValue="team" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="team">
+                  <Users className="mr-2 h-4 w-4" />
+                  Team Battle
+                </TabsTrigger>
+                <TabsTrigger value="info">
+                  <Swords className="mr-2 h-4 w-4" />
+                  Sector Info
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="team" className="mt-4">
+                <div className="mb-4 text-sm text-muted-foreground">
+                  Form a team to attack this shrine together! Up to 3 attackers can join
+                  the assault, and defenders from the owning village can queue to defend.
+                </div>
+                <ShrineBattleLobby
+                  sectorNumber={userData.sector}
+                  userId={userData.userId}
+                  userVillageId={userData.villageId}
+                  defenderVillageId={sectorOwnerVillageId}
+                />
+              </TabsContent>
+              <TabsContent value="info" className="mt-4">
+                <div className="flex flex-col items-center">
+                  <p>
+                    This sector is claimed by{" "}
+                    <strong>{sectorData.sectorData?.village.name}</strong>. The leader
+                    of your village or faction can attack the shrine to try and defeat
+                    it and claim the sector.
+                  </p>
+                </div>
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <div className="flex flex-col items-center">
+              {sectorData.sectorData ? (
+                <p>
+                  {" "}
+                  This sector is claimed by{" "}
+                  <strong>{sectorData.sectorData.village.name}</strong>. The leader of
+                  your village or faction can attack the shrine to try and defeat it and
+                  claim the sector.
+                </p>
+              ) : (
+                <p>
+                  This sector is unclaimed. The leader of your village or faction can
+                  attack the shrine to try and defeat it and claim the sector.
+                </p>
+              )}
+            </div>
+          )}
         </ContentBox>
         <RamenShop initialBreak />
       </>
@@ -102,18 +147,48 @@ export default function Shrine() {
             subtitle={`Sector ${userData.sector}`}
             defaultBackHref="/travel"
           >
-            <div className="divide-y">
-              {userWars.map((war) => (
-                <WarCard
-                  key={war.id}
-                  war={war}
-                  villageId={userData.villageId!}
-                  sector={userData.sector}
-                  onAttack={() => attack({ sector: userData.sector })}
-                  isAttacking={isAttacking}
+            <Tabs defaultValue="solo" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="solo">
+                  <Swords className="mr-2 h-4 w-4" />
+                  Solo Battle
+                </TabsTrigger>
+                <TabsTrigger value="team">
+                  <Users className="mr-2 h-4 w-4" />
+                  Team Battle
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="solo">
+                <div className="divide-y">
+                  {userWars.map((war) => (
+                    <WarCard
+                      key={war.id}
+                      war={war}
+                      villageId={userData.villageId!}
+                      sector={userData.sector}
+                      onAttack={() => attack({ sector: userData.sector })}
+                      isAttacking={isAttacking}
+                    />
+                  ))}
+                </div>
+              </TabsContent>
+              <TabsContent value="team">
+                <div className="mb-4 text-sm text-muted-foreground">
+                  Form a team to attack this shrine together! Up to 3 attackers can join
+                  the assault, and defenders from the owning village can queue to defend.
+                </div>
+                <ShrineBattleLobby
+                  sectorNumber={userData.sector}
+                  userId={userData.userId}
+                  userVillageId={userData.villageId}
+                  defenderVillageId={
+                    userWars[0]?.attackerVillageId === userData.villageId
+                      ? userWars[0]?.defenderVillageId
+                      : userWars[0]?.attackerVillageId
+                  }
                 />
-              ))}
-            </div>
+              </TabsContent>
+            </Tabs>
           </ContentBox>
           <RamenShop />
         </>

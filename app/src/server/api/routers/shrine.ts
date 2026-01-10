@@ -482,8 +482,6 @@ export const shrineRouter = createTRPCRouter({
       await Promise.all([
         ctx.drizzle.insert(mpvpBattleQueue).values({
           id: shrineBattleId,
-          clan1Id: user.villageId, // Legacy field, use attackerEntityId
-          clan2Id: targetSector.villageId, // Legacy field, use defenderEntityId
           createdAt: new Date(),
           battleType: "SHRINE_BATTLE",
           attackerEntityId: user.villageId,

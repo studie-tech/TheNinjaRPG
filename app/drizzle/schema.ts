@@ -677,8 +677,9 @@ export const mpvpBattleQueue = mysqlTable(
   "MpvpBattleQueue",
   {
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
-    clan1Id: varchar("clan1Id", { length: 191 }).notNull(),
-    clan2Id: varchar("clan2Id", { length: 191 }).notNull(),
+    // Legacy fields for backward compatibility with clan battles
+    clan1Id: varchar("clan1Id", { length: 191 }),
+    clan2Id: varchar("clan2Id", { length: 191 }),
     winnerId: varchar("winnerId", { length: 191 }),
     battleId: varchar("battleId", { length: 191 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
@@ -688,8 +689,9 @@ export const mpvpBattleQueue = mysqlTable(
     battleType: mysqlEnum("battleType", consts.MPVP_BATTLE_TYPES)
       .default("CLAN_BATTLE")
       .notNull(),
-    attackerEntityId: varchar("attackerEntityId", { length: 191 }),
-    defenderEntityId: varchar("defenderEntityId", { length: 191 }),
+    // Primary entity identifiers - used for both clan and shrine battles
+    attackerEntityId: varchar("attackerEntityId", { length: 191 }).notNull(),
+    defenderEntityId: varchar("defenderEntityId", { length: 191 }).notNull(),
     sector: smallint("sector"),
   },
   (table) => {
