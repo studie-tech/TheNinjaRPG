@@ -148,6 +148,7 @@ import type {
 } from "@/drizzle/schema";
 import type { BattleWar } from "@/libs/combat/types";
 import type { GlobalMapData } from "@/libs/threejs/types";
+import { findWarsWithUser } from "@/libs/war";
 
 // Debug flag when testing battle
 const debug = false;
@@ -1589,7 +1590,7 @@ export const initiateBattle = async (
       }
     }
 
-    // Level restrictions - prevent attacking users more than 15 levels under or above (skip if in war-torn sector)
+    // Level restrictions - prevent attacking users more than 15 levels under or above (skip if in war-torn sector or at war)
     if (battleType === "COMBAT" && userIds.includes(user.userId)) {
       const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
       if (!isInWarTornSector) {
@@ -1604,21 +1605,32 @@ export const initiateBattle = async (
         );
 
         if (nonCompliantTarget) {
-          const targetLevel = calcLevel(nonCompliantTarget.experience);
-          const levelDifference = attackerLevel - targetLevel;
+          // Check if attacker and target are at war - if so, bypass level restriction
+          const areAtWar =
+            findWarsWithUser(
+              activeWars,
+              activeWars,
+              nonCompliantTarget.villageId,
+              user.villageId,
+            ).length > 0;
 
-          if (levelDifference > 15) {
-            return {
-              success: false,
-              message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels below you (${levelDifference} level difference)`,
-            };
-          }
+          if (!areAtWar) {
+            const targetLevel = calcLevel(nonCompliantTarget.experience);
+            const levelDifference = attackerLevel - targetLevel;
 
-          if (levelDifference < -15) {
-            return {
-              success: false,
-              message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)`,
-            };
+            if (levelDifference > 15) {
+              return {
+                success: false,
+                message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels below you (${levelDifference} level difference)`,
+              };
+            }
+
+            if (levelDifference < -15) {
+              return {
+                success: false,
+                message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)`,
+              };
+            }
           }
         }
       }
