@@ -46,16 +46,17 @@ export default function Shrine() {
       },
     });
 
+  // Query for user's queued shrine battle (to check if they're queued for this sector)
+  // IMPORTANT: This hook must be called before any early returns to follow React's Rules of Hooks
+  const { data: userQueuedBattle } = api.shrine.getUserQueuedShrineBattle.useQuery(
+    undefined,
+    { enabled: userData?.status === "QUEUED" },
+  );
+
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!sectorData) return <Loader explanation="Loading sector data" />;
   if (!userData.villageId) return <Loader explanation="No village found" />;
-
-  // Query for user's queued shrine battle (to check if they're queued for this sector)
-  const { data: userQueuedBattle } = api.shrine.getUserQueuedShrineBattle.useQuery(
-    undefined,
-    { enabled: userData.status === "QUEUED" },
-  );
 
   // Check if there's an active war in this sector
   // Filter to only show wars for the current sector

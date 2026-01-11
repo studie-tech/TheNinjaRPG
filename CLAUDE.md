@@ -142,6 +142,13 @@ The combat system is the most complex feature, with dedicated files:
 - Mobile-first responsive design with Tailwind
 - Optimize for Web Vitals (LCP, CLS, FID)
 
+## Frontend React Guidelines
+
+- **React Rules of Hooks**: All React hooks (useState, useEffect, useQuery, useMutation, etc.) MUST be called unconditionally and in the same order on every render. Hooks must be placed BEFORE any early returns (e.g., `if (!data) return <Loader />`) in the component.
+- **Hook Ordering**: Always place all hooks at the top of the component, before any conditional logic or early returns.
+- **Conditional Hook Enabling**: Use the `enabled` option for queries instead of conditionally calling hooks (e.g., `useQuery({ enabled: !!userData })`).
+- **Check for Render Errors**: After modifying frontend components, verify there are no "Rendered more hooks than during the previous render" or similar React hook violations.
+
 ## Permission System
 
 Centralized permission logic in `/app/src/utils/permissions.ts`.
