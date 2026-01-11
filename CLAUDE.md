@@ -2,10 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-<important>
-    Claude code should never (!) run git commands or github CLI!
-</important>
-
 ## Before Starting Work
 
 - Always make a plan in "plan mode"

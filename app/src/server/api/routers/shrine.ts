@@ -438,7 +438,8 @@ export const shrineRouter = createTRPCRouter({
         },
         orderBy: desc(mpvpBattleQueue.createdAt),
       });
-      return battles;
+      // Filter out empty battles (where all users have left)
+      return battles.filter((battle) => battle.queue.length > 0);
     }),
 
   // Get user's currently queued shrine battle (to check which sector they're queued for)

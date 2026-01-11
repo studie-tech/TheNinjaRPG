@@ -446,7 +446,6 @@ export const PvpBattleTypes: BattleType[] = [
   "KAGE_PVP",
   "KAGE_AI",
   "RANKED_PVP",
-  "SHRINE_WAR",
 ];
 
 export const PveBattleTypes: BattleType[] = [

@@ -730,9 +730,9 @@ export const mpvpBattleUser = mysqlTable(
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
     // Side field for both shrine and clan battles
-    side: mysqlEnum("side", consts.MPVP_BATTLE_SIDES),
+    side: mysqlEnum("side", consts.MPVP_BATTLE_SIDES).notNull(),
     // Slot number (0-based) for capacity enforcement per side
-    slot: tinyint("slot"),
+    slot: tinyint("slot").notNull(),
   },
   (table) => {
     return {

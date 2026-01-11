@@ -5686,14 +5686,14 @@
           "name": "side",
           "type": "enum('ATTACKER','DEFENDER')",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "slot": {
           "name": "slot",
           "type": "tinyint",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         }
       },
