@@ -910,9 +910,9 @@ export const shrineRouter = createTRPCRouter({
           });
           defenderIds = globalAiDefenders.map((ai) => ai.userId);
         }
-        // If still no defenders after both fallbacks, return error
+        // Final fallback: use the same hardcoded AI as solo shrine battles
         if (defenderIds.length === 0) {
-          return errorResponse("No defenders available (no AI defenders found)");
+          defenderIds = ["MJMzOE67Cx2YP3NX8SAbh"];
         }
       }
 
