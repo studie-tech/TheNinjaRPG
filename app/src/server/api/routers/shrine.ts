@@ -539,6 +539,27 @@ export const shrineRouter = createTRPCRouter({
         }),
       ]);
 
+      // Notify all members of the defending village that their sector is under attack
+      const defenderVillageMembers = await ctx.drizzle.query.userData.findMany({
+        where: and(
+          eq(userData.villageId, targetSector.villageId),
+          eq(userData.isAi, false),
+        ),
+        columns: {
+          userId: true,
+        },
+      });
+
+      // Send notifications to all village members
+      defenderVillageMembers.forEach((member) => {
+        void pusher.trigger(member.userId, "event", {
+          type: "userMessage",
+          message: `Sector ${input.sectorNumber} is under attack! Your village's shrine is being challenged.`,
+          route: "/travel",
+          routeText: "Go to Map",
+        });
+      });
+
       return {
         success: true,
         message: `Shrine attack party created! Waiting for more attackers (min ${SHRINE_BATTLE_MIN_ATTACKERS})`,
