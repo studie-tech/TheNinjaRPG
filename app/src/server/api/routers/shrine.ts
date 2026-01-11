@@ -980,6 +980,6 @@ export const shrineRouter = createTRPCRouter({
           ),
         );
 
-      return errorResponse("Failed to initiate shrine battle");
+      return errorResponse(`Failed to initiate shrine battle: ${result.message}`);
     }),
 });

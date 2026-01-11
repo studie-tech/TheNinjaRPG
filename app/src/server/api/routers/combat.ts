@@ -1557,6 +1557,10 @@ export const initiateBattle = async (
 
     // Check if user is asleep
     const QUEUED_BATTLES = ["RANKED_PVP", "CLAN_BATTLE", "KAGE_PVP"];
+    const isQueuedBattle = QUEUED_BATTLES.includes(battleType);
+    const isAutoBattle = AutoBattleTypes.includes(battleType);
+    const isShrineBattle = battleType === "SHRINE_WAR";
+
     // Special handling for KAGE_PVP battles
     if (battleType === "KAGE_PVP") {
       // For KAGE_PVP: challenger should be KAGE_QUEUED, kage should be AWAKE
@@ -1569,12 +1573,16 @@ export const initiateBattle = async (
       if (targetIds.includes(user.userId) && user.status !== "AWAKE") {
         return { success: false, message: `Kage ${user.username} is not awake` };
       }
-    } else if (
-      ((user.status !== "QUEUED" && QUEUED_BATTLES.includes(battleType)) ||
-        (user.status !== "AWAKE" && !QUEUED_BATTLES.includes(battleType))) &&
-      !AutoBattleTypes.includes(battleType)
-    ) {
-      return { success: false, message: `User ${user.username} is not awake` };
+    } else if (!isAutoBattle) {
+      // For other battles, check if user status is appropriate
+      const isOk = isQueuedBattle
+        ? user.status === "QUEUED"
+        : isShrineBattle
+          ? ["AWAKE", "QUEUED"].includes(user.status)
+          : user.status === "AWAKE";
+      if (!isOk) {
+        return { success: false, message: `User ${user.username} is not awake` };
+      }
     }
 
     // Rank restrictions

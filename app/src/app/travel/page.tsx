@@ -252,7 +252,11 @@ export default function Travel() {
   // Convenience for starting global move
   const initiateGlobalMoveStart = (sector: number) => {
     // Guards against global movement
-    if (currentStep?.title === "Travel" && currentStep?.relatedValue !== undefined) {
+    if (
+      currentStep?.title === "Travel" &&
+      currentStep?.relatedValue !== undefined &&
+      userData?.tutorialOn
+    ) {
       if (sector !== currentStep?.relatedValue) {
         showMutationToast({
           success: false,

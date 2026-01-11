@@ -12,7 +12,7 @@ import AvatarImage from "@/layout/Avatar";
 import Countdown from "@/layout/Countdown";
 import Loader from "@/layout/Loader";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DoorOpen, CirclePlay, Swords, Users, Shield } from "lucide-react";
+import { DoorOpen, CirclePlay, Swords, Users, Shield, Loader2 } from "lucide-react";
 import { cn } from "src/libs/shadui";
 import {
   SHRINE_BATTLE_MIN_ATTACKERS,
@@ -23,7 +23,8 @@ import type { UserRank } from "@/drizzle/schema";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/api/root";
 
-type ShrineBattleData = inferRouterOutputs<AppRouter>["shrine"]["getShrineBattles"][number];
+type ShrineBattleData =
+  inferRouterOutputs<AppRouter>["shrine"]["getShrineBattles"][number];
 
 interface ShrineBattleLobbyProps {
   sectorNumber: number;
@@ -132,9 +133,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
               battle={battle}
               userId={userId}
               userVillageId={userVillageId}
-              onJoin={(side) =>
-                joinBattle({ shrineBattleId: battle.id, side })
-              }
+              onJoin={(side) => joinBattle({ shrineBattleId: battle.id, side })}
               onLeave={() => leaveBattle({ shrineBattleId: battle.id })}
               onInitiate={() => initiateBattle({ shrineBattleId: battle.id })}
               isJoining={isJoining}
@@ -275,19 +274,20 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
                 <DoorOpen className="mr-1 h-4 w-4" />
                 Leave
               </Button>
-              {isInitiating ? (
-                <Loader explanation="Starting..." />
-              ) : (
-                <Button
-                  size="sm"
-                  onClick={onInitiate}
-                  disabled={!canInitiate || isInitiating}
-                  className={cn(!canInitiate && "opacity-50")}
-                >
+
+              <Button
+                size="sm"
+                onClick={onInitiate}
+                disabled={!canInitiate || isInitiating}
+                className={cn(!canInitiate && "opacity-50")}
+              >
+                {isInitiating ? (
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                ) : (
                   <CirclePlay className="mr-1 h-4 w-4" />
-                  Start Battle
-                </Button>
-              )}
+                )}
+                Start Battle
+              </Button>
             </>
           )}
           {!userInBattle && (canJoinAsAttacker || canJoinAsDefender) && (
