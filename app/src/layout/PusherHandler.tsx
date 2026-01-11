@@ -17,6 +17,8 @@ export type UserEvent = {
   route?: string;
   routeText?: string;
   battleId?: string;
+  alertType?: string;
+  sector?: number;
 };
 
 export const usePusherHandler = (
@@ -25,6 +27,7 @@ export const usePusherHandler = (
 ) => {
   // Extra parameter
   const clanId = userData?.clanId;
+  const villageId = userData?.villageId;
 
   // Navigation
   const router = useRouter();
@@ -142,14 +145,34 @@ export const usePusherHandler = (
           }
         });
       }
+      // Listen on village channel
+      if (villageId) {
+        const villageChannel = pusher.subscribe(`village-${villageId}`);
+        villageChannel.bind("event", (data: UserEvent) => {
+          if (data.type === "villageAlert") {
+            showMutationToast({
+              success: true,
+              message: data.message ?? "Village alert!",
+              title: "Village Notification!",
+              action: data.route ? (
+                <ToastAction altText="Action">
+                  <Link href={data.route}>{data.routeText ?? "Go"}</Link>
+                </ToastAction>
+              ) : undefined,
+            });
+          }
+        });
+      }
       // Cleanup
       return () => {
         pusher.unsubscribe(userId);
+        if (clanId) pusher.unsubscribe(clanId);
+        if (villageId) pusher.unsubscribe(`village-${villageId}`);
         pusher.disconnect();
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, clanId, router, utils]);
+  }, [userId, clanId, villageId, router, utils]);
 
   return pusher;
 };
