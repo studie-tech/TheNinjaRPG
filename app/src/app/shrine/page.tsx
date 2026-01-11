@@ -51,6 +51,12 @@ export default function Shrine() {
   if (!sectorData) return <Loader explanation="Loading sector data" />;
   if (!userData.villageId) return <Loader explanation="No village found" />;
 
+  // Query for user's queued shrine battle (to check if they're queued for this sector)
+  const { data: userQueuedBattle } = api.shrine.getUserQueuedShrineBattle.useQuery(
+    undefined,
+    { enabled: userData.status === "QUEUED" },
+  );
+
   // Check if there's an active war in this sector
   // Filter to only show wars for the current sector
   const activeWars = sectorData.warData?.filter(
@@ -62,8 +68,9 @@ export default function Shrine() {
   const canShowMpvpOption =
     sectorOwnerVillageId && sectorOwnerVillageId !== userData.villageId;
 
-  // Check if user is queued - if so, show the lobby so they can see/leave queue
-  const isUserQueued = userData.status === "QUEUED";
+  // Check if user is queued FOR THIS SECTOR - only then show the lobby
+  const isUserQueuedForThisSector =
+    userData.status === "QUEUED" && userQueuedBattle?.sector === userData.sector;
 
   if (!activeWars || activeWars.length === 0) {
     return (
@@ -73,7 +80,7 @@ export default function Shrine() {
           subtitle={sectorData.sectorData ? "Sector is Claimed" : "Unclaimed Sector"}
           defaultBackHref="/travel"
         >
-          {canShowMpvpOption || isUserQueued ? (
+          {canShowMpvpOption || isUserQueuedForThisSector ? (
             <Tabs defaultValue="team" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="team">
@@ -92,7 +99,7 @@ export default function Shrine() {
                     join the assault, and defenders from the owning village can queue to
                     defend.
                   </div>
-                ) : isUserQueued ? (
+                ) : isUserQueuedForThisSector ? (
                   <div className="mb-4 text-sm text-muted-foreground">
                     You are queued for a shrine battle. You can view your queue status or
                     leave the queue below.

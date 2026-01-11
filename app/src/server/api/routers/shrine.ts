@@ -441,6 +441,32 @@ export const shrineRouter = createTRPCRouter({
       return battles;
     }),
 
+  // Get user's currently queued shrine battle (to check which sector they're queued for)
+  getUserQueuedShrineBattle: protectedProcedure.query(async ({ ctx }) => {
+    const queueEntry = await ctx.drizzle.query.mpvpBattleUser.findFirst({
+      where: eq(mpvpBattleUser.userId, ctx.userId),
+      with: {
+        clanBattle: {
+          columns: {
+            id: true,
+            battleType: true,
+            sector: true,
+          },
+        },
+      },
+    });
+
+    // Return null if not in any battle queue or if it's not a shrine battle
+    if (!queueEntry || queueEntry.clanBattle?.battleType !== "SHRINE_BATTLE") {
+      return null;
+    }
+
+    return {
+      battleId: queueEntry.clanBattle.id,
+      sector: queueEntry.clanBattle.sector,
+    };
+  }),
+
   // Challenge a shrine (create a new shrine battle queue)
   challengeShrine: protectedProcedure
     .input(z.object({ sectorNumber: z.number() }))

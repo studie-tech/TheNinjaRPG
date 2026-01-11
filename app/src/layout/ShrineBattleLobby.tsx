@@ -256,7 +256,11 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
           <Countdown
             targetDate={startTime}
             timeDiff={0}
-            onEndShow="Battle can start!"
+            onEndShow={
+              canInitiate
+                ? "Battle can start!"
+                : `Waiting for ${SHRINE_BATTLE_MIN_ATTACKERS - attackers.length} more attacker(s)`
+            }
           />
         </div>
         <div className="flex gap-2">
@@ -340,11 +344,11 @@ const UserSlot: React.FC<UserSlotProps> = ({ user }) => {
   return (
     <Popover>
       <PopoverTrigger>
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center w-10">
           <AvatarImage
             href={user.avatar}
             alt={user.username}
-            size={50}
+            size={35}
             hover_effect={true}
             priority
           />
@@ -371,7 +375,7 @@ const EmptySlot: React.FC<EmptySlotProps> = ({ canJoin, onJoin }) => {
   return (
     <div
       className={cn(
-        "flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed border-gray-300 text-gray-400",
+        "flex h-9 w-9 items-center justify-center rounded-full border-2 border-dashed border-gray-300 text-gray-400 text-sm",
         canJoin &&
           "cursor-pointer hover:border-orange-500 hover:bg-orange-50 hover:text-orange-500",
       )}
