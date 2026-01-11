@@ -791,15 +791,14 @@ export const shrineRouter = createTRPCRouter({
       const attackerIds = attackers.map((a) => a.userId);
       let defenderIds: string[] = defenders.map((d) => d.userId);
 
-      // If no player defenders, use AI defenders
-      if (defenderIds.length === 0 && shrineBattle.sector) {
-        // Fetch sector data to get AI defenders
-        const targetSector = await ctx.drizzle.query.sector.findFirst({
-          where: eq(sector.sector, shrineBattle.sector),
-          with: { village: true },
+      // If no player defenders, use AI defenders from the defender village
+      if (defenderIds.length === 0) {
+        // Use defenderEntityId directly - it's the village ID for shrine battles
+        const defenderVillage = await ctx.drizzle.query.village.findFirst({
+          where: eq(village.id, shrineBattle.defenderEntityId),
         });
-        if (targetSector?.village?.shrineSettings?.activeAiIds) {
-          defenderIds = targetSector.village.shrineSettings.activeAiIds.slice(
+        if (defenderVillage?.shrineSettings?.activeAiIds) {
+          defenderIds = defenderVillage.shrineSettings.activeAiIds.slice(
             0,
             SHRINE_BATTLE_MAX_USERS_PER_SIDE,
           );
