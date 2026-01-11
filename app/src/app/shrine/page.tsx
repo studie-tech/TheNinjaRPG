@@ -203,7 +203,7 @@ export default function Shrine() {
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="solo">
-                <div className="divide-y">
+                <div className="divide-y border rounded-lg">
                   {userWars.map((war) => (
                     <WarCard
                       key={war.id}

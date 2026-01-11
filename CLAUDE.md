@@ -134,6 +134,7 @@ The combat system is the most complex feature, with dedicated files:
 - Use descriptive variable names with auxiliary verbs
 - Directory names: lowercase with dashes
 - Component file structure: exported component → subcomponents → helpers → types
+- **Natural Comments Only**: Do not leave unnatural comments like "Issue X:", "TODO from review:", or similar tracking markers in committed code. Comments should describe the code's purpose, not reference external issues or review feedback. Remove any such markers before committing.
 
 ## UI/Styling Guidelines
 
