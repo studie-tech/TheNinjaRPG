@@ -216,6 +216,22 @@ export default function Shrine() {
                 </div>
               </TabsContent>
               <TabsContent value="team">
+                {/* Issue 1: Show WarCard in Team Battle tab to display war state */}
+                {userWars.length > 0 && (
+                  <div className="mb-6 divide-y border rounded-lg">
+                    {userWars.map((war) => (
+                      <WarCard
+                        key={war.id}
+                        war={war}
+                        villageId={userData.villageId!}
+                        sector={userData.sector}
+                        onAttack={() => {}}
+                        isAttacking={false}
+                        hideAttackButton={true}
+                      />
+                    ))}
+                  </div>
+                )}
                 {userIsAttacker ? (
                   <>
                     <div className="mb-4 text-sm text-muted-foreground">
@@ -284,6 +300,7 @@ const WarCard = ({
   villageId,
   onAttack,
   isAttacking,
+  hideAttackButton = false,
 }: {
   war: War & {
     attackerVillage: { name: string; villageGraphic: string };
@@ -293,12 +310,11 @@ const WarCard = ({
   sector: number;
   onAttack: () => void;
   isAttacking: boolean;
+  hideAttackButton?: boolean;
 }) => {
   const isAttacker = war.attackerVillageId === villageId;
-  const isDefender = war.defenderVillageId === villageId;
-  const isUserWar = isAttacker || isDefender;
   // Only attackers can attack the shrine - defenders shouldn't attack their own shrine
-  const canAttack = isAttacker && war.shrineHp > 0;
+  const canAttack = isAttacker && war.shrineHp > 0 && !hideAttackButton;
 
   return (
     <div className="flex flex-col items-center gap-4 p-4">

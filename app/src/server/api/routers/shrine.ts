@@ -409,6 +409,42 @@ export const shrineRouter = createTRPCRouter({
   getShrineBattles: protectedProcedure
     .input(z.object({ sectorNumber: z.number() }))
     .query(async ({ ctx, input }) => {
+      // First, cleanup any empty shrine battle queues in the DB (Issue 7)
+      // Get all queue IDs that have at least one participant
+      const nonEmptyQueueIds = await ctx.drizzle
+        .select({ clanBattleId: mpvpBattleUser.clanBattleId })
+        .from(mpvpBattleUser);
+      const nonEmptyIds = nonEmptyQueueIds.map((r) => r.clanBattleId);
+
+      // Delete empty queues for this sector
+      if (nonEmptyIds.length > 0) {
+        await ctx.drizzle
+          .delete(mpvpBattleQueue)
+          .where(
+            and(
+              eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+              eq(mpvpBattleQueue.sector, input.sectorNumber),
+              isNull(mpvpBattleQueue.battleId),
+              sql`${mpvpBattleQueue.id} NOT IN (${sql.join(
+                nonEmptyIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+            ),
+          );
+      } else {
+        // If no queues have participants at all, delete all empty queues for this sector
+        await ctx.drizzle
+          .delete(mpvpBattleQueue)
+          .where(
+            and(
+              eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+              eq(mpvpBattleQueue.sector, input.sectorNumber),
+              isNull(mpvpBattleQueue.battleId),
+            ),
+          );
+      }
+
+      // Now fetch non-empty battles with FIFO ordering (oldest first)
       const battles = await ctx.drizzle.query.mpvpBattleQueue.findMany({
         where: and(
           eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
@@ -436,15 +472,17 @@ export const shrineRouter = createTRPCRouter({
             },
           },
         },
-        orderBy: desc(mpvpBattleQueue.createdAt),
+        orderBy: asc(mpvpBattleQueue.createdAt), // FIFO ordering - oldest first
       });
-      // Filter out empty battles (where all users have left)
+      // Filter out empty battles (as a safety check)
       return battles.filter((battle) => battle.queue.length > 0);
     }),
 
   // Get user's currently queued shrine battle (to check which sector they're queued for)
+  // Issue 6: Filter to active battles (battleId IS NULL) and order explicitly
   getUserQueuedShrineBattle: protectedProcedure.query(async ({ ctx }) => {
-    const queueEntry = await ctx.drizzle.query.mpvpBattleUser.findFirst({
+    // Query all queue entries for this user with their battle info
+    const queueEntries = await ctx.drizzle.query.mpvpBattleUser.findMany({
       where: eq(mpvpBattleUser.userId, ctx.userId),
       with: {
         clanBattle: {
@@ -452,19 +490,29 @@ export const shrineRouter = createTRPCRouter({
             id: true,
             battleType: true,
             sector: true,
+            battleId: true,
+            createdAt: true,
           },
         },
       },
+      orderBy: desc(mpvpBattleUser.createdAt),
     });
 
-    // Return null if not in any battle queue or if it's not a shrine battle
-    if (!queueEntry || queueEntry.clanBattle?.battleType !== "SHRINE_BATTLE") {
+    // Find the first active shrine battle (battleId IS NULL means not started)
+    const activeEntry = queueEntries.find(
+      (entry) =>
+        entry.clanBattle?.battleType === "SHRINE_BATTLE" &&
+        entry.clanBattle?.battleId === null,
+    );
+
+    // Return null if not in any active shrine battle queue
+    if (!activeEntry || !activeEntry.clanBattle) {
       return null;
     }
 
     return {
-      battleId: queueEntry.clanBattle.id,
-      sector: queueEntry.clanBattle.sector,
+      battleId: activeEntry.clanBattle.id,
+      sector: activeEntry.clanBattle.sector,
     };
   }),
 
@@ -513,7 +561,7 @@ export const shrineRouter = createTRPCRouter({
       );
       if (alreadyQueued) return errorResponse("Already in a shrine battle queue");
 
-      // Create new shrine battle queue
+      // Create new shrine battle queue with rollback on failure (Issue 5)
       const shrineBattleId = nanoid();
       const result = await ctx.drizzle
         .update(userData)
@@ -521,43 +569,41 @@ export const shrineRouter = createTRPCRouter({
         .where(and(eq(userData.userId, user.userId), eq(userData.status, "AWAKE")));
       if (result.rowsAffected === 0) return errorResponse("Was not awake?");
 
-      await Promise.all([
-        ctx.drizzle.insert(mpvpBattleQueue).values({
-          id: shrineBattleId,
-          createdAt: new Date(),
-          battleType: "SHRINE_BATTLE",
-          attackerEntityId: user.villageId,
-          defenderEntityId: targetSector.villageId,
-          sector: input.sectorNumber,
-        }),
-        ctx.drizzle.insert(mpvpBattleUser).values({
-          id: nanoid(),
-          userId: user.userId,
-          clanBattleId: shrineBattleId,
-          side: "ATTACKER",
-          slot: 0, // First attacker gets slot 0
-        }),
-      ]);
+      try {
+        await Promise.all([
+          ctx.drizzle.insert(mpvpBattleQueue).values({
+            id: shrineBattleId,
+            createdAt: new Date(),
+            battleType: "SHRINE_BATTLE",
+            attackerEntityId: user.villageId,
+            defenderEntityId: targetSector.villageId,
+            sector: input.sectorNumber,
+          }),
+          ctx.drizzle.insert(mpvpBattleUser).values({
+            id: nanoid(),
+            userId: user.userId,
+            clanBattleId: shrineBattleId,
+            side: "ATTACKER",
+            slot: 0, // First attacker gets slot 0
+          }),
+        ]);
+      } catch (error) {
+        // Rollback user status on insert failure
+        await ctx.drizzle
+          .update(userData)
+          .set({ status: "AWAKE" })
+          .where(eq(userData.userId, user.userId));
+        throw error;
+      }
 
-      // Notify all members of the defending village that their sector is under attack
-      const defenderVillageMembers = await ctx.drizzle.query.userData.findMany({
-        where: and(
-          eq(userData.villageId, targetSector.villageId),
-          eq(userData.isAi, false),
-        ),
-        columns: {
-          userId: true,
-        },
-      });
-
-      // Send notifications to all village members
-      defenderVillageMembers.forEach((member) => {
-        void pusher.trigger(member.userId, "event", {
-          type: "userMessage",
-          message: `Sector ${input.sectorNumber} is under attack! Your village's shrine is being challenged.`,
-          route: "/travel",
-          routeText: "Go to Map",
-        });
+      // Notify the defending village via village channel (Issue 5)
+      void pusher.trigger(`village-${targetSector.villageId}`, "event", {
+        type: "villageAlert",
+        alertType: "SHRINE_UNDER_ATTACK",
+        sector: input.sectorNumber,
+        message: `Sector ${input.sectorNumber} is under attack! Your village's shrine is being challenged.`,
+        route: "/travel",
+        routeText: "Go to Map",
       });
 
       return {
@@ -652,7 +698,7 @@ export const shrineRouter = createTRPCRouter({
         .where(and(eq(userData.userId, user.userId), eq(userData.status, "AWAKE")));
       if (result.rowsAffected === 0) return errorResponse("Was not awake?");
 
-      // Try to insert with slot - unique constraint prevents race conditions
+      // Try to insert with slot - unique constraint prevents race conditions (Issue 4)
       try {
         await ctx.drizzle.insert(mpvpBattleUser).values({
           id: nanoid(),
@@ -661,13 +707,42 @@ export const shrineRouter = createTRPCRouter({
           side: input.side,
           slot: availableSlot,
         });
-      } catch {
-        // If insert failed due to slot conflict, revert user status and return error
-        await ctx.drizzle
-          .update(userData)
-          .set({ status: "AWAKE" })
-          .where(eq(userData.userId, user.userId));
-        return errorResponse("Slot was taken by another player. Please try again.");
+      } catch (error) {
+        // Check if it's a duplicate key/constraint violation (slot taken)
+        const isDuplicateError =
+          error instanceof Error &&
+          (error.message.includes("Duplicate entry") ||
+            error.message.includes("ER_DUP_ENTRY") ||
+            error.message.includes("UNIQUE constraint"));
+
+        if (isDuplicateError) {
+          // Verify user is still QUEUED and not in any queue before reverting
+          const [currentUser, existingEntry] = await Promise.all([
+            ctx.drizzle.query.userData.findFirst({
+              where: eq(userData.userId, user.userId),
+              columns: { status: true },
+            }),
+            ctx.drizzle.query.mpvpBattleUser.findFirst({
+              where: and(
+                eq(mpvpBattleUser.userId, user.userId),
+                eq(mpvpBattleUser.clanBattleId, input.shrineBattleId),
+              ),
+            }),
+          ]);
+
+          // Only revert if user is still QUEUED and not in this battle
+          if (currentUser?.status === "QUEUED" && !existingEntry) {
+            await ctx.drizzle
+              .update(userData)
+              .set({ status: "AWAKE" })
+              .where(
+                and(eq(userData.userId, user.userId), eq(userData.status, "QUEUED")),
+              );
+          }
+          return errorResponse("Slot was taken by another player. Please try again.");
+        }
+        // For other errors, rethrow without changing status
+        throw error;
       }
 
       return {
@@ -676,54 +751,58 @@ export const shrineRouter = createTRPCRouter({
       };
     }),
 
-  // Leave a shrine battle queue
+  // Leave a shrine battle queue (Issue 3: DB-guarded writes to prevent races)
   leaveShrineBattle: protectedProcedure
     .input(z.object({ shrineBattleId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch user and battle data
-      const [{ user }, shrineBattle] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        ctx.drizzle.query.mpvpBattleQueue.findFirst({
-          where: and(
-            eq(mpvpBattleQueue.id, input.shrineBattleId),
-            eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
-          ),
-          with: {
-            queue: true,
-          },
-        }),
-      ]);
+      // Fetch user data
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
 
       // Guards
       if (!user) return errorResponse("User not found");
-      if (!shrineBattle) return errorResponse("Shrine battle not found");
-      if (shrineBattle.battleId) return errorResponse("Shrine battle already started");
       if (user.status !== "QUEUED") return errorResponse("Not queued");
 
-      const queued = shrineBattle.queue.some((q) => q.userId === user.userId);
-      if (!queued) return errorResponse("Not in this shrine battle queue");
-
-      // Remove user from queue
-      await Promise.all([
-        ctx.drizzle
-          .delete(mpvpBattleUser)
-          .where(
-            and(
-              eq(mpvpBattleUser.clanBattleId, input.shrineBattleId),
-              eq(mpvpBattleUser.userId, user.userId),
-            ),
+      // Issue 3: Use a subquery to only delete if the parent battle hasn't started
+      // This ensures atomic check + delete for the mpvpBattleUser row
+      const deleteResult = await ctx.drizzle
+        .delete(mpvpBattleUser)
+        .where(
+          and(
+            eq(mpvpBattleUser.clanBattleId, input.shrineBattleId),
+            eq(mpvpBattleUser.userId, user.userId),
+            // Only delete if battle hasn't started (battleId IS NULL)
+            sql`EXISTS (
+              SELECT 1 FROM MpvpBattleQueue
+              WHERE MpvpBattleQueue.id = ${input.shrineBattleId}
+              AND MpvpBattleQueue.battleId IS NULL
+            )`,
           ),
-        ctx.drizzle
-          .update(userData)
-          .set({ status: "AWAKE" })
-          .where(eq(userData.userId, user.userId)),
-      ]);
+        );
 
-      // If no one left in queue, delete the battle queue (use DB-truth, not stale snapshot)
+      // If no rows deleted, either user wasn't in queue or battle already started
+      if (deleteResult.rowsAffected === 0) {
+        // Check why - was it because battle started?
+        const battle = await ctx.drizzle.query.mpvpBattleQueue.findFirst({
+          where: eq(mpvpBattleQueue.id, input.shrineBattleId),
+          columns: { battleId: true },
+        });
+        if (battle?.battleId) {
+          return errorResponse("Shrine battle already started - cannot leave");
+        }
+        return errorResponse("Not in this shrine battle queue");
+      }
+
+      // Only update user status if we successfully deleted the queue entry
+      await ctx.drizzle
+        .update(userData)
+        .set({ status: "AWAKE" })
+        .where(and(eq(userData.userId, user.userId), eq(userData.status, "QUEUED")));
+
+      // Issue 8: If no one left in queue, delete the battle queue
       const counts = await ctx.drizzle
         .select({ remaining: sql<number>`count(*)` })
         .from(mpvpBattleUser)
@@ -746,6 +825,7 @@ export const shrineRouter = createTRPCRouter({
     }),
 
   // Initiate shrine battle (start the battle after lobby time)
+  // Issue 2: Fixed double-start race with atomic claim BEFORE initiateBattle()
   initiateShrineBattle: protectedProcedure
     .input(z.object({ shrineBattleId: z.string() }))
     .output(baseServerResponse)
@@ -824,13 +904,40 @@ export const shrineRouter = createTRPCRouter({
             SHRINE_BATTLE_MAX_USERS_PER_SIDE,
           );
         }
-        // If still no defenders, return error
+        // Issue 2: If still no village-configured AI, fall back to global shrine AIs
         if (defenderIds.length === 0) {
-          return errorResponse("No defenders available (AI defenders not configured)");
+          const globalAiDefenders = await ctx.drizzle.query.userData.findMany({
+            where: and(eq(userData.isAi, true), eq(userData.inShrines, true)),
+            columns: { userId: true },
+            limit: SHRINE_BATTLE_MAX_USERS_PER_SIDE,
+          });
+          defenderIds = globalAiDefenders.map((ai) => ai.userId);
+        }
+        // If still no defenders after both fallbacks, return error
+        if (defenderIds.length === 0) {
+          return errorResponse("No defenders available (no AI defenders found)");
         }
       }
 
-      // Start the battle
+      // Issue 2: CRITICAL FIX - Claim the battle BEFORE calling initiateBattle()
+      // Use a placeholder battle ID to atomically claim this queue
+      const claimId = `claiming-${nanoid()}`;
+      const claimResult = await ctx.drizzle
+        .update(mpvpBattleQueue)
+        .set({ battleId: claimId })
+        .where(
+          and(
+            eq(mpvpBattleQueue.id, input.shrineBattleId),
+            isNull(mpvpBattleQueue.battleId),
+          ),
+        );
+
+      // If no rows updated, another process already claimed this battle
+      if (claimResult.rowsAffected === 0) {
+        return errorResponse("Battle was already initiated by another participant");
+      }
+
+      // Now we have exclusive ownership - start the battle
       const result = await initiateBattle(
         {
           userIds: attackerIds,
@@ -842,30 +949,20 @@ export const shrineRouter = createTRPCRouter({
       );
 
       if (result.success && result.battleId) {
-        // Update queue with battleId, using guard to prevent double-start races
-        const updateResult = await ctx.drizzle
+        // Update with the real battleId (replace our claim placeholder)
+        await ctx.drizzle
           .update(mpvpBattleQueue)
           .set({ battleId: result.battleId })
-          .where(
-            and(
-              eq(mpvpBattleQueue.id, input.shrineBattleId),
-              isNull(mpvpBattleQueue.battleId),
-            ),
-          );
-
-        // If no rows updated, another process started the battle
-        if (updateResult.rowsAffected === 0) {
-          return errorResponse("Battle was already initiated by another participant");
-        }
+          .where(eq(mpvpBattleQueue.id, input.shrineBattleId));
 
         // Update user statuses
         if (allUserIds.length > 0) {
           await ctx.drizzle
             .update(userData)
-            .set({
-              status: sql`CASE WHEN status = 'QUEUED' THEN 'AWAKE' ELSE status END`,
-            })
-            .where(inArray(userData.userId, allUserIds));
+            .set({ status: "AWAKE" })
+            .where(
+              and(inArray(userData.userId, allUserIds), eq(userData.status, "QUEUED")),
+            );
         }
 
         // Notify participants
@@ -880,6 +977,17 @@ export const shrineRouter = createTRPCRouter({
 
         return { success: true, message: "Shrine battle initiated!" };
       }
+
+      // If initiateBattle failed, release the claim so others can try
+      await ctx.drizzle
+        .update(mpvpBattleQueue)
+        .set({ battleId: null })
+        .where(
+          and(
+            eq(mpvpBattleQueue.id, input.shrineBattleId),
+            eq(mpvpBattleQueue.battleId, claimId),
+          ),
+        );
 
       return errorResponse("Failed to initiate shrine battle");
     }),
