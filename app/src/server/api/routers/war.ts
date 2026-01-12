@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { baseServerResponse, errorResponse } from "../trpc";
-import { eq, and, gte, ne, desc } from "drizzle-orm";
+import { eq, and, gte, ne, desc, sql, inArray } from "drizzle-orm";
 import {
   war,
   village,
@@ -9,6 +9,7 @@ import {
   warKill,
   sector,
   userData,
+  notification,
   actionLog,
 } from "@/drizzle/schema";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
@@ -36,7 +37,6 @@ import {
   getShrineHpByLevel,
   isVillageInvolvedInAnyWar,
 } from "@/libs/war";
-import { sql } from "drizzle-orm";
 import {
   insertRequest,
   updateRequestState,
@@ -289,12 +289,22 @@ export const warRouter = createTRPCRouter({
       }
 
       // Check if attacker village is already involved in any active war
-      if (isVillageInvolvedInAnyWar(activeWars, user?.village?.id)) {
+      if (
+        isVillageInvolvedInAnyWar(activeWars, user?.village?.id, undefined, [
+          "VILLAGE_WAR",
+          "WAR_RAID",
+        ])
+      ) {
         return errorResponse("Your village is already involved in an active war");
       }
 
       // Check if target village is already involved in any active war
-      if (isVillageInvolvedInAnyWar(activeWars, defenderVillageId)) {
+      if (
+        isVillageInvolvedInAnyWar(activeWars, defenderVillageId, undefined, [
+          "VILLAGE_WAR",
+          "WAR_RAID",
+        ])
+      ) {
         return errorResponse("Target village is already involved in an active war");
       }
 
@@ -312,8 +322,14 @@ export const warRouter = createTRPCRouter({
 
       // Re-check just before creation to avoid races
       if (
-        isVillageInvolvedInAnyWar(activeWars, attackerVillage.id) ||
-        isVillageInvolvedInAnyWar(activeWars, defenderVillageId)
+        isVillageInvolvedInAnyWar(activeWars, attackerVillage.id, undefined, [
+          "VILLAGE_WAR",
+          "WAR_RAID",
+        ]) ||
+        isVillageInvolvedInAnyWar(activeWars, defenderVillageId, undefined, [
+          "VILLAGE_WAR",
+          "WAR_RAID",
+        ])
       ) {
         return errorResponse("A village is now already involved in an active war");
       }
@@ -340,6 +356,19 @@ export const warRouter = createTRPCRouter({
           shrineHp: getShrineHpByLevel(targetSector?.shrineLevel),
           shrineMaxHp: getShrineHpByLevel(targetSector?.shrineLevel),
         }),
+        ctx.drizzle.insert(notification).values({
+          userId: user.userId,
+          content: `${attackerVillage?.name} has declared a sector war in sector ${input.sectorId}`,
+        }),
+        ctx.drizzle
+          .update(userData)
+          .set({ unreadNotifications: sql`unreadNotifications + 1` })
+          .where(
+            inArray(
+              userData.villageId,
+              [user.villageId, defenderVillageId].filter((v) => v),
+            ),
+          ),
         ...(!targetSector
           ? [
               ctx.drizzle.insert(sector).values({
@@ -486,12 +515,22 @@ export const warRouter = createTRPCRouter({
       }
 
       // Check if attacker village is already involved in any active war
-      if (isVillageInvolvedInAnyWar(activeWars, user?.village?.id)) {
+      if (
+        isVillageInvolvedInAnyWar(activeWars, user?.village?.id, undefined, [
+          "VILLAGE_WAR",
+          "WAR_RAID",
+        ])
+      ) {
         return errorResponse("Your village is already involved in an active war");
       }
 
       // Check if target village is already involved in any active war
-      if (isVillageInvolvedInAnyWar(activeWars, input.targetVillageId)) {
+      if (
+        isVillageInvolvedInAnyWar(activeWars, input.targetVillageId, undefined, [
+          "VILLAGE_WAR",
+          "WAR_RAID",
+        ])
+      ) {
         return errorResponse("Target village is already involved in an active war");
       }
 
@@ -509,8 +548,14 @@ export const warRouter = createTRPCRouter({
 
       // Re-check just before creation to avoid races
       if (
-        isVillageInvolvedInAnyWar(activeWars, attackerVillage.id) ||
-        isVillageInvolvedInAnyWar(activeWars, defenderVillage.id)
+        isVillageInvolvedInAnyWar(activeWars, attackerVillage.id, undefined, [
+          "VILLAGE_WAR",
+          "WAR_RAID",
+        ]) ||
+        isVillageInvolvedInAnyWar(activeWars, defenderVillage.id, undefined, [
+          "VILLAGE_WAR",
+          "WAR_RAID",
+        ])
       ) {
         return errorResponse("A village is now already involved in an active war");
       }
@@ -629,7 +674,10 @@ export const warRouter = createTRPCRouter({
 
       // Check if target village is already involved in any other active war
       if (
-        isVillageInvolvedInAnyWar(allActiveWars, input.targetVillageId, activeWar.id)
+        isVillageInvolvedInAnyWar(allActiveWars, input.targetVillageId, activeWar.id, [
+          "VILLAGE_WAR",
+          "WAR_RAID",
+        ])
       ) {
         return errorResponse(
           "Target village is already involved in another active war",

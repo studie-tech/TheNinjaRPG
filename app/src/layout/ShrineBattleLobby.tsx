@@ -31,6 +31,7 @@ interface ShrineBattleLobbyProps {
   userId: string;
   userVillageId: string;
   defenderVillageId?: string | null;
+  isProtected?: boolean;
 }
 
 export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
@@ -38,6 +39,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
   userId,
   userVillageId,
   defenderVillageId,
+  isProtected = false,
 }) => {
   const utils = api.useUtils();
   const router = useRouter();
@@ -96,7 +98,10 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
 
   // Determine if user can create a challenge
   const canCreateChallenge =
-    defenderVillageId && userVillageId !== defenderVillageId && !isChallenging;
+    defenderVillageId &&
+    userVillageId !== defenderVillageId &&
+    !isChallenging &&
+    !isProtected;
 
   // Check if user is already in any battle
   const userInBattle = shrineBattles?.some((battle) =>

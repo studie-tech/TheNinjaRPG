@@ -38,6 +38,7 @@ import {
   userActivityEvent,
   supportTicket,
   war,
+  mpvpBattleQueue,
 } from "@/drizzle/schema";
 import { canSeeSecretData, canDeleteUsers, canSeeIps } from "@/utils/permissions";
 import { canChangeContent, canModerateRoles } from "@/utils/permissions";
@@ -396,6 +397,78 @@ export const profileRouter = createTRPCRouter({
     toastMessages.forEach((msg) => {
       notifications.push({ name: msg, color: "toast", href: "/profile" });
     });
+
+    // Shrine notifications
+    const userWithRelations = user as UserWithRelations;
+    const shrineDefenseSectors =
+      userWithRelations?.shrineBattles
+        ?.filter((b) => b.defenderEntityId === user?.villageId)
+        .map((b) => b.sector)
+        .filter(Boolean) ?? [];
+    const shrineOffenseSectors =
+      userWithRelations?.shrineBattles
+        ?.filter((b) => b.attackerEntityId === user?.villageId)
+        .map((b) => b.sector)
+        .filter(Boolean) ?? [];
+
+    if (shrineDefenseSectors.length > 0) {
+      notifications.push({
+        href: "/travel",
+        name: `${shrineDefenseSectors.length > 1 ? "Shrines" : "Shrine"} under attack (${shrineDefenseSectors.length > 1 ? "Sectors" : "Sector"} ${shrineDefenseSectors.join(", ")})`,
+        color: "red",
+      });
+    }
+    if (shrineOffenseSectors.length > 0) {
+      notifications.push({
+        href: "/travel",
+        name: `We are attacking ${shrineOffenseSectors.length > 1 ? "Shrines" : "Shrine"} (${shrineOffenseSectors.length > 1 ? "Sectors" : "Sector"} ${shrineOffenseSectors.join(", ")})`,
+        color: "blue",
+      });
+    }
+
+    // Gather sectors under war attack for this user's village
+    const warDefenseSectors =
+      userWithRelations?.activeWars
+        ?.filter((w) => {
+          const isDefender = w.defenderVillageId === user?.villageId;
+          const isDefenderAlly = w.warAllies?.some(
+            (a) =>
+              a.villageId === user?.villageId &&
+              a.supportVillageId === w.defenderVillageId,
+          );
+          return (isDefender || isDefenderAlly) && w.sector;
+        })
+        .map((w) => w.sector)
+        .filter(Boolean) ?? [];
+
+    const warOffenseSectors =
+      userWithRelations?.activeWars
+        ?.filter((w) => {
+          const isAttacker = w.attackerVillageId === user?.villageId;
+          const isAttackerAlly = w.warAllies?.some(
+            (a) =>
+              a.villageId === user?.villageId &&
+              a.supportVillageId === w.attackerVillageId,
+          );
+          return (isAttacker || isAttackerAlly) && w.sector;
+        })
+        .map((w) => w.sector)
+        .filter(Boolean) ?? [];
+
+    if (warDefenseSectors.length > 0) {
+      notifications.push({
+        href: "/travel",
+        name: `${warDefenseSectors.length > 1 ? "Sectors" : "Sector"} under attack (${warDefenseSectors.length > 1 ? "Sectors" : "Sector"} ${warDefenseSectors.join(", ")})`,
+        color: "red",
+      });
+    }
+    if (warOffenseSectors.length > 0) {
+      notifications.push({
+        href: "/travel",
+        name: `We are attacking ${warOffenseSectors.length > 1 ? "Sectors" : "Sector"} (${warOffenseSectors.length > 1 ? "Sectors" : "Sector"} ${warOffenseSectors.join(", ")})`,
+        color: "blue",
+      });
+    }
 
     // Add notification for unvoted polls
     if (
@@ -1948,81 +2021,97 @@ export const fetchUpdatedUser = async (props: {
   const now = new Date();
 
   // Ensure we can fetch the user
-  const [achievements, settings, user, hasUnvotedPolls, allActiveWars] =
-    await Promise.all([
-      client
-        .select()
-        .from(quest)
-        .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
-      client.select().from(gameSetting),
-      client.query.userData.findFirst({
-        where: eq(userData.userId, userId),
-        with: {
-          bloodline: true,
-          activeReskin: true,
-          clan: true,
-          village: {
-            with: {
-              structures: true,
-              relationshipA: true,
-              relationshipB: true,
-              sectors: { columns: { sector: true } },
-            },
+  const [
+    achievements,
+    settings,
+    user,
+    hasUnvotedPolls,
+    allActiveWars,
+    activeShrineBattles,
+  ] = await Promise.all([
+    client
+      .select()
+      .from(quest)
+      .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
+    client.select().from(gameSetting),
+    client.query.userData.findFirst({
+      where: eq(userData.userId, userId),
+      with: {
+        bloodline: true,
+        activeReskin: true,
+        clan: true,
+        village: {
+          with: {
+            structures: true,
+            relationshipA: true,
+            relationshipB: true,
+            sectors: { columns: { sector: true } },
           },
-          anbuSquad: {
-            columns: { name: true },
-          },
-          loadout: {
-            columns: { jutsuIds: true },
-          },
-          promotions: {
-            limit: 1,
-          },
-          items: { where: ne(userItem.equipped, "NONE") },
-          userQuests: {
-            where: or(
-              and(isNull(questHistory.endAt), eq(questHistory.completed, 0)),
-              eq(questHistory.questType, "achievement"),
-            ),
-            with: {
-              quest: true,
-            },
-            orderBy: sql`FIELD(${questHistory.questType}, 'daily', 'tier') ASC`,
-          },
-          completedQuests: {
-            columns: { id: true, questId: true, completed: true },
-            where: gte(questHistory.completed, 1),
-          },
-          votes: true,
         },
-      }),
-      client
-        .select({ id: poll.id })
-        .from(poll)
-        .leftJoin(
-          userPollVote,
-          and(eq(userPollVote.pollId, poll.id), eq(userPollVote.userId, userId)),
-        )
-        .where(
-          and(
-            eq(poll.isActive, true),
-            // Either endDate is null or endDate is in the future
-            or(isNull(poll.endDate), sql`${poll.endDate} > ${now}`),
-            // User hasn't voted on this poll
-            isNull(userPollVote.id),
+        anbuSquad: {
+          columns: { name: true },
+        },
+        loadout: {
+          columns: { jutsuIds: true },
+        },
+        promotions: {
+          limit: 1,
+        },
+        items: { where: ne(userItem.equipped, "NONE") },
+        userQuests: {
+          where: or(
+            and(isNull(questHistory.endAt), eq(questHistory.completed, 0)),
+            eq(questHistory.questType, "achievement"),
           ),
-        )
-        .limit(1),
-      // Fetch all active wars for enemy_village sector type resolution
-      client.query.war.findMany({
-        where: isNull(war.endedAt),
-        with: {
-          attackerVillage: { columns: { id: true, sector: true } },
-          defenderVillage: { columns: { id: true, sector: true } },
-          warAllies: true,
+          with: {
+            quest: true,
+          },
+          orderBy: sql`FIELD(${questHistory.questType}, 'daily', 'tier') ASC`,
         },
-      }),
-    ]);
+        completedQuests: {
+          columns: { id: true, questId: true, completed: true },
+          where: gte(questHistory.completed, 1),
+        },
+        votes: true,
+      },
+    }),
+    client
+      .select({ id: poll.id })
+      .from(poll)
+      .leftJoin(
+        userPollVote,
+        and(eq(userPollVote.pollId, poll.id), eq(userPollVote.userId, userId)),
+      )
+      .where(
+        and(
+          eq(poll.isActive, true),
+          // Either endDate is null or endDate is in the future
+          or(isNull(poll.endDate), sql`${poll.endDate} > ${now}`),
+          // User hasn't voted on this poll
+          isNull(userPollVote.id),
+        ),
+      )
+      .limit(1),
+    // Fetch all active wars for enemy_village sector type resolution
+    client.query.war.findMany({
+      where: isNull(war.endedAt),
+      columns: {
+        id: true,
+        attackerVillageId: true,
+        defenderVillageId: true,
+        sector: true,
+      },
+      with: {
+        attackerVillage: { columns: { id: true, sector: true } },
+        defenderVillage: { columns: { id: true, sector: true } },
+        warAllies: true,
+      },
+    }),
+    // Fetch all active shrine battles
+    client.query.mpvpBattleQueue.findMany({
+      where: eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+    }),
+  ]);
 
   // Reskin bloodline if needed
   if (user?.bloodline && user?.activeReskin) {
@@ -2059,6 +2148,15 @@ export const fetchUpdatedUser = async (props: {
         w.warAllies.some((a) => a.villageId === user.villageId),
     );
     (user as NonNullable<UserWithRelations>).activeWars = userActiveWars;
+  }
+
+  // Filter and attach active shrine battles
+  if (user?.villageId) {
+    const userActiveShrineBattles = activeShrineBattles.filter(
+      (b) =>
+        b.defenderEntityId === user.villageId || b.attackerEntityId === user.villageId,
+    );
+    (user as NonNullable<UserWithRelations>).shrineBattles = userActiveShrineBattles;
   }
 
   if (user) {
@@ -2312,9 +2410,21 @@ export const fetchUpdatedUser = async (props: {
         controlShownQuestLocationInformation(q.quest, user);
       });
     }
-    return { user, settings, toastMessages, hasUnvotedPolls, trackerResults };
+    return {
+      user,
+      settings,
+      toastMessages,
+      hasUnvotedPolls,
+      trackerResults,
+    };
   } else {
-    return { user, settings, toastMessages, hasUnvotedPolls, trackerResults: null };
+    return {
+      user,
+      settings,
+      toastMessages,
+      hasUnvotedPolls,
+      trackerResults: null,
+    };
   }
 };
 
@@ -2507,11 +2617,19 @@ export type UserWithRelations =
       completedQuests: { id: string; questId: string; completed: number }[];
       votes?: UserVote | null;
       activeWars?: {
+        id: string;
         attackerVillageId: string;
         defenderVillageId: string;
+        sector: number;
         attackerVillage: { id: string; sector: number };
         defenderVillage: { id: string; sector: number };
         warAllies?: { villageId: string; supportVillageId: string }[];
+      }[];
+      shrineBattles?: {
+        id: string;
+        sector: number | null;
+        attackerEntityId: string;
+        defenderEntityId: string;
       }[];
     })
   | undefined;

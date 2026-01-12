@@ -19,7 +19,7 @@ import {
   WAR_SECTOR_LOSS_TOWNHALL_DAMAGE,
 } from "@/drizzle/constants";
 import { getUnique } from "@/utils/grouping";
-import type { WarState } from "@/drizzle/constants";
+import type { WarState, WarType } from "@/drizzle/constants";
 import { TERR_BOT_ID } from "@/drizzle/constants";
 import { findRelationship } from "@/utils/alliance";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
@@ -488,16 +488,23 @@ export const getShrineHpByLevel = (level?: number | null) => {
  * @param activeWars - Array of active wars to check against
  * @param villageId - The village ID to check
  * @param excludeWarId - Optional war ID to exclude from the check
+ * @param types - Optional array of war types to check for
  * @returns true if the village is involved in any active war, false otherwise
  */
 export const isVillageInvolvedInAnyWar = (
   activeWars: FetchActiveWarsReturnType[],
   villageId: string,
   excludeWarId?: string,
+  types?: readonly WarType[],
 ): boolean => {
   return activeWars.some((war) => {
     // Skip the excluded war if provided
     if (excludeWarId && war.id === excludeWarId) {
+      return false;
+    }
+
+    // Skip if types are provided and war type is not in them
+    if (types && !types.includes(war.type)) {
       return false;
     }
 

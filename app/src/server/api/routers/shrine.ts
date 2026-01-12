@@ -16,15 +16,21 @@ import {
   SHRINE_BATTLE_MIN_ATTACKERS,
   SHRINE_BATTLE_MAX_USERS_PER_SIDE,
   SHRINE_BATTLE_LOBBY_SECONDS,
+  MAP_RESERVED_SECTORS,
+  VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import {
   sector,
   village,
   userData,
+  notification,
   mpvpBattleQueue,
   mpvpBattleUser,
 } from "@/drizzle/schema";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import { fetchActiveWars } from "./war";
+import { fetchAlliances } from "./village";
+import { findRelationship } from "@/utils/alliance";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
 import { initiateBattle } from "@/routers/combat";
 import { getServerPusher } from "@/libs/pusher";
@@ -505,7 +511,14 @@ export const shrineRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch user and sector data
-      const [{ user }, targetSector, existingQueues] = await Promise.all([
+      const [
+        { user },
+        targetSector,
+        existingQueues,
+        activeWars,
+        relationships,
+        isHome,
+      ] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -526,17 +539,52 @@ export const shrineRouter = createTRPCRouter({
             queue: true,
           },
         }),
+        fetchActiveWars(ctx.drizzle),
+        fetchAlliances(ctx.drizzle),
+        ctx.drizzle.query.village.findFirst({
+          where: eq(village.sector, input.sectorNumber),
+        }),
       ]);
+
+      // Get the war the user is involved with
+      const userWar = activeWars.find(
+        (w) =>
+          w.attackerVillageId === user?.villageId &&
+          w.sector === input.sectorNumber &&
+          w.status === "ACTIVE" &&
+          w.type === "SECTOR_WAR",
+      );
+
+      // Relationship check
+      const relationship = findRelationship(
+        relationships,
+        user?.villageId || "",
+        targetSector?.villageId || "",
+      );
 
       // Guards
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake to challenge");
       if (!user.villageId) return errorResponse("You must be in a village");
+      if (MAP_RESERVED_SECTORS.includes(input.sectorNumber)) {
+        return errorResponse("This sector is reserved and cannot be attacked");
+      }
+      if (isHome) {
+        return errorResponse("Cannot attack shrines in village home sectors");
+      }
       if (!targetSector) return errorResponse("Sector not found");
       if (!targetSector.villageId)
         return errorResponse("This sector has no shrine to attack");
       if (targetSector.villageId === user.villageId)
         return errorResponse("Cannot attack your own village's shrine");
+
+      // Sector war or village war check
+      const isSyndicate = targetSector.villageId === VILLAGE_SYNDICATE_ID;
+      if (!userWar && relationship?.status !== "ENEMY" && !isSyndicate) {
+        return errorResponse(
+          "You can only attack shrines in sectors where your village has declared a sector war or if you are at war with that village",
+        );
+      }
 
       // Check if user is already in a queue
       const alreadyQueued = existingQueues.some((q) =>
@@ -562,6 +610,18 @@ export const shrineRouter = createTRPCRouter({
           defenderEntityId: targetSector.villageId,
           sector: input.sectorNumber,
         });
+
+        // Insert notification
+        await Promise.all([
+          ctx.drizzle.insert(notification).values({
+            userId: user.userId,
+            content: `${user.username} from ${user.village?.name} is attacking the shrine in sector ${input.sectorNumber}!`,
+          }),
+          ctx.drizzle
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(eq(userData.villageId, targetSector.villageId)),
+        ]);
 
         try {
           await ctx.drizzle.insert(mpvpBattleUser).values({
@@ -828,7 +888,7 @@ export const shrineRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch user and battle data
-      const [{ user }, shrineBattle] = await Promise.all([
+      const [{ user }, shrineBattle, activeWars, relationships] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -851,6 +911,8 @@ export const shrineRouter = createTRPCRouter({
             },
           },
         }),
+        fetchActiveWars(ctx.drizzle),
+        fetchAlliances(ctx.drizzle),
       ]);
 
       // Guards
@@ -863,6 +925,30 @@ export const shrineRouter = createTRPCRouter({
       if (!userQueueEntry) return errorResponse("Not in this shrine battle");
       if (userQueueEntry.side !== "ATTACKER") {
         return errorResponse("Only attackers can initiate the shrine battle");
+      }
+
+      // Get the war the user is involved with
+      const userWar = activeWars.find(
+        (w) =>
+          w.attackerVillageId === user?.villageId &&
+          w.sector === shrineBattle.sector &&
+          w.status === "ACTIVE" &&
+          w.type === "SECTOR_WAR",
+      );
+
+      // Relationship check
+      const relationship = findRelationship(
+        relationships,
+        user?.villageId || "",
+        shrineBattle.defenderEntityId || "",
+      );
+
+      // Sector war or village war check
+      const isSyndicate = shrineBattle.defenderEntityId === VILLAGE_SYNDICATE_ID;
+      if (!userWar && relationship?.status !== "ENEMY" && !isSyndicate) {
+        return errorResponse(
+          "You can only attack shrines in sectors where your village has declared a sector war or if you are at war with that village",
+        );
       }
 
       // Check lobby time has passed

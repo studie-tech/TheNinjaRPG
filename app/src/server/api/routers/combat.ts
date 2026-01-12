@@ -96,7 +96,11 @@ import { fetchAiProfileById } from "@/routers/ai";
 import { getBattleGrid } from "@/libs/combat/util";
 import { BATTLE_ARENA_DAILY_LIMIT } from "@/drizzle/constants";
 import { REGEN_SECONDS } from "@/drizzle/constants";
-import { VILLAGE_SYNDICATE_ID, MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
+import {
+  VILLAGE_SYNDICATE_ID,
+  MAP_WAKE_ISLAND_SECTOR,
+  MAP_RESERVED_SECTORS,
+} from "@/drizzle/constants";
 import { StatTypes, GeneralTypes } from "@/drizzle/constants";
 import { BattleTypes } from "@/drizzle/constants";
 import { calcActiveUserRegen } from "@/libs/profile";
@@ -1151,7 +1155,7 @@ export const combatRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information
-      const [{ user }, warData, sectorData, shrineAis] = await Promise.all([
+      const [{ user }, warData, sectorData, shrineAis, isHome] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -1171,6 +1175,9 @@ export const combatRouter = createTRPCRouter({
           where: and(eq(userData.isAi, true), eq(userData.inShrines, true)),
           columns: { userId: true },
         }),
+        ctx.drizzle.query.village.findFirst({
+          where: eq(village.sector, input.sector),
+        }),
       ]);
 
       // Get the war the user is involved with
@@ -1179,6 +1186,12 @@ export const combatRouter = createTRPCRouter({
       // Check that user was found
       if (!user) return errorResponse("User not found");
       if (user.isBanned) return errorResponse("Cannot attack shrine while banned");
+      if (MAP_RESERVED_SECTORS.includes(input.sector)) {
+        return errorResponse("This sector is reserved and cannot be attacked");
+      }
+      if (isHome) {
+        return errorResponse("Cannot attack shrines in village home sectors");
+      }
       if (!sectorData) return errorResponse("Sector data could not be found");
       if (user.sector !== input.sector)
         return errorResponse("Not in the correct sector");

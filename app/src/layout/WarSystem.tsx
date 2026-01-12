@@ -289,6 +289,10 @@ export const WarMap: React.FC<{
         ["HIDEOUT", "TOWN"].includes(v.type)),
   );
   const sectorClaimed = villages?.find((v) => v.sector === targetSector);
+  const sectorOwnerId = allSectors?.find((s) =>
+    s.sectors.includes(targetSector ?? 0),
+  )?.villageId;
+  const sectorOwnerVillage = villages?.find((v) => v.id === sectorOwnerId);
   const ownsTargetSector = userOwnedSectors?.sectors?.includes(targetSector ?? 0);
   const relationship = findRelationship(
     relationships ?? [],
@@ -386,6 +390,7 @@ export const WarMap: React.FC<{
   const dialogContentProps: DialogContentProps = {
     user,
     sectorVillage,
+    sectorOwnerVillage,
     status,
     textColor,
     relationships,
@@ -663,6 +668,7 @@ interface DialogContentProps {
   user: NonNullable<UserWithRelations>;
   villages?: Village[];
   sectorVillage?: Village;
+  sectorOwnerVillage?: Village;
   structureRoute: string;
   structures?: VillageStructure[];
   setStructureRoute: React.Dispatch<React.SetStateAction<string>>;
@@ -697,10 +703,28 @@ export const DeclareSectorWarDialogContent: React.FC<DialogContentProps> = (prop
   return (
     <div className="border p-4 rounded-lg text-center relative">
       <SectorVillageDialogContent {...props} />
-      <p>You are about to declare war on sector {props.targetSector}.</p>
+      <p>
+        You are about to declare war on sector {props.targetSector}
+        {props.sectorOwnerVillage &&
+        props.sectorOwnerVillage.id !== VILLAGE_SYNDICATE_ID ? (
+          <>
+            , currently owned by <b>{props.sectorOwnerVillage.name}</b>
+          </>
+        ) : (
+          ", which is currently neutral territory"
+        )}
+        .
+      </p>
       <p className="py-2">
-        This will initiate a war between your village and any village in sector{" "}
-        {props.targetSector}.
+        {props.sectorOwnerVillage &&
+        props.sectorOwnerVillage.id !== VILLAGE_SYNDICATE_ID ? (
+          <>
+            This will initiate a war between your village and any village in sector{" "}
+            {props.targetSector}.
+          </>
+        ) : (
+          <>This will initiate a war to capture sector {props.targetSector}.</>
+        )}
       </p>
       <p className="py-2">
         The cost of declaring war is {WAR_DECLARATION_COST.toLocaleString()} Village
@@ -805,8 +829,8 @@ export const InitiateRaidDialogContent: React.FC<DialogContentProps> = (props) =
         {WAR_DECLARATION_COST.toLocaleString()} tokens. Each day at war reduces your
         tokens by {WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}% (increasing to{" "}
         {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5}% after 5 days and{" "}
-        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8}% after 8 days). If you win, the
-        structure level will be reduced by 3 and you will receive{" "}
+        {WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8}% after 8 days). If you win, the structure
+        level will be reduced by 3 and you will receive{" "}
         {WAR_VICTORY_TOKEN_BONUS.toLocaleString()} tokens.
       </div>
       <div className="space-y-2">
@@ -1232,81 +1256,81 @@ export const VillageWar: React.FC<{
         ["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && (
           <div className="mt-4">
             <h5 className="font-bold mb-2">Send War Alliance Offers</h5>
-          <p className="text-sm text-muted-foreground mb-4">
-            Send offers to factions or allied villages to join your war effort.
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {villagesThatCanJoin?.map((village) => (
-              <div
-                key={village.id}
-                className="border rounded-lg py-1 px-2 hover:bg-popover transition-colors"
-              >
-                <div className="flex items-center space-x-2">
-                  <Image
-                    src={village.villageGraphic}
-                    alt={village.name}
-                    width={40}
-                    height={40}
-                    className="rounded-full"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">{village.name}</p>
-                    <p className="text-sm">
-                      {village.type === "VILLAGE" ? "Ally" : "Faction"}
-                    </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Send offers to factions or allied villages to join your war effort.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {villagesThatCanJoin?.map((village) => (
+                <div
+                  key={village.id}
+                  className="border rounded-lg py-1 px-2 hover:bg-popover transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Image
+                      src={village.villageGraphic}
+                      alt={village.name}
+                      width={40}
+                      height={40}
+                      className="rounded-full"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">{village.name}</p>
+                      <p className="text-sm">
+                        {village.type === "VILLAGE" ? "Ally" : "Faction"}
+                      </p>
+                    </div>
+                    <Confirm2
+                      title={`Send Offer to ${village.name}`}
+                      button={
+                        <Button
+                          size="sm"
+                          className="shrink-0"
+                          onClick={(e) => e.preventDefault()}
+                        >
+                          <Handshake className="h-4 w-4" />
+                        </Button>
+                      }
+                      onAccept={onOfferSubmit(village.id)}
+                    >
+                      <Form {...offerForm}>
+                        <form className="space-y-4">
+                          <FormField
+                            control={offerForm.control}
+                            name="amount"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    placeholder={`Token offer (min ${WAR_ALLY_OFFER_MIN}, max ${userVillage?.tokens?.toLocaleString()})`}
+                                    {...field}
+                                    onChange={(e) => {
+                                      const value = parseInt(e.target.value);
+                                      field.onChange(value);
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormMessage className="text-xs" />
+                              </FormItem>
+                            )}
+                          />
+                        </form>
+                      </Form>
+                      <p className="text-sm text-muted-foreground mt-4">
+                        This will send an offer to {village.name} to join your side in
+                        the war against{" "}
+                        {war.attackerVillageId === user.villageId
+                          ? war.defenderVillage?.name
+                          : war.attackerVillage?.name}
+                        . They can choose to accept or reject this offer.
+                      </p>
+                    </Confirm2>
                   </div>
-                  <Confirm2
-                    title={`Send Offer to ${village.name}`}
-                    button={
-                      <Button
-                        size="sm"
-                        className="shrink-0"
-                        onClick={(e) => e.preventDefault()}
-                      >
-                        <Handshake className="h-4 w-4" />
-                      </Button>
-                    }
-                    onAccept={onOfferSubmit(village.id)}
-                  >
-                    <Form {...offerForm}>
-                      <form className="space-y-4">
-                        <FormField
-                          control={offerForm.control}
-                          name="amount"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  placeholder={`Token offer (min ${WAR_ALLY_OFFER_MIN}, max ${userVillage?.tokens?.toLocaleString()})`}
-                                  {...field}
-                                  onChange={(e) => {
-                                    const value = parseInt(e.target.value);
-                                    field.onChange(value);
-                                  }}
-                                />
-                              </FormControl>
-                              <FormMessage className="text-xs" />
-                            </FormItem>
-                          )}
-                        />
-                      </form>
-                    </Form>
-                    <p className="text-sm text-muted-foreground mt-4">
-                      This will send an offer to {village.name} to join your side in the
-                      war against{" "}
-                      {war.attackerVillageId === user.villageId
-                        ? war.defenderVillage?.name
-                        : war.attackerVillage?.name}
-                      . They can choose to accept or reject this offer.
-                    </p>
-                  </Confirm2>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
       {!user.isOutlaw &&
         war.status === "ACTIVE" &&
         warRequests &&

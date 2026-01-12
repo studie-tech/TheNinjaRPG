@@ -11,7 +11,11 @@ import Loader from "@/layout/Loader";
 import { Swords, Users, Shield } from "lucide-react";
 import Image from "@/layout/Image";
 import StatusBar from "@/layout/StatusBar";
-import { WAR_SHRINE_IMAGE, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import {
+  WAR_SHRINE_IMAGE,
+  VILLAGE_SYNDICATE_ID,
+  MAP_RESERVED_SECTORS,
+} from "@/drizzle/constants";
 import RamenShop from "@/layout/RamenShop";
 import ShrineBattleLobby from "@/layout/ShrineBattleLobby";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -64,14 +68,29 @@ export default function Shrine() {
     (war) => war.sector === userData.sector,
   );
 
-  // Determine if this sector is owned by another village (for MPVP attacks)
+  // Determine if this sector is owned (for MPVP attacks/defends)
   const sectorOwnerVillageId = sectorData.sectorData?.villageId ?? null;
+  const userIsOwner = sectorOwnerVillageId === userData.villageId;
+  const isSyndicate = sectorOwnerVillageId === VILLAGE_SYNDICATE_ID;
+  const isAtWar = sectorData.warData?.some(
+    (war) =>
+      (war.attackerVillageId === userData.villageId ||
+        war.defenderVillageId === userData.villageId ||
+        war.warAllies?.some((a) => a.villageId === userData.villageId)) &&
+      (war.attackerVillageId === sectorOwnerVillageId ||
+        war.defenderVillageId === sectorOwnerVillageId),
+  );
   const canShowMpvpOption =
-    sectorOwnerVillageId && sectorOwnerVillageId !== userData.villageId;
+    !!sectorOwnerVillageId && (isAtWar || (isSyndicate && !userIsOwner));
 
   // Check if user is queued FOR THIS SECTOR - only then show the lobby
   const isUserQueuedForThisSector =
     userData.status === "QUEUED" && userQueuedBattle?.sector === userData.sector;
+
+  // Check if this sector is protected
+  const isReserved = MAP_RESERVED_SECTORS.includes(userData.sector);
+  const isHome = !!sectorData.village;
+  const isProtected = isReserved || isHome;
 
   if (!activeWars || activeWars.length === 0) {
     return (
@@ -94,7 +113,18 @@ export default function Shrine() {
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="team" className="mt-4">
-                {canShowMpvpOption ? (
+                {userIsOwner ? (
+                  <div className="mb-4 text-sm text-muted-foreground">
+                    Your village owns this sector. You can join as a defender if an
+                    attack party is formed against this shrine.
+                  </div>
+                ) : isProtected ? (
+                  <div className="mb-4 text-sm text-amber-600 font-semibold">
+                    {isReserved
+                      ? "This sector is reserved and cannot be attacked."
+                      : "This is a village home sector and its shrine cannot be attacked."}
+                  </div>
+                ) : canShowMpvpOption ? (
                   <div className="mb-4 text-sm text-muted-foreground">
                     Form a team to attack this shrine together! Up to 3 attackers can
                     join the assault, and defenders from the owning village can queue to
@@ -102,8 +132,8 @@ export default function Shrine() {
                   </div>
                 ) : isUserQueuedForThisSector ? (
                   <div className="mb-4 text-sm text-muted-foreground">
-                    You are queued for a shrine battle. You can view your queue status or
-                    leave the queue below.
+                    You are queued for a shrine battle. You can view your queue status
+                    or leave the queue below.
                   </div>
                 ) : null}
                 <ShrineBattleLobby
@@ -111,47 +141,66 @@ export default function Shrine() {
                   userId={userData.userId}
                   userVillageId={userData.villageId}
                   defenderVillageId={sectorOwnerVillageId}
+                  isProtected={isProtected}
                 />
               </TabsContent>
               <TabsContent value="info" className="mt-4">
                 <div className="flex flex-col items-center">
                   {sectorData.sectorData ? (
-                    sectorOwnerVillageId === userData.villageId ? (
+                    userIsOwner ? (
                       <p>
-                        This sector is owned by your village. You can defend it when other
-                        villages attack.
+                        This sector is owned by your village. You can defend it when
+                        other villages attack.
                       </p>
                     ) : (
                       <p>
                         This sector is claimed by{" "}
-                        <strong>{sectorData.sectorData?.village.name}</strong>. The
-                        leader of your village or faction can attack the shrine to try
-                        and defeat it and claim the sector.
+                        <strong>{sectorData.sectorData?.village.name}</strong>.{" "}
+                        {isProtected
+                          ? "However, because it is a protected sector, it cannot be attacked."
+                          : "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
                       </p>
                     )
                   ) : (
                     <p>
-                      This sector is unclaimed. The leader of your village or faction can
-                      attack the shrine to try and defeat it and claim the sector.
+                      This sector is unclaimed.{" "}
+                      {!isProtected &&
+                        "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
                     </p>
                   )}
                 </div>
               </TabsContent>
             </Tabs>
           ) : (
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center text-center">
               {sectorData.sectorData ? (
-                <p>
-                  {" "}
-                  This sector is claimed by{" "}
-                  <strong>{sectorData.sectorData.village.name}</strong>. The leader of
-                  your village or faction can attack the shrine to try and defeat it and
-                  claim the sector.
-                </p>
+                userIsOwner ? (
+                  <p>
+                    This sector is owned by your village. You can defend it when other
+                    villages attack.
+                  </p>
+                ) : (
+                  <p>
+                    {" "}
+                    This sector is claimed by{" "}
+                    <strong>{sectorData.sectorData.village.name}</strong>.{" "}
+                    {isProtected
+                      ? "However, because it is a protected sector, it cannot be attacked."
+                      : "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
+                  </p>
+                )
               ) : (
                 <p>
-                  This sector is unclaimed. The leader of your village or faction can
-                  attack the shrine to try and defeat it and claim the sector.
+                  This sector is unclaimed.{" "}
+                  {!isProtected &&
+                    "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
+                </p>
+              )}
+              {isProtected && (
+                <p className="mt-2 text-amber-600 font-semibold">
+                  {isReserved
+                    ? "This sector is reserved and cannot be attacked."
+                    : "This is a village home sector and its shrine cannot be attacked."}
                 </p>
               )}
             </div>
@@ -166,20 +215,34 @@ export default function Shrine() {
   const userWars = activeWars.filter(
     (war) =>
       war.attackerVillageId === userData.villageId ||
-      war.defenderVillageId === userData.villageId,
+      war.defenderVillageId === userData.villageId ||
+      war.warAllies.some((wa) => wa.villageId === userData.villageId),
   );
   const competingWars = activeWars.filter(
     (war) =>
       war.attackerVillageId !== userData.villageId &&
-      war.defenderVillageId !== userData.villageId,
+      war.defenderVillageId !== userData.villageId &&
+      !war.warAllies.some((wa) => wa.villageId === userData.villageId),
   );
 
   // Check if user is an attacker in any of their wars (for Team Battle tab)
   const userIsAttacker = userWars.some(
-    (war) => war.attackerVillageId === userData.villageId,
+    (war) =>
+      war.attackerVillageId === userData.villageId ||
+      war.warAllies.some(
+        (wa) =>
+          wa.villageId === userData.villageId &&
+          wa.supportVillageId === war.attackerVillageId,
+      ),
   );
   const userIsDefender = userWars.some(
-    (war) => war.defenderVillageId === userData.villageId,
+    (war) =>
+      war.defenderVillageId === userData.villageId ||
+      war.warAllies.some(
+        (wa) =>
+          wa.villageId === userData.villageId &&
+          wa.supportVillageId === war.defenderVillageId,
+      ),
   );
 
   return (
@@ -212,6 +275,7 @@ export default function Shrine() {
                       sector={userData.sector}
                       onAttack={() => attack({ sector: userData.sector })}
                       isAttacking={isAttacking}
+                      isProtected={isProtected}
                     />
                   ))}
                 </div>
@@ -229,22 +293,32 @@ export default function Shrine() {
                         onAttack={() => {}}
                         isAttacking={false}
                         hideAttackButton={true}
+                        isProtected={isProtected}
                       />
                     ))}
                   </div>
                 )}
                 {userIsAttacker ? (
                   <>
-                    <div className="mb-4 text-sm text-muted-foreground">
-                      Form a team to attack this shrine together! Up to 3 attackers can
-                      join the assault, and defenders from the owning village can queue
-                      to defend.
-                    </div>
+                    {isProtected ? (
+                      <div className="mb-4 text-sm text-amber-600 font-semibold">
+                        {isReserved
+                          ? "This sector is reserved and cannot be attacked."
+                          : "This is a village home sector and its shrine cannot be attacked."}
+                      </div>
+                    ) : (
+                      <div className="mb-4 text-sm text-muted-foreground">
+                        Form a team to attack this shrine together! Up to 3 attackers
+                        can join the assault, and defenders from the owning village can
+                        queue to defend.
+                      </div>
+                    )}
                     <ShrineBattleLobby
                       sectorNumber={userData.sector}
                       userId={userData.userId}
                       userVillageId={userData.villageId}
                       defenderVillageId={sectorOwnerVillageId}
+                      isProtected={isProtected}
                     />
                   </>
                 ) : userIsDefender ? (
@@ -258,6 +332,7 @@ export default function Shrine() {
                       userId={userData.userId}
                       userVillageId={userData.villageId}
                       defenderVillageId={sectorOwnerVillageId}
+                      isProtected={isProtected}
                     />
                   </>
                 ) : (
@@ -286,6 +361,7 @@ export default function Shrine() {
                 sector={userData.sector}
                 onAttack={() => attack({ sector: userData.sector })}
                 isAttacking={isAttacking}
+                isProtected={isProtected}
               />
             ))}
           </div>
@@ -302,6 +378,7 @@ const WarCard = ({
   onAttack,
   isAttacking,
   hideAttackButton = false,
+  isProtected = false,
 }: {
   war: War & {
     attackerVillage: { name: string; villageGraphic: string };
@@ -312,10 +389,11 @@ const WarCard = ({
   onAttack: () => void;
   isAttacking: boolean;
   hideAttackButton?: boolean;
+  isProtected?: boolean;
 }) => {
   const isAttacker = war.attackerVillageId === villageId;
   // Only attackers can attack the shrine - defenders shouldn't attack their own shrine
-  const canAttack = isAttacker && war.shrineHp > 0 && !hideAttackButton;
+  const canAttack = isAttacker && war.shrineHp > 0 && !hideAttackButton && !isProtected;
 
   return (
     <div className="flex flex-col items-center gap-4 p-4">
