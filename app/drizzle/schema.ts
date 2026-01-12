@@ -2780,6 +2780,42 @@ export const village = mysqlTable(
 );
 export type Village = InferSelectModel<typeof village>;
 
+// ✅ ShrineBoostSchedule
+export const shrineBoostSchedule = mysqlTable(
+  "ShrineBoostSchedule",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    villageId: varchar("villageId", { length: 191 }).notNull(),
+    boostType: mysqlEnum("boostType", consts.SHRINE_BOOST_TYPES).notNull(),
+    startAt: datetime("startAt", { mode: "date", fsp: 3 }).notNull(),
+    endAt: datetime("endAt", { mode: "date", fsp: 3 }).notNull(),
+    createdByUserId: varchar("createdByUserId", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    villageIdIdx: index("ShrineBoostSchedule_villageId_idx").on(table.villageId),
+    boostTypeIdx: index("ShrineBoostSchedule_boostType_idx").on(table.boostType),
+    startAtIdx: index("ShrineBoostSchedule_startAt_idx").on(table.startAt),
+    endAtIdx: index("ShrineBoostSchedule_endAt_idx").on(table.endAt),
+  }),
+);
+
+export const shrineBoostScheduleRelations = relations(shrineBoostSchedule, ({ one }) => ({
+  village: one(village, {
+    fields: [shrineBoostSchedule.villageId],
+    references: [village.id],
+  }),
+  createdBy: one(userData, {
+    fields: [shrineBoostSchedule.createdByUserId],
+    references: [userData.userId],
+  }),
+}));
+
 export const villageRelations = relations(village, ({ many, one }) => ({
   structures: many(villageStructure),
   relationshipA: many(villageAlliance, { relationName: "villageA" }),

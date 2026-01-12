@@ -196,3 +196,27 @@ export const isDifferentDay = (date1: Date, date2: Date): boolean => {
   );
   return utc1.getTime() !== utc2.getTime();
 };
+
+/**
+ * Format a date to a short datetime string in "YYYY-MM-DD HH:MM" format (UTC)
+ *
+ * @param date - The date to format
+ * @returns The formatted datetime string
+ */
+export const formatDateTimeShort = (date: Date): string => {
+  return date.toISOString().replace("T", " ").slice(0, 16);
+};
+
+/**
+ * Combine a date and time string (HH:MM) into a single Date object
+ *
+ * @param date - The date to use
+ * @param timeHHMM - The time string in "HH:MM" format
+ * @returns A new Date with the combined date and time
+ */
+export const combineLocalDateTime = (date: Date, timeHHMM: string): Date => {
+  const [hhStr = "00", mmStr = "00"] = timeHHMM.split(":");
+  const out = new Date(date);
+  out.setHours(parseInt(hhStr, 10), parseInt(mmStr, 10), 0, 0);
+  return out;
+};

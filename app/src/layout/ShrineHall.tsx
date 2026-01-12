@@ -1,15 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
-import Image from "@/layout/Image";
+
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import StatusBar from "@/layout/StatusBar";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import Image from "@/layout/Image";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   Card,
   CardContent,
@@ -25,11 +31,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Clock, Shield, Coins, AlertTriangle } from "lucide-react";
+import { Label } from "@/components/ui/label";
+
+import { Clock, Shield, Coins, AlertTriangle, X, CalendarClock } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+
 import { getShrineHpByLevel } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
+
 import {
   SHRINE_MAX_LEVEL,
   SHRINE_MAX_PER_VILLAGE,
@@ -42,8 +51,16 @@ import {
   SHRINE_UPGRADE_COST,
   SHRINE_MAX_AI_ASSIGNMENTS,
 } from "@/drizzle/constants";
-import { getTimeLeftStr, getDaysHoursMinutesSeconds } from "@/utils/time";
-import { cn } from "src/libs/shadui";
+
+import {
+  combineLocalDateTime,
+  DAY_S,
+  getDaysHoursMinutesSeconds,
+  getTimeLeftStr,
+  secondsFromNow,
+} from "@/utils/time";
+
+import { cn } from "@/libs/shadui";
 
 /**
  * ShrineHall
@@ -120,10 +137,8 @@ interface TabProps {
 /* -------------------------------------------------------------------------- */
 
 const OverviewTab = ({ user, isActive }: TabProps) => {
-  // Utils
   const utils = api.useUtils();
 
-  // Queries
   const { data: shrineData } = api.travel.getSectorData.useQuery(
     { sector: user.sector ?? 0 },
     {
@@ -131,12 +146,12 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
       refetchInterval: isActive ? 30_000 : false,
     },
   );
+
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
     { villageId: user.villageId || "" },
     { enabled: isActive && !!user.villageId },
   );
 
-  // Mutations
   const { mutate: upgradeShrine, isPending: isUpgrading } =
     api.shrine.upgradeShrine.useMutation({
       onSuccess: (res) => {
@@ -149,7 +164,6 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 
   const isKage = user.userId === user.village?.kageId;
 
-  // Fetch all active wars for this village once – used for shrine HP display
   const { data: activeWars } = api.war.getActiveWars.useQuery(
     { villageId: user.villageId || "" },
     {
@@ -181,12 +195,9 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
     { key: "health", header: "HP", type: "jsx" },
   ];
 
-  if (isKage) {
-    capturedShrineColumns.push({ key: "action", header: "", type: "jsx" });
-  }
+  if (isKage) capturedShrineColumns.push({ key: "action", header: "", type: "jsx" });
 
   const capturedShrineRows: CapturedShrineRow[] = activeShrines.map((shrine) => {
-    // All sector wars for the relevant sector
     const sectorWars =
       activeWars?.filter(
         (war) => war.type === "SECTOR_WAR" && war.sector === shrine.sector,
@@ -255,7 +266,6 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 
   return (
     <div className="flex flex-col">
-      {/* Stats */}
       <div className="grid grid-cols-2 gap-3 p-3">
         <StatsCard
           icon={Coins}
@@ -269,14 +279,13 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
         />
       </div>
 
-      {/* Captured Shrines List */}
       <div className="space-y-4">
         {activeShrines.length === 0 ? (
           <div className="px-3 pb-3">
             <Card>
               <CardContent className="pt-6 text-center">
                 <p className="text-muted-foreground">No shrines currently captured</p>
-                <p className="text-sm mt-2">
+                <p className="mt-2 text-sm">
                   Defeat enemy shrines in combat to capture sectors for your village!
                 </p>
               </CardContent>
@@ -295,37 +304,69 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 /* -------------------------------------------------------------------------- */
 
 const BoostsTab = ({ user, isActive }: TabProps) => {
-  // Utils
   const utils = api.useUtils();
 
-  // Query
   const { data: sectorData } = api.travel.getSectorData.useQuery(
     { sector: user.sector ?? 0 },
     { enabled: isActive && typeof user.sector === "number" },
   );
+
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
     { villageId: user.villageId || "" },
     { enabled: isActive && !!user.villageId },
   );
 
-  // Mutation
+  const { data: scheduledBoosts } = api.shrine.getScheduledBoosts.useQuery(
+    { villageId: user.villageId || "" },
+    { enabled: isActive && !!user.villageId },
+  );
+
   const { mutate: activateBoost, isPending: isActivatingBoost } =
-    api.shrine.activateBoost.useMutation({
-      onSuccess: (data) => {
+    api.shrine.scheduleBoost.useMutation({
+      onSuccess: (data: { success: boolean; message: string }) => {
         showMutationToast(data);
         if (data.success) {
           void utils.profile.getUser.invalidate();
+          void utils.shrine.getScheduledBoosts.invalidate();
         }
       },
     });
 
-  // Guard
+  const { mutate: scheduleBoost, isPending: isSchedulingBoost } =
+    api.shrine.scheduleBoost.useMutation({
+      onSuccess: (res) => {
+        showMutationToast(res);
+        if (res.success) {
+          void utils.profile.getUser.invalidate();
+          void utils.shrine.getScheduledBoosts.invalidate();
+          setSchedulingBoostType(null);
+          setScheduleDate(undefined);
+          setScheduleTime("");
+        }
+      },
+    });
+
+  const { mutate: cancelScheduledBoost, isPending: isCancellingBoost } =
+    api.shrine.cancelScheduledBoost.useMutation({
+      onSuccess: (res) => {
+        showMutationToast(res);
+        if (res.success) void utils.shrine.getScheduledBoosts.invalidate();
+      },
+    });
+
+  const [schedulingBoostType, setSchedulingBoostType] = useState<string | null>(null);
+  const [scheduleDate, setScheduleDate] = useState<Date | undefined>(undefined);
+  const [scheduleTime, setScheduleTime] = useState<string>(""); // "HH:MM"
+  const maxScheduleDate = useMemo(() => secondsFromNow(7 * DAY_S), []);
+
   if (!sectorData) return <Loader explanation="Loading shrine data" />;
 
   const isKage = user.userId === user.village?.kageId;
+
   const level3Shrines = (capturedSectors || []).filter(
     (s) => s.shrineLevel === 3,
   ).length;
+
   const boostSettings = user.village?.shrineSettings?.activeBoosts;
   const activeBoosts = Object.entries(boostSettings || {})
     .map(([boostType, expiry]) => {
@@ -342,24 +383,24 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
       : 0;
 
   return (
-    <div className={cn("grid grid-cols-1 gap-4 p-3")}>
-      {/* Active Boosts */}
+    <div className="grid grid-cols-1 gap-4 p-3">
       <Card>
         <CardHeader>
           <CardTitle>Active Boosts</CardTitle>
           <CardDescription>Currently active village-wide bonuses</CardDescription>
         </CardHeader>
         <CardContent>
-          {activeBoosts && activeBoosts.length > 0 ? (
+          {activeBoosts.length > 0 ? (
             <div className="space-y-2">
               {activeBoosts.map(({ boostType, secondsLeft }) => {
                 const timeLeft = getTimeLeftStr(
                   ...getDaysHoursMinutesSeconds(secondsLeft),
                 );
+
                 return (
                   <div
                     key={boostType}
-                    className="flex justify-between items-center p-2 bg-muted rounded"
+                    className="flex items-center justify-between rounded bg-muted p-2"
                   >
                     <div>
                       <div className="font-medium">{boostType}</div>
@@ -378,43 +419,228 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
         </CardContent>
       </Card>
 
-      {/* Boost Activation */}
       {user.villageId && isKage && (
         <Card>
           <CardHeader>
-            <CardTitle>Activate Boost</CardTitle>
+            <CardTitle>Activate or Schedule a Boost</CardTitle>
             <CardDescription>
               Requires Level 3 shrine • Cost: {SHRINE_BOOST_COST.toLocaleString()}{" "}
               tokens
             </CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-3">
             {!level3Shrines ? (
               <p className="text-sm text-muted-foreground">
                 Need at least one Level 3 shrine to activate boosts
               </p>
             ) : (
-              SHRINE_BOOST_TYPES.map((boostType) => {
-                const currentlyActive = activeBoosts.some(
-                  ({ boostType: activeBoostType }) => activeBoostType === boostType,
-                );
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Scheduling uses <span className="font-medium">your local time</span>{" "}
+                  (not server time).
+                </p>
 
-                return (
-                  <Button
-                    key={boostType}
-                    className="w-full justify-between"
-                    variant={currentlyActive ? "secondary" : "default"}
-                    disabled={isActivatingBoost || currentlyActive}
-                    onClick={() =>
-                      activateBoost({ boostType, villageId: user.villageId! })
-                    }
-                  >
-                    <span>
-                      {boostType} [+{boostPercentage}%]
-                    </span>
-                  </Button>
-                );
-              })
+                {SHRINE_BOOST_TYPES.map((boostType) => {
+                  const currentlyActive = activeBoosts.some(
+                    ({ boostType: activeType }) => activeType === boostType,
+                  );
+
+                  const isScheduling = schedulingBoostType === boostType;
+
+                  const schedulesForType =
+                    scheduledBoosts?.filter((s) => s.boostType === boostType) ?? [];
+
+                  return (
+                    <div key={boostType} className="space-y-2">
+                      <div className="flex gap-2">
+                        <Button
+                          className="flex-1 justify-between"
+                          variant={currentlyActive ? "secondary" : "default"}
+                          disabled={
+                            isActivatingBoost || isSchedulingBoost || currentlyActive
+                          }
+                          onClick={() =>
+                            activateBoost({
+                              boostType,
+                              villageId: user.villageId!,
+                            })
+                          }
+                        >
+                          <span>
+                            {boostType} [+{boostPercentage}%]
+                          </span>
+                          <span className="ml-2 text-xs">Activate Now</span>
+                        </Button>
+
+                        <Popover
+                          open={isScheduling}
+                          onOpenChange={(open) => {
+                            if (!open) {
+                              if (schedulingBoostType === boostType) {
+                                setSchedulingBoostType(null);
+                                setScheduleDate(undefined);
+                                setScheduleTime("");
+                              }
+                              return;
+                            }
+
+                            setSchedulingBoostType(boostType);
+
+                            const d = new Date();
+                            d.setHours(d.getHours() + 1);
+                            setScheduleDate(d);
+
+                            const hh = String(d.getHours()).padStart(2, "0");
+                            const mm = String(d.getMinutes()).padStart(2, "0");
+                            setScheduleTime(`${hh}:${mm}`);
+                          }}
+                        >
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant={isScheduling ? "secondary" : "outline"}
+                              disabled={isActivatingBoost || isSchedulingBoost}
+                              aria-label={
+                                isScheduling
+                                  ? `Close scheduling for ${boostType}`
+                                  : `Schedule ${boostType}`
+                              }
+                            >
+                              <CalendarClock className="h-4 w-4" />
+                            </Button>
+                          </PopoverTrigger>
+
+                          <PopoverContent align="end" className="w-auto p-3">
+                            <div className="space-y-3">
+                              <div className="text-xs font-medium text-muted-foreground">
+                                Scheduling (local time)
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label className="text-sm">Start Date</Label>
+                                <Calendar
+                                  mode="single"
+                                  selected={scheduleDate}
+                                  onSelect={setScheduleDate}
+                                  disabled={(date) => {
+                                    const startOfToday = new Date();
+                                    startOfToday.setHours(0, 0, 0, 0);
+
+                                    const end = new Date(maxScheduleDate);
+                                    end.setHours(23, 59, 59, 999);
+
+                                    return date < startOfToday || date > end;
+                                  }}
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label
+                                  htmlFor={`time-${boostType}`}
+                                  className="text-sm"
+                                >
+                                  Start Time
+                                </Label>
+                                <Input
+                                  id={`time-${boostType}`}
+                                  type="time"
+                                  value={scheduleTime}
+                                  onChange={(e) => setScheduleTime(e.target.value)}
+                                />
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  disabled={
+                                    isSchedulingBoost || !scheduleDate || !scheduleTime
+                                  }
+                                  onClick={() => {
+                                    if (!scheduleDate || !scheduleTime) return;
+
+                                    const startAtLocal = combineLocalDateTime(
+                                      scheduleDate,
+                                      scheduleTime,
+                                    );
+
+                                    scheduleBoost({
+                                      boostType,
+                                      villageId: user.villageId!,
+                                      startAt: startAtLocal.toISOString(),
+                                    });
+                                  }}
+                                >
+                                  Submit
+                                </Button>
+
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSchedulingBoostType(null);
+                                    setScheduleDate(undefined);
+                                    setScheduleTime("");
+                                  }}
+                                >
+                                  Close
+                                </Button>
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+
+                      {/* Scheduled boosts list: under the boost type row (NOT in popup) */}
+                      {schedulesForType.length > 0 && (
+                        <div className="space-y-2 rounded-md border bg-muted/30 p-2">
+                          <div className="text-sm font-medium">Scheduled Boosts</div>
+
+                          <div className="space-y-2">
+                            {schedulesForType.map((schedule) => {
+                              const startDate = new Date(schedule.startAt);
+                              const endDate = new Date(schedule.endAt);
+                              const isPast = endDate < new Date();
+
+                              return (
+                                <div
+                                  key={schedule.id}
+                                  className="flex items-center justify-between rounded bg-muted p-2 text-sm"
+                                >
+                                  <div className="flex-1">
+                                    <div className="font-medium">
+                                      {startDate.toLocaleString()} -{" "}
+                                      {endDate.toLocaleString()}
+                                    </div>
+                                    {isPast && (
+                                      <div className="text-xs text-muted-foreground">
+                                        (Expired)
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={isCancellingBoost}
+                                    onClick={() =>
+                                      cancelScheduledBoost({
+                                        scheduleId: schedule.id,
+                                      })
+                                    }
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
             )}
           </CardContent>
         </Card>
@@ -430,19 +656,17 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
 const DefendersTab = ({ user, isActive }: TabProps) => {
   const [selectedAiId, setSelectedAiId] = useState<string>("");
 
-  // Utils
   const utils = api.useUtils();
 
-  // Queries
   const { data: aiData } = api.shrine.getShrineAis.useQuery(undefined, {
     enabled: isActive,
   });
+
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
     { villageId: user.villageId || "" },
     { enabled: isActive && !!user.villageId },
   );
 
-  // Mutations
   const { mutate: unlockAi, isPending: isUnlockingAi } =
     api.shrine.unlockAiDefender.useMutation({
       onSuccess: (res) => {
@@ -468,37 +692,33 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
     (s) => s.shrineLevel && s.shrineLevel > 0,
   );
 
-  // Get shrine settings from user data
   const shrineSettings = user.village.shrineSettings;
   const unlockedAiIds = shrineSettings?.unlockedAiIds || [];
   const currentVillageAiIds = shrineSettings?.activeAiIds || [];
 
-  // Get assigned AI data for display
   const assignedAis =
     currentVillageAiIds.length > 0
       ? aiData.filter((ai) => currentVillageAiIds.includes(ai.userId))
       : [];
 
-  // Available AIs for unlocking (those not yet unlocked)
   const availableToUnlock = aiData.filter((ai) => !unlockedAiIds.includes(ai.userId));
-
-  // Unlocked AIs that can be assigned
   const unlockedAis = aiData.filter((ai) => unlockedAiIds.includes(ai.userId));
 
   return (
     <div className="flex flex-col gap-4 p-3">
-      {/* Currently Assigned AI - for everyone */}
       <Card>
         <CardHeader>
           <CardTitle>Current Village Defenders</CardTitle>
           <CardDescription>
             {activeShrines.length > 0
-              ? `Defending ${activeShrines.length} active shrine${activeShrines.length === 1 ? "" : "s"}`
+              ? `Defending ${activeShrines.length} active shrine${
+                  activeShrines.length === 1 ? "" : "s"
+                }`
               : "No active shrines to defend"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {assignedAis?.map((ai) => (
+          {assignedAis.map((ai) => (
             <ItemWithEffects
               key={ai.userId}
               item={{
@@ -515,19 +735,18 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
               }}
             />
           ))}
-          {assignedAis?.length === 0 && (
-            <div className="text-center py-4">
-              <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+
+          {assignedAis.length === 0 && (
+            <div className="py-4 text-center">
+              <Shield className="mx-auto mb-2 h-12 w-12 text-muted-foreground" />
               <p className="text-muted-foreground">Using default AI defender</p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Kage-only sections */}
       {isKage && (
         <>
-          {/* Unlock New AI Defenders */}
           {availableToUnlock.length > 0 && (
             <Card>
               <CardHeader>
@@ -550,6 +769,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
                     ))}
                   </SelectContent>
                 </Select>
+
                 <Button
                   className="w-full"
                   disabled={!selectedAiId || isUnlockingAi}
@@ -566,7 +786,6 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
             </Card>
           )}
 
-          {/* Manage AI Defenders */}
           {activeShrines.length > 0 && unlockedAis.length > 0 && (
             <Card>
               <CardHeader>
@@ -586,7 +805,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
                     return (
                       <div
                         key={ai.userId}
-                        className="flex items-center justify-between p-3 border rounded-lg"
+                        className="flex items-center justify-between rounded-lg border p-3"
                       >
                         <div className="flex items-center gap-3">
                           <div className="flex-shrink-0">
@@ -596,7 +815,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
                                 alt={ai.username}
                                 width={32}
                                 height={32}
-                                className="w-8 h-8 rounded-full"
+                                className="h-8 w-8 rounded-full"
                               />
                             )}
                           </div>
@@ -607,6 +826,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
                             </p>
                           </div>
                         </div>
+
                         <Button
                           variant={isAssigned ? "default" : "outline"}
                           size="sm"
@@ -619,6 +839,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
                     );
                   })}
                 </div>
+
                 {currentVillageAiIds.length >= SHRINE_MAX_AI_ASSIGNMENTS && (
                   <p className="text-sm text-muted-foreground text-center">
                     Maximum defenders assigned ({SHRINE_MAX_AI_ASSIGNMENTS}). Remove one
@@ -639,16 +860,13 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
 /* -------------------------------------------------------------------------- */
 
 const MaintenanceTab = ({ user }: TabProps) => {
-  // Utils
   const utils = api.useUtils();
 
-  // Query for captured sectors
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
     { villageId: user.villageId! },
     { enabled: !!user.villageId },
   );
 
-  // Mutations
   const { mutate: payMaintenance, isPending: isPaying } =
     api.shrine.payWeeklyMaintenance.useMutation({
       onSuccess: (res) => {
@@ -678,9 +896,10 @@ const MaintenanceTab = ({ user }: TabProps) => {
             requires individual maintenance payments.
           </CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 bg-poppopover rounded">
+            <div className="flex items-center justify-between rounded bg-popover p-3">
               <span>Maintenance Cost (per shrine)</span>
               <span className="font-semibold">
                 {SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens
@@ -689,8 +908,9 @@ const MaintenanceTab = ({ user }: TabProps) => {
 
             <div className="space-y-3">
               <h4 className="font-semibold">Captured Sectors</h4>
+
               {capturedSectors.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
+                <p className="text-sm text-muted-foreground">
                   No captured sectors. Capture sectors to build shrines that require
                   maintenance.
                 </p>
@@ -699,10 +919,13 @@ const MaintenanceTab = ({ user }: TabProps) => {
                   const dueDate = sector.nextMaintainanceDueDate
                     ? new Date(sector.nextMaintainanceDueDate)
                     : new Date();
+
                   const isOverdue = dueDate <= new Date();
+
                   const secondsToNextPayment = dueDate
                     ? dueDate.getTime() - new Date().getTime()
                     : 0;
+
                   const nextPaymentAt = getTimeLeftStr(
                     ...getDaysHoursMinutesSeconds(secondsToNextPayment),
                   );
@@ -717,13 +940,14 @@ const MaintenanceTab = ({ user }: TabProps) => {
                           : "border-border bg-card",
                       )}
                     >
-                      <div className="flex justify-between items-center">
+                      <div className="flex items-center justify-between">
                         <div>
                           <h5 className="font-medium">Sector {sector.sector}</h5>
                           <p className="text-sm text-muted-foreground">
                             Shrine Level {sector.shrineLevel}
                           </p>
                         </div>
+
                         <div className="text-right">
                           <p className="text-sm text-muted-foreground">Next Payment</p>
                           <p
@@ -738,7 +962,7 @@ const MaintenanceTab = ({ user }: TabProps) => {
                       </div>
 
                       {isOverdue && (
-                        <div className="flex items-center gap-2 p-2 bg-red-100 border border-red-200 rounded">
+                        <div className="flex items-center gap-2 rounded border border-red-200 bg-red-100 p-2">
                           <AlertTriangle className="h-4 w-4 text-red-500" />
                           <span className="text-xs text-red-700">
                             Maintenance overdue! This shrine may lose levels without

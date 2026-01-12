@@ -93,6 +93,35 @@ export const lockWithHourlyTimer = async (client: DrizzleClient, name: string) =
 };
 
 /**
+ * Locks the game with a minute timer.
+ *
+ * @param client
+ * @param name
+ * @returns
+ */
+export const lockWithMinuteTimer = async (client: DrizzleClient, name: string) => {
+  const timer = await getGameSetting(client, name);
+  const prevTime = timer.time;
+
+  const now = new Date();
+  const isNewMinute =
+    now.getUTCFullYear() !== prevTime.getUTCFullYear() ||
+    now.getUTCMonth() !== prevTime.getUTCMonth() ||
+    now.getUTCDate() !== prevTime.getUTCDate() ||
+    now.getUTCHours() !== prevTime.getUTCHours() ||
+    now.getUTCMinutes() !== prevTime.getUTCMinutes();
+
+  let response: string | null = null;
+  if (!isNewMinute) {
+    response = "Wait until the next minute to run this again";
+  } else {
+    await updateGameSetting(client, name, 0, now);
+  }
+
+  return { isNewMinute, prevTime, response: Response.json(response, { status: 200 }) };
+};
+
+/**
  * Locks the game with a daily timer.
  *
  * @param client

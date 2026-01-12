@@ -2,7 +2,7 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { baseServerResponse, errorResponse } from "../trpc";
-import { eq, and, gte, sql, asc, isNull, desc, inArray } from "drizzle-orm";
+import { eq, and, gte, sql, asc, gt, isNull, desc, inArray } from "drizzle-orm";
 import {
   SHRINE_UPGRADE_COST,
   SHRINE_BOOST_DURATION_HOURS,
@@ -17,12 +17,14 @@ import {
   SHRINE_BATTLE_MAX_USERS_PER_SIDE,
   SHRINE_BATTLE_LOBBY_SECONDS,
   MAP_RESERVED_SECTORS,
+  MAX_BOOSTS_PER_SHRINE,
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import {
   sector,
   village,
   userData,
+  shrineBoostSchedule,
   notification,
   mpvpBattleQueue,
   mpvpBattleUser,
@@ -31,7 +33,7 @@ import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchActiveWars } from "./war";
 import { fetchAlliances } from "./village";
 import { findRelationship } from "@/utils/alliance";
-import { secondsFromDate, secondsFromNow } from "@/utils/time";
+import { secondsFromDate, secondsFromNow, formatDateTimeShort } from "@/utils/time";
 import { initiateBattle } from "@/routers/combat";
 import { getServerPusher } from "@/libs/pusher";
 
@@ -67,6 +69,7 @@ export const shrineRouter = createTRPCRouter({
       orderBy: asc(userData.level),
     });
   }),
+
   // Get the captured sectors for a village
   getCapturedSectors: protectedProcedure
     .input(z.object({ villageId: z.string() }))
@@ -76,12 +79,32 @@ export const shrineRouter = createTRPCRouter({
       });
       return sectors;
     }),
-  // Upgrade a shrine level (simplified version)
+
+  // Get scheduled boosts for a village (future only)
+  getScheduledBoosts: protectedProcedure
+    .input(z.object({ villageId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const now = new Date();
+
+      const schedules = await ctx.drizzle
+        .select()
+        .from(shrineBoostSchedule)
+        .where(
+          and(
+            eq(shrineBoostSchedule.villageId, input.villageId),
+            gt(shrineBoostSchedule.startAt, now), // hide boosts that already started
+          ),
+        )
+        .orderBy(asc(shrineBoostSchedule.startAt));
+
+      return schedules;
+    }),
+
+  // Upgrade a shrine level
   upgradeShrine: protectedProcedure
     .input(z.object({ sectorNumber: z.number() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
       const [{ user }, targetSector] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
@@ -93,12 +116,8 @@ export const shrineRouter = createTRPCRouter({
       ]);
 
       // Guards
-      if (!user?.villageId) {
-        return errorResponse("You must be in a village");
-      }
-      if (!targetSector) {
-        return errorResponse("Sector not found");
-      }
+      if (!user?.villageId) return errorResponse("You must be in a village");
+      if (!targetSector) return errorResponse("Sector not found");
       if (targetSector.villageId !== user.villageId) {
         return errorResponse("You can only upgrade your own shrines");
       }
@@ -108,23 +127,42 @@ export const shrineRouter = createTRPCRouter({
       if (user?.village?.kageId !== user.userId) {
         return errorResponse("Only the Kage can upgrade shrines");
       }
-      if (user?.village?.tokens < SHRINE_UPGRADE_COST) {
+      if (!user.village) return errorResponse("Village not found");
+      if (user.village.tokens < SHRINE_UPGRADE_COST) {
         return errorResponse(
           `Need ${SHRINE_UPGRADE_COST.toLocaleString()} tokens to upgrade shrine`,
         );
       }
 
-      // Calculate new HP and perform upgrade
-      await Promise.all([
-        ctx.drizzle
-          .update(sector)
-          .set({ shrineLevel: targetSector.shrineLevel + 1 })
-          .where(eq(sector.sector, input.sectorNumber)),
-        ctx.drizzle
-          .update(village)
-          .set({ tokens: user.village.tokens - SHRINE_UPGRADE_COST })
-          .where(eq(village.id, user.villageId)),
-      ]);
+      // IMPORTANT: do token update with DB-guard + atomic decrement
+      // We do tokens first; if it fails, we do nothing else.
+      const tokenRes = await ctx.drizzle
+        .update(village)
+        .set({ tokens: sql`${village.tokens} - ${SHRINE_UPGRADE_COST}` })
+        .where(
+          and(eq(village.id, user.villageId), gte(village.tokens, SHRINE_UPGRADE_COST)),
+        );
+
+      if (tokenRes.rowsAffected === 0) {
+        return errorResponse("Not enough village tokens to upgrade shrine");
+      }
+
+      // Then upgrade shrine level with DB-guard to prevent concurrent upgrades
+      const shrineUpdateRes = await ctx.drizzle
+        .update(sector)
+        .set({ shrineLevel: targetSector.shrineLevel + 1 })
+        .where(
+          and(
+            eq(sector.sector, input.sectorNumber),
+            eq(sector.shrineLevel, targetSector.shrineLevel),
+          ),
+        );
+
+      if (shrineUpdateRes.rowsAffected === 0) {
+        return errorResponse(
+          "Shrine upgrade failed - shrine may have been upgraded by another request",
+        );
+      }
 
       return {
         success: true,
@@ -147,17 +185,14 @@ export const shrineRouter = createTRPCRouter({
           where: and(eq(sector.villageId, input.villageId), eq(sector.shrineLevel, 3)),
         }),
       ]);
+
       // Guards
-      if (!user?.villageId) {
-        return errorResponse("You must be in a village");
-      }
+      if (!user?.villageId) return errorResponse("You must be in a village");
       if (user.villageId !== input.villageId) {
         return errorResponse("You can only activate boosts for your own village");
       }
-      if (!user.village) {
-        return errorResponse("Village not found");
-      }
-      if (user.village?.kageId !== user.userId) {
+      if (!user.village) return errorResponse("Village not found");
+      if (user.village.kageId !== user.userId) {
         return errorResponse("Only the Kage can activate boosts");
       }
       if (level3Shrines.length === 0) {
@@ -183,8 +218,7 @@ export const shrineRouter = createTRPCRouter({
         [input.boostType]: boostExpiry.toISOString(),
       };
 
-      // Run mutation to do update
-      await ctx.drizzle
+      const updateRes = await ctx.drizzle
         .update(village)
         .set({
           tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
@@ -193,11 +227,236 @@ export const shrineRouter = createTRPCRouter({
             activeBoosts: updatedBoosts,
           },
         })
-        .where(eq(village.id, user.villageId));
+        .where(
+          and(eq(village.id, user.villageId), gte(village.tokens, SHRINE_BOOST_COST)),
+        );
+
+      if (updateRes.rowsAffected === 0) {
+        return errorResponse("Not enough village tokens to activate boost");
+      }
 
       return {
         success: true,
         message: `${input.boostType} boost activated for ${SHRINE_BOOST_DURATION_HOURS} hours!`,
+      };
+    }),
+
+  // Schedule village-wide boost for future activation (requires level 3 shrine)
+  scheduleBoost: protectedProcedure
+    .input(
+      z.object({
+        boostType: z.enum(SHRINE_BOOST_TYPES),
+        villageId: z.string(),
+        startAt: z.string().datetime().optional(),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date();
+
+      // Query
+      const [{ user }, level3Shrines, existingSchedules, activeSchedulesCount] =
+        await Promise.all([
+          fetchUpdatedUser({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+          }),
+          ctx.drizzle.query.sector.findMany({
+            where: and(
+              eq(sector.villageId, input.villageId),
+              eq(sector.shrineLevel, 3),
+            ),
+          }),
+          ctx.drizzle
+            .select()
+            .from(shrineBoostSchedule)
+            .where(
+              and(
+                eq(shrineBoostSchedule.villageId, input.villageId),
+                eq(shrineBoostSchedule.boostType, input.boostType),
+              ),
+            ),
+          ctx.drizzle
+            .select({ count: sql<number>`count(*)` })
+            .from(shrineBoostSchedule)
+            .where(
+              and(
+                eq(shrineBoostSchedule.villageId, input.villageId),
+                gt(shrineBoostSchedule.endAt, now),
+              ),
+            )
+            .then(([result]) => result?.count ?? 0),
+        ]);
+
+      // Guards
+      if (!user?.villageId) return errorResponse("You must be in a village");
+      if (user.villageId !== input.villageId) {
+        return errorResponse("You can only schedule boosts for your own village");
+      }
+      if (!user.village) return errorResponse("Village not found");
+      if (user.village.kageId !== user.userId) {
+        return errorResponse("Only the Kage can schedule boosts");
+      }
+      if (level3Shrines.length === 0) {
+        return errorResponse("Need at least one Level 3 shrine to schedule boosts");
+      }
+      if (user.village.tokens < SHRINE_BOOST_COST) {
+        return errorResponse(
+          `Need ${SHRINE_BOOST_COST.toLocaleString()} tokens to schedule boosts`,
+        );
+      }
+      if (activeSchedulesCount >= MAX_BOOSTS_PER_SHRINE) {
+        return errorResponse(
+          `Too many scheduled boosts. Please keep it under ${MAX_BOOSTS_PER_SHRINE} active schedules (expired schedules don't count).`,
+        );
+      }
+
+      const startAt = input.startAt ? new Date(input.startAt) : new Date();
+      const endAt = secondsFromDate(SHRINE_BOOST_DURATION_HOURS * 60 * 60, startAt);
+
+      const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+      if (startAt < oneMinuteAgo) {
+        return errorResponse("Start time must be in the future or very recent past");
+      }
+
+      const sevenDaysFromNow = secondsFromDate(7 * 24 * 60 * 60, now);
+      if (startAt > sevenDaysFromNow) {
+        return errorResponse("Cannot schedule boosts more than 7 days in advance");
+      }
+
+      for (const schedule of existingSchedules) {
+        const scheduleStart = new Date(schedule.startAt);
+        const scheduleEnd = new Date(schedule.endAt);
+
+        if (
+          (startAt >= scheduleStart && startAt < scheduleEnd) ||
+          (endAt > scheduleStart && endAt <= scheduleEnd) ||
+          (startAt <= scheduleStart && endAt >= scheduleEnd)
+        ) {
+          return errorResponse(
+            `${input.boostType} boost is already scheduled during this time period`,
+          );
+        }
+      }
+
+      const currentBoosts = user.village.shrineSettings.activeBoosts || {};
+      const existingBoost = currentBoosts[input.boostType];
+      if (existingBoost) {
+        const activeBoostEnd = new Date(existingBoost);
+        if (activeBoostEnd > startAt) {
+          return errorResponse(
+            `${input.boostType} boost is already active and would overlap with the scheduled time`,
+          );
+        }
+      }
+
+      // Pay first (DB guard)
+      const tokenUpdateRes = await ctx.drizzle
+        .update(village)
+        .set({ tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}` })
+        .where(
+          and(eq(village.id, user.villageId), gte(village.tokens, SHRINE_BOOST_COST)),
+        );
+
+      if (tokenUpdateRes.rowsAffected === 0) {
+        return errorResponse("Not enough village tokens to schedule boost");
+      }
+
+      try {
+        await ctx.drizzle.insert(shrineBoostSchedule).values({
+          id: nanoid(),
+          villageId: input.villageId,
+          boostType: input.boostType,
+          startAt,
+          endAt,
+          createdByUserId: ctx.userId,
+        });
+      } catch (_err) {
+        // best-effort refund (guarded)
+        await ctx.drizzle
+          .update(village)
+          .set({ tokens: sql`${village.tokens} + ${SHRINE_BOOST_COST}` })
+          .where(eq(village.id, user.villageId));
+        return errorResponse("Failed to create schedule. Tokens were refunded.");
+      }
+
+      return {
+        success: true,
+        message: `${input.boostType} boost scheduled from ${formatDateTimeShort(startAt)} to ${formatDateTimeShort(endAt)}!`,
+      };
+    }),
+
+  // Cancel a scheduled boost
+  cancelScheduledBoost: protectedProcedure
+    .input(z.object({ scheduleId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date();
+
+      // Query
+      const [userDataRes, schedule] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        ctx.drizzle
+          .select()
+          .from(shrineBoostSchedule)
+          .where(eq(shrineBoostSchedule.id, input.scheduleId))
+          .limit(1)
+          .then((schedules) => schedules[0] ?? null),
+      ]);
+
+      // Derived
+      const user = userDataRes.user;
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (!user.village || !user.villageId)
+        return errorResponse("You must be in a village");
+      if (!schedule) return errorResponse("Scheduled boost not found");
+
+      if (schedule.villageId !== user.villageId) {
+        return errorResponse("You can only cancel boosts for your own village");
+      }
+      if (user.village.kageId !== user.userId) {
+        return errorResponse("Only the Kage can cancel scheduled boosts");
+      }
+      const startAt =
+        schedule.startAt instanceof Date
+          ? schedule.startAt
+          : new Date(schedule.startAt);
+      if (startAt <= now) {
+        return errorResponse("Cannot cancel a boost that has already started");
+      }
+
+      // DB-level guard: only delete schedules that are still in the future
+      const delRes = await ctx.drizzle
+        .delete(shrineBoostSchedule)
+        .where(
+          and(
+            eq(shrineBoostSchedule.id, input.scheduleId),
+            gt(shrineBoostSchedule.startAt, now),
+          ),
+        );
+
+      if (delRes.rowsAffected === 0) {
+        return errorResponse(
+          "Cannot cancel a boost that has already started (or it may have already been cancelled)",
+        );
+      }
+
+      // Refund tokens to the village (schedule was in the future, so always refund)
+      await ctx.drizzle
+        .update(village)
+        .set({
+          tokens: sql`${village.tokens} + ${SHRINE_BOOST_COST}`,
+        })
+        .where(eq(village.id, user.villageId!));
+
+      return {
+        success: true,
+        message: `Scheduled ${schedule.boostType} boost cancelled and refunded`,
       };
     }),
 
@@ -206,7 +465,6 @@ export const shrineRouter = createTRPCRouter({
     .input(z.object({ aiId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Queries
       const [{ user }, ai] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
@@ -215,13 +473,9 @@ export const shrineRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, input.aiId),
       ]);
 
-      // Guards
-      if (!user) {
-        return errorResponse("User not found");
-      }
-      if (!user.village || !user.villageId) {
+      if (!user) return errorResponse("User not found");
+      if (!user.village || !user.villageId)
         return errorResponse("You must be in a village");
-      }
       if (user.village.kageId !== user.userId) {
         return errorResponse("Only the Kage can unlock AI defenders");
       }
@@ -230,19 +484,16 @@ export const shrineRouter = createTRPCRouter({
           `Need ${SHRINE_AI_UNLOCK_COST.toLocaleString()} tokens to unlock AI defender`,
         );
       }
-      if (!ai) {
-        return errorResponse("AI not found");
-      }
+      if (!ai) return errorResponse("AI not found");
+
       const currentUnlocks = user.village.shrineSettings.unlockedAiIds || [];
       if (currentUnlocks.includes(input.aiId)) {
         return errorResponse("AI defender already unlocked");
       }
 
-      // Update unlocked AI types
       const updatedUnlocks = [...currentUnlocks, input.aiId];
 
-      // Deduct tokens and update unlocked AI IDs
-      await ctx.drizzle
+      const updateRes = await ctx.drizzle
         .update(village)
         .set({
           tokens: sql`${village.tokens} - ${SHRINE_AI_UNLOCK_COST}`,
@@ -257,6 +508,10 @@ export const shrineRouter = createTRPCRouter({
             gte(village.tokens, SHRINE_AI_UNLOCK_COST),
           ),
         );
+
+      if (updateRes.rowsAffected === 0) {
+        return errorResponse("Not enough village tokens to unlock AI defender");
+      }
 
       return {
         success: true,
@@ -278,19 +533,13 @@ export const shrineRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, input.aiId),
       ]);
 
-      // Guards
-      if (!user) {
-        return errorResponse("User not found");
-      }
-      if (!user.village || !user.villageId) {
+      if (!user) return errorResponse("User not found");
+      if (!user.village || !user.villageId)
         return errorResponse("You must be in a village");
-      }
       if (user.village.kageId !== user.userId) {
         return errorResponse("Only the Kage can manage AI defenders");
       }
-      if (!ai) {
-        return errorResponse("AI not found");
-      }
+      if (!ai) return errorResponse("AI not found");
 
       const currentUnlocks = user.village.shrineSettings.unlockedAiIds || [];
       const currentAssigns = user.village.shrineSettings.activeAiIds || [];
@@ -303,11 +552,9 @@ export const shrineRouter = createTRPCRouter({
       let message: string;
 
       if (currentAssigns.includes(input.aiId)) {
-        // Remove AI defender (deselect)
         newAssigns = currentAssigns.filter((id) => id !== input.aiId);
         message = `AI defender ${ai.username} removed from active defenders`;
       } else {
-        // Add AI defender (select)
         if (currentAssigns.length >= SHRINE_MAX_AI_ASSIGNMENTS) {
           return errorResponse(
             `Can only assign up to ${SHRINE_MAX_AI_ASSIGNMENTS} AI defenders`,
@@ -317,7 +564,6 @@ export const shrineRouter = createTRPCRouter({
         message = `AI defender ${ai.username} added to active defenders`;
       }
 
-      // Run update mutation
       await ctx.drizzle
         .update(village)
         .set({
@@ -343,22 +589,14 @@ export const shrineRouter = createTRPCRouter({
         }),
         ctx.drizzle.query.sector.findFirst({
           where: eq(sector.id, input.sectorId),
-          with: {
-            village: true,
-          },
+          with: { village: true },
         }),
       ]);
 
-      // Guards
-      if (!user) {
-        return errorResponse("User not found");
-      }
-      if (!user.village || !user.villageId) {
+      if (!user) return errorResponse("User not found");
+      if (!user.village || !user.villageId)
         return errorResponse("You must be in a village");
-      }
-      if (!targetSector) {
-        return errorResponse("Sector not found");
-      }
+      if (!targetSector) return errorResponse("Sector not found");
       if (targetSector.villageId !== user.villageId) {
         return errorResponse(
           "You can only pay maintenance for your own village's sectors",
@@ -375,31 +613,48 @@ export const shrineRouter = createTRPCRouter({
 
       const currentNextMaintainanceDueDate =
         targetSector.nextMaintainanceDueDate || new Date();
+
       const nextNextMaintainanceDueDate = secondsFromDate(
         WAR_SHRINE_MAINTENANCE_DAYS * 24 * 60 * 60,
         currentNextMaintainanceDueDate,
       );
 
-      // Update payment and maintenance date for the specific sector
-      await Promise.all([
-        ctx.drizzle
-          .update(village)
-          .set({
-            tokens: sql`${village.tokens} - ${SHRINE_WEEKLY_MAINTENANCE_COST}`,
-          })
-          .where(
-            and(
-              eq(village.id, user.villageId),
-              gte(village.tokens, SHRINE_WEEKLY_MAINTENANCE_COST),
-            ),
+      const tokenRes = await ctx.drizzle
+        .update(village)
+        .set({ tokens: sql`${village.tokens} - ${SHRINE_WEEKLY_MAINTENANCE_COST}` })
+        .where(
+          and(
+            eq(village.id, user.villageId),
+            gte(village.tokens, SHRINE_WEEKLY_MAINTENANCE_COST),
           ),
-        ctx.drizzle
-          .update(sector)
-          .set({
-            nextMaintainanceDueDate: nextNextMaintainanceDueDate,
-          })
-          .where(eq(sector.id, input.sectorId)),
-      ]);
+        );
+
+      if (tokenRes.rowsAffected === 0) {
+        return errorResponse("Not enough village tokens for maintenance");
+      }
+
+      // Update maintenance date with DB-guard to prevent concurrent modifications
+      // Check against the actual database value (null or the date we read)
+      const maintenanceUpdateRes = await ctx.drizzle
+        .update(sector)
+        .set({ nextMaintainanceDueDate: nextNextMaintainanceDueDate })
+        .where(
+          and(
+            eq(sector.id, input.sectorId),
+            targetSector.nextMaintainanceDueDate === null
+              ? isNull(sector.nextMaintainanceDueDate)
+              : eq(
+                  sector.nextMaintainanceDueDate,
+                  targetSector.nextMaintainanceDueDate,
+                ),
+          ),
+        );
+
+      if (maintenanceUpdateRes.rowsAffected === 0) {
+        return errorResponse(
+          "Maintenance update failed - sector may have been modified by another request",
+        );
+      }
 
       return {
         success: true,

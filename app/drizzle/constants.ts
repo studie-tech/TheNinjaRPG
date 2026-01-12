@@ -1276,6 +1276,7 @@ export const SHRINE_BOOST_TYPES = [
   "Crafting",
 ] as const;
 export type SHRINE_BOOST_TYPE = (typeof SHRINE_BOOST_TYPES)[number];
+export const MAX_BOOSTS_PER_SHRINE = 50;
 export type WarType = (typeof WAR_TYPES)[number];
 export type WarState = (typeof WAR_STATES)[number];
 
