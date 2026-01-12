@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { baseServerResponse, errorResponse } from "../trpc";
+import { baseServerResponse, errorResponse, serverError } from "../trpc";
+import { canSeeSecretData } from "@/utils/permissions";
 import { eq, and, gte, sql, asc, gt, isNull, desc, inArray } from "drizzle-orm";
 import {
   SHRINE_UPGRADE_COST,
@@ -86,16 +87,28 @@ export const shrineRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const now = new Date();
 
-      const schedules = await ctx.drizzle
-        .select()
-        .from(shrineBoostSchedule)
-        .where(
-          and(
-            eq(shrineBoostSchedule.villageId, input.villageId),
-            gt(shrineBoostSchedule.startAt, now), // hide boosts that already started
-          ),
-        )
-        .orderBy(asc(shrineBoostSchedule.startAt));
+      // Run queries in parallel
+      const [user, schedules] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle
+          .select()
+          .from(shrineBoostSchedule)
+          .where(
+            and(
+              eq(shrineBoostSchedule.villageId, input.villageId),
+              gt(shrineBoostSchedule.startAt, now), // hide boosts that already started
+            ),
+          )
+          .orderBy(asc(shrineBoostSchedule.startAt)),
+      ]);
+
+      // Authorization: only allow access if user belongs to the village or has admin/moderator access
+      if (user.villageId !== input.villageId && !canSeeSecretData(user.role)) {
+        throw serverError(
+          "FORBIDDEN",
+          "You can only view scheduled boosts for your own village",
+        );
+      }
 
       return schedules;
     }),
@@ -367,22 +380,27 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("Not enough village tokens to schedule boost");
       }
 
-      try {
-        await ctx.drizzle.insert(shrineBoostSchedule).values({
-          id: nanoid(),
-          villageId: input.villageId,
-          boostType: input.boostType,
-          startAt,
-          endAt,
-          createdByUserId: ctx.userId,
-        });
-      } catch (_err) {
-        // best-effort refund (guarded)
+      // Atomic guarded insert to prevent concurrent overlap
+      const scheduleId = nanoid();
+      const insertRes = await ctx.drizzle.execute(sql`
+        INSERT INTO ShrineBoostSchedule (id, villageId, boostType, startAt, endAt, createdByUserId, createdAt, updatedAt)
+        SELECT ${scheduleId}, ${input.villageId}, ${input.boostType}, ${startAt}, ${endAt}, ${ctx.userId}, NOW(3), NOW(3)
+        WHERE NOT EXISTS (
+          SELECT 1 FROM ShrineBoostSchedule s
+          WHERE s.villageId = ${input.villageId}
+            AND s.boostType = ${input.boostType}
+            AND s.startAt < ${endAt}
+            AND s.endAt > ${startAt}
+        )
+      `);
+
+      if (insertRes.rowsAffected === 0) {
+        // Overlap detected by another concurrent request - refund tokens
         await ctx.drizzle
           .update(village)
           .set({ tokens: sql`${village.tokens} + ${SHRINE_BOOST_COST}` })
           .where(eq(village.id, user.villageId));
-        return errorResponse("Failed to create schedule. Tokens were refunded.");
+        return errorResponse("Boost time overlaps with an existing scheduled boost");
       }
 
       return {

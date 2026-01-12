@@ -116,6 +116,7 @@ The combat system is the most complex feature, with dedicated files:
 - Schema is centralized in `@/drizzle/schema.ts`
 - We use the react compiler, and therefore must use useWatch hook, not watch, for react-hook-form.
 - **No Legacy Fields**: When refactoring database schema, fully remove legacy/deprecated fields rather than keeping them for backward compatibility. Do not leave legacy fields in the schema - migrate all code to use new field names immediately.
+- **Minimize DB Roundtrips**: For queries, prefer reducing the number of database roundtrips over reducing the amount of data fetched. Running queries in parallel with `Promise.all()` is faster than running them sequentially, even if it means fetching slightly more data upfront.
 
 ## tRPC Patterns
 
