@@ -398,18 +398,24 @@ export const profileRouter = createTRPCRouter({
       notifications.push({ name: msg, color: "toast", href: "/profile" });
     });
 
-    // Shrine notifications
+    // Shrine notifications (use Set to avoid duplicate sectors)
     const userWithRelations = user as UserWithRelations;
-    const shrineDefenseSectors =
-      userWithRelations?.shrineBattles
-        ?.filter((b) => b.defenderEntityId === user?.villageId)
-        .map((b) => b.sector)
-        .filter(Boolean) ?? [];
-    const shrineOffenseSectors =
-      userWithRelations?.shrineBattles
-        ?.filter((b) => b.attackerEntityId === user?.villageId)
-        .map((b) => b.sector)
-        .filter(Boolean) ?? [];
+    const shrineDefenseSectors = [
+      ...new Set(
+        userWithRelations?.shrineBattles
+          ?.filter((b) => b.defenderEntityId === user?.villageId)
+          .map((b) => b.sector)
+          .filter(Boolean) ?? [],
+      ),
+    ];
+    const shrineOffenseSectors = [
+      ...new Set(
+        userWithRelations?.shrineBattles
+          ?.filter((b) => b.attackerEntityId === user?.villageId)
+          .map((b) => b.sector)
+          .filter(Boolean) ?? [],
+      ),
+    ];
 
     if (shrineDefenseSectors.length > 0) {
       notifications.push({
@@ -426,34 +432,40 @@ export const profileRouter = createTRPCRouter({
       });
     }
 
-    // Gather sectors under war attack for this user's village
-    const warDefenseSectors =
-      userWithRelations?.activeWars
-        ?.filter((w) => {
-          const isDefender = w.defenderVillageId === user?.villageId;
-          const isDefenderAlly = w.warAllies?.some(
-            (a) =>
-              a.villageId === user?.villageId &&
-              a.supportVillageId === w.defenderVillageId,
-          );
-          return (isDefender || isDefenderAlly) && w.sector;
-        })
-        .map((w) => w.sector)
-        .filter(Boolean) ?? [];
+    // Gather sectors under war attack for this user's village (use Set to avoid duplicate sectors)
+    const warDefenseSectors = [
+      ...new Set(
+        userWithRelations?.activeWars
+          ?.filter((w) => {
+            const isDefender = w.defenderVillageId === user?.villageId;
+            const isDefenderAlly = w.warAllies?.some(
+              (a) =>
+                a.villageId === user?.villageId &&
+                a.supportVillageId === w.defenderVillageId,
+            );
+            return (isDefender || isDefenderAlly) && w.sector;
+          })
+          .map((w) => w.sector)
+          .filter(Boolean) ?? [],
+      ),
+    ];
 
-    const warOffenseSectors =
-      userWithRelations?.activeWars
-        ?.filter((w) => {
-          const isAttacker = w.attackerVillageId === user?.villageId;
-          const isAttackerAlly = w.warAllies?.some(
-            (a) =>
-              a.villageId === user?.villageId &&
-              a.supportVillageId === w.attackerVillageId,
-          );
-          return (isAttacker || isAttackerAlly) && w.sector;
-        })
-        .map((w) => w.sector)
-        .filter(Boolean) ?? [];
+    const warOffenseSectors = [
+      ...new Set(
+        userWithRelations?.activeWars
+          ?.filter((w) => {
+            const isAttacker = w.attackerVillageId === user?.villageId;
+            const isAttackerAlly = w.warAllies?.some(
+              (a) =>
+                a.villageId === user?.villageId &&
+                a.supportVillageId === w.attackerVillageId,
+            );
+            return (isAttacker || isAttackerAlly) && w.sector;
+          })
+          .map((w) => w.sector)
+          .filter(Boolean) ?? [],
+      ),
+    ];
 
     if (warDefenseSectors.length > 0) {
       notifications.push({
@@ -2107,9 +2119,12 @@ export const fetchUpdatedUser = async (props: {
         warAllies: true,
       },
     }),
-    // Fetch all active shrine battles
+    // Fetch all active shrine battles (only those where battle hasn't started yet)
     client.query.mpvpBattleQueue.findMany({
-      where: eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+      where: and(
+        eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+        isNull(mpvpBattleQueue.battleId),
+      ),
     }),
   ]);
 
