@@ -2780,7 +2780,7 @@ export const village = mysqlTable(
 );
 export type Village = InferSelectModel<typeof village>;
 
-// ✅ ShrineBoostSchedule
+// ShrineBoostSchedule
 export const shrineBoostSchedule = mysqlTable(
   "ShrineBoostSchedule",
   {
@@ -2805,16 +2805,19 @@ export const shrineBoostSchedule = mysqlTable(
   }),
 );
 
-export const shrineBoostScheduleRelations = relations(shrineBoostSchedule, ({ one }) => ({
-  village: one(village, {
-    fields: [shrineBoostSchedule.villageId],
-    references: [village.id],
+export const shrineBoostScheduleRelations = relations(
+  shrineBoostSchedule,
+  ({ one }) => ({
+    village: one(village, {
+      fields: [shrineBoostSchedule.villageId],
+      references: [village.id],
+    }),
+    createdBy: one(userData, {
+      fields: [shrineBoostSchedule.createdByUserId],
+      references: [userData.userId],
+    }),
   }),
-  createdBy: one(userData, {
-    fields: [shrineBoostSchedule.createdByUserId],
-    references: [userData.userId],
-  }),
-}));
+);
 
 export const villageRelations = relations(village, ({ many, one }) => ({
   structures: many(villageStructure),

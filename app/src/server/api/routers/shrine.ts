@@ -159,6 +159,11 @@ export const shrineRouter = createTRPCRouter({
         );
 
       if (shrineUpdateRes.rowsAffected === 0) {
+        // Refund tokens since the guarded update failed
+        await ctx.drizzle
+          .update(village)
+          .set({ tokens: sql`${village.tokens} + ${SHRINE_UPGRADE_COST}` })
+          .where(eq(village.id, user.villageId));
         return errorResponse(
           "Shrine upgrade failed - shrine may have been upgraded by another request",
         );
@@ -651,6 +656,11 @@ export const shrineRouter = createTRPCRouter({
         );
 
       if (maintenanceUpdateRes.rowsAffected === 0) {
+        // Refund tokens since the guarded update failed
+        await ctx.drizzle
+          .update(village)
+          .set({ tokens: sql`${village.tokens} + ${SHRINE_WEEKLY_MAINTENANCE_COST}` })
+          .where(eq(village.id, user.villageId));
         return errorResponse(
           "Maintenance update failed - sector may have been modified by another request",
         );

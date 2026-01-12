@@ -322,10 +322,10 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   );
 
   const { mutate: activateBoost, isPending: isActivatingBoost } =
-    api.shrine.scheduleBoost.useMutation({
-      onSuccess: (data: { success: boolean; message: string }) => {
-        showMutationToast(data);
-        if (data.success) {
+    api.shrine.activateBoost.useMutation({
+      onSuccess: (res) => {
+        showMutationToast(res);
+        if (res.success) {
           void utils.profile.getUser.invalidate();
           void utils.shrine.getScheduledBoosts.invalidate();
         }

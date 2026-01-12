@@ -9,6 +9,8 @@ import {
 } from "@/libs/gamesettings";
 import { fetchVillages } from "@/server/api/routers/village";
 import { cookies } from "next/headers";
+import { WAR_SHRINE_MAINTENANCE_DAYS } from "@/drizzle/constants";
+import { secondsFromDate } from "@/utils/time";
 
 const ENDPOINT_NAME = "shrine-maintenance";
 const ENDPOINT_NAME_DAILY = "shrine-maintenance-daily";
@@ -21,6 +23,8 @@ export async function GET() {
   const minuteCheck = await lockWithMinuteTimer(drizzleDB, ENDPOINT_NAME);
   if (!minuteCheck.isNewMinute && minuteCheck.response) return minuteCheck.response;
 
+  let dailyCheck: Awaited<ReturnType<typeof lockWithDailyTimer>> | undefined;
+
   try {
     const now = new Date();
 
@@ -28,7 +32,7 @@ export async function GET() {
     const boostResult = await runShrineBoostTick(now);
 
     // Check daily timer for shrine downgrade maintenance
-    const dailyCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME_DAILY);
+    dailyCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME_DAILY);
     const maintenanceResult = dailyCheck.isNewDay
       ? await runShrineMaintenance(now)
       : null;
@@ -41,6 +45,10 @@ export async function GET() {
   } catch (cause) {
     // Rollback minute timer
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, minuteCheck.prevTime);
+    // Rollback daily timer if it was acquired
+    if (dailyCheck) {
+      await updateGameSetting(drizzleDB, ENDPOINT_NAME_DAILY, 0, dailyCheck.prevTime);
+    }
     return handleEndpointError(cause);
   }
 }
@@ -71,9 +79,13 @@ async function runShrineMaintenance(now: Date) {
         return drizzleDB.delete(sector).where(eq(sector.id, s.id));
       }
       shrinesDowngraded++;
+      const nextMaintainanceDueDate = secondsFromDate(
+        WAR_SHRINE_MAINTENANCE_DAYS * 24 * 60 * 60,
+        now,
+      );
       return drizzleDB
         .update(sector)
-        .set({ shrineLevel: newLevel })
+        .set({ shrineLevel: newLevel, nextMaintainanceDueDate })
         .where(eq(sector.id, s.id));
     });
 
