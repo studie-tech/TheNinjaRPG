@@ -25,8 +25,14 @@ import type { RankedRank } from "@/drizzle/constants";
  * @returns Player's rank
  */
 export function getRankedRank(lp: number, topPlayersLP: number[]): RankedRank {
-  // Sannin rank requires being in top players
-  if (topPlayersLP.length >= RANKED_SANNIN_TOP_PLAYERS && lp >= Math.min(...topPlayersLP)) {
+  // Sannin rank requires being Legend (900+ LP) AND in top 10 Legend players
+  const LEGEND_LP_REQUIREMENT =
+    RANKED_DIVISIONS.find((d) => d.key === "LEGEND")?.rankedLp ?? 900;
+  if (
+    lp >= LEGEND_LP_REQUIREMENT &&
+    topPlayersLP.length >= RANKED_SANNIN_TOP_PLAYERS &&
+    lp >= Math.min(...topPlayersLP)
+  ) {
     return "Sannin";
   }
   // Find the highest division the player qualifies for
