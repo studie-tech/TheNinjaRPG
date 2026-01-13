@@ -18,7 +18,7 @@ import {
   RANKED_PVP_STATS,
   RANKED_REQUIRED_RANK,
   RANKED_ENTRY_COST,
-  RANKED_DIVISIONS,
+  RANKED_LEGEND_LP_REQUIREMENT,
 } from "@/drizzle/constants";
 import { validateJutsuLoadout, validateItemLoadout } from "@/libs/ranked_pvp";
 import { initiateBattle } from "@/routers/combat";
@@ -712,9 +712,9 @@ export const endRankedSeason = async (client: DrizzleClient, seasonId: string) =
 
   // Determine top players LP for "Sannin" rank calculation
   // Sannin is only the top 10 players who have reached Legend rank (900+ LP)
-  const LEGEND_LP_REQUIREMENT =
-    RANKED_DIVISIONS.find((d) => d.key === "LEGEND")?.rankedLp ?? 900;
-  const legendPlayers = users.filter((u) => u.rankedLp >= LEGEND_LP_REQUIREMENT);
+  const legendPlayers = users.filter(
+    (u) => u.rankedLp >= RANKED_LEGEND_LP_REQUIREMENT,
+  );
   const topPlayersLP = legendPlayers
     .slice(0, RANKED_SANNIN_TOP_PLAYERS)
     .map((u) => u.rankedLp);
@@ -751,15 +751,13 @@ export const endRankedSeason = async (client: DrizzleClient, seasonId: string) =
  */
 export const fetchSanninRankedPlayers = async (client: DrizzleClient) => {
   // Sannin is only the top 10 players who have reached Legend rank (900+ LP)
-  const LEGEND_LP_REQUIREMENT =
-    RANKED_DIVISIONS.find((d) => d.key === "LEGEND")?.rankedLp ?? 900;
   const users = await client.query.userData.findMany({
     columns: {
       userId: true,
       rankedLp: true,
     },
     orderBy: (userData, { desc }) => [desc(userData.rankedLp)],
-    where: gte(userData.rankedLp, LEGEND_LP_REQUIREMENT),
+    where: gte(userData.rankedLp, RANKED_LEGEND_LP_REQUIREMENT),
     limit: RANKED_SANNIN_TOP_PLAYERS,
   });
   return users.map((u) => u.rankedLp);

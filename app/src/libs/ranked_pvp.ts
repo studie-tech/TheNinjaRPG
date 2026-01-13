@@ -3,6 +3,7 @@ import {
   RANKED_STREAK_BONUS,
   RANKED_DIVISIONS,
   RANKED_SANNIN_TOP_PLAYERS,
+  RANKED_LEGEND_LP_REQUIREMENT,
   RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
   RANKED_LOADOUT_MAX_POISON_JUTSUS,
   RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
@@ -26,10 +27,8 @@ import type { RankedRank } from "@/drizzle/constants";
  */
 export function getRankedRank(lp: number, topPlayersLP: number[]): RankedRank {
   // Sannin rank requires being Legend (900+ LP) AND in top 10 Legend players
-  const LEGEND_LP_REQUIREMENT =
-    RANKED_DIVISIONS.find((d) => d.key === "LEGEND")?.rankedLp ?? 900;
   if (
-    lp >= LEGEND_LP_REQUIREMENT &&
+    lp >= RANKED_LEGEND_LP_REQUIREMENT &&
     topPlayersLP.length >= RANKED_SANNIN_TOP_PLAYERS &&
     lp >= Math.min(...topPlayersLP)
   ) {

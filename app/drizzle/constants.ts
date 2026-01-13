@@ -1418,6 +1418,8 @@ export const RANKED_DIVISIONS = [
   { key: "LEGEND", name: "Legend", rankedLp: 900, kFactor: 16 },
   { key: "SANNIN", name: "Sannin", rankedLp: Infinity, kFactor: 16 },
 ] as const;
+export const RANKED_LEGEND_LP_REQUIREMENT =
+  RANKED_DIVISIONS.find((d) => d.key === "LEGEND")?.rankedLp ?? 900;
 export const RANKED_PVP_STATS = {
   strength: MAX_GENS_CAP,
   intelligence: MAX_GENS_CAP,

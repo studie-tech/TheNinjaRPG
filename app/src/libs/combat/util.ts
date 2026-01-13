@@ -1594,7 +1594,7 @@ export const calcBattleResult = (
           const maxTargetLevel = Math.max(...targets.map((t) => t.level), 0);
           const levelDifference = Math.abs(user.level - maxTargetLevel);
           if (levelDifference <= STREAK_LEVEL_DIFF) {
-            const silverDropChance = 0.5 * battle.rewardScaling;
+            const silverDropChance = 5 * battle.rewardScaling;
             if (Math.random() * 100 < silverDropChance) {
               result.seichiSilver = 1;
             }
