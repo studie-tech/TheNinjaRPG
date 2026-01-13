@@ -58,21 +58,34 @@ export async function GET() {
     // One day in mseconds
     const oneDay = 1000 * 60 * 60 * 24;
 
-    // Step 5: Delete battle history older than 1 day
+    // Step 5: Delete battle history based on battle type
+    // - RANKED_PVP: 7 days
+    // - COMBAT: 60 days
+    // - Other battles: 1 day
     await drizzleDB
       .delete(battleHistory)
       .where(
         or(
+          // Delete RANKED_PVP battles older than 7 days
+          and(
+            eq(battleHistory.battleType, "RANKED_PVP"),
+            lte(battleHistory.createdAt, new Date(Date.now() - oneDay * 7)),
+          ),
+          // Delete COMBAT battles older than 60 days
+          and(
+            eq(battleHistory.battleType, "COMBAT"),
+            lte(battleHistory.createdAt, new Date(Date.now() - oneDay * 60)),
+          ),
+          // Delete other non-COMBAT battles older than 1 day
           and(
             lte(battleHistory.createdAt, new Date(Date.now() - oneDay * 1)),
             or(
-              ne(battleHistory.battleType, "COMBAT"),
+              and(
+                ne(battleHistory.battleType, "COMBAT"),
+                ne(battleHistory.battleType, "RANKED_PVP"),
+              ),
               isNull(battleHistory.battleType),
             ),
-          ),
-          and(
-            lte(battleHistory.createdAt, new Date(Date.now() - oneDay * 60)),
-            eq(battleHistory.battleType, "COMBAT"),
           ),
         ),
       );
