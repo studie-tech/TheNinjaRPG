@@ -20,6 +20,7 @@ import {
   CRAFTING_REQUIRED_EXP,
   CRAFTING_TIMES_MINS,
   CRAFTING_MAX_IMBUED_ITEMS,
+  CONSUMABLE_CRAFTING_TIMES_MINS,
 } from "@/drizzle/constants";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { canChangeContent } from "@/utils/permissions";
@@ -28,7 +29,9 @@ import {
   getCraftingRankProgress,
   getTotalItemQuantity,
   getEffectiveMaxImbuements,
+  getCraftingRank,
 } from "@/libs/crafting";
+import { getShrineBoost } from "@/utils/village";
 import { calcItemRepairCost } from "@/libs/item";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 
@@ -359,42 +362,97 @@ export default function OccupationCrafting() {
                         return null;
                       }
 
-                      return (
-                        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3">
-                          <h4 className="font-semibold text-sm mb-2">
-                            Required Materials
-                          </h4>
-                          <div className="space-y-2">
-                            {craftableItem.craftingRequirements.map((req, index) => {
-                              const totalQuantity = getTotalItemQuantity(
-                                userItems || [],
-                                req.requirementItemId,
-                              );
-                              const required = req.quantity;
-                              const hasEnough = totalQuantity >= required;
+                      // Calculate crafting time
+                      const userCraftingRank = getCraftingRank(
+                        userData?.craftingExperience || 0,
+                      );
+                      const craftingTime =
+                        selectedItem.itemType === "CONSUMABLE"
+                          ? CONSUMABLE_CRAFTING_TIMES_MINS[selectedItem.rarity]
+                          : CRAFTING_TIMES_MINS[userCraftingRank][selectedItem.rarity];
+                      const sectors = userData?.village?.sectors?.length || 0;
+                      const shrineBoost = getShrineBoost(
+                        sectors,
+                        "Crafting",
+                        userData?.village,
+                      );
+                      const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
+                      const craftSeconds = Math.round(craftingTime * 60 * shrineBoostFactor);
+                      const craftMinutes = Math.floor(craftSeconds / 60);
+                      const remainingSeconds = craftSeconds % 60;
+                      const timeDisplay =
+                        craftMinutes > 0
+                          ? remainingSeconds > 0
+                            ? `${craftMinutes}m ${remainingSeconds}s`
+                            : `${craftMinutes}m`
+                          : `${craftSeconds}s`;
 
-                              return (
-                                <div
-                                  key={index}
-                                  className="flex items-center justify-between"
-                                >
-                                  <span className="text-sm">
-                                    {required}x{" "}
-                                    {req.requirementItem?.name || "Unknown Item"}
+                      // Get crafting experience
+                      const expGain = selectedItem.craftingExperience ?? 0;
+
+                      return (
+                        <>
+                          {/* Crafting Info */}
+                          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">
+                                  Crafting Time:
+                                </span>
+                                <span className="text-sm font-semibold">
+                                  {timeDisplay}
+                                </span>
+                              </div>
+                              {expGain > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium">
+                                    Experience Gain:
                                   </span>
-                                  <div
-                                    className={`text-sm font-medium ${
-                                      hasEnough ? "text-green-600" : "text-red-600"
-                                    }`}
-                                  >
-                                    {totalQuantity}/{required}
-                                    {hasEnough ? " ✓" : " ✗"}
-                                  </div>
+                                  <span className="text-sm font-semibold text-green-600">
+                                    +{expGain} EXP
+                                  </span>
                                 </div>
-                              );
-                            })}
+                              )}
+                            </div>
                           </div>
-                        </div>
+
+                          {/* Required Materials */}
+                          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3">
+                            <h4 className="font-semibold text-sm mb-2">
+                              Required Materials
+                            </h4>
+                            <div className="space-y-2">
+                              {craftableItem.craftingRequirements.map((req, index) => {
+                                const totalQuantity = getTotalItemQuantity(
+                                  userItems || [],
+                                  req.requirementItemId,
+                                );
+                                const required = req.quantity;
+                                const hasEnough = totalQuantity >= required;
+
+                                return (
+                                  <div
+                                    key={index}
+                                    className="flex items-center justify-between"
+                                  >
+                                    <span className="text-sm">
+                                      {required}x{" "}
+                                      {req.requirementItem?.name || "Unknown Item"}
+                                    </span>
+                                    <div
+                                      className={`text-sm font-medium ${
+                                        hasEnough ? "text-green-600" : "text-red-600"
+                                      }`}
+                                    >
+                                      {totalQuantity}/{required}
+                                      {hasEnough ? " ✓" : " ✗"}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </>
                       );
                     })()}
                   </div>

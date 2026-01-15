@@ -155,6 +155,7 @@ export const useItemEditForm = (
     { id: "canBeCrafted", type: "boolean" },
     { id: "canBeTraded", type: "boolean" },
     { id: "canBeImbued", type: "boolean" },
+    { id: "craftingExperience", type: "number", label: "Crafting Experience" },
     { id: "expireFromStoreAt", type: "date", label: "Remove from store at" },
   ];
 

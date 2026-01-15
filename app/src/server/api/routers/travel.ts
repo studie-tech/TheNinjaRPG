@@ -284,6 +284,10 @@ export const travelRouter = createTRPCRouter({
             eq(userData.sector, user.sector),
             inArray(userData.status, ["AWAKE", "BATTLE"]),
             or(
+              eq(userData.isBanned, false),
+              eq(userData.userId, ctx.userId),
+            ),
+            or(
               gte(userData.updatedAt, secondsFromNow(-36000)),
               eq(userData.userId, ctx.userId),
             ),

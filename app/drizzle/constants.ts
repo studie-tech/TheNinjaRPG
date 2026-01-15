@@ -945,10 +945,11 @@ export type HUNTING_RANK = (typeof HUNTING_RANKS)[number];
 export const HUNTING_REQUIRED_EXP: Record<HUNTING_RANK, number> = {
   NONE: 0,
   "D RANK": 0,
-  "C RANK": 30000,
-  "B RANK": 76000,
-  "A RANK": 90000,
-  "S RANK": 120000,
+  // Keep job rank progression in line with crafting thresholds
+  "C RANK": 100000,
+  "B RANK": 300000,
+  "A RANK": 600000,
+  "S RANK": 900000,
 };
 export const HUNTING_ITEM_DROP_CHANCES: Record<
   HUNTING_RANK,
@@ -1005,10 +1006,11 @@ export type GATHERING_RANK = (typeof GATHERING_RANKS)[number];
 export const GATHERING_REQUIRED_EXP: Record<GATHERING_RANK, number> = {
   NONE: 0,
   "D RANK": 0,
-  "C RANK": 30000,
-  "B RANK": 76000,
-  "A RANK": 90000,
-  "S RANK": 120000,
+  // Keep job rank progression in line with crafting thresholds
+  "C RANK": 100000,
+  "B RANK": 300000,
+  "A RANK": 600000,
+  "S RANK": 900000,
 };
 export const GATHERING_EXPERIENCE_GAIN: Record<ItemRarity, number> = {
   COMMON: 200,
@@ -1109,6 +1111,14 @@ export const CRAFTING_TIMES_MINS: Record<CRAFTING_RANK, Record<ItemRarity, numbe
     EPIC: 60,
     LEGENDARY: 160,
   },
+};
+
+// Static crafting times for consumables (doesn't scale with rank)
+export const CONSUMABLE_CRAFTING_TIMES_MINS: Record<ItemRarity, number> = {
+  COMMON: 5,
+  RARE: 10,
+  EPIC: 15,
+  LEGENDARY: 20,
 };
 
 // Ai profile config

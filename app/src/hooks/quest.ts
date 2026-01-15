@@ -9,6 +9,7 @@ import {
   RetryQuestDelays,
   MEDNIN_RANKS,
   HUNTING_RANKS,
+  GATHERING_RANKS,
   STARTER_VILLAGES,
   QuestTypesWithMaxAttempts,
 } from "@/drizzle/constants";
@@ -209,6 +210,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     { id: "questRank", type: "str_array", values: LetterRanks },
     { id: "medicalRank", type: "str_array", values: MEDNIN_RANKS },
     { id: "huntingRank", type: "str_array", values: HUNTING_RANKS },
+    { id: "gatheringRank", type: "str_array", values: GATHERING_RANKS },
     { id: "requiredLevel", type: "number" },
     { id: "maxLevel", type: "number", label: "Max Level" },
     {

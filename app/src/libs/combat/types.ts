@@ -1683,6 +1683,7 @@ export const ItemValidatorRawSchema = z.object({
   canBeHunted: z.coerce.boolean().default(false),
   canBeGathered: z.coerce.boolean().default(false),
   canBeTraded: z.coerce.boolean().default(false),
+  craftingExperience: z.coerce.number().int().min(0).default(0),
   crystalTargetTypes: z.enum(ItemTypes).nullable(),
   bloodlineId: z.string().nullable(),
   battleUsageType: z.enum(BattleUsageTypes).default("BOTH"),

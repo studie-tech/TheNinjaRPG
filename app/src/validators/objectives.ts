@@ -7,6 +7,7 @@ import {
   RetryQuestDelays,
   MEDNIN_RANKS,
   HUNTING_RANKS,
+  GATHERING_RANKS,
   STARTER_VILLAGES,
 } from "@/drizzle/constants";
 
@@ -356,6 +357,7 @@ export const QuestValidatorRawSchema = z.object({
   questRank: z.enum(LetterRanks).optional(),
   medicalRank: z.enum(MEDNIN_RANKS).optional().nullish(),
   huntingRank: z.enum(HUNTING_RANKS).optional().nullish(),
+  gatheringRank: z.enum(GATHERING_RANKS).optional().nullish(),
   requiredLevel: z.coerce.number().min(0).max(100).optional(),
   maxLevel: z.coerce.number().min(0).max(100).optional(),
   maxAttempts: z.coerce.number().min(0).max(100).default(1),

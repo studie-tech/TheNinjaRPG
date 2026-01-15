@@ -12,7 +12,7 @@ import {
   OCCUPATIONS,
   OCCUPATION_CHANGE_COOLDOWN_DAYS,
   CRAFTING_TIMES_MINS,
-  CRAFTING_EXP_GAIN,
+  CONSUMABLE_CRAFTING_TIMES_MINS,
 } from "@/drizzle/constants";
 import {
   getCraftingRank,
@@ -114,8 +114,11 @@ export const occupationRouter = createTRPCRouter({
       }
       // Derived
       const userCraftingRank = getCraftingRank(user.craftingExperience);
+      // Consumables have static crafting times that don't scale with rank
       const craftingTime =
-        CRAFTING_TIMES_MINS[userCraftingRank][itemWithRequirements.rarity];
+        itemWithRequirements.itemType === "CONSUMABLE"
+          ? CONSUMABLE_CRAFTING_TIMES_MINS[itemWithRequirements.rarity]
+          : CRAFTING_TIMES_MINS[userCraftingRank][itemWithRequirements.rarity];
       // Guards
       if (craftingTime === 0) {
         return errorResponse(
@@ -184,8 +187,8 @@ export const occupationRouter = createTRPCRouter({
         craftingFinishedAt: finishTime,
       });
 
-      // Award crafting experience (small amount when starting)
-      const expGain = CRAFTING_EXP_GAIN[userCraftingRank];
+      // Award crafting experience (from item config, or 0 if not set)
+      const expGain = itemWithRequirements.craftingExperience ?? 0;
       // Update trackers with crafting experience gained
       const { trackers } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },
@@ -317,8 +320,8 @@ export const occupationRouter = createTRPCRouter({
         craftingFinishedAt: finishTime,
       });
 
-      // Award small amount of crafting experience
-      const expGain = CRAFTING_EXP_GAIN[userCraftingRank] / 2;
+      // Award small amount of crafting experience (half of crystal's crafting experience, or 0 if not set)
+      const expGain = Math.floor((crystalItem.craftingExperience ?? 0) / 2);
       // Update trackers with crafting experience gained
       const { trackers } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },

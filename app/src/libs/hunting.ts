@@ -39,7 +39,7 @@ export const getNextHuntingRank = (huntingRank: HUNTING_RANK) => {
 export const getNextRankExperience = (huntingRank: HUNTING_RANK) => {
   switch (huntingRank) {
     case "S RANK":
-      return HUNTING_REQUIRED_EXP["S RANK"];
+      return null;
     case "A RANK":
       return HUNTING_REQUIRED_EXP["S RANK"];
     case "B RANK":

@@ -39,7 +39,7 @@ export const getNextGatheringRank = (gatheringRank: GATHERING_RANK) => {
 export const getNextRankExperience = (gatheringRank: GATHERING_RANK) => {
   switch (gatheringRank) {
     case "S RANK":
-      return GATHERING_REQUIRED_EXP["S RANK"];
+      return null;
     case "A RANK":
       return GATHERING_REQUIRED_EXP["S RANK"];
     case "B RANK":

@@ -1199,6 +1199,7 @@ export const item = mysqlTable(
     canBeHunted: boolean("canBeHunted").default(false).notNull(),
     canBeGathered: boolean("canBeGathered").default(false).notNull(),
     canBeTraded: boolean("canBeTraded").default(false).notNull(),
+    craftingExperience: int("craftingExperience").default(0).notNull(),
     crystalTargetTypes: mysqlEnum("crystalTargetTypes", consts.ItemTypes),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
     battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
@@ -3013,6 +3014,7 @@ export const quest = mysqlTable(
     questRank: mysqlEnum("questRank", consts.LetterRanks).default("D").notNull(),
     medicalRank: mysqlEnum("medicalRank", consts.MEDNIN_RANKS).default("NONE"),
     huntingRank: mysqlEnum("huntingRank", consts.HUNTING_RANKS).default("NONE"),
+    gatheringRank: mysqlEnum("gatheringRank", consts.GATHERING_RANKS).default("NONE"),
     requiredLevel: int("requiredLevel").default(1).notNull(),
     prerequisiteQuestId: varchar("prerequisiteQuestId", { length: 191 }),
     tierLevel: int("tierLevel"),

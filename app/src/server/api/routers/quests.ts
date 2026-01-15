@@ -907,6 +907,7 @@ export const questsRouter = createTRPCRouter({
         questType: "mission",
         medicalRank: "NONE",
         huntingRank: "NONE",
+        gatheringRank: "NONE",
         hidden: true,
         prerequisiteQuestId: "",
         content: {
