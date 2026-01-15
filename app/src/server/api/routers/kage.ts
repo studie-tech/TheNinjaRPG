@@ -516,7 +516,8 @@ if (activeKageChallenges.length > 0) {
       if (village.kageId !== kage.userId) return errorResponse("Not kage");
       if (village.type !== "VILLAGE") return errorResponse("Only for village");
       if (prospect.villageId !== village.id) return errorResponse("Not in village");
-      if (elders.length > KAGE_MAX_ELDERS) {
+      // Only enforce max when PROMOTING to ELDER
+      if (newRank === "ELDER" && elders.length >= KAGE_MAX_ELDERS) {
         return errorResponse(`Already have ${KAGE_MAX_ELDERS} elders`);
       }
       if (secondsFromDate(lockout, village.leaderUpdatedAt) > new Date()) {
