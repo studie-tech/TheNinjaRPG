@@ -355,12 +355,6 @@ export default function OccupationCrafting() {
                       const craftableItem = craftableItems?.find(
                         (item) => item.id === selectedItem.id,
                       );
-                      if (
-                        !craftableItem?.craftingRequirements ||
-                        craftableItem.craftingRequirements.length === 0
-                      ) {
-                        return null;
-                      }
 
                       // Calculate crafting time
                       const userCraftingRank = getCraftingRank(
@@ -390,6 +384,10 @@ export default function OccupationCrafting() {
                       // Get crafting experience
                       const expGain = selectedItem.craftingExperience ?? 0;
 
+                      const hasRequirements =
+                        craftableItem?.craftingRequirements &&
+                        craftableItem.craftingRequirements.length > 0;
+
                       return (
                         <>
                           {/* Crafting Info */}
@@ -417,41 +415,43 @@ export default function OccupationCrafting() {
                           </div>
 
                           {/* Required Materials */}
-                          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3">
-                            <h4 className="font-semibold text-sm mb-2">
-                              Required Materials
-                            </h4>
-                            <div className="space-y-2">
-                              {craftableItem.craftingRequirements.map((req, index) => {
-                                const totalQuantity = getTotalItemQuantity(
-                                  userItems || [],
-                                  req.requirementItemId,
-                                );
-                                const required = req.quantity;
-                                const hasEnough = totalQuantity >= required;
+                          {hasRequirements && (
+                        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3">
+                          <h4 className="font-semibold text-sm mb-2">
+                            Required Materials
+                          </h4>
+                          <div className="space-y-2">
+                            {craftableItem.craftingRequirements.map((req, index) => {
+                              const totalQuantity = getTotalItemQuantity(
+                                userItems || [],
+                                req.requirementItemId,
+                              );
+                              const required = req.quantity;
+                              const hasEnough = totalQuantity >= required;
 
-                                return (
+                              return (
+                                <div
+                                  key={index}
+                                  className="flex items-center justify-between"
+                                >
+                                  <span className="text-sm">
+                                    {required}x{" "}
+                                    {req.requirementItem?.name || "Unknown Item"}
+                                  </span>
                                   <div
-                                    key={index}
-                                    className="flex items-center justify-between"
+                                    className={`text-sm font-medium ${
+                                      hasEnough ? "text-green-600" : "text-red-600"
+                                    }`}
                                   >
-                                    <span className="text-sm">
-                                      {required}x{" "}
-                                      {req.requirementItem?.name || "Unknown Item"}
-                                    </span>
-                                    <div
-                                      className={`text-sm font-medium ${
-                                        hasEnough ? "text-green-600" : "text-red-600"
-                                      }`}
-                                    >
-                                      {totalQuantity}/{required}
-                                      {hasEnough ? " ✓" : " ✗"}
-                                    </div>
+                                    {totalQuantity}/{required}
+                                    {hasEnough ? " ✓" : " ✗"}
                                   </div>
-                                );
-                              })}
-                            </div>
+                                </div>
+                              );
+                            })}
                           </div>
+                        </div>
+                          )}
                         </>
                       );
                     })()}

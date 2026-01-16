@@ -114,13 +114,16 @@ export const occupationRouter = createTRPCRouter({
       }
       // Derived
       const userCraftingRank = getCraftingRank(user.craftingExperience);
+      // Check rank eligibility using rank-based crafting times
+      const rankCraftingTime =
+        CRAFTING_TIMES_MINS[userCraftingRank][itemWithRequirements.rarity];
       // Consumables have static crafting times that don't scale with rank
       const craftingTime =
         itemWithRequirements.itemType === "CONSUMABLE"
           ? CONSUMABLE_CRAFTING_TIMES_MINS[itemWithRequirements.rarity]
-          : CRAFTING_TIMES_MINS[userCraftingRank][itemWithRequirements.rarity];
-      // Guards
-      if (craftingTime === 0) {
+          : rankCraftingTime;
+      // Guards - check rank eligibility regardless of item type
+      if (rankCraftingTime === 0) {
         return errorResponse(
           `You need to be at least ${itemWithRequirements.rarity === "EPIC" ? "Apprentice" : "Master"} rank to craft ${itemWithRequirements.rarity} items`,
         );
