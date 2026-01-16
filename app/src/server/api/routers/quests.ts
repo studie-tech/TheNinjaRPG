@@ -37,6 +37,7 @@ import {
   canEditQuests,
   canEditStarterQuests,
   canPlayHiddenQuests,
+  canOnlyEditSelf,
 } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/socials";
 import { LetterRanks } from "@/drizzle/constants";
@@ -1219,6 +1220,10 @@ export const questsRouter = createTRPCRouter({
       }
       if (!targetUser.user) {
         return errorResponse("Target user not found");
+      }
+      // Roles that can only edit themselves
+      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+        return errorResponse("You can only delete quests from your own profile");
       }
       // Derives
       const questData = targetUser.user.questData?.filter(

@@ -90,6 +90,7 @@ import {
   canEditItems,
   canEditStaffAccountFlag,
   canEditRankedLp,
+  canOnlyEditSelf,
 } from "@/utils/permissions";
 import { UserRanks, BasicElementName } from "@/drizzle/constants";
 import { getRandomElement } from "@/utils/array";
@@ -943,6 +944,10 @@ export const profileRouter = createTRPCRouter({
       if (!target) return errorResponse("User not found");
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
+      // Roles that can only edit themselves
+      if (canOnlyEditSelf(user.role) && user.userId !== target.userId) {
+        return errorResponse("You can only edit your own profile");
+      }
 
       // Prepare jutsu & item id arrays for permission checks and later DB update
       const oldJutsuIds = target.jutsus.map((j) => j.jutsuId);

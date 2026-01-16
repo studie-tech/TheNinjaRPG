@@ -290,9 +290,15 @@ export const canEditPublicUser = (user: UserData) => {
     "CONTENT-ADMIN",
     "EVENT-ADMIN",
     "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
     "MODERATOR-ADMIN",
     "CODER",
   ].includes(user.role);
+};
+
+export const canOnlyEditSelf = (role: UserRole) => {
+  return ["CONTENT", "EVENT"].includes(role);
 };
 
 export const canAwardReputation = (role: UserRole) => {
@@ -438,6 +444,8 @@ export const canEditUsername = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "HEAD_MODERATOR",
@@ -450,6 +458,8 @@ export const canEditCustomTitle = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -460,6 +470,8 @@ export const canEditBloodline = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -470,6 +482,8 @@ export const canEditVillage = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -480,6 +494,8 @@ export const canEditRank = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -490,6 +506,8 @@ export const canEditJutsus = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -500,6 +518,8 @@ export const canEditItems = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
     "CODING-ADMIN",
+    "CONTENT",
+    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
@@ -509,7 +529,9 @@ export const canEditItems = (role: UserRole) => {
 export const canEditQuests = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
-    "CODING-ADMIN",
+    "CODING-ADMIN", 
+    "CONTENT",
+    "EVENT",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",
     "CODER",
