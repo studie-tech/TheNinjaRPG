@@ -58,6 +58,7 @@ Sentry.init({
     "Illegal invocation", // Third-party script error (Facebook in-app browser or Cookiebot)
     "Can't find variable: EmptyRanges", // Browser extension error (CodeMirror-based extensions)
     "postMessage is not a function", // Clerk internal error - occurs in clerk.browser.js with Web Workers
+    "module factory is not available", // Turbopack runtime error - occurs when browser caches stale JS chunks after deployment
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
