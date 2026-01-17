@@ -962,36 +962,38 @@ const SwapVillage: React.FC = () => {
         />
       )}
       {isFetching && <Loader explanation="Loading villages" />}
-      {isOpen && userData && village && (
-        <Modal2
-          title="Confirm Purchase"
-          proceed_label={
-            isSwapping
-              ? undefined
-              : canAfford
-                ? `Swap for ${COST_SWAP_VILLAGE} reps`
-                : `Need ${COST_SWAP_VILLAGE - userData.reputationPoints} reps`
+      <Modal2
+        title="Confirm Purchase"
+        proceed_label={
+          isSwapping
+            ? undefined
+            : canAfford
+              ? `Swap for ${COST_SWAP_VILLAGE} reps`
+              : `Need ${COST_SWAP_VILLAGE - userData.reputationPoints} reps`
+        }
+        isOpen={isOpen && !!village}
+        setIsOpen={setIsOpen}
+        isValid={false}
+        onAccept={() => {
+          if (canAfford && village) {
+            swap({ villageId: village.id });
+          } else {
+            setIsOpen(false);
           }
-          isOpen={isOpen}
-          setIsOpen={setIsOpen}
-          isValid={false}
-          onAccept={() => {
-            if (canAfford) {
-              swap({ villageId: village.id });
-            } else {
-              setIsOpen(false);
-            }
-          }}
-          confirmClassName={
-            canAfford
-              ? "bg-blue-600 text-white hover:bg-blue-700"
-              : "bg-red-600 text-white hover:bg-red-700"
-          }
-        >
-          {!isSwapping && <ItemWithEffects item={village} key={village.id} />}
-          {isSwapping && <Loader explanation={`Purchasing ${village.name}`} />}
-        </Modal2>
-      )}
+        }}
+        confirmClassName={
+          canAfford
+            ? "bg-blue-600 text-white hover:bg-blue-700"
+            : "bg-red-600 text-white hover:bg-red-700"
+        }
+      >
+        {village && !isSwapping && (
+          <ItemWithEffects item={village} key={village.id} />
+        )}
+        {isSwapping && village && (
+          <Loader explanation={`Purchasing ${village.name}`} />
+        )}
+      </Modal2>
     </div>
   );
 };
@@ -1117,38 +1119,40 @@ const SwapBloodline: React.FC = () => {
           build your history.
         </div>
       )}
-      {isOpen && userData && bloodline && (
-        <Modal2
-          title="Confirm Purchase"
-          proceed_label={
-            isSwapping
-              ? undefined
-              : isFreeSwap
-                ? "Swap for free"
-                : canAfford
-                  ? `Swap for ${COST_SWAP_BLOODLINE} reps`
-                  : `Need ${COST_SWAP_BLOODLINE - userData.reputationPoints} reps`
+      <Modal2
+        title="Confirm Purchase"
+        proceed_label={
+          isSwapping
+            ? undefined
+            : isFreeSwap
+              ? "Swap for free"
+              : canAfford
+                ? `Swap for ${COST_SWAP_BLOODLINE} reps`
+                : `Need ${COST_SWAP_BLOODLINE - userData.reputationPoints} reps`
+        }
+        isOpen={isOpen && !!bloodline}
+        setIsOpen={setIsOpen}
+        isValid={false}
+        onAccept={() => {
+          if (canAfford && bloodline) {
+            swap({ bloodlineId: bloodline.id });
+          } else {
+            setIsOpen(false);
           }
-          isOpen={isOpen}
-          setIsOpen={setIsOpen}
-          isValid={false}
-          onAccept={() => {
-            if (canAfford) {
-              swap({ bloodlineId: bloodline.id });
-            } else {
-              setIsOpen(false);
-            }
-          }}
-          confirmClassName={
-            canAfford
-              ? "bg-blue-600 text-white hover:bg-blue-700"
-              : "bg-red-600 text-white hover:bg-red-700"
-          }
-        >
-          {!isSwapping && <ItemWithEffects item={bloodline} key={bloodline.id} />}
-          {isSwapping && <Loader explanation={`Purchasing ${bloodline.name}`} />}
-        </Modal2>
-      )}
+        }}
+        confirmClassName={
+          canAfford
+            ? "bg-blue-600 text-white hover:bg-blue-700"
+            : "bg-red-600 text-white hover:bg-red-700"
+        }
+      >
+        {bloodline && !isSwapping && (
+          <ItemWithEffects item={bloodline} key={bloodline.id} />
+        )}
+        {isSwapping && bloodline && (
+          <Loader explanation={`Purchasing ${bloodline.name}`} />
+        )}
+      </Modal2>
     </div>
   );
 };
