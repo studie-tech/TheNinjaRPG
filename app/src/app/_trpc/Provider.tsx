@@ -141,6 +141,15 @@ export const onError = (err: unknown) => {
   ) {
     return;
   }
+  // Ignore abort errors (user navigated away before request completed)
+  // Check both cause.name (spec-compliant) and message (fallback for browser variations)
+  if (
+    err instanceof TRPCClientError &&
+    (err.cause?.name === "AbortError" ||
+      err.message.includes("The operation was aborted"))
+  ) {
+    return;
+  }
   // Handle "not signed in" errors gracefully (from useGlobalOnMutateProtect)
   if (
     err instanceof Error &&
