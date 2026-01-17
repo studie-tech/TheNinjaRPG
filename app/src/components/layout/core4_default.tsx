@@ -24,7 +24,15 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { Bell, Info, ShieldAlert, ShieldCheck, Eclipse, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Bell,
+  Info,
+  ShieldAlert,
+  ShieldCheck,
+  Eclipse,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { Earth, House, MessageCircleWarning, Inbox } from "lucide-react";
 import { Link2, Music } from "lucide-react";
 import { useGameMenu, getMainNavbarLinks } from "@/libs/menus";
@@ -47,7 +55,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { getCurrentSeason } from "@/utils/time";
 import TutorialAssistant from "@/layout/TutorialAssistant";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem, useLocalStorage } from "@/hooks/localstorage";
+import {
+  safeLocalStorageGetItem,
+  safeLocalStorageSetItem,
+  useLocalStorage,
+} from "@/hooks/localstorage";
 import {
   IMG_WALLPAPER_WINTER,
   IMG_WALLPAPER_SPRING,
@@ -788,7 +800,10 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           {/* MOBILE NOTIFICATIONS */}
           <div className="absolute top-[75px] right-0 left-0 flex flex-row justify-end md:hidden p-1 gap-2">
             {pathname !== "/combat" && (
-              <CollapsibleNotifications notifications={shownNotifications} layout="mobile" />
+              <CollapsibleNotifications
+                notifications={shownNotifications}
+                layout="mobile"
+              />
             )}
           </div>
           {/* <div className="p-3 pt-24 min-h-[1200px] bg-background bg-opacity-50">
@@ -943,7 +958,10 @@ const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
   className = "",
 }) => {
   // Persist collapsed state with default to expanded (false = not collapsed)
-  const [isCollapsed, setIsCollapsed] = useLocalStorage("notificationsCollapsed", false);
+  const [isCollapsed, setIsCollapsed] = useLocalStorage(
+    "notificationsCollapsed",
+    false,
+  );
 
   // Don't render anything if no notifications
   if (!notifications || notifications.length === 0) return null;
@@ -953,83 +971,105 @@ const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
   const count = notifications.length;
 
   // Badge styling based on critical status
-  const badgeClass = hasCritical
-    ? "bg-red-500 text-white"
-    : "bg-slate-500 text-white";
+  const badgeClass = hasCritical ? "bg-red-500 text-white" : "bg-slate-500 text-white";
 
   if (layout === "mobile") {
-    // Mobile layout
-    if (isCollapsed) {
-      // Collapsed: show bell icon with count badge
-      return (
-        <button
-          onClick={() => setIsCollapsed(false)}
-          className="relative flex items-center justify-center p-1 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors duration-200"
-          aria-label={`Show ${count} notifications`}
-          aria-expanded={false}
-        >
-          <Bell className="h-5 w-5 text-white" />
-          <span
-            className={`absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] text-xs font-bold rounded-full px-1 ${badgeClass}`}
-          >
-            {count}
-          </span>
-        </button>
-      );
-    }
-
-    // Expanded: show notifications with collapse button
+    // Mobile layout with smooth horizontal transition
     return (
-      <div className="flex flex-row items-center gap-2">
-        <button
-          onClick={() => setIsCollapsed(true)}
-          className="flex items-center justify-center p-1 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors duration-200"
-          aria-label="Hide notifications"
-          aria-expanded={true}
+      <div className="flex flex-row items-start gap-2">
+        {/* Toggle button - different structure for collapsed vs expanded */}
+        {isCollapsed ? (
+          <button
+            onClick={() => setIsCollapsed(false)}
+            className="flex items-stretch rounded-lg border-2 border-slate-800 overflow-hidden hover:opacity-70 transition-opacity duration-200"
+            aria-label={`Show ${count} notifications`}
+            aria-expanded={false}
+          >
+            <span className="flex items-center justify-center px-2 py-[1px] bg-slate-700">
+              <Bell className="h-5 w-5 text-white" />
+            </span>
+            <span
+              className={`flex items-center justify-center px-2 py-[1px] text-xs font-bold ${badgeClass}`}
+            >
+              {count}
+            </span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setIsCollapsed(true)}
+            className="flex items-center justify-center rounded-lg border-2 border-slate-800 bg-slate-700 hover:opacity-70 transition-opacity duration-200 aspect-square"
+            aria-label="Hide notifications"
+            aria-expanded={true}
+          >
+            <ChevronRight className="h-5 w-5 text-white m-[1px]" />
+          </button>
+        )}
+        {/* Animated notification list container */}
+        <div
+          className="grid transition-all duration-300 ease-in-out"
+          style={{
+            gridTemplateColumns: isCollapsed ? "0fr" : "1fr",
+          }}
         >
-          <ChevronUp className="h-5 w-5 text-white" />
-        </button>
-        <NotificationList notifications={notifications} layout="mobile" className={className} />
+          <div
+            className={`overflow-hidden flex flex-row flex-nowrap items-start gap-2 transition-opacity duration-300 ${
+              isCollapsed ? "opacity-0" : "opacity-100"
+            }`}
+          >
+            <NotificationList
+              notifications={notifications}
+              layout="mobile"
+              className={className}
+            />
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Desktop layout
-  if (isCollapsed) {
-    // Collapsed: show header with count badge
-    return (
+  // Desktop layout with smooth transition
+  return (
+    <div>
+      {/* Header button - always visible */}
       <button
-        onClick={() => setIsCollapsed(false)}
+        onClick={() => setIsCollapsed(!isCollapsed)}
         className="w-full flex items-center justify-between text-xl font-bold text-orange-100 px-1 pt-2 hover:text-orange-300 transition-colors duration-200 cursor-pointer"
-        aria-label={`Show ${count} notifications`}
-        aria-expanded={false}
+        aria-label={isCollapsed ? `Show ${count} notifications` : "Hide notifications"}
+        aria-expanded={!isCollapsed}
       >
         <span className="flex items-center gap-2">
           Notifications
+          {/* Badge only shown when collapsed */}
           <span
-            className={`flex items-center justify-center min-w-[24px] h-[24px] text-sm font-bold rounded-full px-2 ${badgeClass}`}
+            className={`flex items-center justify-center min-w-[24px] h-[24px] text-sm font-bold rounded-full px-2 transition-all duration-300 ${badgeClass} ${
+              isCollapsed ? "opacity-100 scale-100" : "opacity-0 scale-75"
+            }`}
           >
             {count}
           </span>
         </span>
-        <ChevronDown className="h-5 w-5" />
+        {/* Animated chevron */}
+        <ChevronDown
+          className={`h-5 w-5 transition-transform duration-300 ${
+            isCollapsed ? "rotate-0" : "rotate-180"
+          }`}
+        />
       </button>
-    );
-  }
-
-  // Expanded: show full notification list with collapse toggle
-  return (
-    <div className="transition-all duration-200">
-      <button
-        onClick={() => setIsCollapsed(true)}
-        className="w-full flex items-center justify-between text-xl font-bold text-orange-100 px-1 pt-2 hover:text-orange-300 transition-colors duration-200 cursor-pointer"
-        aria-label="Hide notifications"
-        aria-expanded={true}
+      {/* Animated notification list using grid for height animation */}
+      <div
+        className="grid transition-all duration-300 ease-in-out"
+        style={{
+          gridTemplateRows: isCollapsed ? "0fr" : "1fr",
+        }}
       >
-        <span>Notifications</span>
-        <ChevronUp className="h-5 w-5" />
-      </button>
-      <NotificationList notifications={notifications} layout="desktop" className={className} />
+        <div className="overflow-hidden">
+          <NotificationList
+            notifications={notifications}
+            layout="desktop"
+            className={className}
+          />
+        </div>
+      </div>
     </div>
   );
 };
