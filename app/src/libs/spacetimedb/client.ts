@@ -131,6 +131,8 @@ export class SpacetimeDBConnection {
   private currentUserId: string | null = null;
   // For guests, we use the seed to subscribe to a specific session (more efficient than all guest sessions)
   private pendingGuestSeed: string | null = null;
+  // Track if the WebSocket is fully ready for sending (fixes InvalidStateError: Still in CONNECTING state)
+  private wsReady: boolean = false;
 
   constructor(config: SpacetimeDBConfig) {
     this.config = config;
@@ -143,7 +145,7 @@ export class SpacetimeDBConnection {
   private waitForConnection(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const checkConnection = () => {
-        if (this.connectionState === "connected") {
+        if (this.connectionState === "connected" && this.wsReady) {
           resolve();
         } else if (
           this.connectionState === "error" ||
@@ -156,6 +158,25 @@ export class SpacetimeDBConnection {
       };
       setTimeout(checkConnection, 100);
     });
+  }
+
+  /**
+   * Wait for WebSocket to be fully ready for sending messages.
+   * The SpacetimeDB SDK's onConnect callback may fire before the underlying
+   * WebSocket is in OPEN state, causing "Still in CONNECTING state" errors.
+   */
+  private async waitForWebSocketReady(): Promise<void> {
+    const maxAttempts = 20;
+    const delayMs = 50;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      if (this.wsReady) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    throw new Error("WebSocket not ready after maximum wait time");
   }
 
   /**
@@ -213,12 +234,19 @@ export class SpacetimeDBConnection {
           // Set up filtered subscriptions after connection
           // PERFORMANCE: Only subscribe to this user's data
           this.setupGlobalSubscriptions();
+
+          // Mark WebSocket as ready after a small delay to ensure the underlying
+          // WebSocket is fully in OPEN state. This fixes "Still in CONNECTING state" errors.
+          setTimeout(() => {
+            this.wsReady = true;
+          }, 100);
         })
         .onDisconnect((ctx, error) => {
           if (DEBUG) {
             console.log("[SpacetimeDB] Disconnected", error);
           }
           this.connectionState = "disconnected";
+          this.wsReady = false;
           this.emit({ type: "connection_state", state: "disconnected" });
         })
         .onConnectError((ctx, error) => {
@@ -522,6 +550,7 @@ export class SpacetimeDBConnection {
       this.connection = null;
     }
     this.connectionState = "disconnected";
+    this.wsReady = false;
     this.currentSessionId = null;
     this.currentUserId = null;
     this.emit({ type: "connection_state", state: "disconnected" });
@@ -613,6 +642,9 @@ export class SpacetimeDBConnection {
     if (!this.connection || this.connectionState !== "connected") {
       throw new Error("Not connected to SpacetimeDB");
     }
+
+    // Wait for WebSocket to be fully ready before sending
+    await this.waitForWebSocketReady();
 
     this.connection.reducers.createSession(params);
     if (DEBUG) {
