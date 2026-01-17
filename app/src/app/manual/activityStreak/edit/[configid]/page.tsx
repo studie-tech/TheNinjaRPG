@@ -284,6 +284,7 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
                           }));
                           setRewards(newRewards);
                         }}
+                        type="activityStreak"
                         hideFields={[
                           "reward_hunter_items",
                           "reward_hunter_items_ids",

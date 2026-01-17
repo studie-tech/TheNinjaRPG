@@ -437,7 +437,9 @@ export const EditContent = <
                 "reward_hunter_items_ids",
                 "reward_hunter_items",
                 "reward_hunting_experience",
-              ].includes(formEntry.id) || questType === "hunting"
+              ].includes(formEntry.id) ||
+              questType === "hunting" ||
+              props.type === "activityStreak"
             );
           })
           .filter((formEntry) => {
@@ -446,7 +448,9 @@ export const EditContent = <
                 "reward_gathering_items_ids",
                 "reward_gathering_items",
                 "reward_gathering_experience",
-              ].includes(formEntry.id) || questType === "gathering"
+              ].includes(formEntry.id) ||
+              questType === "gathering" ||
+              props.type === "activityStreak"
             );
           })
           .map((formEntry) => {
@@ -2235,6 +2239,7 @@ interface RewardFormWrapperProps {
   setRewards: (rewards: ObjectiveRewardType[]) => void;
   formClassName?: string;
   hideFields?: string[];
+  type?: ContentType;
 }
 
 /**
@@ -2242,7 +2247,7 @@ interface RewardFormWrapperProps {
  * @returns React.ReactNode
  */
 export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
-  const { idx, reward, rewards, formClassName, setRewards, hideFields = [] } = props;
+  const { idx, reward, rewards, formClassName, setRewards, hideFields = [], type } = props;
 
   // Parse reward with schema
   const parsedReward = ObjectiveReward.safeParse(reward);
@@ -2370,6 +2375,7 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
       formData={formData}
       formClassName={formClassName}
       showSubmit={false}
+      type={type}
     />
   );
 };
