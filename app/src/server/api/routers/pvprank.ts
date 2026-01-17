@@ -10,7 +10,7 @@ import {
   logQueueLengths,
   logRankedPicks,
 } from "@/drizzle/schema";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, canAwardReputation } from "@/utils/permissions";
 import { rankedLoadoutSchema, rankedSeasonSchema } from "@/validators/pvpRank";
 import { baseServerResponse, errorResponse } from "@/api/trpc";
 import {
@@ -129,11 +129,16 @@ export const pvpRankRouter = createTRPCRouter({
       if (currentSeason) {
         return errorResponse("A season is already active");
       }
+      // Server-side enforcement: reset reward_reputation to 0 if user lacks permission
+      const seasonData = { ...input };
+      if (!canAwardReputation(user.role)) {
+        seasonData.reward_reputation = 0;
+      }
       // insert new season
       const id = nanoid();
       await ctx.drizzle.insert(rankedSeason).values({
         id,
-        ...input,
+        ...seasonData,
       });
 
       return { success: true, message: "Season created successfully" };
@@ -145,13 +150,19 @@ export const pvpRankRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, currentSeason] = await Promise.all([
+      const [user, currentSeason, existingSeason] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchCurrentSeason(ctx.drizzle),
+        ctx.drizzle.query.rankedSeason.findFirst({
+          where: eq(rankedSeason.id, input.id),
+        }),
       ]);
       // Guard
       if (!canChangeContent(user.role)) {
         return errorResponse("You don't have permission to update ranked seasons");
+      }
+      if (!existingSeason) {
+        return errorResponse("Season not found");
       }
       if (currentSeason && currentSeason.id !== input.id) {
         const now = new Date();
@@ -160,8 +171,12 @@ export const pvpRankRouter = createTRPCRouter({
           return errorResponse("Another season is active, cannot update this season");
         }
       }
-      // update season
+      // Server-side enforcement: preserve existing reward_reputation if user lacks permission
       const { id, ...data } = input;
+      if (!canAwardReputation(user.role)) {
+        data.reward_reputation = existingSeason.reward_reputation;
+      }
+      // update season
       await ctx.drizzle
         .update(rankedSeason)
         .set({

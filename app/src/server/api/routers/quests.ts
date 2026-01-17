@@ -836,12 +836,16 @@ export const questsRouter = createTRPCRouter({
         // Server-side enforcement: preserve existing reward_reputation if user lacks permission
         if (!canAwardReputation(user.role)) {
           data.content.reward.reward_reputation = entry.content.reward.reward_reputation;
-          // Also preserve reward_reputation for each objective
-          data.content.objectives.forEach((objective, index) => {
-            const existingObjective = entry.content.objectives[index];
-            if (existingObjective) {
-              objective.reward_reputation = existingObjective.reward_reputation;
-            }
+          // Preserve by objective id; new objectives should not gain reputation
+          const existingObjectivesById = new Map(
+            entry.content.objectives.map((objective) => [objective.id, objective]),
+          );
+          data.content.objectives = data.content.objectives.map((objective) => {
+            const existingObjective = existingObjectivesById.get(objective.id);
+            return {
+              ...objective,
+              reward_reputation: existingObjective?.reward_reputation ?? 0,
+            };
           });
         }
         // Check we only give ranks with exams
