@@ -8,6 +8,7 @@ scripts/clips/*
 scripts/music/*
 scripts/theninja_rpg_trailer*
 scripts/fiverr*
+scripts/fetch_sentry_issues.sh
 *.pem
 assets/pwa/*
 assets/sfx/*
