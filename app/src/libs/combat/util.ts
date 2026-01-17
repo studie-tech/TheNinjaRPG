@@ -1780,14 +1780,14 @@ export const calcApReduction = (
 ) => {
   const user = battle?.usersState.find((u) => u.userId === userId);
   const stunEffects = [
-    ...(battle?.usersEffects.filter(
+    ...(battle?.usersEffects?.filter(
       (e) =>
         e.type === "stun" &&
         e.targetId === userId &&
         !e.castThisRound &&
         isEffectActive(e),
-    ) || []),
-    ...(battle?.groundEffects.filter((e) => {
+    ) ?? []),
+    ...(battle?.groundEffects?.filter((e) => {
       // Basic checks for stun effect at user's location
       const locationMatch =
         e.type === "stun" &&
@@ -1800,7 +1800,7 @@ export const calcApReduction = (
 
       // Use the existing checkFriendlyFire function to determine if effect should be applied
       return checkFriendlyFire(e, user, battle.usersState);
-    }) || []),
+    }) ?? []),
   ];
   const apReduction = stunEffects?.reduce((acc, e) => {
     if (e && "apReduction" in e) {
