@@ -713,26 +713,21 @@ export const updateUser = async (
     }
 
     // Check for ranked win streak reward (every 3 wins) and total wins reward (every 3 wins)
+    // Use the user's rankedStreak and rankedWins from battle state (loaded at battle initiation)
     let streakSeichiSilverBonus = 0;
     if (curBattle.battleType === "RANKED_PVP" && result.didWin) {
-      const currentUser = await client.query.userData.findFirst({
-        where: eq(userData.userId, userId),
-        columns: { rankedStreak: true, rankedWins: true },
-      });
-      if (currentUser) {
-        // Check win streak reward (every 3 consecutive wins)
-        const newStreak = currentUser.rankedStreak + 1;
-        if (newStreak > 0 && newStreak % 3 === 0) {
-          streakSeichiSilverBonus += 1;
-        }
-        // Check total wins reward (every 3 total wins)
-        const newWins = currentUser.rankedWins + 1;
-        if (newWins > 0 && newWins % 3 === 0) {
-          streakSeichiSilverBonus += 1;
-        }
-        if (streakSeichiSilverBonus > 0) {
-          result.seichiSilver += streakSeichiSilverBonus;
-        }
+      // Check win streak reward (every 3 consecutive wins)
+      const newStreak = user.rankedStreak + 1;
+      if (newStreak > 0 && newStreak % 3 === 0) {
+        streakSeichiSilverBonus += 1;
+      }
+      // Check total wins reward (every 3 total wins)
+      const newWins = user.rankedWins + 1;
+      if (newWins > 0 && newWins % 3 === 0) {
+        streakSeichiSilverBonus += 1;
+      }
+      if (streakSeichiSilverBonus > 0) {
+        result.seichiSilver += streakSeichiSilverBonus;
       }
     }
 

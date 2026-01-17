@@ -116,6 +116,19 @@ The combat system is the most complex feature, with dedicated files:
 - `initiateBattle()` in `routers/combat.ts` - Start battles between users/AI
 - `performAction()` in `routers/combat.ts` - Process user actions in combat
 
+**⚠️ Battle Performance Requirements:**
+
+The combat system has strict performance requirements. The data flow should be:
+
+1. **Battle Initiation (`initiateBattle`)**: Load ALL required user data into the battle state. This includes user stats, items, jutsus, bloodlines, village info, quest data, and any other fields needed during combat (e.g., `rankedStreak`, `rankedWins`).
+
+2. **Action Processing (`performAction`)**:
+   - ONE initial query to fetch the battle state from the database
+   - Process all combat logic using the pre-loaded battle state data
+   - ONE parallel mutation step (`Promise.all`) for all database updates at the end
+
+**NEVER add intermediate fetch queries during `performAction`**. If you need data during combat that isn't available, add it to the battle state during `initiateBattle` instead. This ensures combat endpoints remain performant.
+
 ## Database Patterns
 
 - Uses Drizzle ORM with MySQL hosted on **PlanetScale**
