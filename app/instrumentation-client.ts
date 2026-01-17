@@ -77,6 +77,9 @@ Sentry.init({
     if (isEffectInterruptError(event)) {
       return null; // Drop Effect-TS fiber interruption errors (SpacetimeDB SDK)
     }
+    if (isDataCloneError(event)) {
+      return null; // Drop DataCloneError from third-party scripts (gtag, mediafilter)
+    }
     return event;
   },
 
@@ -305,6 +308,32 @@ function isEffectInterruptError(event: Sentry.ErrorEvent): boolean {
     message.includes("MicroCause.Interrupt") ||
     (message.includes("Cannot assign to read only property") &&
       message.includes("stack"))
+  );
+}
+
+/**
+ * Check if an error is a DataCloneError from third-party scripts.
+ * These occur when scripts like Google Analytics (gtag) or mediafilter inject
+ * code that tries to postMessage with DOM elements that cannot be cloned.
+ * Common in Facebook's in-app browser.
+ */
+function isDataCloneError(event: Sentry.ErrorEvent): boolean {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  const isDataCloneMessage =
+    message.includes("DataCloneError") ||
+    (message.includes("postMessage") && message.includes("could not be cloned"));
+
+  if (!isDataCloneMessage) return false;
+
+  // Check if the error originates from third-party scripts
+  return stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("gtag/js") ||
+      frame.filename?.includes("mediafilter") ||
+      frame.abs_path?.includes("gtag/js") ||
+      frame.abs_path?.includes("mediafilter"),
   );
 }
 
