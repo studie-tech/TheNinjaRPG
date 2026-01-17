@@ -37,10 +37,26 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
     return () => {
       isMounted.current = false;
       if (cy.current) {
-        // Remove all listeners and destroy to prevent events firing on unmounted component
-        cy.current.removeAllListeners();
-        cy.current.destroy();
+        const cyInstance = cy.current;
         cy.current = null;
+        // Disable all user interactions immediately to prevent new touch events
+        cyInstance.autoungrabify(true);
+        cyInstance.autounselectify(true);
+        cyInstance.userPanningEnabled(false);
+        cyInstance.userZoomingEnabled(false);
+        cyInstance.boxSelectionEnabled(false);
+        // Remove all listeners before destroying
+        cyInstance.removeAllListeners();
+        // Use setTimeout to allow any pending touch event handlers to complete
+        // before destroying the instance. This prevents the "Cannot read properties
+        // of undefined (reading 'emit')" error on mobile devices.
+        setTimeout(() => {
+          try {
+            cyInstance.destroy();
+          } catch {
+            // Ignore errors during cleanup - the instance may already be partially destroyed
+          }
+        }, 0);
       }
     };
   }, []);
