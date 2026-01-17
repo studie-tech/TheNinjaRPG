@@ -143,10 +143,23 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
     ["timer", "battlefield", "battlelog"].includes(id),
   );
 
+  // Format battle date/time for subtitle
+  const battleDate = battleHistory?.createdAt;
+  const dateString = battleDate
+    ? battleDate.toLocaleDateString([], {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
+  const subtitle = dateString ? `Battle from ${dateString}` : "Loading...";
+
   return (
     <ContentBox
       title="Spectate"
-      subtitle="Available for 3h!"
+      subtitle={subtitle}
       defaultBackHref="/profile"
     >
       <div className="flex flex-col gap-1">

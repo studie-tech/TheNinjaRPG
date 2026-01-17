@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, lte, sql, eq, lt, isNull, isNotNull, or, ne } from "drizzle-orm";
+import { and, lte, sql, eq, lt, isNull, isNotNull } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
 import { forumPost, forumThread, questHistory, userAttribute } from "@/drizzle/schema";
 import { bankTransfers, bloodlineRolls, conceptImage } from "@/drizzle/schema";
@@ -49,44 +49,44 @@ export async function GET() {
       );
 
     // Step 3: Delete from battle action where battles have been deleted
+    // TTL: 72h to match the longest retention period (PVP battles)
     await drizzleDB.execute(
-      sql`DELETE FROM ${battleAction} a WHERE 
+      sql`DELETE FROM ${battleAction} a WHERE
           NOT EXISTS (SELECT id FROM ${battle} b WHERE b.id = a.battleId) AND
-          updatedAt < DATE_SUB(NOW(), INTERVAL ${3600 * 3} SECOND) LIMIT 99999`,
+          updatedAt < DATE_SUB(NOW(), INTERVAL ${3600 * 72} SECOND) LIMIT 99999`,
     );
 
-    // One day in mseconds
-    const oneDay = 1000 * 60 * 60 * 24;
+    // Time constants
+    const oneHour = 1000 * 60 * 60;
+    const oneDay = oneHour * 24;
 
     // Step 5: Delete battle history based on battle type
-    // - RANKED_PVP: 7 days
-    // - COMBAT: 60 days
-    // - Other battles: 1 day
+    // PVP battles (72 hours): ARENA, COMBAT, SPARRING, KAGE_PVP, CLAN_CHALLENGE, CLAN_BATTLE, SHRINE_WAR, TOURNAMENT, RANKED_PVP, RANKED_SPARRING
+    // PVE battles (12 hours): KAGE_AI, QUEST, RANDOM_ENCOUNTER, VILLAGE_PROTECTOR, TRAINING
+    const pvpTypes = ["ARENA", "COMBAT", "SPARRING", "KAGE_PVP", "CLAN_CHALLENGE", "CLAN_BATTLE", "SHRINE_WAR", "TOURNAMENT", "RANKED_PVP", "RANKED_SPARRING"] as const;
+    const pveTypes = ["KAGE_AI", "QUEST", "RANDOM_ENCOUNTER", "VILLAGE_PROTECTOR", "TRAINING"] as const;
+
+    // Delete PVP battles older than 72 hours
+    await drizzleDB.execute(
+      sql`DELETE FROM ${battleHistory}
+          WHERE battleType IN (${sql.join(pvpTypes.map(t => sql`${t}`), sql`, `)})
+          AND createdAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)`,
+    );
+
+    // Delete PVE battles older than 12 hours
+    await drizzleDB.execute(
+      sql`DELETE FROM ${battleHistory}
+          WHERE battleType IN (${sql.join(pveTypes.map(t => sql`${t}`), sql`, `)})
+          AND createdAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)`,
+    );
+
+    // Delete battles with null type older than 12 hours
     await drizzleDB
       .delete(battleHistory)
       .where(
-        or(
-          // Delete RANKED_PVP battles older than 7 days
-          and(
-            eq(battleHistory.battleType, "RANKED_PVP"),
-            lte(battleHistory.createdAt, new Date(Date.now() - oneDay * 7)),
-          ),
-          // Delete COMBAT battles older than 60 days
-          and(
-            eq(battleHistory.battleType, "COMBAT"),
-            lte(battleHistory.createdAt, new Date(Date.now() - oneDay * 60)),
-          ),
-          // Delete other non-COMBAT battles older than 1 day
-          and(
-            lte(battleHistory.createdAt, new Date(Date.now() - oneDay * 1)),
-            or(
-              and(
-                ne(battleHistory.battleType, "COMBAT"),
-                ne(battleHistory.battleType, "RANKED_PVP"),
-              ),
-              isNull(battleHistory.battleType),
-            ),
-          ),
+        and(
+          isNull(battleHistory.battleType),
+          lte(battleHistory.createdAt, new Date(Date.now() - oneHour * 12)),
         ),
       );
 

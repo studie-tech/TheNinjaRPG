@@ -91,6 +91,10 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
 
   sortedGroups?.forEach((entries, round) => {
     const isOpen = openRounds.includes(round);
+    const roundTime = entries[0]?.createdAt;
+    const timeString = roundTime
+      ? roundTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : "";
 
     const roundHeader = (
       <div
@@ -112,6 +116,9 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
           )}
         />
         <span className="text-sm font-semibold text-gray-800">Round {round}</span>
+        {timeString && (
+          <span className="text-xs text-gray-500 ml-auto">{timeString}</span>
+        )}
       </div>
     );
 

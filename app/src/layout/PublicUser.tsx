@@ -121,7 +121,9 @@ import {
   canChangeUserRolesTo,
   canAwardExperience,
   canEditRankedLp,
+  canViewOtherUsersBattleLogs,
 } from "@/utils/permissions";
+import { BattleTypes } from "@/drizzle/constants";
 
 interface PublicUserComponentProps {
   userId: string;
@@ -178,6 +180,10 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const enableActivityEvents =
     showActivityEvents && userData && canSeeActivityEvents(userData.role);
   const enableBloodlineHistory = showBloodlineHistory && canSeeSecrets;
+  const enableCombatHistory =
+    showCombatLogs &&
+    userData &&
+    (userData.userId === userId || canViewOtherUsersBattleLogs(userData.role));
 
   // Two-level filtering
   const state = useFiltering();
@@ -808,7 +814,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         enableLogs ||
         enableHistoricalIps ||
         enableActivityEvents ||
-        enableBloodlineHistory) && (
+        enableBloodlineHistory ||
+        enableCombatHistory) && (
         <Tabs
           defaultValue={showActive}
           className="flex flex-col items-center justify-center mt-3"
@@ -820,6 +827,9 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 {showNindo && <TabsTrigger value="nindo">Nindo</TabsTrigger>}
                 {showCombatLogs && (
                   <TabsTrigger value="graph">Combat Graph</TabsTrigger>
+                )}
+                {enableCombatHistory && (
+                  <TabsTrigger value="combatHistory">Combat History</TabsTrigger>
                 )}
                 {showTransactions && enablePaypal && (
                   <TabsTrigger value="transactions">Transactions</TabsTrigger>
@@ -915,6 +925,15 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   </DialogContent>
                 </Dialog>
               </ContentBox>
+            </TabsContent>
+          )}
+          {/* USER COMBAT HISTORY */}
+          {enableCombatHistory && (
+            <TabsContent value="combatHistory">
+              <CombatHistoryTab
+                userId={profile.userId}
+                isActive={showActive === "combatHistory"}
+              />
             </TabsContent>
           )}
           {/* USER TRANSACTIONS */}
@@ -2084,6 +2103,77 @@ const RankedMatchesTab: React.FC<TabComponentProps> = ({
             { key: "attackerAvatar", header: "Attacker", type: "avatar" },
             { key: "defenderAvatar", header: "Defender", type: "avatar" },
             { key: "battleId", header: "Battle ID", type: "string" },
+            { key: "createdAt", header: "Date", type: "date" },
+          ]}
+          linkPrefix="/battlelog/"
+          linkColumn={"battleId"}
+        />
+      )}
+    </ContentBox>
+  );
+};
+
+// ---------------- Combat History Tab ----------------
+
+const CombatHistoryTab: React.FC<TabComponentProps> = ({
+  userId,
+  isActive: _isActive,
+}) => {
+  const [selectedType, setSelectedType] = useState<string>("all");
+
+  const { data: history, isPending } = api.combat.getBattleHistory.useQuery(
+    {
+      userId,
+      combatTypes: selectedType === "all" ? undefined : [selectedType as (typeof BattleTypes)[number]],
+    },
+    { enabled: _isActive },
+  );
+
+  const combatHistory = history?.map((e) => ({
+    attackerUsername: e.attacker?.username || "Deleted User",
+    attackerUserId: e.attacker?.userId || "Deleted User",
+    attackerAvatar: e.attacker?.avatar || IMG_AVATAR_DEFAULT,
+    defenderUsername: e.defender?.username || "Deleted User",
+    defenderUserId: e.defender?.userId || "Deleted User",
+    defenderAvatar: e.defender?.avatar || IMG_AVATAR_DEFAULT,
+    battleId: e.battleId,
+    battleType: e.battleType || "Unknown",
+    createdAt: e.createdAt,
+  }));
+
+  return (
+    <ContentBox
+      title="Combat History"
+      subtitle="All combat encounters for this user"
+      initialBreak={true}
+      padding={false}
+      topRightContent={
+        <Select value={selectedType} onValueChange={setSelectedType}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="All Types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            {BattleTypes.map((type) => (
+              <SelectItem key={type} value={type}>
+                {type.replace(/_/g, " ")}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
+    >
+      {isPending && <Loader explanation="Loading combat history..." />}
+      {(!combatHistory || combatHistory.length === 0) && (
+        <p className="p-3">No combat history found</p>
+      )}
+      {combatHistory && combatHistory.length > 0 && (
+        <Table
+          data={combatHistory}
+          columns={[
+            { key: "attackerAvatar", header: "Attacker", type: "avatar" },
+            { key: "defenderAvatar", header: "Defender", type: "avatar" },
+            { key: "battleType", header: "Type", type: "capitalized" },
             { key: "createdAt", header: "Date", type: "date" },
           ]}
           linkPrefix="/battlelog/"

@@ -388,6 +388,16 @@ export const canViewFullBattleLog = (role: UserRole) => {
   ].includes(role);
 };
 
+export const canViewOtherUsersBattleLogs = (role: UserRole) => {
+  return [
+    "HEAD_MODERATOR",
+    "MODERATOR-ADMIN",
+    "CODING-ADMIN",
+    "CONTENT-ADMIN",
+    "EVENT-ADMIN",
+  ].includes(role);
+};
+
 export const canCloneUser = (role: UserRole) => {
   return ["CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
 };
