@@ -150,6 +150,18 @@ const Map: React.FC<MapProps> = (props) => {
       // Create scene
       sceneRef.appendChild(renderer.domElement);
 
+      // Track WebGL context loss to prevent shader errors on iOS mobile browsers
+      let isContextLost = false;
+      const handleContextLost = (event: Event) => {
+        event.preventDefault();
+        isContextLost = true;
+      };
+      const handleContextRestored = () => {
+        isContextLost = false;
+      };
+      renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
+      renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored);
+
       // Setup camera
       const camera = new PerspectiveCamera(fov, aspect, near, far);
 
@@ -594,9 +606,11 @@ const Map: React.FC<MapProps> = (props) => {
         // Trackball updates
         controls.update();
 
-        // Render the scene
+        // Render the scene (skip if WebGL context is lost)
         animationId = requestAnimationFrame(render);
-        renderer?.render(scene, camera);
+        if (!isContextLost) {
+          renderer?.render(scene, camera);
+        }
 
         // Performance monitor
         // stats.update();
@@ -620,6 +634,11 @@ const Map: React.FC<MapProps> = (props) => {
             renderer.domElement.removeEventListener("touchend", onTouchEnd);
           }
           window.removeEventListener("resize", handleResize);
+          renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+          renderer.domElement.removeEventListener(
+            "webglcontextrestored",
+            handleContextRestored,
+          );
         } catch {
           // Ignore errors if elements are already removed
         }

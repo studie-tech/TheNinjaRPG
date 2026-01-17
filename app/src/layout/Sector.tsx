@@ -673,6 +673,18 @@ const Sector: React.FC<SectorProps> = (props) => {
       // Create scene
       sceneRef.appendChild(renderer.domElement);
 
+      // Track WebGL context loss to prevent shader errors on iOS mobile browsers
+      let isContextLost = false;
+      const handleContextLost = (event: Event) => {
+        event.preventDefault();
+        isContextLost = true;
+      };
+      const handleContextRestored = () => {
+        isContextLost = false;
+      };
+      renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
+      renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored);
+
       // Setup camara
       const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
       camera.zoom = storedZoom;
@@ -928,9 +940,11 @@ const Sector: React.FC<SectorProps> = (props) => {
           endShaders();
         }
 
-        // Render the scene
+        // Render the scene (skip if WebGL context is lost)
         const endRender = profiler.mark("animate_render");
-        renderer?.render(scene, camera);
+        if (!isContextLost) {
+          renderer?.render(scene, camera);
+        }
         endRender();
 
         if (renderer) {
@@ -962,6 +976,11 @@ const Sector: React.FC<SectorProps> = (props) => {
           sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
           controls.removeEventListener("change", onZoomChange);
           rendererElement.removeEventListener("click", onClick, true);
+          renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+          renderer.domElement.removeEventListener(
+            "webglcontextrestored",
+            handleContextRestored,
+          );
         } catch {
           // Ignore errors if elements are already removed
         }

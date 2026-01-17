@@ -425,6 +425,18 @@ const TowerDefenseInner = ({
       return;
     }
 
+    // Track WebGL context loss to prevent shader errors on iOS mobile browsers
+    let isContextLost = false;
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      isContextLost = true;
+    };
+    const handleContextRestored = () => {
+      isContextLost = false;
+    };
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
+    renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored);
+
     // Camera and Controls
     const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
     cameraRef.current = camera;
@@ -808,10 +820,12 @@ const TowerDefenseInner = ({
         if (currentHitCount < lastHitCount) lastPlayerHitCountRef.current = 0;
         endPlayerHits();
 
-        // Render
+        // Render (skip if WebGL context is lost)
         const endRender = profiler.mark("animate_render");
         controlsRef.current?.update();
-        rendererRef.current.render(sceneRef.current, cameraRef.current);
+        if (!isContextLost) {
+          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        }
         endRender();
 
         profiler.setRendererInfo(rendererRef.current.info);
@@ -833,6 +847,15 @@ const TowerDefenseInner = ({
       mount.removeEventListener("mousemove", onMouseMove);
       mount.removeEventListener("click", onClick);
       window.removeEventListener("resize", onResize);
+      try {
+        renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+        renderer.domElement.removeEventListener(
+          "webglcontextrestored",
+          handleContextRestored,
+        );
+      } catch {
+        // Ignore errors if elements are already removed
+      }
       if (scene && renderer) cleanUp(scene, renderer);
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       if (frameAnimatorRef.current) frameAnimatorRef.current.dispose();
