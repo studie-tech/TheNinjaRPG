@@ -263,16 +263,37 @@ export const itemRouter = createTRPCRouter({
         }
       }
       // Server-side enforcement: preserve existing reward_reputation for users without permission
-      // Effects don't have stable IDs, so we preserve by position. New effects get 0.
+      // Match effects by content (excluding reward_reputation) to handle reordering
       if (!canAwardReputation(user.role)) {
-        const existingEffects = entry.effects as Array<{ type: string; reward_reputation?: number }>;
-        input.data.effects.forEach((effect, index) => {
+        type EffectWithReputation = Record<string, unknown> & {
+          type: string;
+          reward_reputation?: number;
+        };
+        const existingEffects = entry.effects as EffectWithReputation[];
+        const existingReputationEffects = existingEffects.filter(
+          (e) => e.type === "noncombatconsumereward" && (e.reward_reputation ?? 0) > 0,
+        );
+
+        // Create signature for matching (all properties except reward_reputation)
+        const getEffectSignature = (effect: EffectWithReputation): string => {
+          const { reward_reputation: _unused, ...rest } = effect;
+          void _unused; // Explicitly mark as intentionally unused
+          return JSON.stringify(rest, Object.keys(rest).sort());
+        };
+
+        // Build lookup map from existing effects' signatures to their reward_reputation
+        const signatureToReputation = new Map<string, number>();
+        for (const existing of existingReputationEffects) {
+          const sig = getEffectSignature(existing);
+          signatureToReputation.set(sig, existing.reward_reputation ?? 0);
+        }
+
+        // Preserve reputation for matching effects, set to 0 for new/modified effects
+        input.data.effects.forEach((effect) => {
           if (effect.type === "noncombatconsumereward") {
-            const existingEffect = existingEffects[index];
-            const existingReputation =
-              existingEffect?.type === "noncombatconsumereward"
-                ? existingEffect.reward_reputation ?? 0
-                : 0;
+            const typedEffect = effect as EffectWithReputation;
+            const sig = getEffectSignature(typedEffect);
+            const existingReputation = signatureToReputation.get(sig) ?? 0;
             (effect as { reward_reputation?: number }).reward_reputation = existingReputation;
           }
         });
