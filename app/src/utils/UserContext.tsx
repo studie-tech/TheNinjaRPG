@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useEffect, useState, use } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { parseHtml } from "@/utils/parse";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -176,7 +176,7 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
 
 // Easy hook for getting the current user data
 export const useUserData = () => {
-  return use(UserContext);
+  return useContext(UserContext);
 };
 
 // Require the user to be logged in
