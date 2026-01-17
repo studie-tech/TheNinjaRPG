@@ -90,6 +90,7 @@
         "gifuct-js": "^2.1.2",
         "honeycomb-grid": "4.1.5",
         "html2canvas": "1.4.1",
+        "import-in-the-middle": "^1.14.2",
         "jotai": "^2.12.5",
         "jszip": "^3.10.1",
         "lucide-react": "^0.542.0",
