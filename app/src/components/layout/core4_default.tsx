@@ -361,13 +361,11 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
 
   return (
     <GlobalAudioProvider userData={userData}>
-      {userData && (
-        <TutorialAssistant
-          rightSideBarOpen={rightSideBarOpen}
-          setRightSideBarOpen={setRightSideBarOpen}
-          rightSideBarRef={rightSideBarRef}
-        />
-      )}
+      <TutorialAssistant
+        rightSideBarOpen={rightSideBarOpen}
+        setRightSideBarOpen={setRightSideBarOpen}
+        rightSideBarRef={rightSideBarRef}
+      />
       <div className="w-full absolute top-0 bottom-0 md:relative">
         <div className="fixed right-1 bottom-1 md:right-5 md:bottom-5 z-50 bg-slate-500 rounded-full">
           <LowerRightHelpBtn className="hidden md:block">
