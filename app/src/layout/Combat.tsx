@@ -1174,38 +1174,40 @@ const Combat: React.FC<CombatProps> = (props) => {
                   </p>
                 );
               })}
-              {Object.entries(result.warHealthInfo).map(([villageName, change]) => {
-                const key = `${villageName}-${change}`;
-                if (change > 0) {
-                  return (
-                    <p key={key} className="text-green-500">
-                      {villageName} War HP: +{change.toFixed(2)}
-                    </p>
-                  );
-                } else if (change < 0) {
-                  return (
-                    <p key={key} className="text-red-500">
-                      {villageName} War HP: {change.toFixed(2)}
-                    </p>
-                  );
-                }
-              })}
-              {Object.entries(result.shrineInfo).map(([sectorId, change]) => {
-                const key = `sector-${sectorId}-${change}`;
-                if (change > 0) {
-                  return (
-                    <p key={key} className="text-green-500">
-                      Shrine HP in sector {sectorId}: +{change.toFixed(2)}
-                    </p>
-                  );
-                } else if (change < 0) {
-                  return (
-                    <p key={key} className="text-red-500">
-                      Shrine HP in sector {sectorId}: {change.toFixed(2)}
-                    </p>
-                  );
-                }
-              })}
+              {result.warHealthInfo &&
+                Object.entries(result.warHealthInfo).map(([villageName, change]) => {
+                  const key = `${villageName}-${change}`;
+                  if (change > 0) {
+                    return (
+                      <p key={key} className="text-green-500">
+                        {villageName} War HP: +{change.toFixed(2)}
+                      </p>
+                    );
+                  } else if (change < 0) {
+                    return (
+                      <p key={key} className="text-red-500">
+                        {villageName} War HP: {change.toFixed(2)}
+                      </p>
+                    );
+                  }
+                })}
+              {result.shrineInfo &&
+                Object.entries(result.shrineInfo).map(([sectorId, change]) => {
+                  const key = `sector-${sectorId}-${change}`;
+                  if (change > 0) {
+                    return (
+                      <p key={key} className="text-green-500">
+                        Shrine HP in sector {sectorId}: +{change.toFixed(2)}
+                      </p>
+                    );
+                  } else if (change < 0) {
+                    return (
+                      <p key={key} className="text-red-500">
+                        Shrine HP in sector {sectorId}: {change.toFixed(2)}
+                      </p>
+                    );
+                  }
+                })}
               {result.droppedItems &&
                 result.droppedItems.length > 0 &&
                 result.droppedItems.map((d) => (
