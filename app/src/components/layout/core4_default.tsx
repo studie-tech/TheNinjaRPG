@@ -1041,6 +1041,7 @@ const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
           Notifications
           {/* Badge only shown when collapsed */}
           <span
+            aria-hidden="true"
             className={`flex items-center justify-center min-w-[24px] h-[24px] text-sm font-bold rounded-full px-2 transition-all duration-300 ${badgeClass} ${
               isCollapsed ? "opacity-100 scale-100" : "opacity-0 scale-75"
             }`}
