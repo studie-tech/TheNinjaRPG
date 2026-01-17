@@ -20,7 +20,7 @@ import { fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/api/trpc";
 import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
 import { ItemValidator } from "@/libs/combat/types";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, canAwardReputation } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/socials";
 import { getStrucBoost } from "@/utils/village";
 import { calcItemSellingPrice, calcItemRepairCost } from "@/libs/item";
@@ -248,6 +248,21 @@ export const itemRouter = createTRPCRouter({
             "Weapons and battle-usable consumables must have at least one effect with both appearAnimation and appearSfx defined",
           );
         }
+      }
+      // Server-side enforcement: preserve existing reward_reputation in noncombatconsumereward effects if user lacks permission
+      // Use existing reputation values by position or default to 0 to prevent bypass via effect reordering
+      if (!canAwardReputation(user.role)) {
+        const existingReputation = entry.effects
+          .filter((e) => e.type === "noncombatconsumereward")
+          .map((e) => ("reward_reputation" in e ? e.reward_reputation : 0));
+        let repIndex = 0;
+        input.data.effects.forEach((effect) => {
+          if (effect.type === "noncombatconsumereward") {
+            const safeValue = existingReputation[repIndex] ?? 0;
+            repIndex += 1;
+            (effect as { reward_reputation?: number }).reward_reputation = safeValue;
+          }
+        });
       }
       // Calculate diff
       const diff = calculateContentDiff(entry, {

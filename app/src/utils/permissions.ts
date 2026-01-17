@@ -529,7 +529,7 @@ export const canEditItems = (role: UserRole) => {
 export const canEditQuests = (role: UserRole) => {
   return [
     "CONTENT-ADMIN",
-    "CODING-ADMIN", 
+    "CODING-ADMIN",
     "CONTENT",
     "EVENT",
     "EVENT-ADMIN",
