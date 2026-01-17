@@ -170,5 +170,10 @@ export const onError = (err: unknown) => {
       title: "Error",
       description: err.message,
     });
+  } else if (err !== null && err !== undefined) {
+    Sentry.captureMessage("Non-Error object thrown", {
+      level: "warning",
+      extra: { err },
+    });
   }
 };
