@@ -688,21 +688,31 @@ export const activityStreakRouter = createTRPCRouter({
         return errorResponse("Configuration not found");
       }
 
-      // If activating a RECURRING config, deactivate all other RECURRING configs
+      // If activating a RECURRING config, deactivate ALL RECURRING configs first
+      // to ensure only one can be active (reduces race condition window)
       if (!config.isActive && config.streakType === "RECURRING") {
         await ctx.drizzle
           .update(activityStreakConfig)
           .set({ isActive: false, updatedAt: new Date() })
-          .where(
-            and(
-              eq(activityStreakConfig.streakType, "RECURRING"),
-              eq(activityStreakConfig.isActive, true),
-              ne(activityStreakConfig.id, input.id),
-            ),
-          );
+          .where(eq(activityStreakConfig.streakType, "RECURRING"));
+
+        // Activate only this config with guard to ensure it exists
+        const result = await ctx.drizzle
+          .update(activityStreakConfig)
+          .set({ isActive: true, updatedAt: new Date() })
+          .where(eq(activityStreakConfig.id, input.id));
+
+        if (result.rowsAffected === 0) {
+          return errorResponse("Failed to activate configuration");
+        }
+
+        return {
+          success: true,
+          message: "Configuration activated successfully",
+        };
       }
 
-      // Toggle this config
+      // For deactivation or non-RECURRING types, just toggle
       await ctx.drizzle
         .update(activityStreakConfig)
         .set({ isActive: !config.isActive, updatedAt: new Date() })

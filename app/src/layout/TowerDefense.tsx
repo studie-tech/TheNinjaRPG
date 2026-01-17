@@ -3,6 +3,7 @@ import React, {
   useEffect,
   useCallback,
   useImperativeHandle,
+  useState,
   memo,
 } from "react";
 import { OrthographicCamera, Group, Clock } from "three";
@@ -148,7 +149,8 @@ const TowerDefenseInner = ({
 
   // PERFORMANCE: Track initialization without useState to avoid re-renders
   const isInitializedRef = useRef<boolean>(false);
-  const webglErrorRef = useRef<boolean>(false);
+  // WebGL error state uses useState to trigger re-render and show error component
+  const [webglError, setWebglError] = useState(false);
 
   // Groups
   const groupsRef = useRef<{
@@ -419,7 +421,7 @@ const TowerDefenseInner = ({
     raycasterRef.current = raycaster;
 
     if (!renderer) {
-      webglErrorRef.current = true;
+      setWebglError(true);
       return;
     }
 
@@ -843,7 +845,7 @@ const TowerDefenseInner = ({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (webglErrorRef.current) return <WebGlError />;
+  if (webglError) return <WebGlError />;
 
   return <div ref={mountRef} className="w-full" />;
 };
