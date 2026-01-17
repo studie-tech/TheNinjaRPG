@@ -50,7 +50,7 @@ ALTER TABLE `UserData` DROP COLUMN `activityStreak`;
 INSERT INTO `ActivityStreakConfig` (`id`, `name`, `description`, `image`, `totalDays`, `streakType`, `isActive`, `ryoCost`, `repsCost`, `seichiSilverCost`, `startDate`, `endDate`, `createdByUserId`)
 VALUES ('streak-config-recurring', 'Daily Login Streak', 'Claim daily rewards for logging in! Rewards increase each day. Special bonuses every 7 days.', NULL, 14, 'RECURRING', true, 0, 0, 0, NULL, NULL, NULL);
 
--- Day rewards (60 days total)
+-- Day rewards (14 days total for recurring streak)
 -- Formula: base ryo = day * 100, plus bonuses at milestones
 INSERT INTO `ActivityStreakReward` (`id`, `configId`, `dayNumber`, `rewards`, `image`) VALUES
 ('streak-reward-day-01', 'streak-config-recurring', 1, '{"reward_money": 100, "reward_reputation": 0, "reward_hunting_experience": 0}', NULL),

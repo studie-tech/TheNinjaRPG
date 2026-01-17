@@ -38,6 +38,7 @@ import {
   canEditStarterQuests,
   canPlayHiddenQuests,
   canOnlyEditSelf,
+  canAwardReputation,
 } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/socials";
 import { LetterRanks } from "@/drizzle/constants";
@@ -832,6 +833,10 @@ export const questsRouter = createTRPCRouter({
         }
         // Prepare data for insertion into database
         const data = input.data;
+        // Server-side enforcement: strip reward_reputation if user lacks permission
+        if (!canAwardReputation(user.role)) {
+          data.content.reward.reward_reputation = 0;
+        }
         // Check we only give ranks with exams
         let rankError = false;
         if (
