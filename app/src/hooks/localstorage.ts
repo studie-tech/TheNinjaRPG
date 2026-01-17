@@ -166,15 +166,68 @@ export const useLocalStorage = <T>(
     safeLocalStorageSetItem(key, JSON.stringify(value));
   }, [key, value]);
 
-  // When calling the setValue function, remove the URL anchor
-  // Memoized to prevent unnecessary re-renders when passed as prop
-  const setValueWithoutAnchor = useCallback((newValue: T) => {
-    setValue(newValue);
-    if (typeof window !== "undefined") {
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-  }, []);
+  // Listen for storage changes from other tabs (StorageEvent) and same-page instances (CustomEvent)
+  useEffect(() => {
+    // Handle cross-tab storage changes
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === key && event.newValue !== null) {
+        try {
+          const newValue = JSON.parse(event.newValue) as T;
+          setValue(newValue);
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    };
 
-  // Return the value and the setValueWithoutAnchor function
-  return [value, setValueWithoutAnchor];
+    // Handle same-page storage changes via custom event
+    const handleLocalStorageSync = (event: Event) => {
+      const customEvent = event as CustomEvent<{ key: string; value: string }>;
+      if (customEvent.detail.key === key) {
+        try {
+          const newValue = JSON.parse(customEvent.detail.value) as T;
+          setValue(newValue);
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("localStorageSync", handleLocalStorageSync);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("localStorageSync", handleLocalStorageSync);
+    };
+  }, [key]);
+
+  // When calling the setValue function, only remove the URL anchor if checkUrlAnchor is enabled
+  // Memoized to prevent unnecessary re-renders when passed as prop
+  const setValueCallback = useCallback(
+    (newValue: T) => {
+      setValue(newValue);
+      // Dispatch custom event to sync same-page instances
+      if (typeof window !== "undefined") {
+        const serializedValue = JSON.stringify(newValue);
+        window.dispatchEvent(
+          new CustomEvent("localStorageSync", {
+            detail: { key, value: serializedValue },
+          }),
+        );
+      }
+      // Only clear the URL anchor if this hook is configured to use URL anchors
+      // Preserve query parameters when clearing the anchor
+      if (checkUrlAnchor && typeof window !== "undefined") {
+        window.history.replaceState(
+          {},
+          "",
+          window.location.pathname + window.location.search,
+        );
+      }
+    },
+    [key, checkUrlAnchor],
+  );
+
+  // Return the value and the setValue callback
+  return [value, setValueCallback];
 };
