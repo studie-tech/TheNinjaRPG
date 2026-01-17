@@ -139,11 +139,24 @@ export const itemRouter = createTRPCRouter({
 
       // Create new item with copied data
       const newItemId = nanoid();
+      // Server-side enforcement: zero out reward_reputation when cloning if user lacks permission
+      let clonedEffects = itemData.effects;
+      if (!canAwardReputation(user.role)) {
+        clonedEffects = (itemData.effects as Array<{ type: string; reward_reputation?: number }>).map(
+          (effect) => {
+            if (effect.type === "noncombatconsumereward") {
+              return { ...effect, reward_reputation: 0 };
+            }
+            return effect;
+          },
+        );
+      }
       const clonedItem = {
         ...itemData,
         id: newItemId,
         name: `${itemData.name} - copy`,
         hidden: true,
+        effects: clonedEffects,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -249,13 +262,18 @@ export const itemRouter = createTRPCRouter({
           );
         }
       }
-      // Server-side enforcement: set reward_reputation to 0 for users without permission
-      // Since effects don't have stable IDs like quest objectives, we can't reliably preserve
-      // existing values when effects are added/deleted/reordered. Setting to 0 is the safest approach.
+      // Server-side enforcement: preserve existing reward_reputation for users without permission
+      // Effects don't have stable IDs, so we preserve by position. New effects get 0.
       if (!canAwardReputation(user.role)) {
-        input.data.effects.forEach((effect) => {
+        const existingEffects = entry.effects as Array<{ type: string; reward_reputation?: number }>;
+        input.data.effects.forEach((effect, index) => {
           if (effect.type === "noncombatconsumereward") {
-            (effect as { reward_reputation?: number }).reward_reputation = 0;
+            const existingEffect = existingEffects[index];
+            const existingReputation =
+              existingEffect?.type === "noncombatconsumereward"
+                ? existingEffect.reward_reputation ?? 0
+                : 0;
+            (effect as { reward_reputation?: number }).reward_reputation = existingReputation;
           }
         });
       }

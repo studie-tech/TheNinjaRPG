@@ -988,6 +988,14 @@ export const questsRouter = createTRPCRouter({
       questData.name = `${questData.name} - copy`;
       questData.createdAt = new Date();
       questData.updatedAt = new Date();
+      // Server-side enforcement: zero out reward_reputation when cloning if user lacks permission
+      if (!canAwardReputation(user.role)) {
+        questData.content.reward.reward_reputation = 0;
+        questData.content.objectives = questData.content.objectives.map((objective) => ({
+          ...objective,
+          reward_reputation: 0,
+        }));
+      }
       await ctx.drizzle.insert(quest).values(questData);
 
       return { success: true, message: questData.id };
