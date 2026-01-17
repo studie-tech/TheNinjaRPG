@@ -76,6 +76,13 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
             if (isSafariJsonError && opts.op.type === "query") {
               return opts.attempts <= 3;
             }
+            // Retry on proxy/CDN error pages (returns "An error occurred" text instead of JSON)
+            const isProxyError = opts.error.message?.includes(
+              '"An error o"... is not valid JSON',
+            );
+            if (isProxyError && opts.op.type === "query") {
+              return opts.attempts <= 3;
+            }
             // Don't retry on non-500s
             if (
               opts.error.data &&
@@ -138,6 +145,13 @@ export const onError = (err: unknown) => {
   if (
     err instanceof TRPCClientError &&
     err.message.includes("The string did not match the expected pattern")
+  ) {
+    return;
+  }
+  // Ignore proxy/CDN error pages (returns "An error occurred" text instead of JSON, retries handle it)
+  if (
+    err instanceof TRPCClientError &&
+    err.message.includes('"An error o"... is not valid JSON')
   ) {
     return;
   }
