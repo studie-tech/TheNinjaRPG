@@ -516,10 +516,11 @@ export const commentsRouter = createTRPCRouter({
         };
       }
       if (!canViewConversation(convo, ctx.userId, user.role)) {
-        throw serverError(
-          "UNAUTHORIZED",
-          "You are not allowed to view this conversation",
-        );
+        return {
+          convo: null,
+          data: [],
+          nextCursor: null,
+        };
       }
 
       // Build aliases
