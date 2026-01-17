@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
-import { eq, and, ne, desc, gte, isNull } from "drizzle-orm";
+import { eq, and, ne, desc, gte, isNull, sql } from "drizzle-orm";
 import {
   userData,
   activityStreakConfig,
@@ -241,13 +241,13 @@ export const activityStreakRouter = createTRPCRouter({
         );
       }
 
-      // Deduct currency with guarded where-conditions to prevent concurrent spending
+      // Deduct currency atomically using DB-side arithmetic to prevent lost updates
       const updateResult = await ctx.drizzle
         .update(userData)
         .set({
-          money: user.money - config.ryoCost,
-          reputationPoints: user.reputationPoints - config.repsCost,
-          seichiSilver: user.seichiSilver - config.seichiSilverCost,
+          money: sql`${userData.money} - ${config.ryoCost}`,
+          reputationPoints: sql`${userData.reputationPoints} - ${config.repsCost}`,
+          seichiSilver: sql`${userData.seichiSilver} - ${config.seichiSilverCost}`,
         })
         .where(
           and(
@@ -418,7 +418,7 @@ export const activityStreakRouter = createTRPCRouter({
       ];
 
       if (isComplete) {
-        // Streak complete - log to actionLog and delete progress
+        // Streak complete - log to actionLog
         updatePromises.push(
           ctx.drizzle.insert(actionLog).values({
             id: nanoid(),
@@ -430,11 +430,23 @@ export const activityStreakRouter = createTRPCRouter({
             relatedImage: config.image,
           }),
         );
-        updatePromises.push(
-          ctx.drizzle
-            .delete(userStreakProgress)
-            .where(eq(userStreakProgress.id, progress.id)),
-        );
+
+        if (config.streakType === "EVENT_PASS") {
+          // EVENT_PASS: delete progress when complete
+          updatePromises.push(
+            ctx.drizzle
+              .delete(userStreakProgress)
+              .where(eq(userStreakProgress.id, progress.id)),
+          );
+        } else {
+          // RECURRING: reset progress but preserve lastClaimDate to prevent same-day re-claim
+          updatePromises.push(
+            ctx.drizzle
+              .update(userStreakProgress)
+              .set({ currentDay: 0, startedAt: now })
+              .where(eq(userStreakProgress.id, progress.id)),
+          );
+        }
       }
 
       await Promise.all(updatePromises);

@@ -8,7 +8,7 @@ export type StreakRewardType = z.infer<typeof streakRewardSchema>;
 
 // Single day reward configuration
 export const streakDayRewardSchema = z.object({
-  dayNumber: z.coerce.number().min(1).max(60),
+  dayNumber: z.coerce.number().min(1).max(28),
   rewards: streakRewardSchema,
   image: z.string().url().optional().nullable(),
 });
@@ -27,7 +27,7 @@ const activityStreakConfigBaseSchema = z.object({
   seichiSilverCost: z.coerce.number().min(0).default(0),
   startDate: z.coerce.date().optional().nullable(),
   endDate: z.coerce.date().optional().nullable(),
-  rewards: z.array(streakDayRewardSchema).min(1).max(60),
+  rewards: z.array(streakDayRewardSchema).min(1).max(28),
 });
 
 // Validation refinement for activity streak configs

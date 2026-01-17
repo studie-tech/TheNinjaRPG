@@ -259,7 +259,8 @@ export const hoursSince = (date: Date | null): number => {
 
 /**
  * Get a date key string in format YYYY-M-D for use in localStorage or caching
+ * Uses UTC methods for consistency with other time utilities
  */
 export const getDateKey = (date: Date): string => {
-  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  return `${date.getUTCFullYear()}-${date.getUTCMonth() + 1}-${date.getUTCDate()}`;
 };
