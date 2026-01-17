@@ -643,7 +643,7 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
 
       return () => chart.destroy();
     }
-  }, [stepsCompleted, title, stepDescriptions, mode, getUsernamesForStep]);
+  }, [stepsCompleted, title, stepDescriptions, stepLabels, mode, getUsernamesForStep]);
 
   return (
     <Card>

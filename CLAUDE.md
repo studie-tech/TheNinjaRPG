@@ -16,6 +16,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - You should update the task plan .md-file as you work
 - After you complete tasks in the plan, also update and append information on the changes made to the task .md-file
 
+## After Implementing
+
+- After implementing, review whether the changes conform to the standards defined in the Claude.md file
+- After successfully implementing a feature or fix, run `coderabbit review --plain` to get automated feedback
+- Review each piece of CodeRabbit feedback and apply improvements iteratively
+- Use good judgment: if CodeRabbit feedback conflicts with guidelines in this file or is incorrect, skip that suggestion
+- Continue iterating until CodeRabbit feedback is addressed or consciously rejected
+- Document any rejected feedback reasoning in the task .md-file if significant
+
 ## Development Commands
 
 All make commands should be run from the root directory `/`, not from `/app`.
@@ -75,7 +84,7 @@ Core game systems organized by feature:
 
 ### `/app/src/validators/` - Zod Schemas
 
-Shared validation schemas between frontend and backend using Zod.
+Shared validation schemas between frontend and backend using Zod. **All Zod schemas should be defined here**, not in page components or routers. This includes form validation schemas, API input schemas, and any reusable type definitions. Import schemas from this directory rather than defining them inline.
 
 ### `/app/src/layout/` - Reusable UI Components
 
@@ -109,10 +118,9 @@ The combat system is the most complex feature, with dedicated files:
 
 ## Database Patterns
 
-- Uses Drizzle ORM with MySQL
+- Uses Drizzle ORM with MySQL hosted on **PlanetScale**
 - Prefer query syntax over raw SQL
-- Always try to use `Promise.all()` for parallel database operations
-- Avoid transactions; use guards with where-statements instead
+- **⚠️ NEVER use database transactions** - PlanetScale does not support traditional transactions. Instead, use guard clauses with WHERE conditions to ensure atomic updates (e.g., `WHERE balance >= amount` to prevent negative balances).
 - Schema is centralized in `@/drizzle/schema.ts`
 - We use the react compiler, and therefore must use useWatch hook, not watch, for react-hook-form.
 - **No Legacy Fields**: When refactoring database schema, fully remove legacy/deprecated fields rather than keeping them for backward compatibility. Do not leave legacy fields in the schema - migrate all code to use new field names immediately.
@@ -127,15 +135,46 @@ The combat system is the most complex feature, with dedicated files:
 - Structure endpoints consistently across routers
 - Convenience functions for database interaction should be in the router files at the bottom, see e.g. "fetchUser" function in profile router.
 
+### ⚠️ CRITICAL: Minimize Database Round-Trips
+
+**This is a high-priority performance requirement.** When writing tRPC router endpoints:
+
+1. **ALWAYS prefer `Promise.all()` for parallel queries** over sequential fetches, even if it means fetching slightly more data than strictly necessary.
+2. **Latency matters more than bandwidth** - multiple sequential database calls add latency that compounds. A single round-trip fetching extra data is almost always faster than multiple round-trips fetching minimal data.
+3. **Fetch data in parallel at the start** of your endpoint, then process/filter in JavaScript.
+
+**Good pattern:**
+
+```typescript
+const [user, village, clan, items] = await Promise.all([
+  fetchUser(userId),
+  fetchVillage(villageId),
+  fetchClan(clanId),
+  fetchUserItems(userId), // Fetch all, filter in JS if needed
+]);
+```
+
+**Bad pattern:**
+
+```typescript
+const user = await fetchUser(userId);
+const village = await fetchVillage(user.villageId); // Sequential!
+const clan = await fetchClan(user.clanId); // Sequential!
+const items = await fetchUserItems(userId); // Sequential!
+```
+
+**Exception:** Only avoid parallel fetching when a query is especially expensive (e.g., complex aggregations, large table scans) AND the data may not be needed based on earlier results.
+
 ## Code Style Guidelines
 
 - Use TypeScript with strict mode
 - Functional and declarative patterns (avoid classes)
+- Prefer arrow functions over function declarations (e.g., `const fn = () => {}` instead of `function fn() {}`)
 - Prefer named exports for components
 - Use descriptive variable names with auxiliary verbs
-- Directory names: lowercase with dashes
-- Component file structure: exported component → subcomponents → helpers → types
+- Component file structure: exported component → subcomponents → helpers → types. When adding sub-components to a page or component file, always keep sub-components below the main exported component in the file ordering.
 - **Natural Comments Only**: Do not leave unnatural comments like "Issue X:", "TODO from review:", or similar tracking markers in committed code. Comments should describe the code's purpose, not reference external issues or review feedback. Remove any such markers before committing.
+- **Time Utilities**: When adding time-related utility functions, always add them to `/app/src/utils/time.ts`. Check existing functions there first to avoid duplication.
 
 ## UI/Styling Guidelines
 

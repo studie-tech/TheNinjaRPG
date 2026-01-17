@@ -107,7 +107,6 @@ import {
   canUnstuckVillage,
   canAwardReputation,
   canSeeActivityEvents,
-  canRestoreActivityStreak,
   canEditUsername,
   canEditCustomTitle,
   canEditBloodline,
@@ -1690,21 +1689,11 @@ const HistoricalIpsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => 
 const ActivityEventsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
   const { data: currentUser } = useUserData();
   const canSeeEvents = currentUser && canSeeActivityEvents(currentUser.role);
-  const utils = api.useUtils();
 
   const { data: activityEvents, isPending } = api.staff.getUserActivityEvents.useQuery(
     { userId },
     { enabled: isActive && !!canSeeEvents },
   );
-
-  const restoreActivityStreak = api.staff.restoreUserActivityStreak.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.staff.getUserActivityEvents.invalidate();
-      }
-    },
-  });
 
   if (!canSeeEvents) return null;
 
@@ -1721,35 +1710,15 @@ const ActivityEventsTab: React.FC<TabComponentProps> = ({ userId, isActive }) =>
           {activityEvents.map((event, i) => (
             <div
               key={`event-${i}`}
-              className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
+              className="p-3 border-2 border-border rounded-lg bg-card"
             >
-              <div>
-                <h4 className="font-semibold text-foreground">
-                  Activity Event #{event.id}
-                </h4>
-                <p className="text-sm text-muted-foreground">Streak: {event.streak}</p>
-                <p className="text-sm text-muted-foreground">
-                  Created: {event.createdAt.toLocaleString()}
-                </p>
-              </div>
-              {currentUser && canRestoreActivityStreak(currentUser.role) && (
-                <Confirm2
-                  title="Restore Activity Streak"
-                  proceed_label="Restore Streak"
-                  button={
-                    <Button variant="secondary" size="sm">
-                      Restore Streak
-                    </Button>
-                  }
-                  onAccept={() =>
-                    restoreActivityStreak.mutate({ userId, activityEventId: event.id })
-                  }
-                >
-                  Are you sure you want to restore the activity streak to{" "}
-                  <strong>{event.streak}</strong>? This action will update the
-                  user&apos;s current activity streak.
-                </Confirm2>
-              )}
+              <h4 className="font-semibold text-foreground">
+                Activity Event #{event.id}
+              </h4>
+              <p className="text-sm text-muted-foreground">Streak: {event.streak}</p>
+              <p className="text-sm text-muted-foreground">
+                Created: {event.createdAt.toLocaleString()}
+              </p>
             </div>
           ))}
         </div>

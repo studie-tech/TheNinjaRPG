@@ -1,4 +1,5 @@
 import { createTRPCRouter } from "./trpc";
+import { activityStreakRouter } from "./routers/activityStreak";
 import { anbuRouter } from "./routers/anbu";
 import { avatarRouter } from "./routers/avatar";
 import { aiRouter } from "./routers/ai";
@@ -55,6 +56,7 @@ import { towerDefenseRouter } from "./routers/towerDefense";
  * All routers added in /api/routers should be manually added here
  */
 export const appRouter = createTRPCRouter({
+  activityStreak: activityStreakRouter,
   ai: aiRouter,
   anbu: anbuRouter,
   avatar: avatarRouter,

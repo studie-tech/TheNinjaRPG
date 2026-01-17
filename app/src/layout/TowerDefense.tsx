@@ -3,7 +3,6 @@ import React, {
   useEffect,
   useCallback,
   useImperativeHandle,
-  forwardRef,
   memo,
 } from "react";
 import { OrthographicCamera, Group, Clock } from "three";
@@ -116,731 +115,738 @@ export interface TowerDefenseHandle {
  * - Parent triggers rare updates via ref.current.updateGrid/updateRange
  * - React.memo with custom comparison prevents any re-renders
  */
-const TowerDefenseInner = forwardRef<TowerDefenseHandle, TowerDefenseProps>(
-  (
-    {
-      seed,
-      initialGridSize,
-      initialPlayerPosition,
-      onTileClick,
-      entitiesRef,
-      runtimeStateRef,
-      playerHitEventsRef,
-      impactAsset,
-      sfxUrl,
-    },
-    ref,
-  ) => {
-    // Performance monitoring - use bounded mode (requestAnimationFrame) for proper vsync
-    const performanceMonitor = usePerformanceMonitor(false);
+const TowerDefenseInner = ({
+  seed,
+  initialGridSize,
+  initialPlayerPosition,
+  onTileClick,
+  entitiesRef,
+  runtimeStateRef,
+  playerHitEventsRef,
+  impactAsset,
+  sfxUrl,
+  ref,
+}: TowerDefenseProps & { ref?: React.Ref<TowerDefenseHandle> }) => {
+  // Performance monitoring - use bounded mode (requestAnimationFrame) for proper vsync
+  const performanceMonitor = usePerformanceMonitor(false);
 
-    // Refs for Three.js objects
-    const mountRef = useRef<HTMLDivElement | null>(null);
-    const sceneRef = useRef<Scene | null>(null);
-    const rendererRef = useRef<WebGLRenderer | null>(null);
-    const cameraRef = useRef<OrthographicCamera | null>(null);
-    const controlsRef = useRef<OrbitControls | null>(null);
-    const raycasterRef = useRef<Raycaster | null>(null);
-    const gridRef = useRef<Grid<TerrainHex> | null>(null);
-    const mouseHexRef = useRef<TerrainHex | null>(null);
-    const isMountedRef = useRef<boolean>(false);
-    const onTileClickRef = useRef(onTileClick);
+  // Refs for Three.js objects
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const sceneRef = useRef<Scene | null>(null);
+  const rendererRef = useRef<WebGLRenderer | null>(null);
+  const cameraRef = useRef<OrthographicCamera | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const raycasterRef = useRef<Raycaster | null>(null);
+  const gridRef = useRef<Grid<TerrainHex> | null>(null);
+  const mouseHexRef = useRef<TerrainHex | null>(null);
+  const isMountedRef = useRef<boolean>(false);
+  const onTileClickRef = useRef(onTileClick);
 
-    useEffect(() => {
-      onTileClickRef.current = onTileClick;
-    }, [onTileClick]);
+  useEffect(() => {
+    onTileClickRef.current = onTileClick;
+  }, [onTileClick]);
 
-    // PERFORMANCE: Track initialization without useState to avoid re-renders
-    const isInitializedRef = useRef<boolean>(false);
-    const webglErrorRef = useRef<boolean>(false);
+  // PERFORMANCE: Track initialization without useState to avoid re-renders
+  const isInitializedRef = useRef<boolean>(false);
+  const webglErrorRef = useRef<boolean>(false);
 
-    // Groups
-    const groupsRef = useRef<{
-      tiles: Group;
-      ground: Group;
-      edges: Group;
-      assets: Group;
-      range: Group;
-      player: Group;
-      enemies: Group;
-      projectiles: Group;
-      effects: Group;
-      ui: Group;
-    } | null>(null);
+  // Groups
+  const groupsRef = useRef<{
+    tiles: Group;
+    ground: Group;
+    edges: Group;
+    assets: Group;
+    range: Group;
+    player: Group;
+    enemies: Group;
+    projectiles: Group;
+    effects: Group;
+    ui: Group;
+  } | null>(null);
 
-    // Optimization: Keep track of animated objects to avoid group.traverse
-    const animatedAssetsRef = useRef<Material[]>([]);
-    const animatedTilesRef = useRef<Material[]>([]);
+  // Optimization: Keep track of animated objects to avoid group.traverse
+  const animatedAssetsRef = useRef<Material[]>([]);
+  const animatedTilesRef = useRef<Material[]>([]);
 
-    // Optimization: Spatial map for assets to speed up proximity checks
-    const assetsSpatialMapRef = useRef<Map<string, (Sprite | InstancedMesh)[]>>(
-      new Map(),
-    );
+  // Optimization: Spatial map for assets to speed up proximity checks
+  const assetsSpatialMapRef = useRef<Map<string, (Sprite | InstancedMesh)[]>>(
+    new Map(),
+  );
 
-    // Frame animator for character animations
-    const frameAnimatorRef = useRef<FrameAnimator | null>(null);
+  // Frame animator for character animations
+  const frameAnimatorRef = useRef<FrameAnimator | null>(null);
 
-    // SpriteMixer for impact animations
-    const spriteMixerRef = useRef<SpriteMixer | null>(null);
+  // SpriteMixer for impact animations
+  const spriteMixerRef = useRef<SpriteMixer | null>(null);
 
-    // Tracking damage numbers for animation
-    const damageNumbersRef = useRef<{ update: (delta: number) => boolean }[]>([]);
+  // Tracking damage numbers for animation
+  const damageNumbersRef = useRef<{ update: (delta: number) => boolean }[]>([]);
 
-    // Track state for animation loop
-    const prevProjectilesRef = useRef<TowerDefenseProjectile[]>([]);
-    const lastPlayerHitCountRef = useRef<number>(0);
-    const punchingEnemiesRef = useRef<Set<string>>(new Set());
+  // Track state for animation loop
+  const prevProjectilesRef = useRef<TowerDefenseProjectile[]>([]);
+  const lastPlayerHitCountRef = useRef<number>(0);
+  const punchingEnemiesRef = useRef<Set<string>>(new Set());
 
-    // Player state for direction and throw animation
-    const playerStateRef = useRef<PlayerState>({
-      direction: "s",
-      isThrowingAnimation: false,
+  // Player state for direction and throw animation
+  const playerStateRef = useRef<PlayerState>({
+    direction: "s",
+    isThrowingAnimation: false,
+  });
+
+  // Timeout refs for proper cleanup
+  const throwingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const punchingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
+
+  // PERFORMANCE: Track current grid size and range for imperative updates
+  const currentGridSizeRef = useRef<number>(initialGridSize);
+  const currentRangeRef = useRef<number>(1);
+  const currentSeedRef = useRef<string>(seed);
+  const currentPlayerPositionRef = useRef<HexPosition>(initialPlayerPosition);
+
+  // PERFORMANCE: Cache assets refs to avoid prop access in animation loop
+  const impactAssetRef = useRef(impactAsset);
+  const sfxUrlRef = useRef(sfxUrl);
+
+  // Update asset refs when props change (rare)
+  useEffect(() => {
+    impactAssetRef.current = impactAsset;
+    sfxUrlRef.current = sfxUrl;
+    // Preload sound if available
+    if (sfxUrl) {
+      void preloadAudioBuffers([sfxUrl]);
+    }
+  }, [impactAsset, sfxUrl]);
+
+  /**
+   * Internal ref to hold update functions (avoids circular dependency issues)
+   */
+  const updateFunctionsRef = useRef<{
+    updateRangeInternal: (range: number) => void;
+    updateGrid: (gridSize: number) => void;
+  }>({
+    updateRangeInternal: () => {},
+    updateGrid: () => {},
+  });
+
+  // Initialize updateRangeInternal
+  updateFunctionsRef.current.updateRangeInternal = (range: number) => {
+    const groups = groupsRef.current;
+    const grid = gridRef.current;
+    if (!groups || !grid || !isInitializedRef.current) return;
+
+    const playerPosition =
+      runtimeStateRef.current?.state?.playerPosition ??
+      currentPlayerPositionRef.current;
+
+    drawRangeIndicator({
+      group_range: groups.range,
+      grid: grid,
+      playerPosition: playerPosition,
+      range: range,
+      hexWidth: TD_HEX_SIZE,
     });
+  };
 
-    // PERFORMANCE: Track current grid size and range for imperative updates
-    const currentGridSizeRef = useRef<number>(initialGridSize);
-    const currentRangeRef = useRef<number>(1);
-    const currentSeedRef = useRef<string>(seed);
-    const currentPlayerPositionRef = useRef<HexPosition>(initialPlayerPosition);
+  // Initialize updateGrid
+  updateFunctionsRef.current.updateGrid = (newGridSize: number) => {
+    const groups = groupsRef.current;
+    const mount = mountRef.current;
+    if (!groups || !mount || !isInitializedRef.current) return;
 
-    // PERFORMANCE: Cache assets refs to avoid prop access in animation loop
-    const impactAssetRef = useRef(impactAsset);
-    const sfxUrlRef = useRef(sfxUrl);
+    currentGridSizeRef.current = newGridSize;
 
-    // Update asset refs when props change (rare)
-    useEffect(() => {
-      impactAssetRef.current = impactAsset;
-      sfxUrlRef.current = sfxUrl;
-      // Preload sound if available
-      if (sfxUrl) {
-        void preloadAudioBuffers([sfxUrl]);
-      }
-    }, [impactAsset, sfxUrl]);
-
-    /**
-     * Internal ref to hold update functions (avoids circular dependency issues)
-     */
-    const updateFunctionsRef = useRef<{
-      updateRangeInternal: (range: number) => void;
-      updateGrid: (gridSize: number) => void;
-    }>({
-      updateRangeInternal: () => {},
-      updateGrid: () => {},
-    });
-
-    // Initialize updateRangeInternal
-    updateFunctionsRef.current.updateRangeInternal = (range: number) => {
-      const groups = groupsRef.current;
-      const grid = gridRef.current;
-      if (!groups || !grid || !isInitializedRef.current) return;
-
-      const playerPosition =
-        runtimeStateRef.current?.state?.playerPosition ??
-        currentPlayerPositionRef.current;
-
-      drawRangeIndicator({
-        group_range: groups.range,
-        grid: grid,
-        playerPosition: playerPosition,
-        range: range,
-        hexWidth: TD_HEX_SIZE,
-      });
-    };
-
-    // Initialize updateGrid
-    updateFunctionsRef.current.updateGrid = (newGridSize: number) => {
-      const groups = groupsRef.current;
-      const mount = mountRef.current;
-      if (!groups || !mount || !isInitializedRef.current) return;
-
-      currentGridSizeRef.current = newGridSize;
-
-      // Recalculate dimensions
-      if (rendererRef.current) {
-        const width2height = calculateWidth2Height(newGridSize, newGridSize + 2);
-        const WIDTH = mount.clientWidth;
-        const HEIGHT = WIDTH * width2height;
-        mount.style.height = `${HEIGHT}px`;
-        rendererRef.current.setSize(WIDTH, HEIGHT);
-      }
-
-      gridRef.current = getTowerDefenseGrid(TD_HEX_SIZE, newGridSize);
-
-      // Clear optimization lists
-      animatedAssetsRef.current = [];
-      animatedTilesRef.current = [];
-      assetsSpatialMapRef.current.clear();
-
-      // Get current player position from runtime ref
-      const playerPosition =
-        runtimeStateRef.current?.state?.playerPosition ??
-        currentPlayerPositionRef.current;
-      currentPlayerPositionRef.current = playerPosition;
-
-      drawTowerDefenseBackground({
-        group_tiles: groups.tiles,
-        group_ground: groups.ground,
-        group_edges: groups.edges,
-        group_assets: groups.assets,
-        grid: gridRef.current,
-        hexsize: TD_HEX_SIZE,
-        seed: currentSeedRef.current,
-        centerPosition: playerPosition,
-        onAssetAdded: (asset) => {
-          const mat = asset.material as Material;
-          if (mat?.userData?.isAnimated) {
-            animatedAssetsRef.current.push(mat);
-          }
-          const tileKey = asset.userData.tileKey as string;
-          if (tileKey) {
-            if (!assetsSpatialMapRef.current.has(tileKey)) {
-              assetsSpatialMapRef.current.set(tileKey, []);
-            }
-            assetsSpatialMapRef.current.get(tileKey)!.push(asset);
-          }
-        },
-        onTileAdded: (tile) => {
-          const mat = tile.material as Material;
-          if (mat?.userData?.isAnimated) {
-            animatedTilesRef.current.push(mat);
-          }
-        },
-      });
-
-      groups.assets.children.sort((a, b) => b.position.y - a.position.y);
-
-      // Configure camera
-      if (cameraRef.current && gridRef.current) {
-        const gridArray = gridRef.current.toArray();
-        let minX = Infinity,
-          maxX = -Infinity,
-          minY = Infinity,
-          maxY = -Infinity;
-        gridArray.forEach((tile) => {
-          tile.corners.forEach((corner) => {
-            minX = Math.min(minX, corner.x);
-            maxX = Math.max(maxX, corner.x);
-            minY = Math.min(minY, corner.y);
-            maxY = Math.max(maxY, corner.y);
-          });
-        });
-
-        const padding = TD_HEX_SIZE * 0.5;
-        const viewWidth = maxX - minX + padding * 2;
-        const viewHeight = maxY - minY + padding * 2;
-        const containerAspect = mount.clientWidth / mount.clientHeight;
-        const gridAspect = viewWidth / viewHeight;
-
-        let left = minX - padding,
-          right = maxX + padding,
-          top = maxY + padding,
-          bottom = minY - padding;
-
-        if (containerAspect > gridAspect) {
-          const newWidth = viewHeight * containerAspect;
-          const centerX = (minX + maxX) / 2;
-          left = centerX - newWidth / 2;
-          right = centerX + newWidth / 2;
-        } else {
-          const newHeight = viewWidth / containerAspect;
-          const centerY = (minY + maxY) / 2;
-          bottom = centerY - newHeight / 2;
-          top = centerY + newHeight / 2;
-        }
-
-        cameraRef.current.left = left;
-        cameraRef.current.right = right;
-        cameraRef.current.top = top;
-        cameraRef.current.bottom = bottom;
-        cameraRef.current.updateProjectionMatrix();
-      }
-
-      // Update range indicator with new grid
-      updateFunctionsRef.current.updateRangeInternal(currentRangeRef.current);
-    };
-
-    /**
-     * Stable reference to updateGrid for imperative handle
-     */
-    const updateGrid = useCallback((newGridSize: number) => {
-      updateFunctionsRef.current.updateGrid(newGridSize);
-    }, []);
-
-    /**
-     * Stable reference to updateRange for imperative handle
-     */
-    const updateRange = useCallback((newRange: number) => {
-      currentRangeRef.current = newRange;
-      updateFunctionsRef.current.updateRangeInternal(newRange);
-    }, []);
-
-    // Expose imperative handle to parent
-    useImperativeHandle(ref, () => ({ updateGrid, updateRange }), [
-      updateGrid,
-      updateRange,
-    ]);
-
-    // Initialize Three.js scene (runs once, never re-runs)
-    useEffect(() => {
-      isMountedRef.current = true;
-      const mount = mountRef.current;
-      if (!mount) return;
-
-      // Calculate proper dimensions based on grid size
-      const gridSize = initialGridSize;
-      const width2height = calculateWidth2Height(gridSize, gridSize + 2);
+    // Recalculate dimensions
+    if (rendererRef.current) {
+      const width2height = calculateWidth2Height(newGridSize, newGridSize + 2);
       const WIDTH = mount.clientWidth;
       const HEIGHT = WIDTH * width2height;
-
       mount.style.height = `${HEIGHT}px`;
+      rendererRef.current.setSize(WIDTH, HEIGHT);
+    }
 
-      // Setup scene
-      const {
-        scene,
-        renderer,
-        raycaster,
-        handleResize: onResize,
-      } = setupScene({
-        mountRef,
-        width: WIDTH,
-        height: HEIGHT,
-        sortObjects: false,
-        color: 0x1a1a2e,
-        colorAlpha: 1,
-        width2height,
+    gridRef.current = getTowerDefenseGrid(TD_HEX_SIZE, newGridSize);
+
+    // Clear optimization lists
+    animatedAssetsRef.current = [];
+    animatedTilesRef.current = [];
+    assetsSpatialMapRef.current.clear();
+
+    // Get current player position from runtime ref
+    const playerPosition =
+      runtimeStateRef.current?.state?.playerPosition ??
+      currentPlayerPositionRef.current;
+    currentPlayerPositionRef.current = playerPosition;
+
+    drawTowerDefenseBackground({
+      group_tiles: groups.tiles,
+      group_ground: groups.ground,
+      group_edges: groups.edges,
+      group_assets: groups.assets,
+      grid: gridRef.current,
+      hexsize: TD_HEX_SIZE,
+      seed: currentSeedRef.current,
+      centerPosition: playerPosition,
+      onAssetAdded: (asset) => {
+        const mat = asset.material as Material;
+        if (mat?.userData?.isAnimated) {
+          animatedAssetsRef.current.push(mat);
+        }
+        const tileKey = asset.userData.tileKey as string;
+        if (tileKey) {
+          if (!assetsSpatialMapRef.current.has(tileKey)) {
+            assetsSpatialMapRef.current.set(tileKey, []);
+          }
+          assetsSpatialMapRef.current.get(tileKey)!.push(asset);
+        }
+      },
+      onTileAdded: (tile) => {
+        const mat = tile.material as Material;
+        if (mat?.userData?.isAnimated) {
+          animatedTilesRef.current.push(mat);
+        }
+      },
+    });
+
+    groups.assets.children.sort((a, b) => b.position.y - a.position.y);
+
+    // Configure camera
+    if (cameraRef.current && gridRef.current) {
+      const gridArray = gridRef.current.toArray();
+      let minX = Infinity,
+        maxX = -Infinity,
+        minY = Infinity,
+        maxY = -Infinity;
+      gridArray.forEach((tile) => {
+        tile.corners.forEach((corner) => {
+          minX = Math.min(minX, corner.x);
+          maxX = Math.max(maxX, corner.x);
+          minY = Math.min(minY, corner.y);
+          maxY = Math.max(maxY, corner.y);
+        });
       });
 
-      sceneRef.current = scene;
-      rendererRef.current = renderer ?? null;
-      raycasterRef.current = raycaster;
+      const padding = TD_HEX_SIZE * 0.5;
+      const viewWidth = maxX - minX + padding * 2;
+      const viewHeight = maxY - minY + padding * 2;
+      const containerAspect = mount.clientWidth / mount.clientHeight;
+      const gridAspect = viewWidth / viewHeight;
 
-      if (!renderer) {
-        webglErrorRef.current = true;
-        return;
+      let left = minX - padding,
+        right = maxX + padding,
+        top = maxY + padding,
+        bottom = minY - padding;
+
+      if (containerAspect > gridAspect) {
+        const newWidth = viewHeight * containerAspect;
+        const centerX = (minX + maxX) / 2;
+        left = centerX - newWidth / 2;
+        right = centerX + newWidth / 2;
+      } else {
+        const newHeight = viewWidth / containerAspect;
+        const centerY = (minY + maxY) / 2;
+        bottom = centerY - newHeight / 2;
+        top = centerY + newHeight / 2;
       }
 
-      // Camera and Controls
-      const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
-      cameraRef.current = camera;
+      cameraRef.current.left = left;
+      cameraRef.current.right = right;
+      cameraRef.current.top = top;
+      cameraRef.current.bottom = bottom;
+      cameraRef.current.updateProjectionMatrix();
+    }
 
-      const controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableRotate = false;
-      controls.enablePan = false;
-      controls.enableZoom = false;
-      controlsRef.current = controls;
+    // Update range indicator with new grid
+    updateFunctionsRef.current.updateRangeInternal(currentRangeRef.current);
+  };
 
-      // Initialize Groups
-      groupsRef.current = {
-        tiles: new Group(),
-        ground: new Group(),
-        edges: new Group(),
-        assets: new Group(),
-        range: new Group(),
-        player: new Group(),
-        enemies: new Group(),
-        projectiles: new Group(),
-        effects: new Group(),
-        ui: new Group(),
-      };
+  /**
+   * Stable reference to updateGrid for imperative handle
+   */
+  const updateGrid = useCallback((newGridSize: number) => {
+    updateFunctionsRef.current.updateGrid(newGridSize);
+  }, []);
 
-      Object.values(groupsRef.current).forEach((group) => scene.add(group));
+  /**
+   * Stable reference to updateRange for imperative handle
+   */
+  const updateRange = useCallback((newRange: number) => {
+    currentRangeRef.current = newRange;
+    updateFunctionsRef.current.updateRangeInternal(newRange);
+  }, []);
 
-      // Animators
-      frameAnimatorRef.current = new FrameAnimator(loadTexture);
-      spriteMixerRef.current = new SpriteMixer();
+  // Expose imperative handle to parent
+  useImperativeHandle(ref, () => ({ updateGrid, updateRange }), [
+    updateGrid,
+    updateRange,
+  ]);
 
-      mount.appendChild(renderer.domElement);
+  // Initialize Three.js scene (runs once, never re-runs)
+  useEffect(() => {
+    isMountedRef.current = true;
+    const mount = mountRef.current;
+    // Capture refs for cleanup
+    const punchingTimeouts = punchingTimeoutsRef.current;
+    if (!mount) return;
 
-      preloadProjectileTextures();
-      initDamageNumberPool();
+    // Calculate proper dimensions based on grid size
+    const gridSize = initialGridSize;
+    const width2height = calculateWidth2Height(gridSize, gridSize + 2);
+    const WIDTH = mount.clientWidth;
+    const HEIGHT = WIDTH * width2height;
 
-      isInitializedRef.current = true;
+    mount.style.height = `${HEIGHT}px`;
 
-      // Draw initial grid (use ref to avoid stale closure)
-      updateFunctionsRef.current.updateGrid(initialGridSize);
+    // Setup scene
+    const {
+      scene,
+      renderer,
+      raycaster,
+      handleResize: onResize,
+    } = setupScene({
+      mountRef,
+      width: WIDTH,
+      height: HEIGHT,
+      sortObjects: false,
+      color: 0x1a1a2e,
+      colorAlpha: 1,
+      width2height,
+    });
 
-      const onMouseMove = (event: MouseEvent) => {
-        if (!rendererRef.current || !cameraRef.current || !raycasterRef.current) return;
-        setRaycasterFromMouse(raycasterRef.current, mount, event, cameraRef.current);
+    sceneRef.current = scene;
+    rendererRef.current = renderer ?? null;
+    raycasterRef.current = raycaster;
 
-        const groups = groupsRef.current;
-        if (gridRef.current && groups?.tiles) {
-          const intersects = raycasterRef.current.intersectObjects(
-            groups.tiles.children,
-          );
-          const firstIntersect = intersects[0];
-          mouseHexRef.current =
-            firstIntersect && firstIntersect.object.userData.tile
-              ? (firstIntersect.object.userData.tile as TerrainHex)
-              : null;
+    if (!renderer) {
+      webglErrorRef.current = true;
+      return;
+    }
+
+    // Camera and Controls
+    const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
+    cameraRef.current = camera;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableRotate = false;
+    controls.enablePan = false;
+    controls.enableZoom = false;
+    controlsRef.current = controls;
+
+    // Initialize Groups
+    groupsRef.current = {
+      tiles: new Group(),
+      ground: new Group(),
+      edges: new Group(),
+      assets: new Group(),
+      range: new Group(),
+      player: new Group(),
+      enemies: new Group(),
+      projectiles: new Group(),
+      effects: new Group(),
+      ui: new Group(),
+    };
+
+    Object.values(groupsRef.current).forEach((group) => scene.add(group));
+
+    // Animators
+    frameAnimatorRef.current = new FrameAnimator(loadTexture);
+    spriteMixerRef.current = new SpriteMixer();
+
+    mount.appendChild(renderer.domElement);
+
+    preloadProjectileTextures();
+    initDamageNumberPool();
+
+    isInitializedRef.current = true;
+
+    // Draw initial grid (use ref to avoid stale closure)
+    updateFunctionsRef.current.updateGrid(initialGridSize);
+
+    const onMouseMove = (event: MouseEvent) => {
+      if (!rendererRef.current || !cameraRef.current || !raycasterRef.current) return;
+      setRaycasterFromMouse(raycasterRef.current, mount, event, cameraRef.current);
+
+      const groups = groupsRef.current;
+      if (gridRef.current && groups?.tiles) {
+        const intersects = raycasterRef.current.intersectObjects(groups.tiles.children);
+        const firstIntersect = intersects[0];
+        mouseHexRef.current =
+          firstIntersect && firstIntersect.object.userData.tile
+            ? (firstIntersect.object.userData.tile as TerrainHex)
+            : null;
+      }
+    };
+
+    const onClick = () => {
+      if (mouseHexRef.current) {
+        onTileClickRef.current({
+          col: mouseHexRef.current.col,
+          row: mouseHexRef.current.row,
+        });
+      }
+    };
+
+    mount.addEventListener("mousemove", onMouseMove);
+    mount.addEventListener("click", onClick);
+
+    // Animation loop
+    const clock = new Clock();
+    clock.start();
+    let animationId: number;
+
+    const animate = () => {
+      if (!isMountedRef.current) return;
+
+      profiler.beginFrame();
+      performanceMonitor.begin();
+      const endTotal = profiler.mark("animate_total");
+
+      const delta = clock.getDelta();
+      const groups = groupsRef.current;
+      const grid = gridRef.current;
+      const animator = frameAnimatorRef.current;
+      const mixer = spriteMixerRef.current;
+
+      const endAnimators = profiler.mark("animate_animators");
+      if (animator) animator.update(delta);
+      if (mixer) mixer.update(delta);
+      endAnimators();
+
+      // Update damage numbers
+      const endDamageNumbers = profiler.mark("animate_damage_numbers");
+      if (damageNumbersRef.current.length > 0) {
+        damageNumbersRef.current = damageNumbersRef.current.filter(
+          (dn) => dn && typeof dn.update === "function" && dn.update(delta),
+        );
+      }
+      profiler.reportCount("draw_damage_numbers", damageNumbersRef.current.length);
+      endDamageNumbers();
+
+      if (
+        groups &&
+        grid &&
+        rendererRef.current &&
+        sceneRef.current &&
+        cameraRef.current
+      ) {
+        // PERFORMANCE: Read all dynamic data from refs
+        const currentEnemies = entitiesRef.current?.enemiesArray ?? [];
+        const currentProjectiles = entitiesRef.current?.projectilesArray ?? [];
+        const runtimeState = runtimeStateRef.current;
+
+        // Check if grid size changed (rare - grid expansion)
+        const newGridSize = runtimeState?.state?.gridSize;
+        if (newGridSize && newGridSize !== currentGridSizeRef.current) {
+          updateFunctionsRef.current.updateGrid(newGridSize);
         }
-      };
 
-      const onClick = () => {
-        if (mouseHexRef.current) {
-          onTileClickRef.current({
-            col: mouseHexRef.current.col,
-            row: mouseHexRef.current.row,
-          });
+        // Check if range changed (rare - upgrade)
+        const newRange = runtimeState?.abilities[0]?.range ?? 1;
+        if (newRange !== currentRangeRef.current) {
+          currentRangeRef.current = newRange;
+          updateFunctionsRef.current.updateRangeInternal(newRange);
         }
-      };
 
-      mount.addEventListener("mousemove", onMouseMove);
-      mount.addEventListener("click", onClick);
+        // Handle projectile spawning and impacts
+        const endProjectiles = profiler.mark("animate_projectiles");
 
-      // Animation loop
-      const clock = new Clock();
-      clock.start();
-      let animationId: number;
+        const enemyPositionMap = createEnemyPositionMap(currentEnemies);
+        const currentProjectileIds = new Set(currentProjectiles.map((p) => p.id));
+        const prevProjectiles = prevProjectilesRef.current;
 
-      const animate = () => {
-        if (!isMountedRef.current) return;
+        // Spawn new projectiles
+        for (const projectile of currentProjectiles) {
+          if (!groups.projectiles.getObjectByName(projectile.id)) {
+            spawnProjectile({
+              group_projectiles: groups.projectiles,
+              projectile,
+              grid: grid,
+              hexWidth: TD_HEX_SIZE,
+            });
 
-        profiler.beginFrame();
-        performanceMonitor.begin();
-        const endTotal = profiler.mark("animate_total");
-
-        const delta = clock.getDelta();
-        const groups = groupsRef.current;
-        const grid = gridRef.current;
-        const animator = frameAnimatorRef.current;
-        const mixer = spriteMixerRef.current;
-
-        const endAnimators = profiler.mark("animate_animators");
-        if (animator) animator.update(delta);
-        if (mixer) mixer.update(delta);
-        endAnimators();
-
-        // Update damage numbers
-        const endDamageNumbers = profiler.mark("animate_damage_numbers");
-        if (damageNumbersRef.current.length > 0) {
-          damageNumbersRef.current = damageNumbersRef.current.filter(
-            (dn) => dn && typeof dn.update === "function" && dn.update(delta),
-          );
-        }
-        profiler.reportCount("draw_damage_numbers", damageNumbersRef.current.length);
-        endDamageNumbers();
-
-        if (
-          groups &&
-          grid &&
-          rendererRef.current &&
-          sceneRef.current &&
-          cameraRef.current
-        ) {
-          // PERFORMANCE: Read all dynamic data from refs
-          const currentEnemies = entitiesRef.current?.enemiesArray ?? [];
-          const currentProjectiles = entitiesRef.current?.projectilesArray ?? [];
-          const runtimeState = runtimeStateRef.current;
-
-          // Check if grid size changed (rare - grid expansion)
-          const newGridSize = runtimeState?.state?.gridSize;
-          if (newGridSize && newGridSize !== currentGridSizeRef.current) {
-            updateFunctionsRef.current.updateGrid(newGridSize);
-          }
-
-          // Check if range changed (rare - upgrade)
-          const newRange = runtimeState?.abilities[0]?.range ?? 1;
-          if (newRange !== currentRangeRef.current) {
-            currentRangeRef.current = newRange;
-            updateFunctionsRef.current.updateRangeInternal(newRange);
-          }
-
-          // Handle projectile spawning and impacts
-          const endProjectiles = profiler.mark("animate_projectiles");
-
-          const enemyPositionMap = createEnemyPositionMap(currentEnemies);
-          const currentProjectileIds = new Set(currentProjectiles.map((p) => p.id));
-          const prevProjectiles = prevProjectilesRef.current;
-
-          // Spawn new projectiles
-          for (const projectile of currentProjectiles) {
-            if (!groups.projectiles.getObjectByName(projectile.id)) {
-              spawnProjectile({
-                group_projectiles: groups.projectiles,
-                projectile,
-                grid: grid,
-                hexWidth: TD_HEX_SIZE,
-              });
-
-              if (animator) {
-                playerStateRef.current.direction = calculateEnemyDirection(
-                  projectile.origin.col,
-                  projectile.origin.row,
-                  projectile.target.col,
-                  projectile.target.row,
-                );
-                playerStateRef.current.isThrowingAnimation = true;
-                setTimeout(() => {
-                  playerStateRef.current.isThrowingAnimation = false;
-                }, 420);
-              }
-            }
-          }
-
-          // Detect impacts (projectiles that were removed)
-          for (const prevProjectile of prevProjectiles) {
-            if (!currentProjectileIds.has(prevProjectile.id)) {
-              const sprite = groups.projectiles.getObjectByName(prevProjectile.id);
-              if (sprite) groups.projectiles.remove(sprite);
-
-              const targetTile = grid.getHex(prevProjectile.target);
-              if (targetTile && mixer && groups.effects) {
-                const posKey = `${prevProjectile.target.col},${prevProjectile.target.row}`;
-                const targetEnemy = enemyPositionMap.get(posKey);
-
-                let impactX = targetTile.x;
-                let impactY = targetTile.y;
-
-                if (targetEnemy && targetEnemy.movementProgress > 0) {
-                  const nextWaypoint = targetEnemy.path[targetEnemy.pathIndex];
-                  if (nextWaypoint) {
-                    const nextTile = grid.getHex(nextWaypoint);
-                    if (nextTile) {
-                      impactX +=
-                        (nextTile.x - targetTile.x) * targetEnemy.movementProgress;
-                      impactY +=
-                        (nextTile.y - targetTile.y) * targetEnemy.movementProgress;
-                    }
-                  }
-                }
-
-                // Impact animation and sound (using refs)
-                const cachedImpactAsset = impactAssetRef.current;
-                const cachedSfxUrl = sfxUrlRef.current;
-
-                if (cachedImpactAsset) {
-                  showImpactAnimation({
-                    group_effects: groups.effects,
-                    position: { x: impactX, y: impactY },
-                    gameAsset: cachedImpactAsset,
-                    spriteMixer: mixer,
-                    hexWidth: TD_HEX_SIZE,
-                  });
-                }
-
-                if (cachedSfxUrl) {
-                  void playPreloadedAudio(cachedSfxUrl, 0.8);
-                }
-
-                // Calculate and show damage number
-                const ability = runtimeState?.abilities[0];
-                const distance = calculateHexDistance(
-                  prevProjectile.origin,
-                  prevProjectile.target,
-                );
-                const distanceBonus = Math.floor(
-                  distance * (ability?.damagePerTile ?? 0),
-                );
-                let finalDamage = prevProjectile.damage + distanceBonus;
-
-                const isCrit =
-                  prevProjectile.critRoll !== undefined &&
-                  prevProjectile.critRoll < (ability?.critChance ?? 0);
-                if (isCrit) {
-                  finalDamage *= 2;
-                }
-
-                if (groups.ui) {
-                  damageNumbersRef.current.push(
-                    spawnDamageNumber({
-                      group_ui: groups.ui,
-                      position: { x: impactX, y: impactY },
-                      damage: finalDamage,
-                      isCrit,
-                      hexWidth: TD_HEX_SIZE,
-                    }),
-                  );
-                }
-              }
-            }
-          }
-
-          prevProjectilesRef.current = [...currentProjectiles];
-
-          updateProjectiles({
-            group_projectiles: groups.projectiles,
-            projectiles: currentProjectiles,
-            enemies: currentEnemies,
-            grid: grid,
-            delta: delta,
-            enemyPositionMap,
-          });
-          profiler.reportCount("draw_impact_effects", groups.effects.children.length);
-          endProjectiles();
-
-          // Get player position from runtime ref
-          const playerPosition =
-            runtimeState?.state?.playerPosition ?? currentPlayerPositionRef.current;
-          currentPlayerPositionRef.current = playerPosition;
-
-          // Update player direction based on closest enemy
-          if (
-            !playerStateRef.current.isThrowingAnimation &&
-            currentEnemies.length > 0
-          ) {
-            let closestEnemy = null;
-            let closestDistance = Infinity;
-
-            for (const enemy of currentEnemies) {
-              if (enemy.health <= 0) continue;
-              const dx = enemy.position.col - playerPosition.col;
-              const dy = enemy.position.row - playerPosition.row;
-              const distance = dx * dx + dy * dy;
-              if (distance < closestDistance) {
-                closestDistance = distance;
-                closestEnemy = enemy;
-              }
-            }
-
-            if (closestEnemy) {
+            if (animator) {
               playerStateRef.current.direction = calculateEnemyDirection(
-                playerPosition.col,
-                playerPosition.row,
-                closestEnemy.position.col,
-                closestEnemy.position.row,
+                projectile.origin.col,
+                projectile.origin.row,
+                projectile.target.col,
+                projectile.target.row,
               );
+              playerStateRef.current.isThrowingAnimation = true;
+              if (throwingTimeoutRef.current) clearTimeout(throwingTimeoutRef.current);
+              throwingTimeoutRef.current = setTimeout(() => {
+                playerStateRef.current.isThrowingAnimation = false;
+              }, 420);
             }
           }
+        }
 
-          // Draw/update player
-          if (animator) {
-            drawTowerDefensePlayer({
-              group_player: groups.player,
-              grid: grid,
-              playerPosition: playerPosition,
-              frameAnimator: animator,
-              playerState: playerStateRef.current,
-            });
-          }
+        // Detect impacts (projectiles that were removed)
+        for (const prevProjectile of prevProjectiles) {
+          if (!currentProjectileIds.has(prevProjectile.id)) {
+            const sprite = groups.projectiles.getObjectByName(prevProjectile.id);
+            if (sprite) groups.projectiles.remove(sprite);
 
-          // Update enemies
-          const endEnemies = profiler.mark("animate_enemies");
-          if (animator) {
-            drawTowerDefenseEnemies({
-              group_enemies: groups.enemies,
-              assetsSpatialMap: assetsSpatialMapRef.current,
-              grid: grid,
-              enemies: currentEnemies,
-              deltaTime: delta,
-              frameAnimator: animator,
-              playerPosition: playerPosition,
-              punchingEnemies: punchingEnemiesRef.current,
-            });
-          }
-          endEnemies();
+            const targetTile = grid.getHex(prevProjectile.target);
+            if (targetTile && mixer && groups.effects) {
+              const posKey = `${prevProjectile.target.col},${prevProjectile.target.row}`;
+              const targetEnemy = enemyPositionMap.get(posKey);
 
-          // Update health bars
-          const endHealthBars = profiler.mark("animate_health_bars");
-          updateEnemyHealthBars({
-            group_enemies: groups.enemies,
-            enemies: currentEnemies,
-            hexWidth: TD_HEX_SIZE,
-          });
-          endHealthBars();
+              let impactX = targetTile.x;
+              let impactY = targetTile.y;
 
-          // Update shaders
-          const endShaders = profiler.mark("animate_shaders");
-          updateWindAnimation(animatedAssetsRef.current, performance.now() / 1000);
-          updateWaveAnimation(animatedTilesRef.current, performance.now() / 1000);
-          endShaders();
-
-          // Handle player hit events
-          const endPlayerHits = profiler.mark("animate_player_hits");
-          const hitEvents = playerHitEventsRef.current ?? [];
-          const currentHitCount = hitEvents.length;
-          const lastHitCount = lastPlayerHitCountRef.current;
-
-          if (currentHitCount > lastHitCount) {
-            const newHits = hitEvents.slice(lastHitCount);
-
-            newHits.forEach(() => {
-              const playerTile = grid.getHex(playerPosition);
-              if (playerTile && runtimeState?.state && mixer) {
-                const cachedImpactAsset = impactAssetRef.current;
-                const cachedSfxUrl = sfxUrlRef.current;
-
-                if (cachedImpactAsset) {
-                  showImpactAnimation({
-                    group_effects: groups.effects,
-                    position: { x: playerTile.x, y: playerTile.y },
-                    gameAsset: cachedImpactAsset,
-                    spriteMixer: mixer,
-                    hexWidth: TD_HEX_SIZE,
-                  });
-                }
-
-                if (cachedSfxUrl) {
-                  void playPreloadedAudio(cachedSfxUrl, 0.8);
-                }
-
-                // Trigger punches for adjacent enemies
-                for (const enemy of currentEnemies) {
-                  if (enemy.health <= 0) continue;
-                  const isAdjacent =
-                    Math.abs(enemy.position.col - playerPosition.col) <= 1 &&
-                    Math.abs(enemy.position.row - playerPosition.row) <= 1 &&
-                    !(
-                      enemy.position.col === playerPosition.col &&
-                      enemy.position.row === playerPosition.row
-                    );
-
-                  if (isAdjacent && enemy.lastAttackTime !== undefined) {
-                    punchingEnemiesRef.current.add(enemy.id);
-                    setTimeout(() => {
-                      punchingEnemiesRef.current.delete(enemy.id);
-                    }, 300);
+              if (targetEnemy && targetEnemy.movementProgress > 0) {
+                const nextWaypoint = targetEnemy.path[targetEnemy.pathIndex];
+                if (nextWaypoint) {
+                  const nextTile = grid.getHex(nextWaypoint);
+                  if (nextTile) {
+                    impactX +=
+                      (nextTile.x - targetTile.x) * targetEnemy.movementProgress;
+                    impactY +=
+                      (nextTile.y - targetTile.y) * targetEnemy.movementProgress;
                   }
                 }
               }
-            });
-            lastPlayerHitCountRef.current = currentHitCount;
+
+              // Impact animation and sound (using refs)
+              const cachedImpactAsset = impactAssetRef.current;
+              const cachedSfxUrl = sfxUrlRef.current;
+
+              if (cachedImpactAsset) {
+                showImpactAnimation({
+                  group_effects: groups.effects,
+                  position: { x: impactX, y: impactY },
+                  gameAsset: cachedImpactAsset,
+                  spriteMixer: mixer,
+                  hexWidth: TD_HEX_SIZE,
+                });
+              }
+
+              if (cachedSfxUrl) {
+                void playPreloadedAudio(cachedSfxUrl, 0.8);
+              }
+
+              // Calculate and show damage number
+              const ability = runtimeState?.abilities[0];
+              const distance = calculateHexDistance(
+                prevProjectile.origin,
+                prevProjectile.target,
+              );
+              const distanceBonus = Math.floor(
+                distance * (ability?.damagePerTile ?? 0),
+              );
+              let finalDamage = prevProjectile.damage + distanceBonus;
+
+              const isCrit =
+                prevProjectile.critRoll !== undefined &&
+                prevProjectile.critRoll < (ability?.critChance ?? 0);
+              if (isCrit) {
+                finalDamage *= 2;
+              }
+
+              if (groups.ui) {
+                damageNumbersRef.current.push(
+                  spawnDamageNumber({
+                    group_ui: groups.ui,
+                    position: { x: impactX, y: impactY },
+                    damage: finalDamage,
+                    isCrit,
+                    hexWidth: TD_HEX_SIZE,
+                  }),
+                );
+              }
+            }
           }
-
-          if (currentHitCount < lastHitCount) lastPlayerHitCountRef.current = 0;
-          endPlayerHits();
-
-          // Render
-          const endRender = profiler.mark("animate_render");
-          controlsRef.current?.update();
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
-          endRender();
-
-          profiler.setRendererInfo(rendererRef.current.info);
         }
 
-        endTotal();
-        profiler.log(2000);
-        performanceMonitor.end();
-        animationId = performanceMonitor.requestFrame(animate);
-      };
+        prevProjectilesRef.current = [...currentProjectiles];
 
+        updateProjectiles({
+          group_projectiles: groups.projectiles,
+          projectiles: currentProjectiles,
+          enemies: currentEnemies,
+          grid: grid,
+          delta: delta,
+          enemyPositionMap,
+        });
+        profiler.reportCount("draw_impact_effects", groups.effects.children.length);
+        endProjectiles();
+
+        // Get player position from runtime ref
+        const playerPosition =
+          runtimeState?.state?.playerPosition ?? currentPlayerPositionRef.current;
+        currentPlayerPositionRef.current = playerPosition;
+
+        // Update player direction based on closest enemy
+        if (!playerStateRef.current.isThrowingAnimation && currentEnemies.length > 0) {
+          let closestEnemy = null;
+          let closestDistance = Infinity;
+
+          for (const enemy of currentEnemies) {
+            if (enemy.health <= 0) continue;
+            const dx = enemy.position.col - playerPosition.col;
+            const dy = enemy.position.row - playerPosition.row;
+            const distance = dx * dx + dy * dy;
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestEnemy = enemy;
+            }
+          }
+
+          if (closestEnemy) {
+            playerStateRef.current.direction = calculateEnemyDirection(
+              playerPosition.col,
+              playerPosition.row,
+              closestEnemy.position.col,
+              closestEnemy.position.row,
+            );
+          }
+        }
+
+        // Draw/update player
+        if (animator) {
+          drawTowerDefensePlayer({
+            group_player: groups.player,
+            grid: grid,
+            playerPosition: playerPosition,
+            frameAnimator: animator,
+            playerState: playerStateRef.current,
+          });
+        }
+
+        // Update enemies
+        const endEnemies = profiler.mark("animate_enemies");
+        if (animator) {
+          drawTowerDefenseEnemies({
+            group_enemies: groups.enemies,
+            assetsSpatialMap: assetsSpatialMapRef.current,
+            grid: grid,
+            enemies: currentEnemies,
+            deltaTime: delta,
+            frameAnimator: animator,
+            playerPosition: playerPosition,
+            punchingEnemies: punchingEnemiesRef.current,
+          });
+        }
+        endEnemies();
+
+        // Update health bars
+        const endHealthBars = profiler.mark("animate_health_bars");
+        updateEnemyHealthBars({
+          group_enemies: groups.enemies,
+          enemies: currentEnemies,
+          hexWidth: TD_HEX_SIZE,
+        });
+        endHealthBars();
+
+        // Update shaders
+        const endShaders = profiler.mark("animate_shaders");
+        updateWindAnimation(animatedAssetsRef.current, performance.now() / 1000);
+        updateWaveAnimation(animatedTilesRef.current, performance.now() / 1000);
+        endShaders();
+
+        // Handle player hit events
+        const endPlayerHits = profiler.mark("animate_player_hits");
+        const hitEvents = playerHitEventsRef.current ?? [];
+        const currentHitCount = hitEvents.length;
+        const lastHitCount = lastPlayerHitCountRef.current;
+
+        if (currentHitCount > lastHitCount) {
+          const newHits = hitEvents.slice(lastHitCount);
+
+          newHits.forEach(() => {
+            const playerTile = grid.getHex(playerPosition);
+            if (playerTile && runtimeState?.state && mixer) {
+              const cachedImpactAsset = impactAssetRef.current;
+              const cachedSfxUrl = sfxUrlRef.current;
+
+              if (cachedImpactAsset) {
+                showImpactAnimation({
+                  group_effects: groups.effects,
+                  position: { x: playerTile.x, y: playerTile.y },
+                  gameAsset: cachedImpactAsset,
+                  spriteMixer: mixer,
+                  hexWidth: TD_HEX_SIZE,
+                });
+              }
+
+              if (cachedSfxUrl) {
+                void playPreloadedAudio(cachedSfxUrl, 0.8);
+              }
+
+              // Trigger punches for adjacent enemies
+              for (const enemy of currentEnemies) {
+                if (enemy.health <= 0) continue;
+                const isAdjacent =
+                  Math.abs(enemy.position.col - playerPosition.col) <= 1 &&
+                  Math.abs(enemy.position.row - playerPosition.row) <= 1 &&
+                  !(
+                    enemy.position.col === playerPosition.col &&
+                    enemy.position.row === playerPosition.row
+                  );
+
+                if (isAdjacent && enemy.lastAttackTime !== undefined) {
+                  punchingEnemiesRef.current.add(enemy.id);
+                  const existingTimeout = punchingTimeoutsRef.current.get(enemy.id);
+                  if (existingTimeout) clearTimeout(existingTimeout);
+                  // Timeout is stored in Map and cleared via punchingTimeouts.forEach in cleanup
+                  // eslint-disable-next-line @eslint-react/web-api/no-leaked-timeout
+                  const newTimeout = setTimeout(() => {
+                    punchingEnemiesRef.current.delete(enemy.id);
+                    punchingTimeoutsRef.current.delete(enemy.id);
+                  }, 300);
+                  punchingTimeoutsRef.current.set(enemy.id, newTimeout);
+                }
+              }
+            }
+          });
+          lastPlayerHitCountRef.current = currentHitCount;
+        }
+
+        if (currentHitCount < lastHitCount) lastPlayerHitCountRef.current = 0;
+        endPlayerHits();
+
+        // Render
+        const endRender = profiler.mark("animate_render");
+        controlsRef.current?.update();
+        rendererRef.current.render(sceneRef.current, cameraRef.current);
+        endRender();
+
+        profiler.setRendererInfo(rendererRef.current.info);
+      }
+
+      endTotal();
+      profiler.log(2000);
+      performanceMonitor.end();
       animationId = performanceMonitor.requestFrame(animate);
+    };
 
-      // Cleanup
-      return () => {
-        isMountedRef.current = false;
-        isInitializedRef.current = false;
-        performanceMonitor.cancelFrame(animationId);
-        mount.removeEventListener("mousemove", onMouseMove);
-        mount.removeEventListener("click", onClick);
-        window.removeEventListener("resize", onResize);
-        if (scene && renderer) cleanUp(scene, renderer);
-        if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
-        if (frameAnimatorRef.current) frameAnimatorRef.current.dispose();
-        damageNumbersRef.current = [];
-        resetEnemyInstancedMeshes();
-        resetRangeIndicatorCache();
-      };
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    animationId = performanceMonitor.requestFrame(animate);
 
-    if (webglErrorRef.current) return <WebGlError />;
+    // Cleanup
+    return () => {
+      isMountedRef.current = false;
+      isInitializedRef.current = false;
+      performanceMonitor.cancelFrame(animationId);
+      mount.removeEventListener("mousemove", onMouseMove);
+      mount.removeEventListener("click", onClick);
+      window.removeEventListener("resize", onResize);
+      if (scene && renderer) cleanUp(scene, renderer);
+      if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+      if (frameAnimatorRef.current) frameAnimatorRef.current.dispose();
+      if (throwingTimeoutRef.current) clearTimeout(throwingTimeoutRef.current);
+      punchingTimeouts.forEach((timeout) => clearTimeout(timeout));
+      punchingTimeouts.clear();
+      damageNumbersRef.current = [];
+      resetEnemyInstancedMeshes();
+      resetRangeIndicatorCache();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return <div ref={mountRef} className="w-full" />;
-  },
-);
+  if (webglErrorRef.current) return <WebGlError />;
 
-TowerDefenseInner.displayName = "TowerDefenseInner";
+  return <div ref={mountRef} className="w-full" />;
+};
 
 /**
  * PERFORMANCE: Memoized wrapper that NEVER re-renders.

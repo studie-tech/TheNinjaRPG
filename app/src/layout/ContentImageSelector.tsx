@@ -5,7 +5,7 @@ import RichInput from "@/layout/RichInput";
 import { Sparkles, Edit } from "lucide-react";
 import { UploadButton } from "@/utils/uploadthing";
 import { Button } from "@/components/ui/button";
-import { FormLabel } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -116,7 +116,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
 
   return (
     <div className="flex flex-col justify-start">
-      <FormLabel>{label}</FormLabel>
+      <Label>{label}</Label>
       <br />
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>

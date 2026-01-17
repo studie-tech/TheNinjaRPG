@@ -35,7 +35,6 @@ import {
   userVote,
   historicalIp,
   village,
-  userActivityEvent,
   supportTicket,
   war,
   mpvpBattleQueue,
@@ -59,7 +58,6 @@ import { callDiscordContent } from "@/libs/socials";
 import { scaleUserStats } from "@/libs/profile";
 import { insertAiSchema } from "@/drizzle/schema";
 import { calcLevelRequirements } from "@/libs/profile";
-import { activityStreakRewards } from "@/libs/profile";
 import { calcHP, calcSP, calcCP } from "@/libs/profile";
 import { COST_CHANGE_USERNAME, SENSEI_MAX_STUDENT_LEVEL } from "@/drizzle/constants";
 import { UserRolesWithSkillTreeAccess } from "@/drizzle/constants";
@@ -100,7 +98,7 @@ import { capUserStats } from "@/libs/profile";
 import { calcActiveUserRegen } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
 import { getShrineBoost } from "@/utils/village";
-import { RYO_CAP, MAX_EXTRA_RESKIN_SLOTS } from "@/drizzle/constants";
+import { RYO_CAP } from "@/drizzle/constants";
 import { getUserCaps } from "@/drizzle/constants";
 import { getReducedGainsDays } from "@/libs/train";
 import { calculateContentDiff } from "@/utils/diff";
@@ -2273,7 +2271,6 @@ export const fetchUpdatedUser = async (props: {
     // Get activity rewards if any & update timers
     const now = new Date();
     const newDay = isDifferentDay(now, user.updatedAt);
-    const withinThreshold = secondsPassed(user.updatedAt) < 36 * 3600;
 
     // Check if travel should be completed automatically
     if (user.status === "TRAVEL" && user.travelFinishAt && user.travelFinishAt <= now) {
@@ -2295,48 +2292,6 @@ export const fetchUpdatedUser = async (props: {
       user.curHealth = Math.min(user.curHealth + regen, user.maxHealth);
       user.curStamina = Math.min(user.curStamina + regen, user.maxStamina);
       user.curChakra = Math.min(user.curChakra + regen, user.maxChakra);
-      // Get activity rewards if any & update timers
-      if (newDay) {
-        user.activityStreak = withinThreshold ? user.activityStreak + 1 : 1;
-        const rewards = activityStreakRewards(user.activityStreak);
-        if (rewards.money > 0) {
-          user.money += rewards.money;
-          toastMessages.push(`Activity streak reward: ${rewards.money} ryo`);
-        }
-        if (rewards.reputationPoints > 0) {
-          user.reputationPoints += rewards.reputationPoints;
-          user.reputationPointsTotal += rewards.reputationPoints;
-          toastMessages.push(
-            `Activity streak reward: ${rewards.reputationPoints} reputation points`,
-          );
-        }
-        if (rewards.jobExperience > 0) {
-          user.medicalExperience += rewards.jobExperience;
-          user.craftingExperience += rewards.jobExperience;
-          user.huntingExperience += rewards.jobExperience;
-          user.gatheringExperience += rewards.jobExperience;
-          toastMessages.push(
-            `Activity streak reward: ${rewards.jobExperience} experience for all jobs`,
-          );
-        }
-        if (rewards.reskinSlot > 0) {
-          if (user.extraReskinSlots >= MAX_EXTRA_RESKIN_SLOTS) {
-            // User is already at max, don't grant the reward
-            toastMessages.push(
-              `Activity streak reward: Reskin slot (already at max: ${user.extraReskinSlots})`,
-            );
-          } else {
-            const newValue = Math.min(
-              user.extraReskinSlots + rewards.reskinSlot,
-              MAX_EXTRA_RESKIN_SLOTS,
-            );
-            user.extraReskinSlots = newValue;
-            toastMessages.push(
-              `Activity streak reward: ${rewards.reskinSlot} extra reskin slot`,
-            );
-          }
-        }
-      }
       user.updatedAt = now;
       user.regenAt = now;
 
@@ -2360,7 +2315,6 @@ export const fetchUpdatedUser = async (props: {
             updatedAt: user.updatedAt,
             regenAt: user.regenAt,
             questData: user.questData,
-            activityStreak: user.activityStreak,
             money: user.money > RYO_CAP ? RYO_CAP : user.money,
             bank: user.bank > RYO_CAP ? RYO_CAP : user.bank,
             primaryElement: user.primaryElement,
@@ -2380,14 +2334,6 @@ export const fetchUpdatedUser = async (props: {
             extraReskinSlots: user.extraReskinSlots,
           })
           .where(eq(userData.userId, userId)),
-        ...(newDay
-          ? [
-              client.insert(userActivityEvent).values({
-                userId: userId,
-                streak: user.activityStreak,
-              }),
-            ]
-          : []),
         ...(userIp && user.lastIp !== userIp
           ? [
               client

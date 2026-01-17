@@ -13,7 +13,7 @@ import { getTagSchema } from "@/libs/combat/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
-import { getObjectiveSchema } from "@/validators/objectives";
+import { getObjectiveSchema, ObjectiveReward } from "@/validators/objectives";
 import { Button } from "@/components/ui/button";
 import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
 import { X, Plus } from "lucide-react";
@@ -42,7 +42,7 @@ import { InstantTasks } from "@/validators/objectives";
 import type { Quest } from "@/drizzle/schema";
 import type { DeepPartial } from "@/utils/typeutils";
 import type { Path, PathValue } from "react-hook-form";
-import type { AllObjectivesType } from "@/validators/objectives";
+import type { AllObjectivesType, ObjectiveRewardType } from "@/validators/objectives";
 import type { ZodAllTags } from "@/libs/combat/types";
 import type { FieldValues } from "react-hook-form";
 import type { UseFormReturn } from "react-hook-form";
@@ -2199,12 +2199,179 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   );
 };
 
+interface RewardFormWrapperProps {
+  idx: number;
+  reward: ObjectiveRewardType;
+  rewards: ObjectiveRewardType[];
+  setRewards: (rewards: ObjectiveRewardType[]) => void;
+  formClassName?: string;
+  hideFields?: string[];
+}
+
+/**
+ * A wrapper component around EditContent for creating a form for reward fields
+ * @returns React.ReactNode
+ */
+export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
+  const { idx, reward, rewards, formClassName, setRewards, hideFields = [] } = props;
+
+  // Parse reward with schema
+  const parsedReward = ObjectiveReward.safeParse(reward);
+  const shownReward = parsedReward.success ? parsedReward.data : reward;
+
+  // Queries for db-backed fields
+  const { data: itemData } = api.item.getAllNames.useQuery();
+  const { data: jutsuData } = api.jutsu.getAllNames.useQuery();
+  const { data: badgeData } = api.badge.getAll.useQuery();
+  const { data: bloodlineData } = api.bloodline.getAllNames.useQuery();
+
+  // Form for handling the reward
+  const form = useForm<ObjectiveRewardType>({
+    defaultValues: shownReward,
+    values: shownReward,
+    resolver: zodResolver(ObjectiveReward),
+    mode: "all",
+  });
+
+  // Watch form values
+  const watchAll = useWatch({ control: form.control });
+
+  // Update parent when form is valid and dirty
+  useEffect(() => {
+    const newRewards = [...rewards];
+    const parsed = ObjectiveReward.safeParse(watchAll);
+    if (parsed.success) {
+      newRewards[idx] = parsed.data;
+      const diff = calculateContentDiff(rewards, newRewards);
+      if (diff.length > 0 && form.formState.isDirty) {
+        setRewards(newRewards);
+        form.reset(watchAll);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchAll]);
+
+  // Attributes on this reward schema
+  type Attribute = keyof ObjectiveRewardType;
+  const attributes = Object.keys(ObjectiveReward.shape) as Attribute[];
+
+  /** Unwrap zod types to get inner-most type */
+  const getInner = (type: z.ZodTypeAny): z.ZodTypeAny => {
+    if (
+      type instanceof z.ZodDefault ||
+      type instanceof z.ZodOptional ||
+      type instanceof z.ZodNullable
+    ) {
+      return getInner(type._def.innerType as z.ZodTypeAny);
+    }
+    return type;
+  };
+
+  // Generate form data dynamically
+  const formData: FormEntry<Attribute>[] = attributes
+    .filter((value) => !hideFields.includes(value))
+    .map((value) => {
+      const innerType = getInner(ObjectiveReward.shape[value]);
+
+      // Special handling for db-backed array fields
+      if (value === "reward_items" && itemData) {
+        return {
+          id: value,
+          values: itemData.sort((a, b) => a.name.localeCompare(b.name)),
+          doubleWidth: true,
+          multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values_with_number" as const,
+        };
+      } else if (value === "reward_jutsus" && jutsuData) {
+        return {
+          id: value,
+          values: jutsuData,
+          multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values" as const,
+        };
+      } else if (value === "reward_bloodlines" && bloodlineData) {
+        return {
+          id: value,
+          values: bloodlineData,
+          multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values" as const,
+        };
+      } else if (value === "reward_badges" && badgeData?.data) {
+        return {
+          id: value,
+          values: badgeData.data,
+          multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values" as const,
+        };
+      } else if (
+        (value === "reward_hunter_items_ids" || value === "reward_gathering_items_ids") &&
+        itemData
+      ) {
+        return {
+          id: value,
+          values: itemData,
+          multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values" as const,
+        };
+      } else if (innerType instanceof z.ZodNumber) {
+        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "number" as const };
+      } else if (innerType instanceof z.ZodBoolean) {
+        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "boolean" as const };
+      } else if (innerType instanceof z.ZodEnum) {
+        return {
+          id: value,
+          type: "str_array" as const,
+          values: innerType._def.values as string[],
+          label: FORM_LABEL_MAP[value] ?? value,
+        };
+      } else {
+        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "text" as const };
+      }
+    });
+
+  return (
+    <EditContent
+      schema={ObjectiveReward}
+      form={form}
+      formData={formData}
+      formClassName={formClassName}
+      showSubmit={false}
+    />
+  );
+};
+
 // Form labels for different tag names
 export const FORM_LABEL_MAP: Record<string, string> = {
-  reward_items: "Reward Items [and drop chance%]",
+  reward_items: "Reward Items [and quantity]",
   reward_jutsus: "Reward Jutsus",
   reward_bloodlines: "Reward Bloodlines",
   reward_badges: "Reward Badges",
+  reward_money: "Ryo",
+  reward_exp: "Experience",
+  reward_prestige: "Prestige",
+  reward_reputation: "Reputation",
+  reward_clanpoints: "Clan Points",
+  reward_anbupoints: "ANBU Points",
+  reward_skillpoints: "Skill Points",
+  reward_seichi_silver: "Seichi Silver",
+  reward_medical_experience: "Medical Exp",
+  reward_hunting_experience: "Hunting Exp",
+  reward_crafting_experience: "Crafting Exp",
+  reward_gathering_experience: "Gathering Exp",
+  reward_rank: "Reward Rank",
+  reward_village_membership: "Village Membership",
+  reward_tokens: "Tokens",
+  reward_war_damage: "War Damage",
+  reward_war_healing: "War Healing",
+  reward_hunter_items: "Hunter Items Enabled",
+  reward_hunter_items_ids: "Hunter Item IDs",
+  reward_gathering_items: "Gathering Items Enabled",
+  reward_gathering_items_ids: "Gathering Item IDs",
   opponentAIs: "Opponent AIs [and number]",
   nextObjectiveId: "Next Objective ID",
   failObjectiveId: "If fail, go to objective",

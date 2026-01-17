@@ -24,6 +24,7 @@ import {
   IMG_MANUAL_BACKUP,
   IMG_MANUAL_STAFF,
   IMG_MANUAL_TOWER_UPGRADES,
+  IMG_MANUAL_ACTIVITY_STREAK,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { useUserData } from "@/utils/UserContext";
@@ -56,6 +57,7 @@ export default function ManualMain() {
     { name: "balance", img: IMG_MANUAL_BALANCE },
     { name: "staff", img: IMG_MANUAL_STAFF },
     { name: "towerDefense", img: IMG_MANUAL_TOWER_UPGRADES },
+    { name: "activityStreak", img: IMG_MANUAL_ACTIVITY_STREAK },
   ];
 
   // Add tower defense admin entry for content editors

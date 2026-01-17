@@ -9,6 +9,7 @@ import { extractRouterConfig } from "uploadthing/server";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
 import TrpcClientProvider from "@/app/_trpc/Provider";
 import AcceptWarning from "@/layout/AcceptWarning";
+import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
 import { IMG_LOGO_FULL } from "@/drizzle/constants";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import PWAManager from "@/components/pwa/PWAManager";
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <LayoutSwitcher>{children}</LayoutSwitcher>
                   <Toaster />
                   <AcceptWarning />
+                  <ActivityStreakPopup />
                   <PWAManager />
                   <InstallPrompt />
                   <ParticleProvider />

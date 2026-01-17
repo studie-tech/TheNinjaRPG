@@ -588,7 +588,6 @@ export const useTowerDefense = (userId?: string) => {
 
       // PERFORMANCE: Use refs to read current state without triggering setGameState
       const currentExistingSession = currentExistingSessionRef.current;
-      const currentWaveInProgress = currentWaveInProgressRef.current;
 
       // Lobby mode: check for existing sessions
       if (currentMode === "lobby" && sessionIdRef.current === null) {
@@ -1073,6 +1072,7 @@ export const useTowerDefense = (userId?: string) => {
         error: error instanceof Error ? error.message : "Failed to start run",
       }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initiateSessionMutation, initiateGuestSessionMutation, userId, resetGameRefs]);
 
   /**
@@ -1146,6 +1146,7 @@ export const useTowerDefense = (userId?: string) => {
         error: error instanceof Error ? error.message : "Failed to resume run",
       }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.existingSession, userId, resetGameRefs]);
 
   /**

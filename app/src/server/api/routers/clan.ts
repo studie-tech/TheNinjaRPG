@@ -1190,7 +1190,7 @@ export const clanRouter = createTRPCRouter({
           side: side,
           slot: availableSlot,
         });
-      } catch (error) {
+      } catch {
         // If insert failed due to slot conflict, revert user status and return error
         await ctx.drizzle
           .update(userData)

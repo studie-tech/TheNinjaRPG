@@ -506,3 +506,16 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
   }
   return rewards;
 };
+
+/**
+ * Returns a comma-separated string preview of rewards, or null if no rewards.
+ * @param reward - The objective reward object.
+ * @returns A string preview of rewards or null.
+ */
+export const getRewardPreview = (
+  reward?: ObjectiveRewardType | null,
+): string | null => {
+  if (!reward) return null;
+  const rewardsList = getRewardArray(reward);
+  return rewardsList.length > 0 ? rewardsList.join(", ") : null;
+};

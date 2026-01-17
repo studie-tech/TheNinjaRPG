@@ -2,7 +2,7 @@ import { drizzleDB } from "@/server/db";
 import { war, village, villageStructure, userRequest } from "@/drizzle/schema";
 import { userData, notification, gameSetting, sector } from "@/drizzle/schema";
 import { eq, and, or, ne, isNull } from "drizzle-orm";
-import { sql, inArray, notInArray } from "drizzle-orm";
+import { sql, inArray } from "drizzle-orm";
 import {
   WAR_VICTORY_TOKEN_BONUS,
   WAR_WINNING_BOOST_DAYS,

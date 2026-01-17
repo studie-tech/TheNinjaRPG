@@ -1980,7 +1980,6 @@ export const userData = mysqlTable(
     questFinishAt: datetime("questFinishAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
-    activityStreak: int("activityStreak").default(0).notNull(),
     deletionAt: datetime("deletionAt", { mode: "date", fsp: 3 }),
     travelFinishAt: datetime("travelFinishAt", { mode: "date", fsp: 3 }),
     isBanned: boolean("isBanned").default(false).notNull(),
@@ -2244,6 +2243,7 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   bountySignups: many(bountySignup),
   userSkills: many(userSkill),
   battleHistory: many(battleHistory, { relationName: "attacker" }),
+  streakProgress: many(userStreakProgress),
 }));
 
 export const userActivityEvent = mysqlTable("UserActivityEvent", {
@@ -4371,3 +4371,116 @@ export const towerDefenseCharacter = mysqlTable(
   },
 );
 export type TowerDefenseCharacterDb = InferSelectModel<typeof towerDefenseCharacter>;
+
+// Activity Streak System Tables
+export const activityStreakConfig = mysqlTable("ActivityStreakConfig", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  name: varchar("name", { length: 191 }).notNull(),
+  description: text("description"),
+  image: varchar("image", { length: 500 }),
+  totalDays: int("totalDays").default(14).notNull(),
+  streakType: mysqlEnum("streakType", consts.ActivityStreakTypes)
+    .default("RECURRING")
+    .notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  ryoCost: int("ryoCost").default(0).notNull(),
+  repsCost: int("repsCost").default(0).notNull(),
+  seichiSilverCost: int("seichiSilverCost").default(0).notNull(),
+  startDate: datetime("startDate", { mode: "date", fsp: 3 }),
+  endDate: datetime("endDate", { mode: "date", fsp: 3 }),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+  createdByUserId: varchar("createdByUserId", { length: 191 }),
+});
+export type ActivityStreakConfig = InferSelectModel<typeof activityStreakConfig>;
+
+export const activityStreakReward = mysqlTable(
+  "ActivityStreakReward",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    configId: varchar("configId", { length: 191 }).notNull(),
+    dayNumber: int("dayNumber").notNull(),
+    rewards: json("rewards").$type<ObjectiveRewardType>().notNull(),
+    image: varchar("image", { length: 500 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      configIdIdx: index("ActivityStreakReward_configId_idx").on(table.configId),
+      dayNumberIdx: index("ActivityStreakReward_dayNumber_idx").on(table.dayNumber),
+      configDayKey: uniqueIndex("ActivityStreakReward_configId_dayNumber_key").on(
+        table.configId,
+        table.dayNumber,
+      ),
+    };
+  },
+);
+export type ActivityStreakReward = InferSelectModel<typeof activityStreakReward>;
+
+export const userStreakProgress = mysqlTable(
+  "UserStreakProgress",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    configId: varchar("configId", { length: 191 }).notNull(),
+    currentDay: int("currentDay").default(0).notNull(),
+    lastClaimDate: datetime("lastClaimDate", { mode: "date", fsp: 3 }),
+    startedAt: datetime("startedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("UserStreakProgress_userId_idx").on(table.userId),
+      configIdIdx: index("UserStreakProgress_configId_idx").on(table.configId),
+      userConfigKey: uniqueIndex("UserStreakProgress_userId_configId_key").on(
+        table.userId,
+        table.configId,
+      ),
+    };
+  },
+);
+export type UserStreakProgress = InferSelectModel<typeof userStreakProgress>;
+
+// Relations for activity streak tables
+export const activityStreakConfigRelations = relations(
+  activityStreakConfig,
+  ({ many, one }) => ({
+    rewards: many(activityStreakReward),
+    progress: many(userStreakProgress),
+    createdBy: one(userData, {
+      fields: [activityStreakConfig.createdByUserId],
+      references: [userData.userId],
+    }),
+  }),
+);
+
+export const activityStreakRewardRelations = relations(
+  activityStreakReward,
+  ({ one }) => ({
+    config: one(activityStreakConfig, {
+      fields: [activityStreakReward.configId],
+      references: [activityStreakConfig.id],
+    }),
+  }),
+);
+
+export const userStreakProgressRelations = relations(userStreakProgress, ({ one }) => ({
+  user: one(userData, {
+    fields: [userStreakProgress.userId],
+    references: [userData.userId],
+  }),
+  config: one(activityStreakConfig, {
+    fields: [userStreakProgress.configId],
+    references: [activityStreakConfig.id],
+  }),
+}));

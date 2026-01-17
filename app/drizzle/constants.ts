@@ -4,6 +4,9 @@ export type OccupationType = (typeof OCCUPATIONS)[number];
 export const CURRENCY_TYPES = ["MONEY", "REPUTATION", "SEICHI_SILVER"] as const;
 export type CurrencyType = (typeof CURRENCY_TYPES)[number];
 
+export const ActivityStreakTypes = ["RECURRING", "EVENT_PASS"] as const;
+export type ActivityStreakType = (typeof ActivityStreakTypes)[number];
+
 export const TRADEABLE_CURRENCY_TYPES = ["MONEY", "REPUTATION"] as const;
 export type TradeableCurrencyType = (typeof TRADEABLE_CURRENCY_TYPES)[number];
 
@@ -56,6 +59,7 @@ export type IMG_ORIENTATION = (typeof IMG_ORIENTATIONS)[number];
 export const REGEN_SECONDS = 30;
 
 export const ContentTypes = [
+  "activityStreak",
   "asset",
   "ai",
   "badge",
@@ -1651,6 +1655,8 @@ export const IMG_HOME_SLEEP =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu8FpvZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
 export const IMG_HOME_AWAKE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1BKctL6bo95WClq4K0wxZUmJcvThgdVenO3P";
+export const IMG_MANUAL_ACTIVITY_STREAK =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTPVewE5IU29dZYJPoOKSh5vmlqatMub3EigH";
 export const IMG_MANUAL_TOWER_UPGRADES =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HMAwecnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b";
 export const IMG_MANUAL_TOWER_ENEMIES =

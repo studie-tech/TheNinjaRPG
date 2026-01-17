@@ -928,7 +928,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           sceneRef.removeEventListener("touchstart", onDocumentTouchStart);
           controls.removeEventListener("change", onZoomChange);
           rendererElement.removeEventListener("click", onClick, true);
-        } catch (e) {
+        } catch {
           // Ignore errors if elements are already removed
         }
 
@@ -937,7 +937,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           if (renderer.domElement && renderer.domElement.parentNode === sceneRef) {
             sceneRef.removeChild(renderer.domElement);
           }
-        } catch (e) {
+        } catch {
           // Ignore errors if element is already removed
         }
 

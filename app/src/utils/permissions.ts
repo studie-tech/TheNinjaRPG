@@ -152,10 +152,6 @@ export const canSeeActivityEvents = (role: UserRole) => {
   return role !== "USER";
 };
 
-export const canRestoreActivityStreak = (role: UserRole) => {
-  return role !== "USER";
-};
-
 export const canModifyUserBadges = (role: UserRole) => {
   return [
     "CODING-ADMIN",

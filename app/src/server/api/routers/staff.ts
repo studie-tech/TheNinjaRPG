@@ -69,7 +69,6 @@ import {
   canSeeIps,
   canSeeActivityEvents,
   canUnequipAllUsers,
-  canRestoreActivityStreak,
   canUseMonitoringTests,
   canDeleteReferral,
   canControlBackups,
@@ -651,33 +650,6 @@ export const staffRouter = createTRPCRouter({
         limit: 100, // Limit to last 100 activity events
       });
       return activityEvents;
-    }),
-  // Restore user activity streak based on activity event
-  restoreUserActivityStreak: protectedProcedure
-    .input(z.object({ userId: z.string(), activityEventId: z.number() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Query
-      const [user, target, activity] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
-        ctx.drizzle.query.userActivityEvent.findFirst({
-          where: eq(userActivityEvent.id, input.activityEventId),
-        }),
-      ]);
-      // Guard
-      if (!user) return errorResponse("User not found");
-      if (!target) return errorResponse("Target user not found");
-      if (!activity) return errorResponse("Activity event not found");
-      if (!canRestoreActivityStreak(user.role)) {
-        return errorResponse("Not allowed for you");
-      }
-      // Mutate
-      await ctx.drizzle
-        .update(userData)
-        .set({ activityStreak: activity.streak })
-        .where(eq(userData.userId, target.userId));
-      return { success: true, message: "Activity streak restored" };
     }),
   // Update all occurances of a user ID in the database to another userId.
   // VERY dangerous - used to e.g. link up unlinked accounts with new userIds from clerk

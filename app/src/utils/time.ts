@@ -220,3 +220,46 @@ export const combineLocalDateTime = (date: Date, timeHHMM: string): Date => {
   out.setHours(parseInt(hhStr, 10), parseInt(mmStr, 10), 0, 0);
   return out;
 };
+
+/**
+ * Check if two dates are on the same day (UTC-based comparison)
+ */
+export const isSameDay = (date1: Date, date2: Date): boolean => {
+  return !isDifferentDay(date1, date2);
+};
+
+/**
+ * Check if a date is today (UTC-based comparison)
+ */
+export const isToday = (date: Date | null): boolean => {
+  if (!date) return false;
+  return isSameDay(date, new Date());
+};
+
+/**
+ * Check if a date is within a given date range (inclusive)
+ * @param start - Start date of the range (null means no lower bound)
+ * @param end - End date of the range (null means no upper bound)
+ */
+export const isWithinDateRange = (start: Date | null, end: Date | null): boolean => {
+  const now = new Date();
+  if (start && now < start) return false;
+  if (end && now > end) return false;
+  return true;
+};
+
+/**
+ * Number of hours elapsed since a given date
+ */
+export const hoursSince = (date: Date | null): number => {
+  if (!date) return Infinity;
+  const now = new Date();
+  return (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+};
+
+/**
+ * Get a date key string in format YYYY-M-D for use in localStorage or caching
+ */
+export const getDateKey = (date: Date): string => {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+};

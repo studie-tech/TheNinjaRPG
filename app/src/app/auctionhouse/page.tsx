@@ -2,7 +2,7 @@
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { useRequireInVillage, useRequiredUserData } from "@/utils/UserContext";
 import Loader from "@/layout/Loader";
