@@ -499,7 +499,7 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
               selector: "node[label]",
               style: {
                 label: "data(id)",
-                fontSize: 8,
+                "font-size": 8,
                 color: "#f59e42",
               },
             },
