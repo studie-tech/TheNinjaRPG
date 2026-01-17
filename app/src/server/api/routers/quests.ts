@@ -833,9 +833,9 @@ export const questsRouter = createTRPCRouter({
         }
         // Prepare data for insertion into database
         const data = input.data;
-        // Server-side enforcement: strip reward_reputation if user lacks permission
+        // Server-side enforcement: preserve existing reward_reputation if user lacks permission
         if (!canAwardReputation(user.role)) {
-          data.content.reward.reward_reputation = 0;
+          data.content.reward.reward_reputation = entry.content.reward.reward_reputation;
         }
         // Check we only give ranks with exams
         let rankError = false;
