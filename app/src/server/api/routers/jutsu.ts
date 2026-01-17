@@ -42,6 +42,7 @@ import {
   canTransferJutsu,
   canReskinFreely,
   canModerateReskin,
+  canOnlyEditSelf,
 } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/socials";
 import { createTRPCRouter, errorResponse } from "@/server/api/trpc";
@@ -544,6 +545,10 @@ export const jutsuRouter = createTRPCRouter({
       // Guard)
       if (!canEditJutsus(user.role)) {
         return errorResponse("Not allowed to edit public user");
+      }
+      // Roles that can only edit themselves
+      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+        return errorResponse("You can only edit your own jutsus");
       }
       const userjutsu = userjutsus.find((j) => j.jutsuId === input.jutsuId);
       if (!userjutsu) {

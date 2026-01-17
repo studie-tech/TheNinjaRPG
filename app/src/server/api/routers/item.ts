@@ -142,14 +142,12 @@ export const itemRouter = createTRPCRouter({
       // Server-side enforcement: zero out reward_reputation when cloning if user lacks permission
       let clonedEffects = itemData.effects;
       if (!canAwardReputation(user.role)) {
-        clonedEffects = (itemData.effects as Array<{ type: string; reward_reputation?: number }>).map(
-          (effect) => {
-            if (effect.type === "noncombatconsumereward") {
-              return { ...effect, reward_reputation: 0 };
-            }
-            return effect;
-          },
-        );
+        clonedEffects = itemData.effects.map((effect) => {
+          if (effect.type === "noncombatconsumereward") {
+            return { ...effect, reward_reputation: 0 };
+          }
+          return effect;
+        }) as ZodAllTags[];
       }
       const clonedItem = {
         ...itemData,
