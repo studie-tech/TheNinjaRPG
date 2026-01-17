@@ -81,30 +81,40 @@ export const registerRouter = createTRPCRouter({
       const moderationResult = await checkForBadWords(input.username);
       if (!moderationResult.success) return moderationResult;
       // Query
-      const [villageData, user, reminder, selectedBloodline, currentIp] =
-        await Promise.all([
-          ctx.drizzle.query.village.findFirst({
-            where: eq(village.name, "Horizon"),
-          }),
-          ctx.drizzle.query.userData.findFirst({
-            where: eq(userData.username, input.username),
-          }),
-          ctx.drizzle.query.emailReminder.findFirst({
-            where: eq(emailReminder.userId, ctx.userId),
-          }),
-          ctx.drizzle.query.bloodline.findFirst({
-            where: eq(bloodline.id, input.bloodlineId),
-          }),
-          ctx.drizzle.query.historicalIp.findFirst({
-            where: and(
-              eq(historicalIp.ip, ctx.userIp ?? ""),
-              eq(historicalIp.userId, ctx.userId),
-            ),
-          }),
-        ]);
+      const [
+        villageData,
+        existingUser,
+        usernameTaken,
+        reminder,
+        selectedBloodline,
+        currentIp,
+      ] = await Promise.all([
+        ctx.drizzle.query.village.findFirst({
+          where: eq(village.name, "Horizon"),
+        }),
+        ctx.drizzle.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        }),
+        ctx.drizzle.query.userData.findFirst({
+          where: eq(userData.username, input.username),
+        }),
+        ctx.drizzle.query.emailReminder.findFirst({
+          where: eq(emailReminder.userId, ctx.userId),
+        }),
+        ctx.drizzle.query.bloodline.findFirst({
+          where: eq(bloodline.id, input.bloodlineId),
+        }),
+        ctx.drizzle.query.historicalIp.findFirst({
+          where: and(
+            eq(historicalIp.ip, ctx.userIp ?? ""),
+            eq(historicalIp.userId, ctx.userId),
+          ),
+        }),
+      ]);
 
       // Guard
-      if (user) return errorResponse("Username already taken");
+      if (existingUser) return errorResponse("Character already created for this account");
+      if (usernameTaken) return errorResponse("Username already taken");
       if (!villageData) return errorResponse("Horizon village not found");
       if (villageData.type !== "VILLAGE")
         return errorResponse("Can only join villages");
