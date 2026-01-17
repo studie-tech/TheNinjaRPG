@@ -695,6 +695,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               </p>
             </div>
           )}
+          {"gatheringRank" in item && item.gatheringRank && item.gatheringRank !== "NONE" && (
+            <div className="my-2 rounded-lg bg-poppopover p-2">
+              <p>
+                <b>Gathering Rank Requirement</b>: {item.gatheringRank}
+              </p>
+            </div>
+          )}
           {/* {objectives.length > 0 && (
             <div className={`my-2 rounded-lg bg-poppopover p-2`}>
               <p className="font-bold">Objectives</p>

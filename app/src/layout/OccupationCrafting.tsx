@@ -33,6 +33,7 @@ import {
 } from "@/libs/crafting";
 import { getShrineBoost } from "@/utils/village";
 import { calcItemRepairCost } from "@/libs/item";
+import { formatSecondsToTimeDisplay } from "@/utils/time";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 
 export default function OccupationCrafting() {
@@ -372,14 +373,7 @@ export default function OccupationCrafting() {
                       );
                       const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
                       const craftSeconds = Math.round(craftingTime * 60 * shrineBoostFactor);
-                      const craftMinutes = Math.floor(craftSeconds / 60);
-                      const remainingSeconds = craftSeconds % 60;
-                      const timeDisplay =
-                        craftMinutes > 0
-                          ? remainingSeconds > 0
-                            ? `${craftMinutes}m ${remainingSeconds}s`
-                            : `${craftMinutes}m`
-                          : `${craftSeconds}s`;
+                      const timeDisplay = formatSecondsToTimeDisplay(craftSeconds);
 
                       // Get crafting experience
                       const expGain = selectedItem.craftingExperience ?? 0;

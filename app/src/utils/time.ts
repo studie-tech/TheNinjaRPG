@@ -264,3 +264,15 @@ export const hoursSince = (date: Date | null): number => {
 export const getDateKey = (date: Date): string => {
   return `${date.getUTCFullYear()}-${date.getUTCMonth() + 1}-${date.getUTCDate()}`;
 };
+
+/**
+ * Format a duration in seconds to a human-readable string (e.g., "5m 30s", "2m", "45s")
+ */
+export const formatSecondsToTimeDisplay = (totalSeconds: number): string => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes > 0) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+  return `${totalSeconds}s`;
+};
