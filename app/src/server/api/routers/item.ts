@@ -249,18 +249,13 @@ export const itemRouter = createTRPCRouter({
           );
         }
       }
-      // Server-side enforcement: preserve existing reward_reputation in noncombatconsumereward effects if user lacks permission
-      // Use existing reputation values by position or default to 0 to prevent bypass via effect reordering
+      // Server-side enforcement: set reward_reputation to 0 for users without permission
+      // Since effects don't have stable IDs like quest objectives, we can't reliably preserve
+      // existing values when effects are added/deleted/reordered. Setting to 0 is the safest approach.
       if (!canAwardReputation(user.role)) {
-        const existingReputation = entry.effects
-          .filter((e) => e.type === "noncombatconsumereward")
-          .map((e) => ("reward_reputation" in e ? e.reward_reputation : 0));
-        let repIndex = 0;
         input.data.effects.forEach((effect) => {
           if (effect.type === "noncombatconsumereward") {
-            const safeValue = existingReputation[repIndex] ?? 0;
-            repIndex += 1;
-            (effect as { reward_reputation?: number }).reward_reputation = safeValue;
+            (effect as { reward_reputation?: number }).reward_reputation = 0;
           }
         });
       }
