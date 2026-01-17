@@ -282,18 +282,24 @@ export const itemRouter = createTRPCRouter({
         };
 
         // Build lookup map from existing effects' signatures to their reward_reputation
-        const signatureToReputation = new Map<string, number>();
+        // Use an array to track multiple identical effects and prevent reputation multiplication
+        const signatureToReputations = new Map<string, number[]>();
         for (const existing of existingReputationEffects) {
           const sig = getEffectSignature(existing);
-          signatureToReputation.set(sig, existing.reward_reputation ?? 0);
+          const reputations = signatureToReputations.get(sig) ?? [];
+          reputations.push(existing.reward_reputation ?? 0);
+          signatureToReputations.set(sig, reputations);
         }
 
         // Preserve reputation for matching effects, set to 0 for new/modified effects
+        // Each reputation value can only be used once (prevents duplication exploit)
         input.data.effects.forEach((effect) => {
           if (effect.type === "noncombatconsumereward") {
             const typedEffect = effect as EffectWithReputation;
             const sig = getEffectSignature(typedEffect);
-            const existingReputation = signatureToReputation.get(sig) ?? 0;
+            const reputations = signatureToReputations.get(sig);
+            // Pop the first available reputation value to prevent reuse
+            const existingReputation = reputations?.shift() ?? 0;
             (effect as { reward_reputation?: number }).reward_reputation = existingReputation;
           }
         });
