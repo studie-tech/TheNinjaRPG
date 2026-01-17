@@ -26,7 +26,6 @@ import {
   village,
   userData,
   shrineBoostSchedule,
-  notification,
   mpvpBattleQueue,
   mpvpBattleUser,
 } from "@/drizzle/schema";
@@ -893,18 +892,6 @@ export const shrineRouter = createTRPCRouter({
           defenderEntityId: targetSector.villageId,
           sector: input.sectorNumber,
         });
-
-        // Insert notification
-        await Promise.all([
-          ctx.drizzle.insert(notification).values({
-            userId: user.userId,
-            content: `${user.username} from ${user.village?.name} is attacking the shrine in sector ${input.sectorNumber}!`,
-          }),
-          ctx.drizzle
-            .update(userData)
-            .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(eq(userData.villageId, targetSector.villageId)),
-        ]);
 
         try {
           await ctx.drizzle.insert(mpvpBattleUser).values({
