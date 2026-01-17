@@ -84,19 +84,6 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
   const form = useForm<ActivityStreakFormType>({
     mode: "all",
     criteriaMode: "all",
-    values: {
-      name: config.name,
-      description: config.description,
-      image: config.image,
-      totalDays: config.totalDays,
-      streakType: config.streakType,
-      isActive: config.isActive,
-      ryoCost: config.ryoCost,
-      repsCost: config.repsCost,
-      seichiSilverCost: config.seichiSilverCost,
-      startDate: config.startDate,
-      endDate: config.endDate,
-    },
     defaultValues: {
       name: config.name,
       description: config.description,
@@ -216,9 +203,7 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
             {rewards
               .sort((a, b) => a.dayNumber - b.dayNumber)
               .map((reward) => {
-                const originalIndex = rewards.findIndex(
-                  (r) => r.dayNumber === reward.dayNumber,
-                );
+                const originalIndex = rewards.findIndex((r) => r.id === reward.id);
                 const rewardSummary = getRewardArray(reward.rewards).join(" • ");
                 const dayKey = `day-${reward.dayNumber}`;
 

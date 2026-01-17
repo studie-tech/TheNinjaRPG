@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
-import { eq, and, ne, desc } from "drizzle-orm";
+import { eq, and, ne, desc, gte, isNull } from "drizzle-orm";
 import {
   userData,
   activityStreakConfig,
@@ -241,25 +241,36 @@ export const activityStreakRouter = createTRPCRouter({
         );
       }
 
-      // Deduct currency and create progress
-      await Promise.all([
-        ctx.drizzle
-          .update(userData)
-          .set({
-            money: user.money - config.ryoCost,
-            reputationPoints: user.reputationPoints - config.repsCost,
-            seichiSilver: user.seichiSilver - config.seichiSilverCost,
-          })
-          .where(eq(userData.userId, ctx.userId)),
-        ctx.drizzle.insert(userStreakProgress).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          configId: config.id,
-          currentDay: 0,
-          lastClaimDate: null,
-          startedAt: new Date(),
-        }),
-      ]);
+      // Deduct currency with guarded where-conditions to prevent concurrent spending
+      const updateResult = await ctx.drizzle
+        .update(userData)
+        .set({
+          money: user.money - config.ryoCost,
+          reputationPoints: user.reputationPoints - config.repsCost,
+          seichiSilver: user.seichiSilver - config.seichiSilverCost,
+        })
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.money, config.ryoCost),
+            gte(userData.reputationPoints, config.repsCost),
+            gte(userData.seichiSilver, config.seichiSilverCost),
+          ),
+        );
+
+      if (updateResult.rowsAffected === 0) {
+        return errorResponse("Not enough currency to purchase this event pass");
+      }
+
+      // Create progress entry
+      await ctx.drizzle.insert(userStreakProgress).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        configId: config.id,
+        currentDay: 0,
+        lastClaimDate: null,
+        startedAt: new Date(),
+      });
 
       // Build cost message
       const costs: string[] = [];
@@ -268,9 +279,10 @@ export const activityStreakRouter = createTRPCRouter({
       if (config.seichiSilverCost > 0)
         costs.push(`${config.seichiSilverCost} seichi silver`);
 
+      const costText = costs.length > 0 ? costs.join(", ") : "free";
       return {
         success: true,
-        message: `Purchased "${config.name}" for ${costs.join(", ")}!`,
+        message: `Purchased "${config.name}" for ${costText}!`,
       };
     }),
 
@@ -373,7 +385,27 @@ export const activityStreakRouter = createTRPCRouter({
       // Check if this completes the streak
       const isComplete = newCurrentDay >= config.totalDays;
 
-      // Apply rewards and update progress
+      // Optimistic concurrency guard: Update progress with lastClaimDate check to prevent double-claims
+      const progressUpdateResult = await ctx.drizzle
+        .update(userStreakProgress)
+        .set({
+          currentDay: newCurrentDay,
+          lastClaimDate: now,
+        })
+        .where(
+          and(
+            eq(userStreakProgress.id, progress.id),
+            progress.lastClaimDate === null
+              ? isNull(userStreakProgress.lastClaimDate)
+              : eq(userStreakProgress.lastClaimDate, progress.lastClaimDate),
+          ),
+        );
+
+      if (progressUpdateResult.rowsAffected === 0) {
+        return errorResponse("You have already claimed this streak today");
+      }
+
+      // Only grant rewards after successful progress update
       const processedRewards = postProcessRewards(rewards);
 
       const updatePromises: Promise<unknown>[] = [
@@ -403,17 +435,6 @@ export const activityStreakRouter = createTRPCRouter({
             .delete(userStreakProgress)
             .where(eq(userStreakProgress.id, progress.id)),
         );
-      } else {
-        // Update progress
-        updatePromises.push(
-          ctx.drizzle
-            .update(userStreakProgress)
-            .set({
-              currentDay: newCurrentDay,
-              lastClaimDate: now,
-            })
-            .where(eq(userStreakProgress.id, progress.id)),
-        );
       }
 
       await Promise.all(updatePromises);
@@ -434,7 +455,7 @@ export const activityStreakRouter = createTRPCRouter({
 
   // ===== Admin/Content Endpoints =====
 
-  // Get all streak configurations
+  // Get all streak configurations (admin only)
   getConfigs: protectedProcedure
     .input(
       z
@@ -444,6 +465,14 @@ export const activityStreakRouter = createTRPCRouter({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
+      // Fetch user for permission check
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+
+      // Guard: permission check
+      if (!canChangeContent(user.role)) {
+        throw new Error("You don't have permission to view streak configurations");
+      }
+
       const whereClause = input?.streakType
         ? eq(activityStreakConfig.streakType, input.streakType)
         : undefined;
@@ -458,10 +487,18 @@ export const activityStreakRouter = createTRPCRouter({
       return configs;
     }),
 
-  // Get single config with rewards
+  // Get single config with rewards (admin only)
   getConfig: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
+      // Fetch user for permission check
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+
+      // Guard: permission check
+      if (!canChangeContent(user.role)) {
+        throw new Error("You don't have permission to view streak configurations");
+      }
+
       const config = await ctx.drizzle.query.activityStreakConfig.findFirst({
         where: eq(activityStreakConfig.id, input.id),
         with: {

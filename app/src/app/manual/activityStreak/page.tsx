@@ -164,14 +164,15 @@ export default function ActivityStreakListPage() {
                       {config.streakType === "EVENT_PASS" && (
                         <>
                           {" • "}
-                          {config.ryoCost > 0 && <span>{config.ryoCost} ryo</span>}
-                          {config.repsCost > 0 && <span>{config.repsCost} reps</span>}
-                          {config.seichiSilverCost > 0 && (
-                            <span>{config.seichiSilverCost} silver</span>
-                          )}
-                          {config.ryoCost === 0 &&
-                            config.repsCost === 0 &&
-                            config.seichiSilverCost === 0 && <span>Free</span>}
+                          {(() => {
+                            const costs: string[] = [];
+                            if (config.ryoCost > 0) costs.push(`${config.ryoCost} ryo`);
+                            if (config.repsCost > 0)
+                              costs.push(`${config.repsCost} reps`);
+                            if (config.seichiSilverCost > 0)
+                              costs.push(`${config.seichiSilverCost} silver`);
+                            return costs.length > 0 ? costs.join(" / ") : "Free";
+                          })()}
                         </>
                       )}
                     </div>
