@@ -129,10 +129,16 @@ export const pvpRankRouter = createTRPCRouter({
       if (currentSeason) {
         return errorResponse("A season is already active");
       }
-      // Server-side enforcement: reset reward_reputation to 0 if user lacks permission
+      // Server-side enforcement: reset reward_reputation to 0 in all division rewards if user lacks permission
       const seasonData = { ...input };
       if (!canAwardReputation(user.role)) {
-        seasonData.reward_reputation = 0;
+        seasonData.rewards = seasonData.rewards.map((divisionReward) => ({
+          ...divisionReward,
+          rewards: {
+            ...divisionReward.rewards,
+            reward_reputation: 0,
+          },
+        }));
       }
       // insert new season
       const id = nanoid();
@@ -171,10 +177,23 @@ export const pvpRankRouter = createTRPCRouter({
           return errorResponse("Another season is active, cannot update this season");
         }
       }
-      // Server-side enforcement: preserve existing reward_reputation if user lacks permission
+      // Server-side enforcement: preserve existing reward_reputation in all division rewards if user lacks permission
       const { id, ...data } = input;
       if (!canAwardReputation(user.role)) {
-        data.reward_reputation = existingSeason.reward_reputation;
+        data.rewards = data.rewards.map((divisionReward) => {
+          // Find existing division reward by division name to preserve its reputation value
+          const existingDivisionReward = existingSeason.rewards.find(
+            (r) => r.division === divisionReward.division,
+          );
+          const existingReputation = existingDivisionReward?.rewards?.reward_reputation ?? 0;
+          return {
+            ...divisionReward,
+            rewards: {
+              ...divisionReward.rewards,
+              reward_reputation: existingReputation,
+            },
+          };
+        });
       }
       // update season
       await ctx.drizzle
