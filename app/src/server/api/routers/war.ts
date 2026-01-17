@@ -30,6 +30,7 @@ import {
   WAR_LOSING_COOLDOWN_DAYS,
   WAR_MINIMUM_MEMBERS_REQUIRED,
   WAR_ALLY_MAX_PAYMENT_PERCENTAGE,
+  WAR_RAID_SHRINE_HP,
 } from "@/drizzle/constants";
 import {
   handleWarEnd,
@@ -579,6 +580,8 @@ export const warRouter = createTRPCRouter({
           status: "ACTIVE",
           type: warType,
           targetStructureRoute: structure.route,
+          shrineHp: WAR_RAID_SHRINE_HP,
+          shrineMaxHp: WAR_RAID_SHRINE_HP,
         }),
       ]);
       if (updateResult.rowsAffected === 0) {

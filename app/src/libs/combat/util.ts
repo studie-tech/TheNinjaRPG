@@ -1347,6 +1347,21 @@ export const calcBattleResult = (
                   }
                 }
               }
+              // Village wars and raids - abstract shrine HP mechanic (PvP only)
+              if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
+                if (battleType === "COMBAT") {
+                  if (
+                    (didWin && war.attackerVillageId === vilId) ||
+                    (!didWin && war.defenderVillageId === vilId)
+                  ) {
+                    // Attacker side won - reduce shrine HP
+                    if (didWin) shrineChangeHp -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
+                  } else {
+                    // Defender side won - recover shrine HP
+                    if (didWin) shrineChangeHp += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
+                  }
+                }
+              }
             });
           });
       }

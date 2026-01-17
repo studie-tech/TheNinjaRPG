@@ -15,7 +15,13 @@ import {
   bounty,
   war,
 } from "@/drizzle/schema";
-import { kageDefendedChallenges, village, clan, anbuSquad } from "@/drizzle/schema";
+import {
+  kageDefendedChallenges,
+  village,
+  clan,
+  anbuSquad,
+  villageStructure,
+} from "@/drizzle/schema";
 import { dataBattleAction } from "@/drizzle/schema";
 import { getNewTrackers } from "@/libs/quest";
 import { battleJutsuExp } from "@/libs/train";
@@ -25,6 +31,9 @@ import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
 import {
   VILLAGE_SYNDICATE_ID,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  WAR_CAPTURE_TOWNHALL_DAMAGE,
+  WAR_RECAPTURE_TOWNHALL_HEAL,
+  WAR_RECAPTURE_THRESHOLD,
 } from "@/drizzle/constants";
 import { findWarsWithUser } from "@/libs/war";
 import {
@@ -407,8 +416,9 @@ export const updateWars = async (
                     }),
                   ]
                 : []),
-              // Update shrine HP in war table for sector wars
-              ...(result.shrineChangeHp !== 0 && w.type === "SECTOR_WAR"
+              // Update shrine HP in war table for sector wars, village wars, and raids
+              ...(result.shrineChangeHp !== 0 &&
+              ["SECTOR_WAR", "VILLAGE_WAR", "WAR_RAID"].includes(w.type)
                 ? [
                     client
                       .update(war)
@@ -439,6 +449,44 @@ export const updateWars = async (
                             })
                             .where(and(eq(war.id, w.id), isNull(war.endedAt))),
                         ]),
+                  ]
+                : []),
+              // Townhall damage on shrine capture (shrine HP drops to 0) for Village Wars/Raids
+              ...(result.shrineChangeHp < 0 &&
+              ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
+              w.shrineHp > 0 &&
+              w.shrineHp + result.shrineChangeHp <= 0
+                ? [
+                    client
+                      .update(villageStructure)
+                      .set({
+                        curSp: sql`GREATEST(curSp - ${WAR_CAPTURE_TOWNHALL_DAMAGE}, 0)`,
+                      })
+                      .where(
+                        and(
+                          eq(villageStructure.villageId, w.defenderVillageId),
+                          eq(villageStructure.route, "/townhall"),
+                        ),
+                      ),
+                  ]
+                : []),
+              // Townhall heal on shrine recapture (shrine HP rises above 25%) for Village Wars/Raids
+              ...(result.shrineChangeHp > 0 &&
+              ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
+              w.shrineHp <= w.shrineMaxHp * WAR_RECAPTURE_THRESHOLD &&
+              w.shrineHp + result.shrineChangeHp > w.shrineMaxHp * WAR_RECAPTURE_THRESHOLD
+                ? [
+                    client
+                      .update(villageStructure)
+                      .set({
+                        curSp: sql`LEAST(curSp + ${WAR_RECAPTURE_TOWNHALL_HEAL}, maxSp)`,
+                      })
+                      .where(
+                        and(
+                          eq(villageStructure.villageId, w.defenderVillageId),
+                          eq(villageStructure.route, "/townhall"),
+                        ),
+                      ),
                   ]
                 : []),
             ];

@@ -1230,6 +1230,23 @@ export const VillageWar: React.FC<{
         </div>
       </Modal2>
 
+      {/* Shrine HP Status for Village Wars and Raids */}
+      {["VILLAGE_WAR", "WAR_RAID"].includes(war.type) &&
+        war.status === "ACTIVE" &&
+        war.shrineMaxHp > 0 && (
+          <div className="mb-4">
+            <p className="text-sm font-medium mb-1">Target Shrine HP</p>
+            <StatusBar
+              tooltip="Shrine Health - Depletes from PvP kills. Capture (HP=0) damages defender townhall by 200. Recapture (HP>25%) heals by 150."
+              color="bg-red-500"
+              showText={true}
+              status="AWAKE"
+              current={war.shrineHp}
+              total={war.shrineMaxHp}
+            />
+          </div>
+        )}
+
       <div className="grid grid-cols-2 gap-8 items-start justify-center">
         <WarSide
           structure={isAttacker ? attackerStructure : defenderStructure}
