@@ -930,24 +930,24 @@ export const fetchConversation = async (params: FetchConvoOptions) => {
       return await client.query.conversation.findFirst({
         where: eq(conversation.id, id),
         with: { users: true },
-        orderBy: [desc(conversation.isPublic)],
       });
     } else if (title) {
+      // First try to find a public conversation with this title
+      const publicConvo = await client.query.conversation.findFirst({
+        where: and(eq(conversation.title, title), eq(conversation.isPublic, true)),
+        with: { users: true },
+      });
+      if (publicConvo) return publicConvo;
+      // Fallback to any conversation with this title (for private convos)
       return await client.query.conversation.findFirst({
         where: eq(conversation.title, title),
         with: { users: true },
-        orderBy: [desc(conversation.isPublic)],
       });
     } else {
       throw serverError("BAD_REQUEST", "Invalid request");
     }
   };
-  const convo = await getConvo();
-  if (convo) {
-    return convo;
-  } else {
-    return null;
-  }
+  return await getConvo();
 };
 
 /**
