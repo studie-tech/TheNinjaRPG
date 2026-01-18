@@ -81,6 +81,9 @@ Sentry.init({
     if (isDataCloneError(event)) {
       return null; // Drop DataCloneError from third-party scripts (gtag, mediafilter)
     }
+    if (isReplicateApiError(event)) {
+      return null; // Drop Replicate API gateway errors (502/503/504)
+    }
     return event;
   },
 
@@ -338,6 +341,23 @@ function isDataCloneError(event: Sentry.ErrorEvent): boolean {
       frame.abs_path?.includes("mediafilter"),
   );
 }
+
+/**
+ * Check if an error is a Replicate API gateway error that should be filtered.
+ * These occur when Replicate's API returns 502/503/504 errors during image generation.
+ * These are transient third-party infrastructure issues we cannot fix.
+ */
+const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+
+  // Match TRPCClientError wrapping Replicate API gateway errors (502, 503, 504)
+  return (
+    message.includes("api.replicate.com") &&
+    (message.includes("502 Bad Gateway") ||
+      message.includes("503 Service") ||
+      message.includes("504 Gateway"))
+  );
+};
 
 function ensureBrowserErrorHandler() {
   if (typeof window === "undefined") return;
