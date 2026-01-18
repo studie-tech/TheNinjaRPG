@@ -468,8 +468,9 @@ export const updateWars = async (
         return warResult.wars
           .map((w) => {
             return [
-              // Townhall damage on shrine capture (shrine HP is now 0) for Village Wars/Raids
-              // Check if shrine HP is exactly 0 after the update, indicating capture just happened
+              // Townhall damage on shrine capture (shrine HP just crossed from >0 to 0) for Village Wars/Raids
+              // Use threshold crossing check: shrine HP is now 0 AND was >0 before this battle's change
+              // This prevents multiple concurrent battles from applying damage when shrine is already at 0
               ...(result.shrineChangeHp < 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
                 ? [
                     client
@@ -481,6 +482,7 @@ export const updateWars = async (
                             WHERE war.id = ${w.id}
                             AND war.endedAt IS NULL
                             AND war.shrineHp = 0
+                            AND war.shrineHp - ${result.shrineChangeHp} > 0
                           )
                           THEN GREATEST(curSp - ${WAR_CAPTURE_TOWNHALL_DAMAGE}, 0)
                           ELSE curSp
@@ -495,7 +497,8 @@ export const updateWars = async (
                   ]
                 : []),
               // Townhall heal on shrine recapture (shrine HP rises above threshold) for Village Wars/Raids
-              // Check if shrine HP is now just above threshold after the update
+              // Use threshold crossing check: shrine HP is now above threshold AND was at/below threshold before this battle's change
+              // This prevents subsequent battles from triggering heal when threshold was already crossed
               ...(result.shrineChangeHp > 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
                 ? [
                     client
