@@ -65,31 +65,29 @@ const RamenShop: React.FC<RamenShopProps> = (props) => {
         />
       )}
       {isPending && <Loader explanation="Purchasing food" />}
-      {!isPending && (
-        <div className="grid grid-cols-3 text-center font-bold italic p-3">
-          <MenuEntry
-            title="Small Bowl"
-            entry="small"
-            image={IMG_RAMEN_SMALL}
-            userData={userData}
-            onPurchase={() => mutate({ ramen: "small" })}
-          />
-          <MenuEntry
-            title="Medium Bowl"
-            entry="medium"
-            image={IMG_RAMEN_MEDIUM}
-            userData={userData}
-            onPurchase={() => mutate({ ramen: "medium" })}
-          />
-          <MenuEntry
-            title="Large Bowl"
-            entry="large"
-            image={IMG_RAMEN_LARGE}
-            userData={userData}
-            onPurchase={() => mutate({ ramen: "large" })}
-          />
-        </div>
-      )}
+      <div className={`grid grid-cols-3 text-center font-bold italic p-3 ${isPending ? "hidden" : ""}`}>
+        <MenuEntry
+          title="Small Bowl"
+          entry="small"
+          image={IMG_RAMEN_SMALL}
+          userData={userData}
+          onPurchase={() => mutate({ ramen: "small" })}
+        />
+        <MenuEntry
+          title="Medium Bowl"
+          entry="medium"
+          image={IMG_RAMEN_MEDIUM}
+          userData={userData}
+          onPurchase={() => mutate({ ramen: "medium" })}
+        />
+        <MenuEntry
+          title="Large Bowl"
+          entry="large"
+          image={IMG_RAMEN_LARGE}
+          userData={userData}
+          onPurchase={() => mutate({ ramen: "large" })}
+        />
+      </div>
     </ContentBox>
   );
 };
