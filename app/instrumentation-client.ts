@@ -84,6 +84,9 @@ Sentry.init({
     if (isReplicateApiError(event)) {
       return null; // Drop Replicate API gateway errors (502/503/504)
     }
+    if (isNetworkLoadError(event)) {
+      return null; // Drop iOS Safari network errors (Load failed, Failed to fetch)
+    }
     return event;
   },
 
@@ -365,6 +368,41 @@ const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
       message.includes("503 Service") ||
       message.includes("504 Gateway"))
   );
+};
+
+/**
+ * Check if an error is an iOS Safari "Load failed" network error.
+ * These occur on Mobile Safari when network requests fail due to:
+ * - Device going to sleep during a fetch request
+ * - Network connectivity changes (WiFi to cellular)
+ * - CDN/network requests failing transiently
+ * - User navigating away while a fetch is in progress
+ *
+ * UX note: These errors are handled gracefully:
+ * - tRPC retry logic (Provider.tsx) automatically retries up to 3 times
+ * - Silent ignore in tRPC onError prevents alarming toast notifications
+ * - Users only see errors if the request fails after all retries for other reasons
+ *
+ * This filter serves as a backup to the ignoreErrors regex pattern, catching
+ * errors that may slip through due to timing in Sentry's global handler.
+ */
+const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const hasStackTrace =
+    (event.exception?.values?.[0]?.stacktrace?.frames?.length ?? 0) > 0;
+
+  // Check for "Load failed" pattern (may have domain suffix like "(uploadthing.b-cdn.net)")
+  const isLoadFailed = message.startsWith("Load failed");
+
+  // Also check for "Failed to fetch" as a related network error
+  const isFailedToFetch = message === "Failed to fetch";
+
+  // These errors typically have no stack trace and are TypeError
+  const isNetworkErrorShape =
+    !hasStackTrace && (errorType === "TypeError" || errorType === "");
+
+  return (isLoadFailed || isFailedToFetch) && isNetworkErrorShape;
 };
 
 function ensureBrowserErrorHandler() {
