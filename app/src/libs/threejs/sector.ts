@@ -163,6 +163,7 @@ export const drawSector = (
   villageData: SectorVillage | null,
   globalTile: GlobalTile,
   lightLayout = false,
+  structures?: VillageStructure[],
 ) => {
   const endMark = profiler.mark("drawSector");
   // Calculate hex size
@@ -177,6 +178,9 @@ export const drawSector = (
   const wallPlacements = lightLayout
     ? []
     : generateWallPlacements(SECTOR_WIDTH, SECTOR_HEIGHT);
+
+  // Use provided structures or fall back to villageData structures
+  const allStructures = structures ?? villageData?.structures ?? [];
 
   // Create the grid first
   const Tile = defineHex({
@@ -204,8 +208,8 @@ export const drawSector = (
       tile.cost = 1;
 
       // If level is below the minimum structure level, check for structures
-      // Check village structures first
-      const hasStructure = villageData?.structures?.some((s) => {
+      // Check village structures first (includes shrines and other added structures)
+      const hasStructure = allStructures.some((s) => {
         if (s.longitude === tile.col && s.latitude === tile.row) return true;
         return STRUCTURE_ADJACENTS.some(
           ({ dCol, dRow }) =>

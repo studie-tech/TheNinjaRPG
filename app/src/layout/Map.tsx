@@ -2,9 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   BufferAttribute,
   BufferGeometry,
-  Color,
-  TorusKnotGeometry,
-  EdgesGeometry,
   Group,
   LineBasicMaterial,
   LineSegments,
@@ -54,7 +51,6 @@ interface MapProps {
     avatarLight: string | null;
   }[];
   userLocation?: boolean;
-  highlightedSector?: number;
   intersection: boolean;
   hexasphere: GlobalMapData;
   showOwnership?: boolean;
@@ -69,7 +65,7 @@ const Map: React.FC<MapProps> = (props) => {
   const [hoverSector, setHoverSector] = useState<number | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
   const mouse = new Vector2();
-  const { hexasphere, highlightedSector, showOwnership } = props;
+  const { hexasphere, showOwnership } = props;
   const actionExplanation =
     props.actionExplanation || "Double click tile to move there";
 
@@ -373,12 +369,11 @@ const Map: React.FC<MapProps> = (props) => {
 
       // Add tweening highlights
       const questTweenColor = { r: 0.8, g: 0.6, b: 0.0 };
-      const highlightTweenColor = { r: 0.0, g: 0.6, b: 0.8 };
       const warTweenColor = { r: 1.0, g: 0.0, b: 0.0 }; // Red color for war zones
       const sectorsToHighlight: {
         sector: number;
         color: typeof questTweenColor;
-        type: "quest" | "war" | "highlight";
+        type: "quest" | "war";
       }[] = [];
 
       // Add war-torn battleground sector to highlight
@@ -413,13 +408,6 @@ const Map: React.FC<MapProps> = (props) => {
       }
 
       if (props.userLocation && userData && !showOwnership) {
-        if (highlightedSector) {
-          sectorsToHighlight.push({
-            sector: highlightedSector,
-            color: highlightTweenColor,
-            type: "highlight",
-          });
-        }
         userData.userQuests.forEach((userquest) => {
           userquest.quest.content.objectives.forEach((objective) => {
             const isHidden = "hideLocation" in objective && objective.hideLocation;
@@ -438,11 +426,6 @@ const Map: React.FC<MapProps> = (props) => {
           .repeat(Infinity)
           .easing(TWEEN.Easing.Cubic.InOut)
           .start();
-        new TWEEN.Tween(highlightTweenColor)
-          .to({ r: 0.0, g: 0.0, b: 0.0 }, 1000)
-          .repeat(Infinity)
-          .easing(TWEEN.Easing.Cubic.InOut)
-          .start();
         new TWEEN.Tween(warTweenColor)
           .to({ r: 0.4, g: 0.0, b: 0.0 }, 1000)
           .repeat(Infinity)
@@ -450,7 +433,7 @@ const Map: React.FC<MapProps> = (props) => {
           .start();
       }
 
-      // Highlighted GPS pins for quests, wars, and sector search
+      // Highlighted GPS pins for quests and wars
       sectorsToHighlight.forEach((highlight) => {
         const hasLabel = props.highlights?.find((h) => h.sector === highlight.sector);
         const sector = hexasphere?.tiles[highlight.sector]?.c;
@@ -467,43 +450,21 @@ const Map: React.FC<MapProps> = (props) => {
           const line = new LineSegments(geometry, lineMaterial);
           group_highlights.add(line);
 
-          if (["war", "quest"].includes(highlight.type)) {
-            // Create war/quest icon sprite
-            const texture = loadTexture(
-              highlight.type === "war" ? IMG_MAP_WAR_ICON : IMG_MAP_QUEST_ICON,
-            );
-            texture.generateMipmaps = false;
-            texture.minFilter = LinearFilter;
-            const iconMaterial = new SpriteMaterial({
-              map: texture,
-              depthWrite: false,
-              depthTest: false,
-            });
-            const iconSprite = new Sprite(iconMaterial);
-            iconSprite.scale.set(1, 1, 1);
-            iconSprite.position.set(sector.x / 2.5, sector.y / 2.5, sector.z / 2.5);
-            group_highlights.add(iconSprite);
-          } else {
-            // Object
-            const highlightMaterial = new MeshBasicMaterial({
-              color: new Color(highlight.color.r, highlight.color.g, highlight.color.b),
-            });
-            const highlightGeom = new TorusKnotGeometry(10, 3, 70, 8);
-            const highlightMesh = new Mesh(highlightGeom, highlightMaterial);
-            highlightMesh.position.set(sector.x / 2.5, sector.y / 2.5, sector.z / 2.5);
-            highlightMesh.scale.set(0.05, 0.05, 0.05);
-            highlightMesh.name = `highlight_sphere`;
-            group_highlights.add(highlightMesh);
-            // Edges
-            const edges = new EdgesGeometry(highlightGeom);
-            const lines = new LineSegments(
-              edges,
-              new LineBasicMaterial({ color: "#000000", linewidth: 1 }),
-            );
-            Object.assign(lines.position, highlightMesh.position);
-            Object.assign(lines.scale, highlightMesh.scale);
-            group_highlights.add(lines);
-          }
+          // Create war/quest icon sprite
+          const texture = loadTexture(
+            highlight.type === "war" ? IMG_MAP_WAR_ICON : IMG_MAP_QUEST_ICON,
+          );
+          texture.generateMipmaps = false;
+          texture.minFilter = LinearFilter;
+          const iconMaterial = new SpriteMaterial({
+            map: texture,
+            depthWrite: false,
+            depthTest: false,
+          });
+          const iconSprite = new Sprite(iconMaterial);
+          iconSprite.scale.set(1, 1, 1);
+          iconSprite.position.set(sector.x / 2.5, sector.y / 2.5, sector.z / 2.5);
+          group_highlights.add(iconSprite);
         }
       });
 
@@ -534,19 +495,11 @@ const Map: React.FC<MapProps> = (props) => {
           sectorsToHighlight.forEach((highlight) => {
             const mesh = group_tiles.getObjectByName(`${highlight.sector}`);
             if (mesh) {
-              if (highlightedSector === highlight.sector) {
-                (mesh as HexagonalFaceMesh).material.color.setRGB(
-                  highlightTweenColor.r,
-                  highlightTweenColor.g,
-                  highlightTweenColor.b,
-                );
-              } else {
-                (mesh as HexagonalFaceMesh).material.color.setRGB(
-                  questTweenColor.r,
-                  questTweenColor.g,
-                  questTweenColor.b,
-                );
-              }
+              (mesh as HexagonalFaceMesh).material.color.setRGB(
+                questTweenColor.r,
+                questTweenColor.g,
+                questTweenColor.b,
+              );
             }
           });
           TWEEN.update();
@@ -656,14 +609,7 @@ const Map: React.FC<MapProps> = (props) => {
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    props.highlights,
-    props.usersHighlighted,
-    props.intersection,
-    highlightedSector,
-    showOwnership,
-    ownershipData,
-  ]);
+  }, [props.highlights, props.usersHighlighted, props.intersection, showOwnership, ownershipData]);
 
   return (
     <>
@@ -672,18 +618,10 @@ const Map: React.FC<MapProps> = (props) => {
       <div className="absolute left-0 top-0 m-5">
         <ul>
           {hoverSector && (
-            <>
-              <li className="flex flex-row items-center">
-                <span className="text-2xl mr-1 animate-pulse text-orange-500">⬢</span>{" "}
-                Quest
-              </li>
-              {highlightedSector && (
-                <li className="flex flex-row items-center">
-                  <span className="text-2xl mr-1 animate-pulse text-teal-500">⬢</span>{" "}
-                  Highlight
-                </li>
-              )}
-            </>
+            <li className="flex flex-row items-center">
+              <span className="text-2xl mr-1 animate-pulse text-orange-500">⬢</span>{" "}
+              Quest
+            </li>
           )}
         </ul>
       </div>

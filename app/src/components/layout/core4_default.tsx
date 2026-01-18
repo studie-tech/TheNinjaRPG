@@ -149,7 +149,10 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   // Derived data for layout
   const navbarMenuItems = getMainNavbarLinks(notifications);
   const shownNotifications = notifications?.filter(
-    (n) => n.color !== "toast" && n.color !== "hidden" && n.href !== pathname,
+    (n) =>
+      n.color !== "toast" &&
+      n.color !== "hidden" &&
+      (n.alwaysShow || n.href !== pathname),
   );
 
   // Split menu into two parts

@@ -23,6 +23,8 @@ export interface NavBarDropdownLink {
   onClick?: () => Promise<void>;
   group?: string;
   notificationCount?: number;
+  /** If true, notification will be shown even when user is on the same page as href */
+  alwaysShow?: boolean;
 }
 
 /**

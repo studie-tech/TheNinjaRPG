@@ -700,7 +700,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         group_interaction,
         animatedMaterials,
         honeycombGrid,
-      } = drawSector(WIDTH, prng, villageData, props.tile, lightLayout);
+      } = drawSector(WIDTH, prng, villageData, props.tile, lightLayout, structures);
       grid.current = honeycombGrid;
 
       // Draw any village in this sector

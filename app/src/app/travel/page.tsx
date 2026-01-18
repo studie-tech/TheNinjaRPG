@@ -140,16 +140,16 @@ export default function Travel() {
     : "";
   const globalLink = `Global`;
 
-  // Selecting sector to highlight form
-  const sectorSelect = z.object({
-    sector: z.coerce.number().int().min(0).max(492).optional(),
+  // Quick travel form
+  const quickTravelSchema = z.object({
+    sector: z.coerce.number().int().min(0).max(492),
   });
-  const sectorForm = useForm<z.infer<typeof sectorSelect>>({
+  const quickTravelForm = useForm<z.infer<typeof quickTravelSchema>>({
     mode: "all",
-    resolver: zodResolver(sectorSelect),
+    resolver: zodResolver(quickTravelSchema),
   });
-  const highlightedSector = useWatch({
-    control: sectorForm.control,
+  const quickTravelSector = useWatch({
+    control: quickTravelForm.control,
     name: "sector",
   });
 
@@ -394,23 +394,27 @@ export default function Travel() {
                     <Search className={`h-7 w-7 mr-2 hover:text-orange-500`} />
                   </PopoverTrigger>
                   <PopoverContent>
-                    <p className="py-2">
-                      Select sector you wish to highlight on the global map.
+                    <p className="py-2 font-semibold">Quick Travel</p>
+                    <p className="pb-2 text-sm text-muted-foreground">
+                      Enter a sector ID to travel there directly.
                     </p>
-                    <div className="flex flex-row items-center gap-2">
-                      {highlightedSector ? (
-                        <p>Currently selected sector:</p>
-                      ) : undefined}
-                      <Form {...sectorForm}>
+                    <Form {...quickTravelForm}>
+                      <form
+                        onSubmit={quickTravelForm.handleSubmit((data) => {
+                          setTargetSector(data.sector);
+                          setShowModal(true);
+                        })}
+                        className="flex flex-col gap-2"
+                      >
                         <FormField
-                          control={sectorForm.control}
+                          control={quickTravelForm.control}
                           name="sector"
                           render={({ field }) => (
                             <FormItem>
                               <FormControl>
                                 <Input
                                   className="w-full"
-                                  placeholder="Sector Highlight"
+                                  placeholder="Sector ID (0-492)"
                                   type="number"
                                   {...field}
                                 />
@@ -419,8 +423,19 @@ export default function Travel() {
                             </FormItem>
                           )}
                         />
-                      </Form>
-                    </div>
+                        <Button
+                          type="submit"
+                          size="sm"
+                          disabled={
+                            quickTravelSector === undefined ||
+                            quickTravelSector === userData?.sector ||
+                            isStartingTravel
+                          }
+                        >
+                          Travel to Sector {quickTravelSector ?? "..."}
+                        </Button>
+                      </form>
+                    </Form>
                   </PopoverContent>
                 </Popover>
                 <TooltipProvider delayDuration={50}>
@@ -484,7 +499,6 @@ export default function Travel() {
             highlights={villages}
             usersHighlighted={trackedBounties}
             userLocation={true}
-            highlightedSector={highlightedSector}
             showOwnership={showOwnership}
             onTileClick={(sector) => {
               setTargetSector(sector);

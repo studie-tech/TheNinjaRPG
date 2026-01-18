@@ -421,6 +421,7 @@ export const profileRouter = createTRPCRouter({
         href: "/travel",
         name: `${shrineDefenseSectors.length > 1 ? "Shrines" : "Shrine"} under attack (${shrineDefenseSectors.length > 1 ? "Sectors" : "Sector"} ${shrineDefenseSectors.join(", ")})`,
         color: "red",
+        alwaysShow: true,
       });
     }
     if (shrineOffenseSectors.length > 0) {
@@ -428,6 +429,7 @@ export const profileRouter = createTRPCRouter({
         href: "/travel",
         name: `We are attacking ${shrineOffenseSectors.length > 1 ? "Shrines" : "Shrine"} (${shrineOffenseSectors.length > 1 ? "Sectors" : "Sector"} ${shrineOffenseSectors.join(", ")})`,
         color: "blue",
+        alwaysShow: true,
       });
     }
 
@@ -471,6 +473,7 @@ export const profileRouter = createTRPCRouter({
         href: "/travel",
         name: `${warDefenseSectors.length > 1 ? "Sectors" : "Sector"} under attack (${warDefenseSectors.length > 1 ? "Sectors" : "Sector"} ${warDefenseSectors.join(", ")})`,
         color: "red",
+        alwaysShow: true,
       });
     }
     if (warOffenseSectors.length > 0) {
@@ -478,6 +481,7 @@ export const profileRouter = createTRPCRouter({
         href: "/travel",
         name: `We are attacking ${warOffenseSectors.length > 1 ? "Sectors" : "Sector"} (${warOffenseSectors.length > 1 ? "Sectors" : "Sector"} ${warOffenseSectors.join(", ")})`,
         color: "blue",
+        alwaysShow: true,
       });
     }
 
