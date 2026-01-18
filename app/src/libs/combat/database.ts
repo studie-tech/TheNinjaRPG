@@ -383,7 +383,8 @@ export const updateWars = async (
     })
     .filter((wr) => wr.wars.length > 0);
 
-  // Mutate
+  // Step 1: Run war kill inserts, shrine HP updates, and war health updates in parallel
+  // (These can run concurrently as they don't depend on each other)
   await Promise.all(
     warResults
       .map((warResult) => {
@@ -451,9 +452,24 @@ export const updateWars = async (
                         ]),
                   ]
                 : []),
-              // Townhall damage on shrine capture (shrine HP drops to 0) for Village Wars/Raids
-              // Uses atomic conditional update: only applies damage if current DB shrineHp > 0
-              // AND shrineHp + change <= 0 (threshold crossing happens at DB level to prevent race conditions)
+            ];
+          })
+          .flat();
+      })
+      .flat(),
+  );
+
+  // Step 2: After shrine HP is updated, run townhall damage/heal updates
+  // These must run AFTER shrine HP updates to check the updated shrine HP value
+  // and correctly detect threshold crossings
+  await Promise.all(
+    warResults
+      .map((warResult) => {
+        return warResult.wars
+          .map((w) => {
+            return [
+              // Townhall damage on shrine capture (shrine HP is now 0) for Village Wars/Raids
+              // Check if shrine HP is exactly 0 after the update, indicating capture just happened
               ...(result.shrineChangeHp < 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
                 ? [
                     client
@@ -464,8 +480,7 @@ export const updateWars = async (
                             SELECT 1 FROM war
                             WHERE war.id = ${w.id}
                             AND war.endedAt IS NULL
-                            AND war.shrineHp > 0
-                            AND war.shrineHp + ${result.shrineChangeHp} <= 0
+                            AND war.shrineHp = 0
                           )
                           THEN GREATEST(curSp - ${WAR_CAPTURE_TOWNHALL_DAMAGE}, 0)
                           ELSE curSp
@@ -479,9 +494,8 @@ export const updateWars = async (
                       ),
                   ]
                 : []),
-              // Townhall heal on shrine recapture (shrine HP rises above 25%) for Village Wars/Raids
-              // Uses atomic conditional update: only applies heal if current DB shrineHp <= threshold
-              // AND shrineHp + change > threshold (threshold crossing happens at DB level to prevent race conditions)
+              // Townhall heal on shrine recapture (shrine HP rises above threshold) for Village Wars/Raids
+              // Check if shrine HP is now just above threshold after the update
               ...(result.shrineChangeHp > 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
                 ? [
                     client
@@ -492,8 +506,8 @@ export const updateWars = async (
                             SELECT 1 FROM war
                             WHERE war.id = ${w.id}
                             AND war.endedAt IS NULL
-                            AND war.shrineHp <= war.shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}
-                            AND war.shrineHp + ${result.shrineChangeHp} > war.shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}
+                            AND war.shrineHp > war.shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}
+                            AND war.shrineHp - ${result.shrineChangeHp} <= war.shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}
                           )
                           THEN LEAST(curSp + ${WAR_RECAPTURE_TOWNHALL_HEAL}, maxSp)
                           ELSE curSp
