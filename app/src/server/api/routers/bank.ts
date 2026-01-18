@@ -39,10 +39,12 @@ export const bankRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return { success: false, message: "Not enough money in pocket" };
       }
+      // Re-fetch user to get accurate balances after concurrent updates
+      const updatedUser = await fetchUser(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: `Successfully deposited ${value} ryo`,
-        data: { bank: user.bank + value, money: user.money - value },
+        data: { bank: updatedUser.bank, money: updatedUser.money },
       };
     }),
   toPocket: protectedProcedure
@@ -76,10 +78,12 @@ export const bankRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return { success: false, message: "Not enough money in bank" };
       }
+      // Re-fetch user to get accurate balances after concurrent updates
+      const updatedUser = await fetchUser(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: `Successfully withdrew ${value} ryo`,
-        data: { bank: user.bank - value, money: user.money + value },
+        data: { bank: updatedUser.bank, money: updatedUser.money },
       };
     }),
   transfer: protectedProcedure
@@ -122,10 +126,12 @@ export const bankRouter = createTRPCRouter({
           amount: value,
         }),
       ]);
+      // Re-fetch user to get accurate bank balance after concurrent updates
+      const updatedUser = await fetchUser(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: `Successfully transferred ${value} ryo to ${target.username}`,
-        data: { bank: user.bank - value },
+        data: { bank: updatedUser.bank },
       };
     }),
   getGraph: protectedProcedure
@@ -276,11 +282,14 @@ export const bankRouter = createTRPCRouter({
           ),
       ]);
 
+      // Re-fetch user to get accurate bank balance after concurrent updates
+      const updatedUser = await fetchUser(ctx.drizzle, ctx.userId);
+
       return {
         success: true,
         message: `Successfully claimed ${finalAmount} ryo in bank interest!`,
         data: {
-          bank: user.bank + finalAmount,
+          bank: updatedUser.bank,
           claimedAmount: finalAmount,
         },
       };
