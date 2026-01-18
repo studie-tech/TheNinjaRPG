@@ -34,6 +34,8 @@ import {
   WAR_CAPTURE_TOWNHALL_DAMAGE,
   WAR_RECAPTURE_TOWNHALL_HEAL,
   WAR_RECAPTURE_THRESHOLD,
+  WAR_SECTORWAR_PVP_SHRINE_REDUCE,
+  WAR_SECTORWAR_PVP_SHRINE_RECOVER,
 } from "@/drizzle/constants";
 import { findWarsWithUser } from "@/libs/war";
 import {
@@ -406,10 +408,38 @@ export const updateWars = async (
           : w.defenderVillageId;
 
       // Insert war kill for tracking purposes
-      // Use per-war shrine HP change for village wars/raids, accumulated value for sector wars
-      const logShrineHpChange = ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
-        ? (result.villageWarShrineInfo[w.id] ?? 0)
-        : result.shrineChangeHp;
+      // Compute per-kill shrine delta directly for village wars/raids (not accumulated)
+      // For sector wars, use the total accumulated shrineChangeHp value
+      let logShrineHpChange = 0;
+      if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
+        // Determine if user is on attacker or defender side for this war
+        const isUserOnAttackerSide =
+          w.attackerVillageId === user.villageId ||
+          w.warAllies.some(
+            (a) =>
+              a.villageId === user.villageId &&
+              a.supportVillageId === w.attackerVillageId,
+          );
+        const isUserOnDefenderSide =
+          w.defenderVillageId === user.villageId ||
+          w.warAllies.some(
+            (a) =>
+              a.villageId === user.villageId &&
+              a.supportVillageId === w.defenderVillageId,
+          );
+        // Per-kill contribution (only on win), scaled by rewardScaling
+        if (result.didWin) {
+          if (isUserOnAttackerSide) {
+            logShrineHpChange =
+              -WAR_SECTORWAR_PVP_SHRINE_REDUCE * curBattle.rewardScaling;
+          } else if (isUserOnDefenderSide) {
+            logShrineHpChange =
+              WAR_SECTORWAR_PVP_SHRINE_RECOVER * curBattle.rewardScaling;
+          }
+        }
+      } else {
+        logShrineHpChange = result.shrineChangeHp;
+      }
       if (result.didWin) {
         otherPromises.push(
           client.insert(warKill).values({
