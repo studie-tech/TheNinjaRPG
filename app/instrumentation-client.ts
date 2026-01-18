@@ -91,6 +91,9 @@ Sentry.init({
     if (isHtmlResponseError(event)) {
       return null; // Drop HTML response parsing errors (CDN/proxy outages)
     }
+    if (isInjectedJsonParseError(event)) {
+      return null; // Drop JSON parsing errors from anonymous/injected code (browser extensions)
+    }
     return event;
   },
 
@@ -434,6 +437,59 @@ const isHtmlResponseError = (event: Sentry.ErrorEvent): boolean => {
     errorType === "TRPCClientError" || errorType === "SyntaxError";
 
   return isHtmlParsingError && isTrpcOrSyntaxError;
+};
+
+/**
+ * Check if an error is a JSON parsing error from anonymous/injected code.
+ * These occur when third-party scripts (browser extensions, password managers, injected
+ * code) try to parse "undefined" as JSON. The error originates from anonymous code
+ * with no identifiable source files in the stack trace.
+ *
+ * UX note: These errors are not actionable and don't affect users - they originate
+ * from third-party code we don't control. Users never see these errors as they
+ * occur in isolated third-party contexts.
+ *
+ * THENINJARPG-2CX: Filter these errors from Sentry.
+ */
+const isInjectedJsonParseError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must be a SyntaxError with the specific "undefined" is not valid JSON message
+  if (errorType !== "SyntaxError") return false;
+  if (!message.includes('"undefined" is not valid JSON')) return false;
+
+  // Check if stack trace indicates anonymous/injected code
+  // - Empty stack trace (no frames at all)
+  // - Frames with no filename or <anonymous> filename
+  // - Frames from known injected script patterns
+  if (stackFrames.length === 0) return true;
+
+  const isFromAnonymousOrInjectedCode = stackFrames.every((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+
+    // No identifiable source file
+    if (!filename && !absPath) return true;
+
+    // Anonymous script markers
+    if (filename === "<anonymous>" || absPath === "<anonymous>") return true;
+
+    // Common injected script patterns
+    if (
+      filename.includes("inject") ||
+      filename.includes("extension") ||
+      absPath.includes("inject") ||
+      absPath.includes("extension")
+    ) {
+      return true;
+    }
+
+    return false;
+  });
+
+  return isFromAnonymousOrInjectedCode;
 };
 
 function ensureBrowserErrorHandler() {
