@@ -388,9 +388,10 @@ export const updateWars = async (
   // Village war/raid shrine updates use atomic conditional WHERE clauses to safely handle townhall damage/heal
   const shrineUpdatePromises: Promise<unknown>[] = [];
   const otherPromises: Promise<unknown>[] = [];
-  // Track which wars have already had shrine HP updates scheduled to prevent multiple applications
-  // when multiple targets share the same war (the shrineChangeHp in result is already accumulated across all targets)
+  // Track which wars have already had updates scheduled to prevent multiple applications
+  // when multiple targets share the same war (the changes in result are already accumulated across all targets)
   const processedShrineWarIds = new Set<string>();
+  const processedWarHealthIds = new Set<string>();
 
   warResults.forEach((warResult) => {
     warResult.wars.forEach((w) => {
@@ -549,7 +550,13 @@ export const updateWars = async (
       }
 
       // Update war health if we're in a village war or raid
-      if (result.warHealthChange !== 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
+      // Skip if we've already scheduled an update for this war (prevents double-counting when multiple targets share a war)
+      if (
+        result.warHealthChange !== 0 &&
+        ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
+        !processedWarHealthIds.has(w.id)
+      ) {
+        processedWarHealthIds.add(w.id);
         if (killerSideVillageId === w.attackerVillageId) {
           otherPromises.push(
             client
