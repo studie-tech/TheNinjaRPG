@@ -83,6 +83,13 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
             if (isProxyError && opts.op.type === "query") {
               return opts.attempts <= 3;
             }
+            // Retry on HTML error pages (CDN/proxy returns HTML instead of JSON during outages)
+            const isHtmlResponseError = opts.error.message?.includes(
+              '"<!DOCTYPE "... is not valid JSON',
+            );
+            if (isHtmlResponseError && opts.op.type === "query") {
+              return opts.attempts <= 3;
+            }
             // Don't retry on non-500s
             if (
               opts.error.data &&
@@ -152,6 +159,13 @@ export const onError = (err: unknown) => {
   if (
     err instanceof TRPCClientError &&
     err.message.includes('"An error o"... is not valid JSON')
+  ) {
+    return;
+  }
+  // Ignore HTML error pages (CDN/proxy returns HTML instead of JSON during outages, retries handle it)
+  if (
+    err instanceof TRPCClientError &&
+    err.message.includes('"<!DOCTYPE "... is not valid JSON')
   ) {
     return;
   }

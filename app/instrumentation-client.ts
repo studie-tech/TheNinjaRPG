@@ -87,6 +87,9 @@ Sentry.init({
     if (isNetworkLoadError(event)) {
       return null; // Drop iOS Safari network errors (Load failed, Failed to fetch)
     }
+    if (isHtmlResponseError(event)) {
+      return null; // Drop HTML response parsing errors (CDN/proxy outages)
+    }
     return event;
   },
 
@@ -403,6 +406,33 @@ const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
     !hasStackTrace && (errorType === "TypeError" || errorType === "");
 
   return (isLoadFailed || isFailedToFetch) && isNetworkErrorShape;
+};
+
+/**
+ * Check if an error is an HTML response parsing error from tRPC.
+ * These occur when a CDN or reverse proxy returns an HTML error page (502/503/504)
+ * instead of JSON, causing the tRPC client to fail parsing the response.
+ *
+ * UX note: These errors are handled gracefully:
+ * - tRPC retry logic (Provider.tsx) automatically retries up to 3 times
+ * - Silent ignore in tRPC onError prevents alarming toast notifications
+ * - Users only see errors if the request fails after all retries
+ *
+ * THENINJARPG-2D7: Filter these errors from Sentry as they are transient infrastructure issues.
+ */
+const isHtmlResponseError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+
+  // Check for HTML DOCTYPE in JSON parsing error (CDN/proxy returning HTML error page)
+  const isHtmlParsingError =
+    message.includes('"<!DOCTYPE "') && message.includes("is not valid JSON");
+
+  // This error comes from tRPC client as TRPCClientError or SyntaxError
+  const isTrpcOrSyntaxError =
+    errorType === "TRPCClientError" || errorType === "SyntaxError";
+
+  return isHtmlParsingError && isTrpcOrSyntaxError;
 };
 
 function ensureBrowserErrorHandler() {
