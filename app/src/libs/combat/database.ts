@@ -408,35 +408,15 @@ export const updateWars = async (
           : w.defenderVillageId;
 
       // Insert war kill for tracking purposes
-      // Compute per-kill shrine delta directly for village wars/raids (not accumulated)
+      // Use per-war shrine HP change for village wars/raids (includes level diff adjustment)
       // For sector wars, use the total accumulated shrineChangeHp value
       let logShrineHpChange = 0;
       if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
-        // Determine if user is on attacker or defender side for this war
-        const isUserOnAttackerSide =
-          w.attackerVillageId === user.villageId ||
-          w.warAllies.some(
-            (a) =>
-              a.villageId === user.villageId &&
-              a.supportVillageId === w.attackerVillageId,
-          );
-        const isUserOnDefenderSide =
-          w.defenderVillageId === user.villageId ||
-          w.warAllies.some(
-            (a) =>
-              a.villageId === user.villageId &&
-              a.supportVillageId === w.defenderVillageId,
-          );
-        // Per-kill contribution (only on win), scaled by rewardScaling
-        if (result.didWin) {
-          if (isUserOnAttackerSide) {
-            logShrineHpChange =
-              -WAR_SECTORWAR_PVP_SHRINE_REDUCE * curBattle.rewardScaling;
-          } else if (isUserOnDefenderSide) {
-            logShrineHpChange =
-              WAR_SECTORWAR_PVP_SHRINE_RECOVER * curBattle.rewardScaling;
-          }
-        }
+        // Use the already-computed villageWarShrineInfo which includes:
+        // 1. The correct shrine change constants
+        // 2. Scaling by rewardScaling
+        // 3. Level difference adjustment (reduced to ±1 when STREAK_LEVEL_DIFF exceeded)
+        logShrineHpChange = result.villageWarShrineInfo[w.id] ?? 0;
       } else {
         logShrineHpChange = result.shrineChangeHp;
       }
