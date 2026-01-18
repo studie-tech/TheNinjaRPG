@@ -146,7 +146,7 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
   // Format battle date/time for subtitle
   const battleDate = battleHistory?.createdAt;
   const dateString = battleDate
-    ? battleDate.toLocaleDateString([], {
+    ? battleDate.toLocaleString([], {
         year: "numeric",
         month: "short",
         day: "numeric",

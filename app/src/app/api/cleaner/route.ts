@@ -49,11 +49,11 @@ export async function GET() {
       );
 
     // Step 3: Delete from battle action where battles have been deleted
-    // TTL: 72h to match the longest retention period (PVP battles)
+    // TTL: 60 days to match the longest retention period (COMBAT, RANKED_PVP battles)
     await drizzleDB.execute(
       sql`DELETE FROM ${battleAction} a WHERE
           NOT EXISTS (SELECT id FROM ${battle} b WHERE b.id = a.battleId) AND
-          updatedAt < DATE_SUB(NOW(), INTERVAL ${3600 * 72} SECOND) LIMIT 99999`,
+          updatedAt < DATE_SUB(NOW(), INTERVAL 60 DAY) LIMIT 99999`,
     );
 
     // Time constants
@@ -61,15 +61,27 @@ export async function GET() {
     const oneDay = oneHour * 24;
 
     // Step 5: Delete battle history based on battle type
-    // PVP battles (72 hours): ARENA, COMBAT, SPARRING, KAGE_PVP, CLAN_CHALLENGE, CLAN_BATTLE, SHRINE_WAR, TOURNAMENT, RANKED_PVP, RANKED_SPARRING
-    // PVE battles (12 hours): KAGE_AI, QUEST, RANDOM_ENCOUNTER, VILLAGE_PROTECTOR, TRAINING
-    const pvpTypes = ["ARENA", "COMBAT", "SPARRING", "KAGE_PVP", "CLAN_CHALLENGE", "CLAN_BATTLE", "SHRINE_WAR", "TOURNAMENT", "RANKED_PVP", "RANKED_SPARRING"] as const;
-    const pveTypes = ["KAGE_AI", "QUEST", "RANDOM_ENCOUNTER", "VILLAGE_PROTECTOR", "TRAINING"] as const;
+    // Battle type categorization matches @/drizzle/constants.ts (PvpBattleTypes, PveBattleTypes)
+    // Retention periods:
+    // - PVP important (60 days): COMBAT, RANKED_PVP - for moderator investigation
+    // - PVP standard (72 hours): SPARRING, CLAN_BATTLE, TOURNAMENT, RANKED_SPARRING, KAGE_PVP, KAGE_AI
+    // - PVE (12 hours): ARENA, QUEST, RANDOM_ENCOUNTER, VILLAGE_PROTECTOR, TRAINING, CLAN_CHALLENGE
+    // - Other (72 hours): SHRINE_WAR (not in constants but referenced in code)
+    const pvpImportantTypes = ["COMBAT", "RANKED_PVP"] as const;
+    const pvpStandardTypes = ["SPARRING", "CLAN_BATTLE", "TOURNAMENT", "RANKED_SPARRING", "KAGE_PVP", "KAGE_AI", "SHRINE_WAR"] as const;
+    const pveTypes = ["ARENA", "QUEST", "RANDOM_ENCOUNTER", "VILLAGE_PROTECTOR", "TRAINING", "CLAN_CHALLENGE"] as const;
 
-    // Delete PVP battles older than 72 hours
+    // Delete important PVP battles older than 60 days (for moderator investigation)
     await drizzleDB.execute(
       sql`DELETE FROM ${battleHistory}
-          WHERE battleType IN (${sql.join(pvpTypes.map(t => sql`${t}`), sql`, `)})
+          WHERE battleType IN (${sql.join(pvpImportantTypes.map(t => sql`${t}`), sql`, `)})
+          AND createdAt < DATE_SUB(NOW(), INTERVAL 60 DAY)`,
+    );
+
+    // Delete standard PVP battles older than 72 hours
+    await drizzleDB.execute(
+      sql`DELETE FROM ${battleHistory}
+          WHERE battleType IN (${sql.join(pvpStandardTypes.map(t => sql`${t}`), sql`, `)})
           AND createdAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)`,
     );
 
