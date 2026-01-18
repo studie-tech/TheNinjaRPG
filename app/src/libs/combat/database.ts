@@ -452,15 +452,24 @@ export const updateWars = async (
                   ]
                 : []),
               // Townhall damage on shrine capture (shrine HP drops to 0) for Village Wars/Raids
-              ...(result.shrineChangeHp < 0 &&
-              ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
-              w.shrineHp > 0 &&
-              w.shrineHp + result.shrineChangeHp <= 0
+              // Uses atomic conditional update: only applies damage if current DB shrineHp > 0
+              // AND shrineHp + change <= 0 (threshold crossing happens at DB level to prevent race conditions)
+              ...(result.shrineChangeHp < 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
                 ? [
                     client
                       .update(villageStructure)
                       .set({
-                        curSp: sql`GREATEST(curSp - ${WAR_CAPTURE_TOWNHALL_DAMAGE}, 0)`,
+                        curSp: sql`CASE
+                          WHEN EXISTS (
+                            SELECT 1 FROM war
+                            WHERE war.id = ${w.id}
+                            AND war.endedAt IS NULL
+                            AND war.shrineHp > 0
+                            AND war.shrineHp + ${result.shrineChangeHp} <= 0
+                          )
+                          THEN GREATEST(curSp - ${WAR_CAPTURE_TOWNHALL_DAMAGE}, 0)
+                          ELSE curSp
+                        END`,
                       })
                       .where(
                         and(
@@ -471,15 +480,24 @@ export const updateWars = async (
                   ]
                 : []),
               // Townhall heal on shrine recapture (shrine HP rises above 25%) for Village Wars/Raids
-              ...(result.shrineChangeHp > 0 &&
-              ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
-              w.shrineHp <= w.shrineMaxHp * WAR_RECAPTURE_THRESHOLD &&
-              w.shrineHp + result.shrineChangeHp > w.shrineMaxHp * WAR_RECAPTURE_THRESHOLD
+              // Uses atomic conditional update: only applies heal if current DB shrineHp <= threshold
+              // AND shrineHp + change > threshold (threshold crossing happens at DB level to prevent race conditions)
+              ...(result.shrineChangeHp > 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
                 ? [
                     client
                       .update(villageStructure)
                       .set({
-                        curSp: sql`LEAST(curSp + ${WAR_RECAPTURE_TOWNHALL_HEAL}, maxSp)`,
+                        curSp: sql`CASE
+                          WHEN EXISTS (
+                            SELECT 1 FROM war
+                            WHERE war.id = ${w.id}
+                            AND war.endedAt IS NULL
+                            AND war.shrineHp <= war.shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}
+                            AND war.shrineHp + ${result.shrineChangeHp} > war.shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}
+                          )
+                          THEN LEAST(curSp + ${WAR_RECAPTURE_TOWNHALL_HEAL}, maxSp)
+                          ELSE curSp
+                        END`,
                       })
                       .where(
                         and(

@@ -1348,17 +1348,27 @@ export const calcBattleResult = (
                 }
               }
               // Village wars and raids - abstract shrine HP mechanic (PvP only)
-              if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
-                if (battleType === "COMBAT") {
-                  if (
-                    (didWin && war.attackerVillageId === vilId) ||
-                    (!didWin && war.defenderVillageId === vilId)
-                  ) {
-                    // Attacker side won - reduce shrine HP
-                    if (didWin) shrineChangeHp -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
-                  } else {
-                    // Defender side won - recover shrine HP
-                    if (didWin) shrineChangeHp += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
+              if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && battleType === "COMBAT") {
+                const isUserOnAttackerSide =
+                  war.attackerVillageId === vilId ||
+                  war.warAllies?.some(
+                    (ally) =>
+                      ally.villageId === vilId &&
+                      ally.supportVillageId === war.attackerVillageId,
+                  );
+                const isUserOnDefenderSide =
+                  war.defenderVillageId === vilId ||
+                  war.warAllies?.some(
+                    (ally) =>
+                      ally.villageId === vilId &&
+                      ally.supportVillageId === war.defenderVillageId,
+                  );
+
+                if (didWin) {
+                  if (isUserOnAttackerSide) {
+                    shrineChangeHp -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
+                  } else if (isUserOnDefenderSide) {
+                    shrineChangeHp += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
                   }
                 }
               }

@@ -1235,8 +1235,8 @@ export const VillageWar: React.FC<{
         war.status === "ACTIVE" &&
         war.shrineMaxHp > 0 && (
           <div className="mb-4">
-            <p className="text-sm font-medium mb-1">Target Shrine HP</p>
             <StatusBar
+              title="Target Shrine HP"
               tooltip="Shrine Health - Depletes from PvP kills. Capture (HP=0) damages defender townhall by 200. Recapture (HP>25%) heals by 150."
               color="bg-red-500"
               showText={true}
