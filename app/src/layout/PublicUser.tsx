@@ -2164,7 +2164,7 @@ const CombatHistoryTab: React.FC<TabComponentProps> = ({
       }
     >
       {isPending && <Loader explanation="Loading combat history..." />}
-      {(!combatHistory || combatHistory.length === 0) && (
+      {!isPending && (!combatHistory || combatHistory.length === 0) && (
         <p className="p-3">No combat history found</p>
       )}
       {combatHistory && combatHistory.length > 0 && (

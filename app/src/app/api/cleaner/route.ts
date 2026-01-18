@@ -64,9 +64,8 @@ export async function GET() {
     // Battle type categorization matches @/drizzle/constants.ts (PvpBattleTypes, PveBattleTypes)
     // Retention periods:
     // - PVP important (60 days): COMBAT, RANKED_PVP - for moderator investigation
-    // - PVP standard (72 hours): SPARRING, CLAN_BATTLE, TOURNAMENT, RANKED_SPARRING, KAGE_PVP, KAGE_AI
+    // - PVP standard (72 hours): SPARRING, CLAN_BATTLE, TOURNAMENT, RANKED_SPARRING, KAGE_PVP, KAGE_AI, SHRINE_WAR
     // - PVE (12 hours): ARENA, QUEST, RANDOM_ENCOUNTER, VILLAGE_PROTECTOR, TRAINING, CLAN_CHALLENGE
-    // - Other (72 hours): SHRINE_WAR (not in constants but referenced in code)
     const pvpImportantTypes = ["COMBAT", "RANKED_PVP"] as const;
     const pvpStandardTypes = ["SPARRING", "CLAN_BATTLE", "TOURNAMENT", "RANKED_SPARRING", "KAGE_PVP", "KAGE_AI", "SHRINE_WAR"] as const;
     const pveTypes = ["ARENA", "QUEST", "RANDOM_ENCOUNTER", "VILLAGE_PROTECTOR", "TRAINING", "CLAN_CHALLENGE"] as const;
@@ -101,6 +100,15 @@ export async function GET() {
           lte(battleHistory.createdAt, new Date(Date.now() - oneHour * 12)),
         ),
       );
+
+    // Delete any uncategorized battle types older than 72 hours (catch-all for future/legacy types)
+    const allKnownTypes = [...pvpImportantTypes, ...pvpStandardTypes, ...pveTypes];
+    await drizzleDB.execute(
+      sql`DELETE FROM ${battleHistory}
+          WHERE battleType NOT IN (${sql.join(allKnownTypes.map(t => sql`${t}`), sql`, `)})
+          AND battleType IS NOT NULL
+          AND createdAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)`,
+    );
 
     // Step 6: Delete conversations older than 14 days
     await drizzleDB
