@@ -19,6 +19,7 @@ import { COST_REROLL_ELEMENT } from "@/drizzle/constants";
 import { RYO_FOR_REP_MAX_LISTINGS } from "@/drizzle/constants";
 import { RYO_FOR_REP_MIN_REPS } from "@/drizzle/constants";
 import { BasicElementName, ElementNames } from "@/drizzle/constants";
+import { RYO_CAP } from "@/drizzle/constants";
 import { getRandomElement } from "@/utils/array";
 import { genders } from "@/validators/register";
 import { baseServerResponse, errorResponse } from "../trpc";
@@ -196,7 +197,7 @@ export const blackMarketRouter = createTRPCRouter({
   takeOffer: protectedProcedure
     .input(z.object({ offerId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // Fetch both the offer and user data simultaneously
+      // Fetch the offer, user, and seller data simultaneously
       const [offer, user] = await Promise.all([
         fetchOffer(ctx.drizzle, input.offerId),
         fetchUser(ctx.drizzle, ctx.userId),
@@ -213,6 +214,15 @@ export const blackMarketRouter = createTRPCRouter({
       if (user.isTradeBanned) return errorResponse("You are banned from trading");
       if (user.money < offer.requestedRyo) {
         return errorResponse("Insufficient funds");
+      }
+
+      // Verify seller still exists before processing
+      const seller = await ctx.drizzle.query.userData.findFirst({
+        where: eq(userData.userId, offer.creatorUserId),
+        columns: { userId: true },
+      });
+      if (!seller) {
+        return errorResponse("Seller account no longer exists");
       }
 
       // Mark the offer as taken first - this will fail if someone else has taken it
@@ -239,46 +249,80 @@ export const blackMarketRouter = createTRPCRouter({
               gte(userData.money, offer.requestedRyo),
             ),
           ),
-        // Update seller's money - add the requested ryo
+        // Update seller's bank - add the requested ryo, respecting RYO_CAP
         ctx.drizzle
           .update(userData)
-          .set({ bank: sql`${userData.bank} + ${offer.requestedRyo}` })
+          .set({ bank: sql`LEAST(${userData.bank} + ${offer.requestedRyo}, ${RYO_CAP})` })
           .where(eq(userData.userId, offer.creatorUserId)),
       ]);
 
-      if (buyerResult.rowsAffected === 0) {
-        // This should not happen since we checked funds earlier, but handle it anyway
-        // We need to revert the offer status since the buyer update failed
+      // Verify BOTH buyer and seller updates succeeded
+      const buyerFailed = buyerResult.rowsAffected === 0;
+      const sellerFailed = sellerResult.rowsAffected === 0;
+
+      if (buyerFailed || sellerFailed) {
+        // Rollback: reset offer status and any successful updates
         await Promise.all([
           // Always reset the offer status
           ctx.drizzle
             .update(ryoTrade)
             .set({ purchaserUserId: null })
             .where(eq(ryoTrade.id, input.offerId)),
-
-          // Only attempt to roll back seller's money if their update succeeded
-          // and ensure they still have enough money to roll back
-          ...(sellerResult.rowsAffected === 1
+          // Roll back seller's bank if only buyer failed (seller succeeded)
+          ...(sellerFailed === false && buyerFailed
             ? [
                 ctx.drizzle
                   .update(userData)
                   .set({ bank: sql`${userData.bank} - ${offer.requestedRyo}` })
                   .where(eq(userData.userId, offer.creatorUserId)),
-                ,
               ]
             : []),
+          // Roll back buyer if only seller failed (buyer succeeded)
+          ...(buyerFailed === false && sellerFailed
+            ? [
+                ctx.drizzle
+                  .update(userData)
+                  .set({
+                    money: sql`${userData.money} + ${offer.requestedRyo}`,
+                    reputationPoints: sql`${userData.reputationPoints} - ${offer.repsForSale}`,
+                  })
+                  .where(eq(userData.userId, ctx.userId)),
+              ]
+            : []),
+          // Log the failure for debugging
           ctx.drizzle.insert(actionLog).values({
             id: nanoid(),
             userId: ctx.userId,
             tableName: "ryoTrade",
-            changes: [`Attempted rollback of offer ${input.offerId}`],
+            changes: [
+              `Rollback of offer ${input.offerId}`,
+              `Buyer update: ${buyerFailed ? "failed" : "success"}`,
+              `Seller update: ${sellerFailed ? "failed" : "success"}`,
+            ],
             relatedId: input.offerId,
-            relatedMsg: `Rollback attempt: Buyer update failed`,
+            relatedMsg: `Rollback: buyer=${buyerFailed ? "fail" : "ok"}, seller=${sellerFailed ? "fail" : "ok"}`,
           }),
         ]);
 
-        return errorResponse("Failed to update buyer - transaction reverted");
+        return errorResponse(
+          buyerFailed
+            ? "Failed to update buyer - transaction reverted"
+            : "Failed to update seller - transaction reverted",
+        );
       }
+
+      // Log successful trade for audit trail
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "ryoTrade",
+        changes: [
+          `Purchased ${offer.repsForSale} reputation for ${offer.requestedRyo} ryo`,
+          `Seller: ${offer.creatorUserId}`,
+        ],
+        relatedId: input.offerId,
+        relatedMsg: `Trade completed: ${offer.requestedRyo} ryo`,
+      });
 
       return {
         success: true,
