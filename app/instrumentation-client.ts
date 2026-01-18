@@ -504,7 +504,7 @@ const isInjectedJsonParseError = (event: Sentry.ErrorEvent): boolean => {
  * UX note: When Clerk fails to load, users see a loading state for authentication.
  * Clerk's SDK has built-in retry mechanisms, and users can refresh to reload the script.
  *
- * THENINJARPG-2CY: Filter SyntaxError from Clerk scripts as they are transient network issues.
+ * Filter SyntaxError from Clerk scripts as they are transient network issues.
  */
 const isClerkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
   const errorType = event.exception?.values?.[0]?.type ?? "";
