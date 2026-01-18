@@ -24,7 +24,6 @@ import fs from "fs";
 import type { FileOutput } from "replicate";
 import type { IMG_ORIENTATION } from "@/drizzle/constants";
 import type { GenerateAudioInput } from "@/validators/audio";
-import { withRetry } from "@/utils/retry";
 
 // Singleton Replicate instance to avoid connection pool exhaustion
 let replicateInstance: Replicate | null = null;
@@ -169,6 +168,7 @@ export const uploadToUT = async (url: string) => {
 /**
  * Create a fast image from text using Replicate
  * Uses server-to-server transfer - UploadThing fetches directly from Replicate URL
+ * Attempts flux-schnell first, falls back to prunaai/p-image on failure
  * @param prompt - The prompt to create the image from
  * @param disable_safety_checker - Whether to disable the safety checker
  * @returns The URL of the image
@@ -188,25 +188,43 @@ export const fastTxt2imgReplicate = async (config: {
     mega_pixels = "0.25",
   } = config;
   const replicate = getReplicateInstance();
-  const input = {
-    prompt: prompt,
-    go_fast: true,
-    megapixels: mega_pixels,
-    num_outputs: 1,
-    aspect_ratio: aspect_ratio,
-    output_format: "webp",
-    output_quality: output_quality,
-    num_inference_steps: 4,
-    disable_safety_checker: disable_safety_checker,
-  };
-  // Use retry logic for transient 502/503 errors from Replicate API
-  const outputs = await withRetry(async () => {
-    return (await replicate.run("black-forest-labs/flux-schnell", {
-      input,
+
+  // Try flux-schnell first
+  let output: FileOutput | undefined;
+  try {
+    const fluxInput = {
+      prompt: prompt,
+      go_fast: true,
+      megapixels: mega_pixels,
+      num_outputs: 1,
+      aspect_ratio: aspect_ratio,
+      output_format: "webp",
+      output_quality: output_quality,
+      num_inference_steps: 4,
+      disable_safety_checker: disable_safety_checker,
+    };
+    const outputs = (await replicate.run("black-forest-labs/flux-schnell", {
+      input: fluxInput,
     })) as FileOutput[];
-  });
-  const output = outputs?.[0];
+    output = outputs?.[0];
+  } catch (fluxError) {
+    console.warn("flux-schnell failed, falling back to prunaai/p-image:", fluxError);
+  }
+
+  // Fallback to prunaai/p-image if flux-schnell failed or returned no output
+  if (!output) {
+    const pImageInput = {
+      prompt: prompt,
+      aspect_ratio: aspect_ratio,
+      disable_safety_checker: disable_safety_checker,
+    };
+    output = (await replicate.run("prunaai/p-image", {
+      input: pImageInput,
+    })) as FileOutput;
+  }
+
   if (!output) throw new Error("No output from AI model");
+
   // Use URL-based upload - UploadThing fetches directly from Replicate
   const replicateUrl = output.url();
   const utapi = new UTApi();
@@ -307,14 +325,10 @@ export const txt2imgNanoBanana = async (config: Txt2ImgConfig) => {
   const inputs: Record<string, unknown> = { prompt: promptToSend };
   if (config.previousImg) inputs.image_input = [config.previousImg];
 
-  // Get the file from the replicate run with retry logic for transient errors
-  let file = await withRetry(async () => {
-    const result = (await replicate.run("google/nano-banana", {
-      input: inputs,
-    })) as FileOutput;
-    if (!result) throw new Error("No output from AI model");
-    return result;
-  });
+  // Get the file from the replicate run
+  let file = (await replicate.run("google/nano-banana", {
+    input: inputs,
+  })) as FileOutput;
   if (!file) throw new Error("No output from AI model");
 
   // If transparent background requested, post-process with remove-bg
@@ -341,15 +355,12 @@ export const txt2imgNanoBanana = async (config: Txt2ImgConfig) => {
  */
 export const removeBackgroundReplicate = async (imageUrl: string) => {
   const replicate = getReplicateInstance();
-  // Use retry logic for transient 502/503 errors from Replicate API
-  const output = await withRetry(async () => {
-    return (await replicate.run(
-      "lucataco/remove-bg:95fcc2a26d3899cd6c2691c900465aaeff466285a65c14638cc5f36f34befaf1",
-      {
-        input: { image: imageUrl },
-      },
-    )) as FileOutput | FileOutput[];
-  });
+  const output = (await replicate.run(
+    "lucataco/remove-bg:95fcc2a26d3899cd6c2691c900465aaeff466285a65c14638cc5f36f34befaf1",
+    {
+      input: { image: imageUrl },
+    },
+  )) as FileOutput | FileOutput[];
   const file = Array.isArray(output) ? output[0] : output;
   if (!file) throw new Error("No output from remove-bg model");
   return file;
@@ -464,20 +475,17 @@ export const generateSoundEffectReplicate = async (config: {
   secondsTotal: number;
 }) => {
   const replicate = getReplicateInstance();
-  // Use retry logic for transient 502/503 errors from Replicate API
-  const output = await withRetry(async () => {
-    return (await replicate.run(
-      "sepal/audiogen:154b3e5141493cb1b8cec976d9aa90f2b691137e39ad906d2421b74c2a8c52b8",
-      {
-        input: {
-          prompt: config.prompt,
-          negative_prompt: config.negativePrompt,
-          duration: config.secondsTotal,
-          format: "mp3",
-        },
+  const output = (await replicate.run(
+    "sepal/audiogen:154b3e5141493cb1b8cec976d9aa90f2b691137e39ad906d2421b74c2a8c52b8",
+    {
+      input: {
+        prompt: config.prompt,
+        negative_prompt: config.negativePrompt,
+        duration: config.secondsTotal,
+        format: "mp3",
       },
-    )) as FileOutput;
-  });
+    },
+  )) as FileOutput;
   const url = output.url();
   if (!url) throw new Error("No output from audio model");
   return { url } as const;
