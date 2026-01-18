@@ -44,8 +44,9 @@ Sentry.init({
     "https://reactjs.org/docs/error-decoder.html?invariant=422", // There was an error while hydrating...
     "https://reactjs.org/docs/error-decoder.html?invariant=423", // There was an error while hydrating...
     "https://reactjs.org/docs/error-decoder.html?invariant=425", // There was an error while hydrating...
-    "Can't find variable: __firefox__", // Firefox error
+    "Can't find variable: __firefox__", // Firefox/iOS browser extension error
     /window\.__firefox__/, // Firefox/Brave browser extension errors (e.g., YouTube quality extensions)
+    /undefined is not an object \(evaluating 'window\.__firefox__\..*'\)/, // iOS browser extension error (Brave/Firefox) - extensions inject __firefox__ object that may be undefined
     "Failed to load chunk", // New deployment
     "Invalid call to runtime.sendMessage()", // Browser extension error, not from our app
     "zoid destroyed", // PayPal SDK cleanup errors - occur when users navigate away while PayPal buttons are initializing
