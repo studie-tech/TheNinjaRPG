@@ -206,3 +206,25 @@ const items = await fetchUserItems(userId); // Sequential!
 ## Permission System
 
 Centralized permission logic in `/app/src/utils/permissions.ts`.
+
+## Error Handling & Sentry
+
+### Sentry Error Filtering (`instrumentation-client.ts`)
+
+When adding errors to the Sentry ignore list or `beforeSend` filter:
+
+1. **Never just ignore - ensure graceful UX handling**: Before filtering an error from Sentry, verify that the error is handled gracefully for users. The global tRPC error handler in `_trpc/Provider.tsx` shows toast notifications for most API errors, but check that:
+   - Users see a meaningful error message (via toast, inline error, or error boundary)
+   - The application doesn't break or show blank screens
+   - Any loading states are properly resolved
+
+2. **Document UX handling**: Add a comment explaining how the error is handled for UX when filtering it from Sentry (see `isReplicateApiError` for an example).
+
+3. **Use precise matching**: For URL-based filters, use regex patterns that properly validate the domain rather than simple substring checks to avoid false positives from spoofed URLs.
+
+4. **Common filtered error categories**:
+   - Third-party script errors (PayPal, Clerk, Google Translate, Cookiebot)
+   - Network errors during navigation (handled by tRPC retry logic)
+   - Transient third-party API errors (Replicate gateway errors)
+   - Browser extension conflicts
+   - Hydration mismatches (typically not user-visible)

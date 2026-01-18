@@ -346,13 +346,22 @@ function isDataCloneError(event: Sentry.ErrorEvent): boolean {
  * Check if an error is a Replicate API gateway error that should be filtered.
  * These occur when Replicate's API returns 502/503/504 errors during image generation.
  * These are transient third-party infrastructure issues we cannot fix.
+ *
+ * UX note: These errors are still displayed to users via the global tRPC error handler
+ * in Provider.tsx which shows a toast notification. This filter only suppresses Sentry logging.
  */
 const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
 
   // Match TRPCClientError wrapping Replicate API gateway errors (502, 503, 504)
+  // Use regex to properly match the domain (not just substring) to avoid false positives
+  // from URLs like "evil-api.replicate.com.attacker.com"
+  const isReplicateDomain =
+    /(?:^|[/:])api\.replicate\.com(?:[/:$]|$)/.test(message) ||
+    message.includes("https://api.replicate.com");
+
   return (
-    message.includes("api.replicate.com") &&
+    isReplicateDomain &&
     (message.includes("502 Bad Gateway") ||
       message.includes("503 Service") ||
       message.includes("504 Gateway"))
