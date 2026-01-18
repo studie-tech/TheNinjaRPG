@@ -384,8 +384,8 @@ export const updateWars = async (
     .filter((wr) => wr.wars.length > 0);
 
   // Run all war updates in parallel
-  // Note: War kill inserts, war health updates, and sector war shrine updates run in parallel
-  // Village war/raid shrine updates are processed sequentially per war to handle townhall damage/heal atomically
+  // Note: War kill inserts, war health updates, and all shrine updates run in parallel
+  // Village war/raid shrine updates use atomic conditional WHERE clauses to safely handle townhall damage/heal
   const shrineUpdatePromises: Promise<unknown>[] = [];
   const otherPromises: Promise<unknown>[] = [];
   // Track which wars have already had shrine HP updates scheduled to prevent multiple applications
