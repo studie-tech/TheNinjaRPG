@@ -95,6 +95,9 @@ Sentry.init({
     if (isInjectedJsonParseError(event)) {
       return null; // Drop JSON parsing errors from anonymous/injected code (browser extensions)
     }
+    if (isClerkSyntaxError(event)) {
+      return null; // Drop Clerk script parsing errors (network truncation)
+    }
     return event;
   },
 
@@ -491,6 +494,33 @@ const isInjectedJsonParseError = (event: Sentry.ErrorEvent): boolean => {
   });
 
   return isFromAnonymousOrInjectedCode;
+};
+
+/**
+ * Check if an error is a Clerk script parsing error that should be filtered.
+ * These occur when the Clerk SDK script is truncated during download due to network
+ * issues (mobile network changes, device sleep, interrupted connection).
+ *
+ * UX note: When Clerk fails to load, users see a loading state for authentication.
+ * Clerk's SDK has built-in retry mechanisms, and users can refresh to reload the script.
+ *
+ * THENINJARPG-2CY: Filter SyntaxError from Clerk scripts as they are transient network issues.
+ */
+const isClerkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Only filter SyntaxError exceptions
+  if (errorType !== "SyntaxError") return false;
+
+  // Check if the error originates from Clerk
+  return stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("@clerk/clerk-js") ||
+      frame.filename?.includes("clerk.browser") ||
+      frame.abs_path?.includes("@clerk/clerk-js") ||
+      frame.abs_path?.includes("clerk.browser"),
+  );
 };
 
 function ensureBrowserErrorHandler() {
