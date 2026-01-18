@@ -35,6 +35,48 @@ const getReplicateInstance = () => {
 };
 
 /**
+ * Check if an error is a transient server error that should be retried
+ */
+const isTransientError = (error: unknown): boolean => {
+  if (error instanceof Error) {
+    const message = error.message;
+    return (
+      message.includes("502") ||
+      message.includes("503") ||
+      message.includes("Bad Gateway") ||
+      message.includes("Service Unavailable")
+    );
+  }
+  return false;
+};
+
+/**
+ * Execute an async function with retry logic for transient errors
+ * Uses exponential backoff with jitter
+ */
+const withRetry = async <T>(
+  fn: () => Promise<T>,
+  maxRetries = 2,
+  baseDelayMs = 1000,
+): Promise<T> => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries && isTransientError(error)) {
+        const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 500;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+};
+
+/**
  * Compress a gltf file
  * @param url The URL of the gltf file to compress
  * @returns The compressed gltf file
@@ -198,9 +240,12 @@ export const fastTxt2imgReplicate = async (config: {
     num_inference_steps: 4,
     disable_safety_checker: disable_safety_checker,
   };
-  const outputs = (await replicate.run("black-forest-labs/flux-schnell", {
-    input,
-  })) as FileOutput[];
+  // Use retry logic for transient 502/503 errors from Replicate API
+  const outputs = await withRetry(async () => {
+    return (await replicate.run("black-forest-labs/flux-schnell", {
+      input,
+    })) as FileOutput[];
+  });
   const output = outputs?.[0];
   if (!output) throw new Error("No output from AI model");
   // Use URL-based upload - UploadThing fetches directly from Replicate
