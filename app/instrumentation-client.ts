@@ -357,8 +357,7 @@ const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
   // Use regex to properly match the domain (not just substring) to avoid false positives
   // from URLs like "evil-api.replicate.com.attacker.com"
   const isReplicateDomain =
-    /(?:^|[/:])api\.replicate\.com(?:[/:$]|$)/.test(message) ||
-    message.includes("https://api.replicate.com");
+    /(?:^|[/:])api\.replicate\.com(?:[/:$?]|$)/.test(message);
 
   return (
     isReplicateDomain &&
