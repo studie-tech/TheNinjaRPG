@@ -24,6 +24,7 @@ import fs from "fs";
 import type { FileOutput } from "replicate";
 import type { IMG_ORIENTATION } from "@/drizzle/constants";
 import type { GenerateAudioInput } from "@/validators/audio";
+import { withRetry } from "@/utils/retry";
 
 // Singleton Replicate instance to avoid connection pool exhaustion
 let replicateInstance: Replicate | null = null;
@@ -32,48 +33,6 @@ const getReplicateInstance = () => {
     replicateInstance = new Replicate({ auth: env.REPLICATE_API_TOKEN });
   }
   return replicateInstance;
-};
-
-/**
- * Check if an error is a transient server error that should be retried
- */
-const isTransientError = (error: unknown): boolean => {
-  if (error instanceof Error) {
-    const message = error.message;
-    return (
-      message.includes("502") ||
-      message.includes("503") ||
-      message.includes("Bad Gateway") ||
-      message.includes("Service Unavailable")
-    );
-  }
-  return false;
-};
-
-/**
- * Execute an async function with retry logic for transient errors
- * Uses exponential backoff with jitter
- */
-const withRetry = async <T>(
-  fn: () => Promise<T>,
-  maxRetries = 2,
-  baseDelayMs = 1000,
-): Promise<T> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      if (attempt < maxRetries && isTransientError(error)) {
-        const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 500;
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        continue;
-      }
-      throw error;
-    }
-  }
-  throw lastError;
 };
 
 /**
@@ -348,10 +307,14 @@ export const txt2imgNanoBanana = async (config: Txt2ImgConfig) => {
   const inputs: Record<string, unknown> = { prompt: promptToSend };
   if (config.previousImg) inputs.image_input = [config.previousImg];
 
-  // Get the file from the replicate run
-  let file = (await replicate.run("google/nano-banana", {
-    input: inputs,
-  })) as FileOutput;
+  // Get the file from the replicate run with retry logic for transient errors
+  let file = await withRetry(async () => {
+    const result = (await replicate.run("google/nano-banana", {
+      input: inputs,
+    })) as FileOutput;
+    if (!result) throw new Error("No output from AI model");
+    return result;
+  });
   if (!file) throw new Error("No output from AI model");
 
   // If transparent background requested, post-process with remove-bg
@@ -378,12 +341,15 @@ export const txt2imgNanoBanana = async (config: Txt2ImgConfig) => {
  */
 export const removeBackgroundReplicate = async (imageUrl: string) => {
   const replicate = getReplicateInstance();
-  const output = (await replicate.run(
-    "lucataco/remove-bg:95fcc2a26d3899cd6c2691c900465aaeff466285a65c14638cc5f36f34befaf1",
-    {
-      input: { image: imageUrl },
-    },
-  )) as FileOutput | FileOutput[];
+  // Use retry logic for transient 502/503 errors from Replicate API
+  const output = await withRetry(async () => {
+    return (await replicate.run(
+      "lucataco/remove-bg:95fcc2a26d3899cd6c2691c900465aaeff466285a65c14638cc5f36f34befaf1",
+      {
+        input: { image: imageUrl },
+      },
+    )) as FileOutput | FileOutput[];
+  });
   const file = Array.isArray(output) ? output[0] : output;
   if (!file) throw new Error("No output from remove-bg model");
   return file;
@@ -498,17 +464,20 @@ export const generateSoundEffectReplicate = async (config: {
   secondsTotal: number;
 }) => {
   const replicate = getReplicateInstance();
-  const output = (await replicate.run(
-    "sepal/audiogen:154b3e5141493cb1b8cec976d9aa90f2b691137e39ad906d2421b74c2a8c52b8",
-    {
-      input: {
-        prompt: config.prompt,
-        negative_prompt: config.negativePrompt,
-        duration: config.secondsTotal,
-        format: "mp3",
+  // Use retry logic for transient 502/503 errors from Replicate API
+  const output = await withRetry(async () => {
+    return (await replicate.run(
+      "sepal/audiogen:154b3e5141493cb1b8cec976d9aa90f2b691137e39ad906d2421b74c2a8c52b8",
+      {
+        input: {
+          prompt: config.prompt,
+          negative_prompt: config.negativePrompt,
+          duration: config.secondsTotal,
+          format: "mp3",
+        },
       },
-    },
-  )) as FileOutput;
+    )) as FileOutput;
+  });
   const url = output.url();
   if (!url) throw new Error("No output from audio model");
   return { url } as const;
