@@ -1893,15 +1893,15 @@ export const initiateBattle = async (
     ]);
 
   // Calculate expected rows for user status update
-  // For auto battles (KAGE_AI, CLAN_CHALLENGE), only 1 user (attacker) is updated
-  // For other battles, all non-AI participants should be updated
+  // For auto battles (KAGE_AI, CLAN_CHALLENGE), only the attacker userIds are updated
+  // For other battles, all participants (userIds + targetIds) should be updated
+  // This includes AI participants since the UPDATE query affects all matching rows
   const allParticipantIds = AutoBattleTypes.includes(battleType)
     ? userIds
     : [...new Set([...userIds, ...targetIds])];
-  const nonAiParticipants = users.filter(
-    (u) => !u.isAi && allParticipantIds.includes(u.userId),
-  );
-  const expectedRows = nonAiParticipants.length;
+  const expectedRows = users.filter((u) =>
+    allParticipantIds.includes(u.userId),
+  ).length;
 
   // Step 1: Update user statuses FIRST (before creating battle record)
   // This prevents race conditions where battle is created but users aren't in BATTLE status
@@ -1920,7 +1920,7 @@ export const initiateBattle = async (
         ? sql`${userData.pveFights} + 1`
         : sql`${userData.pveFights}`,
       immunityUntil: ["SPARRING", "COMBAT"].includes(battleType)
-        ? sql`CASE WHEN userId IN (${userIds.join(", ")}) THEN NOW() ELSE immunityUntil END`
+        ? sql`CASE WHEN ${inArray(userData.userId, userIds)} THEN NOW() ELSE ${userData.immunityUntil} END`
         : sql`immunityUntil`,
     })
     .where(
@@ -1939,9 +1939,13 @@ export const initiateBattle = async (
         ...(battleType === "COMBAT"
           ? [
               and(
-                ...(sector ? [eq(userData.sector, sector)] : []),
-                ...(longitude ? [eq(userData.longitude, longitude)] : []),
-                ...(latitude ? [eq(userData.latitude, latitude)] : []),
+                ...(sector !== undefined ? [eq(userData.sector, sector)] : []),
+                ...(longitude !== undefined
+                  ? [eq(userData.longitude, longitude)]
+                  : []),
+                ...(latitude !== undefined
+                  ? [eq(userData.latitude, latitude)]
+                  : []),
               ),
             ]
           : []),
@@ -1950,18 +1954,13 @@ export const initiateBattle = async (
 
   // Step 2: Verify all expected users were updated before creating battle
   if (userResult.rowsAffected !== expectedRows) {
-    // Rollback: Reset user statuses by userId OR battleId to catch all cases
-    // Using userId catches users whose battleId wasn't set (failed update)
-    // Using battleId catches users whose update succeeded
+    // Rollback: Only reset users who were actually updated for THIS battle
+    // Using battleId ensures we only affect users whose update succeeded,
+    // without risking corruption of users who joined a different battle
     await client
       .update(userData)
       .set({ status: "AWAKE", battleId: null })
-      .where(
-        or(
-          inArray(userData.userId, allParticipantIds),
-          eq(userData.battleId, battleId),
-        ),
-      );
+      .where(eq(userData.battleId, battleId));
     return { success: false, message: "Attack failed, did the target move?" };
   }
 
