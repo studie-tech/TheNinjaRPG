@@ -388,6 +388,9 @@ export const updateWars = async (
   // Village war/raid shrine updates are processed sequentially per war to handle townhall damage/heal atomically
   const shrineUpdatePromises: Promise<unknown>[] = [];
   const otherPromises: Promise<unknown>[] = [];
+  // Track which wars have already had shrine HP updates scheduled to prevent multiple applications
+  // when multiple targets share the same war (the shrineChangeHp in result is already accumulated across all targets)
+  const processedShrineWarIds = new Set<string>();
 
   warResults.forEach((warResult) => {
     warResult.wars.forEach((w) => {
@@ -420,7 +423,13 @@ export const updateWars = async (
       }
 
       // Update shrine HP in war table for sector wars only (no townhall damage for sector wars)
-      if (result.shrineChangeHp !== 0 && w.type === "SECTOR_WAR") {
+      // Skip if we've already scheduled an update for this war (prevents double-counting when multiple targets share a war)
+      if (
+        result.shrineChangeHp !== 0 &&
+        w.type === "SECTOR_WAR" &&
+        !processedShrineWarIds.has(w.id)
+      ) {
+        processedShrineWarIds.add(w.id);
         otherPromises.push(
           client
             .update(war)
@@ -433,7 +442,13 @@ export const updateWars = async (
 
       // For village wars and raids, handle shrine HP + townhall damage/heal atomically
       // This prevents race conditions where multiple concurrent battles could all detect the same threshold crossing
-      if (result.shrineChangeHp !== 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
+      // Skip if we've already scheduled an update for this war (prevents double-counting when multiple targets share a war)
+      if (
+        result.shrineChangeHp !== 0 &&
+        ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
+        !processedShrineWarIds.has(w.id)
+      ) {
+        processedShrineWarIds.add(w.id);
         // Create an async function that handles the shrine update and townhall damage/heal atomically
         // by checking the pre-update value and only applying damage if THIS update caused the crossing
         shrineUpdatePromises.push(
