@@ -188,6 +188,7 @@ const items = await fetchUserItems(userId); // Sequential!
 - Component file structure: exported component → subcomponents → helpers → types. When adding sub-components to a page or component file, always keep sub-components below the main exported component in the file ordering.
 - **Natural Comments Only**: Do not leave unnatural comments like "Issue X:", "TODO from review:", or similar tracking markers in committed code. Comments should describe the code's purpose, not reference external issues or review feedback. Remove any such markers before committing.
 - **Time Utilities**: When adding time-related utility functions, always add them to `/app/src/utils/time.ts`. Check existing functions there first to avoid duplication.
+- **Use Constants**: When displaying game-related values in the UI (costs, thresholds, damage values, etc.), always import and use the actual constants from `@/drizzle/constants.ts` rather than hardcoding values. This ensures values stay in sync and only need to be updated in one place.
 
 ## UI/Styling Guidelines
 

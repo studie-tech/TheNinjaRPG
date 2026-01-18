@@ -287,13 +287,18 @@ const Combat: React.FC<CombatProps> = (props) => {
             notification.includes("durability is critically low") ||
             notification.includes("has broken");
           const isBrokenItem = notification.includes("has broken");
+          // Check if this is a war notification
+          const isWarNotification =
+            notification.includes("townhall") || notification.includes("Shrine");
           showMutationToast({
             success: !isDurabilityWarning, // Durability warnings are not "success" (they're warnings)
             title: isDurabilityWarning
               ? isBrokenItem
                 ? "Item Broken"
                 : "Low Durability Warning"
-              : "Quest Update",
+              : isWarNotification
+                ? "War Update"
+                : "Quest Update",
             message: notification,
           });
         });
@@ -1227,6 +1232,25 @@ const Combat: React.FC<CombatProps> = (props) => {
                     );
                   }
                 })}
+              {result.villageWarShrineDisplay &&
+                Object.entries(result.villageWarShrineDisplay).map(
+                  ([warName, change]) => {
+                    const key = `war-shrine-${warName}-${change}`;
+                    if (change > 0) {
+                      return (
+                        <p key={key} className="text-green-500">
+                          War Shrine HP ({warName}): +{change.toFixed(2)}
+                        </p>
+                      );
+                    } else if (change < 0) {
+                      return (
+                        <p key={key} className="text-red-500">
+                          War Shrine HP ({warName}): {change.toFixed(2)}
+                        </p>
+                      );
+                    }
+                  },
+                )}
               {result.droppedItems &&
                 result.droppedItems.length > 0 &&
                 result.droppedItems.map((d) => (

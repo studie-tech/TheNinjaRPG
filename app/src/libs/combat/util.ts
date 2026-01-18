@@ -1206,6 +1206,8 @@ export const calcBattleResult = (
       const warHealthInfo: Record<string, number> = {};
       const shrineInfo: Record<number, number> = {};
       const villageWarShrineInfo: Record<string, number> = {};
+      const villageWarShrineDisplay: Record<string, number> = {};
+      const warIdToDisplayName: Record<string, string> = {};
       let warHealthChange = 0;
       let shrineChangeHp = 0;
       // Skip war updates if kill happened in war-torn sector
@@ -1348,11 +1350,15 @@ export const calcBattleResult = (
                   }
                 }
               }
-              // Village wars and raids - abstract shrine HP mechanic (PvP only)
+              // Village wars and raids - abstract shrine HP mechanic
               // Track per-war to avoid accumulation bug when a user is in multiple wars
-              if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && battleType === "COMBAT") {
+              if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
                 if (!(war.id in villageWarShrineInfo)) {
                   villageWarShrineInfo[war.id] = 0;
+                  // Create display name for this war using village names
+                  const attackerName = war.attackerVillage?.name ?? "Attacker";
+                  const defenderName = war.defenderVillage?.name ?? "Defender";
+                  warIdToDisplayName[war.id] = `${attackerName} vs ${defenderName}`;
                 }
                 const isUserOnAttackerSide =
                   war.attackerVillageId === vilId ||
@@ -1369,11 +1375,27 @@ export const calcBattleResult = (
                       ally.supportVillageId === war.defenderVillageId,
                   );
 
-                if (didWin) {
-                  if (isUserOnAttackerSide) {
-                    villageWarShrineInfo[war.id]! -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
-                  } else if (isUserOnDefenderSide) {
-                    villageWarShrineInfo[war.id]! += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
+                // AI shrine battles (SHRINE_WAR) - attacking the shrine directly
+                if (battleType === "SHRINE_WAR") {
+                  if (didWin) {
+                    if (isUserOnAttackerSide) {
+                      // Attacker wins at defender's shrine: HP down
+                      villageWarShrineInfo[war.id]! -= WAR_SECTORWAR_AI_SHRINE_REDUCE;
+                    } else if (isUserOnDefenderSide) {
+                      // Defender wins at attacker's shrine: HP up
+                      villageWarShrineInfo[war.id]! += WAR_SECTORWAR_AI_SHRINE_RECOVER;
+                    }
+                  }
+                }
+
+                // PvP battles (COMBAT)
+                if (battleType === "COMBAT") {
+                  if (didWin) {
+                    if (isUserOnAttackerSide) {
+                      villageWarShrineInfo[war.id]! -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
+                    } else if (isUserOnDefenderSide) {
+                      villageWarShrineInfo[war.id]! += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
+                    }
                   }
                 }
               }
@@ -1429,6 +1451,12 @@ export const calcBattleResult = (
           });
         }
       }
+
+      // Convert villageWarShrineInfo to display-friendly format using war names
+      Object.keys(villageWarShrineInfo).forEach((warId) => {
+        const displayName = warIdToDisplayName[warId] ?? warId;
+        villageWarShrineDisplay[displayName] = villageWarShrineInfo[warId]!;
+      });
 
       // Determine if pvpStreak should be adjusted
       const calculatePvpStreak = (
@@ -1539,6 +1567,7 @@ export const calcBattleResult = (
         shrineInfo: shrineInfo,
         warHealthInfo: warHealthInfo,
         villageWarShrineInfo: villageWarShrineInfo,
+        villageWarShrineDisplay: villageWarShrineDisplay,
         clanPoints: clanPoints * battle.rewardScaling,
         notifications: [],
         bountiesClaimed: bountiesClaimed,

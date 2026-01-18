@@ -10,7 +10,7 @@ import NavTabs from "@/layout/NavTabs";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import Building from "@/layout/Building";
 import Table from "@/layout/Table";
-import { Handshake, LandPlot, Swords, Trophy, Trash2 } from "lucide-react";
+import { Handshake, Info, LandPlot, Swords, Trophy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { showMutationToast } from "@/libs/toast";
 import { DoorClosed } from "lucide-react";
@@ -31,6 +31,9 @@ import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { WAR_ALLY_OFFER_MIN } from "@/drizzle/constants";
 import { WAR_SHRINE_IMAGE } from "@/drizzle/constants";
 import { WAR_PURCHASE_SHRINE_TOKEN_COST } from "@/drizzle/constants";
+import { WAR_SHRINE_CAPTURE_WARHEALTH_DMG } from "@/drizzle/constants";
+import { WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL } from "@/drizzle/constants";
+import { WAR_RECAPTURE_THRESHOLD } from "@/drizzle/constants";
 import { MAP_RESERVED_SECTORS } from "@/drizzle/constants";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -866,6 +869,7 @@ export const VillageWar: React.FC<{
   // Add state for dialog
   const [showKills, setShowKills] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showShrineMechanics, setShowShrineMechanics] = useState(false);
   const [selectedStat, setSelectedStat] = useState<
     "townhallHpChange" | "shrineHpChange" | "totalKills"
   >("totalKills");
@@ -931,7 +935,7 @@ export const VillageWar: React.FC<{
     { key: "victimInfo", header: "Victim", type: "jsx" },
     { key: "sector", header: "Sector", type: "string" },
     { key: "shrineHpChange", header: "Shrine HP", type: "string" },
-    { key: "townhallHpChange", header: "Townhall HP", type: "string" },
+    { key: "townhallHpChange", header: "War Health", type: "string" },
     { key: "killedAt", header: "Time", type: "date" },
   ];
 
@@ -946,7 +950,7 @@ export const VillageWar: React.FC<{
         selectedStat === "totalKills"
           ? "Kills"
           : selectedStat === "townhallHpChange"
-            ? "Townhall Damage"
+            ? "War Health Damage"
             : "Shrine Damage",
       type: "string",
     },
@@ -1203,7 +1207,7 @@ export const VillageWar: React.FC<{
               variant={selectedStat === "townhallHpChange" ? "default" : "outline"}
               onClick={() => setSelectedStat("townhallHpChange")}
             >
-              Townhall Damage
+              War Health Damage
             </Button>
             <Button
               variant={selectedStat === "shrineHpChange" ? "default" : "outline"}
@@ -1228,44 +1232,101 @@ export const VillageWar: React.FC<{
             )}
           </div>
         </div>
-      </Modal2>
+      </Modal2>      
 
-      {/* Shrine HP Status for Village Wars and Raids */}
-      {["VILLAGE_WAR", "WAR_RAID"].includes(war.type) &&
-        war.status === "ACTIVE" &&
-        war.shrineMaxHp > 0 && (
-          <div className="mb-4">
-            <StatusBar
-              title="Target Shrine HP"
-              tooltip="Shrine Health - Depletes from PvP kills. Capture (HP=0) damages defender townhall by 200. Recapture (HP>25%) heals by 150."
-              color="bg-red-500"
-              showText={true}
-              status="AWAKE"
-              current={war.shrineHp}
-              total={war.shrineMaxHp}
-            />
-          </div>
-        )}
-
-      <div className="grid grid-cols-2 gap-8 items-start justify-center">
-        <WarSide
-          structure={isAttacker ? attackerStructure : defenderStructure}
-          village={isAttacker ? war.attackerVillage : war.defenderVillage}
-          war={war}
-          warHealth={isAttacker ? war.attackerWarHealth : war.defenderWarHealth}
-          warHealthMax={
-            isAttacker ? war.attackerWarHealthMax : war.defenderWarHealthMax
-          }
-        />
-        <WarSide
-          structure={isAttacker ? defenderStructure : attackerStructure}
-          village={isAttacker ? war.defenderVillage : war.attackerVillage}
-          war={war}
-          warHealth={isAttacker ? war.defenderWarHealth : war.attackerWarHealth}
-          warHealthMax={
-            isAttacker ? war.defenderWarHealthMax : war.attackerWarHealthMax
-          }
-        />
+      <div className="overflow-x-auto -mx-4 px-4">
+        <div className="grid grid-cols-3 gap-8 items-start justify-center min-w-[350px]">
+          <WarSide
+            structure={isAttacker ? attackerStructure : defenderStructure}
+            village={isAttacker ? war.attackerVillage : war.defenderVillage}
+            war={war}
+            warHealth={isAttacker ? war.attackerWarHealth : war.defenderWarHealth}
+            warHealthMax={
+              isAttacker ? war.attackerWarHealthMax : war.defenderWarHealthMax
+            }
+          />
+          <WarSide
+            structure={isAttacker ? defenderStructure : attackerStructure}
+            village={isAttacker ? war.defenderVillage : war.attackerVillage}
+            war={war}
+            warHealth={isAttacker ? war.defenderWarHealth : war.attackerWarHealth}
+            warHealthMax={
+              isAttacker ? war.defenderWarHealthMax : war.attackerWarHealthMax
+            }
+          />
+          {["VILLAGE_WAR", "WAR_RAID"].includes(war.type) &&
+            war.status === "ACTIVE" &&
+            war.shrineMaxHp > 0 && (
+              <div className="flex flex-col items-center justify-center">
+                <h5 className="font-bold mb-2 no-wrap text-nowrap">
+                  Shrine - Sector {war.defenderVillage.sector}
+                </h5>                
+                <div className="w-full mb-2">
+                  <StatusBar
+                    title="HP"
+                    tooltip="Shrine Health - Depletes from PvP kills"
+                    color="bg-red-500"
+                    showText={true}
+                    status="AWAKE"
+                    current={war.shrineHp}
+                    total={war.shrineMaxHp}
+                  />
+                </div>
+                <div className="w-full md:w-3/5 lg:w-3/4 aspect-square relative">
+                  <Image
+                    src={WAR_SHRINE_IMAGE}
+                    alt={`${war.defenderVillage?.name} Shrine`}
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => setShowShrineMechanics(true)}
+                >
+                  <Info className="h-4 w-4 mr-1" />
+                  Shrine Mechanics
+                </Button>
+                <Modal2
+                  title="Shrine Mechanics"
+                  isOpen={showShrineMechanics}
+                  setIsOpen={setShowShrineMechanics}
+                >
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      The shrine is a key objective in village wars. Its HP is reduced
+                      through PvP combat against enemy village members.
+                    </p>
+                    <div className="space-y-2">
+                      <h6 className="font-semibold">Capture (HP reaches 0):</h6>
+                      <p className="text-sm text-muted-foreground">
+                        When the shrine HP reaches 0, it is captured. This deals{" "}
+                        <span className="font-semibold text-red-500">
+                          -{WAR_SHRINE_CAPTURE_WARHEALTH_DMG} HP
+                        </span>{" "}
+                        to the defender&apos;s war health.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <h6 className="font-semibold">
+                        Recapture (HP exceeds {WAR_RECAPTURE_THRESHOLD * 100}%):
+                      </h6>
+                      <p className="text-sm text-muted-foreground">
+                        When defenders recapture the shrine by raising its HP above{" "}
+                        {WAR_RECAPTURE_THRESHOLD * 100}%, they heal{" "}
+                        <span className="font-semibold text-green-500">
+                          +{WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL} HP
+                        </span>{" "}
+                        to their war health.
+                      </p>
+                    </div>
+                  </div>
+                </Modal2>
+              </div>
+            )}
+        </div>
       </div>
 
       {isKage &&
@@ -1369,7 +1430,8 @@ export const VillageWar: React.FC<{
               onCancel={({ id }) => cancelAllyOffer({ offerId: id })}
             />
           </ContentBox>
-        )}
+        )}{/* Shrine HP Status for Village Wars and Raids */}
+        
     </div>
   );
 };
@@ -1395,7 +1457,7 @@ const WarSide: React.FC<{
       {war.status === "ACTIVE" && (
         <div className="w-full mb-2">
           <StatusBar
-            title="War Health"
+            title="HP"
             tooltip="War Health - Depletes from PvP kills"
             color="bg-red-500"
             showText={true}

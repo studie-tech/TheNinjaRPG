@@ -93,6 +93,7 @@ import { mockAchievementHistoryEntries } from "@/libs/quest";
 import { canAccessStructure } from "@/utils/village";
 import { fetchSectorVillage } from "@/routers/village";
 import { fetchAiProfileById } from "@/routers/ai";
+import { fetchActiveWars } from "@/routers/war";
 import { getBattleGrid } from "@/libs/combat/util";
 import { BATTLE_ARENA_DAILY_LIMIT } from "@/drizzle/constants";
 import { REGEN_SECONDS } from "@/drizzle/constants";
@@ -1154,19 +1155,13 @@ export const combatRouter = createTRPCRouter({
     .input(z.object({ sector: z.number().int() }))
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      // Get information
-      const [{ user }, warData, sectorData, shrineAis, isHome] = await Promise.all([
+      // Get information (use fetchActiveWars to get village relations with sectors)
+      const [{ user }, activeWars, sectorData, shrineAis, isHome] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        ctx.drizzle.query.war.findMany({
-          where: and(
-            eq(war.sector, input.sector),
-            eq(war.status, "ACTIVE"),
-            eq(war.type, "SECTOR_WAR"),
-          ),
-        }),
+        fetchActiveWars(ctx.drizzle),
         ctx.drizzle.query.sector.findFirst({
           where: eq(sector.sector, input.sector),
           with: { village: true },
@@ -1180,8 +1175,56 @@ export const combatRouter = createTRPCRouter({
         }),
       ]);
 
-      // Get the war the user is involved with
-      const userWar = warData.find((w) => w.attackerVillageId === user?.villageId);
+      // Helper to check if user is on attacker side (including allies)
+      const isUserOnAttackerSide = (w: (typeof activeWars)[number]) =>
+        w.attackerVillageId === user?.villageId ||
+        w.warAllies?.some(
+          (ally) =>
+            ally.villageId === user?.villageId &&
+            ally.supportVillageId === w.attackerVillageId,
+        );
+
+      // Helper to check if user is on defender side (including allies)
+      const isUserOnDefenderSide = (w: (typeof activeWars)[number]) =>
+        w.defenderVillageId === user?.villageId ||
+        w.warAllies?.some(
+          (ally) =>
+            ally.villageId === user?.villageId &&
+            ally.supportVillageId === w.defenderVillageId,
+        );
+
+      // Find the war the user is involved with
+      // For SECTOR_WAR: check war.sector matches and user is attacker
+      // For VILLAGE_WAR/WAR_RAID: check village sectors
+      const userWar = activeWars.find((w) => {
+        if (w.status !== "ACTIVE") return false;
+
+        if (w.type === "SECTOR_WAR") {
+          // Sector wars use war.sector and only attackers can attack
+          return w.sector === input.sector && isUserOnAttackerSide(w);
+        }
+
+        if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
+          // Village wars/raids: check if user is at the opposing village's sector
+          // Attackers attack at defender's village sector
+          // Defenders counter-attack at attacker's village sector
+          const atDefenderVillage =
+            w.defenderVillage?.sector === input.sector;
+          const atAttackerVillage =
+            w.attackerVillage?.sector === input.sector;
+
+          return (
+            (atDefenderVillage && isUserOnAttackerSide(w)) ||
+            (atAttackerVillage && isUserOnDefenderSide(w))
+          );
+        }
+
+        return false;
+      });
+
+      // Check if this is a Village War or Raid (allows attacking home sectors)
+      const isVillageWarOrRaid =
+        userWar?.type === "VILLAGE_WAR" || userWar?.type === "WAR_RAID";
 
       // Check that user was found
       if (!user) return errorResponse("User not found");
@@ -1189,13 +1232,21 @@ export const combatRouter = createTRPCRouter({
       if (MAP_RESERVED_SECTORS.includes(input.sector)) {
         return errorResponse("This sector is reserved and cannot be attacked");
       }
-      if (isHome) {
+      // Home sectors can only be attacked during Village Wars or Raids
+      if (isHome && !isVillageWarOrRaid) {
         return errorResponse("Cannot attack shrines in village home sectors");
       }
       if (!sectorData) return errorResponse("Sector data could not be found");
       if (user.sector !== input.sector)
         return errorResponse("Not in the correct sector");
-      if (!userWar) return errorResponse("There is no sector war for this sector");
+      if (!userWar) return errorResponse("There is no active war for this sector");
+
+      // Determine which village's shrine is being attacked
+      // For Village Wars: if at defender's sector, attack defender; if at attacker's sector, attack attacker
+      const shrineOwnerVillageId =
+        isVillageWarOrRaid && userWar.attackerVillage?.sector === input.sector
+          ? userWar.attackerVillageId
+          : userWar.defenderVillageId;
 
       // Determine AIs to defend the shrine
       const assignedAis = sectorData.village?.shrineSettings?.activeAiIds || [];
@@ -1211,7 +1262,7 @@ export const combatRouter = createTRPCRouter({
           sector: input.sector,
           userIds: [user.userId],
           targetIds: targetIds,
-          forceDefenderVillageId: userWar.defenderVillageId,
+          forceDefenderVillageId: shrineOwnerVillageId,
           client: ctx.drizzle,
           biome: "default",
         },

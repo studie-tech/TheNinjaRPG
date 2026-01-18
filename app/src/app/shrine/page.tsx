@@ -63,10 +63,20 @@ export default function Shrine() {
   if (!userData.villageId) return <Loader explanation="No village found" />;
 
   // Check if there's an active war in this sector
-  // Filter to only show wars for the current sector
-  const activeWars = sectorData.warData?.filter(
-    (war) => war.sector === userData.sector,
-  );
+  // For SECTOR_WAR: check war.sector
+  // For VILLAGE_WAR/WAR_RAID: check if this sector is either village's home sector
+  const activeWars = sectorData.warData?.filter((war) => {
+    if (war.type === "SECTOR_WAR") {
+      return war.sector === userData.sector;
+    }
+    if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
+      return (
+        war.attackerVillage?.sector === userData.sector ||
+        war.defenderVillage?.sector === userData.sector
+      );
+    }
+    return false;
+  });
 
   // Determine if this sector is owned (for MPVP attacks/defends)
   const sectorOwnerVillageId = sectorData.sectorData?.villageId ?? null;
@@ -90,7 +100,41 @@ export default function Shrine() {
   // Check if this sector is protected
   const isReserved = MAP_RESERVED_SECTORS.includes(userData.sector);
   const isHome = !!sectorData.village;
-  const isProtected = isReserved || isHome;
+
+  // Check if user can attack the shrine in a Village War or Raid
+  // Attackers can attack at defender's village sector (shrine HP down)
+  // Defenders can attack at attacker's village sector (shrine HP up)
+  const userCanAttackVillageWarShrine = sectorData.warData?.some((war) => {
+    if (!["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) return false;
+
+    const isUserOnAttackerSide =
+      war.attackerVillageId === userData.villageId ||
+      war.warAllies?.some(
+        (a) =>
+          a.villageId === userData.villageId &&
+          a.supportVillageId === war.attackerVillageId,
+      );
+
+    const isUserOnDefenderSide =
+      war.defenderVillageId === userData.villageId ||
+      war.warAllies?.some(
+        (a) =>
+          a.villageId === userData.villageId &&
+          a.supportVillageId === war.defenderVillageId,
+      );
+
+    const atDefenderVillage = war.defenderVillage?.sector === userData.sector;
+    const atAttackerVillage = war.attackerVillage?.sector === userData.sector;
+
+    // Attackers attack at defender's sector, defenders counter-attack at attacker's sector
+    return (
+      (atDefenderVillage && isUserOnAttackerSide) ||
+      (atAttackerVillage && isUserOnDefenderSide)
+    );
+  });
+
+  // Home sectors are protected UNLESS user can attack in a Village War/Raid
+  const isProtected = isReserved || (isHome && !userCanAttackVillageWarShrine);
 
   // Split wars into user's wars and competing wars
   const userWars =
@@ -372,14 +416,15 @@ export default function Shrine() {
 const WarCard = ({
   war,
   villageId,
+  sector,
   onAttack,
   isAttacking,
   hideAttackButton = false,
   isProtected = false,
 }: {
   war: War & {
-    attackerVillage: { name: string; villageGraphic: string };
-    defenderVillage: { name: string; villageGraphic: string };
+    attackerVillage: { name: string; villageGraphic: string; sector?: number };
+    defenderVillage: { name: string; villageGraphic: string; sector?: number };
   };
   villageId: string;
   sector: number;
@@ -388,9 +433,35 @@ const WarCard = ({
   hideAttackButton?: boolean;
   isProtected?: boolean;
 }) => {
-  const isAttacker = war.attackerVillageId === villageId;
-  // Only attackers can attack the shrine - defenders shouldn't attack their own shrine
-  const canAttack = isAttacker && war.shrineHp > 0 && !hideAttackButton && !isProtected;
+  const isUserAttacker = war.attackerVillageId === villageId;
+  const isUserDefender = war.defenderVillageId === villageId;
+  const isVillageWar = ["VILLAGE_WAR", "WAR_RAID"].includes(war.type);
+
+  // Determine which village's shrine we're at
+  const atAttackerVillage = war.attackerVillage?.sector === sector;
+  const atDefenderVillage = war.defenderVillage?.sector === sector;
+
+  // For Village Wars: users can attack when at the opposing village's shrine
+  // Attackers attack at defender's village, defenders counter-attack at attacker's village
+  const canAttackVillageWar =
+    isVillageWar &&
+    war.shrineHp > 0 &&
+    !hideAttackButton &&
+    !isProtected &&
+    ((isUserAttacker && atDefenderVillage) || (isUserDefender && atAttackerVillage));
+
+  // For Sector Wars: only attackers can attack
+  const canAttackSectorWar =
+    !isVillageWar && isUserAttacker && war.shrineHp > 0 && !hideAttackButton && !isProtected;
+
+  const canAttack = canAttackVillageWar || canAttackSectorWar;
+
+  // Determine the shrine sector to display
+  const displaySector = isVillageWar
+    ? atAttackerVillage
+      ? war.attackerVillage?.sector
+      : war.defenderVillage?.sector
+    : war.sector;
 
   return (
     <div className="flex flex-col items-center gap-4 p-4">
@@ -419,13 +490,17 @@ const WarCard = ({
           />
           <div className="w-full max-w-md space-y-4">
             <div>
-              <p className="text-sm font-medium">Shrine - Sector {war.sector}</p>
+              <p className="text-sm font-medium">Shrine - Sector {displaySector}</p>
               <p className="text-sm text-muted-foreground">
-                {war.attackerVillageId === villageId
-                  ? "Your village is attacking"
-                  : war.defenderVillageId === villageId
-                    ? "Your village is defending"
-                    : "Competing war"}
+                {isVillageWar
+                  ? atAttackerVillage
+                    ? `${war.attackerVillage.name}'s shrine`
+                    : `${war.defenderVillage.name}'s shrine`
+                  : isUserAttacker
+                    ? "Your village is attacking"
+                    : isUserDefender
+                      ? "Your village is defending"
+                      : "Competing war"}
               </p>
               {war.shrineHp > 0 && (
                 <StatusBar
@@ -486,14 +561,36 @@ const WarCard = ({
           ))}
         {war.shrineHp <= 0 && (
           <div className="text-center space-y-4 mt-4">
-            <h3 className="text-2xl font-bold">Shrine Defeated!</h3>
-            <p>
-              The shrine has been defeated. Quickly return to your village&apos;s Town
-              Hall to finalize the war and claim the sector!
-            </p>
-            <Link href="/travel">
-              <Button>Travel to Village</Button>
-            </Link>
+            <h3 className="text-2xl font-bold">Shrine Captured!</h3>
+            {isVillageWar ? (
+              isUserAttacker ? (
+                <p>
+                  The defender&apos;s shrine has been captured! The defending
+                  village&apos;s townhall has taken damage. Keep the shrine HP low to
+                  prevent the defenders from recovering. They can counter-attack by
+                  attacking your village&apos;s shrine.
+                </p>
+              ) : isUserDefender ? (
+                <p>
+                  Your shrine has been captured! Your townhall has taken damage.
+                  Counter-attack by going to the attacker&apos;s village and attacking
+                  their shrine to recover HP. Once the shrine HP rises above 25%, your
+                  townhall will heal.
+                </p>
+              ) : (
+                <p>The shrine has been captured in this war.</p>
+              )
+            ) : (
+              <>
+                <p>
+                  The shrine has been defeated. Quickly return to your village&apos;s
+                  Town Hall to finalize the war and claim the sector!
+                </p>
+                <Link href="/travel">
+                  <Button>Travel to Village</Button>
+                </Link>
+              </>
+            )}
           </div>
         )}
         {canAttack && (

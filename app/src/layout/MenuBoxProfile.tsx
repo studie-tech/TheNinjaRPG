@@ -254,6 +254,14 @@ const MenuBoxProfile: React.FC = () => {
             <b>Status: </b>{" "}
             <span className="ml-1">{statusLink(userData?.status || "UNKNOWN")}</span>
           </p>
+          {userData?.village?.name && (
+            <p className="flex flex-row">
+              <b>Village: </b>{" "}
+              <Link href="/village" className="ml-1 hover:text-orange-500">
+                {userData.village.name}
+              </Link>
+            </p>
+          )}
           <p suppressHydrationWarning>
             <b>Time: </b> {gameTime}
           </p>

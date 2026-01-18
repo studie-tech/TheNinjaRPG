@@ -828,14 +828,56 @@ export const shrineRouter = createTRPCRouter({
         }),
       ]);
 
+      // Helper to check if user is on attacker side (including allies)
+      const isUserOnAttackerSide = (w: (typeof activeWars)[number]) =>
+        w.attackerVillageId === user?.villageId ||
+        w.warAllies?.some(
+          (ally) =>
+            ally.villageId === user?.villageId &&
+            ally.supportVillageId === w.attackerVillageId,
+        );
+
+      // Helper to check if user is on defender side (including allies)
+      const isUserOnDefenderSide = (w: (typeof activeWars)[number]) =>
+        w.defenderVillageId === user?.villageId ||
+        w.warAllies?.some(
+          (ally) =>
+            ally.villageId === user?.villageId &&
+            ally.supportVillageId === w.defenderVillageId,
+        );
+
       // Get the war the user is involved with
-      const userWar = activeWars.find(
-        (w) =>
-          w.attackerVillageId === user?.villageId &&
-          w.sector === input.sectorNumber &&
-          w.status === "ACTIVE" &&
-          w.type === "SECTOR_WAR",
-      );
+      // For SECTOR_WAR: check war.sector matches and user is attacker
+      // For VILLAGE_WAR/WAR_RAID: check village sectors
+      const userWar = activeWars.find((w) => {
+        if (w.status !== "ACTIVE") return false;
+
+        if (w.type === "SECTOR_WAR") {
+          // Sector wars use war.sector and only attackers can attack
+          return w.sector === input.sectorNumber && isUserOnAttackerSide(w);
+        }
+
+        if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
+          // Village wars/raids: check if user is at the opposing village's sector
+          // Attackers attack at defender's village sector
+          // Defenders counter-attack at attacker's village sector
+          const atDefenderVillage =
+            w.defenderVillage?.sector === input.sectorNumber;
+          const atAttackerVillage =
+            w.attackerVillage?.sector === input.sectorNumber;
+
+          return (
+            (atDefenderVillage && isUserOnAttackerSide(w)) ||
+            (atAttackerVillage && isUserOnDefenderSide(w))
+          );
+        }
+
+        return false;
+      });
+
+      // Check if this is a Village War or Raid (allows attacking home sectors)
+      const isVillageWarOrRaid =
+        userWar?.type === "VILLAGE_WAR" || userWar?.type === "WAR_RAID";
 
       // Relationship check
       const relationship = findRelationship(
@@ -851,7 +893,8 @@ export const shrineRouter = createTRPCRouter({
       if (MAP_RESERVED_SECTORS.includes(input.sectorNumber)) {
         return errorResponse("This sector is reserved and cannot be attacked");
       }
-      if (isHome) {
+      // Home sectors can only be attacked during Village Wars or Raids
+      if (isHome && !isVillageWarOrRaid) {
         return errorResponse("Cannot attack shrines in village home sectors");
       }
       if (!targetSector) return errorResponse("Sector not found");

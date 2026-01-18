@@ -20,7 +20,6 @@ import {
   village,
   clan,
   anbuSquad,
-  villageStructure,
 } from "@/drizzle/schema";
 import { dataBattleAction } from "@/drizzle/schema";
 import { getNewTrackers } from "@/libs/quest";
@@ -31,11 +30,9 @@ import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
 import {
   VILLAGE_SYNDICATE_ID,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
-  WAR_CAPTURE_TOWNHALL_DAMAGE,
-  WAR_RECAPTURE_TOWNHALL_HEAL,
+  WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
+  WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
   WAR_RECAPTURE_THRESHOLD,
-  WAR_SECTORWAR_PVP_SHRINE_REDUCE,
-  WAR_SECTORWAR_PVP_SHRINE_RECOVER,
 } from "@/drizzle/constants";
 import { findWarsWithUser } from "@/libs/war";
 import {
@@ -491,18 +488,17 @@ export const updateWars = async (
 
               if (captureResult.rowsAffected > 0) {
                 // This battle caused the shrine to be captured (crossed from >0 to 0)
-                // Apply townhall damage
+                // Apply damage to defender's war health
                 await client
-                  .update(villageStructure)
+                  .update(war)
                   .set({
-                    curSp: sql`GREATEST(curSp - ${WAR_CAPTURE_TOWNHALL_DAMAGE}, 0)`,
+                    defenderWarHealth: sql`GREATEST(defenderWarHealth - ${WAR_SHRINE_CAPTURE_WARHEALTH_DMG}, 0)`,
                   })
-                  .where(
-                    and(
-                      eq(villageStructure.villageId, w.defenderVillageId),
-                      eq(villageStructure.route, "/townhall"),
-                    ),
-                  );
+                  .where(and(eq(war.id, w.id), isNull(war.endedAt)));
+                // Add notification about war health damage
+                result.notifications.push(
+                  `Shrine captured! Defender lost ${WAR_SHRINE_CAPTURE_WARHEALTH_DMG} war HP!`,
+                );
               } else {
                 // Didn't capture - either shrine was already at 0, or we didn't cross the threshold
                 // Still update shrine HP (might reduce from a positive value but not cross 0)
@@ -532,18 +528,17 @@ export const updateWars = async (
 
               if (recaptureResult.rowsAffected > 0) {
                 // This battle caused the shrine to be recaptured (crossed above threshold)
-                // Apply townhall heal
+                // Apply heal to defender's war health
                 await client
-                  .update(villageStructure)
+                  .update(war)
                   .set({
-                    curSp: sql`LEAST(curSp + ${WAR_RECAPTURE_TOWNHALL_HEAL}, maxSp)`,
+                    defenderWarHealth: sql`LEAST(defenderWarHealth + ${WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL}, defenderWarHealthMax)`,
                   })
-                  .where(
-                    and(
-                      eq(villageStructure.villageId, w.defenderVillageId),
-                      eq(villageStructure.route, "/townhall"),
-                    ),
-                  );
+                  .where(and(eq(war.id, w.id), isNull(war.endedAt)));
+                // Add notification about war health heal
+                result.notifications.push(
+                  `Shrine recovered! Defender gained ${WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL} war HP!`,
+                );
               } else {
                 // Didn't recapture - either already above threshold, or we didn't cross it
                 // Still update shrine HP

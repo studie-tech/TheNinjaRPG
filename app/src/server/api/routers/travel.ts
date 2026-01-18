@@ -315,10 +315,10 @@ export const travelRouter = createTRPCRouter({
           where: eq(war.status, "ACTIVE"),
           with: {
             attackerVillage: {
-              columns: { name: true, id: true, villageGraphic: true },
+              columns: { name: true, id: true, villageGraphic: true, sector: true },
             },
             defenderVillage: {
-              columns: { name: true, id: true, villageGraphic: true },
+              columns: { name: true, id: true, villageGraphic: true, sector: true },
             },
             warAllies: {
               columns: { villageId: true, supportVillageId: true },

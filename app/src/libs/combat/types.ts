@@ -405,6 +405,7 @@ export type CombatResult = {
   warHealthInfo: Record<string, number>;
   shrineInfo: Record<number, number>;
   villageWarShrineInfo: Record<string, number>;
+  villageWarShrineDisplay: Record<string, number>;
   clanPoints: number;
   notifications: string[];
   bountiesClaimed: { bountyId: string; hunterId: string; amountRyo: number }[];

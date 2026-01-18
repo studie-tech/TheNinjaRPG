@@ -149,8 +149,11 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
         </div>
       ) : (
         <p className="text-center text-muted-foreground">
-          No active shrine battles for this sector. Create an attack party to challenge
-          the shrine!
+          {userVillageId === defenderVillageId
+            ? "No active attacks on your shrine. You can join as a defender when attackers start a team battle."
+            : canCreateChallenge
+              ? "No active shrine battles for this sector. Create an attack party to challenge the shrine!"
+              : "No active shrine battles for this sector."}
         </p>
       )}
     </div>
