@@ -383,153 +383,177 @@ export const updateWars = async (
     })
     .filter((wr) => wr.wars.length > 0);
 
-  // Step 1: Run war kill inserts, shrine HP updates, and war health updates in parallel
-  // (These can run concurrently as they don't depend on each other)
-  await Promise.all(
-    warResults
-      .map((warResult) => {
-        return warResult.wars
-          .map((w) => {
-            const killerSideVillageId =
-              w.attackerVillageId === user.villageId ||
-              w.warAllies.some(
-                (a) =>
-                  a.villageId === user.villageId &&
-                  a.supportVillageId === w.attackerVillageId,
-              )
-                ? w.attackerVillageId
-                : w.defenderVillageId;
-            return [
-              // Insert war kill for tracking purposes
-              ...(result.didWin
-                ? [
-                    client.insert(warKill).values({
-                      id: nanoid(),
-                      warId: w.id,
-                      killerId: user.userId,
-                      victimId: warResult.target.userId,
-                      killerVillageId: user.villageId || "unknown",
-                      victimVillageId: warResult.target.villageId || "unknonwn",
-                      sector: user.sector,
-                      shrineHpChange: result.shrineChangeHp,
-                      townhallHpChange: result.warHealthChange,
-                      killedAt: new Date(),
-                    }),
-                  ]
-                : []),
-              // Update shrine HP in war table for sector wars, village wars, and raids
-              ...(result.shrineChangeHp !== 0 &&
-              ["SECTOR_WAR", "VILLAGE_WAR", "WAR_RAID"].includes(w.type)
-                ? [
-                    client
-                      .update(war)
-                      .set({
-                        shrineHp: sql`GREATEST(LEAST(shrineHp + ${result.shrineChangeHp}, shrineMaxHp), 0)`,
-                      })
-                      .where(and(eq(war.id, w.id), isNull(war.endedAt))),
-                  ]
-                : []),
-              // Update war health if we're in a village war or raid
-              ...(result.warHealthChange !== 0 &&
-              ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
-                ? [
-                    ...(killerSideVillageId === w.attackerVillageId
-                      ? [
-                          client
-                            .update(war)
-                            .set({
-                              attackerWarHealth: sql`GREATEST(LEAST(attackerWarHealth + ${result.warHealthChange}, attackerWarHealthMax), 0)`,
-                            })
-                            .where(and(eq(war.id, w.id), isNull(war.endedAt))),
-                        ]
-                      : [
-                          client
-                            .update(war)
-                            .set({
-                              defenderWarHealth: sql`GREATEST(LEAST(defenderWarHealth + ${result.warHealthChange}, defenderWarHealthMax), 0)`,
-                            })
-                            .where(and(eq(war.id, w.id), isNull(war.endedAt))),
-                        ]),
-                  ]
-                : []),
-            ];
-          })
-          .flat();
-      })
-      .flat(),
-  );
+  // Run all war updates in parallel
+  // Note: War kill inserts, war health updates, and sector war shrine updates run in parallel
+  // Village war/raid shrine updates are processed sequentially per war to handle townhall damage/heal atomically
+  const shrineUpdatePromises: Promise<unknown>[] = [];
+  const otherPromises: Promise<unknown>[] = [];
 
-  // Step 2: After shrine HP is updated, run townhall damage/heal updates
-  // These must run AFTER shrine HP updates to check the updated shrine HP value
-  // and correctly detect threshold crossings
-  await Promise.all(
-    warResults
-      .map((warResult) => {
-        return warResult.wars
-          .map((w) => {
-            return [
-              // Townhall damage on shrine capture (shrine HP just crossed from >0 to 0) for Village Wars/Raids
-              // Use threshold crossing check: shrine HP is now 0 AND was >0 before this battle's change
-              // This prevents multiple concurrent battles from applying damage when shrine is already at 0
-              ...(result.shrineChangeHp < 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
-                ? [
-                    client
-                      .update(villageStructure)
-                      .set({
-                        curSp: sql`CASE
-                          WHEN EXISTS (
-                            SELECT 1 FROM war
-                            WHERE war.id = ${w.id}
-                            AND war.endedAt IS NULL
-                            AND war.shrineHp = 0
-                            AND war.shrineHp - ${result.shrineChangeHp} > 0
-                          )
-                          THEN GREATEST(curSp - ${WAR_CAPTURE_TOWNHALL_DAMAGE}, 0)
-                          ELSE curSp
-                        END`,
-                      })
-                      .where(
-                        and(
-                          eq(villageStructure.villageId, w.defenderVillageId),
-                          eq(villageStructure.route, "/townhall"),
-                        ),
-                      ),
-                  ]
-                : []),
-              // Townhall heal on shrine recapture (shrine HP rises above threshold) for Village Wars/Raids
-              // Use threshold crossing check: shrine HP is now above threshold AND was at/below threshold before this battle's change
-              // This prevents subsequent battles from triggering heal when threshold was already crossed
-              ...(result.shrineChangeHp > 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
-                ? [
-                    client
-                      .update(villageStructure)
-                      .set({
-                        curSp: sql`CASE
-                          WHEN EXISTS (
-                            SELECT 1 FROM war
-                            WHERE war.id = ${w.id}
-                            AND war.endedAt IS NULL
-                            AND war.shrineHp > war.shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}
-                            AND war.shrineHp - ${result.shrineChangeHp} <= war.shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}
-                          )
-                          THEN LEAST(curSp + ${WAR_RECAPTURE_TOWNHALL_HEAL}, maxSp)
-                          ELSE curSp
-                        END`,
-                      })
-                      .where(
-                        and(
-                          eq(villageStructure.villageId, w.defenderVillageId),
-                          eq(villageStructure.route, "/townhall"),
-                        ),
-                      ),
-                  ]
-                : []),
-            ];
-          })
-          .flat();
-      })
-      .flat(),
-  );
+  warResults.forEach((warResult) => {
+    warResult.wars.forEach((w) => {
+      const killerSideVillageId =
+        w.attackerVillageId === user.villageId ||
+        w.warAllies.some(
+          (a) =>
+            a.villageId === user.villageId &&
+            a.supportVillageId === w.attackerVillageId,
+        )
+          ? w.attackerVillageId
+          : w.defenderVillageId;
+
+      // Insert war kill for tracking purposes
+      if (result.didWin) {
+        otherPromises.push(
+          client.insert(warKill).values({
+            id: nanoid(),
+            warId: w.id,
+            killerId: user.userId,
+            victimId: warResult.target.userId,
+            killerVillageId: user.villageId || "unknown",
+            victimVillageId: warResult.target.villageId || "unknonwn",
+            sector: user.sector,
+            shrineHpChange: result.shrineChangeHp,
+            townhallHpChange: result.warHealthChange,
+            killedAt: new Date(),
+          }),
+        );
+      }
+
+      // Update shrine HP in war table for sector wars only (no townhall damage for sector wars)
+      if (result.shrineChangeHp !== 0 && w.type === "SECTOR_WAR") {
+        otherPromises.push(
+          client
+            .update(war)
+            .set({
+              shrineHp: sql`GREATEST(LEAST(shrineHp + ${result.shrineChangeHp}, shrineMaxHp), 0)`,
+            })
+            .where(and(eq(war.id, w.id), isNull(war.endedAt))),
+        );
+      }
+
+      // For village wars and raids, handle shrine HP + townhall damage/heal atomically
+      // This prevents race conditions where multiple concurrent battles could all detect the same threshold crossing
+      if (result.shrineChangeHp !== 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
+        // Create an async function that handles the shrine update and townhall damage/heal atomically
+        // by checking the pre-update value and only applying damage if THIS update caused the crossing
+        shrineUpdatePromises.push(
+          (async () => {
+            // Use a conditional UPDATE that atomically checks if this update will cause a threshold crossing
+            // and records it by updating shrine HP. We then apply townhall damage only if rows were affected.
+            if (result.shrineChangeHp < 0) {
+              // Attacking: reduce shrine HP, apply townhall damage if crossing to 0
+              // First, try to update only if shrine HP is currently > 0 (this battle causes the capture)
+              const captureResult = await client
+                .update(war)
+                .set({
+                  shrineHp: sql`GREATEST(shrineHp + ${result.shrineChangeHp}, 0)`,
+                })
+                .where(
+                  and(
+                    eq(war.id, w.id),
+                    isNull(war.endedAt),
+                    sql`shrineHp > 0`,
+                    sql`shrineHp + ${result.shrineChangeHp} <= 0`,
+                  ),
+                );
+
+              if (captureResult.rowsAffected > 0) {
+                // This battle caused the shrine to be captured (crossed from >0 to 0)
+                // Apply townhall damage
+                await client
+                  .update(villageStructure)
+                  .set({
+                    curSp: sql`GREATEST(curSp - ${WAR_CAPTURE_TOWNHALL_DAMAGE}, 0)`,
+                  })
+                  .where(
+                    and(
+                      eq(villageStructure.villageId, w.defenderVillageId),
+                      eq(villageStructure.route, "/townhall"),
+                    ),
+                  );
+              } else {
+                // Didn't capture - either shrine was already at 0, or we didn't cross the threshold
+                // Still update shrine HP (might reduce from a positive value but not cross 0)
+                await client
+                  .update(war)
+                  .set({
+                    shrineHp: sql`GREATEST(shrineHp + ${result.shrineChangeHp}, 0)`,
+                  })
+                  .where(and(eq(war.id, w.id), isNull(war.endedAt)));
+              }
+            } else {
+              // Defending: increase shrine HP, apply townhall heal if crossing recapture threshold
+              // First, try to update only if shrine HP was at/below threshold and will cross above it
+              const recaptureResult = await client
+                .update(war)
+                .set({
+                  shrineHp: sql`LEAST(shrineHp + ${result.shrineChangeHp}, shrineMaxHp)`,
+                })
+                .where(
+                  and(
+                    eq(war.id, w.id),
+                    isNull(war.endedAt),
+                    sql`shrineHp <= shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}`,
+                    sql`shrineHp + ${result.shrineChangeHp} > shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}`,
+                  ),
+                );
+
+              if (recaptureResult.rowsAffected > 0) {
+                // This battle caused the shrine to be recaptured (crossed above threshold)
+                // Apply townhall heal
+                await client
+                  .update(villageStructure)
+                  .set({
+                    curSp: sql`LEAST(curSp + ${WAR_RECAPTURE_TOWNHALL_HEAL}, maxSp)`,
+                  })
+                  .where(
+                    and(
+                      eq(villageStructure.villageId, w.defenderVillageId),
+                      eq(villageStructure.route, "/townhall"),
+                    ),
+                  );
+              } else {
+                // Didn't recapture - either already above threshold, or we didn't cross it
+                // Still update shrine HP
+                await client
+                  .update(war)
+                  .set({
+                    shrineHp: sql`LEAST(shrineHp + ${result.shrineChangeHp}, shrineMaxHp)`,
+                  })
+                  .where(and(eq(war.id, w.id), isNull(war.endedAt)));
+              }
+            }
+          })(),
+        );
+      }
+
+      // Update war health if we're in a village war or raid
+      if (result.warHealthChange !== 0 && ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
+        if (killerSideVillageId === w.attackerVillageId) {
+          otherPromises.push(
+            client
+              .update(war)
+              .set({
+                attackerWarHealth: sql`GREATEST(LEAST(attackerWarHealth + ${result.warHealthChange}, attackerWarHealthMax), 0)`,
+              })
+              .where(and(eq(war.id, w.id), isNull(war.endedAt))),
+          );
+        } else {
+          otherPromises.push(
+            client
+              .update(war)
+              .set({
+                defenderWarHealth: sql`GREATEST(LEAST(defenderWarHealth + ${result.warHealthChange}, defenderWarHealthMax), 0)`,
+              })
+              .where(and(eq(war.id, w.id), isNull(war.endedAt))),
+          );
+        }
+      }
+    });
+  });
+
+  // Run all promises - shrine updates are processed independently to avoid race conditions
+  await Promise.all([...otherPromises, ...shrineUpdatePromises]);
 };
 
 export const updateTournament = async (
