@@ -1892,8 +1892,81 @@ export const initiateBattle = async (
       ID_SFX_CLEAR,
     ]);
 
-  // Insert data
-  const [, , userResult] = await Promise.all([
+  // Calculate expected rows for user status update
+  // For auto battles (KAGE_AI, CLAN_CHALLENGE), only 1 user (attacker) is updated
+  // For other battles, all non-AI participants should be updated
+  const allParticipantIds = AutoBattleTypes.includes(battleType)
+    ? userIds
+    : [...new Set([...userIds, ...targetIds])];
+  const nonAiParticipants = users.filter(
+    (u) => !u.isAi && allParticipantIds.includes(u.userId),
+  );
+  const expectedRows = nonAiParticipants.length;
+
+  // Step 1: Update user statuses FIRST (before creating battle record)
+  // This prevents race conditions where battle is created but users aren't in BATTLE status
+  const userResult = await client
+    .update(userData)
+    .set({
+      status: sql`CASE WHEN isAi = false THEN "BATTLE" ELSE "AWAKE" END`,
+      battleId: sql`CASE WHEN isAi = false THEN ${battleId} ELSE NULL END`,
+      pvpActivity: ["COMBAT"].includes(battleType)
+        ? sql`${userData.pvpActivity} + 1`
+        : sql`${userData.pvpActivity}`,
+      pvpFights: ["SPARRING", "COMBAT"].includes(battleType)
+        ? sql`${userData.pvpFights} + 1`
+        : sql`${userData.pvpFights}`,
+      pveFights: !["SPARRING", "COMBAT"].includes(battleType)
+        ? sql`${userData.pveFights} + 1`
+        : sql`${userData.pveFights}`,
+      immunityUntil: ["SPARRING", "COMBAT"].includes(battleType)
+        ? sql`CASE WHEN userId IN (${userIds.join(", ")}) THEN NOW() ELSE immunityUntil END`
+        : sql`immunityUntil`,
+    })
+    .where(
+      and(
+        or(
+          inArray(userData.userId, userIds),
+          ...(!AutoBattleTypes.includes(battleType)
+            ? [inArray(userData.userId, targetIds)]
+            : []),
+        ),
+        or(
+          eq(userData.status, "AWAKE"),
+          eq(userData.status, "QUEUED"),
+          eq(userData.status, "KAGE_QUEUED"),
+        ),
+        ...(battleType === "COMBAT"
+          ? [
+              and(
+                ...(sector ? [eq(userData.sector, sector)] : []),
+                ...(longitude ? [eq(userData.longitude, longitude)] : []),
+                ...(latitude ? [eq(userData.latitude, latitude)] : []),
+              ),
+            ]
+          : []),
+      ),
+    );
+
+  // Step 2: Verify all expected users were updated before creating battle
+  if (userResult.rowsAffected !== expectedRows) {
+    // Rollback: Reset user statuses by userId OR battleId to catch all cases
+    // Using userId catches users whose battleId wasn't set (failed update)
+    // Using battleId catches users whose update succeeded
+    await client
+      .update(userData)
+      .set({ status: "AWAKE", battleId: null })
+      .where(
+        or(
+          inArray(userData.userId, allParticipantIds),
+          eq(userData.battleId, battleId),
+        ),
+      );
+    return { success: false, message: "Attack failed, did the target move?" };
+  }
+
+  // Step 3: Only create battle record after user statuses are confirmed
+  await Promise.all([
     client.insert(battle).values({
       id: battleId,
       battleType: battleType,
@@ -1932,48 +2005,6 @@ export const initiateBattle = async (
         })),
       ),
     ),
-    client
-      .update(userData)
-      .set({
-        status: sql`CASE WHEN isAi = false THEN "BATTLE" ELSE "AWAKE" END`,
-        battleId: sql`CASE WHEN isAi = false THEN ${battleId} ELSE NULL END`,
-        pvpActivity: ["COMBAT"].includes(battleType)
-          ? sql`${userData.pvpActivity} + 1`
-          : sql`${userData.pvpActivity}`,
-        pvpFights: ["SPARRING", "COMBAT"].includes(battleType)
-          ? sql`${userData.pvpFights} + 1`
-          : sql`${userData.pvpFights}`,
-        pveFights: !["SPARRING", "COMBAT"].includes(battleType)
-          ? sql`${userData.pveFights} + 1`
-          : sql`${userData.pveFights}`,
-        immunityUntil: ["SPARRING", "COMBAT"].includes(battleType)
-          ? sql`CASE WHEN userId IN (${userIds.join(", ")}) THEN NOW() ELSE immunityUntil END`
-          : sql`immunityUntil`,
-      })
-      .where(
-        and(
-          or(
-            inArray(userData.userId, userIds),
-            ...(!AutoBattleTypes.includes(battleType)
-              ? [inArray(userData.userId, targetIds)]
-              : []),
-          ),
-          or(
-            eq(userData.status, "AWAKE"),
-            eq(userData.status, "QUEUED"),
-            eq(userData.status, "KAGE_QUEUED"),
-          ),
-          ...(battleType === "COMBAT"
-            ? [
-                and(
-                  ...(sector ? [eq(userData.sector, sector)] : []),
-                  ...(longitude ? [eq(userData.longitude, longitude)] : []),
-                  ...(latitude ? [eq(userData.latitude, latitude)] : []),
-                ),
-              ]
-            : []),
-        ),
-      ),
     ...(battleType === "TOURNAMENT"
       ? [
           client
@@ -1994,22 +2025,6 @@ export const initiateBattle = async (
         ]
       : []),
   ]);
-
-  // Check if success
-  if (
-    (AutoBattleTypes.includes(battleType) && userResult.rowsAffected !== 1) ||
-    (!AutoBattleTypes.includes(battleType) && userResult.rowsAffected < 2)
-  ) {
-    await Promise.all([
-      client
-        .update(userData)
-        .set({ status: "AWAKE", battleId: null })
-        .where(eq(userData.battleId, battleId)),
-      client.delete(battle).where(eq(battle.id, battleId)),
-      client.delete(battleHistory).where(eq(battleHistory.battleId, battleId)),
-    ]);
-    return { success: false, message: "Attack failed, did the target move?" };
-  }
   // Push websockets message to target
   const pusher = getServerPusher();
 
