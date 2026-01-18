@@ -1895,13 +1895,13 @@ export const initiateBattle = async (
   // Calculate expected rows for user status update
   // For auto battles (KAGE_AI, CLAN_CHALLENGE), only the attacker userIds are updated
   // For other battles, all participants (userIds + targetIds) should be updated
-  // This includes AI participants since the UPDATE query affects all matching rows
-  const allParticipantIds = AutoBattleTypes.includes(battleType)
-    ? userIds
-    : [...new Set([...userIds, ...targetIds])];
-  const expectedRows = users.filter((u) =>
-    allParticipantIds.includes(u.userId),
-  ).length;
+  // Use Set to deduplicate - the database UPDATE affects unique rows by userId
+  const allParticipantIds = [
+    ...new Set(
+      AutoBattleTypes.includes(battleType) ? userIds : [...userIds, ...targetIds],
+    ),
+  ];
+  const expectedRows = allParticipantIds.length;
 
   // Step 1: Update user statuses FIRST (before creating battle record)
   // This prevents race conditions where battle is created but users aren't in BATTLE status
