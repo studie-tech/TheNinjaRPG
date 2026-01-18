@@ -410,7 +410,7 @@ export const updateWars = async (
             killerId: user.userId,
             victimId: warResult.target.userId,
             killerVillageId: user.villageId || "unknown",
-            victimVillageId: warResult.target.villageId || "unknonwn",
+            victimVillageId: warResult.target.villageId || "unknown",
             sector: user.sector,
             shrineHpChange: result.shrineChangeHp,
             townhallHpChange: result.warHealthChange,
