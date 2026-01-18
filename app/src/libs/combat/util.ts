@@ -1205,6 +1205,7 @@ export const calcBattleResult = (
       // Determine war kills bonus
       const warHealthInfo: Record<string, number> = {};
       const shrineInfo: Record<number, number> = {};
+      const villageWarShrineInfo: Record<string, number> = {};
       let warHealthChange = 0;
       let shrineChangeHp = 0;
       // Skip war updates if kill happened in war-torn sector
@@ -1348,7 +1349,11 @@ export const calcBattleResult = (
                 }
               }
               // Village wars and raids - abstract shrine HP mechanic (PvP only)
+              // Track per-war to avoid accumulation bug when a user is in multiple wars
               if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && battleType === "COMBAT") {
+                if (!(war.id in villageWarShrineInfo)) {
+                  villageWarShrineInfo[war.id] = 0;
+                }
                 const isUserOnAttackerSide =
                   war.attackerVillageId === vilId ||
                   war.warAllies?.some(
@@ -1366,9 +1371,9 @@ export const calcBattleResult = (
 
                 if (didWin) {
                   if (isUserOnAttackerSide) {
-                    shrineChangeHp -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
+                    villageWarShrineInfo[war.id]! -= WAR_SECTORWAR_PVP_SHRINE_REDUCE;
                   } else if (isUserOnDefenderSide) {
-                    shrineChangeHp += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
+                    villageWarShrineInfo[war.id]! += WAR_SECTORWAR_PVP_SHRINE_RECOVER;
                   }
                 }
               }
@@ -1384,6 +1389,9 @@ export const calcBattleResult = (
       });
       Object.keys(warHealthInfo).forEach((name) => {
         warHealthInfo[name]! *= battle.rewardScaling;
+      });
+      Object.keys(villageWarShrineInfo).forEach((warId) => {
+        villageWarShrineInfo[warId]! *= battle.rewardScaling;
       });
 
       // Adjust shrine & townhall datamage based on level different
@@ -1414,6 +1422,10 @@ export const calcBattleResult = (
           Object.keys(warHealthInfo).forEach((name) => {
             const abs = Math.abs(warHealthInfo[name]!);
             if (abs !== 0) warHealthInfo[name]! /= abs;
+          });
+          Object.keys(villageWarShrineInfo).forEach((warId) => {
+            const abs = Math.abs(villageWarShrineInfo[warId]!);
+            if (abs !== 0) villageWarShrineInfo[warId]! /= abs;
           });
         }
       }
@@ -1526,6 +1538,7 @@ export const calcBattleResult = (
         shrineChangeHp: shrineChangeHp,
         shrineInfo: shrineInfo,
         warHealthInfo: warHealthInfo,
+        villageWarShrineInfo: villageWarShrineInfo,
         clanPoints: clanPoints * battle.rewardScaling,
         notifications: [],
         bountiesClaimed: bountiesClaimed,

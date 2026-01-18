@@ -405,6 +405,10 @@ export const updateWars = async (
           : w.defenderVillageId;
 
       // Insert war kill for tracking purposes
+      // Use per-war shrine HP change for village wars/raids, accumulated value for sector wars
+      const logShrineHpChange = ["VILLAGE_WAR", "WAR_RAID"].includes(w.type)
+        ? (result.villageWarShrineInfo[w.id] ?? 0)
+        : result.shrineChangeHp;
       if (result.didWin) {
         otherPromises.push(
           client.insert(warKill).values({
@@ -415,7 +419,7 @@ export const updateWars = async (
             killerVillageId: user.villageId || "unknown",
             victimVillageId: warResult.target.villageId || "unknown",
             sector: user.sector,
-            shrineHpChange: result.shrineChangeHp,
+            shrineHpChange: logShrineHpChange,
             townhallHpChange: result.warHealthChange,
             killedAt: new Date(),
           }),
@@ -443,8 +447,10 @@ export const updateWars = async (
       // For village wars and raids, handle shrine HP + townhall damage/heal atomically
       // This prevents race conditions where multiple concurrent battles could all detect the same threshold crossing
       // Skip if we've already scheduled an update for this war (prevents double-counting when multiple targets share a war)
+      // Use the per-war shrine HP change to avoid accumulation bug when user is in multiple wars
+      const villageWarShrineChange = result.villageWarShrineInfo[w.id] ?? 0;
       if (
-        result.shrineChangeHp !== 0 &&
+        villageWarShrineChange !== 0 &&
         ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
         !processedShrineWarIds.has(w.id)
       ) {
@@ -455,20 +461,20 @@ export const updateWars = async (
           (async () => {
             // Use a conditional UPDATE that atomically checks if this update will cause a threshold crossing
             // and records it by updating shrine HP. We then apply townhall damage only if rows were affected.
-            if (result.shrineChangeHp < 0) {
+            if (villageWarShrineChange < 0) {
               // Attacking: reduce shrine HP, apply townhall damage if crossing to 0
               // First, try to update only if shrine HP is currently > 0 (this battle causes the capture)
               const captureResult = await client
                 .update(war)
                 .set({
-                  shrineHp: sql`GREATEST(shrineHp + ${result.shrineChangeHp}, 0)`,
+                  shrineHp: sql`GREATEST(shrineHp + ${villageWarShrineChange}, 0)`,
                 })
                 .where(
                   and(
                     eq(war.id, w.id),
                     isNull(war.endedAt),
                     sql`shrineHp > 0`,
-                    sql`shrineHp + ${result.shrineChangeHp} <= 0`,
+                    sql`shrineHp + ${villageWarShrineChange} <= 0`,
                   ),
                 );
 
@@ -492,7 +498,7 @@ export const updateWars = async (
                 await client
                   .update(war)
                   .set({
-                    shrineHp: sql`GREATEST(shrineHp + ${result.shrineChangeHp}, 0)`,
+                    shrineHp: sql`GREATEST(shrineHp + ${villageWarShrineChange}, 0)`,
                   })
                   .where(and(eq(war.id, w.id), isNull(war.endedAt)));
               }
@@ -502,14 +508,14 @@ export const updateWars = async (
               const recaptureResult = await client
                 .update(war)
                 .set({
-                  shrineHp: sql`LEAST(shrineHp + ${result.shrineChangeHp}, shrineMaxHp)`,
+                  shrineHp: sql`LEAST(shrineHp + ${villageWarShrineChange}, shrineMaxHp)`,
                 })
                 .where(
                   and(
                     eq(war.id, w.id),
                     isNull(war.endedAt),
                     sql`shrineHp <= shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}`,
-                    sql`shrineHp + ${result.shrineChangeHp} > shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}`,
+                    sql`shrineHp + ${villageWarShrineChange} > shrineMaxHp * ${WAR_RECAPTURE_THRESHOLD}`,
                   ),
                 );
 
@@ -533,7 +539,7 @@ export const updateWars = async (
                 await client
                   .update(war)
                   .set({
-                    shrineHp: sql`LEAST(shrineHp + ${result.shrineChangeHp}, shrineMaxHp)`,
+                    shrineHp: sql`LEAST(shrineHp + ${villageWarShrineChange}, shrineMaxHp)`,
                   })
                   .where(and(eq(war.id, w.id), isNull(war.endedAt)));
               }
