@@ -957,18 +957,19 @@ const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
   layout,
   className = "",
 }) => {
+  // Early return before any hooks - prevents "Rendered more hooks than during the previous render" error
+  // when this component is conditionally rendered and notification count changes
+  if (!notifications || notifications.length === 0) return null;
+
   // Persist collapsed state with default to expanded (false = not collapsed)
   const [isCollapsed, setIsCollapsed] = useLocalStorage(
     "notificationsCollapsed",
     false,
   );
 
-  // Check for critical notifications (red color) - compute before early return
-  const hasCritical = notifications?.some((n) => n.color === "red") ?? false;
-  const count = notifications?.length ?? 0;
-
-  // Don't render anything if no notifications
-  if (!notifications || notifications.length === 0) return null;
+  // Check for critical notifications (red color)
+  const hasCritical = notifications.some((n) => n.color === "red");
+  const count = notifications.length;
 
   // Badge styling based on critical status
   const badgeClass = hasCritical ? "bg-red-500 text-white" : "bg-slate-500 text-white";
