@@ -60,6 +60,7 @@ Sentry.init({
     "Can't find variable: EmptyRanges", // Browser extension error (CodeMirror-based extensions)
     "postMessage is not a function", // Clerk internal error - occurs in clerk.browser.js with Web Workers
     "module factory is not available", // Turbopack runtime error - occurs when browser caches stale JS chunks after deployment
+    "Cannot assign to read only property 'then' of object", // Turbopack Promise assignment error - occurs when browser extensions freeze Promise objects or stale caches cause conflicts
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
