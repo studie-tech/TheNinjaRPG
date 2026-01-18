@@ -216,13 +216,17 @@ export const blackMarketRouter = createTRPCRouter({
         return errorResponse("Insufficient funds");
       }
 
-      // Verify seller still exists before processing
+      // Verify seller still exists and can receive payment
       const seller = await ctx.drizzle.query.userData.findFirst({
         where: eq(userData.userId, offer.creatorUserId),
-        columns: { userId: true },
+        columns: { userId: true, bank: true },
       });
       if (!seller) {
         return errorResponse("Seller account no longer exists");
+      }
+      // Reject trade if seller's bank would exceed RYO_CAP (prevents silent ryo loss)
+      if (seller.bank + offer.requestedRyo > RYO_CAP) {
+        return errorResponse("Seller's bank is at capacity - trade cannot proceed");
       }
 
       // Mark the offer as taken first - this will fail if someone else has taken it
@@ -249,11 +253,16 @@ export const blackMarketRouter = createTRPCRouter({
               gte(userData.money, offer.requestedRyo),
             ),
           ),
-        // Update seller's bank - add the requested ryo, respecting RYO_CAP
+        // Update seller's bank - add the full requested ryo (validated to fit under RYO_CAP)
         ctx.drizzle
           .update(userData)
-          .set({ bank: sql`LEAST(${userData.bank} + ${offer.requestedRyo}, ${RYO_CAP})` })
-          .where(eq(userData.userId, offer.creatorUserId)),
+          .set({ bank: sql`${userData.bank} + ${offer.requestedRyo}` })
+          .where(
+            and(
+              eq(userData.userId, offer.creatorUserId),
+              sql`${userData.bank} + ${offer.requestedRyo} <= ${RYO_CAP}`,
+            ),
+          ),
       ]);
 
       // Verify BOTH buyer and seller updates succeeded
