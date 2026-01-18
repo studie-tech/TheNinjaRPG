@@ -48,66 +48,75 @@ export async function GET() {
         ),
       );
 
-    // Step 3: Delete from battle action where battles have been deleted
-    // TTL: 60 days to match the longest retention period (COMBAT, RANKED_PVP battles)
-    await drizzleDB.execute(
-      sql`DELETE FROM ${battleAction} a WHERE
-          NOT EXISTS (SELECT id FROM ${battle} b WHERE b.id = a.battleId) AND
-          updatedAt < DATE_SUB(NOW(), INTERVAL 60 DAY) LIMIT 99999`,
-    );
-
     // Time constants
     const oneHour = 1000 * 60 * 60;
     const oneDay = oneHour * 24;
 
+    // Battle retention periods:
+    // - PVP (72 hours): Explicit PVP types that we want longer retention for
+    // - Everything else (12 hours): All other battle types default to short retention
+    const pvpTypes = [
+      "SPARRING",
+      "CLAN_BATTLE",
+      "TOURNAMENT",
+      "RANKED_SPARRING",
+      "KAGE_PVP",
+      "COMBAT",
+      "RANKED_PVP",
+    ] as const;
+
+    // Step 3: Delete from battle action based on battle type (matching battleHistory retention)
+    // Join with battleHistory to get the battleType for each battleAction
+    // Delete PVP battle actions older than 72 hours
+    await drizzleDB.execute(
+      sql`DELETE a FROM ${battleAction} a
+          INNER JOIN ${battleHistory} h ON a.battleId = h.battleId
+          WHERE h.battleType IN (${sql.join(
+            pvpTypes.map((t) => sql`${t}`),
+            sql`, `,
+          )})
+          AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 72 HOUR) LIMIT 99999`,
+    );
+
+    // Delete all other battle actions older than 12 hours (including new/unknown types)
+    await drizzleDB.execute(
+      sql`DELETE a FROM ${battleAction} a
+          INNER JOIN ${battleHistory} h ON a.battleId = h.battleId
+          WHERE (h.battleType NOT IN (${sql.join(
+            pvpTypes.map((t) => sql`${t}`),
+            sql`, `,
+          )}) OR h.battleType IS NULL)
+          AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR) LIMIT 99999`,
+    );
+
+    // Delete orphaned battle actions (no matching battle AND no matching history) older than 12 hours
+    await drizzleDB.execute(
+      sql`DELETE FROM ${battleAction} a WHERE
+          NOT EXISTS (SELECT id FROM ${battle} b WHERE b.id = a.battleId) AND
+          NOT EXISTS (SELECT battleId FROM ${battleHistory} h WHERE h.battleId = a.battleId) AND
+          a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR) LIMIT 99999`,
+    );
+
     // Step 5: Delete battle history based on battle type
-    // Battle type categorization matches @/drizzle/constants.ts (PvpBattleTypes, PveBattleTypes)
-    // Retention periods:
-    // - PVP important (60 days): COMBAT, RANKED_PVP - for moderator investigation
-    // - PVP standard (72 hours): SPARRING, CLAN_BATTLE, TOURNAMENT, RANKED_SPARRING, KAGE_PVP, KAGE_AI, SHRINE_WAR
-    // - PVE (12 hours): ARENA, QUEST, RANDOM_ENCOUNTER, VILLAGE_PROTECTOR, TRAINING, CLAN_CHALLENGE
-    const pvpImportantTypes = ["COMBAT", "RANKED_PVP"] as const;
-    const pvpStandardTypes = ["SPARRING", "CLAN_BATTLE", "TOURNAMENT", "RANKED_SPARRING", "KAGE_PVP", "KAGE_AI", "SHRINE_WAR"] as const;
-    const pveTypes = ["ARENA", "QUEST", "RANDOM_ENCOUNTER", "VILLAGE_PROTECTOR", "TRAINING", "CLAN_CHALLENGE"] as const;
 
-    // Delete important PVP battles older than 60 days (for moderator investigation)
+    // Delete PVP battles older than 72 hours
     await drizzleDB.execute(
       sql`DELETE FROM ${battleHistory}
-          WHERE battleType IN (${sql.join(pvpImportantTypes.map(t => sql`${t}`), sql`, `)})
-          AND createdAt < DATE_SUB(NOW(), INTERVAL 60 DAY)`,
-    );
-
-    // Delete standard PVP battles older than 72 hours
-    await drizzleDB.execute(
-      sql`DELETE FROM ${battleHistory}
-          WHERE battleType IN (${sql.join(pvpStandardTypes.map(t => sql`${t}`), sql`, `)})
+          WHERE battleType IN (${sql.join(
+            pvpTypes.map((t) => sql`${t}`),
+            sql`, `,
+          )})
           AND createdAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)`,
     );
 
-    // Delete PVE battles older than 12 hours
+    // Delete all other battles older than 12 hours (including null/unknown types)
     await drizzleDB.execute(
       sql`DELETE FROM ${battleHistory}
-          WHERE battleType IN (${sql.join(pveTypes.map(t => sql`${t}`), sql`, `)})
+          WHERE (battleType NOT IN (${sql.join(
+            pvpTypes.map((t) => sql`${t}`),
+            sql`, `,
+          )}) OR battleType IS NULL)
           AND createdAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)`,
-    );
-
-    // Delete battles with null type older than 12 hours
-    await drizzleDB
-      .delete(battleHistory)
-      .where(
-        and(
-          isNull(battleHistory.battleType),
-          lte(battleHistory.createdAt, new Date(Date.now() - oneHour * 12)),
-        ),
-      );
-
-    // Delete any uncategorized battle types older than 72 hours (catch-all for future/legacy types)
-    const allKnownTypes = [...pvpImportantTypes, ...pvpStandardTypes, ...pveTypes];
-    await drizzleDB.execute(
-      sql`DELETE FROM ${battleHistory}
-          WHERE battleType NOT IN (${sql.join(allKnownTypes.map(t => sql`${t}`), sql`, `)})
-          AND battleType IS NOT NULL
-          AND createdAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)`,
     );
 
     // Step 6: Delete conversations older than 14 days

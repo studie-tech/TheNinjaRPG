@@ -123,7 +123,7 @@ import {
   canEditRankedLp,
   canViewOtherUsersBattleLogs,
 } from "@/utils/permissions";
-import { BattleTypes } from "@/drizzle/constants";
+import { BattleTypes, type BattleType } from "@/drizzle/constants";
 
 interface PublicUserComponentProps {
   userId: string;
@@ -2124,7 +2124,7 @@ const CombatHistoryTab: React.FC<TabComponentProps> = ({
   const { data: history, isPending } = api.combat.getBattleHistory.useQuery(
     {
       userId,
-      combatTypes: selectedType === "all" ? undefined : [selectedType as (typeof BattleTypes)[number]],
+      combatTypes: selectedType === "all" ? undefined : [selectedType as BattleType],
     },
     { enabled: _isActive },
   );

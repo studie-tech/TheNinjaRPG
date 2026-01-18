@@ -93,7 +93,11 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
     const isOpen = openRounds.includes(round);
     const roundTime = entries[0]?.createdAt;
     const timeString = roundTime
-      ? roundTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      ? roundTime.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
       : "";
 
     const roundHeader = (
