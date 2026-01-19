@@ -297,8 +297,8 @@ export const canEditPublicUser = (user: UserData) => {
   ].includes(user.role);
 };
 
-export const canOnlyEditSelf = (role: UserRole) => {
-  return ["CONTENT", "EVENT"].includes(role);
+export const canOnlyEditSelf = (userRole: UserRole) => {
+  return ["CONTENT", "EVENT"].includes(userRole);
 };
 
 export const canAwardReputation = (role: UserRole) => {

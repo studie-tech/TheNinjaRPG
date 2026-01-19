@@ -1089,21 +1089,21 @@ export const CRAFTING_MAX_IMBUED_ITEMS: Record<CRAFTING_RANK, number> = {
 export const CRAFTING_TIMES_MINS: Record<CRAFTING_RANK, Record<ItemRarity, number>> = {
   NOVICE: {
     COMMON: 60,
-    RARE: 90,
+    RARE: 0, // Cannot craft rare items
     EPIC: 0, // Cannot craft epic items
     LEGENDARY: 0, // Cannot craft legendary items
   },
   APPRENTICE: {
     COMMON: 40,
     RARE: 65,
-    EPIC: 90,
+    EPIC: 0, // Cannot craft epic items
     LEGENDARY: 0, // Cannot craft legendary items
   },
   MASTER: {
     COMMON: 30,
     RARE: 50,
     EPIC: 70,
-    LEGENDARY: 240,
+    LEGENDARY: 0, // Cannot craft legendary items
   },
   FORGEMASTER: {
     COMMON: 15,

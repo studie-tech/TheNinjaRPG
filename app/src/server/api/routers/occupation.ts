@@ -24,6 +24,7 @@ import { nanoid } from "nanoid";
 import { baseServerResponse } from "@/server/api/trpc";
 import { canChangeContent } from "@/utils/permissions";
 import { getNewTrackers } from "@/libs/quest";
+import { formatSecondsToTimeDisplay } from "@/utils/time";
 
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure.query(async ({ ctx }) => {
@@ -41,6 +42,7 @@ export const occupationRouter = createTRPCRouter({
 
   selectOccupation: protectedProcedure
     .input(z.object({ occupation: z.enum(OCCUPATIONS) }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -72,7 +74,12 @@ export const occupationRouter = createTRPCRouter({
     }),
 
   craftItem: protectedProcedure
-    .input(z.object({ itemId: z.string() }))
+    .input(
+      z.object({
+        itemId: z.string(),
+        quantity: z.number().int().min(1).max(10).default(1),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Run all initial queries in parallel
       const [{ user }, itemWithRequirements, useritems] = await Promise.all([
@@ -85,10 +92,7 @@ export const occupationRouter = createTRPCRouter({
       ]);
       // Derived
       const currentlyCrafting = useritems.find(
-        (item) =>
-          item.itemId === input.itemId &&
-          item.craftingFinishedAt &&
-          item.craftingFinishedAt > new Date(),
+        (item) => item.craftingFinishedAt && item.craftingFinishedAt > new Date(),
       );
       // Guards
       if (!user) return errorResponse("User not found");
@@ -124,8 +128,12 @@ export const occupationRouter = createTRPCRouter({
           : rankCraftingTime;
       // Guards - check rank eligibility regardless of item type
       if (rankCraftingTime === 0) {
+        const requiredRank = 
+          itemWithRequirements.rarity === "RARE" ? "Apprentice" :
+          itemWithRequirements.rarity === "EPIC" ? "Master" :
+          itemWithRequirements.rarity === "LEGENDARY" ? "Forgemaster" : "Unknown";
         return errorResponse(
-          `You need to be at least ${itemWithRequirements.rarity === "EPIC" ? "Apprentice" : "Master"} rank to craft ${itemWithRequirements.rarity} items`,
+          `You need to be at least ${requiredRank} rank to craft ${itemWithRequirements.rarity} items`,
         );
       }
       // Validate user has enough materials using collapsed quantities
@@ -134,10 +142,11 @@ export const occupationRouter = createTRPCRouter({
           useritems,
           requirement.requirementItemId,
         );
-        if (totalQuantity < requirement.quantity) {
+        const requiredQuantity = requirement.quantity * input.quantity;
+        if (totalQuantity < requiredQuantity) {
           const itemName = requirement.requirementItem?.name || "Unknown item";
           return errorResponse(
-            `You need ${requirement.quantity} ${itemName} (you have ${totalQuantity})`,
+            `You need ${requiredQuantity} ${itemName} (you have ${totalQuantity})`,
           );
         }
       }
@@ -146,7 +155,7 @@ export const occupationRouter = createTRPCRouter({
       const sectors = user.village?.sectors?.length || 0;
       const shrineBoost = getShrineBoost(sectors, "Crafting", user.village);
       const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
-      const craftSeconds = craftingTime * 60 * shrineBoostFactor;
+      const craftSeconds = Math.round(craftingTime * 60 * shrineBoostFactor * input.quantity);
 
       // Calculate crafting finish time
       const finishTime = new Date(Date.now() + craftSeconds * 1000);
@@ -155,10 +164,11 @@ export const occupationRouter = createTRPCRouter({
       // Calculate consumption for each requirement
       const allConsumptions = [];
       for (const requirement of itemWithRequirements.craftingRequirements) {
+        const requiredQuantity = requirement.quantity * input.quantity;
         const consumption = calculateItemConsumption(
           useritems,
           requirement.requirementItemId,
-          requirement.quantity,
+          requiredQuantity,
         );
         if (!consumption.hasEnough) {
           const itemName = requirement.requirementItem?.name || "Unknown item";
@@ -181,17 +191,45 @@ export const occupationRouter = createTRPCRouter({
         }
       });
 
-      // Create crafting item entry (quantity 0 initially, will be 1 when finished)
-      const craftingItemInsert = ctx.drizzle.insert(userItem).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        itemId: input.itemId,
-        quantity: 1,
-        craftingFinishedAt: finishTime,
-      });
+      // Create crafting item entry/entries
+      // Respect stackSize limit when creating items
+      const craftingItemInserts = [];
+      if (itemWithRequirements.stackSize === 1) {
+        // Create separate items for non-stackable items
+        for (let i = 0; i < input.quantity; i++) {
+          craftingItemInserts.push(
+            ctx.drizzle.insert(userItem).values({
+              id: nanoid(),
+              userId: ctx.userId,
+              itemId: input.itemId,
+              quantity: 1,
+              craftingFinishedAt: finishTime,
+            }),
+          );
+        }
+      } else {
+        // Create stacked items respecting stackSize limit
+        let remainingQuantity = input.quantity;
+        while (remainingQuantity > 0) {
+          const stackQuantity = Math.min(
+            remainingQuantity,
+            itemWithRequirements.stackSize,
+          );
+          craftingItemInserts.push(
+            ctx.drizzle.insert(userItem).values({
+              id: nanoid(),
+              userId: ctx.userId,
+              itemId: input.itemId,
+              quantity: stackQuantity,
+              craftingFinishedAt: finishTime,
+            }),
+          );
+          remainingQuantity -= stackQuantity;
+        }
+      }
 
       // Award crafting experience (from item config, or 0 if not set)
-      const expGain = itemWithRequirements.craftingExperience ?? 0;
+      const expGain = (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
       // Update trackers with crafting experience gained
       const { trackers } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },
@@ -204,11 +242,11 @@ export const occupationRouter = createTRPCRouter({
         })
         .where(eq(userData.userId, ctx.userId));
 
-      await Promise.all([...materialUpdates, craftingItemInsert, expUpdate]);
+      await Promise.all([...materialUpdates, ...craftingItemInserts, expUpdate]);
 
       return {
         success: true,
-        message: `Started crafting ${itemWithRequirements.name}. It will be ready in ${craftSeconds} seconds.`,
+        message: `Started crafting ${input.quantity}x ${itemWithRequirements.name}. ${expGain > 0 ? `+${expGain} EXP.` : ""} Ready in ${formatSecondsToTimeDisplay(craftSeconds)}.`,
         finishTime: finishTime.toISOString(),
       };
     }),
