@@ -19,8 +19,13 @@ export const detectedUserSchema = z.object({
   latitude: z.number(),
 });
 
+export const activateStealthDataSchema = z.object({
+  stealthActivatedAt: z.date(),
+});
+
 export const useSensoryDataSchema = z.object({
   detectedUsers: z.array(detectedUserSchema),
+  lastSensoryAt: z.date(),
 });
 
 export const startTrainDataSchema = z.object({

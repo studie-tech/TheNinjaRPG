@@ -28,9 +28,10 @@ export const useLiveCountdown = (serverSeconds: number | undefined | null): numb
     }
   }, [roundedServerSeconds]);
 
-  // Decrement countdown every second
+  // Decrement countdown every second - depends on roundedServerSeconds to start
+  // when data loads, but not on liveSeconds to avoid restarting every tick
   useEffect(() => {
-    if (liveSeconds <= 0) return;
+    if (roundedServerSeconds <= 0) return;
 
     const interval = setInterval(() => {
       const elapsed = (Date.now() - lastSyncTimeRef.current) / 1000;
@@ -39,7 +40,7 @@ export const useLiveCountdown = (serverSeconds: number | undefined | null): numb
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [liveSeconds]);
+  }, [roundedServerSeconds]);
 
   return liveSeconds;
 };

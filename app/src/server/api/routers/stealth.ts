@@ -12,6 +12,7 @@ import {
   calcSensoryCooldown,
   isSensoryReady,
   isStealthCooldownExpired,
+  isStealthExpired,
   getRemainingStealthCooldown,
   getRemainingSensoryCooldown,
   rollSensoryDetection,
@@ -26,6 +27,7 @@ import {
 import {
   useSensoryInputSchema,
   trainInputSchema,
+  activateStealthDataSchema,
   useSensoryDataSchema,
   startTrainDataSchema,
   stopTrainDataSchema,
@@ -35,66 +37,78 @@ import type { CovertTrainingType } from "@/drizzle/constants";
 export const stealthRouter = createTRPCRouter({
   
   // Activate stealth mode
-  activateStealth: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
-    // Query
-    const { user } = await fetchUpdatedUser({
-      client: ctx.drizzle,
-      userId: ctx.userId,
-    });
+  activateStealth: protectedProcedure
+    .output(
+      baseServerResponse.extend({
+        data: activateStealthDataSchema.optional(),
+      }),
+    )
+    .mutation(async ({ ctx }) => {
+      // Query
+      let { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
 
-    // Guard
-    if (!user) throw serverError("NOT_FOUND", "User not found");
-    if (user.status !== "AWAKE") return errorResponse("Must be awake to activate stealth");
-    if (user.stealthActive) return errorResponse("Stealth is already active");
-    if (!isStealthCooldownExpired(user.stealthCooldownAt)) {
-      const remaining = getRemainingStealthCooldown(user.stealthCooldownAt);
-      return errorResponse(
-        `Stealth is on cooldown for ${Math.ceil(remaining)} more seconds`,
-      );
-    }
+      // Guard
+      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (user.status !== "AWAKE") return errorResponse("Must be awake to activate stealth");
 
-    // Mutation
-    const result = await ctx.drizzle
-      .update(userData)
-      .set({
+      // Clean up expired stealth before the "already active" guard
+      if (user.stealthActive && isStealthExpired(user.stealthActivatedAt, user.stealth)) {
+        user = { ...user, stealthActive: false, stealthActivatedAt: null };
+      }
+
+      if (user.stealthActive) return errorResponse("Stealth is already active");
+      if (!isStealthCooldownExpired(user.stealthCooldownAt)) {
+        const remaining = getRemainingStealthCooldown(user.stealthCooldownAt);
+        return errorResponse(
+          `Stealth is on cooldown for ${Math.ceil(remaining)} more seconds`,
+        );
+      }
+
+      // Derived
+      const stealthActivatedAt = new Date();
+
+      // Mutation
+      const result = await ctx.drizzle
+        .update(userData)
+        .set({
+          stealthActive: true,
+          stealthActivatedAt,
+        })
+        .where(
+          eq(userData.userId, ctx.userId)
+        );
+
+      if (result.rowsAffected === 0) {
+        return errorResponse("Failed to activate stealth");
+      }
+
+      // Broadcast with stealthActive: true so other clients remove this user from their map
+      void updateUserOnMap(pusher, user.sector, {
+        userId: user.userId,
+        sector: user.sector,
+        longitude: user.longitude,
+        latitude: user.latitude,
+        username: user.username,
+        avatar: user.avatar,
+        avatarLight: user.avatarLight,
+        location: user.location,
+        villageId: user.villageId,
+        battleId: user.battleId,
+        level: user.level,
+        status: user.status,
         stealthActive: true,
-        stealthActivatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(userData.userId, ctx.userId),
-          eq(userData.stealthActive, false),
-          eq(userData.status, "AWAKE"),
-        ),
-      );
+      });
 
-    if (result.rowsAffected === 0) {
-      return errorResponse("Failed to activate stealth");
-    }
-
-    // Broadcast with stealthActive: true so other clients remove this user from their map
-    void updateUserOnMap(pusher, user.sector, {
-      userId: user.userId,
-      sector: user.sector,
-      longitude: user.longitude,
-      latitude: user.latitude,
-      username: user.username,
-      avatar: user.avatar,
-      avatarLight: user.avatarLight,
-      location: user.location,
-      villageId: user.villageId,
-      battleId: user.battleId,
-      level: user.level,
-      status: user.status,
-      stealthActive: true,
-    });
-
-    const duration = calcStealthDuration(user.stealth);
-    return {
-      success: true,
-      message: `Stealth activated for ${Math.floor(duration / 60)} minutes`,
-    };
-  }),
+      const duration = calcStealthDuration(user.stealth);
+      return {
+        success: true,
+        message: `Stealth activated for ${Math.floor(duration / 60)} minutes`,
+        data: { stealthActivatedAt },
+      };
+    }),
 
   // Deactivate stealth mode
   deactivateStealth: protectedProcedure
@@ -200,12 +214,13 @@ export const stealthRouter = createTRPCRouter({
         }
       }
       const detectedUserIds = detectedUsers.map((u) => u.userId);
+      const lastSensoryAt = new Date();
 
       // Mutation
       const updates: Promise<unknown>[] = [
         ctx.drizzle
           .update(userData)
-          .set({ lastSensoryAt: new Date() })
+          .set({ lastSensoryAt })
           .where(eq(userData.userId, ctx.userId)),
       ];
 
@@ -263,6 +278,7 @@ export const stealthRouter = createTRPCRouter({
             longitude: u.longitude,
             latitude: u.latitude,
           })),
+          lastSensoryAt,
         },
       };
     }),

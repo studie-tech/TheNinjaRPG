@@ -83,15 +83,18 @@ export const calcSensoryCooldown = (sensoryStat: number): number => {
 
 /**
  * Check if stealth has expired based on activation time and stat
+ * @param timeDiff - Optional time difference between server and client clocks
  */
 export const isStealthExpired = (
   stealthActivatedAt: Date | null,
   stealthStat: number,
+  timeDiff: number = 0,
 ): boolean => {
   if (!stealthActivatedAt) return true;
 
   const maxDuration = calcStealthDuration(stealthStat);
-  const elapsedSeconds = (Date.now() - stealthActivatedAt.getTime()) / 1000;
+  const syncedNow = Date.now() - timeDiff;
+  const elapsedSeconds = (syncedNow - stealthActivatedAt.getTime()) / 1000;
 
   return elapsedSeconds >= maxDuration;
 };
@@ -118,35 +121,49 @@ export const rollSensoryDetection = (sensoryStat: number): boolean => {
 
 /**
  * Check if sensory is off cooldown
+ * @param timeDiff - Optional time difference between server and client clocks
  */
-export const isSensoryReady = (lastSensoryAt: Date | null, sensoryStat: number): boolean => {
+export const isSensoryReady = (
+  lastSensoryAt: Date | null,
+  sensoryStat: number,
+  timeDiff: number = 0,
+): boolean => {
   if (!lastSensoryAt) return true;
 
   const cooldown = calcSensoryCooldown(sensoryStat);
-  const elapsedSeconds = (Date.now() - lastSensoryAt.getTime()) / 1000;
+  const syncedNow = Date.now() - timeDiff;
+  const elapsedSeconds = (syncedNow - lastSensoryAt.getTime()) / 1000;
 
   return elapsedSeconds >= cooldown;
 };
 
 /**
  * Check if stealth cooldown has expired (after combat)
+ * @param timeDiff - Optional time difference between server and client clocks
  */
-export const isStealthCooldownExpired = (stealthCooldownAt: Date | null): boolean => {
+export const isStealthCooldownExpired = (
+  stealthCooldownAt: Date | null,
+  timeDiff: number = 0,
+): boolean => {
   if (!stealthCooldownAt) return true;
-  return Date.now() >= stealthCooldownAt.getTime();
+  const syncedNow = Date.now() - timeDiff;
+  return syncedNow >= stealthCooldownAt.getTime();
 };
 
 /**
  * Get remaining stealth duration in seconds
+ * @param timeDiff - Optional time difference between server and client clocks
  */
 export const getRemainingStealthDuration = (
   stealthActivatedAt: Date | null,
   stealthStat: number,
+  timeDiff: number = 0,
 ): number => {
   if (!stealthActivatedAt) return 0;
 
   const maxDuration = calcStealthDuration(stealthStat);
-  const elapsedSeconds = (Date.now() - stealthActivatedAt.getTime()) / 1000;
+  const syncedNow = Date.now() - timeDiff;
+  const elapsedSeconds = (syncedNow - stealthActivatedAt.getTime()) / 1000;
   const remaining = maxDuration - elapsedSeconds;
 
   return Math.max(remaining, 0);
@@ -154,15 +171,18 @@ export const getRemainingStealthDuration = (
 
 /**
  * Get remaining sensory cooldown in seconds
+ * @param timeDiff - Optional time difference between server and client clocks
  */
 export const getRemainingSensoryCooldown = (
   lastSensoryAt: Date | null,
   sensoryStat: number,
+  timeDiff: number = 0,
 ): number => {
   if (!lastSensoryAt) return 0;
 
   const cooldown = calcSensoryCooldown(sensoryStat);
-  const elapsedSeconds = (Date.now() - lastSensoryAt.getTime()) / 1000;
+  const syncedNow = Date.now() - timeDiff;
+  const elapsedSeconds = (syncedNow - lastSensoryAt.getTime()) / 1000;
   const remaining = cooldown - elapsedSeconds;
 
   return Math.max(remaining, 0);
@@ -170,27 +190,36 @@ export const getRemainingSensoryCooldown = (
 
 /**
  * Get remaining stealth cooldown in seconds (after combat)
+ * @param timeDiff - Optional time difference between server and client clocks
  */
-export const getRemainingStealthCooldown = (stealthCooldownAt: Date | null): number => {
+export const getRemainingStealthCooldown = (
+  stealthCooldownAt: Date | null,
+  timeDiff: number = 0,
+): number => {
   if (!stealthCooldownAt) return 0;
 
-  const remaining = (stealthCooldownAt.getTime() - Date.now()) / 1000;
+  const syncedNow = Date.now() - timeDiff;
+  const remaining = (stealthCooldownAt.getTime() - syncedNow) / 1000;
   return Math.max(remaining, 0);
 };
 
 /**
  * Check if a user is currently stealthed (active and not expired)
  * Convenience function that combines stealthActive check with expiration check
+ * @param timeDiff - Optional time difference between server and client clocks
  */
-export const isUserCurrentlyStealthed = (user: {
-  stealthActive: boolean;
-  stealthActivatedAt: Date | null;
-  stealth: number;
-}): boolean => {
+export const isUserCurrentlyStealthed = (
+  user: {
+    stealthActive: boolean;
+    stealthActivatedAt: Date | null;
+    stealth: number;
+  },
+  timeDiff: number = 0,
+): boolean => {
   return (
     user.stealthActive &&
     user.stealthActivatedAt !== null &&
-    !isStealthExpired(user.stealthActivatedAt, user.stealth)
+    !isStealthExpired(user.stealthActivatedAt, user.stealth, timeDiff)
   );
 };
 
@@ -215,12 +244,13 @@ export const calcCovertTrainingGain = (
   gainPerMinute: number,
 ): number => {
   const rawGain = minutes * gainPerMinute;
-  return Math.min(rawGain, cap - currentStat);
+  return Math.max(0, Math.min(rawGain, cap - currentStat));
 };
 
 /**
  * Derive all stealth status values from user data.
  * This is a pure function that computes all stealth-related UI values.
+ * @param timeDiff - Optional time difference between server and client clocks
  */
 export const getStealthStatus = (
   userData:
@@ -239,6 +269,7 @@ export const getStealthStatus = (
     | null,
   cap: number,
   gainPerMinute: number,
+  timeDiff: number = 0,
 ) => {
   if (!userData) return undefined;
 
@@ -261,19 +292,24 @@ export const getStealthStatus = (
     stealth: userData.stealth,
     sensory: userData.sensory,
     stealthActive: userData.stealthActive,
-    isCurrentlyStealthed: isUserCurrentlyStealthed(userData),
+    isCurrentlyStealthed: isUserCurrentlyStealthed(userData, timeDiff),
     stealthDurationMax: calcStealthDuration(userData.stealth),
     stealthDurationRemaining: getRemainingStealthDuration(
       userData.stealthActivatedAt,
       userData.stealth,
+      timeDiff,
     ),
     stealthKeepChance: calcStealthKeepChance(userData.stealth),
-    stealthCooldownRemaining: getRemainingStealthCooldown(userData.stealthCooldownAt),
+    stealthCooldownRemaining: getRemainingStealthCooldown(
+      userData.stealthCooldownAt,
+      timeDiff,
+    ),
     sensoryDetectChance: calcSensoryDetectChance(userData.sensory),
     sensoryCooldown: calcSensoryCooldown(userData.sensory),
     sensoryCooldownRemaining: getRemainingSensoryCooldown(
       userData.lastSensoryAt,
       userData.sensory,
+      timeDiff,
     ),
     covertTrainingType: userData.covertTrainingType,
     covertTrainingFinishAt,

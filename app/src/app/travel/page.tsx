@@ -259,6 +259,7 @@ export default function Travel() {
     userData,
     STEALTH_SENSORY_CAP,
     STEALTH_TRAIN_GAIN_PER_MINUTE,
+    timeDiff,
   );
 
   // Live countdown hooks for stealth/sensory cooldowns
@@ -270,8 +271,11 @@ export default function Travel() {
     api.stealth.activateStealth.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        if (data.success) {
-          await updateUser({ stealthActive: true, stealthActivatedAt: new Date() });
+        if (data.success && data.data) {
+          await updateUser({
+            stealthActive: true,
+            stealthActivatedAt: data.data.stealthActivatedAt,
+          });
         }
       },
     });
@@ -290,8 +294,8 @@ export default function Travel() {
     api.stealth.useSensory.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        if (data.success) {
-          await updateUser({ lastSensoryAt: new Date() });
+        if (data.success && data.data) {
+          await updateUser({ lastSensoryAt: data.data.lastSensoryAt });
           await utils.travel.getSectorData.invalidate();
         }
       },

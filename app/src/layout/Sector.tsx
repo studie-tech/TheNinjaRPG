@@ -66,6 +66,7 @@ import type { TerrainHex } from "@/libs/hexgrid";
 import type { VillageStructure } from "@/drizzle/schema";
 import { createGenericStructure } from "@/libs/threejs/sector";
 import { hasRequiredRank } from "@/libs/train";
+import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import HealingPopover from "@/layout/HealingPopover";
 
 interface SectorProps {
@@ -244,7 +245,8 @@ const Sector: React.FC<SectorProps> = (props) => {
       if (users.current) {
         // Filter out stealthed users (defense in depth - server should already filter these)
         // Only filter if it's not the current user (user should always see themselves)
-        if (data.stealthActive && data.userId !== userData?.userId) {
+        // Uses isUserCurrentlyStealthed to check expiry, mirroring server-side logic
+        if (isUserCurrentlyStealthed(data) && data.userId !== userData?.userId) {
           // Remove from local users list if they went stealth
           const idx = users.current.findIndex((u) => u.userId === data.userId);
           if (idx !== -1) {

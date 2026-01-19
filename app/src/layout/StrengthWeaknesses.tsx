@@ -479,16 +479,21 @@ export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
     userData,
     STEALTH_SENSORY_CAP,
     STEALTH_TRAIN_GAIN_PER_MINUTE,
+    timeDiff,
   );
 
   // Training mutation
   const { mutate: trainCovert, isPending: isTrainingCovert } =
     api.stealth.trainCovert.useMutation({
       onSuccess: async (data, variables) => {
-        if (data.success) {
+        if (data.success && data.data) {
+          // Derive start time from server-provided finish time to avoid clock-skew issues
+          const covertTrainingStartedAt = new Date(
+            data.data.covertTrainingFinishAt.getTime() - variables.minutes * 60_000,
+          );
           await updateUser({
             covertTrainingType: variables.type,
-            covertTrainingStartedAt: new Date(),
+            covertTrainingStartedAt,
             covertTrainingMinutes: variables.minutes,
           });
         } else {
