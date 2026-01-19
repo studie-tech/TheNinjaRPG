@@ -2289,3 +2289,26 @@ export const TD_DAMAGE_NUMBER_RISE_SPEED_FACTOR = 0.48; // relative to hexWidth
 export const TD_SHURIKEN_IMAGE_URL =
   "https://uploadthing.b-cdn.net/f/4a3100e5-97c6-4e5a-96e2-1c3520838179-gwm3dh.svg";
 export const TD_HEX_SIZE = 100;
+
+// ============================================
+// Stealth & Sensory System Constants
+// ============================================
+export const STEALTH_SENSORY_CAP = 20000;
+export const STEALTH_SENSORY_DEFAULT = 1000;
+export const STEALTH_BASE_DURATION_SECONDS = 60; // 1 minute base
+export const STEALTH_DURATION_PER_1000_POINTS = 60; // +1 minute per 1000 points
+export const STEALTH_MAX_DURATION_SECONDS = 1200; // 20 minutes cap
+export const STEALTH_BASE_KEEP_CHANCE_PERC = 5; // 5% base chance to keep stealth on action
+export const STEALTH_KEEP_CHANCE_PER_1000_POINTS = 2.75; // +2.75% per 1000 points
+export const STEALTH_POST_COMBAT_COOLDOWN_SECONDS = 20; // 20 second cooldown after combat
+export const SENSORY_BASE_DETECT_CHANCE_PERC = 5; // 5% base detection chance
+export const SENSORY_DETECT_CHANCE_PER_1000_POINTS = 2.75; // +2.75% per 1000 points
+export const SENSORY_MAX_DETECT_CHANCE_PERC = 60; // 60% max detection chance
+export const SENSORY_BASE_COOLDOWN_SECONDS = 120; // 2 minute base cooldown
+export const SENSORY_COOLDOWN_REDUCTION_PER_1000_POINTS = 5; // -5 seconds per 1000 points
+export const SENSORY_DETECTION_DURATION_SECONDS = 30; // Detection lasts 30 seconds
+export const STEALTH_TRAIN_GAIN_PER_MINUTE = 50; // Training gain per minute
+
+// Covert training types enum
+export const CovertTrainingTypes = ["stealth", "sensory"] as const;
+export type CovertTrainingType = (typeof CovertTrainingTypes)[number];

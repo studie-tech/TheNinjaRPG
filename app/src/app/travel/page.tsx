@@ -16,6 +16,9 @@ import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import AutoAttackModal from "@/layout/AutoAttackModal";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useLiveCountdown } from "@/hooks/useLiveCountdown";
+import { getStealthStatus } from "@/libs/stealth";
+import { STEALTH_SENSORY_CAP, STEALTH_TRAIN_GAIN_PER_MINUTE } from "@/drizzle/constants";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAwake } from "@/utils/routing";
 import {
@@ -28,6 +31,8 @@ import {
   Cookie,
   Zap,
   ZapOff,
+  Ghost,
+  Radar,
 } from "lucide-react";
 import { HousePlus } from "lucide-react";
 import { api } from "@/app/_trpc/client";
@@ -249,6 +254,49 @@ export default function Travel() {
     },
   });
 
+  // Stealth and sensory - derived from userData
+  const stealthStatus = getStealthStatus(
+    userData,
+    STEALTH_SENSORY_CAP,
+    STEALTH_TRAIN_GAIN_PER_MINUTE,
+  );
+
+  // Live countdown hooks for stealth/sensory cooldowns
+  const sensoryCooldown = useLiveCountdown(stealthStatus?.sensoryCooldownRemaining);
+  const stealthCooldown = useLiveCountdown(stealthStatus?.stealthCooldownRemaining);
+  const stealthDuration = useLiveCountdown(stealthStatus?.stealthDurationRemaining);
+
+  const { mutate: activateStealth, isPending: isActivatingStealth } =
+    api.stealth.activateStealth.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await updateUser({ stealthActive: true, stealthActivatedAt: new Date() });
+        }
+      },
+    });
+
+  const { mutate: deactivateStealth, isPending: isDeactivatingStealth } =
+    api.stealth.deactivateStealth.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await updateUser({ stealthActive: false, stealthActivatedAt: null });
+        }
+      },
+    });
+
+  const { mutate: scanSensory, isPending: isScanningSensory } =
+    api.stealth.useSensory.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await updateUser({ lastSensoryAt: new Date() });
+          await utils.travel.getSectorData.invalidate();
+        }
+      },
+    });
+
   // Convenience for starting global move
   const initiateGlobalMoveStart = (sector: number) => {
     // Guards against global movement
@@ -370,6 +418,64 @@ export default function Travel() {
                     )}
                   </>
                 )}
+                {/* Stealth Toggle */}
+                <TooltipProvider delayDuration={50}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Ghost
+                        className={`h-7 w-7 mr-2 ${
+                          stealthStatus?.isCurrentlyStealthed
+                            ? "text-purple-500"
+                            : stealthCooldown > 0
+                              ? "text-gray-400 cursor-not-allowed"
+                              : "hover:text-purple-500"
+                        }`}
+                        onClick={() => {
+                          if (isActivatingStealth || isDeactivatingStealth) return;
+                          if (stealthStatus?.isCurrentlyStealthed) {
+                            deactivateStealth();
+                          } else if (stealthCooldown <= 0) {
+                            activateStealth();
+                          }
+                        }}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {stealthStatus?.isCurrentlyStealthed
+                        ? `Stealth Active (${Math.ceil(stealthDuration)}s remaining)`
+                        : stealthCooldown > 0
+                          ? `Stealth Cooldown (${Math.ceil(stealthCooldown)}s)`
+                          : "Activate Stealth"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                {/* Sensory Scan */}
+                <TooltipProvider delayDuration={50}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Radar
+                        className={`h-7 w-7 mr-2 ${
+                          sensoryCooldown > 0
+                            ? "text-gray-400 cursor-not-allowed"
+                            : "hover:text-blue-500"
+                        }`}
+                        onClick={() => {
+                          if (isScanningSensory) return;
+                          if (sensoryCooldown <= 0) {
+                            if (currentSector !== undefined) {
+                              scanSensory({ sector: currentSector });
+                            }
+                          }
+                        }}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {sensoryCooldown > 0
+                        ? `Sensory Cooldown (${Math.ceil(sensoryCooldown)}s)`
+                        : `Scan for Hidden Enemies (${(stealthStatus?.sensoryDetectChance ?? 5).toFixed(0)}% chance)`}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 {showActive ? (
                   <Eye
                     className={`h-7 w-7 mr-2 text-orange-500`}

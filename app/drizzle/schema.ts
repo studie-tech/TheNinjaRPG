@@ -2079,6 +2079,17 @@ export const userData = mysqlTable(
     towerDefensePoints: int("towerDefensePoints").default(0).notNull(),
     occupation: mysqlEnum("occupation", consts.OCCUPATIONS),
     occupationSignupAt: datetime("occupationSignupAt", { mode: "date", fsp: 3 }),
+    // Stealth & Sensory stats
+    stealth: double("stealth").default(consts.STEALTH_SENSORY_DEFAULT).notNull(),
+    sensory: double("sensory").default(consts.STEALTH_SENSORY_DEFAULT).notNull(),
+    stealthActive: boolean("stealthActive").default(false).notNull(),
+    stealthActivatedAt: datetime("stealthActivatedAt", { mode: "date", fsp: 3 }),
+    stealthCooldownAt: datetime("stealthCooldownAt", { mode: "date", fsp: 3 }),
+    lastSensoryAt: datetime("lastSensoryAt", { mode: "date", fsp: 3 }),
+    // Covert training (timer-based like jutsu training)
+    covertTrainingType: mysqlEnum("covertTrainingType", consts.CovertTrainingTypes),
+    covertTrainingStartedAt: datetime("covertTrainingStartedAt", { mode: "date", fsp: 3 }),
+    covertTrainingMinutes: smallint("covertTrainingMinutes", { unsigned: true }),
   },
   (table) => {
     return {
@@ -2112,6 +2123,10 @@ export const userData = mysqlTable(
       battleIdIdx: index("UserData_battleId_idx").on(table.battleId),
       statusIdx: index("UserData_status_idx").on(table.status),
       sectorIdx: index("UserData_sector_idx").on(table.sector),
+      sectorStealthActiveIdx: index("UserData_sector_stealthActive_idx").on(
+        table.sector,
+        table.stealthActive,
+      ),
       senseiIdx: index("UserData_senseiId_idx").on(table.senseiId),
       latitudeIdx: index("UserData_latitude_idx").on(table.latitude),
       longitudeIdx: index("UserData_longitude_idx").on(table.longitude),

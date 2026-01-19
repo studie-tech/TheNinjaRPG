@@ -30,6 +30,8 @@ import {
   ANBU_STEALTH_BASE_CHANCE_PERC,
   ANBU_STEALTH_CHANGE_PER_LEVEL,
 } from "@/drizzle/constants";
+import { isUserCurrentlyStealthed } from "@/libs/stealth";
+import { breakStealth } from "@/routers/stealth";
 import { fetchSector } from "@/routers/village";
 import * as map from "@/data/hexasphere.json";
 import { UserStatuses } from "@/drizzle/constants";
@@ -144,6 +146,12 @@ export const travelRouter = createTRPCRouter({
 
       // 40% chance to rob successfully
       const success = Math.random() < ROBBING_SUCCESS_CHANCE;
+
+      // Handle stealth breaking when robbing (only if user is stealthed)
+      if (user.stealthActive) {
+        await breakStealth(ctx.drizzle, ctx.userId, user.stealth, false);
+      }
+
       if (success) {
         // Rob 30% of target's money
         const stolenAmount = Math.floor(target.money * ROBBING_STOLLEN_AMOUNT);
@@ -279,6 +287,9 @@ export const travelRouter = createTRPCRouter({
             villageId: true,
             battleId: true,
             anbuId: true,
+            stealthActive: true,
+            stealthActivatedAt: true,
+            stealth: true,
           },
           where: and(
             eq(userData.sector, user.sector),
@@ -327,18 +338,29 @@ export const travelRouter = createTRPCRouter({
         }),
       ]);
 
-      // Anonymize enemy ANBU squad members
-      const processedUsers = users.map((u) => {
-        if (u.anbuSquad && u.anbuSquad.villageId !== user.villageId) {
-          return {
-            ...u,
-            username: `ANBU Member`,
-            avatar: u.anbuSquad.image,
-            avatarLight: u.anbuSquad.image,
-          };
-        }
-        return u;
-      });
+      // Filter out stealthed players (unless it's the current user)
+      // Then anonymize enemy ANBU squad members
+      const processedUsers = users
+        .filter((u) => {
+          // Always show the current user
+          if (u.userId === ctx.userId) return true;
+          // Hide stealthed players from others (only if stealth hasn't expired)
+          if (isUserCurrentlyStealthed(u)) {
+            return false;
+          }
+          return true;
+        })
+        .map((u) => {
+          if (u.anbuSquad && u.anbuSquad.villageId !== user.villageId) {
+            return {
+              ...u,
+              username: `ANBU Member`,
+              avatar: u.anbuSquad.image,
+              avatarLight: u.anbuSquad.image,
+            };
+          }
+          return u;
+        });
 
       return { users: processedUsers, village: villageData, sectorData, warData };
     }),
@@ -388,7 +410,10 @@ export const travelRouter = createTRPCRouter({
         user.sector = input.sector;
         user.status = "TRAVEL";
         user.travelFinishAt = endTime;
-        void updateUserOnMap(pusher, user.sector, user);
+        // Only broadcast if user is NOT stealthed
+        if (!isUserCurrentlyStealthed(user)) {
+          void updateUserOnMap(pusher, user.sector, user);
+        }
         return {
           success: true,
           message: "OK",
@@ -419,7 +444,10 @@ export const travelRouter = createTRPCRouter({
       }
       user.status = "AWAKE";
       user.travelFinishAt = null;
-      void updateUserOnMap(pusher, user.sector, user);
+      // Only broadcast if user is NOT stealthed
+      if (!isUserCurrentlyStealthed(user)) {
+        void updateUserOnMap(pusher, user.sector, user);
+      }
       await ctx.drizzle
         .update(userData)
         .set({ status: "AWAKE", travelFinishAt: null })
@@ -580,13 +608,18 @@ export const travelRouter = createTRPCRouter({
         // Final output
         const output = { ...input, location, userId: userId, status: "AWAKE" as const };
 
-        void updateUserOnMap(pusher, input.sector, output);
+        // Only broadcast if user is NOT stealthed (to hide from other players)
+        if (!user || !isUserCurrentlyStealthed(user)) {
+          void updateUserOnMap(pusher, input.sector, output);
+        }
         return { success: true, message: "OK", data: output };
       } else {
         // Get the user data
         const user = await fetchUser(ctx.drizzle, userId);
-        // Force an update on the map of the real information
-        void updateUserOnMap(pusher, user.sector, user);
+        // Force an update on the map of the real information (only if not stealthed)
+        if (!isUserCurrentlyStealthed(user)) {
+          void updateUserOnMap(pusher, user.sector, user);
+        }
         // Figure out return message
         if (user.status !== "AWAKE") {
           return errorResponse(`Status is: ${user.status.toLowerCase()}`);

@@ -1,6 +1,10 @@
 import { nanoid } from "nanoid";
 import { eq, and, or, sql, lt, gte, inArray, isNull } from "drizzle-orm";
-import { HOSPITAL_LONG, HOSPITAL_LAT } from "@/drizzle/constants";
+import {
+  HOSPITAL_LONG,
+  HOSPITAL_LAT,
+  STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
+} from "@/drizzle/constants";
 import {
   battle,
   battleAction,
@@ -1156,6 +1160,10 @@ export const updateUser = async (
                     : sql`immunityUntil`,
               }
             : { status: "AWAKE" }),
+          // Deactivate stealth and set cooldown after leaving combat (20 seconds)
+          stealthActive: false,
+          stealthActivatedAt: null,
+          stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
         })
         .where(eq(userData.userId, userId)),
       // Handle dropped items transfer if present on result. Currently only AI have droppable items, so no need to delete from loser

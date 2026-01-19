@@ -15,7 +15,7 @@ import { Label } from "src/components/ui/label";
 import { z } from "zod";
 import { useLocalStorage, safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { Vector2, OrthographicCamera, Group } from "three";
 import { api } from "@/app/_trpc/client";
 import { useRouter } from "next/navigation";
@@ -242,6 +242,20 @@ const Sector: React.FC<SectorProps> = (props) => {
   ) => {
     if (data.userId) {
       if (users.current) {
+        // Filter out stealthed users (defense in depth - server should already filter these)
+        // Only filter if it's not the current user (user should always see themselves)
+        if (data.stealthActive && data.userId !== userData?.userId) {
+          // Remove from local users list if they went stealth
+          const idx = users.current.findIndex((u) => u.userId === data.userId);
+          if (idx !== -1) {
+            users.current.splice(idx, 1);
+            if (!skipStateUpdate) {
+              setSorrounding(users.current.filter((u) => u?.userId) || []);
+            }
+          }
+          return;
+        }
+
         const allianceStatus = getAllyStatus(userData?.village, data.villageId);
         const idx = users.current
           .filter((u) => u.userId)
@@ -1157,13 +1171,13 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   const {
     register,
     setValue,
-    watch,
+    control,
     formState: { errors },
   } = useForm<LevelSliderSchema>({
     resolver: zodResolver(levelSliderSchema),
     defaultValues: { value: storedLvl || 1 },
   });
-  const watchedLevel = round(watch("value", 2));
+  const watchedLevel = round(useWatch({ control, name: "value", defaultValue: 2 }));
 
   // Filter users
   const users = props.users

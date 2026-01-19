@@ -43,6 +43,7 @@ import {
 } from "@/drizzle/constants";
 import { NonActionItemTypes, DURABILITY_USABILITY_THR } from "@/drizzle/constants";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
+import { rollStealthKeep } from "@/libs/stealth";
 import {
   calcBattleResult,
   maskBattle,
@@ -1903,6 +1904,27 @@ export const initiateBattle = async (
   ];
   const expectedRows = allParticipantIds.length;
 
+  // Handle stealth breaking for combat
+  // Defenders always have stealth broken (force break)
+  // Attackers roll to keep stealth based on their stealth stat
+  const stealthBreakUserIds: string[] = [];
+
+  // Defenders always lose stealth
+  if (!AutoBattleTypes.includes(battleType)) {
+    stealthBreakUserIds.push(...targetIds);
+  }
+
+  // Attackers roll to see if they keep stealth
+  for (const userId of userIds) {
+    const user = users.find((u) => u.userId === userId);
+    if (user?.stealthActive) {
+      const keepStealth = rollStealthKeep(user.stealth);
+      if (!keepStealth) {
+        stealthBreakUserIds.push(userId);
+      }
+    }
+  }
+
   // Run battle creation and user status updates in parallel for performance
   const [, , userResult] = await Promise.all([
     client.insert(battle).values({
@@ -1960,6 +1982,17 @@ export const initiateBattle = async (
         immunityUntil: ["SPARRING", "COMBAT"].includes(battleType)
           ? sql`CASE WHEN ${inArray(userData.userId, userIds)} THEN NOW() ELSE ${userData.immunityUntil} END`
           : sql`immunityUntil`,
+        // Break stealth when entering combat
+        // Defenders (being attacked) always lose stealth
+        // Attackers roll to keep stealth based on their stealth stat
+        stealthActive:
+          stealthBreakUserIds.length > 0
+            ? sql`CASE WHEN userId IN (${stealthBreakUserIds.map((id) => `"${id}"`).join(", ")}) THEN false ELSE stealthActive END`
+            : sql`stealthActive`,
+        stealthActivatedAt:
+          stealthBreakUserIds.length > 0
+            ? sql`CASE WHEN userId IN (${stealthBreakUserIds.map((id) => `"${id}"`).join(", ")}) THEN NULL ELSE stealthActivatedAt END`
+            : sql`stealthActivatedAt`,
       })
       .where(
         and(

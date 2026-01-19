@@ -2297,6 +2297,13 @@
       "when": 1737244800000,
       "tag": "0327_dual_shrine_hp",
       "breakpoints": false
+    },
+    {
+      "idx": 328,
+      "version": "5",
+      "when": 1768834430187,
+      "tag": "0328_tired_wraith",
+      "breakpoints": false
     }
   ]
 }

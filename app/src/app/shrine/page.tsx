@@ -152,34 +152,34 @@ export default function Shrine() {
       (war) =>
         war.attackerVillageId === userData.villageId ||
         war.defenderVillageId === userData.villageId ||
-        war.warAllies.some((wa) => wa.villageId === userData.villageId),
+        (war.warAllies?.some((wa) => wa.villageId === userData.villageId) ?? false),
     ) ?? [];
   const competingWars =
     activeWars?.filter(
       (war) =>
         war.attackerVillageId !== userData.villageId &&
         war.defenderVillageId !== userData.villageId &&
-        !war.warAllies.some((wa) => wa.villageId === userData.villageId),
+        !(war.warAllies?.some((wa) => wa.villageId === userData.villageId) ?? false),
     ) ?? [];
 
   // Check if user is an attacker in any of their wars (for Team Battle tab)
   const userIsAttacker = userWars.some(
     (war) =>
       war.attackerVillageId === userData.villageId ||
-      war.warAllies.some(
+      (war.warAllies?.some(
         (wa) =>
           wa.villageId === userData.villageId &&
           wa.supportVillageId === war.attackerVillageId,
-      ),
+      ) ?? false),
   );
   const userIsDefender = userWars.some(
     (war) =>
       war.defenderVillageId === userData.villageId ||
-      war.warAllies.some(
+      (war.warAllies?.some(
         (wa) =>
           wa.villageId === userData.villageId &&
           wa.supportVillageId === war.defenderVillageId,
-      ),
+      ) ?? false),
   );
 
   const hasNoActiveWars = !activeWars || activeWars.length === 0;

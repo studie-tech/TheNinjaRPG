@@ -1,0 +1,10 @@
+ALTER TABLE `UserData` ADD `stealth` double DEFAULT 1000 NOT NULL;
+ALTER TABLE `UserData` ADD `sensory` double DEFAULT 1000 NOT NULL;
+ALTER TABLE `UserData` ADD `stealthActive` boolean DEFAULT false NOT NULL;
+ALTER TABLE `UserData` ADD `stealthActivatedAt` datetime(3);
+ALTER TABLE `UserData` ADD `stealthCooldownAt` datetime(3);
+ALTER TABLE `UserData` ADD `lastSensoryAt` datetime(3);
+ALTER TABLE `UserData` ADD `covertTrainingType` enum('stealth','sensory');
+ALTER TABLE `UserData` ADD `covertTrainingStartedAt` datetime(3);
+ALTER TABLE `UserData` ADD `covertTrainingMinutes` smallint unsigned;
+CREATE INDEX `UserData_sector_stealthActive_idx` ON `UserData` (`sector`,`stealthActive`);

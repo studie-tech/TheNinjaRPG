@@ -200,6 +200,7 @@
     "require-in-the-middle": "7.5.2",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
-    "eslint-plugin-react-hooks": "5.2.0"
+    "eslint-plugin-react-hooks": "5.2.0",
+    "zod-to-json-schema": "3.24.1"
   }
 }

@@ -5,10 +5,17 @@ import ContentBox from "@/layout/ContentBox";
 import NavTabs from "@/layout/NavTabs";
 import ElementImage from "@/layout/ElementImage";
 import SkillTreeGraph from "@/layout/SkillTreeGraph";
-import { CircleHelp } from "lucide-react";
+import Countdown from "@/layout/Countdown";
+import { CircleHelp, Eye, Lock, Search, Timer, XCircle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { UserRolesWithSkillTreeAccess } from "@/drizzle/constants";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import {
+  UserRolesWithSkillTreeAccess,
+  STEALTH_SENSORY_CAP,
+  STEALTH_SENSORY_DEFAULT,
+} from "@/drizzle/constants";
 import { capUserStats } from "@/libs/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { Chart as ChartJS } from "chart.js/auto";
@@ -16,12 +23,14 @@ import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { getUserElements } from "@/validators/user";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
+import { getStealthStatus } from "@/libs/stealth";
+import { STEALTH_TRAIN_GAIN_PER_MINUTE } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 
 // Main StrengthWeaknesses Component
 const StrengthWeaknesses: React.FC = () => {
   // Nav tabs
-  const tabOptions = ["Stats", "Graphs", "Skills"];
+  const tabOptions = ["Stats", "Graphs", "Skills", "Covert"];
 
   // State
   type TabOptions = (typeof tabOptions)[number];
@@ -101,6 +110,7 @@ const StrengthWeaknesses: React.FC = () => {
       {currentTab === "Stats" && userData && <StatsTab userData={userData} />}
       {currentTab === "Graphs" && userData && <GraphsTab userData={userData} />}
       {currentTab === "Skills" && userData && <SkillsTab userData={userData} />}
+      {currentTab === "Covert" && userData && <CovertTab userData={userData} />}
     </ContentBox>
   );
 };
@@ -410,7 +420,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   if (!hasSkillTreeAccess) {
     return (
       <div className="text-center py-8">
-        <div className="text-6xl mb-4">🔒</div>
+        <Lock className="h-16 w-16 mx-auto mb-4" />
         <h3 className="text-xl font-semibold mb-2">Skill Tree Locked</h3>
         <div className="text-gray-600">
           Reach <Badge variant="secondary">Chunin</Badge> rank to unlock the skill tree
@@ -452,6 +462,244 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
         />
       </div>
     </>
+  );
+};
+
+// CovertTab Component - For Stealth and Sensory Training
+interface CovertTabProps {
+  userData: NonNullable<UserWithRelations>;
+}
+
+export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
+  // tRPC utils for invalidating queries after mutations
+  const { timeDiff, updateUser } = useRequiredUserData();
+
+  // Stealth status derived from userData
+  const stealthStatus = getStealthStatus(
+    userData,
+    STEALTH_SENSORY_CAP,
+    STEALTH_TRAIN_GAIN_PER_MINUTE,
+  );
+
+  // Training mutation
+  const { mutate: trainCovert, isPending: isTrainingCovert } =
+    api.stealth.trainCovert.useMutation({
+      onSuccess: async (data, variables) => {
+        if (data.success) {
+          await updateUser({
+            covertTrainingType: variables.type,
+            covertTrainingStartedAt: new Date(),
+            covertTrainingMinutes: variables.minutes,
+          });
+        } else {
+          showMutationToast(data);
+        }
+      },
+    });
+
+  const { mutate: stopTraining, isPending: isStoppingTraining } =
+    api.stealth.stopCovertTraining.useMutation({
+      onSuccess: async (data) => {        
+        if (data.success && data.data) {
+          const statUpdate =
+            stealthStatus?.covertTrainingType === "stealth"
+              ? { stealth: data.data.newValue }
+              : { sensory: data.data.newValue };
+          await updateUser({
+            covertTrainingType: null,
+            covertTrainingStartedAt: null,
+            covertTrainingMinutes: null,
+            ...statUpdate,
+          });
+        } else {
+          showMutationToast(data);
+        }
+      },
+    });
+
+  const { mutate: cancelTraining, isPending: isCancellingTraining } =
+    api.stealth.cancelCovertTraining.useMutation({
+      onSuccess: async (data) => {
+        if (data.success) {
+          await updateUser({
+            covertTrainingType: null,
+            covertTrainingStartedAt: null,
+            covertTrainingMinutes: null,
+          });
+        } else {
+          showMutationToast(data);
+        }
+      },
+    });
+
+  const stealthProgress =
+    ((stealthStatus?.stealth ?? STEALTH_SENSORY_DEFAULT) / STEALTH_SENSORY_CAP) * 100;
+  const sensoryProgress =
+    ((stealthStatus?.sensory ?? STEALTH_SENSORY_DEFAULT) / STEALTH_SENSORY_CAP) * 100;
+
+  // Check if currently training
+  const isTraining = !!stealthStatus?.covertTrainingType;
+  const trainingType = stealthStatus?.covertTrainingType;
+  const trainingFinishAt = stealthStatus?.covertTrainingFinishAt;
+  const trainingGain = stealthStatus?.covertTrainingGain;
+
+  return (
+    <div className="space-y-6">
+      {/* Header Info */}
+      <div className="text-sm text-gray-600">
+        Train your covert operations skills to become more effective at stealth and
+        detection.
+      </div>
+
+      {/* Training Overlay - shown when training is in progress */}
+      {isTraining && trainingFinishAt && (
+        <div className="relative border rounded-lg p-6 bg-background">
+          <div className="flex flex-col items-center justify-center text-center space-y-4">
+            <div className="text-lg font-semibold">
+              Training {trainingType === "stealth" ? "Stealth" : "Sensory"}
+            </div>
+            <div className="text-3xl font-bold">
+              <Countdown targetDate={trainingFinishAt} timeDiff={timeDiff} />
+            </div>
+            {trainingGain && (
+              <div className="text-sm text-muted-foreground">
+                Expected gain: +{trainingGain.toFixed(0)} points
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button onClick={() => stopTraining()} disabled={isStoppingTraining}>
+                {isStoppingTraining ? "Collecting..." : "Collect Reward"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => cancelTraining()}
+                disabled={isCancellingTraining}
+              >
+                <XCircle className="h-4 w-4 mr-1" />
+                {isCancellingTraining ? "Cancelling..." : "Cancel"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stealth Section - hidden when training */}
+      {!isTraining && (
+        <div className="border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Eye className="h-5 w-5 text-purple-600" />
+            <h3 className="font-bold text-lg">Stealth</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm">Progress</span>
+                <span className="text-sm font-medium">
+                  {Math.floor(
+                    stealthStatus?.stealth ?? STEALTH_SENSORY_DEFAULT,
+                  ).toLocaleString()}{" "}
+                  / {STEALTH_SENSORY_CAP.toLocaleString()}
+                </span>
+              </div>
+              <Progress value={stealthProgress} className="h-2" />
+              <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                <p>
+                  Duration:{" "}
+                  {Math.floor((stealthStatus?.stealthDurationMax ?? 60) / 60)} min
+                </p>
+                <p>
+                  Keep Chance: {(stealthStatus?.stealthKeepChance ?? 5).toFixed(1)}%
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={() => trainCovert({ type: "stealth", minutes: 10 })}
+                disabled={isTrainingCovert || stealthProgress >= 100}
+                className="w-full"
+              >
+                <Timer className="h-4 w-4 mr-1" />
+                {isTrainingCovert ? "Starting..." : "Train 10 min"}
+              </Button>
+              <Button
+                onClick={() => trainCovert({ type: "stealth", minutes: 30 })}
+                disabled={isTrainingCovert || stealthProgress >= 100}
+                className="w-full"
+              >
+                <Timer className="h-4 w-4 mr-1" />
+                {isTrainingCovert ? "Starting..." : "Train 30 min"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sensory Section - hidden when training */}
+      {!isTraining && (
+        <div className="border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Search className="h-5 w-5 text-blue-600" />
+            <h3 className="font-bold text-lg">Sensory</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm">Progress</span>
+                <span className="text-sm font-medium">
+                  {Math.floor(
+                    stealthStatus?.sensory ?? STEALTH_SENSORY_DEFAULT,
+                  ).toLocaleString()}{" "}
+                  / {STEALTH_SENSORY_CAP.toLocaleString()}
+                </span>
+              </div>
+              <Progress value={sensoryProgress} className="h-2" />
+              <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                <p>
+                  Detection Chance:{" "}
+                  {(stealthStatus?.sensoryDetectChance ?? 5).toFixed(1)}%
+                </p>
+                <p>Cooldown: {Math.floor(stealthStatus?.sensoryCooldown ?? 120)} sec</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={() => trainCovert({ type: "sensory", minutes: 10 })}
+                disabled={isTrainingCovert || sensoryProgress >= 100}
+                className="w-full"
+              >
+                <Timer className="h-4 w-4 mr-1" />
+                {isTrainingCovert ? "Starting..." : "Train 10 min"}
+              </Button>
+              <Button
+                onClick={() => trainCovert({ type: "sensory", minutes: 30 })}
+                disabled={isTrainingCovert || sensoryProgress >= 100}
+                className="w-full"
+              >
+                <Timer className="h-4 w-4 mr-1" />
+                {isTrainingCovert ? "Starting..." : "Train 30 min"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Info Box */}
+      <div className="bg-muted border border-border rounded-lg p-4 text-sm">
+        <h4 className="font-bold mb-2">How Covert Operations Work</h4>
+        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+          <li>
+            <b>Stealth:</b> Go undetected in enemy territory. Higher stat = longer
+            duration and better chance to stay hidden when performing actions.
+          </li>
+          <li>
+            <b>Sensory:</b> Detect stealthed enemies. Higher stat = better detection
+            chance and shorter cooldown.
+          </li>
+          <li>Actions like attacking or robbing may break your stealth.</li>
+          <li>Being attacked will always break your stealth.</li>
+        </ul>
+      </div>
+    </div>
   );
 };
 
