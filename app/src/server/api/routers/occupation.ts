@@ -28,7 +28,7 @@ import { getNewTrackers } from "@/libs/quest";
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure.query(async ({ ctx }) => {
     return await ctx.drizzle.query.item.findMany({
-      where: eq(item.canBeCrafted, true),
+      where: sql`${item.canBeCrafted} = true AND ${item.hidden} = false`,
       with: {
         craftingRequirements: {
           with: {

@@ -1703,6 +1703,8 @@ export const IMG_MANUAL_BACKUP =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJctH7DQSnxBpQqGNDcTHbLmYz8uXAl3oa54ti";
 export const IMG_MANUAL_ITEM =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJb59vlYAtYUndMi56GkX19q0A4PzyeIloBrEa";
+export const IMG_MANUAL_CRAFTING_RECIPES =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrZmM8nhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx";
 export const IMG_MANUAL_AI =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuTQifZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
 export const IMG_MANUAL_STAFF =
