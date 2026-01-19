@@ -338,10 +338,15 @@ export const postProcessRewards = (rewards: ObjectiveRewardType) => {
     ...rewards,
     reward_items: rewardItems
       .filter((reward) => {
-        return Math.random() * 100 < reward.number;
+        // Use 'number' as drop chance (default 100 = guaranteed)
+        const dropChance = reward.number ?? 100;
+        return Math.random() * 100 < dropChance;
       })
-      .map((reward) => reward.ids)
-      .flat(),
+      .flatMap((reward) => {
+        // Use 'quantity' to repeat each item ID
+        const qty = Math.max(1, Math.floor(reward.quantity ?? 1));
+        return reward.ids.flatMap((id) => Array(qty).fill(id) as string[]);
+      }),
   };
 };
 export type PostProcessedRewards = ReturnType<typeof postProcessRewards>;

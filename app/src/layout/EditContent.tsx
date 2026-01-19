@@ -1231,13 +1231,15 @@ export const EditContent = <
                       control={form.control}
                       name={id}
                       render={({ field }) => {
-                        // Each entry: { opponentId: string, number: number }
-                        const valueArr: { ids: string[]; number: number }[] =
+                        // Each entry: { ids: string[], number: number, quantity?: number }
+                        const valueArr: { ids: string[]; number: number; quantity?: number }[] =
                           Array.isArray(field.value) ? field.value : [];
                         const options = (formEntry.values || []).map((v) => ({
                           label: v.name,
                           value: v.id,
                         }));
+                        // Check if this is a reward_items field (supports quantity)
+                        const isRewardItems = id === "reward_items";
                         return (
                           <FormItem className="flex flex-col py-4">
                             <FormLabel>{formEntry.label ?? id}</FormLabel>
@@ -1303,21 +1305,49 @@ export const EditContent = <
                                       </Command>
                                     </PopoverContent>
                                   </Popover>
-                                  {/* Number input */}
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    className="w-20"
-                                    value={entry.number}
-                                    onChange={(e) => {
-                                      const updated = [...valueArr];
-                                      updated[idx] = {
-                                        ...entry,
-                                        number: Number(e.target.value),
-                                      };
-                                      field.onChange(updated);
-                                    }}
-                                  />
+                                  {/* Drop chance % input (for reward_items) or Number input (for others) */}
+                                  <div className="flex items-center gap-1">
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      max={isRewardItems ? 100 : undefined}
+                                      className="w-20"
+                                      title={isRewardItems ? "Drop chance %" : "Number"}
+                                      placeholder={isRewardItems ? "%" : "#"}
+                                      value={entry.number}
+                                      onChange={(e) => {
+                                        const updated = [...valueArr];
+                                        updated[idx] = {
+                                          ...entry,
+                                          number: Number(e.target.value),
+                                        };
+                                        field.onChange(updated);
+                                      }}
+                                    />
+                                    {isRewardItems && <span className="text-xs text-muted-foreground">%</span>}
+                                  </div>
+                                  {/* Quantity input (only for reward_items) */}
+                                  {isRewardItems && (
+                                    <div className="flex items-center gap-1">
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        className="w-20"
+                                        title="Quantity"
+                                        placeholder="qty"
+                                        value={entry.quantity ?? 1}
+                                        onChange={(e) => {
+                                          const updated = [...valueArr];
+                                          updated[idx] = {
+                                            ...entry,
+                                            quantity: Number(e.target.value),
+                                          };
+                                          field.onChange(updated);
+                                        }}
+                                      />
+                                      <span className="text-xs text-muted-foreground">qty</span>
+                                    </div>
+                                  )}
                                   {/* Remove button */}
                                   <Button
                                     type="button"
@@ -1339,7 +1369,12 @@ export const EditContent = <
                                 variant="secondary"
                                 className="w-full"
                                 onClick={() => {
-                                  field.onChange([...valueArr, { ids: [], number: 1 }]);
+                                  // For reward_items: default to 100% drop chance, 1 quantity
+                                  // For others (like opponentAIs, attackers): default to number: 1
+                                  const newEntry = isRewardItems
+                                    ? { ids: [], number: 100, quantity: 1 }
+                                    : { ids: [], number: 1 };
+                                  field.onChange([...valueArr, newEntry]);
                                 }}
                                 disabled={options.length === 0}
                               >
@@ -2382,7 +2417,7 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
 
 // Form labels for different tag names
 export const FORM_LABEL_MAP: Record<string, string> = {
-  reward_items: "Reward Items [and quantity]",
+  reward_items: "Reward Items [drop chance % and quantity]",
   reward_jutsus: "Reward Jutsus",
   reward_bloodlines: "Reward Bloodlines",
   reward_badges: "Reward Badges",

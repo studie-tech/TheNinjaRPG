@@ -79,7 +79,8 @@ export const idsWithNumberField = z
   .array(
     z.object({
       ids: z.array(z.string()).default([]),
-      number: z.number(),
+      number: z.number().default(100), // Drop chance % (0-100), default 100 = guaranteed
+      quantity: z.number().default(1), // How many items to give
     }),
   )
   .default([]);
