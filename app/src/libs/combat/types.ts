@@ -51,8 +51,8 @@ import type { Intersection, Object3D } from "three";
 
 export type BattleWar = War & {
   warAllies: { villageId: string; supportVillageId: string }[];
-  attackerVillage: { name: string } | null;
-  defenderVillage: { name: string } | null;
+  attackerVillage: { name: string; sector?: number } | null;
+  defenderVillage: { name: string; sector?: number } | null;
 };
 
 /**
@@ -404,7 +404,7 @@ export type CombatResult = {
   shrineChangeHp: number;
   warHealthInfo: Record<string, number>;
   shrineInfo: Record<number, number>;
-  villageWarShrineInfo: Record<string, number>;
+  villageWarShrineInfo: Record<string, { attacker: number; defender: number }>;
   villageWarShrineDisplay: Record<string, number>;
   clanPoints: number;
   notifications: string[];

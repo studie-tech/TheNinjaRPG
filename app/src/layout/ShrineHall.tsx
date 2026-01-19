@@ -228,8 +228,8 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
                 color="bg-red-500"
                 showText
                 status="AWAKE"
-                current={Math.max(0, war.shrineHp)}
-                total={war.shrineMaxHp}
+                current={Math.max(0, war.defenderShrineHp)}
+                total={war.defenderShrineMaxHp}
               />
             ))}
           </div>

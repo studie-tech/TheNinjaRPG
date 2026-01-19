@@ -134,7 +134,7 @@ export const warRouter = createTRPCRouter({
       if (activeWar.type !== "SECTOR_WAR") {
         return errorResponse("War is not a sector war");
       }
-      if (activeWar.shrineHp > 0) {
+      if (activeWar.defenderShrineHp > 0) {
         return errorResponse("Shrine is still standing");
       }
       if (MAP_RESERVED_SECTORS.includes(activeWar.sector)) {
@@ -354,8 +354,13 @@ export const warRouter = createTRPCRouter({
           status: "ACTIVE",
           type: "SECTOR_WAR",
           sector: input.sectorId,
-          shrineHp: getShrineHpByLevel(targetSector?.shrineLevel),
-          shrineMaxHp: getShrineHpByLevel(targetSector?.shrineLevel),
+          // Sector wars only have a defender shrine (the sector's shrine)
+          attackerShrineHp: 0,
+          attackerShrineMaxHp: 0,
+          attackerShrineStatus: "CAPTURED",
+          defenderShrineHp: getShrineHpByLevel(targetSector?.shrineLevel),
+          defenderShrineMaxHp: getShrineHpByLevel(targetSector?.shrineLevel),
+          defenderShrineStatus: "ACTIVE",
         }),
         ctx.drizzle.insert(notification).values({
           userId: user.userId,
@@ -580,8 +585,13 @@ export const warRouter = createTRPCRouter({
           status: "ACTIVE",
           type: warType,
           targetStructureRoute: structure.route,
-          shrineHp: WAR_RAID_SHRINE_HP,
-          shrineMaxHp: WAR_RAID_SHRINE_HP,
+          // Village wars and raids have both attacker and defender shrines
+          attackerShrineHp: WAR_RAID_SHRINE_HP,
+          attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
+          attackerShrineStatus: "ACTIVE",
+          defenderShrineHp: WAR_RAID_SHRINE_HP,
+          defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
+          defenderShrineStatus: "ACTIVE",
         }),
       ]);
       if (updateResult.rowsAffected === 0) {

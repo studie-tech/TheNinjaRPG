@@ -1258,9 +1258,11 @@ export const WAR_SECTORWAR_AI_SHRINE_RECOVER = 3; // Shrine hp recover per day
 export const WAR_SECTORWAR_PVP_SHRINE_REDUCE = 5; // Killing a player in a sector war shrine hp decrease
 export const WAR_SECTORWAR_PVP_SHRINE_RECOVER = 7; // Shrine hp remove per day
 export const WAR_RAID_SHRINE_HP = 1000; // Fixed HP for Village Wars and Raids (abstract mechanic)
-export const WAR_SHRINE_CAPTURE_WARHEALTH_DMG = 200; // Damage to defender war health when shrine is captured (HP <= 0)
-export const WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL = 150; // Heal to defender war health when shrine is recaptured (HP > 25%)
+export const WAR_SHRINE_CAPTURE_WARHEALTH_DMG = 200; // Damage to war health when shrine is captured (HP <= 0)
+export const WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL = 150; // Heal to war health when shrine is recaptured (HP > 25%)
 export const WAR_RECAPTURE_THRESHOLD = 0.25; // Threshold for recapture (25% of max shrine HP)
+export const SHRINE_STATUSES = ["ACTIVE", "CAPTURED"] as const; // Status tracking for shrine capture/recovery cycles
+export type ShrineStatus = (typeof SHRINE_STATUSES)[number];
 export const WAR_SHRINE_IMAGE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgLihSncU9cpECTimBdjaqbNn7vQsxGR1wLk4";
 export const WAR_RAMEN_IMAGE =

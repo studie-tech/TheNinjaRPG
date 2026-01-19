@@ -3509,9 +3509,25 @@ export const war = mysqlTable(
     status: mysqlEnum("status", consts.WAR_STATES).notNull(),
     type: mysqlEnum("type", consts.WAR_TYPES).notNull(),
     sector: smallint("sector").default(0).notNull(),
-    shrineHp: smallint("shrineHp").default(consts.SHRINE_HP_BY_LEVEL[1]).notNull(),
-    shrineMaxHp: smallint("shrineMaxHp")
+    // Attacker shrine (only used in VILLAGE_WAR and WAR_RAID)
+    attackerShrineHp: smallint("attackerShrineHp")
+      .default(consts.WAR_RAID_SHRINE_HP)
+      .notNull(),
+    attackerShrineMaxHp: smallint("attackerShrineMaxHp")
+      .default(consts.WAR_RAID_SHRINE_HP)
+      .notNull(),
+    attackerShrineStatus: mysqlEnum("attackerShrineStatus", consts.SHRINE_STATUSES)
+      .default("ACTIVE")
+      .notNull(),
+    // Defender shrine (used in all war types)
+    defenderShrineHp: smallint("defenderShrineHp")
       .default(consts.SHRINE_HP_BY_LEVEL[1])
+      .notNull(),
+    defenderShrineMaxHp: smallint("defenderShrineMaxHp")
+      .default(consts.SHRINE_HP_BY_LEVEL[1])
+      .notNull(),
+    defenderShrineStatus: mysqlEnum("defenderShrineStatus", consts.SHRINE_STATUSES)
+      .default("ACTIVE")
       .notNull(),
     lastTokenReductionAt: datetime("lastTokenReductionAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)

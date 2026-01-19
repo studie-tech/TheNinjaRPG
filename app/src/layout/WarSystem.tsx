@@ -553,7 +553,7 @@ export const SectorWar: React.FC<{
     isKage &&
     user.village?.tokens &&
     war.attackerVillageId === user.villageId &&
-    war.shrineHp <= 0 &&
+    war.defenderShrineHp <= 0 &&
     user.village?.tokens >= WAR_PURCHASE_SHRINE_TOKEN_COST;
 
   // Render
@@ -588,25 +588,25 @@ export const SectorWar: React.FC<{
             alt="War Shrine"
             width={200}
             height={200}
-            className={war.shrineHp <= 0 ? "opacity-50 grayscale" : ""}
+            className={war.defenderShrineHp <= 0 ? "opacity-50 grayscale" : ""}
           />
           <div className="w-full max-w-md space-y-2">
             <div>
               <p className="text-sm font-medium">Shrine - Sector {war.sector}</p>
-              {war.shrineHp > 0 && (
+              {war.defenderShrineHp > 0 && (
                 <StatusBar
                   title="HP"
                   tooltip="Shrine Health"
                   color="bg-red-500"
                   showText={true}
                   status="AWAKE"
-                  current={war.shrineHp}
-                  total={war.shrineMaxHp}
+                  current={war.defenderShrineHp}
+                  total={war.defenderShrineMaxHp}
                 />
               )}
             </div>
             <div className="mt-2 rounded-md bg-popover p-3 text-sm text-popover-foreground">
-              {war.shrineHp > 0 ? (
+              {war.defenderShrineHp > 0 ? (
                 <>
                   {war.defenderVillageId === VILLAGE_SYNDICATE_ID ? (
                     <p>
@@ -850,6 +850,133 @@ export const InitiateRaidDialogContent: React.FC<DialogContentProps> = (props) =
             ))}
           </SelectContent>
         </Select>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Town Hall component for a side of a war
+ */
+const WarSideTownHall: React.FC<{
+  structure: VillageStructure;
+  village: Village;
+  warStatus: string;
+  warHealth: number;
+  warHealthMax: number;
+}> = ({ structure, village, warStatus, warHealth, warHealthMax }) => {
+  return (
+    <div className="flex flex-col items-center">
+      <h5 className="font-bold mb-2">{village.name}</h5>
+      {warStatus === "ACTIVE" && (
+        <div className="w-full mb-2">
+          <StatusBar
+            title="HP"
+            tooltip="War Health - Depletes from PvP kills"
+            color="bg-red-500"
+            showText={true}
+            current={warHealth}
+            total={warHealthMax}
+          />
+        </div>
+      )}
+      <div className="w-full max-w-[160px]">
+        <Building
+          structure={structure}
+          village={village}
+          textPosition="bottom"
+          showBar={false}
+          showNumbers={false}
+        />
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Shrine component for a side of a war
+ */
+const WarSideShrine: React.FC<{
+  village: Village;
+  shrineHp: number;
+  shrineMaxHp: number;
+  shrineStatus: string | null;
+}> = ({ village, shrineHp, shrineMaxHp, shrineStatus }) => {
+  const isCaptured = shrineStatus === "CAPTURED";
+  const isDamaged = shrineHp < shrineMaxHp * 0.25;
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="font-semibold text-sm">{village.name} Shrine</span>
+        <span
+          className={`text-xs px-2 py-0.5 rounded ${
+            isCaptured
+              ? "bg-red-500/20 text-red-500"
+              : isDamaged
+                ? "bg-yellow-500/20 text-yellow-500"
+                : "bg-green-500/20 text-green-500"
+          }`}
+        >
+          {isCaptured ? "Captured" : isDamaged ? "Damaged" : "Active"}
+        </span>
+      </div>
+      <div className="w-full mb-2">
+        <StatusBar
+          title="HP"
+          tooltip="Shrine Health"
+          color={isCaptured ? "bg-red-500" : "bg-blue-500"}
+          showText={true}
+          status="AWAKE"
+          current={shrineHp}
+          total={shrineMaxHp}
+        />
+      </div>
+      <div className="w-full aspect-square max-w-[160px] relative">
+        <Image
+          src={WAR_SHRINE_IMAGE}
+          alt={`${village.name} Shrine`}
+          fill
+          className={`object-contain ${isCaptured ? "opacity-50 grayscale" : ""}`}
+        />
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Supporting Forces component for a side of a war
+ */
+const WarSideSupportingForces: React.FC<{
+  village: Village;
+  warAllies: FetchActiveWarsReturnType["warAllies"];
+}> = ({ village, warAllies }) => {
+  const allies = warAllies.filter((warAlly) => warAlly.supportVillageId === village.id);
+
+  return (
+    <div className="flex flex-col items-center">
+      <p className="text-sm text-muted-foreground mb-2">{village.name}</p>
+      <div className="flex flex-wrap gap-2 justify-center">
+        {allies.map((warAlly) => (
+          <div
+            key={warAlly.villageId}
+            className="flex items-center space-x-2 bg-popover rounded-full px-3 py-1 border"
+          >
+            <Image
+              src={warAlly.village.villageGraphic}
+              alt={warAlly.village.name}
+              width={20}
+              height={20}
+              className="rounded-full"
+            />
+            <span className="text-sm">{warAlly.village.name}</span>
+          </div>
+        ))}
+        {allies.length === 0 && (
+          <div className="text-sm text-muted-foreground italic">
+            No supporting forces
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1234,100 +1361,123 @@ export const VillageWar: React.FC<{
         </div>
       </Modal2>      
 
-      <div className="overflow-x-auto -mx-4 px-4">
-        <div className="grid grid-cols-3 gap-8 items-start justify-center min-w-[350px]">
-          <WarSide
+      {/* Town Halls Section */}
+      <div className="border border-border rounded-lg p-4">
+        <div className="grid grid-cols-2 gap-4">
+          <WarSideTownHall
             structure={isAttacker ? attackerStructure : defenderStructure}
             village={isAttacker ? war.attackerVillage : war.defenderVillage}
-            war={war}
+            warStatus={war.status}
             warHealth={isAttacker ? war.attackerWarHealth : war.defenderWarHealth}
-            warHealthMax={
-              isAttacker ? war.attackerWarHealthMax : war.defenderWarHealthMax
-            }
+            warHealthMax={isAttacker ? war.attackerWarHealthMax : war.defenderWarHealthMax}
           />
-          <WarSide
+          <WarSideTownHall
             structure={isAttacker ? defenderStructure : attackerStructure}
             village={isAttacker ? war.defenderVillage : war.attackerVillage}
-            war={war}
+            warStatus={war.status}
             warHealth={isAttacker ? war.defenderWarHealth : war.attackerWarHealth}
-            warHealthMax={
-              isAttacker ? war.defenderWarHealthMax : war.attackerWarHealthMax
-            }
+            warHealthMax={isAttacker ? war.defenderWarHealthMax : war.attackerWarHealthMax}
           />
-          {["VILLAGE_WAR", "WAR_RAID"].includes(war.type) &&
-            war.status === "ACTIVE" &&
-            war.shrineMaxHp > 0 && (
-              <div className="flex flex-col items-center justify-center">
-                <h5 className="font-bold mb-2 no-wrap text-nowrap">
-                  Shrine - Sector {war.defenderVillage.sector}
-                </h5>                
-                <div className="w-full mb-2">
-                  <StatusBar
-                    title="HP"
-                    tooltip="Shrine Health - Depletes from PvP kills"
-                    color="bg-red-500"
-                    showText={true}
-                    status="AWAKE"
-                    current={war.shrineHp}
-                    total={war.shrineMaxHp}
-                  />
-                </div>
-                <div className="w-full md:w-3/5 lg:w-3/4 aspect-square relative">
-                  <Image
-                    src={WAR_SHRINE_IMAGE}
-                    alt={`${war.defenderVillage?.name} Shrine`}
-                    fill
-                    className="object-contain"
-                  />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => setShowShrineMechanics(true)}
-                >
-                  <Info className="h-4 w-4 mr-1" />
-                  Shrine Mechanics
-                </Button>
-                <Modal2
-                  title="Shrine Mechanics"
-                  isOpen={showShrineMechanics}
-                  setIsOpen={setShowShrineMechanics}
-                >
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      The shrine is a key objective in village wars. Its HP is reduced
-                      through PvP combat against enemy village members.
-                    </p>
-                    <div className="space-y-2">
-                      <h6 className="font-semibold">Capture (HP reaches 0):</h6>
-                      <p className="text-sm text-muted-foreground">
-                        When the shrine HP reaches 0, it is captured. This deals{" "}
-                        <span className="font-semibold text-red-500">
-                          -{WAR_SHRINE_CAPTURE_WARHEALTH_DMG} HP
-                        </span>{" "}
-                        to the defender&apos;s war health.
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <h6 className="font-semibold">
-                        Recapture (HP exceeds {WAR_RECAPTURE_THRESHOLD * 100}%):
-                      </h6>
-                      <p className="text-sm text-muted-foreground">
-                        When defenders recapture the shrine by raising its HP above{" "}
-                        {WAR_RECAPTURE_THRESHOLD * 100}%, they heal{" "}
-                        <span className="font-semibold text-green-500">
-                          +{WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL} HP
-                        </span>{" "}
-                        to their war health.
-                      </p>
-                    </div>
-                  </div>
-                </Modal2>
-              </div>
-            )}
         </div>
       </div>
+
+      {/* Shrines Section */}
+      {["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && war.status === "ACTIVE" && (
+        <div className="border border-border rounded-lg p-4 mt-4">
+          <div className="grid grid-cols-2 gap-4">
+            <WarSideShrine
+              village={isAttacker ? war.attackerVillage : war.defenderVillage}
+              shrineHp={isAttacker ? war.attackerShrineHp : war.defenderShrineHp}
+              shrineMaxHp={isAttacker ? war.attackerShrineMaxHp : war.defenderShrineMaxHp}
+              shrineStatus={isAttacker ? war.attackerShrineStatus : war.defenderShrineStatus}
+            />
+            <WarSideShrine
+              village={isAttacker ? war.defenderVillage : war.attackerVillage}
+              shrineHp={isAttacker ? war.defenderShrineHp : war.attackerShrineHp}
+              shrineMaxHp={isAttacker ? war.defenderShrineMaxHp : war.attackerShrineMaxHp}
+              shrineStatus={isAttacker ? war.defenderShrineStatus : war.attackerShrineStatus}
+            />
+          </div>
+          <div className="flex justify-center mt-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowShrineMechanics(true)}
+            >
+              <Info className="h-4 w-4 mr-1" />
+              Shrine Mechanics
+            </Button>
+            <Modal2
+              title="Shrine Mechanics"
+              isOpen={showShrineMechanics}
+              setIsOpen={setShowShrineMechanics}
+            >
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  The shrine is a key objective in village wars. Its HP determines
+                  control of the shrine.
+                </p>
+                <div className="space-y-2">
+                  <h6 className="font-semibold">Attack (Enemy Shrine):</h6>
+                  <p className="text-sm text-muted-foreground">
+                    When you win shrine combat against an enemy at their shrine, you{" "}
+                    <span className="font-semibold text-red-500">reduce</span> their
+                    shrine&apos;s HP.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <h6 className="font-semibold">Defend (Your Shrine):</h6>
+                  <p className="text-sm text-muted-foreground">
+                    When you win shrine combat against an enemy at your own shrine, you{" "}
+                    <span className="font-semibold text-green-500">restore</span> your
+                    shrine&apos;s HP.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <h6 className="font-semibold">Capture (HP reaches 0):</h6>
+                  <p className="text-sm text-muted-foreground">
+                    When the shrine HP reaches 0, it is captured. This deals{" "}
+                    <span className="font-semibold text-red-500">
+                      -{WAR_SHRINE_CAPTURE_WARHEALTH_DMG} HP
+                    </span>{" "}
+                    to the defender&apos;s war health.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <h6 className="font-semibold">
+                    Recapture (HP exceeds {WAR_RECAPTURE_THRESHOLD * 100}%):
+                  </h6>
+                  <p className="text-sm text-muted-foreground">
+                    When defenders recapture the shrine by raising its HP above{" "}
+                    {WAR_RECAPTURE_THRESHOLD * 100}%, they heal{" "}
+                    <span className="font-semibold text-green-500">
+                      +{WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL} HP
+                    </span>{" "}
+                    to their war health.
+                  </p>
+                </div>
+              </div>
+            </Modal2>
+          </div>
+        </div>
+      )}
+
+      {/* Supporting Forces Section */}
+      {["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && (
+        <div className="border border-border rounded-lg p-4 mt-4">
+          <h6 className="font-semibold text-sm mb-3 text-center">Supporting Forces</h6>
+          <div className="grid grid-cols-2 gap-4">
+            <WarSideSupportingForces
+              village={isAttacker ? war.attackerVillage : war.defenderVillage}
+              warAllies={war.warAllies}
+            />
+            <WarSideSupportingForces
+              village={isAttacker ? war.defenderVillage : war.attackerVillage}
+              warAllies={war.warAllies}
+            />
+          </div>
+        </div>
+      )}
 
       {isKage &&
         war.status === "ACTIVE" &&
@@ -1432,80 +1582,6 @@ export const VillageWar: React.FC<{
           </ContentBox>
         )}{/* Shrine HP Status for Village Wars and Raids */}
         
-    </div>
-  );
-};
-
-/**
- * A component that displays a side of a war
- * @param structure
- * @param war
- * @param village
- * @param user
- * @returns
- */
-const WarSide: React.FC<{
-  structure: VillageStructure;
-  war: FetchActiveWarsReturnType;
-  village: Village;
-  warHealth: number;
-  warHealthMax: number;
-}> = ({ structure, war, village, warHealth, warHealthMax }) => {
-  return (
-    <div className="flex flex-col items-center justify-center">
-      <h5 className="font-bold mb-2">{village.name}</h5>
-      {war.status === "ACTIVE" && (
-        <div className="w-full mb-2">
-          <StatusBar
-            title="HP"
-            tooltip="War Health - Depletes from PvP kills"
-            color="bg-red-500"
-            showText={true}
-            current={warHealth}
-            total={warHealthMax}
-          />
-        </div>
-      )}
-      <div className="w-full md:w-3/5 lg:w-3/4 aspect-square">
-        <Building
-          structure={structure}
-          village={village}
-          textPosition="bottom"
-          showBar={false}
-          showNumbers={false}
-        />
-      </div>
-      {/* Show our supporting factions */}
-      {["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && (
-        <div className="mt-4">
-          <h6 className="font-semibold text-sm mb-2">Supporting Forces:</h6>
-          <div className="flex flex-wrap gap-2 justify-center">
-            {war.warAllies
-              .filter((warAlly) => warAlly.supportVillageId === village.id)
-              .map((warAlly) => (
-                <div
-                  key={warAlly.villageId}
-                  className="flex items-center space-x-2 bg-poppopover rounded-full px-3 py-1 border-2"
-                >
-                  <Image
-                    src={warAlly.village.villageGraphic}
-                    alt={warAlly.village.name}
-                    width={20}
-                    height={20}
-                    className="rounded-full"
-                  />
-                  <span className="text-sm">{warAlly.village.name}</span>
-                </div>
-              ))}
-            {war.warAllies.filter((warAlly) => warAlly.supportVillageId === village.id)
-              .length === 0 && (
-              <div className="text-sm text-muted-foreground italic">
-                No supporting forces
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

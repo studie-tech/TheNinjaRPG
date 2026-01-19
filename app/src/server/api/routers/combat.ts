@@ -1195,7 +1195,7 @@ export const combatRouter = createTRPCRouter({
 
       // Find the war the user is involved with
       // For SECTOR_WAR: check war.sector matches and user is attacker
-      // For VILLAGE_WAR/WAR_RAID: check village sectors
+      // For VILLAGE_WAR/WAR_RAID: check village sectors for attack OR defend scenarios
       const userWar = activeWars.find((w) => {
         if (w.status !== "ACTIVE") return false;
 
@@ -1205,18 +1205,24 @@ export const combatRouter = createTRPCRouter({
         }
 
         if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
-          // Village wars/raids: check if user is at the opposing village's sector
-          // Attackers attack at defender's village sector
-          // Defenders counter-attack at attacker's village sector
-          const atDefenderVillage =
-            w.defenderVillage?.sector === input.sector;
-          const atAttackerVillage =
-            w.attackerVillage?.sector === input.sector;
+          const atDefenderVillage = w.defenderVillage?.sector === input.sector;
+          const atAttackerVillage = w.attackerVillage?.sector === input.sector;
 
-          return (
+          // Attack scenarios: at enemy's village (reduce their shrine HP)
+          const canAttack =
             (atDefenderVillage && isUserOnAttackerSide(w)) ||
-            (atAttackerVillage && isUserOnDefenderSide(w))
-          );
+            (atAttackerVillage && isUserOnDefenderSide(w));
+
+          // Defend scenarios: at own village when shrine is damaged (restore shrine HP)
+          const canDefend =
+            (atAttackerVillage &&
+              isUserOnAttackerSide(w) &&
+              w.attackerShrineHp < w.attackerShrineMaxHp) ||
+            (atDefenderVillage &&
+              isUserOnDefenderSide(w) &&
+              w.defenderShrineHp < w.defenderShrineMaxHp);
+
+          return canAttack || canDefend;
         }
 
         return false;
@@ -3002,8 +3008,8 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
         where: eq(war.status, "ACTIVE"),
         with: {
           warAllies: true,
-          attackerVillage: { columns: { name: true } },
-          defenderVillage: { columns: { name: true } },
+          attackerVillage: { columns: { name: true, sector: true } },
+          defenderVillage: { columns: { name: true, sector: true } },
         },
       }),
       // Fetch game settings

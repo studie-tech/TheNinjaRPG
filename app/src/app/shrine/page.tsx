@@ -101,10 +101,10 @@ export default function Shrine() {
   const isReserved = MAP_RESERVED_SECTORS.includes(userData.sector);
   const isHome = !!sectorData.village;
 
-  // Check if user can attack the shrine in a Village War or Raid
-  // Attackers can attack at defender's village sector (shrine HP down)
-  // Defenders can attack at attacker's village sector (shrine HP up)
-  const userCanAttackVillageWarShrine = sectorData.warData?.some((war) => {
+  // Check if user can attack OR defend the shrine in a Village War or Raid
+  // Attack: Attackers at defender's village, Defenders at attacker's village (reduces shrine HP)
+  // Defend: Attackers at their own village when damaged, Defenders at their own village when damaged (restores shrine HP)
+  const userCanBattleVillageWarShrine = sectorData.warData?.some((war) => {
     if (!["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) return false;
 
     const isUserOnAttackerSide =
@@ -126,15 +126,25 @@ export default function Shrine() {
     const atDefenderVillage = war.defenderVillage?.sector === userData.sector;
     const atAttackerVillage = war.attackerVillage?.sector === userData.sector;
 
-    // Attackers attack at defender's sector, defenders counter-attack at attacker's sector
-    return (
+    // Attack scenarios: at enemy's village
+    const canAttack =
       (atDefenderVillage && isUserOnAttackerSide) ||
-      (atAttackerVillage && isUserOnDefenderSide)
-    );
+      (atAttackerVillage && isUserOnDefenderSide);
+
+    // Defend scenarios: at own village when shrine is damaged
+    const canDefend =
+      (atAttackerVillage &&
+        isUserOnAttackerSide &&
+        war.attackerShrineHp < war.attackerShrineMaxHp) ||
+      (atDefenderVillage &&
+        isUserOnDefenderSide &&
+        war.defenderShrineHp < war.defenderShrineMaxHp);
+
+    return canAttack || canDefend;
   });
 
-  // Home sectors are protected UNLESS user can attack in a Village War/Raid
-  const isProtected = isReserved || (isHome && !userCanAttackVillageWarShrine);
+  // Home sectors are protected UNLESS user can battle in a Village War/Raid
+  const isProtected = isReserved || (isHome && !userCanBattleVillageWarShrine);
 
   // Split wars into user's wars and competing wars
   const userWars =
@@ -441,20 +451,64 @@ const WarCard = ({
   const atAttackerVillage = war.attackerVillage?.sector === sector;
   const atDefenderVillage = war.defenderVillage?.sector === sector;
 
-  // For Village Wars: users can attack when at the opposing village's shrine
-  // Attackers attack at defender's village, defenders counter-attack at attacker's village
+  // Determine which shrine is being targeted and its HP
+  // For Village Wars: at defender village = defender shrine, at attacker village = attacker shrine
+  // For Sector Wars: always defender shrine
+  const targetShrineHp = isVillageWar
+    ? atDefenderVillage
+      ? war.defenderShrineHp
+      : war.attackerShrineHp
+    : war.defenderShrineHp;
+  const targetShrineMaxHp = isVillageWar
+    ? atDefenderVillage
+      ? war.defenderShrineMaxHp
+      : war.attackerShrineMaxHp
+    : war.defenderShrineMaxHp;
+  const targetShrineStatus = isVillageWar
+    ? atDefenderVillage
+      ? war.defenderShrineStatus
+      : war.attackerShrineStatus
+    : war.defenderShrineStatus;
+
+  // Determine action type: attack or defend
+  // Attackers at own village = defend (if shrine damaged)
+  // Attackers at enemy village = attack
+  // Defenders at own village = defend (if shrine damaged)
+  // Defenders at enemy village = attack
+  const isDefendAction = isVillageWar && (
+    (isUserAttacker && atAttackerVillage && war.attackerShrineHp < war.attackerShrineMaxHp) ||
+    (isUserDefender && atDefenderVillage && war.defenderShrineHp < war.defenderShrineMaxHp)
+  );
+
+  // For Village Wars: users can attack/defend based on location and shrine state
   const canAttackVillageWar =
     isVillageWar &&
-    war.shrineHp > 0 &&
     !hideAttackButton &&
     !isProtected &&
-    ((isUserAttacker && atDefenderVillage) || (isUserDefender && atAttackerVillage));
+    ((isUserAttacker && atDefenderVillage && war.defenderShrineHp > 0) ||
+     (isUserDefender && atAttackerVillage && war.attackerShrineHp > 0));
+
+  const canDefendVillageWar =
+    isVillageWar &&
+    !hideAttackButton &&
+    !isProtected &&
+    isDefendAction;
 
   // For Sector Wars: only attackers can attack
   const canAttackSectorWar =
-    !isVillageWar && isUserAttacker && war.shrineHp > 0 && !hideAttackButton && !isProtected;
+    !isVillageWar && isUserAttacker && war.defenderShrineHp > 0 && !hideAttackButton && !isProtected;
 
   const canAttack = canAttackVillageWar || canAttackSectorWar;
+  const canDefend = canDefendVillageWar;
+
+  // Get shrine status display
+  const getShrineStatusBadge = (hp: number, maxHp: number, status: string) => {
+    if (status === "CAPTURED") return { text: "Captured", className: "bg-red-500/20 text-red-500" };
+    if (hp < maxHp * 0.25) return { text: "Damaged", className: "bg-yellow-500/20 text-yellow-500" };
+    return { text: "Active", className: "bg-green-500/20 text-green-500" };
+  };
+
+  const statusBadge = getShrineStatusBadge(targetShrineHp, targetShrineMaxHp, targetShrineStatus);
 
   // Determine the shrine sector to display
   const displaySector = isVillageWar
@@ -474,7 +528,6 @@ const WarCard = ({
             alt={war.attackerVillage.name}
             width={100}
             height={100}
-            className={`${war.shrineHp <= 0 ? "opacity-50 grayscale" : ""}`}
           />
           <p className="mt-2 text-sm font-medium">{war.attackerVillage.name}</p>
         </div>
@@ -486,11 +539,16 @@ const WarCard = ({
             alt="War Shrine"
             width={200}
             height={200}
-            className={`${war.shrineHp <= 0 ? "opacity-50 grayscale" : ""}`}
+            className={`${targetShrineStatus === "CAPTURED" ? "opacity-50 grayscale" : ""}`}
           />
           <div className="w-full max-w-md space-y-4">
             <div>
-              <p className="text-sm font-medium">Shrine - Sector {displaySector}</p>
+              <p className="text-sm font-medium">
+                Shrine - Sector {displaySector}
+                <span className={`ml-2 text-xs px-2 py-0.5 rounded ${statusBadge.className}`}>
+                  {statusBadge.text}
+                </span>
+              </p>
               <p className="text-sm text-muted-foreground">
                 {isVillageWar
                   ? atAttackerVillage
@@ -502,18 +560,16 @@ const WarCard = ({
                       ? "Your village is defending"
                       : "Competing war"}
               </p>
-              {war.shrineHp > 0 && (
-                <StatusBar
-                  key={war.shrineHp}
-                  title="HP"
-                  tooltip="Shrine Health"
-                  color="bg-red-500"
-                  showText={true}
-                  status="AWAKE"
-                  current={war.shrineHp > 0 ? war.shrineHp : 0}
-                  total={war.shrineMaxHp}
-                />
-              )}
+              <StatusBar
+                key={`${targetShrineHp}-${targetShrineStatus}`}
+                title="HP"
+                tooltip="Shrine Health"
+                color={targetShrineStatus === "CAPTURED" ? "bg-red-500" : "bg-green-500"}
+                showText={true}
+                status="AWAKE"
+                current={Math.max(0, targetShrineHp)}
+                total={targetShrineMaxHp}
+              />
             </div>
           </div>
         </div>
@@ -526,7 +582,6 @@ const WarCard = ({
             alt={war.defenderVillage.name}
             width={100}
             height={100}
-            className={`${war.shrineHp <= 0 ? "opacity-50 grayscale" : ""}`}
           />
           <p className="mt-2 text-sm font-medium">
             {war.defenderVillageId === VILLAGE_SYNDICATE_ID
@@ -537,7 +592,7 @@ const WarCard = ({
       </div>
 
       <div className="relative w-full">
-        {canAttack &&
+        {(canAttack || canDefend) &&
           (!isAttacking ? (
             <Button
               size="xl"
@@ -546,39 +601,63 @@ const WarCard = ({
               className="italic text-2xl w-full"
               onClick={onAttack}
             >
-              <Swords className="h-10 w-10 mr-4" />
-              Attack shrine
+              {canDefend ? (
+                <>
+                  <Shield className="h-10 w-10 mr-4" />
+                  Defend shrine
+                </>
+              ) : (
+                <>
+                  <Swords className="h-10 w-10 mr-4" />
+                  Attack shrine
+                </>
+              )}
             </Button>
           ) : (
             <div className="min-h-64">
               <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
                 <div className="m-auto text-white">
-                  <p className="text-5xl">Attacking the Shrine</p>
+                  <p className="text-5xl">{canDefend ? "Defending" : "Attacking"} the Shrine</p>
                   <Loader />
                 </div>
               </div>
             </div>
           ))}
-        {war.shrineHp <= 0 && (
+        {targetShrineStatus === "CAPTURED" && (
           <div className="text-center space-y-4 mt-4">
             <h3 className="text-2xl font-bold">Shrine Captured!</h3>
             {isVillageWar ? (
-              isUserAttacker ? (
-                <p>
-                  The defender&apos;s shrine has been captured! The defending
-                  village&apos;s townhall has taken damage. Keep the shrine HP low to
-                  prevent the defenders from recovering. They can counter-attack by
-                  attacking your village&apos;s shrine.
-                </p>
-              ) : isUserDefender ? (
-                <p>
-                  Your shrine has been captured! Your townhall has taken damage.
-                  Counter-attack by going to the attacker&apos;s village and attacking
-                  their shrine to recover HP. Once the shrine HP rises above 25%, your
-                  townhall will heal.
-                </p>
+              atDefenderVillage ? (
+                isUserAttacker ? (
+                  <p>
+                    The defender&apos;s shrine has been captured! The defending
+                    village&apos;s war health has taken damage. Keep fighting to prevent
+                    the defenders from recovering.
+                  </p>
+                ) : isUserDefender ? (
+                  <p>
+                    Your shrine has been captured! Your war health has taken damage.
+                    Defend this shrine to recover HP. Once the shrine HP rises above 25%,
+                    your war health will heal.
+                  </p>
+                ) : (
+                  <p>The shrine has been captured in this war.</p>
+                )
               ) : (
-                <p>The shrine has been captured in this war.</p>
+                isUserDefender ? (
+                  <p>
+                    The attacker&apos;s shrine has been captured! Their war health has
+                    taken damage. Keep fighting to prevent them from recovering.
+                  </p>
+                ) : isUserAttacker ? (
+                  <p>
+                    Your shrine has been captured! Your war health has taken damage.
+                    Defend this shrine to recover HP. Once the shrine HP rises above 25%,
+                    your war health will heal.
+                  </p>
+                ) : (
+                  <p>The shrine has been captured in this war.</p>
+                )
               )
             ) : (
               <>
@@ -593,10 +672,11 @@ const WarCard = ({
             )}
           </div>
         )}
-        {canAttack && (
+        {(canAttack || canDefend) && (
           <div className="space-y-4 mt-4 text-muted-foreground">
-            In order to attack the shrine, you can either attack it directly, or kill
-            villages of the defending village.
+            {canDefend
+              ? "Defend your shrine by winning battles against the AI defenders. Victories will restore shrine HP."
+              : "Attack the enemy shrine by engaging its AI defenders. Victories will reduce shrine HP."}
           </div>
         )}
       </div>
