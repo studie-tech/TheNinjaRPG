@@ -169,6 +169,7 @@ export const ItemSlotTypes = [
   "LEGS",
   "FEET",
   "HAND",
+  "THROWN",
   "ITEM",
   "WAIST",
   "KEYSTONE",
@@ -206,6 +207,7 @@ export const ItemSlots = [
   "FEET",
   "HAND_1",
   "HAND_2",
+  "THROWN",
   "WAIST",
   "KEYSTONE",
   "ITEM_1",
@@ -214,7 +216,6 @@ export const ItemSlots = [
   "ITEM_4",
   "ITEM_5",
   "ITEM_6",
-  "ITEM_7",
   "NONE",
 ] as const;
 export type ItemSlot = (typeof ItemSlots)[number];
@@ -608,6 +609,7 @@ export const JUTSU_MAX_RESIDUAL_EQUIPPED = 4;
 export const JUTSU_MAX_PIERCE_EQUIPPED = 9999;
 export const JUTSU_MAX_EVENT_EQUIPPED = 2;
 export const JUTSU_MAX_BARRIER_EQUIPPED = 1;
+export const JUTSU_MAX_STUN_EQUIPPED = 1;
 
 // Content difficulty ratings
 export const BloodlineDifficultyRatings = ["Easy", "Medium", "Hard", "Expert"] as const;
@@ -1460,6 +1462,7 @@ export const RANKED_LOADOUT_MAX_INCREASECOST_ITEMS = 1;
 export const RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS = 1;
 export const RANKED_LOADOUT_MAX_SUMMON_JUTSUS = 0;
 export const RANKED_LOADOUT_MAX_BARRIER_JUTSUS = 1;
+export const RANKED_LOADOUT_MAX_STUN_JUTSUS = 1;
 
 // Game assets
 export const ID_ANIMATION_SMOKE = "gkYHdSzsHu";

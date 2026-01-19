@@ -956,6 +956,7 @@ const removeEffects = (
       .filter((e) => e.fromType !== "bloodline")
       .filter((e) => e.fromType !== "armor")
       .filter((e) => e.fromType !== "skill")
+      .filter((e) => e.fromType !== "ranked")
       .filter(type === "positive" ? isPositiveUserEffect : isNegativeUserEffect)
       .map((e) => {
         e.rounds = 0;

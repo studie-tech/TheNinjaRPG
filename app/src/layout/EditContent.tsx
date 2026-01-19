@@ -2306,14 +2306,14 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
   // Watch form values
   const watchAll = useWatch({ control: form.control });
 
-  // Update parent when form is valid and dirty
+  // Update parent when form is valid and has changes
   useEffect(() => {
     const newRewards = [...rewards];
     const parsed = ObjectiveReward.safeParse(watchAll);
     if (parsed.success) {
       newRewards[idx] = parsed.data;
       const diff = calculateContentDiff(rewards, newRewards);
-      if (diff.length > 0 && form.formState.isDirty) {
+      if (diff.length > 0) {
         setRewards(newRewards);
         form.reset(watchAll);
       }

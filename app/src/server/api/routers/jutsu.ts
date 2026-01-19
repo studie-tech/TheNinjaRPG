@@ -26,6 +26,7 @@ import {
   JUTSU_MAX_PIERCE_EQUIPPED,
   JUTSU_MAX_EVENT_EQUIPPED,
   JUTSU_MAX_BARRIER_EQUIPPED,
+  JUTSU_MAX_STUN_EQUIPPED,
   TUTORIAL_JUTSU_ID,
 } from "@/drizzle/constants";
 import {
@@ -626,10 +627,19 @@ export const jutsuRouter = createTRPCRouter({
       const filteredJutsus = userjutsus.filter((uj) => canTrainJutsu(uj.jutsu, user));
       const curEquip = filteredJutsus?.filter((j) => j.equipped).length || 0;
       const maxEquip = userData && calcJutsuEquipLimit(user);
-      const residualJutsus = userjutsus.filter(
-        (uj) =>
-          uj.equipped &&
-          uj.jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
+      const equippedJutsus = userjutsus.filter((uj) => uj.equipped);
+      const residualJutsus = equippedJutsus.filter((uj) =>
+        uj.jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
+      );
+      const pierceJutsus = equippedJutsus.filter((uj) =>
+        uj.jutsu.effects.some((e) => e.type === "pierce"),
+      );
+      const eventJutsus = equippedJutsus.filter((uj) => uj.jutsu.jutsuType === "EVENT");
+      const barrierJutsus = equippedJutsus.filter((uj) =>
+        uj.jutsu.effects.some((e) => e.type === "barrier"),
+      );
+      const stunJutsus = equippedJutsus.filter((uj) =>
+        uj.jutsu.effects.some((e) => e.type === "stun"),
       );
 
       if (!info) return errorResponse("Jutsu not found");
@@ -682,6 +692,24 @@ export const jutsuRouter = createTRPCRouter({
             and(eq(userJutsu.id, userjutsuObj.id), eq(userJutsu.userId, ctx.userId)),
           );
       } else {
+        // Check if jutsu can be auto-equipped
+        const jutsuHasResidual = info.effects.some(
+          (e) => "residualModifier" in e && e.residualModifier,
+        );
+        const jutsuHasPierce = info.effects.some((e) => e.type === "pierce");
+        const jutsuIsEvent = info.jutsuType === "EVENT";
+        const jutsuHasBarrier = info.effects.some((e) => e.type === "barrier");
+        const jutsuHasStun = info.effects.some((e) => e.type === "stun");
+
+        const canAutoEquip =
+          curEquip < maxEquip &&
+          (!jutsuHasResidual ||
+            residualJutsus.length < JUTSU_MAX_RESIDUAL_EQUIPPED) &&
+          (!jutsuHasPierce || pierceJutsus.length < JUTSU_MAX_PIERCE_EQUIPPED) &&
+          (!jutsuIsEvent || eventJutsus.length < JUTSU_MAX_EVENT_EQUIPPED) &&
+          (!jutsuHasBarrier || barrierJutsus.length < JUTSU_MAX_BARRIER_EQUIPPED) &&
+          (!jutsuHasStun || stunJutsus.length < JUTSU_MAX_STUN_EQUIPPED);
+
         // Use onDuplicateKeyUpdate to handle race conditions
         await ctx.drizzle
           .insert(userJutsu)
@@ -690,11 +718,7 @@ export const jutsuRouter = createTRPCRouter({
             userId: ctx.userId,
             jutsuId: input.jutsuId,
             finishTraining: new Date(Date.now() + trainTime),
-            equipped:
-              curEquip < maxEquip &&
-              residualJutsus.length <= JUTSU_MAX_RESIDUAL_EQUIPPED
-                ? true
-                : false,
+            equipped: canAutoEquip,
           })
           .onDuplicateKeyUpdate({ set: { id: sql`id` } });
       }
@@ -805,6 +829,12 @@ export const jutsuRouter = createTRPCRouter({
       const curJutsuIsBarrier = userjutsuObj?.jutsu.effects.some(
         (e) => e.type === "barrier",
       );
+      const stunEquipped = equippedJutsus.filter((j) =>
+        j.jutsu.effects.some((e) => e.type === "stun"),
+      ).length;
+      const curJutsuIsStun = userjutsuObj?.jutsu.effects.some(
+        (e) => e.type === "stun",
+      );
       const newEquippedState = isEquipped ? false : true;
       const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
       const isLoaded = userjutsuObj && loadout?.jutsuIds.includes(userjutsuObj.jutsuId);
@@ -851,6 +881,15 @@ export const jutsuRouter = createTRPCRouter({
       ) {
         return errorResponse(
           `You cannot equip more than ${JUTSU_MAX_BARRIER_EQUIPPED} barrier jutsu`,
+        );
+      }
+      if (
+        !isEquipped &&
+        curJutsuIsStun &&
+        stunEquipped >= JUTSU_MAX_STUN_EQUIPPED
+      ) {
+        return errorResponse(
+          `You cannot equip more than ${JUTSU_MAX_STUN_EQUIPPED} stun jutsu`,
         );
       }
 

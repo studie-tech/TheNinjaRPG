@@ -1257,12 +1257,17 @@ export const itemRouter = createTRPCRouter({
       const instancesEquipped = useritems.filter(
         (ui) => ui.itemId === info.id && ui.equipped !== "NONE",
       ).length;
-      if (
+      const hasBloodlineItemEquipped = useritems.some(
+        (ui) => ui.equipped !== "NONE" && ui.item.bloodlineId,
+      );
+      const canAutoEquip =
         !info.effects.find((e) => e.type.includes("bloodline")) &&
         instancesEquipped < info.maxEquips &&
         user.level >= info.requiredLevel &&
-        (!info.bloodlineId || info.bloodlineId === user.bloodlineId)
-      ) {
+        (!info.bloodlineId || info.bloodlineId === user.bloodlineId) &&
+        (!info.bloodlineId || !hasBloodlineItemEquipped);
+      
+      if (canAutoEquip) {
         ItemSlots.forEach((slot) => {
           if (slot.includes(info.slot) && !useritems.find((i) => i.equipped === slot)) {
             equipped = slot;
@@ -1657,6 +1662,15 @@ export const toggleEquipItem = async (
     return errorResponse(
       `No more than ${info.maxEquips} instances. Already have ${instancesEquipped} equipped.`,
     );
+  }
+  // Check bloodline item limit - only one item with a bloodline can be equipped
+  if (doEquip && info.bloodlineId) {
+    const equippedBloodlineItems = newUserItems.filter(
+      (ui) => ui.equipped !== "NONE" && ui.id !== useritem.id && ui.item.bloodlineId,
+    );
+    if (equippedBloodlineItems.length > 0) {
+      return errorResponse("You can only equip one item with a bloodline requirement");
+    }
   }
   // Determine equipment slot (first empty slots, then any slot)
   let newEquipSlot = slot;

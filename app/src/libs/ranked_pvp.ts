@@ -14,6 +14,7 @@ import {
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
   RANKED_LOADOUT_MAX_BARRIER_JUTSUS,
+  RANKED_LOADOUT_MAX_STUN_JUTSUS,
   JUTSU_MAX_EVENT_EQUIPPED,
 } from "@/drizzle/constants";
 import type { Jutsu, UserData, Item } from "@/drizzle/schema";
@@ -165,6 +166,15 @@ export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
     message = `You can only equip up to ${RANKED_LOADOUT_MAX_BARRIER_JUTSUS} barrier jutsu in ranked PvP`;
   }
 
+  // Check stun jutsu limit
+  const stunJutsus = jutsus.filter((jutsu) =>
+    jutsu.effects.some((e) => e.type === "stun"),
+  );
+  if (stunJutsus.length > RANKED_LOADOUT_MAX_STUN_JUTSUS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_STUN_JUTSUS} stun jutsu in ranked PvP`;
+  }
+
   // Check event jutsu limit
   const eventJutsus = jutsus.filter((jutsu) => jutsu.jutsuType === "EVENT");
   if (eventJutsus.length > JUTSU_MAX_EVENT_EQUIPPED) {
@@ -209,6 +219,13 @@ export const validateItemLoadout = (items: Item[]) => {
   if (increasecostItems.length > RANKED_LOADOUT_MAX_INCREASECOST_ITEMS) {
     check = false;
     message = `You can only equip up to ${RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} increasecost item in ranked PvP`;
+  }
+
+  // Check bloodline items limit
+  const bloodlineItems = items.filter((item) => item.bloodlineId);
+  if (bloodlineItems.length > 1) {
+    check = false;
+    message = `You can only equip one item with a bloodline requirement in ranked PvP`;
   }
 
   // Check weapon limit

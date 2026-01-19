@@ -691,7 +691,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                 title="Security Confirmation"
                 proceed_label="Submit"
                 button={
-                  useritem.item.isEventItem ? (
+                  useritem.item.isEventItem || !useritem.item.inShop ? (
                     <Button id="sell" variant="destructive">
                       <ArrowDownToLine className="mr-2 h-5 w-5" />
                       Drop Item
@@ -884,6 +884,8 @@ const Character: React.FC<CharacterProps> = (props) => {
         <Equip slot={"WAIST"} act={act} txt="Waist" pos={t3} items={items} />
         <Equip slot={"LEGS"} act={act} txt="Legs" pos={t4} items={items} />
         <Equip slot={"FEET"} act={act} txt="Feet" pos={t5} items={items} />
+        <Equip slot={"KEYSTONE"} act={act} txt="Keystone" pos={l + t1} items={items} />
+        <Equip slot={"THROWN"} act={act} txt="Thrown" pos={r + t1} items={items} />
         <Equip slot={"ITEM_1"} act={act} txt="Item" pos={l + t2} items={items} />
         <Equip slot={"ITEM_2"} act={act} txt="Item" pos={r + t2} items={items} />
         <Equip slot={"HAND_1"} act={act} txt="Hand" pos={l + t3} items={items} />
@@ -892,8 +894,6 @@ const Character: React.FC<CharacterProps> = (props) => {
         <Equip slot={"ITEM_4"} act={act} txt="Item" pos={r + t4} items={items} />
         <Equip slot={"ITEM_5"} act={act} txt="Item" pos={l + t5} items={items} />
         <Equip slot={"ITEM_6"} act={act} txt="Item" pos={r + t5} items={items} />
-        <Equip slot={"ITEM_7"} act={act} txt="Item" pos={r + t1} items={items} />
-        <Equip slot={"KEYSTONE"} act={act} txt="Keystone" pos={l + t1} items={items} />
         {isOpen && slot && (
           <Modal2
             title="Select Item to Equip"
