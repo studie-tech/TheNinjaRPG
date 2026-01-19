@@ -435,6 +435,7 @@ const WarCard = ({
   war: War & {
     attackerVillage: { name: string; villageGraphic: string; sector?: number };
     defenderVillage: { name: string; villageGraphic: string; sector?: number };
+    warAllies: Array<{ villageId: string; supportVillageId: string }>;
   };
   villageId: string;
   sector: number;
@@ -443,8 +444,21 @@ const WarCard = ({
   hideAttackButton?: boolean;
   isProtected?: boolean;
 }) => {
-  const isUserAttacker = war.attackerVillageId === villageId;
-  const isUserDefender = war.defenderVillageId === villageId;
+  // Check if user is attacker or defender (including via war allies)
+  const isUserAttacker =
+    war.attackerVillageId === villageId ||
+    war.warAllies.some(
+      (wa) =>
+        wa.villageId === villageId &&
+        wa.supportVillageId === war.attackerVillageId,
+    );
+  const isUserDefender =
+    war.defenderVillageId === villageId ||
+    war.warAllies.some(
+      (wa) =>
+        wa.villageId === villageId &&
+        wa.supportVillageId === war.defenderVillageId,
+    );
   const isVillageWar = ["VILLAGE_WAR", "WAR_RAID"].includes(war.type);
 
   // Determine which village's shrine we're at

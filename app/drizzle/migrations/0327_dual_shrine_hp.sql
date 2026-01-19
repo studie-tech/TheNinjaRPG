@@ -10,17 +10,24 @@ ALTER TABLE `War` ADD COLUMN `defenderShrineMaxHp` smallint NOT NULL DEFAULT 100
 ALTER TABLE `War` ADD COLUMN `defenderShrineStatus` enum('ACTIVE','CAPTURED') NOT NULL DEFAULT 'ACTIVE';
 
 -- Step 2: Migrate existing data
--- Copy old shrineHp to defenderShrineHp (existing logic treated it as defender's shrine)
-UPDATE `War` SET `defenderShrineHp` = `shrineHp`, `defenderShrineMaxHp` = `shrineMaxHp`;
+-- Copy old shrineHp to defenderShrineHp for SECTOR_WAR (level-based shrines)
+UPDATE `War` SET `defenderShrineHp` = `shrineHp`, `defenderShrineMaxHp` = `shrineMaxHp` WHERE `type` = 'SECTOR_WAR';
 
 -- For SECTOR_WAR: Set attacker shrine to 0 (no attacker shrine)
 UPDATE `War` SET `attackerShrineHp` = 0, `attackerShrineMaxHp` = 0, `attackerShrineStatus` = 'CAPTURED' WHERE `type` = 'SECTOR_WAR';
 
--- For VILLAGE_WAR and WAR_RAID: Set attacker shrine to 1000 (full HP)
-UPDATE `War` SET `attackerShrineHp` = 1000, `attackerShrineMaxHp` = 1000, `attackerShrineStatus` = 'ACTIVE' WHERE `type` IN ('VILLAGE_WAR', 'WAR_RAID');
+-- For SECTOR_WAR: Set defender status to CAPTURED if HP was depleted
+UPDATE `War` SET `defenderShrineStatus` = 'CAPTURED' WHERE `type` = 'SECTOR_WAR' AND `defenderShrineHp` <= 0;
 
--- Set defender status based on existing HP
-UPDATE `War` SET `defenderShrineStatus` = 'CAPTURED' WHERE `defenderShrineHp` <= 0;
+-- For VILLAGE_WAR and WAR_RAID: Normalize both shrines to fixed 1000 HP values
+UPDATE `War` SET 
+  `attackerShrineHp` = 1000, 
+  `attackerShrineMaxHp` = 1000, 
+  `attackerShrineStatus` = 'ACTIVE',
+  `defenderShrineHp` = 1000, 
+  `defenderShrineMaxHp` = 1000, 
+  `defenderShrineStatus` = 'ACTIVE'
+WHERE `type` IN ('VILLAGE_WAR', 'WAR_RAID');
 
 -- Step 3: Drop old columns
 ALTER TABLE `War` DROP COLUMN `shrineHp`;
