@@ -721,7 +721,7 @@ export const NewAuctionListingDialog: React.FC = () => {
       return (
         item.item?.canBeTraded &&
         item.equipped === "NONE" &&
-        !item.craftingFinishedAt &&
+        (!item.craftingFinishedAt || new Date(item.craftingFinishedAt) < new Date()) &&
         !item.isInAuction
       );
     }) || [];

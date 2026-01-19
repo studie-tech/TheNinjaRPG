@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { eq, sql, gte, and, desc, isNull, like, inArray } from "drizzle-orm";
+import { eq, sql, gte, and, desc, isNull, like, inArray, or, lt } from "drizzle-orm";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { fetchUser } from "./profile";
@@ -189,7 +189,10 @@ export const auctionRouter = createTRPCRouter({
             eq(userItem.userId, ctx.userId),
             eq(userItem.equipped, "NONE"),
             eq(userItem.isInAuction, false),
-            isNull(userItem.craftingFinishedAt),
+            or(
+              isNull(userItem.craftingFinishedAt),
+              lt(userItem.craftingFinishedAt, new Date()),
+            ),
           ),
           with: {
             item: true,
