@@ -1224,16 +1224,16 @@ export const VillageWar: React.FC<{
             <>
               <p className="text-sm">Ended: {war.endedAt.toLocaleDateString()}</p>
               <p
-                className={`font-bold ${war.status === "DRAW" ? "text-yellow-500" : war.status === "ATTACKER_VICTORY" ? (war.attackerVillageId === user.villageId ? "text-green-500" : "text-red-500") : war.defenderVillageId === user.villageId ? "text-green-500" : "text-red-500"}`}
+                className={`font-bold ${war.status === "DRAW" ? "text-yellow-500" : war.status === "ATTACKER_VICTORY" ? (isAttacker ? "text-green-500" : "text-red-500") : !isAttacker ? "text-green-500" : "text-red-500"}`}
               >
                 Outcome:{" "}
                 {war.status === "DRAW"
                   ? "War ended in a Draw"
                   : war.status === "ATTACKER_VICTORY"
-                    ? war.attackerVillageId === user.villageId
+                    ? isAttacker
                       ? "Victory"
                       : "Defeat"
-                    : war.defenderVillageId === user.villageId
+                    : !isAttacker
                       ? "Victory"
                       : "Defeat"}
               </p>

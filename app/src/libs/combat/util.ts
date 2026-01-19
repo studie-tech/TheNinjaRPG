@@ -1234,15 +1234,21 @@ export const calcBattleResult = (
               userVillageId,
             );
             wars.forEach((war) => {
+              // Determine if the user is on the attacker side (either as main attacker or ally)
+              const isUserOnAttackerSide =
+                war.attackerVillageId === userVillageId ||
+                war.warAllies?.some(
+                  (ally) =>
+                    ally.villageId === userVillageId &&
+                    ally.supportVillageId === war.attackerVillageId,
+                );
               // Get the names of the village
-              const userVillageName =
-                war.attackerVillageId === targetVillageId
-                  ? war?.defenderVillage?.name || ""
-                  : war?.attackerVillage?.name || "";
-              const targetVillageName =
-                war.attackerVillageId === targetVillageId
-                  ? war?.attackerVillage?.name || ""
-                  : war?.defenderVillage?.name || "";
+              const userVillageName = isUserOnAttackerSide
+                ? war?.attackerVillage?.name || ""
+                : war?.defenderVillage?.name || "";
+              const targetVillageName = isUserOnAttackerSide
+                ? war?.defenderVillage?.name || ""
+                : war?.attackerVillage?.name || "";
               // Reset to 0 if not in warHealthInfo
               if (targetVillageName && !(targetVillageName in warHealthInfo)) {
                 warHealthInfo[targetVillageName] = 0;

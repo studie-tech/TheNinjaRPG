@@ -1016,7 +1016,8 @@ export const warRouter = createTRPCRouter({
           .orderBy(desc(sql<number>`count(*)`));
       }
 
-      // Other aggregate fields
+      // Other aggregate fields - only sum positive values (actual damage contribution)
+      // Negative values represent losses, which shouldn't count as "damage dealt"
       const aggregateField =
         input.aggregateBy === "townhallHpChange"
           ? warKill.townhallHpChange
@@ -1029,14 +1030,14 @@ export const warRouter = createTRPCRouter({
           villageId: userData.villageId,
           villageName: village.name,
           killerAvatar: userData.avatar,
-          count: sql<number>`sum(${aggregateField})`,
+          count: sql<number>`sum(GREATEST(${aggregateField}, 0))`,
         })
         .from(warKill)
         .leftJoin(userData, eq(warKill.killerId, userData.userId))
         .leftJoin(village, eq(userData.villageId, village.id))
         .where(eq(warKill.warId, input.warId))
         .groupBy(warKill.killerId)
-        .orderBy(desc(sql<number>`sum(${aggregateField})`));
+        .orderBy(desc(sql<number>`sum(GREATEST(${aggregateField}, 0))`));
     }),
 });
 
