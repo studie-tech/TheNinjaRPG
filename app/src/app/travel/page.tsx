@@ -421,7 +421,16 @@ export default function Travel() {
                 {/* Stealth Toggle */}
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
-                    <TooltipTrigger asChild>
+                    <TooltipTrigger
+                      onClick={() => {
+                        if (isActivatingStealth || isDeactivatingStealth) return;
+                        if (stealthStatus?.isCurrentlyStealthed) {
+                          deactivateStealth();
+                        } else if (stealthCooldown <= 0) {
+                          activateStealth();
+                        }
+                      }}
+                    >
                       <Ghost
                         className={`h-7 w-7 mr-2 ${
                           stealthStatus?.isCurrentlyStealthed
@@ -430,14 +439,6 @@ export default function Travel() {
                               ? "text-gray-400 cursor-not-allowed"
                               : "hover:text-purple-500"
                         }`}
-                        onClick={() => {
-                          if (isActivatingStealth || isDeactivatingStealth) return;
-                          if (stealthStatus?.isCurrentlyStealthed) {
-                            deactivateStealth();
-                          } else if (stealthCooldown <= 0) {
-                            activateStealth();
-                          }
-                        }}
                       />
                     </TooltipTrigger>
                     <TooltipContent>
@@ -452,21 +453,22 @@ export default function Travel() {
                 {/* Sensory Scan */}
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
-                    <TooltipTrigger asChild>
+                    <TooltipTrigger
+                      onClick={() => {
+                        if (isScanningSensory) return;
+                        if (sensoryCooldown <= 0) {
+                          if (currentSector !== undefined) {
+                            scanSensory({ sector: currentSector });
+                          }
+                        }
+                      }}
+                    >
                       <Radar
                         className={`h-7 w-7 mr-2 ${
                           sensoryCooldown > 0
                             ? "text-gray-400 cursor-not-allowed"
                             : "hover:text-blue-500"
                         }`}
-                        onClick={() => {
-                          if (isScanningSensory) return;
-                          if (sensoryCooldown <= 0) {
-                            if (currentSector !== undefined) {
-                              scanSensory({ sector: currentSector });
-                            }
-                          }
-                        }}
                       />
                     </TooltipTrigger>
                     <TooltipContent>
@@ -546,10 +548,9 @@ export default function Travel() {
                 </Popover>
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
-                    <TooltipTrigger asChild>
+                    <TooltipTrigger onClick={() => setShowOwnership(!showOwnership)}>
                       <MapPinned
                         className={`h-7 w-7 mr-2 ${showOwnership ? "text-orange-500" : ""}`}
-                        onClick={() => setShowOwnership(!showOwnership)}
                       />
                     </TooltipTrigger>
                     <TooltipContent>Show sector ownerships and factions</TooltipContent>
