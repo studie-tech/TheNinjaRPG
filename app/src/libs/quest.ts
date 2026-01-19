@@ -345,7 +345,9 @@ export const postProcessRewards = (rewards: ObjectiveRewardType) => {
       .flatMap((reward) => {
         // Use 'quantity' to repeat each item ID
         const qty = Math.max(1, Math.floor(reward.quantity ?? 1));
-        return reward.ids.flatMap((id) => Array(qty).fill(id) as string[]);
+        // Defensive: handle malformed data where ids might be undefined
+        const ids = Array.isArray(reward.ids) ? reward.ids : [];
+        return ids.flatMap((id) => Array(qty).fill(id) as string[]);
       }),
   };
 };

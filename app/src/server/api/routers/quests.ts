@@ -1324,6 +1324,14 @@ export const updateRewards = async (info: {
   // Check if we need to fetch war data
   const hasWarRewards =
     (rewards.reward_war_damage > 0 || rewards.reward_war_healing > 0) && user.villageId;
+
+  // Count item occurrences before the query (rewards.reward_items may contain duplicates for quantity)
+  const itemIdCounts = new Map<string, number>();
+  for (const id of rewards.reward_items ?? []) {
+    itemIdCounts.set(id, (itemIdCounts.get(id) ?? 0) + 1);
+  }
+  const uniqueItemIds = [...itemIdCounts.keys()];
+
   // Fetch names from the database
   const [
     villageData,
@@ -1357,12 +1365,18 @@ export const updateRewards = async (info: {
           .from(item)
           .where(eq(item.canBeGathered, true))
       : undefined,
-    // Fetch names from the database (use optional chaining for defensive checks against malformed DB data)
-    (rewards.reward_items?.length ?? 0) > 0
+    // Fetch reward items with stacking info (use unique IDs to avoid duplicates in query)
+    uniqueItemIds.length > 0
       ? client
-          .select({ id: item.id, name: item.name, rarity: item.rarity })
+          .select({
+            id: item.id,
+            name: item.name,
+            rarity: item.rarity,
+            canStack: item.canStack,
+            stackSize: item.stackSize,
+          })
           .from(item)
-          .where(inArray(item.id, rewards.reward_items))
+          .where(inArray(item.id, uniqueItemIds))
       : [],
     (rewards.reward_jutsus?.length ?? 0) > 0
       ? client
@@ -1422,11 +1436,35 @@ export const updateRewards = async (info: {
     rewards.reward_gathering_items_ids,
   );
 
-  // Total items to insert
+  // Expand reward items based on quantities, respecting stack sizes
+  const expandedRewardItems: { id: string; name: string; quantity: number }[] = [];
+  for (const itemData of items) {
+    const count = itemIdCounts.get(itemData.id) ?? 1;
+    if (itemData.canStack && itemData.stackSize > 1) {
+      // For stackable items, insert with quantity respecting stackSize limits
+      let remaining = count;
+      while (remaining > 0) {
+        const qty = Math.min(remaining, itemData.stackSize);
+        expandedRewardItems.push({ id: itemData.id, name: itemData.name, quantity: qty });
+        remaining -= qty;
+      }
+    } else {
+      // For non-stackable items, insert multiple rows (one per item)
+      for (let i = 0; i < count; i++) {
+        expandedRewardItems.push({ id: itemData.id, name: itemData.name, quantity: 1 });
+      }
+    }
+  }
+
+  // Total items to insert (hunter and gathering items are always quantity 1)
   const itemsToInsert = [
-    ...items,
-    ...(droppedHunterItems || []),
-    ...(droppedGatheringItems || []),
+    ...expandedRewardItems,
+    ...(droppedHunterItems || []).map((i) => ({ id: i.id, name: i.name, quantity: 1 })),
+    ...(droppedGatheringItems || []).map((i) => ({
+      id: i.id,
+      name: i.name,
+      quantity: 1,
+    })),
   ];
 
   // Update userdata
@@ -1561,14 +1599,15 @@ export const updateRewards = async (info: {
           ),
         ),
     ],
-    // Insert items
+    // Insert items with quantity
     ...[
       itemsToInsert.length > 0 &&
         client.insert(userItem).values(
-          itemsToInsert.map(({ id }) => ({
+          itemsToInsert.map(({ id, quantity }) => ({
             id: nanoid(),
             userId: user.userId,
             itemId: id,
+            quantity: quantity,
           })),
         ),
     ],

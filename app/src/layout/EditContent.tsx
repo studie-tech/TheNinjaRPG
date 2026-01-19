@@ -1332,6 +1332,7 @@ export const EditContent = <
                                       <Input
                                         type="number"
                                         min={1}
+                                        step={1}
                                         className="w-20"
                                         title="Quantity"
                                         placeholder="qty"
