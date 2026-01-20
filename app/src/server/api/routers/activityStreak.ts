@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
-import { eq, and, desc, gte, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, gte, isNull, sql, ne } from "drizzle-orm";
 import {
   userData,
   activityStreakConfig,
@@ -486,6 +486,7 @@ export const activityStreakRouter = createTRPCRouter({
             .set({
               currentDay: progress.currentDay,
               lastClaimDate: progress.lastClaimDate,
+              ...(streakReset && { startedAt: progress.startedAt }),
             })
             .where(eq(userStreakProgress.id, progress.id));
           return errorResponse("Not enough reputation points");
