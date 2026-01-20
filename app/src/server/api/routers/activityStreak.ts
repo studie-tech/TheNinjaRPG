@@ -433,6 +433,10 @@ export const activityStreakRouter = createTRPCRouter({
         if (progress.currentDay >= config.totalDays) {
           return errorResponse("Streak already completed - cannot catch up beyond total days");
         }
+        // Guard: cannot claim beyond theoretical max (can't buy ahead of time)
+        if (progress.currentDay + 1 > theoreticalMaxDay) {
+          return errorResponse("Cannot claim beyond current day - you can only catch up to today");
+        }
         newCurrentDay = progress.currentDay + 1;
         paidCatchUp = true;
       } else if (continuous || progress.currentDay === 0) {
