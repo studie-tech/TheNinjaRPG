@@ -212,7 +212,7 @@ export function ActivityStreakPanel() {
           <CardContent className="space-y-4">
             {/* Catchup panel - shown when user is behind and needs to catch up */}
             {streak.needsCatchUp && (
-              <div className="p-4 bg-orange-500/10 rounded-lg space-y-3">
+              <div className="p-4 bg-orange-500/10 rounded-lg mt-2 space-y-3">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
@@ -258,7 +258,7 @@ export function ActivityStreakPanel() {
                     }
                     onAccept={(e) => {
                       e.preventDefault();
-                      claimStreak.mutate({ configId: streak.configId, payCatchUp: false });
+                      claimStreak.mutate({ configId: streak.configId, reset: true });
                     }}
                   >
                     <div className="space-y-2">
@@ -326,8 +326,9 @@ export function ActivityStreakPanel() {
                 // A day is "to catch up" if it's between currentDay and theoreticalMaxDay
                 const isMissed =
                   streak.needsCatchUp &&
+                  streak.theoreticalMaxDay !== undefined &&
                   day > streak.currentDay &&
-                  day <= (streak.theoreticalMaxDay ?? streak.totalDays);
+                  day <= streak.theoreticalMaxDay;
                 const isFuture =
                   day > (streak.theoreticalMaxDay ?? streak.nextDayNumber);
                 const reward = streak.allRewards.find((r) => r.dayNumber === day);

@@ -89,15 +89,13 @@ export const activityStreakRouter = createTRPCRouter({
         const theoreticalMaxDay = Math.min(daysSinceStart + 1, config.totalDays);
 
         // User is behind if their current day is less than theoretical max
+        // Note: currentDay === 0 means "fresh start" (never claimed or just completed/reset),
+        // not "behind" - you can't be behind if you haven't started
         const isBehind =
-          config.streakType === "RECURRING" &&
-          progress.currentDay < theoreticalMaxDay;
+          progress.currentDay > 0 && progress.currentDay < theoreticalMaxDay;
 
         // Streak is broken if outside the 36-hour window (but user has progress)
-        const streakBroken =
-          config.streakType === "RECURRING" &&
-          !withinThreshold &&
-          progress.currentDay > 0;
+        const streakBroken = !withinThreshold && progress.currentDay > 0;
 
         // User needs to catch up if they're behind AND either:
         // - Their streak is broken (missed 36hr window), OR
@@ -389,48 +387,50 @@ export const activityStreakRouter = createTRPCRouter({
       const continuous = isStreakContinuous(progress.lastClaimDate);
 
       // Check if user can still catch up (not at theoretical max yet)
-      const canCatchUp =
-        config.streakType === "RECURRING" &&
-        progress.currentDay < theoreticalMaxDay;
-
-      // Guard: not already claimed today (unless catching up)
-      if (isToday(progress.lastClaimDate) && !input.payCatchUp) {
-        return errorResponse("You have already claimed this streak today");
-      }
+      const canCatchUp = progress.currentDay < theoreticalMaxDay;
 
       // Determine new day number and whether we need to charge for catchup
+      // Logic is the same for both RECURRING and EVENT_PASS
       let newCurrentDay: number;
       let streakReset = false;
       let paidCatchUp = false;
 
-      if (config.streakType === "RECURRING") {
-        if (continuous || progress.currentDay === 0) {
-          // Normal claim - streak is continuous or just starting
-          newCurrentDay = progress.currentDay + 1;
-        } else if (input.payCatchUp) {
-          // User chose to pay to continue streak
-          // Guard: can't buy ahead of theoretical max
-          if (!canCatchUp) {
-            return errorResponse(
-              "You have already caught up to today. Come back tomorrow!",
-            );
-          }
-          // Guard: must have enough reputation points
-          if (user.reputationPoints < COST_STREAK_CATCHUP_DAY) {
-            return errorResponse(
-              `Not enough reputation points. Required: ${COST_STREAK_CATCHUP_DAY}, Available: ${Math.floor(user.reputationPoints)}`,
-            );
-          }
-          newCurrentDay = progress.currentDay + 1;
-          paidCatchUp = true;
-        } else {
-          // User chose to reset streak
-          newCurrentDay = 1;
-          streakReset = true;
+      // Handle explicit reset first - always allowed, user wants to start over
+      if (input.reset) {
+        // Guard: must have progress to reset (can't reset from day 0)
+        if (progress.currentDay === 0) {
+          return errorResponse("Nothing to reset - you haven't started this streak yet");
         }
-      } else {
-        // EVENT_PASS: simple increment
+        newCurrentDay = 1;
+        streakReset = true;
+      } else if (input.payCatchUp) {
+        // Pay to catch up - only valid in catch-up scenarios
+        // Guard: can only pay to catch up if canCatchUp is true (user is behind)
+        if (!canCatchUp) {
+          return errorResponse(
+            "You can only pay to catch up when you are behind. Come back tomorrow!",
+          );
+        }
+        // Guard: must have enough reputation points
+        if (user.reputationPoints < COST_STREAK_CATCHUP_DAY) {
+          return errorResponse(
+            `Not enough reputation points. Required: ${COST_STREAK_CATCHUP_DAY}, Available: ${Math.floor(user.reputationPoints)}`,
+          );
+        }
         newCurrentDay = progress.currentDay + 1;
+        paidCatchUp = true;
+      } else if (continuous || progress.currentDay === 0) {
+        // Normal claim - streak is continuous or just starting
+        // Guard: not already claimed today (only for normal claims)
+        if (isToday(progress.lastClaimDate)) {
+          return errorResponse("You have already claimed this streak today");
+        }
+        newCurrentDay = progress.currentDay + 1;
+      } else {
+        // Streak is broken and user didn't choose to pay or reset
+        // Auto-reset to day 1
+        newCurrentDay = 1;
+        streakReset = true;
       }
 
       // Get rewards for this day
@@ -441,7 +441,31 @@ export const activityStreakRouter = createTRPCRouter({
       // Check if this completes the streak
       const isComplete = newCurrentDay >= config.totalDays;
 
-      // If paying for catchup, deduct reputation points first
+      // Optimistic concurrency guard: Update progress with lastClaimDate check to prevent double-claims
+      // IMPORTANT: This must happen BEFORE the reputation deduction to prevent losing rep
+      // without claiming the streak day in case of concurrent requests
+      const progressUpdateResult = await ctx.drizzle
+        .update(userStreakProgress)
+        .set({
+          currentDay: newCurrentDay,
+          lastClaimDate: now,
+          // Reset startedAt when streak is reset so theoreticalMaxDay calculates from new start
+          ...(streakReset && { startedAt: now }),
+        })
+        .where(
+          and(
+            eq(userStreakProgress.id, progress.id),
+            progress.lastClaimDate === null
+              ? isNull(userStreakProgress.lastClaimDate)
+              : eq(userStreakProgress.lastClaimDate, progress.lastClaimDate),
+          ),
+        );
+
+      if (progressUpdateResult.rowsAffected === 0) {
+        return errorResponse("You have already claimed this streak today");
+      }
+
+      // If paying for catchup, deduct reputation points after successful progress update
       if (paidCatchUp) {
         const repUpdateResult = await ctx.drizzle
           .update(userData)
@@ -456,28 +480,16 @@ export const activityStreakRouter = createTRPCRouter({
           );
 
         if (repUpdateResult.rowsAffected === 0) {
+          // Rollback the progress update since we couldn't deduct reputation
+          await ctx.drizzle
+            .update(userStreakProgress)
+            .set({
+              currentDay: progress.currentDay,
+              lastClaimDate: progress.lastClaimDate,
+            })
+            .where(eq(userStreakProgress.id, progress.id));
           return errorResponse("Not enough reputation points");
         }
-      }
-
-      // Optimistic concurrency guard: Update progress with lastClaimDate check to prevent double-claims
-      const progressUpdateResult = await ctx.drizzle
-        .update(userStreakProgress)
-        .set({
-          currentDay: newCurrentDay,
-          lastClaimDate: now,
-        })
-        .where(
-          and(
-            eq(userStreakProgress.id, progress.id),
-            progress.lastClaimDate === null
-              ? isNull(userStreakProgress.lastClaimDate)
-              : eq(userStreakProgress.lastClaimDate, progress.lastClaimDate),
-          ),
-        );
-
-      if (progressUpdateResult.rowsAffected === 0) {
-        return errorResponse("You have already claimed this streak today");
       }
 
       // Only grant rewards after successful progress update
