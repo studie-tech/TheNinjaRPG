@@ -386,8 +386,12 @@ export const activityStreakRouter = createTRPCRouter({
       // Check if streak is continuous (within 36-hour window)
       const continuous = isStreakContinuous(progress.lastClaimDate);
 
-      // Check if user can still catch up (not at theoretical max yet)
-      const canCatchUp = progress.currentDay < theoreticalMaxDay;
+      // Check if already claimed today (used for guards in multiple branches)
+      const alreadyClaimedToday = isToday(progress.lastClaimDate);
+
+      // Check if user can still catch up (not at theoretical max yet AND has started)
+      // Note: currentDay === 0 means "fresh start", not "behind" - first claim should be free
+      const canCatchUp = progress.currentDay > 0 && progress.currentDay < theoreticalMaxDay;
 
       // Determine new day number and whether we need to charge for catchup
       // Logic is the same for both RECURRING and EVENT_PASS
@@ -395,11 +399,19 @@ export const activityStreakRouter = createTRPCRouter({
       let streakReset = false;
       let paidCatchUp = false;
 
-      // Handle explicit reset first - always allowed, user wants to start over
+      // Handle explicit reset first - only allowed when behind and not claimed today
       if (input.reset) {
-        // Guard: must have progress to reset (can't reset from day 0)
-        if (progress.currentDay === 0) {
-          return errorResponse("Nothing to reset - you haven't started this streak yet");
+        // Guard: must have progress to reset (can't reset from day 0 or day 1)
+        if (progress.currentDay <= 1) {
+          return errorResponse("Nothing to reset - you're already at the beginning");
+        }
+        // Guard: can only reset if not already claimed today
+        if (alreadyClaimedToday) {
+          return errorResponse("You have already claimed this streak today");
+        }
+        // Guard: can only reset if behind (canCatchUp means user is behind theoreticalMaxDay)
+        if (!canCatchUp) {
+          return errorResponse("Cannot reset - your streak is on track! Just claim the next day.");
         }
         newCurrentDay = 1;
         streakReset = true;
@@ -422,7 +434,7 @@ export const activityStreakRouter = createTRPCRouter({
       } else if (continuous || progress.currentDay === 0) {
         // Normal claim - streak is continuous or just starting
         // Guard: not already claimed today (only for normal claims)
-        if (isToday(progress.lastClaimDate)) {
+        if (alreadyClaimedToday) {
           return errorResponse("You have already claimed this streak today");
         }
         newCurrentDay = progress.currentDay + 1;
