@@ -2143,6 +2143,12 @@ export const insertAiSchema = createInsertSchema(userData)
     travelFinishAt: true,
     questData: true,
     occupation: true,
+    stealthActivatedAt: true,
+    stealthCooldownAt: true,
+    lastSensoryAt: true,
+    covertTrainingType: true,
+    covertTrainingStartedAt: true,
+    covertTrainingMinutes: true,
   })
   .merge(
     z.object({
