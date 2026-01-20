@@ -90,6 +90,8 @@ export type PurchaseEventPassInput = z.infer<typeof purchaseEventPassSchema>;
 // Schema for claiming a streak day
 export const claimStreakDaySchema = z.object({
   configId: z.string(),
+  // If true, user pays 1 rep to continue streak instead of resetting
+  payCatchUp: z.boolean().optional().default(false),
 });
 export type ClaimStreakDayInput = z.infer<typeof claimStreakDaySchema>;
 

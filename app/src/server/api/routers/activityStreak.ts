@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
-import { eq, and, ne, desc, gte, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, gte, isNull, sql } from "drizzle-orm";
 import {
   userData,
   activityStreakConfig,
@@ -17,6 +17,7 @@ import {
   purchaseEventPassSchema,
   claimStreakDaySchema,
 } from "@/validators/activityStreak";
+import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { baseServerResponse, errorResponse } from "@/api/trpc";
 import { fetchUser } from "@/routers/profile";
 import { updateRewards } from "@/server/api/routers/quests";
@@ -69,24 +70,50 @@ export const activityStreakRouter = createTRPCRouter({
       (p) => p.config?.streakType === "RECURRING" && p.config.isActive,
     );
 
-    // Build response
+    // Build response - filter out deactivated configs to avoid showing claimable streaks that can't actually be claimed
     const streaks = progressEntries
       .map((progress) => {
         const config = progress.config;
         if (!config) return null;
 
-        const canClaimToday = !isToday(progress.lastClaimDate);
+        // Skip deactivated configs - users cannot claim these
+        if (!config.isActive) return null;
+
+        const alreadyClaimedToday = isToday(progress.lastClaimDate);
         const withinThreshold = isStreakContinuous(progress.lastClaimDate);
 
-        // For RECURRING, if streak broken, will reset to day 1
-        const effectiveDay =
+        // Calculate theoretical max day based on days since started (capped at totalDays)
+        const daysSinceStart = Math.floor(
+          (Date.now() - new Date(progress.startedAt).getTime()) / (1000 * 60 * 60 * 24),
+        );
+        const theoreticalMaxDay = Math.min(daysSinceStart + 1, config.totalDays);
+
+        // User is behind if their current day is less than theoretical max
+        const isBehind =
+          config.streakType === "RECURRING" &&
+          progress.currentDay < theoreticalMaxDay;
+
+        // Streak is broken if outside the 36-hour window (but user has progress)
+        const streakBroken =
           config.streakType === "RECURRING" &&
           !withinThreshold &&
-          progress.currentDay > 0
-            ? 0
-            : progress.currentDay;
+          progress.currentDay > 0;
 
-        const nextDayNumber = effectiveDay + 1;
+        // User needs to catch up if they're behind AND either:
+        // - Their streak is broken (missed 36hr window), OR
+        // - They've already claimed today (actively catching up)
+        const needsCatchUp = isBehind && (streakBroken || alreadyClaimedToday);
+
+        // Calculate days remaining to catch up
+        const daysToGo = needsCatchUp
+          ? Math.max(0, theoreticalMaxDay - progress.currentDay)
+          : 0;
+
+        // Can claim normally if not already claimed today and streak not broken
+        const canClaimToday = !alreadyClaimedToday && !streakBroken;
+
+        // Next day number is always currentDay + 1 (user continues from where they are)
+        const nextDayNumber = progress.currentDay + 1;
         const nextReward = config.rewards.find((r) => r.dayNumber === nextDayNumber);
 
         return {
@@ -96,14 +123,13 @@ export const activityStreakRouter = createTRPCRouter({
           configImage: config.image,
           streakType: config.streakType,
           totalDays: config.totalDays,
-          currentDay: effectiveDay,
+          currentDay: progress.currentDay,
+          theoreticalMaxDay,
+          daysToGo,
           nextDayNumber,
           canClaimToday,
-          alreadyClaimedToday: isToday(progress.lastClaimDate),
-          streakWillReset:
-            config.streakType === "RECURRING" &&
-            !withinThreshold &&
-            progress.currentDay > 0,
+          alreadyClaimedToday,
+          needsCatchUp,
           nextRewards: nextReward?.rewards ?? null,
           allRewards: config.rewards.sort((a, b) => a.dayNumber - b.dayNumber),
           startedAt: progress.startedAt,
@@ -353,22 +379,52 @@ export const activityStreakRouter = createTRPCRouter({
         return errorResponse("You need to purchase this event pass first");
       }
 
-      // Guard: not already claimed today
-      if (isToday(progress.lastClaimDate)) {
+      // Calculate theoretical max day to prevent buying ahead
+      const daysSinceStart = Math.floor(
+        (Date.now() - new Date(progress.startedAt).getTime()) / (1000 * 60 * 60 * 24),
+      );
+      const theoreticalMaxDay = Math.min(daysSinceStart + 1, config.totalDays);
+
+      // Check if streak is continuous (within 36-hour window)
+      const continuous = isStreakContinuous(progress.lastClaimDate);
+
+      // Check if user can still catch up (not at theoretical max yet)
+      const canCatchUp =
+        config.streakType === "RECURRING" &&
+        progress.currentDay < theoreticalMaxDay;
+
+      // Guard: not already claimed today (unless catching up)
+      if (isToday(progress.lastClaimDate) && !input.payCatchUp) {
         return errorResponse("You have already claimed this streak today");
       }
 
-      // Calculate new day number
+      // Determine new day number and whether we need to charge for catchup
       let newCurrentDay: number;
       let streakReset = false;
+      let paidCatchUp = false;
 
       if (config.streakType === "RECURRING") {
-        // RECURRING: check continuity, reset if broken
-        const continuous = isStreakContinuous(progress.lastClaimDate);
         if (continuous || progress.currentDay === 0) {
+          // Normal claim - streak is continuous or just starting
           newCurrentDay = progress.currentDay + 1;
+        } else if (input.payCatchUp) {
+          // User chose to pay to continue streak
+          // Guard: can't buy ahead of theoretical max
+          if (!canCatchUp) {
+            return errorResponse(
+              "You have already caught up to today. Come back tomorrow!",
+            );
+          }
+          // Guard: must have enough reputation points
+          if (user.reputationPoints < COST_STREAK_CATCHUP_DAY) {
+            return errorResponse(
+              `Not enough reputation points. Required: ${COST_STREAK_CATCHUP_DAY}, Available: ${Math.floor(user.reputationPoints)}`,
+            );
+          }
+          newCurrentDay = progress.currentDay + 1;
+          paidCatchUp = true;
         } else {
-          // Streak broken, reset to day 1
+          // User chose to reset streak
           newCurrentDay = 1;
           streakReset = true;
         }
@@ -384,6 +440,25 @@ export const activityStreakRouter = createTRPCRouter({
 
       // Check if this completes the streak
       const isComplete = newCurrentDay >= config.totalDays;
+
+      // If paying for catchup, deduct reputation points first
+      if (paidCatchUp) {
+        const repUpdateResult = await ctx.drizzle
+          .update(userData)
+          .set({
+            reputationPoints: sql`${userData.reputationPoints} - ${COST_STREAK_CATCHUP_DAY}`,
+          })
+          .where(
+            and(
+              eq(userData.userId, ctx.userId),
+              gte(userData.reputationPoints, COST_STREAK_CATCHUP_DAY),
+            ),
+          );
+
+        if (repUpdateResult.rowsAffected === 0) {
+          return errorResponse("Not enough reputation points");
+        }
+      }
 
       // Optimistic concurrency guard: Update progress with lastClaimDate check to prevent double-claims
       const progressUpdateResult = await ctx.drizzle
@@ -457,11 +532,14 @@ export const activityStreakRouter = createTRPCRouter({
         ? `Rewards: ${rewardPreview}`
         : "Streak claimed!";
       const resetMsg = streakReset ? "(Streak reset) " : "";
+      const catchUpMsg = paidCatchUp
+        ? `(Paid ${COST_STREAK_CATCHUP_DAY} rep to continue) `
+        : "";
       const completeMsg = isComplete ? " Streak completed!" : "";
 
       return {
         success: true,
-        message: `Day ${newCurrentDay} claimed! ${resetMsg}${rewardText}${completeMsg}`,
+        message: `Day ${newCurrentDay} claimed! ${resetMsg}${catchUpMsg}${rewardText}${completeMsg}`,
       };
     }),
 
@@ -511,13 +589,8 @@ export const activityStreakRouter = createTRPCRouter({
     .input(activityStreakConfigSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch user and check for existing RECURRING
-      const [user, existingRecurring] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        ctx.drizzle.query.activityStreakConfig.findFirst({
-          where: eq(activityStreakConfig.streakType, "RECURRING"),
-        }),
-      ]);
+      // Fetch user
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
 
       // Guard: permission check
       if (!canChangeContent(user.role)) {
@@ -526,14 +599,7 @@ export const activityStreakRouter = createTRPCRouter({
         );
       }
 
-      // Guard: prevent multiple RECURRING configs
-      if (input.streakType === "RECURRING" && existingRecurring) {
-        return errorResponse(
-          "A RECURRING streak configuration already exists. Only one RECURRING config is allowed.",
-        );
-      }
-
-      // Create config
+      // Create config first (insert before deactivation to prevent race condition)
       const configId = nanoid();
       await ctx.drizzle.insert(activityStreakConfig).values({
         id: configId,
@@ -551,6 +617,7 @@ export const activityStreakRouter = createTRPCRouter({
         createdByUserId: ctx.userId,
       });
 
+
       // Create rewards for each day
       if (input.rewards.length > 0) {
         await createRewardsForConfig(ctx.drizzle, configId, input.rewards);
@@ -564,17 +631,11 @@ export const activityStreakRouter = createTRPCRouter({
     .input(activityStreakConfigUpdateSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch user, existing config, and check for other RECURRING configs
-      const [user, existingConfig, existingRecurring] = await Promise.all([
+      // Fetch user and existing config
+      const [user, existingConfig] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.activityStreakConfig.findFirst({
           where: eq(activityStreakConfig.id, input.id),
-        }),
-        ctx.drizzle.query.activityStreakConfig.findFirst({
-          where: and(
-            eq(activityStreakConfig.streakType, "RECURRING"),
-            ne(activityStreakConfig.id, input.id),
-          ),
         }),
       ]);
 
@@ -588,13 +649,6 @@ export const activityStreakRouter = createTRPCRouter({
       // Guard: config exists
       if (!existingConfig) {
         return errorResponse("Configuration not found");
-      }
-
-      // Guard: prevent multiple RECURRING configs
-      if (input.streakType === "RECURRING" && existingRecurring) {
-        return errorResponse(
-          "A RECURRING streak configuration already exists. Only one RECURRING config is allowed.",
-        );
       }
 
       // Update config and delete existing rewards in parallel

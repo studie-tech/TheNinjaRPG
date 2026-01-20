@@ -80,6 +80,7 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import UserRequestSystem from "@/layout/UserRequestSystem";
+import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import type { Gender } from "@/validators/register";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import type { Bloodline, Village } from "@/drizzle/schema";
@@ -159,6 +160,14 @@ export default function EditProfile() {
           onClick={setActiveElement}
         >
           <Marriage />
+        </Accordion>
+        <Accordion
+          title="Activity Rewards"
+          selectedTitle={activeElement}
+          unselectedSubtitle="View and claim your daily activity streak"
+          onClick={setActiveElement}
+        >
+          <ActivityStreakPanel />
         </Accordion>
         <Accordion
           title="Name Change"
