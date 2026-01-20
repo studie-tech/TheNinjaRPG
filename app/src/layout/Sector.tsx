@@ -1165,7 +1165,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
 
   // Form schema
   const levelSliderSchema = z.object({
-    value: z.number().min(1).max(2),
+    value: z.number().min(0).max(100),
   });
   type LevelSliderSchema = z.infer<typeof levelSliderSchema>;
 
@@ -1179,7 +1179,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
     resolver: zodResolver(levelSliderSchema),
     defaultValues: { value: storedLvl || 1 },
   });
-  const watchedLevel = round(useWatch({ control, name: "value", defaultValue: 2 }));
+  const watchedLevel = round(useWatch({ control, name: "value" }));
 
   // Filter users
   const users = props.users

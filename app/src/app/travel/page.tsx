@@ -33,6 +33,7 @@ import {
   ZapOff,
   Ghost,
   Radar,
+  Swords,
 } from "lucide-react";
 import { HousePlus } from "lucide-react";
 import { api } from "@/app/_trpc/client";
@@ -88,6 +89,16 @@ export default function Travel() {
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showSorrounding, setShowSorrounding] = useState<boolean>(false);
   const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
+  const [revealedPlayers, setRevealedPlayers] = useState<
+    { userId: string; username: string; longitude: number; latitude: number }[]
+  >([]);
+  const [showRevealedPlayersModal, setShowRevealedPlayersModal] = useState<boolean>(false);
+  const [pendingAttackTarget, setPendingAttackTarget] = useState<{
+    userId: string;
+    username: string;
+    longitude: number;
+    latitude: number;
+  } | null>(null);
 
   const [activeTab, setActiveTab] = useState<string>("");
 
@@ -112,13 +123,17 @@ export default function Travel() {
     { sector: userData?.sector || -1 },
     { enabled: !!userData },
   );
-  const villages = villageData?.filter((v) => {
-    if (userData?.isOutlaw) {
-      return true;
-    } else {
-      return ["VILLAGE", "SAFEZONE"].includes(v.type);
-    }
-  });
+  // Memoize villages to prevent re-creating array reference on every render
+  // This is important because useLiveCountdown triggers re-renders every second
+  const villages = useMemo(() => {
+    return villageData?.filter((v) => {
+      if (userData?.isOutlaw) {
+        return true;
+      } else {
+        return ["VILLAGE", "SAFEZONE"].includes(v.type);
+      }
+    });
+  }, [villageData, userData?.isOutlaw]);
 
   // Fetch tracked bounties for map display
   const { data: trackedBounties } = api.bounty.getTrackedBounties.useQuery(undefined, {
@@ -297,6 +312,30 @@ export default function Travel() {
         if (data.success && data.data) {
           await updateUser({ lastSensoryAt: data.data.lastSensoryAt });
           await utils.travel.getSectorData.invalidate();
+          if (data.data.detectedUsers.length > 0) {
+            setRevealedPlayers(data.data.detectedUsers);
+            setShowRevealedPlayersModal(true);
+          }
+        }
+      },
+    });
+
+  const { mutate: attackRevealedUser, isPending: isAttackingRevealed } =
+    api.combat.attackUser.useMutation({
+      onSuccess: async (data) => {
+        if (data.success) {
+          setShowRevealedPlayersModal(false);
+          setRevealedPlayers([]);
+          await updateUser({
+            status: "BATTLE",
+            battleId: data.battleId,
+            updatedAt: new Date(),
+          });
+        } else {
+          showMutationToast({
+            success: false,
+            message: data.message,
+          });
         }
       },
     });
@@ -344,6 +383,49 @@ export default function Travel() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPosition]);
+
+  // Attack revealed stealthed player after moving to their position
+  useEffect(() => {
+    if (
+      pendingAttackTarget &&
+      currentPosition &&
+      userData &&
+      currentPosition.x === pendingAttackTarget.longitude &&
+      currentPosition.y === pendingAttackTarget.latitude &&
+      !isAttackingRevealed
+    ) {
+      attackRevealedUser({
+        userId: pendingAttackTarget.userId,
+        longitude: pendingAttackTarget.longitude,
+        latitude: pendingAttackTarget.latitude,
+        sector: userData.sector,
+      });
+      setPendingAttackTarget(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPosition, pendingAttackTarget]);
+
+  // Memoized Map component to prevent re-renders during countdown updates
+  const MapComponent = useMemo(() => {
+    return (
+      villages &&
+      globe && (
+        <Map
+          intersection={true}
+          highlights={villages}
+          usersHighlighted={trackedBounties}
+          userLocation={true}
+          showOwnership={showOwnership}
+          onTileClick={(sector) => {
+            setTargetSector(sector);
+            setShowModal(true);
+          }}
+          hexasphere={globe}
+        />
+      )
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [villages, globe, trackedBounties, showOwnership]);
 
   // Battle scene
   const SectorComponent = useMemo(() => {
@@ -608,20 +690,7 @@ export default function Travel() {
           </div>
         }
       >
-        {showGlobal && (
-          <Map
-            intersection={true}
-            highlights={villages}
-            usersHighlighted={trackedBounties}
-            userLocation={true}
-            showOwnership={showOwnership}
-            onTileClick={(sector) => {
-              setTargetSector(sector);
-              setShowModal(true);
-            }}
-            hexasphere={globe}
-          />
-        )}
+        {showGlobal && MapComponent}
         {mapError && <MapError />}
         {showSector && SectorComponent}
         {!villages && <Loader explanation="Loading data" />}
@@ -753,6 +822,83 @@ export default function Travel() {
         setIsOpen={setShowAutoAttackModal}
         onEnable={() => setAutoAttackMode(true)}
       />
+
+      {/* Revealed Players Modal (from Sensory Scan) */}
+      {showRevealedPlayersModal && revealedPlayers.length > 0 && (
+        <Modal2
+          title="Players Revealed by Sensory!"
+          isOpen={showRevealedPlayersModal}
+          setIsOpen={setShowRevealedPlayersModal}
+          isValid={false}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Your sensory ability detected the following stealthed players:
+            </p>
+            {revealedPlayers.map((player) => {
+              const sameHex =
+                player.latitude === userData?.latitude &&
+                player.longitude === userData?.longitude;
+              return (
+                <div
+                  key={player.userId}
+                  className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                >
+                  <div>
+                    <p className="font-semibold">{player.username}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Position: ({player.longitude}, {player.latitude})
+                      {sameHex && " - Same hex as you!"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    {sameHex && userData ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() =>
+                          attackRevealedUser({
+                            userId: player.userId,
+                            longitude: player.longitude,
+                            latitude: player.latitude,
+                            sector: userData.sector,
+                          })
+                        }
+                        disabled={isAttackingRevealed}
+                      >
+                        <Swords className="h-4 w-4 mr-1" />
+                        Attack
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          setPendingAttackTarget({
+                            userId: player.userId,
+                            username: player.username,
+                            longitude: player.longitude,
+                            latitude: player.latitude,
+                          });
+                          setTargetPosition({
+                            x: player.longitude,
+                            y: player.latitude,
+                          });
+                          setShowRevealedPlayersModal(false);
+                        }}
+                        disabled={isAttackingRevealed || !!pendingAttackTarget}
+                      >
+                        <Swords className="h-4 w-4 mr-1" />
+                        Attack
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Modal2>
+      )}
     </>
   );
 }
