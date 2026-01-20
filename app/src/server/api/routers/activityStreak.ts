@@ -429,6 +429,10 @@ export const activityStreakRouter = createTRPCRouter({
             `Not enough reputation points. Required: ${COST_STREAK_CATCHUP_DAY}, Available: ${Math.floor(user.reputationPoints)}`,
           );
         }
+        // Guard: cannot catch up beyond total days
+        if (progress.currentDay >= config.totalDays) {
+          return errorResponse("Streak already completed - cannot catch up beyond total days");
+        }
         newCurrentDay = progress.currentDay + 1;
         paidCatchUp = true;
       } else if (continuous || progress.currentDay === 0) {
