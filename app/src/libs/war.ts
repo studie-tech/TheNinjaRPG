@@ -1,6 +1,7 @@
 import { drizzleDB } from "@/server/db";
 import { war, village, villageStructure, userRequest } from "@/drizzle/schema";
 import { userData, notification, gameSetting, sector } from "@/drizzle/schema";
+import { mpvpBattleQueue } from "@/drizzle/schema";
 import { eq, and, or, ne, isNull } from "drizzle-orm";
 import { sql, inArray } from "drizzle-orm";
 import {
@@ -449,23 +450,67 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
       : []),
   ]);
 
-  // Clean up incomplete war quests for users in villages involved in this war
-  // Run separately after other operations to avoid deadlock (this query joins QuestHistory with UserData)
-  // Daily cron will reassign if they're still in another war
-  await drizzleDB.execute(sql`
-    DELETE qh FROM QuestHistory qh
-    INNER JOIN UserData ud ON qh.userId = ud.userId
-    WHERE qh.questType = 'war'
-      AND qh.completed = 0
-      AND ud.villageId IN (${sql.join(
-        [
-          activeWar.attackerVillageId,
-          activeWar.defenderVillageId,
-          ...activeWar.warAllies.map((a) => a.villageId),
-        ].map((id) => sql`${id}`),
-        sql`, `,
-      )})
-  `);
+  // Clean up incomplete war quests and pending shrine battles
+  // Run separately after other operations to avoid deadlock (these queries join multiple tables)
+  await Promise.all([
+    // Clean up incomplete war quests for users in villages involved in this war
+    // Daily cron will reassign if they're still in another war
+    drizzleDB.execute(sql`
+      DELETE qh FROM QuestHistory qh
+      INNER JOIN UserData ud ON qh.userId = ud.userId
+      WHERE qh.questType = 'war'
+        AND qh.completed = 0
+        AND ud.villageId IN (${sql.join(
+          [
+            activeWar.attackerVillageId,
+            activeWar.defenderVillageId,
+            ...activeWar.warAllies.map((a) => a.villageId),
+          ].map((id) => sql`${id}`),
+          sql`, `,
+        )})
+    `),
+    // For sector wars: reset users queued for shrine battles to AWAKE status
+    // This can run in parallel with quest cleanup since they operate on different data
+    ...(activeWar.type === "SECTOR_WAR" && activeWar.sector
+      ? [
+          drizzleDB.execute(sql`
+            UPDATE UserData ud
+            INNER JOIN MpvpBattleUser mbu ON ud.userId = mbu.userId
+            INNER JOIN MpvpBattleQueue mbq ON mbu.clanBattleId = mbq.id
+            SET ud.status = 'AWAKE'
+            WHERE mbq.battleType = 'SHRINE_BATTLE'
+              AND mbq.sector = ${activeWar.sector}
+              AND mbq.battleId IS NULL
+              AND ud.status = 'QUEUED'
+          `),
+        ]
+      : []),
+  ]);
+
+  // For sector wars: delete battle user records, then queue records
+  // These must run sequentially after the UPDATE above since:
+  // 1. The UPDATE uses JOIN on MpvpBattleUser to find users to reset
+  // 2. The MpvpBattleUser DELETE uses JOIN on MpvpBattleQueue to find records to delete
+  if (activeWar.type === "SECTOR_WAR" && activeWar.sector) {
+    // Delete battle user records for pending shrine battles
+    await drizzleDB.execute(sql`
+      DELETE mbu FROM MpvpBattleUser mbu
+      INNER JOIN MpvpBattleQueue mbq ON mbu.clanBattleId = mbq.id
+      WHERE mbq.battleType = 'SHRINE_BATTLE'
+        AND mbq.sector = ${activeWar.sector}
+        AND mbq.battleId IS NULL
+    `);
+    // Delete pending shrine battle queue records
+    await drizzleDB
+      .delete(mpvpBattleQueue)
+      .where(
+        and(
+          eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+          eq(mpvpBattleQueue.sector, activeWar.sector),
+          isNull(mpvpBattleQueue.battleId),
+        ),
+      );
+  }
 
   // Return updated war
   return { ...activeWar, status, endedAt } as FetchActiveWarsReturnType;
