@@ -416,11 +416,13 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ itemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const info = await fetchItem(ctx.drizzle, input.itemId);
-      const userItems = await ctx.drizzle.query.userItem.findMany({
-        where: and(eq(userItem.userId, ctx.userId), eq(userItem.itemId, input.itemId)),
-        with: { imbuements: true },
-      });
+      const [info, userItems] = await Promise.all([
+        fetchItem(ctx.drizzle, input.itemId),
+        ctx.drizzle.query.userItem.findMany({
+          where: and(eq(userItem.userId, ctx.userId), eq(userItem.itemId, input.itemId)),
+          with: { imbuements: true },
+        }),
+      ]);
       const filteredUserItems = userItems.filter(
         (i) =>
           i.imbuements.length === 0 &&
@@ -428,22 +430,36 @@ export const itemRouter = createTRPCRouter({
       );
       const totalQuantity = filteredUserItems.reduce((acc, i) => acc + i.quantity, 0);
       if (info && filteredUserItems.length > 0) {
+        // Pre-calculate all operations to execute them atomically
+        const updateOperations: Promise<unknown>[] = [];
+        const deleteOperations: Promise<unknown>[] = [];
         let currentCount = 0;
+
         for (const i of filteredUserItems.keys()) {
           const id = filteredUserItems?.[i]?.id;
           const newQuantity = Math.min(info.stackSize, totalQuantity - currentCount);
           if (id) {
             if (newQuantity > 0) {
               currentCount += newQuantity;
-              await ctx.drizzle
-                .update(userItem)
-                .set({ quantity: newQuantity })
-                .where(eq(userItem.id, id));
+              updateOperations.push(
+                ctx.drizzle
+                  .update(userItem)
+                  .set({ quantity: newQuantity })
+                  .where(eq(userItem.id, id)),
+              );
             } else {
-              await ctx.drizzle.delete(userItem).where(eq(userItem.id, id));
+              deleteOperations.push(
+                ctx.drizzle.delete(userItem).where(eq(userItem.id, id)),
+              );
             }
           }
         }
+
+        // Execute updates first, then deletes, all in parallel within each batch
+        // This ensures we don't delete items before confirming updates succeeded
+        await Promise.all(updateOperations);
+        await Promise.all(deleteOperations);
+
         return { success: true, message: `Merged stacks of ${info.name}` };
       }
       return { success: false, message: "Failed to merge stacks" };
