@@ -737,9 +737,13 @@ export const adjustDamageGiven = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
+          // Use baseDamageForModifiers for percentage calculations to ensure additive stacking
+          // This prevents multiplicative behavior when multiple modifiers are applied
+          const baseDamage =
+            consequence.baseDamageForModifiers ?? consequence.damage;
           const change =
             effect.calculation === "percentage"
-              ? (power / 100) * consequence.damage
+              ? (power / 100) * baseDamage
               : power;
           if (effect.fromType === "bloodline") {
             if (
@@ -806,9 +810,13 @@ export const adjustDamageTaken = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
+          // Use baseDamageForModifiers for percentage calculations to ensure additive stacking
+          // This prevents multiplicative behavior when multiple modifiers are applied
+          const baseDamage =
+            consequence.baseDamageForModifiers ?? consequence.damage;
           const change =
             effect.calculation === "percentage"
-              ? (power / 100) * consequence.damage
+              ? (power / 100) * baseDamage
               : power;
           consequence.damage = consequence.damage + change * ratio;
         }
@@ -1267,8 +1275,12 @@ export const damageUser = (
       userId: effect.creatorId,
       targetId: effect.targetId,
       types: types,
-      ...(instant ? { damage: damage, rawDamage: rawDamage } : {}),
-      ...(residual ? { residual: damage, rawResidual: rawDamage } : {}),
+      ...(instant
+        ? { damage: damage, rawDamage: rawDamage, baseDamageForModifiers: damage }
+        : {}),
+      ...(residual
+        ? { residual: damage, rawResidual: rawDamage, baseDamageForModifiers: damage }
+        : {}),
     });
   }
   return getInfo(target, effect, "will take damage");
