@@ -177,6 +177,21 @@ export type CombatUserFields = {
   // Reference IDs to static data in extraState
   relationIds: string[];
   warIds: string[];
+  /** Base stat values used for additive percentage modifier calculations (e.g., increaseStat, decreaseStat) */
+  baseStatsForModifiers?: {
+    ninjutsuOffence?: number;
+    ninjutsuDefence?: number;
+    genjutsuOffence?: number;
+    genjutsuDefence?: number;
+    taijutsuOffence?: number;
+    taijutsuDefence?: number;
+    bukijutsuOffence?: number;
+    bukijutsuDefence?: number;
+    strength?: number;
+    speed?: number;
+    intelligence?: number;
+    willpower?: number;
+  };
 };
 
 /**

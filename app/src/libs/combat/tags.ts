@@ -413,6 +413,29 @@ export const getAffected = (effect: UserEffect, type?: "offence" | "defence") =>
   return result;
 };
 
+/**
+ * Helper to apply a percentage stat modifier additively.
+ * Uses baseStatsForModifiers to ensure additive stacking when multiple modifiers are applied.
+ */
+const applyPercentageStatModifier = (
+  target: BattleUserState,
+  statName: keyof NonNullable<BattleUserState["baseStatsForModifiers"]>,
+  power: number,
+) => {
+  // Initialize baseStatsForModifiers if not present
+  if (!target.baseStatsForModifiers) {
+    target.baseStatsForModifiers = {};
+  }
+  // Store base stat value if not already stored
+  if (target.baseStatsForModifiers[statName] === undefined) {
+    target.baseStatsForModifiers[statName] = target[statName] as number;
+  }
+  // Use base stat for percentage calculation to ensure additive stacking
+  const baseStat = target.baseStatsForModifiers[statName]!;
+  const change = (power / 100) * baseStat;
+  (target[statName] as number) = (target[statName] as number) + change;
+};
+
 /** Adjust stats of target based on effect */
 export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
   const { power, adverb, qualifier } = getPower(effect);
@@ -455,37 +478,12 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               }
             }
           } else {
+            // Percentage calculation - use additive stacking
             if (effect.direction === "offence" || effect.direction === "both") {
-              switch (target.highestOffence) {
-                case "ninjutsuOffence":
-                  target.ninjutsuOffence *= (100 + power) / 100;
-                  break;
-                case "genjutsuOffence":
-                  target.genjutsuOffence *= (100 + power) / 100;
-                  break;
-                case "taijutsuOffence":
-                  target.taijutsuOffence *= (100 + power) / 100;
-                  break;
-                case "bukijutsuOffence":
-                  target.bukijutsuOffence *= (100 + power) / 100;
-                  break;
-              }
+              applyPercentageStatModifier(target, target.highestOffence, power);
             }
             if (effect.direction === "defence" || effect.direction === "both") {
-              switch (target.highestDefence) {
-                case "ninjutsuDefence":
-                  target.ninjutsuDefence *= (100 + power) / 100;
-                  break;
-                case "genjutsuDefence":
-                  target.genjutsuDefence *= (100 + power) / 100;
-                  break;
-                case "taijutsuDefence":
-                  target.taijutsuDefence *= (100 + power) / 100;
-                  break;
-                case "bukijutsuDefence":
-                  target.bukijutsuDefence *= (100 + power) / 100;
-                  break;
-              }
+              applyPercentageStatModifier(target, target.highestDefence, power);
             }
           }
         } else if (stat === "Ninjutsu") {
@@ -497,11 +495,12 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               target.ninjutsuDefence += power;
             }
           } else {
+            // Percentage calculation - use additive stacking
             if (effect.direction === "offence" || effect.direction === "both") {
-              target.ninjutsuOffence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "ninjutsuOffence", power);
             }
             if (effect.direction === "defence" || effect.direction === "both") {
-              target.ninjutsuDefence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "ninjutsuDefence", power);
             }
           }
         } else if (stat === "Genjutsu") {
@@ -513,11 +512,12 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               target.genjutsuDefence += power;
             }
           } else {
+            // Percentage calculation - use additive stacking
             if (effect.direction === "offence" || effect.direction === "both") {
-              target.genjutsuOffence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "genjutsuOffence", power);
             }
             if (effect.direction === "defence" || effect.direction === "both") {
-              target.genjutsuDefence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "genjutsuDefence", power);
             }
           }
         } else if (stat === "Taijutsu") {
@@ -529,11 +529,12 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               target.taijutsuDefence += power;
             }
           } else {
+            // Percentage calculation - use additive stacking
             if (effect.direction === "offence" || effect.direction === "both") {
-              target.taijutsuOffence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "taijutsuOffence", power);
             }
             if (effect.direction === "defence" || effect.direction === "both") {
-              target.taijutsuDefence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "taijutsuDefence", power);
             }
           }
         } else if (stat === "Bukijutsu") {
@@ -545,11 +546,12 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               target.bukijutsuDefence += power;
             }
           } else {
+            // Percentage calculation - use additive stacking
             if (effect.direction === "offence" || effect.direction === "both") {
-              target.bukijutsuOffence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "bukijutsuOffence", power);
             }
             if (effect.direction === "defence" || effect.direction === "both") {
-              target.bukijutsuDefence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "bukijutsuDefence", power);
             }
           }
         }
@@ -561,33 +563,34 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               target[gen] += power;
             });
           } else if (effect.calculation === "percentage") {
+            // Percentage calculation - use additive stacking
             target.highestGenerals.forEach((gen) => {
-              target[gen] *= (100 + power) / 100;
+              applyPercentageStatModifier(target, gen, power);
             });
           }
         } else if (general === "Strength") {
           if (effect.calculation === "static") {
             target.strength += power;
           } else if (effect.calculation === "percentage") {
-            target.strength *= (100 + power) / 100;
+            applyPercentageStatModifier(target, "strength", power);
           }
         } else if (general === "Intelligence") {
           if (effect.calculation === "static") {
             target.intelligence += power;
           } else if (effect.calculation === "percentage") {
-            target.intelligence *= (100 + power) / 100;
+            applyPercentageStatModifier(target, "intelligence", power);
           }
         } else if (general === "Willpower") {
           if (effect.calculation === "static") {
             target.willpower += power;
           } else if (effect.calculation === "percentage") {
-            target.willpower *= (100 + power) / 100;
+            applyPercentageStatModifier(target, "willpower", power);
           }
         } else if (general === "Speed") {
           if (effect.calculation === "static") {
             target.speed += power;
           } else if (effect.calculation === "percentage") {
-            target.speed *= (100 + power) / 100;
+            applyPercentageStatModifier(target, "speed", power);
           }
         }
       });
