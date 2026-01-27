@@ -354,6 +354,7 @@ export const commentsRouter = createTRPCRouter({
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(createConversationSchema)
+    .output(baseServerResponse.extend({ conversationId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, sender] = await Promise.all([
@@ -374,7 +375,11 @@ export const commentsRouter = createTRPCRouter({
         title: input.title,
         content: input.comment,
       });
-      return { conversationId: convoId };
+      return {
+        success: true,
+        message: "Conversation created",
+        conversationId: convoId,
+      };
     }),
   exitConversation: protectedProcedure
     .input(z.object({ convo_id: z.string() }))

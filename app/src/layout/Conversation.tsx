@@ -464,6 +464,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
       },
       onSuccess: (data, _newComment, context) => {
         if (data.success) {
+          showMutationToast(data);
           if (conversation) reset({ object_id: conversation.id, comment: "" });
           setEditorKey((prev) => prev + 1);
           if (props.onCommentPosted) {
