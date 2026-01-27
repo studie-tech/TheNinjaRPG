@@ -2,7 +2,7 @@
  * This is a modal that is used to display a modal.
  * This is a replacement for the Modal component, which will be deprecated.
  */
-import React, { useEffect } from "react";
+import React from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,23 +36,24 @@ const Modal2: React.FC<Modal2Props> = (props) => {
     ? props.confirmClassName
     : "bg-blue-600 text-white hover:bg-blue-700";
 
-  // Handle key-presses for Enter key
-  useEffect(() => {
-    const onDocumentKeyDown = (event: KeyboardEvent) => {
-      // Don't trigger if the active element is a button (it will handle Enter itself)
-      const activeElement = document.activeElement;
-      const isButton = activeElement?.tagName === "BUTTON";
-      
-      if (event.key === "Enter" && props?.onAccept && !isButton) {
-        props.onAccept(event as unknown as React.KeyboardEvent<KeyboardEvent>);
-      }
-    };
-    document.addEventListener("keydown", onDocumentKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onDocumentKeyDown);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.onAccept]);
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Enter" || !props?.onAccept) return;
+    if (event.defaultPrevented) return;
+
+    const target = event.target as HTMLElement | null;
+    const isButton = target?.tagName === "BUTTON";
+    const isFormField =
+      target?.tagName === "INPUT" ||
+      target?.tagName === "TEXTAREA" ||
+      target?.tagName === "SELECT" ||
+      target?.isContentEditable;
+
+    if (isButton || isFormField) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    props.onAccept(event as unknown as React.KeyboardEvent<KeyboardEvent>);
+  };
 
   const handleDialogClose = () => {
     if (props.onClose) props.onClose();
@@ -70,6 +71,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
           "data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0",
           "sm:data-[state=open]:slide-in-from-top-[48%] sm:data-[state=closed]:slide-out-to-top-[48%]",
         )}
+        onKeyDown={handleDialogKeyDown}
         onEscapeKeyDown={handleDialogClose}
         onInteractOutside={handleDialogClose}
       >
