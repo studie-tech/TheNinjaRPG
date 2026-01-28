@@ -1317,6 +1317,7 @@ export const jutsu = mysqlTable(
     method: mysqlEnum("method", consts.AttackMethods).default("SINGLE").notNull(),
     hidden: boolean("hidden").default(false).notNull(),
     injectableInBattle: boolean("injectableInBattle").default(false).notNull(),
+    requiredItemIds: json("requiredItemIds").$type<string[]>().default([]).notNull(),
     battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
       .default("BOTH")
       .notNull(),

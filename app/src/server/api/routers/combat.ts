@@ -2539,7 +2539,7 @@ export const processUsersForBattle = async (
         }
         // Not if cannot train jutsu
         if (battleType !== "RANKED_PVP" && battleType !== "RANKED_SPARRING") {
-          if (!checkJutsuItems(userjutsu.jutsu, user.items) && !user.isAi) {
+          if (!checkJutsuItems(userjutsu.jutsu, user.items, true) && !user.isAi) {
             return false;
           }
           // Provide defaults for optional fields required by canTrainJutsu

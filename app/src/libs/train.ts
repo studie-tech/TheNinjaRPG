@@ -18,6 +18,7 @@ import { getUserElements } from "@/validators/user";
 import type { UserWithRelations } from "@/routers/profile";
 import type { LetterRank } from "@/drizzle/constants";
 import type { TrainingSpeed, BattleType } from "@/drizzle/constants";
+import type { UserItem } from "@/drizzle/schema";
 import type { UserItemWithItem, Jutsu, JutsuRank } from "@/drizzle/schema";
 import type { UserData, UserRank } from "@/drizzle/schema";
 import type { ElementName } from "@/drizzle/constants";
@@ -164,17 +165,63 @@ export const filterValidElementsTypeguard = (elements: string[]): ElementName[] 
 
 export const checkJutsuItems = (
   jutsu: Jutsu,
-  userItems: UserItemWithItem[] | undefined,
+  userItems: UserItem[] | undefined,
+  requireEquipped = true,
+  userItemsWithItem?: UserItemWithItem[],
 ) => {
+  const requiredItemIds = jutsu.requiredItemIds;
+  const hasRequiredItems =
+    Array.isArray(requiredItemIds) && requiredItemIds.length > 0;
+
+  // If specific required items are defined (AND semantics - ALL items required)
+  if (hasRequiredItems) {
+    if (requireEquipped) {
+      // For combat/usage: require ALL items to be equipped
+      const allItemsEquipped = requiredItemIds.every((reqId: string) =>
+        userItems?.some((ui) => ui.itemId === reqId && ui.equipped !== "NONE"),
+      );
+      if (!allItemsEquipped) return false;
+    } else {
+      // For training: require ALL items to be owned (in inventory)
+      const allItemsOwned = requiredItemIds.every((reqId: string) =>
+        userItems?.some((ui) => ui.itemId === reqId),
+      );
+      if (!allItemsOwned) return false;
+    }
+    return true;
+  }
+
+  // Otherwise fall back to weapon-type requirement
   if (jutsu.jutsuWeapon !== "NONE") {
-    const equippedItem = userItems?.find(
-      (useritem) =>
-        useritem.item.weaponType === jutsu.jutsuWeapon && useritem.equipped !== "NONE",
+    // Prefer relations if provided; otherwise try to infer when available. If we
+    // cannot access weaponType, fail closed (no weapon = requirement not met).
+    const itemsWithRelation =
+      userItemsWithItem ??
+      userItems?.filter((ui): ui is UserItemWithItem => "item" in ui);
+
+    if (!itemsWithRelation || itemsWithRelation.length === 0) return false;
+
+    const equippedWeapon = itemsWithRelation.find(
+      (ui) => ui.item.weaponType === jutsu.jutsuWeapon && ui.equipped !== "NONE",
     );
-    if (!equippedItem) return false;
+    if (!equippedWeapon) return false;
   }
   return true;
 };
+
+// Semantic wrapper for training checks
+export const hasRequiredItemsForTraining = (
+  jutsu: Jutsu,
+  userItems: UserItem[] | undefined,
+  userItemsWithItem?: UserItemWithItem[],
+) => checkJutsuItems(jutsu, userItems, false, userItemsWithItem);
+
+// Semantic wrapper for combat/usage checks
+export const hasRequiredItemsEquippedForUse = (
+  jutsu: Jutsu,
+  userItems: UserItem[] | undefined,
+  userItemsWithItem?: UserItemWithItem[],
+) => checkJutsuItems(jutsu, userItems, true, userItemsWithItem);
 
 export const canTrainJutsu = (
   jutsu: Jutsu,
@@ -188,7 +235,8 @@ export const canTrainJutsu = (
     checkJutsuRank(jutsu.jutsuRank, userdata.rank) &&
     checkJutsuVillage(jutsu, userdata) &&
     checkJutsuBloodline(jutsu, userdata) &&
-    checkJutsuElements(jutsu, userElements)
+    checkJutsuElements(jutsu, userElements) &&
+    checkJutsuItems(jutsu, userdata.items, false) // Training only needs ownership
   );
 };
 

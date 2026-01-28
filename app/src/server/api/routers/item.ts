@@ -475,9 +475,14 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, useritem] = await Promise.all([
+      const [user, useritem, equippedJutsus] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
+        ctx.drizzle.query.userJutsu.findMany({
+          where: (table, { eq, and }) =>
+            and(eq(table.userId, ctx.userId), eq(table.equipped, true)),
+          with: { jutsu: true },
+        }),
       ]);
       const structures = await fetchStructures(ctx.drizzle, user.villageId);
       // Guard
@@ -488,6 +493,19 @@ export const itemRouter = createTRPCRouter({
       }
       if (useritem.isInAuction) {
         return errorResponse("Cannot sell item in auction");
+      }
+      // Check if any equipped jutsu requires this item
+      const jutsuRequiringItem = equippedJutsus.find((uj) => {
+        if (!uj.jutsu) return false;
+        const requiredIds = (uj.jutsu as any).requiredItemIds;
+        return (
+          Array.isArray(requiredIds) && requiredIds.includes(useritem.item.id)
+        );
+      });
+      if (jutsuRequiringItem) {
+        return errorResponse(
+          `Cannot sell this item. The equipped jutsu "${jutsuRequiringItem.jutsu?.name}" requires it. Please unequip the jutsu first.`,
+        );
       }
       // Derived
       const cost = calcItemSellingPrice(user, useritem, structures);
@@ -1655,6 +1673,25 @@ export const toggleEquipItem = async (
   if (!useritem) return errorResponse("User item not found");
   if (useritem.storedAtHome) return errorResponse("Fetch at home first");
   const doEquip = slot ? useritem.equipped !== slot : useritem.equipped === "NONE";
+
+  // When unequipping, check if any equipped jutsu requires this item
+  if (!doEquip && useritem.equipped !== "NONE") {
+    const equippedJutsus = await client.query.userJutsu.findMany({
+      where: (table, { eq, and }) =>
+        and(eq(table.userId, user.userId), eq(table.equipped, true)),
+      with: { jutsu: true },
+    });
+    const jutsuRequiringItem = equippedJutsus.find((uj) => {
+      if (!uj.jutsu) return false;
+      const requiredIds = (uj.jutsu as any).requiredItemIds;
+      return Array.isArray(requiredIds) && requiredIds.includes(useritem.item.id);
+    });
+    if (jutsuRequiringItem) {
+      return errorResponse(
+        `Cannot unequip this item. The equipped jutsu "${jutsuRequiringItem.jutsu?.name}" requires it. Please unequip the jutsu first.`,
+      );
+    }
+  }
 
   // Only check requirements when equipping (not when unequipping)
   if (doEquip) {

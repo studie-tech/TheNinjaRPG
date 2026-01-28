@@ -1,0 +1,1 @@
+ALTER TABLE `Jutsu` ADD `requiredItemIds` json DEFAULT ('[]') NOT NULL;

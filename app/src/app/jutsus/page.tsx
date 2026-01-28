@@ -271,8 +271,15 @@ export default function MyJutsu() {
   const actionItems = userJutsus?.map((uj) => {
     let warning = "";
     if (userData) {
-      if (!checkJutsuItems(uj.jutsu, userItems)) {
-        warning = `No ${uj.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
+      if (!checkJutsuItems(uj.jutsu, userItems, true)) {
+        const requiredItemIds = uj.jutsu.requiredItemIds;
+        const hasRequiredItems =
+          Array.isArray(requiredItemIds) && requiredItemIds.length > 0;
+        if (hasRequiredItems) {
+          warning = "Missing required item(s) for this jutsu. Item must be equipped.";
+        } else {
+          warning = `No ${uj.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
+        }
       }
       if (!checkJutsuElements(uj.jutsu, userElements)) {
         warning = "You do not have the required elements to use this jutsu.";

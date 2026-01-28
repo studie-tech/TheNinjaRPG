@@ -1074,6 +1074,7 @@ export const JutsuValidatorRawSchema = z.object({
   statClassification: z.enum(StatTypes),
   hidden: z.coerce.boolean().optional(),
   injectableInBattle: z.coerce.boolean().default(false),
+  requiredItemIds: z.array(z.string()).default([]),
   healthCost: z.coerce.number().min(0).max(10000),
   chakraCost: z.coerce.number().min(0).max(10000),
   staminaCost: z.coerce.number().min(0).max(10000),

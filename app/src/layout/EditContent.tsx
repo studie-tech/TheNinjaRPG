@@ -8,6 +8,7 @@ import RichInput from "@/layout/RichInput";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { objectKeys } from "@/utils/typeutils";
 import { getTagSchema } from "@/validators/combat";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -70,6 +71,7 @@ export type FormEntry<K> = {
   readonly?: boolean;
 } & (
   | { type: "text" }
+  | { type: "textarea" }
   | { type: "richinput" }
   | { type: "date" }
   | { type: "number" }
@@ -580,6 +582,50 @@ export const EditContent = <
                       }}
                     />
                   )}
+                  {type === "textarea" && (
+                    <FormField
+                      control={form.control}
+                      name={id}
+                      render={({ field, fieldState }) => {
+                        // Special handling for array fields: convert to/from newline-separated text
+                        const isArrayField = Array.isArray(field.value);
+                        const displayValue = isArrayField
+                          ? (field.value as string[]).join("\n")
+                          : ((field.value ?? "") as string);
+                        
+                        const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                          if (isArrayField) {
+                            // Convert newline-separated text to array
+                            const arr = e.target.value
+                              .split("\n")
+                              .map((s) => s.trim())
+                              .filter((s) => s.length > 0);
+                            field.onChange(arr);
+                          } else {
+                            field.onChange(e.target.value);
+                          }
+                        };
+
+                        return (
+                          <FormItem>
+                            <FormLabel>
+                              {formEntry.label ? formEntry.label : id}
+                            </FormLabel>
+                            <FormControl>
+                              <Textarea
+                                id={id}
+                                className="min-h-[100px]"
+                                value={displayValue}
+                                onChange={handleChange}
+                                readOnly={formEntry.readonly}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  )}
                   {"boolean" === type && (
                     <FormField
                       control={form.control}
@@ -607,14 +653,14 @@ export const EditContent = <
                     <FormField
                       control={form.control}
                       name={id}
-                      render={({ fieldState }) => {
+                      render={({ field, fieldState }) => {
                         return (
                           <FormItem>
                             <FormControl>
                               <RichInput
                                 id={id}
                                 height="200"
-                                placeholder={currentValues[id] as string}
+                                placeholder={field.value}
                                 label={formEntry.label ? formEntry.label : id}
                                 control={form.control}
                                 isDirty={fieldState.isDirty}

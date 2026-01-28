@@ -327,6 +327,7 @@ export const jutsuRouter = createTRPCRouter({
         target: "OTHER_USER",
         jutsuType: "AI",
         image: IMG_AVATAR_DEFAULT,
+        requiredItemIds: [],
       });
       return { success: true, message: id };
     } else {
@@ -427,6 +428,38 @@ export const jutsuRouter = createTRPCRouter({
       if (entry.id === TUTORIAL_JUTSU_ID && input?.data?.hidden)
         return errorResponse("Cannot hide tutorial jutsu");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+
+      // Validate and sanitize requiredItemIds if present
+      if (input.data.requiredItemIds && input.data.requiredItemIds.length > 0) {
+        // Sanitize: remove empty strings, whitespace-only, and duplicates
+        const sanitizedIds = [
+          ...new Set(
+            input.data.requiredItemIds
+              .map((id) => id.trim())
+              .filter((id) => id.length > 0),
+          ),
+        ];
+        
+        if (sanitizedIds.length === 0) {
+          return errorResponse("requiredItemIds contains only empty values");
+        }
+        
+        // Update input with sanitized values
+        input.data.requiredItemIds = sanitizedIds;
+        
+        const itemsExist = await ctx.drizzle.query.item.findMany({
+          columns: { id: true },
+          where: inArray(item.id, sanitizedIds),
+        });
+        const foundIds = new Set(itemsExist.map((i) => i.id));
+        const invalidIds = sanitizedIds.filter((id) => !foundIds.has(id));
+        if (invalidIds.length > 0) {
+          return errorResponse(
+            `Invalid item IDs: ${invalidIds.join(", ")}. Please check the item IDs are correct.`,
+          );
+        }
+      }
+
       if (!input.data.injectableInBattle) {
         const totalRelations =
           relations.jutsuInjectors.length +

@@ -109,6 +109,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     { id: "battleUsageType", type: "str_array", values: BattleUsageTypes },
     { id: "hidden", type: "boolean" },
     { id: "injectableInBattle", type: "boolean" },
+    { id: "requiredItemIds", type: "textarea", label: "Required Item IDs (one per line)" },
   ];
 
   return { jutsu, effects, form, formData, loading, setEffects, handleJutsuSubmit };
