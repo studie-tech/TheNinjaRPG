@@ -79,7 +79,7 @@ import { performAIaction } from "@/libs/combat/ai_v2";
 import { userData, questHistory, quest, gameSetting, jutsu } from "@/drizzle/schema";
 import { battle, battleAction, battleHistory, war, item } from "@/drizzle/schema";
 import { villageAlliance, village, tournamentMatch, bounty } from "@/drizzle/schema";
-import { sector } from "@/drizzle/schema";
+import { sector, gameAsset } from "@/drizzle/schema";
 import { performActionSchema, statSchema, BarrierTag } from "@/validators/combat";
 import { performBattleAction, stillInBattle } from "@/libs/combat/actions";
 import { availableUserActions } from "@/libs/combat/actions";
@@ -1409,8 +1409,10 @@ export const initiateBattle = async (
   ] = await Promise.all([
     // Essentials
     fetchBattleEssentials(client),
-    // Fetch game assets
-    fetchGameAssets(client),
+    // Fetch game assets (only battlefield ones to avoid row limit)
+    client.query.gameAsset.findMany({
+      where: and(eq(gameAsset.hidden, false), eq(gameAsset.onInitialBattleField, true)),
+    }),
     // Fetch achievements
     client
       .select()
@@ -2223,16 +2225,32 @@ export const processUsersForBattle = async (
       relationIds: [],
       warIds: [],
       // Initialize jutsus and items (will be processed below)
-      jutsus: inputUser.jutsus.map((uj) => ({
-        ...uj,
-        lastUsedRound: -uj.jutsu.cooldown,
-        originalCooldown: uj.jutsu.cooldown,
-      })),
-      items: inputUser.items.map((ui) => ({
-        ...ui,
-        lastUsedRound: -ui.item.cooldown,
-        originalCooldown: ui.item.cooldown,
-      })),
+      jutsus: inputUser.jutsus
+        .filter((uj) => {
+          if (!uj.jutsu) {
+            console.error(`Jutsu not found for UserJutsu ${uj.id}`);
+            return false;
+          }
+          return true;
+        })
+        .map((uj) => ({
+          ...uj,
+          lastUsedRound: -uj.jutsu.cooldown,
+          originalCooldown: uj.jutsu.cooldown,
+        })),
+      items: inputUser.items
+        .filter((ui) => {
+          if (!ui.item) {
+            console.error(`Item not found for UserItem ${ui.id}`);
+            return false;
+          }
+          return true;
+        })
+        .map((ui) => ({
+          ...ui,
+          lastUsedRound: -ui.item.cooldown,
+          originalCooldown: ui.item.cooldown,
+        })),
     };
 
     // Add regen to pools. Pools are not updated "live" in the database, but rather are calculated on the frontend

@@ -17,7 +17,7 @@ import { useUserData } from "@/utils/UserContext";
 import { ShieldCheck, Swords, Moon, Sun, Dumbbell, Star } from "lucide-react";
 import { LayoutList, Atom } from "lucide-react";
 import { sealCheck } from "@/libs/combat/tags";
-import { isEffectActive } from "@/libs/combat/util";
+import { isEffectActive, getPreventTypeName } from "@/libs/combat/util";
 import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
 import { useGameMenu } from "@/libs/menus";
 import { secondsFromDate } from "@/utils/time";
@@ -487,6 +487,7 @@ type CollapsedEffect = {
   upDownEffect: boolean;
   rounds: number[];
   sealed: boolean;
+  blocks?: string; // For immunity effects
 };
 
 interface VisualizeEffectsProps {
@@ -589,12 +590,14 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           value = Math.abs(val.power + val.level * val.powerPerLevel) * sign;
         }
         cats.forEach((cat) => {
+          const valBlocks = "blocks" in val ? (val.blocks as string) : undefined;
           const found = acc.find(
             (e) =>
               e.type === baseType &&
               e.calculation === val.calculation &&
               e.category === cat &&
-              e.sealed === isSealed,
+              e.sealed === isSealed &&
+              e.blocks === valBlocks,
           );
           if (found) {
             found.value += value;
@@ -608,6 +611,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
               upDownEffect: dual,
               rounds: val.rounds ? [val.rounds] : [],
               sealed: isSealed,
+              blocks: valBlocks,
             });
           }
         });
@@ -649,7 +653,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
     return (
       <div
-        key={`${i}-${e.type}-${e.category}`}
+        key={`${i}-${e.type}-${e.category}-${e.blocks || ""}`}
         className="flex flex-row items-center gap-2"
       >
         <ElementImage element={e.category} className="w-6 h-6 shrink-0" />
@@ -692,6 +696,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     "range",
     "onehitkillprevent",
     "summonprevent",
+    "immunity",
     "seal",
     "stun",
     "stealth",
@@ -775,17 +780,18 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     increasecooldown: "Increase Cooldown",
     decreasecooldown: "Decrease Cooldown",
     fleeprevent: "Cannot Flee",
-    robprevent: "Rob Immunity",
-    buffprevent: "Buff Immunity",
-    debuffprevent: "Debuff Immunity",
-    clearprevent: "Clear Immunity",
-    cleanseprevent: "Cleanse Immunity",
-    healprevent: "Heal Prevention",
-    stunprevent: "Stun Resistance",
+    robprevent: "Cannot be Robbed",
+    buffprevent: "Cannot be Buffed",
+    debuffprevent: "Cannot be Debuffed",
+    clearprevent: "Cannot be Cleared",
+    cleanseprevent: "Cannot be Cleansed",
+    healprevent: "Cannot be Healed",
+    stunprevent: "Cannot be Stunned",
     moveprevent: "Immobilized",
-    sealprevent: "Seal Immunity",
-    onehitkillprevent: "OHKO Immunity",
-    summonprevent: "Summons Prevented",
+    sealprevent: "Cannot be Sealed",
+    onehitkillprevent: "Cannot be OHKO'd",
+    summonprevent: "Cannot Summon",
+    immunity: "Immunity",
     seal: "BL Sealed",
     stun: "Stunned",
     stealth: "Stealthed",
@@ -798,15 +804,23 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     redirection: "Redirection",
   };
 
+  const getEffectLabel = (e: (typeof statusEffects)[number]) => {
+    if (e.type === "immunity" && "blocks" in e && e.blocks) {
+      const preventType = getPreventTypeName(e.blocks as string);
+      return `Immune to ${preventType.charAt(0).toUpperCase() + preventType.slice(1)} Prevent`;
+    }
+    return statusLabel[e.type] || e.type;
+  };
+
   const statusVisuals = statusEffects.map((e) => (
     <div
-      key={`${e.type}-${e.category}`}
+      key={`${e.type}-${e.category}-${e.blocks || ""}`}
       className="flex flex-row items-center gap-2 text-xs"
     >
       <ElementImage element={e.category} className="w-6 h-6 shrink-0" />
       <div
         className={cn(e.sealed && "line-through")}
-      >{`${statusLabel[e.type] || e.type} ${valueTxt(e)} ${roundsTxt(e)}`}</div>
+      >{`${getEffectLabel(e)} ${valueTxt(e)} ${roundsTxt(e)}`}</div>
     </div>
   ));
 

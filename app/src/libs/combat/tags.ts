@@ -8,11 +8,16 @@ import {
   DecreaseCooldownTag,
   HealTag,
 } from "@/validators/combat";
-import { isEffectActive } from "@/libs/combat/util";
+import { isEffectActive, getPreventTypeName } from "@/libs/combat/util";
 import type { BattleUserState, Consequence, ReturnedUserState } from "./types";
 import type { GroundEffect, UserEffect, ActionEffect } from "./types";
 import type { StatNames, GenNames, DmgConfig } from "./constants";
-import type { WeaknessTagType, ShieldTagType } from "@/validators/combat";
+import type {
+  WeaknessTagType,
+  ShieldTagType,
+  ImmunityTagType,
+  PreventTagType,
+} from "@/validators/combat";
 import type { CombatAction } from "@/libs/combat/types";
 import type { GeneralType } from "@/drizzle/constants";
 import type { BattleType } from "@/drizzle/constants";
@@ -141,11 +146,45 @@ export const absorb = (
   );
 };
 
+/**
+ * Check if an immunity effect blocks a prevent effect.
+ * Only checks immunity for NEW effects being applied.
+ * Returns an ActionEffect if blocked, undefined if not blocked.
+ */
+const checkPreventImmunity = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+  preventName: string,
+): ActionEffect | undefined => {
+  if (effect.isNew) {
+    const hasImmunity = usersEffects.some(
+      (e) =>
+        e.type === "immunity" &&
+        e.targetId === target.userId &&
+        (e.rounds === undefined || e.rounds > 0) &&
+        "blocks" in e &&
+        e.blocks === effect.type,
+    );
+    if (hasImmunity) {
+      effect.rounds = 0;
+      return {
+        txt: `${target.username}'s immunity blocked ${preventName} prevention!`,
+        color: "blue" as const,
+      };
+    }
+  }
+  return undefined;
+};
+
 /** Prevent buffing */
 export const buffPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "buff");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -357,8 +396,11 @@ export const injectjutsus = (
 /** Prevent debuffing */
 export const debuffPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "debuff");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -741,12 +783,9 @@ export const adjustDamageGiven = (
           const ratio = getEfficiencyRatio(damageEffect, effect);
           // Use baseDamageForModifiers for percentage calculations to ensure additive stacking
           // This prevents multiplicative behavior when multiple modifiers are applied
-          const baseDamage =
-            consequence.baseDamageForModifiers ?? consequence.damage;
+          const baseDamage = consequence.baseDamageForModifiers ?? consequence.damage;
           const change =
-            effect.calculation === "percentage"
-              ? (power / 100) * baseDamage
-              : power;
+            effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           if (effect.fromType === "bloodline") {
             if (
               "allowBloodlineDamageIncrease" in damageEffect &&
@@ -814,12 +853,9 @@ export const adjustDamageTaken = (
           const ratio = getEfficiencyRatio(damageEffect, effect);
           // Use baseDamageForModifiers for percentage calculations to ensure additive stacking
           // This prevents multiplicative behavior when multiple modifiers are applied
-          const baseDamage =
-            consequence.baseDamageForModifiers ?? consequence.damage;
+          const baseDamage = consequence.baseDamageForModifiers ?? consequence.damage;
           const change =
-            effect.calculation === "percentage"
-              ? (power / 100) * baseDamage
-              : power;
+            effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           consequence.damage = consequence.damage + change * ratio;
         }
       }
@@ -1372,8 +1408,11 @@ export const flee = (
 /** Check if flee prevent is successful depending on static chance calculation */
 export const fleePrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "flee");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -1445,8 +1484,11 @@ export const heal = (
 /** Prevent healing */
 export const healPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "heal");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -1864,6 +1906,16 @@ export const shield = (effect: UserEffect, target: BattleUserState) => {
   return info;
 };
 
+/** Blocks prevent effects from being applied to the target */
+export const immunity = (effect: UserEffect, target: BattleUserState) => {
+  const immunityEffect = effect as ImmunityTagType;
+  if (effect.isNew && effect.rounds) {
+    const preventType = getPreventTypeName(immunityEffect.blocks);
+    return getInfo(target, effect, `has immunity to ${preventType} prevention`);
+  }
+  return undefined;
+};
+
 /** Prevents the user from being reduced below 1 HP */
 export const finalStand = (effect: UserEffect, target: BattleUserState) => {
   const { power } = getPower(effect);
@@ -1935,8 +1987,16 @@ export const move = (
 /** Prevent target from moving */
 export const movePrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(
+    effect,
+    usersEffects,
+    target,
+    "movement",
+  );
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -1980,8 +2040,16 @@ export const onehitkill = (
 /** Status effect to prevent OHKO */
 export const onehitkillPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(
+    effect,
+    usersEffects,
+    target,
+    "one-hit-kill",
+  );
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2055,8 +2123,11 @@ export const rob = (
 /** Prevent robbing */
 export const robPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "rob");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2075,8 +2146,11 @@ export const robPrevent = (
 /** Prevent cleansing */
 export const cleansePrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "cleanse");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2095,8 +2169,11 @@ export const cleansePrevent = (
 /** Prevent clearing */
 export const clearPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "clear");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2149,8 +2226,11 @@ export const sealCheck = (effect: UserEffect, sealEffects: UserEffect[]) => {
 /** Prevent sealing of bloodline effects with a static chance */
 export const sealPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "seal");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2604,8 +2684,11 @@ export const redirection = (
 /** Prevent target from being stunned */
 export const stunPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "stun");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2739,11 +2822,14 @@ export const summon = (
   }
 };
 
-/** Prevent target from being stunned */
+/** Prevent target from summoning */
 export const summonPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "summon");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2913,13 +2999,14 @@ const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) => {
  */
 const preventCheck = (
   usersEffects: UserEffect[],
-  type: string,
+  type: PreventTagType,
   target: BattleUserState,
   effect?: UserEffect, // Add optional effect parameter to check creation time
 ) => {
   const preventTag = usersEffects.find(
     (e) => e.type == type && e.targetId === target.userId && !e.castThisRound,
   );
+
   if (preventTag && (preventTag.rounds === undefined || preventTag.rounds > 0)) {
     // Only prevent if the effect being checked was created after the prevent effect
     if (effect && preventTag.createdRound >= effect.createdRound) {

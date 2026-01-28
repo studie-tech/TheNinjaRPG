@@ -9,6 +9,7 @@ import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { SquarePen, Trash2, BarChartBig, Copy, Box } from "lucide-react";
 import { getTagSchema } from "@/validators/combat";
+import { getPreventTypeName } from "@/libs/combat/util";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { formatBattleUsageType } from "@/utils/string";
 import { showMutationToast } from "@/libs/toast";
@@ -741,6 +742,19 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               const result = schema.safeParse(effect);
               const parsedEffect = result.success ? result.data : undefined;
 
+              // Get custom description for immunity effects
+              const getEffectDescription = () => {
+                if (
+                  parsedEffect?.type === "immunity" &&
+                  "blocks" in parsedEffect &&
+                  parsedEffect.blocks
+                ) {
+                  const preventType = getPreventTypeName(parsedEffect.blocks as string);
+                  return `Grants immunity to ${preventType} prevention effects`;
+                }
+                return parsedEffect?.description;
+              };
+
               return (
                 <div
                   key={effect.type + i.toString()}
@@ -757,7 +771,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   {parsedEffect && (
                     <>
                       <div className="pb-1">
-                        <b>Effect {i + 1}: </b> <i>{parsedEffect.description}</i>
+                        <b>Effect {i + 1}: </b> <i>{getEffectDescription()}</i>
                       </div>
                       <div className="grid grid-cols-2">
                         {"rounds" in parsedEffect &&
@@ -770,6 +784,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                           <span>
                             <b>Calculation: </b>
                             {parsedEffect.calculation}
+                          </span>
+                        )}
+                        {"blocks" in parsedEffect && parsedEffect.blocks && (
+                          <span>
+                            <b>Blocks: </b>
+                            {getPreventTypeName(parsedEffect.blocks as string) +
+                              " prevention"}
                           </span>
                         )}
                         {"power" in parsedEffect && (
