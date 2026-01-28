@@ -36,7 +36,7 @@ import {
 } from "@/libs/train";
 import { DAY_S, secondsFromDate } from "@/utils/time";
 import { getFreeTransfers, getReskinnedUserJutsu } from "@/libs/jutsu";
-import { JutsuValidator } from "@/libs/combat/types";
+import { JutsuValidator } from "@/validators/combat";
 import {
   canChangeContent,
   canEditJutsus,
@@ -63,7 +63,7 @@ import {
 } from "@/validators/jutsu";
 import { QuestTracker } from "@/validators/objectives";
 import type { JutsuFilteringSchema } from "@/validators/jutsu";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { ZodAllTags } from "@/validators/combat";
 import type { UserData, JutsuLoadout, UserJutsuWithRelations } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { TRPCError } from "@trpc/server";
@@ -703,8 +703,7 @@ export const jutsuRouter = createTRPCRouter({
 
         const canAutoEquip =
           curEquip < maxEquip &&
-          (!jutsuHasResidual ||
-            residualJutsus.length < JUTSU_MAX_RESIDUAL_EQUIPPED) &&
+          (!jutsuHasResidual || residualJutsus.length < JUTSU_MAX_RESIDUAL_EQUIPPED) &&
           (!jutsuHasPierce || pierceJutsus.length < JUTSU_MAX_PIERCE_EQUIPPED) &&
           (!jutsuIsEvent || eventJutsus.length < JUTSU_MAX_EVENT_EQUIPPED) &&
           (!jutsuHasBarrier || barrierJutsus.length < JUTSU_MAX_BARRIER_EQUIPPED) &&
@@ -832,9 +831,7 @@ export const jutsuRouter = createTRPCRouter({
       const stunEquipped = equippedJutsus.filter((j) =>
         j.jutsu.effects.some((e) => e.type === "stun"),
       ).length;
-      const curJutsuIsStun = userjutsuObj?.jutsu.effects.some(
-        (e) => e.type === "stun",
-      );
+      const curJutsuIsStun = userjutsuObj?.jutsu.effects.some((e) => e.type === "stun");
       const newEquippedState = isEquipped ? false : true;
       const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
       const isLoaded = userjutsuObj && loadout?.jutsuIds.includes(userjutsuObj.jutsuId);
@@ -883,11 +880,7 @@ export const jutsuRouter = createTRPCRouter({
           `You cannot equip more than ${JUTSU_MAX_BARRIER_EQUIPPED} barrier jutsu`,
         );
       }
-      if (
-        !isEquipped &&
-        curJutsuIsStun &&
-        stunEquipped >= JUTSU_MAX_STUN_EQUIPPED
-      ) {
+      if (!isEquipped && curJutsuIsStun && stunEquipped >= JUTSU_MAX_STUN_EQUIPPED) {
         return errorResponse(
           `You cannot equip more than ${JUTSU_MAX_STUN_EQUIPPED} stun jutsu`,
         );

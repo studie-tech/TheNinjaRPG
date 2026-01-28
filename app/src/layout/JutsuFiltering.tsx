@@ -16,7 +16,7 @@ import {
   BattleUsageTypes,
 } from "@/drizzle/constants";
 import { statFilters, rarities } from "@/libs/train";
-import { effectFilters } from "@/libs/combat/types";
+import { effectFilters } from "@/validators/combat";
 import { formatBattleUsageType } from "@/utils/string";
 
 // Single-source schema

@@ -5,8 +5,13 @@ import {
   defineFilteringSchema,
   toOptions,
 } from "@/layout/ContentFiltering";
-import { effectFilters } from "@/libs/combat/types";
-import { ItemRarities, ItemSlotTypes, ItemTypes, BattleUsageTypes } from "@/drizzle/constants";
+import { effectFilters } from "@/validators/combat";
+import {
+  ItemRarities,
+  ItemSlotTypes,
+  ItemTypes,
+  BattleUsageTypes,
+} from "@/drizzle/constants";
 import { formatBattleUsageType } from "@/utils/string";
 import type { ItemType } from "@/drizzle/schema";
 

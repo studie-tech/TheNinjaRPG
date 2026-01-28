@@ -43,5 +43,3 @@ export default __t.object("SessionState", {
   spawnDelayMs: __t.u32(),
   status: __t.string(),
 });
-
-

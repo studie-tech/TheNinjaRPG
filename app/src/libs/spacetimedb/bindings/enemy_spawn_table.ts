@@ -11,7 +11,6 @@ import {
 } from "spacetimedb";
 import HexPosition from "./hex_position_type";
 
-
 export default __t.row({
   enemyId: __t.u64().primaryKey().name("enemy_id"),
   sessionId: __t.u64().name("session_id"),

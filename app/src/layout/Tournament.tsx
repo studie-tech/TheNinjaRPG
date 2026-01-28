@@ -30,7 +30,7 @@ import { tournamentCreateSchema } from "@/validators/tournament";
 import { TOURNAMENT_ROUND_SECONDS, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { secondsFromDate } from "@/utils/time";
 import type { TournamentMatch } from "@/drizzle/schema";
-import type { ObjectiveRewardType } from "@/validators/objectives";
+import type { ObjectiveRewardType } from "@/validators/rewards";
 import type { TournamentCreateSchema } from "@/validators/tournament";
 import type { TournamentType } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";

@@ -20,7 +20,9 @@ const BanInfo: React.FC<BanInfoProps> = () => {
         subtitle="You are banned"
         defaultBackHref="/profile"
       >
-        Please wait for your ban to end before you can access this page. If you need clarification or wish to ask a question, you can create a private support ticket to reach moderation.
+        Please wait for your ban to end before you can access this page. If you need
+        clarification or wish to ask a question, you can create a private support ticket
+        to reach moderation.
       </ContentBox>
       {report && (
         <DisplayUserReport report={report} initialBreak={true} hideHrefBack={true} />

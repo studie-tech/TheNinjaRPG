@@ -1,6 +1,6 @@
 import { ElementNames, LetterRanks, StatTypes } from "@/drizzle/constants";
 import { statFilters } from "@/libs/train";
-import { effectFilters } from "@/libs/combat/types";
+import { effectFilters } from "@/validators/combat";
 import { useUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import {

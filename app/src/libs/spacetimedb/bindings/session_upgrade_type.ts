@@ -16,5 +16,3 @@ export default __t.object("SessionUpgrade", {
   upgradeId: __t.string(),
   level: __t.u32(),
 });
-
-

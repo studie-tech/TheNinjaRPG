@@ -1,12 +1,12 @@
 import { secondsPassed, secondsFromNow } from "@/utils/time";
 import { ANBU_HOSPITAL_DISCOUNT_PERC } from "@/drizzle/constants";
-import { 
-  MEDNIN_REQUIRED_EXP, 
-  MEDNIN_MIN_RANK, 
+import {
+  MEDNIN_REQUIRED_EXP,
+  MEDNIN_MIN_RANK,
   MEDNIN_EXP_CAP,
   MEDNIN_EXP_PER_IMPROVEMENT,
   MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT,
-  MEDNIN_MIN_CHAKRA_FACTOR
+  MEDNIN_MIN_CHAKRA_FACTOR,
 } from "@/drizzle/constants";
 import { hasRequiredRank } from "@/libs/train";
 import type { MEDNIN_RANK } from "@/drizzle/constants";
@@ -87,7 +87,7 @@ export const calcMedninRank = (healer?: Partial<Healer>): MEDNIN_RANK => {
  */
 export const calcUserHealFactor = (healer: Healer) => {
   const base = 0.5;
-  
+
   switch (calcMedninRank(healer)) {
     case "NONE":
       return 0;
@@ -99,17 +99,19 @@ export const calcUserHealFactor = (healer: Healer) => {
       return base - 0.25;
     case "LEGENDARY": {
       let factor = base - 0.35;
-      
+
       // Apply progressive chakra cost reduction for experience above legendary
       if (healer.medicalExperience > MEDNIN_REQUIRED_EXP.LEGENDARY) {
         const expAboveLegendary = Math.min(
           healer.medicalExperience - MEDNIN_REQUIRED_EXP.LEGENDARY,
-          MEDNIN_EXP_CAP - MEDNIN_REQUIRED_EXP.LEGENDARY
+          MEDNIN_EXP_CAP - MEDNIN_REQUIRED_EXP.LEGENDARY,
         );
-        const additionalReduction = Math.floor(expAboveLegendary / MEDNIN_EXP_PER_IMPROVEMENT) * MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT;
+        const additionalReduction =
+          Math.floor(expAboveLegendary / MEDNIN_EXP_PER_IMPROVEMENT) *
+          MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT;
         factor = Math.max(MEDNIN_MIN_CHAKRA_FACTOR, factor - additionalReduction);
       }
-      
+
       return factor;
     }
   }

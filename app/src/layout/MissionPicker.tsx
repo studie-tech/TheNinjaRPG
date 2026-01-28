@@ -1,11 +1,7 @@
 import React from "react";
 import Image from "@/layout/Image";
 import { cn } from "src/libs/shadui";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,10 +29,18 @@ interface MissionPickerProps {
   disabled?: boolean;
   onMissionSelect: (mission: { id: string; name: string; image?: string }) => void;
   dialogTitle: string;
-  dialogDescription: (mission: { id: string; name: string; image?: string }) => React.ReactNode;
+  dialogDescription: (mission: {
+    id: string;
+    name: string;
+    image?: string;
+  }) => React.ReactNode;
   actionDisabled?: boolean;
   actionText?: string;
-  additionalContent?: (mission: { id: string; name: string; image?: string }) => React.ReactNode;
+  additionalContent?: (mission: {
+    id: string;
+    name: string;
+    image?: string;
+  }) => React.ReactNode;
 }
 
 export const MissionPicker: React.FC<MissionPickerProps> = ({
@@ -56,9 +60,7 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
       <PopoverTrigger asChild>
         <div
           className={cn(
-            disabled
-              ? "filter grayscale"
-              : "hover:cursor-pointer hover:opacity-30",
+            disabled ? "filter grayscale" : "hover:cursor-pointer hover:opacity-30",
           )}
         >
           <Image alt="small" src={setting.image} width={256} height={256} />
@@ -80,9 +82,7 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
                       width={128}
                       height={128}
                     />
-                    <p className="font-bold text-xs text-center">
-                      {mission.name}
-                    </p>
+                    <p className="font-bold text-xs text-center">{mission.name}</p>
                     {additionalContent?.(mission)}
                   </div>
                 </div>
@@ -99,13 +99,9 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   {actionDisabled ? (
-                    <AlertDialogAction disabled>
-                      {actionText}
-                    </AlertDialogAction>
+                    <AlertDialogAction disabled>{actionText}</AlertDialogAction>
                   ) : (
-                    <AlertDialogAction
-                      onClick={() => onMissionSelect(mission)}
-                    >
+                    <AlertDialogAction onClick={() => onMissionSelect(mission)}>
                       {actionText}
                     </AlertDialogAction>
                   )}

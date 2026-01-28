@@ -9,26 +9,26 @@ import {
   battle,
   battleAction,
   logBattleLengths,
+  notification,
   tournamentMatch,
   userData,
   userItem,
   userItemImbuement,
   userJutsu,
   mpvpBattleQueue,
+  mpvpBattleUser,
   warKill,
   bounty,
   war,
+  quest,
+  raidParticipation,
 } from "@/drizzle/schema";
-import {
-  kageDefendedChallenges,
-  village,
-  clan,
-  anbuSquad,
-} from "@/drizzle/schema";
+import { kageDefendedChallenges, village, clan, anbuSquad } from "@/drizzle/schema";
 import { dataBattleAction } from "@/drizzle/schema";
 import { getNewTrackers } from "@/libs/quest";
 import { battleJutsuExp } from "@/libs/train";
-import { updateUserOnMap } from "@/libs/pusher";
+import { updateUserOnMap, broadcastRaidAvailability } from "@/libs/pusher";
+import { prepareExclusiveRaidActivation } from "@/libs/raids";
 import { JUTSU_XP_TO_LEVEL } from "@/drizzle/constants";
 import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
 import {
@@ -109,7 +109,31 @@ export const updateBattle = async (
               }),
           ]
         : []),
+      // Clean up raid battle users - can run in parallel since it only reads from mpvpBattleQueue
+      ...(newBattle.battleType === "RAID"
+        ? [
+            client
+              .delete(mpvpBattleUser)
+              .where(
+                inArray(
+                  mpvpBattleUser.clanBattleId,
+                  client
+                    .select({ id: mpvpBattleQueue.id })
+                    .from(mpvpBattleQueue)
+                    .where(eq(mpvpBattleQueue.battleId, newBattle.id)),
+                ),
+              ),
+          ]
+        : []),
     ]);
+
+    // Delete raid queue entries AFTER the Promise.all to ensure mpvpBattleUser
+    // subquery has completed (it references mpvpBattleQueue)
+    if (newBattle.battleType === "RAID") {
+      await client
+        .delete(mpvpBattleQueue)
+        .where(eq(mpvpBattleQueue.battleId, newBattle.id));
+    }
   } else {
     const result = await client
       .update(battle)
@@ -357,6 +381,7 @@ export const updateClanLeaders = async (
 
 export const updateWars = async (
   client: DrizzleClient,
+  pusher: PusherClient,
   curBattle: CompleteBattle,
   result: CombatResult | null,
   userId: string,
@@ -395,6 +420,8 @@ export const updateWars = async (
   // when multiple targets share the same war (the changes in result are already accumulated across all targets)
   const processedShrineWarIds = new Set<string>();
   const processedWarHealthIds = new Set<string>();
+  // Track sectors where SECTOR_WAR shrine HP crossed to 0 (for exclusive raid activation)
+  const sectorsWithDefeatedShrine = new Set<number>();
 
   warResults.forEach((warResult) => {
     warResult.wars.forEach((w) => {
@@ -419,9 +446,7 @@ export const updateWars = async (
         // 3. Level difference adjustment (reduced to ±1 when STREAK_LEVEL_DIFF exceeded)
         // Combine attacker and defender changes for logging purposes
         const shrineInfo = result.villageWarShrineInfo[w.id];
-        logShrineHpChange = shrineInfo
-          ? shrineInfo.attacker + shrineInfo.defender
-          : 0;
+        logShrineHpChange = shrineInfo ? shrineInfo.attacker + shrineInfo.defender : 0;
       } else {
         logShrineHpChange = result.shrineChangeHp;
       }
@@ -451,6 +476,15 @@ export const updateWars = async (
         !processedShrineWarIds.has(w.id)
       ) {
         processedShrineWarIds.add(w.id);
+
+        // Check if shrine HP will cross to 0 (for exclusive raid activation)
+        // Only trigger if shrine was > 0 and will become <= 0
+        const currentShrineHp = w.defenderShrineHp ?? 0;
+        const newShrineHp = Math.max(0, currentShrineHp + result.shrineChangeHp);
+        if (currentShrineHp > 0 && newShrineHp <= 0) {
+          sectorsWithDefeatedShrine.add(w.sector);
+        }
+
         otherPromises.push(
           client
             .update(war)
@@ -485,9 +519,7 @@ export const updateWars = async (
               if (change === 0) return;
 
               const hpCol =
-                shrineType === "attacker"
-                  ? "attackerShrineHp"
-                  : "defenderShrineHp";
+                shrineType === "attacker" ? "attackerShrineHp" : "defenderShrineHp";
               const maxHpCol =
                 shrineType === "attacker"
                   ? "attackerShrineMaxHp"
@@ -497,17 +529,15 @@ export const updateWars = async (
                   ? "attackerShrineStatus"
                   : "defenderShrineStatus";
               const warHealthCol =
-                shrineType === "attacker"
-                  ? "attackerWarHealth"
-                  : "defenderWarHealth";
+                shrineType === "attacker" ? "attackerWarHealth" : "defenderWarHealth";
               const warHealthMaxCol =
                 shrineType === "attacker"
                   ? "attackerWarHealthMax"
                   : "defenderWarHealthMax";
               const villageName =
                 shrineType === "attacker"
-                  ? w.attackerVillage?.name ?? "Attacker"
-                  : w.defenderVillage?.name ?? "Defender";
+                  ? (w.attackerVillage?.name ?? "Attacker")
+                  : (w.defenderVillage?.name ?? "Defender");
 
               if (change < 0) {
                 // Attacking: reduce shrine HP, apply war health damage if crossing to 0 and status changes
@@ -667,25 +697,21 @@ export const updateWars = async (
             const hpCol =
               shrineType === "attacker" ? "attackerShrineHp" : "defenderShrineHp";
             const maxHpCol =
-              shrineType === "attacker"
-                ? "attackerShrineMaxHp"
-                : "defenderShrineMaxHp";
+              shrineType === "attacker" ? "attackerShrineMaxHp" : "defenderShrineMaxHp";
             const statusCol =
               shrineType === "attacker"
                 ? "attackerShrineStatus"
                 : "defenderShrineStatus";
             const warHealthCol =
-              shrineType === "attacker"
-                ? "attackerWarHealth"
-                : "defenderWarHealth";
+              shrineType === "attacker" ? "attackerWarHealth" : "defenderWarHealth";
             const warHealthMaxCol =
               shrineType === "attacker"
                 ? "attackerWarHealthMax"
                 : "defenderWarHealthMax";
             const villageName =
               shrineType === "attacker"
-                ? w.attackerVillage?.name ?? "Attacker"
-                : w.defenderVillage?.name ?? "Defender";
+                ? (w.attackerVillage?.name ?? "Attacker")
+                : (w.defenderVillage?.name ?? "Defender");
 
             if (change > 0) {
               // Defending/Recovering: increase shrine HP, apply war health heal if crossing recapture threshold
@@ -738,8 +764,38 @@ export const updateWars = async (
     }
   }
 
-  // Run all promises - shrine updates are processed independently to avoid race conditions
+  // Prepare raid activations using pre-loaded data (no DB fetch)
+  const preloadedRaids = curBattle.extraState.sectorExclusiveRaids ?? [];
+  const sectorsToNotify: number[] = [];
+
+  for (const sector of sectorsWithDefeatedShrine) {
+    const activation = prepareExclusiveRaidActivation(preloadedRaids, sector);
+    if (activation.activated) {
+      sectorsToNotify.push(sector);
+      // Add mutation promises to otherPromises
+      for (const m of activation.mutations) {
+        otherPromises.push(
+          client
+            .update(quest)
+            .set({
+              raidEndsAt: m.raidEndsAt,
+              raidCaptureDeadline: m.raidCaptureDeadline,
+              raidGracePeriodEnd: null,
+              raidBossCurrentHealth: m.raidBossCurrentHealth,
+            })
+            .where(eq(quest.id, m.raidId)),
+        );
+      }
+    }
+  }
+
+  // Run all promises in parallel - shrine updates are processed independently to avoid race conditions
   await Promise.all([...otherPromises, ...shrineUpdatePromises]);
+
+  // Broadcast pusher notifications after mutations complete
+  for (const sector of sectorsToNotify) {
+    await broadcastRaidAvailability(pusher, sector);
+  }
 };
 
 export const updateTournament = async (
@@ -810,6 +866,135 @@ export const updateVillageAnbuClan = async (
             .where(eq(clan.id, user.clanId)),
         ]
       : []),
+  ]);
+};
+
+/**
+ * Update raid boss progress and participation records after a RAID battle ends.
+ * Handles boss HP reduction, damage tracking per player, and defeat notifications.
+ *
+ * Protection against duplicate processing:
+ * 1. gte(quest.raidBossCurrentHealth, 1) guard ensures only one battle can reduce HP to 0
+ * 2. questUpdate.rowsAffected check prevents duplicate notifications
+ * 3. onDuplicateKeyUpdate for participation records handles concurrent upserts safely
+ */
+export const updateRaidProgress = async (
+  client: DrizzleClient,
+  curBattle: CompleteBattle,
+) => {
+  // Guard: Only process RAID battles with a raid quest ID
+  if (curBattle.battleType !== "RAID" || !curBattle.extraState.raidQuestId) {
+    return;
+  }
+
+  const raidQuestId = curBattle.extraState.raidQuestId;
+  const raidInitialBossHp = curBattle.extraState.raidInitialBossHp ?? 0;
+
+  // Find the boss in the battle state (exclude summons, which also have isAi=true)
+  const boss = curBattle.usersState.find((u) => u.isAi && !u.isSummon);
+
+  // Get all human players (attackers) sorted by userId for deterministic damage distribution
+  const attackers = curBattle.usersState
+    .filter((u) => !u.isAi && !u.isSummon)
+    .sort((a, b) => a.userId.localeCompare(b.userId));
+
+  if (!boss || raidInitialBossHp <= 0 || attackers.length === 0) {
+    return;
+  }
+
+  // Calculate total damage dealt to the boss this battle
+  const totalDamage = Math.max(0, raidInitialBossHp - Math.max(0, boss.curHealth));
+
+  // Only record damage if it's positive
+  if (totalDamage <= 0) {
+    return;
+  }
+
+  // Distribute damage among all attackers with remainder distribution
+  const baseDamagePerPlayer = Math.floor(totalDamage / attackers.length);
+  const remainder = totalDamage % attackers.length;
+
+  // Step 1: Run quest HP update and participation records in PARALLEL
+  // These are independent operations - no data dependency between them
+  const [questUpdate] = await Promise.all([
+    // Update raid boss HP in quest table
+    client
+      .update(quest)
+      .set({
+        raidBossCurrentHealth: sql`GREATEST(0, ${quest.raidBossCurrentHealth} - ${totalDamage})`,
+      })
+      .where(
+        and(
+          eq(quest.id, raidQuestId),
+          eq(quest.questType, "raid"),
+          gte(quest.raidBossCurrentHealth, 1),
+        ),
+      ),
+    // Update/insert participation records for ALL attackers using atomic upsert
+    // Remainder damage is distributed to the first N attackers (deterministic since sorted by userId)
+    ...attackers.map((attacker, index) => {
+      const damageForPlayer = baseDamagePerPlayer + (index < remainder ? 1 : 0);
+      return client
+        .insert(raidParticipation)
+        .values({
+          id: nanoid(),
+          questId: raidQuestId,
+          userId: attacker.userId,
+          damageDealt: damageForPlayer,
+          battleCount: 1,
+          rewardsClaimed: [],
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            damageDealt: sql`${raidParticipation.damageDealt} + ${damageForPlayer}`,
+            battleCount: sql`${raidParticipation.battleCount} + 1`,
+            updatedAt: new Date(),
+          },
+        });
+    }),
+  ]);
+
+  // Step 2: Only proceed if this battle actually reduced HP (prevents duplicate notifications)
+  if (questUpdate.rowsAffected === 0) {
+    return;
+  }
+
+  // Step 3: Fetch updated quest and participants in PARALLEL
+  const [updatedQuest, participants] = await Promise.all([
+    client.query.quest.findFirst({
+      where: eq(quest.id, raidQuestId),
+      columns: { raidBossCurrentHealth: true, name: true },
+    }),
+    client.query.raidParticipation.findMany({
+      where: eq(raidParticipation.questId, raidQuestId),
+      columns: { userId: true },
+    }),
+  ]);
+
+  const bossDefeated = (updatedQuest?.raidBossCurrentHealth ?? 0) <= 0;
+  if (!bossDefeated || participants.length === 0) {
+    return;
+  }
+
+  // Step 4: Send notifications in PARALLEL
+  const raidName = updatedQuest?.name ?? "the raid";
+
+  await Promise.all([
+    client.insert(notification).values(
+      participants.map((p) => ({
+        userId: p.userId,
+        content: `The boss in ${raidName} has been defeated! Check if you've earned any rewards.`,
+      })),
+    ),
+    client
+      .update(userData)
+      .set({ unreadNotifications: sql`unreadNotifications + 1` })
+      .where(
+        inArray(
+          userData.userId,
+          participants.map((p) => p.userId),
+        ),
+      ),
   ]);
 };
 

@@ -7,7 +7,7 @@ import { fetchUser } from "./profile";
 import { round } from "@/utils/math";
 import { userData, ryoTrade, actionLog } from "@/drizzle/schema";
 import { secondsFromDate } from "@/utils/time";
-import { statSchema } from "@/libs/combat/types";
+import { statSchema } from "@/validators/combat";
 import { COST_RESET_STATS } from "@/drizzle/constants";
 import { RYO_FOR_REP_DAYS_FROZEN } from "@/drizzle/constants";
 import { COST_CUSTOM_TITLE } from "@/drizzle/constants";

@@ -14,13 +14,14 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import { allObjectiveTasks } from "@/validators/objectives";
 import { useQuestEditForm } from "@/hooks/quest";
-import { QuestValidator, ObjectiveReward } from "@/validators/objectives";
+import { QuestFormRawSchema } from "@/validators/objectives";
 import { SimpleObjective } from "@/validators/objectives";
 import { getObjectiveSchema } from "@/validators/objectives";
 import type { ZodQuestType, AllObjectivesType } from "@/validators/objectives";
 import type { Quest } from "@/drizzle/schema";
 import CytoscapeComponent from "react-cytoscapejs";
 import { QuestHelper } from "@/layout/ContentHelp";
+import { RaidThresholdEditor } from "@/layout/RaidThresholdEditor";
 import type { ElementDefinition, Core, EventObjectNode, EventObject } from "cytoscape";
 import { getObjectiveImage, buildObjectiveEdges } from "@/libs/objectives";
 import { verifyQuestObjectiveFlow } from "@/libs/quest";
@@ -244,7 +245,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
 
         {props.quest && (
           <EditContent
-            schema={QuestValidator._def.schema.merge(ObjectiveReward)}
+            schema={QuestFormRawSchema}
             form={form}
             formData={formData}
             showSubmit={true}
@@ -276,6 +277,17 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         </ContentBox>
       )}
       {renderSelectedObjective()}
+
+      {/* Damage Thresholds for Raids */}
+      {currentValues.questType === "raid" && (
+        <ContentBox
+          title="Damage Thresholds"
+          subtitle="Configure reward tiers based on damage dealt"
+          initialBreak={true}
+        >
+          <RaidThresholdEditor questId={props.quest.id} />
+        </ContentBox>
+      )}
     </>
   );
 };

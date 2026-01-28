@@ -17,6 +17,7 @@ import {
 import {
   IMG_MAP_WAR_ICON,
   IMG_MAP_QUEST_ICON,
+  IMG_BADGE_MOVE_TO_LOCATION,
   MAP_RESERVED_SECTORS,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
 } from "@/drizzle/constants";
@@ -55,6 +56,8 @@ interface MapProps {
   hexasphere: GlobalMapData;
   showOwnership?: boolean;
   actionExplanation?: string;
+  focusSector?: number | null;
+  focusSectorLabel?: string;
   onTileClick?: (sector: number | null, tile: GlobalTile | null) => void;
   onTileHover?: (sector: number | null, tile: GlobalTile | null) => void;
 }
@@ -76,12 +79,12 @@ const Map: React.FC<MapProps> = (props) => {
   );
 
   // Create a ref to store active war sectors
-  const activeSectorWars = useRef<number[]>([]);
+  const activeSectorWarsRef = useRef<number[]>([]);
 
   // Update active war sectors when ownership data changes
   useEffect(() => {
     if (ownershipData?.wars) {
-      activeSectorWars.current = ownershipData.wars.map((war) => war.sector);
+      activeSectorWarsRef.current = ownershipData.wars.map((war) => war.sector);
     }
   }, [ownershipData]);
 
@@ -156,7 +159,10 @@ const Map: React.FC<MapProps> = (props) => {
         isContextLost = false;
       };
       renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
-      renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored);
+      renderer.domElement.addEventListener(
+        "webglcontextrestored",
+        handleContextRestored,
+      );
 
       // Setup camera
       const camera = new PerspectiveCamera(fov, aspect, near, far);
@@ -195,8 +201,10 @@ const Map: React.FC<MapProps> = (props) => {
 
           // Get which sector was tapped
           const bounding_box = sceneRef.getBoundingClientRect();
-          const mouseX = ((touch.clientX - bounding_box.left) / bounding_box.width) * 2 - 1;
-          const mouseY = -((touch.clientY - bounding_box.top) / bounding_box.height) * 2 + 1;
+          const mouseX =
+            ((touch.clientX - bounding_box.left) / bounding_box.width) * 2 - 1;
+          const mouseY =
+            -((touch.clientY - bounding_box.top) / bounding_box.height) * 2 + 1;
           raycaster.setFromCamera(new Vector2(mouseX, mouseY), camera);
 
           const intersects = raycaster.intersectObjects(group_tiles.children);
@@ -370,10 +378,11 @@ const Map: React.FC<MapProps> = (props) => {
       // Add tweening highlights
       const questTweenColor = { r: 0.8, g: 0.6, b: 0.0 };
       const warTweenColor = { r: 1.0, g: 0.0, b: 0.0 }; // Red color for war zones
+      const focusTweenColor = { r: 0.66, g: 0.33, b: 0.97 }; // Purple color for focus sector
       const sectorsToHighlight: {
         sector: number;
         color: typeof questTweenColor;
-        type: "quest" | "war";
+        type: "quest" | "war" | "focus";
       }[] = [];
 
       // Add war-torn battleground sector to highlight
@@ -384,13 +393,22 @@ const Map: React.FC<MapProps> = (props) => {
       });
 
       // Add war sectors to highlight
-      if (activeSectorWars.current.length > 0) {
-        activeSectorWars.current.forEach((warSector) => {
+      if (activeSectorWarsRef.current.length > 0) {
+        activeSectorWarsRef.current.forEach((warSector) => {
           sectorsToHighlight.push({
             sector: warSector,
             color: warTweenColor,
             type: "war",
           });
+        });
+      }
+
+      // Add focus sector to highlight
+      if (props.focusSector !== undefined && props.focusSector !== null) {
+        sectorsToHighlight.push({
+          sector: props.focusSector,
+          color: focusTweenColor,
+          type: "focus",
         });
       }
 
@@ -431,6 +449,11 @@ const Map: React.FC<MapProps> = (props) => {
           .repeat(Infinity)
           .easing(TWEEN.Easing.Cubic.InOut)
           .start();
+        new TWEEN.Tween(focusTweenColor)
+          .to({ r: 0.33, g: 0.17, b: 0.5 }, 1000)
+          .repeat(Infinity)
+          .easing(TWEEN.Easing.Cubic.InOut)
+          .start();
       }
 
       // Highlighted GPS pins for quests and wars
@@ -450,10 +473,14 @@ const Map: React.FC<MapProps> = (props) => {
           const line = new LineSegments(geometry, lineMaterial);
           group_highlights.add(line);
 
-          // Create war/quest icon sprite
-          const texture = loadTexture(
-            highlight.type === "war" ? IMG_MAP_WAR_ICON : IMG_MAP_QUEST_ICON,
-          );
+          // Create icon sprite based on highlight type
+          const iconUrl =
+            highlight.type === "war"
+              ? IMG_MAP_WAR_ICON
+              : highlight.type === "focus"
+                ? IMG_BADGE_MOVE_TO_LOCATION
+                : IMG_MAP_QUEST_ICON;
+          const texture = loadTexture(iconUrl);
           texture.generateMipmaps = false;
           texture.minFilter = LinearFilter;
           const iconMaterial = new SpriteMaterial({
@@ -478,8 +505,15 @@ const Map: React.FC<MapProps> = (props) => {
       let sigma = 0;
       let phi = 0;
 
-      // Initial camera positioning
-      if (props.userLocation && userData) {
+      // Initial camera positioning - prioritize focus sector over user location
+      if (props.focusSector !== undefined && props.focusSector !== null) {
+        const focusSectorData = hexasphere?.tiles[props.focusSector]?.c;
+        if (focusSectorData) {
+          const { x, y, z } = focusSectorData;
+          sigma = Math.atan2(y, x);
+          phi = Math.acos(z / Math.sqrt(x * x + y * y + z * z));
+        }
+      } else if (props.userLocation && userData) {
         const sector = hexasphere?.tiles[userData.sector]?.c;
         if (sector) {
           const { x, y, z } = sector;
@@ -491,18 +525,23 @@ const Map: React.FC<MapProps> = (props) => {
       // Render the image
       let animationId = 0;
       function render() {
+        // Update all TWEEN animations (color pulsing, etc.)
+        TWEEN.update();
+
+        // Apply highlight colors to sectors
         if (sectorsToHighlight.length > 0) {
           sectorsToHighlight.forEach((highlight) => {
             const mesh = group_tiles.getObjectByName(`${highlight.sector}`);
             if (mesh) {
-              (mesh as HexagonalFaceMesh).material.color.setRGB(
-                questTweenColor.r,
-                questTweenColor.g,
-                questTweenColor.b,
-              );
+              const color =
+                highlight.type === "war"
+                  ? warTweenColor
+                  : highlight.type === "focus"
+                    ? focusTweenColor
+                    : questTweenColor;
+              (mesh as HexagonalFaceMesh).material.color.setRGB(color.r, color.g, color.b);
             }
           });
-          TWEEN.update();
         }
         // Intersections with mouse: https://threejs.org/docs/index.html#api/en/core/Raycaster
         if (props.intersection) {
@@ -537,19 +576,24 @@ const Map: React.FC<MapProps> = (props) => {
           }
         }
 
-        // Rotate the camara, only if trackball not enabled && highlight not selected
+        // Rotate the camera, only if trackball not enabled && highlight not selected
         const current = controls.up0 as GlobalPoint;
         const previous = controls?.object as { up: GlobalPoint };
-        if (
-          (animationId === 0 || !isTravelStep) &&
-          current.x === previous.up.x &&
-          current.y === previous.up.y &&
-          current.z === previous.up.z
-        ) {
+        const isUserInteracting =
+          current.x !== previous.up.x ||
+          current.y !== previous.up.y ||
+          current.z !== previous.up.z;
+
+        // Auto-rotate when not user interacting
+        if ((animationId === 0 || !isTravelStep) && !isUserInteracting) {
           const dt = Date.now() - lastTime;
           const rotateCameraBy = (1 * Math.PI) / (50000 / dt);
           phi += rotateCameraBy;
           lastTime = Date.now();
+        }
+
+        // Update camera position when not user interacting
+        if (!isUserInteracting) {
           camera.position.x = cameraDistance * Math.sin(phi) * Math.cos(sigma);
           camera.position.y = cameraDistance * Math.sin(phi) * Math.sin(sigma);
           camera.position.z = cameraDistance * Math.cos(phi);
@@ -587,7 +631,10 @@ const Map: React.FC<MapProps> = (props) => {
             renderer.domElement.removeEventListener("touchend", onTouchEnd);
           }
           window.removeEventListener("resize", handleResize);
-          renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+          renderer.domElement.removeEventListener(
+            "webglcontextlost",
+            handleContextLost,
+          );
           renderer.domElement.removeEventListener(
             "webglcontextrestored",
             handleContextRestored,
@@ -609,7 +656,14 @@ const Map: React.FC<MapProps> = (props) => {
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.highlights, props.usersHighlighted, props.intersection, showOwnership, ownershipData]);
+  }, [
+    props.highlights,
+    props.usersHighlighted,
+    props.intersection,
+    props.focusSector,
+    showOwnership,
+    ownershipData,
+  ]);
 
   return (
     <>
@@ -621,6 +675,12 @@ const Map: React.FC<MapProps> = (props) => {
             <li className="flex flex-row items-center">
               <span className="text-2xl mr-1 animate-pulse text-orange-500">⬢</span>{" "}
               Quest
+            </li>
+          )}
+          {props.focusSector !== undefined && props.focusSector !== null && (
+            <li className="flex flex-row items-center">
+              <span className="text-2xl mr-1 animate-pulse text-purple-500">⬢</span>{" "}
+              {props.focusSectorLabel || "Target"}
             </li>
           )}
         </ul>

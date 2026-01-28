@@ -27,32 +27,34 @@ interface GraphUsersGenericProps {
 const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
   // State
   const localTheme = safeLocalStorageGetItem("theme");
-  const cy = useRef<Cytoscape.Core | null>(null);
-  const isMounted = useRef(true);
+  const cyRef = useRef<Cytoscape.Core | null>(null);
+  const isMountedRef = useRef(true);
   const color = localTheme === "dark" ? "white" : "black";
 
   // Cleanup cytoscape instance on unmount to prevent touch event race conditions
   useEffect(() => {
-    isMounted.current = true;
+    isMountedRef.current = true;
     return () => {
-      isMounted.current = false;
-      if (cy.current) {
-        const cyInstance = cy.current;
-        cy.current = null;
+      isMountedRef.current = false;
+      if (cyRef.current) {
+        const cyRefInstance = cyRef.current;
+        cyRef.current = null;
         // Disable all user interactions immediately to prevent new touch events
-        cyInstance.autoungrabify(true);
-        cyInstance.autounselectify(true);
-        cyInstance.userPanningEnabled(false);
-        cyInstance.userZoomingEnabled(false);
-        cyInstance.boxSelectionEnabled(false);
+        cyRefInstance.autoungrabify(true);
+        cyRefInstance.autounselectify(true);
+        cyRefInstance.userPanningEnabled(false);
+        cyRefInstance.userZoomingEnabled(false);
+        cyRefInstance.boxSelectionEnabled(false);
         // Remove all listeners before destroying
-        cyInstance.removeAllListeners();
+        cyRefInstance.removeAllListeners();
         // Use setTimeout to allow any pending touch event handlers to complete
         // before destroying the instance. This prevents the "Cannot read properties
         // of undefined (reading 'emit')" error on mobile devices.
+        // Intentionally fire-and-forget since this is cleanup code
+        // eslint-disable-next-line @eslint-react/web-api/no-leaked-timeout
         setTimeout(() => {
           try {
-            cyInstance.destroy();
+            cyRefInstance.destroy();
           } catch {
             // Ignore errors during cleanup - the instance may already be partially destroyed
           }
@@ -64,11 +66,11 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
   // Set Cytoscape
   const setCytoscape = useCallback(
     (ref: cytoscape.Core) => {
-      if (isMounted.current && ref) {
-        cy.current = ref;
+      if (isMountedRef.current && ref) {
+        cyRef.current = ref;
       }
     },
-    [cy],
+    [cyRef],
   );
 
   // User Searching

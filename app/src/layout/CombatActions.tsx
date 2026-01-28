@@ -16,7 +16,7 @@ import {
 import { cn } from "src/libs/shadui";
 import { type ItemRarity } from "@/drizzle/schema";
 import type { Item, Jutsu, Bloodline } from "@/drizzle/schema";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { ZodAllTags } from "@/validators/combat";
 import type { GameAssetType } from "@/drizzle/constants";
 
 interface ActionItemProps {

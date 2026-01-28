@@ -8,7 +8,7 @@ import ElementImage from "@/layout/ElementImage";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { SquarePen, Trash2, BarChartBig, Copy, Box } from "lucide-react";
-import { getTagSchema } from "@/libs/combat/types";
+import { getTagSchema } from "@/validators/combat";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { formatBattleUsageType } from "@/utils/string";
 import { showMutationToast } from "@/libs/toast";
@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import Model3d from "@/layout/Model3d";
 import type { ItemRarity, GameAsset } from "@/drizzle/schema";
 import type { Bloodline, Item, Jutsu, Quest } from "@/drizzle/schema";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { ZodAllTags } from "@/validators/combat";
 import { getRewardArray } from "@/libs/objectives";
 
 export type GenericObject = {
@@ -695,13 +695,15 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               </p>
             </div>
           )}
-          {"gatheringRank" in item && item.gatheringRank && item.gatheringRank !== "NONE" && (
-            <div className="my-2 rounded-lg bg-poppopover p-2">
-              <p>
-                <b>Gathering Rank Requirement</b>: {item.gatheringRank}
-              </p>
-            </div>
-          )}
+          {"gatheringRank" in item &&
+            item.gatheringRank &&
+            item.gatheringRank !== "NONE" && (
+              <div className="my-2 rounded-lg bg-poppopover p-2">
+                <p>
+                  <b>Gathering Rank Requirement</b>: {item.gatheringRank}
+                </p>
+              </div>
+            )}
           {/* {objectives.length > 0 && (
             <div className={`my-2 rounded-lg bg-poppopover p-2`}>
               <p className="font-bold">Objectives</p>

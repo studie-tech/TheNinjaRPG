@@ -6,20 +6,22 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import ChatInputField from "@/layout/ChatInputField";
 import { api } from "@/app/_trpc/client";
-import { DamageTag } from "@/libs/combat/types";
+import {
+  DamageTag,
+  BloodlineValidator,
+  getTagSchema,
+  tagTypes,
+} from "@/validators/combat";
 import { EditContent } from "@/layout/EditContent";
 import { EffectFormWrapper } from "@/layout/EditContent";
 import { BloodlineHelper } from "@/layout/ContentHelp";
 import { FilePlus, FileMinus } from "lucide-react";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { BloodlineValidator } from "@/libs/combat/types";
 import { canChangeContent } from "@/utils/permissions";
 import { useBloodlineEditForm } from "@/hooks/bloodline";
-import { getTagSchema } from "@/libs/combat/types";
-import type { ZodBloodlineType } from "@/libs/combat/types";
+import type { ZodBloodlineType } from "@/validators/combat";
 import type { Bloodline } from "@/drizzle/schema";
-import { tagTypes } from "@/libs/combat/types";
 
 export default function BloodlineEdit(props: {
   params: Promise<{ bloodlineid: string }>;

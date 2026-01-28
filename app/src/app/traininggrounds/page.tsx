@@ -46,7 +46,15 @@ import { useRequireInVillage } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
 import { sendGTMEvent } from "@next/third-parties/google";
 import { showMutationToast } from "@/libs/toast";
-import { Swords, ShieldAlert, XCircle, Fingerprint, Eye, Search, Timer } from "lucide-react";
+import {
+  Swords,
+  ShieldAlert,
+  XCircle,
+  Fingerprint,
+  Eye,
+  Search,
+  Timer,
+} from "lucide-react";
 import { CheckCheck, DoorOpen } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { UserStatNames } from "@/drizzle/constants";
@@ -803,7 +811,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                 }
               >
                 <div className="relative">
-                  <p className="pb-3">You have {userData.money.toLocaleString()} ryo in your pocket</p>
+                  <p className="pb-3">
+                    You have {userData.money.toLocaleString()} ryo in your pocket
+                  </p>
                   {!isPending && (
                     <ItemWithEffects
                       item={jutsu}
@@ -1046,7 +1056,9 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
                     Detection Chance:{" "}
                     {(stealthStatus?.sensoryDetectChance ?? 5).toFixed(1)}%
                   </p>
-                  <p>Cooldown: {Math.floor(stealthStatus?.sensoryCooldown ?? 120)} sec</p>
+                  <p>
+                    Cooldown: {Math.floor(stealthStatus?.sensoryCooldown ?? 120)} sec
+                  </p>
                 </div>
               </div>
               <div className="flex flex-col gap-2">

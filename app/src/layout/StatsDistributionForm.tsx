@@ -19,7 +19,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { showMutationToast } from "@/libs/toast";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { round } from "@/utils/math";
-import { createStatSchema, type StatSchemaType } from "@/libs/combat/types";
+import { createStatSchema, type StatSchemaType } from "@/validators/combat";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import SliderField from "@/layout/SliderField";
@@ -285,7 +285,8 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
           >
             <div>
               <p className="mb-2">
-                This will distribute {availableStats.toLocaleString()} stat points across:
+                This will distribute {availableStats.toLocaleString()} stat points
+                across:
               </p>
               <ul className="list-disc list-inside mb-2">
                 {option.stats.map((stat, index) => {
@@ -418,7 +419,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                       <FormLabel>
                         {capitalizeFirstLetter(noCase(stat))}
                         {currentValue
-                          ? ` - Selected: ${Number(currentValue.toFixed(2)).toLocaleString()} / ${Number(availableStats.toFixed(2), ).toLocaleString()}`
+                          ? ` - Selected: ${Number(currentValue.toFixed(2)).toLocaleString()} / ${Number(availableStats.toFixed(2)).toLocaleString()}`
                           : ""}
                       </FormLabel>
                     )}

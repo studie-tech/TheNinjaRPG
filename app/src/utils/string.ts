@@ -32,8 +32,6 @@ export const prettyNumber = (num: number) => {
  * @param battleUsageType - The battle usage type to format
  * @returns The formatted label
  */
-export const formatBattleUsageType = (
-  battleUsageType: BattleUsageType,
-): string => {
+export const formatBattleUsageType = (battleUsageType: BattleUsageType): string => {
   return battleUsageType === "BOTH" ? "PVP & PVE" : battleUsageType;
 };

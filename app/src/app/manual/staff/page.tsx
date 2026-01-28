@@ -117,7 +117,9 @@ export default function Staff() {
                     </Select>
                   </div>
                   <div>
-                    <div className="mb-1 font-semibold">Motivation & Qualifications</div>
+                    <div className="mb-1 font-semibold">
+                      Motivation & Qualifications
+                    </div>
                     <Textarea
                       placeholder="Tell us why you want to join the staff..."
                       value={form.watch("motivation")}

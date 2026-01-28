@@ -50,6 +50,7 @@ import { supportRouter } from "./routers/support";
 import { applicationsRouter } from "./routers/applications";
 import { towerDefenseRouter } from "./routers/towerDefense";
 import { stealthRouter } from "./routers/stealth";
+import { raidsRouter } from "./routers/raids";
 
 /**
  * This is the primary router for your server.
@@ -108,6 +109,7 @@ export const appRouter = createTRPCRouter({
   applications: applicationsRouter,
   towerDefense: towerDefenseRouter,
   stealth: stealthRouter,
+  raids: raidsRouter,
 });
 
 // export type definition of API

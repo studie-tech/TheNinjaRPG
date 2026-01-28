@@ -6,7 +6,7 @@ import {
   buildFilter,
   defineFilteringSchema,
 } from "@/layout/ContentFiltering";
-import { effectFilters } from "@/libs/combat/types";
+import { effectFilters } from "@/validators/combat";
 
 interface UserFilteringProps {
   state: UserFilteringState;

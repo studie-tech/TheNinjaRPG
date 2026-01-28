@@ -157,11 +157,7 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
   const subtitle = dateString ? `Battle from ${dateString}` : "Loading...";
 
   return (
-    <ContentBox
-      title="Spectate"
-      subtitle={subtitle}
-      defaultBackHref="/profile"
-    >
+    <ContentBox title="Spectate" subtitle={subtitle} defaultBackHref="/profile">
       <div className="flex flex-col gap-1">
         {spectateLayoutOrder.map((id) => (
           <div key={id}>{renderComponent(id)}</div>

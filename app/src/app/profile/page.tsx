@@ -154,8 +154,12 @@ export default function Profile() {
             <b>Reputation</b>
             <p>Reputation points: {userData.reputationPoints?.toLocaleString()}</p>
             <p>Federal Support: {(userData.federalStatus || "NONE").toLowerCase()}</p>
-            {userData.isOutlaw && (<p>Notoriety: {userData.villagePrestige?.toLocaleString()}</p>)}
-            {!userData.isOutlaw && (<p>Village prestige: {userData.villagePrestige?.toLocaleString()}</p>)}
+            {userData.isOutlaw && (
+              <p>Notoriety: {userData.villagePrestige?.toLocaleString()}</p>
+            )}
+            {!userData.isOutlaw && (
+              <p>Village prestige: {userData.villagePrestige?.toLocaleString()}</p>
+            )}
             {userData.joinedVillageAt && (
               <p>
                 Village Member:{" "}

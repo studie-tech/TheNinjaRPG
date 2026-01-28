@@ -18,7 +18,10 @@ import AutoAttackModal from "@/layout/AutoAttackModal";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
 import { getStealthStatus } from "@/libs/stealth";
-import { STEALTH_SENSORY_CAP, STEALTH_TRAIN_GAIN_PER_MINUTE } from "@/drizzle/constants";
+import {
+  STEALTH_SENSORY_CAP,
+  STEALTH_TRAIN_GAIN_PER_MINUTE,
+} from "@/drizzle/constants";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAwake } from "@/utils/routing";
 import {
@@ -34,6 +37,7 @@ import {
   Ghost,
   Radar,
   Swords,
+  Locate,
 } from "lucide-react";
 import { HousePlus } from "lucide-react";
 import { api } from "@/app/_trpc/client";
@@ -92,7 +96,8 @@ export default function Travel() {
   const [revealedPlayers, setRevealedPlayers] = useState<
     { userId: string; username: string; longitude: number; latitude: number }[]
   >([]);
-  const [showRevealedPlayersModal, setShowRevealedPlayersModal] = useState<boolean>(false);
+  const [showRevealedPlayersModal, setShowRevealedPlayersModal] =
+    useState<boolean>(false);
   const [pendingAttackTarget, setPendingAttackTarget] = useState<{
     userId: string;
     username: string;
@@ -101,6 +106,7 @@ export default function Travel() {
   } | null>(null);
 
   const [activeTab, setActiveTab] = useState<string>("");
+  const [focusSector, setFocusSector] = useState<number | null>(null);
 
   // Globe data
   const { globe, mapError } = useMap();
@@ -173,6 +179,19 @@ export default function Travel() {
     name: "sector",
   });
 
+  // Find sector form
+  const findSectorSchema = z.object({
+    sector: z.coerce.number().int().min(0).max(492),
+  });
+  const findSectorForm = useForm<z.infer<typeof findSectorSchema>>({
+    mode: "all",
+    resolver: zodResolver(findSectorSchema),
+  });
+  const findSectorValue = useWatch({
+    control: findSectorForm.control,
+    name: "sector",
+  });
+
   useEffect(() => {
     if (userData && globe) {
       setCurrentPosition({ x: userData.longitude, y: userData.latitude });
@@ -181,7 +200,11 @@ export default function Travel() {
   }, [userData, currentSector, globe]);
 
   useEffect(() => {
-    setActiveTab(sectorLink);
+    // Only set initial tab, don't override user's selection
+    if (activeTab === "" && sectorLink) {
+      setActiveTab(sectorLink);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectorLink]);
 
   useEffect(() => {
@@ -416,6 +439,8 @@ export default function Travel() {
           usersHighlighted={trackedBounties}
           userLocation={true}
           showOwnership={showOwnership}
+          focusSector={focusSector}
+          focusSectorLabel="Target"
           onTileClick={(sector) => {
             setTargetSector(sector);
             setShowModal(true);
@@ -424,8 +449,7 @@ export default function Travel() {
         />
       )
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [villages, globe, trackedBounties, showOwnership]);
+  }, [villages, globe, trackedBounties, showOwnership, focusSector]);
 
   // Battle scene
   const SectorComponent = useMemo(() => {
@@ -587,6 +611,65 @@ export default function Travel() {
             )}
             {activeTab === globalLink && (
               <>
+                <Popover>
+                  <PopoverTrigger>
+                    <Locate
+                      className={`h-7 w-7 mr-2 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent>
+                    <p className="py-2 font-semibold">Find Sector</p>
+                    <p className="pb-2 text-sm text-muted-foreground">
+                      Enter a sector ID to locate it on the map.
+                    </p>
+                    <Form {...findSectorForm}>
+                      <form
+                        onSubmit={findSectorForm.handleSubmit((data) => {
+                          setFocusSector(data.sector);
+                        })}
+                        className="flex flex-col gap-2"
+                      >
+                        <FormField
+                          control={findSectorForm.control}
+                          name="sector"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input
+                                  className="w-full"
+                                  placeholder="Sector ID (0-492)"
+                                  type="number"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            type="submit"
+                            size="sm"
+                            className="flex-1"
+                            disabled={findSectorValue === undefined}
+                          >
+                            Find Sector {findSectorValue ?? "..."}
+                          </Button>
+                          {focusSector !== null && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setFocusSector(null)}
+                            >
+                              Clear
+                            </Button>
+                          )}
+                        </div>
+                      </form>
+                    </Form>
+                  </PopoverContent>
+                </Popover>
                 <Popover>
                   <PopoverTrigger>
                     <Search className={`h-7 w-7 mr-2 hover:text-orange-500`} />

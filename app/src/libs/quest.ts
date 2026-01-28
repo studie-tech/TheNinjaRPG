@@ -1,4 +1,4 @@
-import { ObjectiveReward } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
 import { getQuestCounterFieldName } from "@/validators/user";
 import { ObjectiveTracker, QuestTracker } from "@/validators/objectives";
 import { secondsPassed } from "@/utils/time";
@@ -34,11 +34,8 @@ import { SECTOR_HEIGHT, SECTOR_WIDTH } from "@/drizzle/constants";
 import { getUnique } from "@/utils/grouping";
 import { isQuestComplete, findCompletedPredecessor } from "@/libs/objectives";
 import type { UserWithRelations } from "@/routers/profile";
-import type {
-  AllObjectivesType,
-  AllObjectiveTask,
-  ObjectiveRewardType,
-} from "@/validators/objectives";
+import type { AllObjectivesType, AllObjectiveTask } from "@/validators/objectives";
+import type { ObjectiveRewardType } from "@/validators/rewards";
 import { getHuntingRank } from "@/libs/hunting";
 import { getGatheringRank } from "@/libs/gathering";
 import type { Quest, UserData, UserItem, GameSetting } from "@/drizzle/schema";
@@ -1172,7 +1169,9 @@ export const isAvailableUserQuests = (
   const userHuntRankIdx = HUNTING_RANKS.indexOf(userHuntRank);
   const questGatherRank = questAndUserQuestInfo.gatheringRank;
   const userGatherRank = getGatheringRank(user.gatheringExperience);
-  const reqGatherRankIdx = questGatherRank ? GATHERING_RANKS.indexOf(questGatherRank) : null;
+  const reqGatherRankIdx = questGatherRank
+    ? GATHERING_RANKS.indexOf(questGatherRank)
+    : null;
   const userGatherRankIdx = GATHERING_RANKS.indexOf(userGatherRank);
 
   // Checks

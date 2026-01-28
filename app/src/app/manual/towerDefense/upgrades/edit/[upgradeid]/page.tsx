@@ -93,4 +93,3 @@ const SingleEditUpgrade: React.FC<SingleEditUpgradeProps> = ({ upgrade, refetch 
     </ContentBox>
   );
 };
-

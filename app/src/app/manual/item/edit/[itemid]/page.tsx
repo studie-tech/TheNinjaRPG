@@ -12,14 +12,11 @@ import { EffectFormWrapper } from "@/layout/EditContent";
 import { FilePlus, FileMinus } from "lucide-react";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { DamageTag } from "@/libs/combat/types";
-import { ItemValidator } from "@/libs/combat/types";
+import { DamageTag, ItemValidator, tagTypes, getTagSchema } from "@/validators/combat";
 import { canChangeContent } from "@/utils/permissions";
-import { tagTypes } from "@/libs/combat/types";
 import { useItemEditForm } from "@/hooks/item";
-import { getTagSchema } from "@/libs/combat/types";
 import type { CraftingRequirement } from "@/drizzle/schema";
-import type { ZodItemType } from "@/libs/combat/types";
+import type { ZodItemType } from "@/validators/combat";
 import type { Item } from "@/drizzle/schema";
 
 export default function ItemEdit(props: { params: Promise<{ itemid: string }> }) {

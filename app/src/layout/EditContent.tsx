@@ -9,11 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { objectKeys } from "@/utils/typeutils";
-import { getTagSchema } from "@/libs/combat/types";
+import { getTagSchema } from "@/validators/combat";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
-import { getObjectiveSchema, ObjectiveReward } from "@/validators/objectives";
+import { getObjectiveSchema } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
 import { Button } from "@/components/ui/button";
 import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
 import { X, Plus } from "lucide-react";
@@ -38,20 +39,21 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { nanoid } from "nanoid";
 import { cn } from "src/libs/shadui";
-import { InstantTasks } from "@/validators/objectives";
+import { InstantTasks, RaidTasks } from "@/validators/objectives";
 import { useUserData } from "@/utils/UserContext";
 import { canAwardReputation } from "@/utils/permissions";
 import type { Quest } from "@/drizzle/schema";
 import type { DeepPartial } from "@/utils/typeutils";
 import type { Path, PathValue } from "react-hook-form";
-import type { AllObjectivesType, ObjectiveRewardType } from "@/validators/objectives";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { AllObjectivesType } from "@/validators/objectives";
+import type { ObjectiveRewardType } from "@/validators/rewards";
+import type { ZodAllTags } from "@/validators/combat";
 import type { FieldValues } from "react-hook-form";
 import type { UseFormReturn } from "react-hook-form";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
 import Table from "@/layout/Table";
 import type { ColumnDefinitionType } from "@/layout/Table";
-import type { ZodItemType, ZodJutsuType, ZodBloodlineType } from "@/libs/combat/types";
+import type { ZodItemType, ZodJutsuType, ZodBloodlineType } from "@/validators/combat";
 import Modal2 from "@/layout/Modal2";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentImage from "@/layout/ContentImage";
@@ -274,6 +276,7 @@ export const EditContent = <
     if (id.includes("opponent") || ["scaleGains", "keepOriginalPools"].includes(id))
       return "opponent";
     if (id.includes("attackers")) return "attackers";
+    if (["raidBossMaxHealth", "raidBossCurrentHealth"].includes(id)) return "raid";
     if (
       [
         "sector",
@@ -433,22 +436,18 @@ export const EditContent = <
           .filter((formEntry) => formEntry.type !== "avatar3d")
           .filter((formEntry) => {
             return (
-              ![
-                "reward_hunter_items_ids",
-                "reward_hunter_items",
-                "reward_hunting_experience",
-              ].includes(formEntry.id) ||
+              !["reward_hunter_items_ids", "reward_hunter_items"].includes(
+                formEntry.id,
+              ) ||
               questType === "hunting" ||
               props.type === "activityStreak"
             );
           })
           .filter((formEntry) => {
             return (
-              ![
-                "reward_gathering_items_ids",
-                "reward_gathering_items",
-                "reward_gathering_experience",
-              ].includes(formEntry.id) ||
+              !["reward_gathering_items_ids", "reward_gathering_items"].includes(
+                formEntry.id,
+              ) ||
               questType === "gathering" ||
               props.type === "activityStreak"
             );
@@ -537,6 +536,10 @@ export const EditContent = <
                     // Attackers drawn in red
                     formEntry.category === "attackers"
                       ? "bg-pink-100 dark:bg-pink-900/20 border-pink-200 dark:border-pink-800 border rounded-lg"
+                      : "",
+                    // Raid things in orange
+                    formEntry.category === "raid"
+                      ? "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 border rounded-lg"
                       : "",
                     // Location things in blue
                     formEntry.category === "location"
@@ -1232,8 +1235,11 @@ export const EditContent = <
                       name={id}
                       render={({ field }) => {
                         // Each entry: { ids: string[], number: number, quantity?: number }
-                        const valueArr: { ids: string[]; number: number; quantity?: number }[] =
-                          Array.isArray(field.value) ? field.value : [];
+                        const valueArr: {
+                          ids: string[];
+                          number: number;
+                          quantity?: number;
+                        }[] = Array.isArray(field.value) ? field.value : [];
                         const options = (formEntry.values || []).map((v) => ({
                           label: v.name,
                           value: v.id,
@@ -1324,7 +1330,11 @@ export const EditContent = <
                                         field.onChange(updated);
                                       }}
                                     />
-                                    {isRewardItems && <span className="text-xs text-muted-foreground">%</span>}
+                                    {isRewardItems && (
+                                      <span className="text-xs text-muted-foreground">
+                                        %
+                                      </span>
+                                    )}
                                   </div>
                                   {/* Quantity input (only for reward_items) */}
                                   {isRewardItems && (
@@ -1346,7 +1356,9 @@ export const EditContent = <
                                           field.onChange(updated);
                                         }}
                                       />
-                                      <span className="text-xs text-muted-foreground">qty</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        qty
+                                      </span>
                                     </div>
                                   )}
                                   {/* Remove button */}
@@ -1786,10 +1798,12 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         return { id: value, label: value, type: "text" };
       } else if (innerType instanceof z.ZodNumber) {
         // Only noncombatconsumereward tag allows reward_reputation field
-        const isReputationField = watchType === "noncombatconsumereward" && String(value) === "reward_reputation";
-        return { 
-          id: value, 
-          label: value, 
+        const isReputationField =
+          watchType === "noncombatconsumereward" &&
+          String(value) === "reward_reputation";
+        return {
+          id: value,
+          label: value,
           type: "number",
           readonly: isReputationField && !hasReputationPermission,
         };
@@ -2021,13 +2035,13 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     .filter((value) => {
       return (
         props?.quest?.questType === "hunting" ||
-        !["reward_hunter_items_ids", "reward_hunting_experience"].includes(value)
+        !["reward_hunter_items_ids"].includes(value)
       );
     })
     .filter((value) => {
       return (
         props?.quest?.questType === "gathering" ||
-        !["reward_gathering_items_ids", "reward_gathering_experience"].includes(value)
+        !["reward_gathering_items_ids"].includes(value)
       );
     })
     .filter((value) => {
@@ -2047,6 +2061,13 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         !locationType ||
         locationType === "specific" ||
         (locationType === "random" && !["longitude", "latitude"].includes(value))
+      );
+    })
+    .filter((value) => {
+      // Hide longitude/latitude for raid tasks - these are set via shrine placement
+      return (
+        !(RaidTasks as unknown as string[]).includes(watchTask) ||
+        !["longitude", "latitude"].includes(value)
       );
     })
     .map((value) => {
@@ -2195,9 +2216,9 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         // Check if this is the reward_reputation field
         const valueStr = String(value);
         const isReputationField = valueStr === "reward_reputation";
-        return { 
-          id: value, 
-          label: FORM_LABEL_MAP[value] ?? value, 
+        return {
+          id: value,
+          label: FORM_LABEL_MAP[value] ?? value,
           type: "number",
           readonly: isReputationField && !hasReputationPermission,
         };
@@ -2283,7 +2304,15 @@ interface RewardFormWrapperProps {
  * @returns React.ReactNode
  */
 export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
-  const { idx, reward, rewards, formClassName, setRewards, hideFields = [], type } = props;
+  const {
+    idx,
+    reward,
+    rewards,
+    formClassName,
+    setRewards,
+    hideFields = [],
+    type,
+  } = props;
 
   // Parse reward with schema
   const parsedReward = ObjectiveReward.safeParse(reward);
@@ -2378,7 +2407,8 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
           type: "db_values" as const,
         };
       } else if (
-        (value === "reward_hunter_items_ids" || value === "reward_gathering_items_ids") &&
+        (value === "reward_hunter_items_ids" ||
+          value === "reward_gathering_items_ids") &&
         itemData
       ) {
         return {
@@ -2389,9 +2419,17 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
           type: "db_values" as const,
         };
       } else if (innerType instanceof z.ZodNumber) {
-        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "number" as const };
+        return {
+          id: value,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "number" as const,
+        };
       } else if (innerType instanceof z.ZodBoolean) {
-        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "boolean" as const };
+        return {
+          id: value,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "boolean" as const,
+        };
       } else if (innerType instanceof z.ZodEnum) {
         return {
           id: value,
@@ -2400,7 +2438,11 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
           label: FORM_LABEL_MAP[value] ?? value,
         };
       } else {
-        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "text" as const };
+        return {
+          id: value,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "text" as const,
+        };
       }
     });
 

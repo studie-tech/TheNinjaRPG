@@ -16,14 +16,14 @@ import { findPredecessor } from "@/libs/objectives";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import type { ZodCombinedQuest } from "@/hooks/quest";
-import type { ZodItemType } from "@/libs/combat/types";
-import type { ZodJutsuType } from "@/libs/combat/types";
-import type { ZodSkillTreeType } from "@/libs/combat/types";
-import type { ZodBloodlineType } from "@/libs/combat/types";
+import type { ZodItemType } from "@/validators/combat";
+import type { ZodJutsuType } from "@/validators/combat";
+import type { ZodSkillTreeType } from "@/validators/combat";
+import type { ZodBloodlineType } from "@/validators/combat";
 import type { DeepPartial } from "@/utils/typeutils";
 import type { AllObjectivesType } from "@/validators/objectives";
 import { api } from "@/app/_trpc/client";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { ZodAllTags } from "@/validators/combat";
 import type { JutsuRelations } from "@/server/api/routers/jutsu";
 import type { AiRelations } from "@/server/api/routers/ai";
 import type { ItemRelations } from "@/server/api/routers/item";
@@ -109,10 +109,13 @@ export const QuestHelper: React.FC<QuestHelperProps> = (props) => {
 
             {renderStarterTips(quest)}
 
+            {renderRaidTips(quest)}
+
             {quest.questType !== "hunting" &&
               quest.questType !== "gathering" &&
               quest.questType !== "battlepyramid" &&
-              quest.questType !== "starter" && (
+              quest.questType !== "starter" &&
+              quest.questType !== "raid" && (
                 <div className="p-3 bg-gray-50 rounded-lg border text-center">
                   <p className="text-sm text-gray-600">
                     No specific tips available for this quest type yet.
@@ -997,6 +1000,180 @@ const renderStarterTips = (quest: DeepPartial<ZodCombinedQuest>) => {
             Well-structured starter quests with proper prerequisites, clear descriptions
             and guidelines create a smooth onboarding experience and help retain new
             players by providing clear direction without overwhelming choice paralysis.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Renders the tips for raid quests
+ * @param quest - The quest to render the tips for
+ * @returns The tips for raid quests
+ */
+const renderRaidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
+  if (quest.questType !== "raid") return null;
+
+  const objectives = (quest.content?.objectives || []) as AllObjectivesType[];
+  const objective = objectives[0];
+  const objectiveTask = objective?.task;
+
+  // Check configuration status
+  const hasValidObjectiveType =
+    objectiveTask === "open_raid" || objectiveTask === "exclusive_raid";
+  const hasBossHealth = quest.raidBossMaxHealth && quest.raidBossMaxHealth > 0;
+  const hasCurrentHealth =
+    quest.raidBossCurrentHealth !== null && quest.raidBossCurrentHealth !== undefined;
+  const opponentAIs = (objective as { opponentAIs?: { ids: string[] }[] })?.opponentAIs;
+  const hasBossAI =
+    opponentAIs &&
+    opponentAIs.length > 0 &&
+    opponentAIs.some((ai) => ai.ids.length > 0);
+  const sector = (objective as { sector?: number })?.sector;
+  const hasSector = sector !== null && sector !== undefined;
+
+  return (
+    <div className="space-y-4">
+      <Alert>
+        <HelpCircle className="h-4 w-4" />
+        <AlertDescription>
+          <strong>Raid Quest Setup Guide:</strong>
+        </AlertDescription>
+      </Alert>
+
+      <div className="space-y-3 text-sm">
+        {/* Configuration checklist */}
+        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <h4 className="font-medium text-blue-900 mb-2">Configuration Checklist</h4>
+          <div className="text-blue-800 space-y-1">
+            <p className={hasValidObjectiveType ? "text-green-700" : "text-red-700"}>
+              {hasValidObjectiveType ? "✓" : "✗"} Objective type:{" "}
+              <code className="bg-blue-100 px-1 rounded">open_raid</code> or{" "}
+              <code className="bg-blue-100 px-1 rounded">exclusive_raid</code>
+            </p>
+            <p className={hasBossAI ? "text-green-700" : "text-red-700"}>
+              {hasBossAI ? "✓" : "✗"} Boss AI configured in{" "}
+              <code className="bg-blue-100 px-1 rounded">opponentAIs</code> (in
+              objective)
+            </p>
+            <p className={hasSector ? "text-green-700" : "text-red-700"}>
+              {hasSector ? "✓" : "✗"} Sector number set via{" "}
+              <code className="bg-blue-100 px-1 rounded">sector</code> (in objective)
+            </p>
+            <p className={hasBossHealth ? "text-green-700" : "text-red-700"}>
+              {hasBossHealth ? "✓" : "✗"} Boss max health via{" "}
+              <code className="bg-blue-100 px-1 rounded">raidBossMaxHealth</code> (quest
+              field)
+            </p>
+            <p className={hasCurrentHealth ? "text-green-700" : "text-red-700"}>
+              {hasCurrentHealth ? "✓" : "✗"} Boss current health via{" "}
+              <code className="bg-blue-100 px-1 rounded">raidBossCurrentHealth</code>{" "}
+              (quest field)
+            </p>
+          </div>
+        </div>
+
+        {/* Warning if objectives count is wrong */}
+        {objectives.length !== 1 && (
+          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+            <h4 className="font-medium text-red-900 mb-2">⚠️ Objective Count Error</h4>
+            <p className="text-red-800">
+              Raid quests must have exactly <strong>one</strong> objective. Currently
+              there are {objectives.length} objectives.
+            </p>
+          </div>
+        )}
+
+        {/* Warning if wrong objective type */}
+        {objectiveTask && !hasValidObjectiveType && (
+          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+            <h4 className="font-medium text-red-900 mb-2">⚠️ Invalid Objective Type</h4>
+            <p className="text-red-800">
+              The objective type is{" "}
+              <code className="bg-red-100 px-1 rounded">{objectiveTask}</code>. Raid
+              quests must use either{" "}
+              <code className="bg-red-100 px-1 rounded">open_raid</code> or{" "}
+              <code className="bg-red-100 px-1 rounded">exclusive_raid</code>.
+            </p>
+          </div>
+        )}
+
+        <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+          <h4 className="font-medium text-green-900 mb-2">Open Raids</h4>
+          <p className="text-green-800">
+            <strong>Availability:</strong> Open to all players regardless of village
+            affiliation.
+            <br />
+            <br />
+            <strong>Objective:</strong> Use{" "}
+            <code className="bg-green-100 px-1 rounded">open_raid</code> objective type.
+            <br />
+            <br />
+            <strong>Sector:</strong> Takes place at a specific sector (visual/thematic).
+          </p>
+        </div>
+
+        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+          <h4 className="font-medium text-amber-900 mb-2">Exclusive Raids</h4>
+          <p className="text-amber-800">
+            <strong>Trigger:</strong> Spawns when a village/faction captures the
+            specified sector.
+            <br />
+            <br />
+            <strong>Participation:</strong> Only members of the village/faction that
+            owns the sector can participate.
+            <br />
+            <br />
+            <strong>Win Condition:</strong> Defeat the boss before{" "}
+            <code className="bg-amber-100 px-1 rounded">raidEndsAt</code> →{" "}
+            <span className="font-semibold">Village keeps the sector shrine</span>
+            <br />
+            <br />
+            <strong>Fail Condition:</strong> Boss not defeated in time →{" "}
+            <span className="font-semibold">
+              Sector becomes neutral (Syndicate control)
+            </span>
+            <br />
+            <br />
+            <strong>Objective:</strong> Use{" "}
+            <code className="bg-amber-100 px-1 rounded">exclusive_raid</code> task with
+            the sector number and opponent AI configured.
+          </p>
+        </div>
+
+        <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+          <h4 className="font-medium text-purple-900 mb-2">Boss Configuration</h4>
+          <p className="text-purple-800">
+            The boss AI is configured via the{" "}
+            <code className="bg-purple-100 px-1 rounded">opponentAIs</code> field in the
+            objective. Select an AI that has an AI Profile configured.
+            <br />
+            <br />
+            Boss HP is shared across all battles and is tracked via{" "}
+            <code className="bg-purple-100 px-1 rounded">
+              raidBossMaxHealth
+            </code> and{" "}
+            <code className="bg-purple-100 px-1 rounded">raidBossCurrentHealth</code> on
+            the quest itself.
+          </p>
+        </div>
+
+        <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+          <h4 className="font-medium text-orange-900 mb-2">Sector Requirement</h4>
+          <p className="text-orange-800">
+            Both open and exclusive raids require a{" "}
+            <code className="bg-orange-100 px-1 rounded">sector</code> in the objective.
+            This determines where the raid takes place on the map.
+          </p>
+        </div>
+
+        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <h4 className="font-medium text-gray-900 mb-2">Damage Thresholds</h4>
+          <p className="text-gray-800">
+            After creating the raid quest, you can configure damage threshold rewards
+            through the database. Players who deal enough cumulative damage across
+            battles can claim these rewards.
           </p>
         </div>
       </div>

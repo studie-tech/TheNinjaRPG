@@ -52,7 +52,7 @@ import {
 } from "@/libs/combat/util";
 import { createAction, saveUsage } from "@/libs/combat/database";
 import { fetchUserSkills } from "@/server/api/routers/skillTree";
-import { updateUser, updateBattle } from "@/libs/combat/database";
+import { updateUser, updateBattle, updateRaidProgress } from "@/libs/combat/database";
 import { calcHP, calcSP, calcCP, calcLevelRequirements } from "@/libs/profile";
 import { controlShownQuestLocationInformation } from "@/libs/quest";
 import { getReskinnedBloodline } from "@/libs/bloodline";
@@ -80,10 +80,9 @@ import { userData, questHistory, quest, gameSetting, jutsu } from "@/drizzle/sch
 import { battle, battleAction, battleHistory, war, item } from "@/drizzle/schema";
 import { villageAlliance, village, tournamentMatch, bounty } from "@/drizzle/schema";
 import { sector } from "@/drizzle/schema";
-import { performActionSchema, statSchema } from "@/libs/combat/types";
+import { performActionSchema, statSchema, BarrierTag } from "@/validators/combat";
 import { performBattleAction, stillInBattle } from "@/libs/combat/actions";
 import { availableUserActions } from "@/libs/combat/actions";
-import { BarrierTag } from "@/libs/combat/types";
 import { fetchGameAssets } from "@/routers/misc";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { getRandomElement } from "@/utils/array";
@@ -111,7 +110,7 @@ import { randomInt } from "@/utils/math";
 import { calcLevel } from "@/libs/profile";
 import { calcIsInVillage } from "@/libs/travel";
 import { getStrucBoost } from "@/utils/village";
-import { DecreaseDamageTakenTag } from "@/libs/combat/types";
+import { DecreaseDamageTakenTag } from "@/validators/combat";
 import { realizeTag } from "@/libs/combat/tags";
 import { rollInitiative } from "@/libs/combat/util";
 import { findRelationship } from "@/utils/alliance";
@@ -134,7 +133,8 @@ import { getBiomeFromGlobalTile } from "@/libs/travel";
 import * as mapData from "@/data/hexasphere.json";
 import type { RankedLoadout } from "@/drizzle/schema";
 import type { BattleType } from "@/drizzle/constants";
-import type { BattleUserState, StatSchemaType } from "@/libs/combat/types";
+import type { StatSchemaType } from "@/validators/combat";
+import type { BattleUserState } from "@/libs/combat/types";
 import type { BattleUserItem, BattleUserJutsu } from "@/libs/combat/types";
 import type { GroundEffect, UserEffect, ExtraState } from "@/libs/combat/types";
 import type { ActionEffect } from "@/libs/combat/types";
@@ -267,8 +267,9 @@ export const combatRouter = createTRPCRouter({
           if (result) {
             await Promise.all([
               updateUser(ctx.drizzle, pusher, userBattle, result, ctx.userId),
-              updateWars(ctx.drizzle, userBattle, result, ctx.userId),
+              updateWars(ctx.drizzle, pusher, userBattle, result, ctx.userId),
               updateKage(ctx.drizzle, userBattle, result), // no ctx.userId needed
+              updateRaidProgress(ctx.drizzle, userBattle),
             ]);
           }
 
@@ -679,8 +680,9 @@ export const combatRouter = createTRPCRouter({
               updateKage(db, newBattle, result),
               updateClanLeaders(db, newBattle, result, suid),
               updateVillageAnbuClan(db, newBattle, result, suid),
-              updateWars(db, newBattle, result, suid),
+              updateWars(db, pusher, newBattle, result, suid),
               updateTournament(db, newBattle, result, suid),
+              result ? updateRaidProgress(db, newBattle) : Promise.resolve(),
             ]);
             // Return dynamic battle update (excludes extraState for efficiency)
             // Frontend should merge this with existing extraState
@@ -1374,6 +1376,7 @@ export const initiateBattle = async (
     forceDefenderVillageId?: string;
     biome?: CombatBiome;
     forceKeepPools?: boolean;
+    raidQuestId?: string;
   },
   battleType: BattleType,
   scaleGains = 1,
@@ -1401,6 +1404,8 @@ export const initiateBattle = async (
     loadoutJutsus,
     loadoutItems,
     injectableJutsus,
+    raidQuest,
+    sectorExclusiveRaids,
   ] = await Promise.all([
     // Essentials
     fetchBattleEssentials(client),
@@ -1501,6 +1506,19 @@ export const initiateBattle = async (
       : [],
     // Fetch all jutsus that can be injected in battle
     client.query.jutsu.findMany({ where: eq(jutsu.injectableInBattle, true) }),
+    // Fetch raid quest data for boss HP (if applicable)
+    battleType === "RAID" && info.raidQuestId
+      ? client.query.quest.findFirst({
+          where: eq(quest.id, info.raidQuestId),
+          columns: { raidBossCurrentHealth: true, raidBossMaxHealth: true },
+        })
+      : null,
+    // Fetch exclusive raids for SHRINE_WAR battles (needed for raid activation when shrine is defeated)
+    battleType === "SHRINE_WAR"
+      ? client.query.quest.findMany({
+          where: and(eq(quest.questType, "raid"), eq(quest.hidden, false)),
+        })
+      : [],
   ]);
 
   // If we have forced loadouts, overwrite user items and jutsus appropriately
@@ -1627,7 +1645,7 @@ export const initiateBattle = async (
     }
 
     // Check if user is asleep
-    const QUEUED_BATTLES = ["RANKED_PVP", "CLAN_BATTLE", "KAGE_PVP"];
+    const QUEUED_BATTLES = ["RANKED_PVP", "CLAN_BATTLE", "KAGE_PVP", "RAID"];
     const isQueuedBattle = QUEUED_BATTLES.includes(battleType);
     const isAutoBattle = AutoBattleTypes.includes(battleType);
     const isShrineBattle = battleType === "SHRINE_WAR";
@@ -1644,8 +1662,8 @@ export const initiateBattle = async (
       if (targetIds.includes(user.userId) && user.status !== "AWAKE") {
         return { success: false, message: `Kage ${user.username} is not awake` };
       }
-    } else if (!isAutoBattle) {
-      // For other battles, check if user status is appropriate
+    } else if (!isAutoBattle && !user.isAi) {
+      // For other battles, check if user status is appropriate (skip AI users)
       const isOk = isQueuedBattle
         ? user.status === "QUEUED"
         : isShrineBattle
@@ -1787,6 +1805,30 @@ export const initiateBattle = async (
 
   // Set attacker to be the agressor
   if (usersState[0]) usersState[0].isAggressor = true;
+
+  // Handle RAID battle boss HP
+  let raidInitialBossHp: number | undefined;
+  if (battleType === "RAID" && info.raidQuestId && raidQuest) {
+    // Fall back to max health if current health is null/undefined
+    const raidBossCurrent =
+      raidQuest.raidBossCurrentHealth ?? raidQuest.raidBossMaxHealth;
+    if (raidBossCurrent !== undefined && raidBossCurrent !== null) {
+      // Find the boss (the target AI) and set their HP to the raid's current boss HP
+      const boss = usersState.find((u) => targetIds.includes(u.controllerId) && u.isAi);
+      if (boss) {
+        raidInitialBossHp = raidBossCurrent;
+        // Set boss maxHealth first (use higher of AI max and raid max), then curHealth
+        const raidMaxHp = raidQuest?.raidBossMaxHealth ?? boss.maxHealth;
+        boss.maxHealth = Math.max(boss.maxHealth, raidMaxHp);
+        boss.curHealth = Math.min(boss.maxHealth, raidBossCurrent);
+        // Set chakra and stamina equal to max health for raid bosses
+        boss.maxChakra = boss.maxHealth;
+        boss.curChakra = boss.maxHealth;
+        boss.maxStamina = boss.maxHealth;
+        boss.curStamina = boss.maxHealth;
+      }
+    }
+  }
 
   // Starting ground effects
   const groundEffects: GroundEffect[] = [];
@@ -1946,6 +1988,9 @@ export const initiateBattle = async (
         textureAssets: textureAssets,
         sfxAssets: sfxAssets,
         initialDurability: initialDurability,
+        raidQuestId: info.raidQuestId,
+        raidInitialBossHp: raidInitialBossHp,
+        sectorExclusiveRaids: sectorExclusiveRaids,
       },
       rewardScaling: rewardScaling,
       createdAt: startTime,
@@ -2014,9 +2059,7 @@ export const initiateBattle = async (
                   ...(longitude !== undefined
                     ? [eq(userData.longitude, longitude)]
                     : []),
-                  ...(latitude !== undefined
-                    ? [eq(userData.latitude, latitude)]
-                    : []),
+                  ...(latitude !== undefined ? [eq(userData.latitude, latitude)] : []),
                 ),
               ]
             : []),
@@ -2237,7 +2280,8 @@ export const processUsersForBattle = async (
       bukijutsuOffence: user.bukijutsuOffence,
     };
     type offenceKey = keyof typeof offences;
-    if (!user.preferredStat) {
+    // If preferredStat is "Highest" or not set, calculate the actual highest stat
+    if (!user.preferredStat || user.preferredStat === "Highest") {
       user.highestOffence = Object.keys(offences).reduce((prev, cur) =>
         offences[prev as offenceKey] > offences[cur as offenceKey] ? prev : cur,
       ) as offenceKey;
@@ -2253,7 +2297,8 @@ export const processUsersForBattle = async (
       bukijutsuDefence: user.bukijutsuDefence,
     };
     type defenceKey = keyof typeof defences;
-    if (!user.preferredStat) {
+    // If preferredStat is "Highest" or not set, calculate the actual highest stat
+    if (!user.preferredStat || user.preferredStat === "Highest") {
       user.highestDefence = Object.keys(defences).reduce((prev, cur) =>
         defences[prev as defenceKey] > defences[cur as defenceKey] ? prev : cur,
       ) as defenceKey;

@@ -11,7 +11,6 @@ import {
 } from "spacetimedb";
 import HexPosition from "./hex_position_type";
 
-
 export default __t.object("EnemySpawn", {
   enemyId: __t.u64(),
   sessionId: __t.u64(),
@@ -22,5 +21,3 @@ export default __t.object("EnemySpawn", {
     return __t.array(HexPosition);
   },
 });
-
-

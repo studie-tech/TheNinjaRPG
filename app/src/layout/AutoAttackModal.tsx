@@ -12,7 +12,11 @@ interface AutoAttackModalProps {
   onEnable: () => void;
 }
 
-export default function AutoAttackModal({ isOpen, setIsOpen, onEnable }: AutoAttackModalProps) {
+export default function AutoAttackModal({
+  isOpen,
+  setIsOpen,
+  onEnable,
+}: AutoAttackModalProps) {
   const [autoAttackMinLevel, setAutoAttackMinLevel] = useLocalStorage<number>(
     "autoAttackMinLevel",
     1,
@@ -72,17 +76,10 @@ export default function AutoAttackModal({ isOpen, setIsOpen, onEnable }: AutoAtt
         </div>
 
         <div className="flex gap-2 pt-2">
-          <Button
-            variant="outline"
-            onClick={() => setIsOpen(false)}
-            className="flex-1"
-          >
+          <Button variant="outline" onClick={() => setIsOpen(false)} className="flex-1">
             Cancel
           </Button>
-          <Button
-            onClick={handleEnable}
-            className="flex-1"
-          >
+          <Button onClick={handleEnable} className="flex-1">
             Enable Auto Attack
           </Button>
         </div>

@@ -86,9 +86,7 @@ export const auctionRouter = createTRPCRouter({
       } = input;
 
       // Build where conditions
-      const whereConditions = [
-        eq(auctionListing.status, status || "ACTIVE"),
-      ];
+      const whereConditions = [eq(auctionListing.status, status || "ACTIVE")];
 
       // Only filter by expire time for ACTIVE listings
       // Other statuses (SOLD, EXPIRED, CANCELLED) should show even after expiration
@@ -389,11 +387,15 @@ export const auctionRouter = createTRPCRouter({
         .set(
           auction.currencyType === "MONEY"
             ? { bank: sql`${userData.bank} - ${amountToDeduct}` }
-            : { reputationPoints: sql`${userData.reputationPoints} - ${amountToDeduct}` }
+            : {
+                reputationPoints: sql`${userData.reputationPoints} - ${amountToDeduct}`,
+              },
         )
         .where(eq(userData.userId, ctx.userId));
       if (result.rowsAffected === 0) {
-        return errorResponse(`Failed to deduct ${auction.currencyType === "MONEY" ? "money" : "reputation"} from user`);
+        return errorResponse(
+          `Failed to deduct ${auction.currencyType === "MONEY" ? "money" : "reputation"} from user`,
+        );
       }
 
       // Either update existing bid or create new one
@@ -661,7 +663,9 @@ export const completeAuctionInternal = async (
                   .where(eq(userData.userId, bid.bidderId))
               : drizzle
                   .update(userData)
-                  .set({ reputationPoints: sql`${userData.reputationPoints} + ${bid.amount}` })
+                  .set({
+                    reputationPoints: sql`${userData.reputationPoints} + ${bid.amount}`,
+                  })
                   .where(eq(userData.userId, bid.bidderId)),
           )
         : []),

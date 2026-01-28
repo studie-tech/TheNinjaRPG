@@ -1,7 +1,7 @@
 import { streamText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { checkContentAiAuth } from "@/libs/llm";
-import { ItemValidatorRawSchema } from "@/libs/combat/types";
+import { ItemValidatorRawSchema } from "@/validators/combat";
 import type { CoreMessage } from "ai";
 import { convertToOpenaiCompatibleSchema } from "@/libs/zod_utils";
 import { OPENAI_CONTENT_MODEL } from "@/drizzle/constants";

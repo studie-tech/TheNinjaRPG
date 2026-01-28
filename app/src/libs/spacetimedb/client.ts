@@ -332,7 +332,10 @@ export class SpacetimeDBConnection {
       .subscriptionBuilder()
       .onApplied(() => {
         if (DEBUG) {
-          console.log("[SpacetimeDB] Guest session subscription applied for seed:", seed);
+          console.log(
+            "[SpacetimeDB] Guest session subscription applied for seed:",
+            seed,
+          );
         }
       })
       .onError((ctx: ErrorContext) => {

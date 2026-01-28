@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
-import { eq, and, desc, gte, isNull, sql, ne } from "drizzle-orm";
+import { eq, and, desc, gte, isNull, sql } from "drizzle-orm";
 import {
   userData,
   activityStreakConfig,
@@ -23,9 +23,8 @@ import { fetchUser } from "@/routers/profile";
 import { updateRewards } from "@/server/api/routers/quests";
 import { postProcessRewards } from "@/libs/quest";
 import { getRewardPreview } from "@/libs/objectives";
-import { ObjectiveReward } from "@/validators/objectives";
+import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 import type { DrizzleClient } from "@/server/db";
-import type { ObjectiveRewardType } from "@/validators/objectives";
 
 const STREAK_CONTINUITY_HOURS = 36;
 
@@ -391,7 +390,8 @@ export const activityStreakRouter = createTRPCRouter({
 
       // Check if user can still catch up (not at theoretical max yet AND has started)
       // Note: currentDay === 0 means "fresh start", not "behind" - first claim should be free
-      const canCatchUp = progress.currentDay > 0 && progress.currentDay < theoreticalMaxDay;
+      const canCatchUp =
+        progress.currentDay > 0 && progress.currentDay < theoreticalMaxDay;
 
       // Determine new day number and whether we need to charge for catchup
       // Logic is the same for both RECURRING and EVENT_PASS
@@ -411,7 +411,9 @@ export const activityStreakRouter = createTRPCRouter({
         }
         // Guard: can only reset if behind (canCatchUp means user is behind theoreticalMaxDay)
         if (!canCatchUp) {
-          return errorResponse("Cannot reset - your streak is on track! Just claim the next day.");
+          return errorResponse(
+            "Cannot reset - your streak is on track! Just claim the next day.",
+          );
         }
         newCurrentDay = 1;
         streakReset = true;
@@ -431,11 +433,15 @@ export const activityStreakRouter = createTRPCRouter({
         }
         // Guard: cannot catch up beyond total days
         if (progress.currentDay >= config.totalDays) {
-          return errorResponse("Streak already completed - cannot catch up beyond total days");
+          return errorResponse(
+            "Streak already completed - cannot catch up beyond total days",
+          );
         }
         // Guard: cannot claim beyond theoretical max (can't buy ahead of time)
         if (progress.currentDay + 1 > theoreticalMaxDay) {
-          return errorResponse("Cannot claim beyond current day - you can only catch up to today");
+          return errorResponse(
+            "Cannot claim beyond current day - you can only catch up to today",
+          );
         }
         newCurrentDay = progress.currentDay + 1;
         paidCatchUp = true;
@@ -649,7 +655,6 @@ export const activityStreakRouter = createTRPCRouter({
         endDate: input.endDate ?? null,
         createdByUserId: ctx.userId,
       });
-
 
       // Create rewards for each day
       if (input.rewards.length > 0) {

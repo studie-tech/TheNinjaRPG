@@ -13,11 +13,11 @@ export default function SignupUser() {
     // Detect WebGL2 support on mount
     const canvas = document.createElement("canvas");
     const gl = canvas.getContext("webgl2");
-    
+
     if (!gl) {
       setWebglError(true);
     }
-    
+
     setIsChecking(false);
   }, []);
 

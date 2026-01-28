@@ -35,7 +35,8 @@ export const calcStealthDuration = (stealthStat: number): number => {
   // Calculate intervals above the default stat (1000)
   // At 1000 stat: intervals = 0, at 2000 stat: intervals = 1, etc.
   const intervals = Math.max(0, Math.floor((clampedStat - 1000) / 1000));
-  const duration = STEALTH_BASE_DURATION_SECONDS + intervals * STEALTH_DURATION_PER_1000_POINTS;
+  const duration =
+    STEALTH_BASE_DURATION_SECONDS + intervals * STEALTH_DURATION_PER_1000_POINTS;
   return Math.min(duration, STEALTH_MAX_DURATION_SECONDS);
 };
 
@@ -49,7 +50,9 @@ export const calcStealthKeepChance = (stealthStat: number): number => {
   const clampedStat = Math.min(stealthStat, STEALTH_SENSORY_CAP);
   // Calculate intervals above the default stat (1000)
   const intervals = Math.max(0, Math.floor((clampedStat - 1000) / 1000));
-  return STEALTH_BASE_KEEP_CHANCE_PERC + intervals * STEALTH_KEEP_CHANCE_PER_1000_POINTS;
+  return (
+    STEALTH_BASE_KEEP_CHANCE_PERC + intervals * STEALTH_KEEP_CHANCE_PER_1000_POINTS
+  );
 };
 
 /**
@@ -62,7 +65,8 @@ export const calcSensoryDetectChance = (sensoryStat: number): number => {
   const clampedStat = Math.min(sensoryStat, STEALTH_SENSORY_CAP);
   // Calculate intervals above the default stat (1000)
   const intervals = Math.max(0, Math.floor((clampedStat - 1000) / 1000));
-  const chance = SENSORY_BASE_DETECT_CHANCE_PERC + intervals * SENSORY_DETECT_CHANCE_PER_1000_POINTS;
+  const chance =
+    SENSORY_BASE_DETECT_CHANCE_PERC + intervals * SENSORY_DETECT_CHANCE_PER_1000_POINTS;
   return Math.min(chance, SENSORY_MAX_DETECT_CHANCE_PERC);
 };
 
@@ -77,7 +81,8 @@ export const calcSensoryCooldown = (sensoryStat: number): number => {
   // Calculate intervals above the default stat (1000)
   const intervals = Math.max(0, Math.floor((clampedStat - 1000) / 1000));
   const cooldown =
-    SENSORY_BASE_COOLDOWN_SECONDS - intervals * SENSORY_COOLDOWN_REDUCTION_PER_1000_POINTS;
+    SENSORY_BASE_COOLDOWN_SECONDS -
+    intervals * SENSORY_COOLDOWN_REDUCTION_PER_1000_POINTS;
   return Math.max(cooldown, 30); // Minimum 30 second cooldown
 };
 
@@ -231,7 +236,9 @@ export const calcCovertTrainingFinishAt = (
   covertTrainingMinutes: number | null,
 ): Date | null => {
   if (!covertTrainingStartedAt || covertTrainingMinutes == null) return null;
-  return new Date(covertTrainingStartedAt.getTime() + covertTrainingMinutes * 60 * 1000);
+  return new Date(
+    covertTrainingStartedAt.getTime() + covertTrainingMinutes * 60 * 1000,
+  );
 };
 
 /**
@@ -282,7 +289,9 @@ export const getStealthStatus = (
     userData.covertTrainingMinutes != null
       ? calcCovertTrainingGain(
           userData.covertTrainingMinutes,
-          userData.covertTrainingType === "stealth" ? userData.stealth : userData.sensory,
+          userData.covertTrainingType === "stealth"
+            ? userData.stealth
+            : userData.sensory,
           cap,
           gainPerMinute,
         )

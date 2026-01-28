@@ -23,6 +23,7 @@ import {
   kageDefendedChallenges,
   linkPromotion,
   mpvpBattleUser,
+  mpvpBattleQueue,
   notification,
   paypalSubscription,
   paypalTransaction,
@@ -30,6 +31,7 @@ import {
   staffApplication,
   pollOption,
   questHistory,
+  rankedPvpQueue,
   rankedUserRewards,
   reportLog,
   ryoTrade,
@@ -57,6 +59,8 @@ import {
   village,
   userActivityEvent,
   warKill,
+  raidParticipation,
+  userRaidBuff,
 } from "@/drizzle/schema";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
@@ -303,17 +307,20 @@ export const staffRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const [user, targetUser] = await Promise.all([
+      // Query - fetch users and queue entry in parallel
+      const [user, targetUser, queueEntry] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, input.userId),
+        ctx.drizzle.query.mpvpBattleUser.findFirst({
+          where: eq(mpvpBattleUser.userId, input.userId),
+        }),
       ]);
       // Guard
       if (!user) return errorResponse("User not found");
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canUnstuckVillage(user.role)) return errorResponse("Not allowed for you");
-      // Mutate
+      // Mutate - update status and clean up all queue entries
       await Promise.all([
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
@@ -324,30 +331,62 @@ export const staffRouter = createTRPCRouter({
           changes: [
             `Previous BattleId: ${targetUser.battleId}`,
             `Reason: ${input.reason}`,
+            `Cleared queue entries: mpvpBattleUser=${queueEntry ? "yes" : "no"}`,
           ],
         }),
         ctx.drizzle
           .update(userData)
           .set({ status: "AWAKE", travelFinishAt: null, battleId: null })
           .where(eq(userData.userId, targetUser.userId)),
+        // Clean up raid/clan/shrine battle queue
+        ctx.drizzle
+          .delete(mpvpBattleUser)
+          .where(eq(mpvpBattleUser.userId, input.userId)),
+        // Clean up ranked PVP queue
+        ctx.drizzle
+          .delete(rankedPvpQueue)
+          .where(eq(rankedPvpQueue.userId, input.userId)),
       ]);
-      // Push status update to sector
+      // Clean up empty teams or stuck claiming states if user was in a team
+      if (queueEntry) {
+        const remainingMembers = await ctx.drizzle.query.mpvpBattleUser.findMany({
+          where: eq(mpvpBattleUser.clanBattleId, queueEntry.clanBattleId),
+        });
+        if (remainingMembers.length === 0) {
+          // Delete the queue entry - team is now empty
+          await ctx.drizzle
+            .delete(mpvpBattleQueue)
+            .where(eq(mpvpBattleQueue.id, queueEntry.clanBattleId));
+        } else {
+          // If there are remaining members but battleId is a claiming ID, reset it
+          const team = await ctx.drizzle.query.mpvpBattleQueue.findFirst({
+            where: eq(mpvpBattleQueue.id, queueEntry.clanBattleId),
+          });
+          if (team?.battleId?.startsWith("claiming-")) {
+            await ctx.drizzle
+              .update(mpvpBattleQueue)
+              .set({ battleId: null })
+              .where(eq(mpvpBattleQueue.id, queueEntry.clanBattleId));
+          }
+        }
+      }
+      // Push status update to sector using target user's data (not staff member's)
       const output = {
-        longitude: user.longitude,
-        latitude: user.latitude,
-        sector: user.sector,
-        avatar: user.avatar,
-        avatarLight: user.avatarLight,
-        level: user.level,
-        villageId: user.villageId,
-        battleId: user.battleId,
-        username: user.username,
+        longitude: targetUser.longitude,
+        latitude: targetUser.latitude,
+        sector: targetUser.sector,
+        avatar: targetUser.avatar,
+        avatarLight: targetUser.avatarLight,
+        level: targetUser.level,
+        villageId: targetUser.villageId,
+        battleId: null as string | null, // We're forcing awake, so battleId should be null
+        username: targetUser.username,
         status: "AWAKE" as UserStatus,
         location: "",
-        userId: ctx.userId,
+        userId: input.userId,
       };
       const pusher = getServerPusher();
-      void updateUserOnMap(pusher, user.sector, output);
+      void updateUserOnMap(pusher, targetUser.sector, output);
       // Done
       return {
         success: true,
@@ -1039,5 +1078,7 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
     client.delete(userUpload).where(eq(userUpload.userId, userId)),
     client.delete(warKill).where(eq(warKill.killerId, userId)),
     client.delete(warKill).where(eq(warKill.victimId, userId)),
+    client.delete(raidParticipation).where(eq(raidParticipation.userId, userId)),
+    client.delete(userRaidBuff).where(eq(userRaidBuff.userId, userId)),
   ]);
 };

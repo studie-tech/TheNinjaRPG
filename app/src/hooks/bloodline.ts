@@ -1,16 +1,15 @@
 import { calculateContentDiff } from "@/utils/diff";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { BloodlineValidator } from "@/libs/combat/types";
+import { BloodlineValidator } from "@/validators/combat";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import { LetterRanks } from "@/drizzle/constants";
 import { StatTypes } from "@/drizzle/constants";
 import { BloodlineDifficultyRatings } from "@/drizzle/constants";
 import type { Bloodline } from "@/drizzle/schema";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { ZodAllTags, ZodBloodlineType } from "@/validators/combat";
 import type { FormEntry } from "@/layout/EditContent";
-import type { ZodBloodlineType } from "@/libs/combat/types";
 
 /**
  * Hook used when creating frontend forms for editing bloodlines

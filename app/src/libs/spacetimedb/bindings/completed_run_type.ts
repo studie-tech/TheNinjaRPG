@@ -44,5 +44,3 @@ export default __t.object("CompletedRun", {
   pointsEarned: __t.u32(),
   completedAt: __t.u64(),
 });
-
-

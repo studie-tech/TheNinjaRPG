@@ -1485,7 +1485,7 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
   isActive,
 }) => {
   // State
-  const chart = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<HTMLCanvasElement>(null);
 
   // Query
   const { data: logEntries } = api.train.getTrainingLog.useQuery(
@@ -1522,7 +1522,7 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
 
   // Create chart
   useEffect(() => {
-    const ctx = chart?.current?.getContext("2d");
+    const ctx = chartRef?.current?.getContext("2d");
     if (ctx && datasets) {
       // Update stats chart
       const localTheme = safeLocalStorageGetItem("theme");
@@ -1598,7 +1598,7 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
       initialBreak={true}
     >
       <div className="relative w-[99%] p-3">
-        <canvas ref={chart} id="chart"></canvas>
+        <canvas ref={chartRef} id="chart"></canvas>
       </div>
     </ContentBox>
   );

@@ -32,7 +32,7 @@ import Confirm2 from "@/layout/Confirm2";
 import RichInput from "@/layout/RichInput";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import Tournament from "@/layout/Tournament";
-import { ObjectiveReward } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
 import { mutateContentSchema } from "@/validators/comments";
 import { api } from "@/app/_trpc/client";
 import { useRouter } from "next/navigation";

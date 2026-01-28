@@ -122,7 +122,9 @@ export default function ManualTowerDefenseCharacters() {
 
           <TabsContent value="players">
             {!isLoading && players.length === 0 && (
-              <p className="text-muted-foreground">No player characters configured yet.</p>
+              <p className="text-muted-foreground">
+                No player characters configured yet.
+              </p>
             )}
             {!isLoading && players.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -149,7 +151,11 @@ interface CharacterCardProps {
   onDelete: () => void;
 }
 
-const CharacterCard: React.FC<CharacterCardProps> = ({ character, canEdit, onDelete }) => {
+const CharacterCard: React.FC<CharacterCardProps> = ({
+  character,
+  canEdit,
+  onDelete,
+}) => {
   const [showConfirm, setShowConfirm] = useState(false);
 
   // Get south-facing static rotation from assetConfig if available
@@ -186,10 +192,12 @@ const CharacterCard: React.FC<CharacterCardProps> = ({ character, canEdit, onDel
       {!character.isPlayer && (
         <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <div>
-            <span className="text-muted-foreground">Health:</span> {character.baseHealth}
+            <span className="text-muted-foreground">Health:</span>{" "}
+            {character.baseHealth}
           </div>
           <div>
-            <span className="text-muted-foreground">Damage:</span> {character.baseDamage}
+            <span className="text-muted-foreground">Damage:</span>{" "}
+            {character.baseDamage}
           </div>
           <div>
             <span className="text-muted-foreground">Speed:</span> {character.baseSpeed}
@@ -241,4 +249,3 @@ const CharacterCard: React.FC<CharacterCardProps> = ({ character, canEdit, onDel
     </div>
   );
 };
-

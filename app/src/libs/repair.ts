@@ -74,10 +74,9 @@ export const calculateKitsToUse = (
   if (itemsNeedingRepair.length === 0) {
     return { kitsToUse: [], totalDurabilityNeeded: 0, canRepairAll: true };
   }
-  
+
   const totalDurabilityNeeded = itemsNeedingRepair.reduce(
-    (total, useritem) =>
-      total + (useritem.item.maxDurability - useritem.durability),
+    (total, useritem) => total + (useritem.item.maxDurability - useritem.durability),
     0,
   );
 
@@ -168,4 +167,3 @@ export const calculateKitsToUse = (
     canRepairAll,
   };
 };
-

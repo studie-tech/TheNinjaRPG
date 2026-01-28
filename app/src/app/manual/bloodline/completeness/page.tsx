@@ -214,7 +214,7 @@ interface StackedCountsChartProps {
 }
 
 const CountsChart: React.FC<CountsChartProps> = (props) => {
-  const classChart = useRef<HTMLCanvasElement>(null);
+  const classChartRef = useRef<HTMLCanvasElement>(null);
   const data = Object.entries(props.data || {}).map(([text, value]) => ({
     text,
     value,
@@ -222,7 +222,7 @@ const CountsChart: React.FC<CountsChartProps> = (props) => {
   const values = data.map((d) => d.value);
   const labels = data.map((d) => d.text);
   useEffect(() => {
-    const classCtx = classChart?.current?.getContext("2d");
+    const classCtx = classChartRef?.current?.getContext("2d");
     if (classCtx) {
       const myClassChart = new ChartJS(classCtx, {
         type: "bar",
@@ -267,16 +267,16 @@ const CountsChart: React.FC<CountsChartProps> = (props) => {
 
   return (
     <div className="relative w-[99%] p-3">
-      <canvas ref={classChart} id="classCounts"></canvas>
+      <canvas ref={classChartRef} id="classCounts"></canvas>
     </div>
   );
 };
 
 const StackedCountsChart: React.FC<StackedCountsChartProps> = (props) => {
-  const stackedChart = useRef<HTMLCanvasElement>(null);
+  const stackedChartRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const stackedCtx = stackedChart?.current?.getContext("2d");
+    const stackedCtx = stackedChartRef?.current?.getContext("2d");
     if (stackedCtx && props.data) {
       const effectTypes = Object.keys(props.data);
       const calculations = Array.from(
@@ -344,7 +344,7 @@ const StackedCountsChart: React.FC<StackedCountsChartProps> = (props) => {
 
   return (
     <div className="relative w-[99%] p-3">
-      <canvas ref={stackedChart} id="stackedCounts"></canvas>
+      <canvas ref={stackedChartRef} id="stackedCounts"></canvas>
     </div>
   );
 };

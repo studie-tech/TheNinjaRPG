@@ -25,5 +25,3 @@ export default __t.object("Enemy", {
   direction: __t.string(),
   pathIndex: __t.u32(),
 });
-
-

@@ -10,15 +10,12 @@ import { EffectFormWrapper } from "@/layout/EditContent";
 import { FilePlus, FileMinus } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { DamageTag } from "@/libs/combat/types";
-import { JutsuValidator } from "@/libs/combat/types";
+import { DamageTag, JutsuValidator, tagTypes, getTagSchema } from "@/validators/combat";
 import { canChangeContent } from "@/utils/permissions";
-import { tagTypes } from "@/libs/combat/types";
 import { useJutsuEditForm } from "@/hooks/jutsu";
 import { JutsuHelper } from "@/layout/ContentHelp";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { getTagSchema } from "@/libs/combat/types";
-import type { ZodJutsuType } from "@/libs/combat/types";
+import type { ZodJutsuType } from "@/validators/combat";
 import type { Jutsu } from "@/drizzle/schema";
 
 export default function JutsuEdit(props: { params: Promise<{ jutsuid: string }> }) {

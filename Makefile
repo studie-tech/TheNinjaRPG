@@ -25,6 +25,8 @@ endif
 
 include ./app/.env
 
+PORT ?= 3000
+
 ## List of available commands:
 ---------------General------------------: # -------------------------------------------------------
 .PHONY: help
@@ -83,10 +85,10 @@ bun: install ## Execute bun command in local development.
 	cd app && bun $(ARGS)
 
 .PHONY: start
-start: loadEnv # Run Next.js server, access at http://127.0.0.1:3000
-	@echo "${GREEN}start${RESET}"
+start: loadEnv # Run Next.js server, access at http://127.0.0.1:PORT
+	@echo "${GREEN}start on port $(PORT)${RESET}"
 	rm -rf app/.next
-	@make bun -- OPENAI_API_KEY=$(OPENAI_API_KEY) dev
+	@make bun -- OPENAI_API_KEY=$(OPENAI_API_KEY) dev -p $(PORT)
 
 .PHONY: build
 build: # Build Next.js app
@@ -156,10 +158,19 @@ test: # Push schema to db without creating migrations
 	cd app && bun test
 
 .PHONY: lint
-lint: # Push schema to db without creating migrations
+lint: # Run linting of the project
 	@echo "${YELLOW}Running linting ${RESET}"
 	cd app && bun run lint
 
+.PHONY: format
+format: # Run prettier formatter on the project
+	@echo "${YELLOW}Running prettier formatter${RESET}"
+	cd app && bun prettier --write "src/**/*.{ts,tsx,js,jsx,css}"
+
+.PHONY: typecheck
+typecheck: # Run TypeScript type checking
+	@echo "${YELLOW}Running TypeScript type checking${RESET}"
+	cd app && bun tsc --noEmit
 
 -------------DEPENDENCIES---------------: # -------------------------------------------------------
 .PHONY: deps-upgrade

@@ -40,7 +40,9 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
             // Extract tRPC mutation path from mutation key (e.g., [["towerDefense", "initiateGuestSession"]])
             const key = mutation.options.mutationKey;
             const mutationPath =
-              Array.isArray(key) && Array.isArray(key[0]) ? key[0].join(".") : undefined;
+              Array.isArray(key) && Array.isArray(key[0])
+                ? key[0].join(".")
+                : undefined;
             onMutateCheck(mutationPath);
             document.body.style.cursor = "wait";
           },

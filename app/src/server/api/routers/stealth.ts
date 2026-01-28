@@ -35,7 +35,6 @@ import {
 import type { CovertTrainingType } from "@/drizzle/constants";
 
 export const stealthRouter = createTRPCRouter({
-  
   // Activate stealth mode
   activateStealth: protectedProcedure
     .output(
@@ -52,10 +51,14 @@ export const stealthRouter = createTRPCRouter({
 
       // Guard
       if (!user) throw serverError("NOT_FOUND", "User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to activate stealth");
+      if (user.status !== "AWAKE")
+        return errorResponse("Must be awake to activate stealth");
 
       // Clean up expired stealth before the "already active" guard
-      if (user.stealthActive && isStealthExpired(user.stealthActivatedAt, user.stealth)) {
+      if (
+        user.stealthActive &&
+        isStealthExpired(user.stealthActivatedAt, user.stealth)
+      ) {
         user = { ...user, stealthActive: false, stealthActivatedAt: null };
       }
 
@@ -77,9 +80,7 @@ export const stealthRouter = createTRPCRouter({
           stealthActive: true,
           stealthActivatedAt,
         })
-        .where(
-          eq(userData.userId, ctx.userId)
-        );
+        .where(eq(userData.userId, ctx.userId));
 
       if (result.rowsAffected === 0) {
         return errorResponse("Failed to activate stealth");
@@ -198,7 +199,8 @@ export const stealthRouter = createTRPCRouter({
       // Guard
       if (!user) throw serverError("NOT_FOUND", "User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake to use sensory");
-      if (user.sector !== input.sector) return errorResponse("You are not in this sector");
+      if (user.sector !== input.sector)
+        return errorResponse("You are not in this sector");
       if (!isSensoryReady(user.lastSensoryAt, user.sensory)) {
         const remaining = getRemainingSensoryCooldown(user.lastSensoryAt, user.sensory);
         return errorResponse(
@@ -403,8 +405,12 @@ export const stealthRouter = createTRPCRouter({
           covertTrainingStartedAt: null,
           covertTrainingMinutes: null,
           ...(user.covertTrainingType === "stealth"
-            ? { stealth: sql`LEAST(${userData.stealth} + ${gained}, ${STEALTH_SENSORY_CAP})` }
-            : { sensory: sql`LEAST(${userData.sensory} + ${gained}, ${STEALTH_SENSORY_CAP})` }),
+            ? {
+                stealth: sql`LEAST(${userData.stealth} + ${gained}, ${STEALTH_SENSORY_CAP})`,
+              }
+            : {
+                sensory: sql`LEAST(${userData.sensory} + ${gained}, ${STEALTH_SENSORY_CAP})`,
+              }),
         })
         .where(eq(userData.userId, ctx.userId));
 
@@ -432,7 +438,10 @@ export const stealthRouter = createTRPCRouter({
           covertTrainingMinutes: null,
         })
         .where(
-          and(eq(userData.userId, ctx.userId), sql`${userData.covertTrainingType} IS NOT NULL`),
+          and(
+            eq(userData.userId, ctx.userId),
+            sql`${userData.covertTrainingType} IS NOT NULL`,
+          ),
         );
 
       if (result.rowsAffected === 0) {

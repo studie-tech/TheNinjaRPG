@@ -17,7 +17,7 @@ export default function BotPerformance() {
   const timeframe = showWeekly ? "weekly" : "daily";
 
   // Charting
-  const botChart = useRef<HTMLCanvasElement>(null);
+  const botChartRef = useRef<HTMLCanvasElement>(null);
 
   // Query
   const { data, isFetching } = api.reports.getModBotPerformance.useQuery(
@@ -35,7 +35,7 @@ export default function BotPerformance() {
     const groupCount = (acc: number, curr: NonNullable<typeof botReports>[number]) => {
       return acc + curr.count;
     };
-    const classCtx = botChart?.current?.getContext("2d");
+    const classCtx = botChartRef?.current?.getContext("2d");
     if (classCtx && totalUserReports && totalBotReports && botReports) {
       // Overall number of reports
       const labels = [
@@ -177,7 +177,7 @@ export default function BotPerformance() {
       {isFetching && userData && <Loader explanation="Loading statistics" />}
       {!userData && !isFetching && !data && <Loader explanation="No access" />}
       <div className="relative w-[99%] p-3">
-        <canvas ref={botChart} id="botPerformance"></canvas>
+        <canvas ref={botChartRef} id="botPerformance"></canvas>
       </div>
     </ContentBox>
   );

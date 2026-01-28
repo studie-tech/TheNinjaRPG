@@ -6,6 +6,7 @@ import { fetchUser } from "@/routers/profile";
 import { drizzleDB } from "@/server/db";
 import { IMG_BUILDING_GLOBALANBU } from "@/drizzle/constants";
 import QuestPicker from "@/layout/QuestPicker";
+import RaidBrowser from "@/layout/RaidBrowser";
 
 // Force dynamic rendering to avoid static generation errors with headers
 export const dynamic = "force-dynamic";
@@ -37,13 +38,21 @@ export default async function GlobalAnbuHQ() {
         initialData={initialNews}
       />
       {userData && (
-        <QuestPicker
-          questType="story"
-          title="Story Missions"
-          subtitle="Global Anbu HQ"
-          introduction="Story missions are special assignments that advance the game's narrative. They can only be started here at the Global Anbu HQ."
-          initialBreak={true}
-        />
+        <>
+          <RaidBrowser
+            title="Raids"
+            subtitle="Global ANBU HQ"
+            initialBreak={true}
+            viewOnly={true}
+          />
+          <QuestPicker
+            questType="story"
+            title="Story Missions"
+            subtitle="Global Anbu HQ"
+            introduction="Story missions are special assignments that advance the game's narrative. They can only be started here at the Global Anbu HQ."
+            initialBreak={true}
+          />
+        </>
       )}
     </>
   );

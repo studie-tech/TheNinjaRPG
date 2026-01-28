@@ -14,7 +14,8 @@ export default function CraftingRecipes() {
   const state = useFiltering();
 
   // Data - fetch all craftable items
-  const { data: craftableItems, isFetching } = api.occupation.getCraftableItems.useQuery();
+  const { data: craftableItems, isFetching } =
+    api.occupation.getCraftableItems.useQuery();
 
   // Filter items based on state
   const filteredItems = craftableItems?.filter((item) => {
@@ -22,24 +23,36 @@ export default function CraftingRecipes() {
     if (!item.craftingRequirements || item.craftingRequirements.length === 0) {
       return false;
     }
-    
+
     const filter = getFilter(state);
-    
+
     // Filter by item type
-    if (filter.itemType && filter.itemType !== "ANY" && item.itemType !== filter.itemType) {
+    if (
+      filter.itemType &&
+      filter.itemType !== "ANY" &&
+      item.itemType !== filter.itemType
+    ) {
       return false;
     }
-    
+
     // Filter by rarity
-    if (filter.itemRarity && filter.itemRarity !== "ANY" && item.rarity !== filter.itemRarity) {
+    if (
+      filter.itemRarity &&
+      filter.itemRarity !== "ANY" &&
+      item.rarity !== filter.itemRarity
+    ) {
       return false;
     }
-    
+
     // Filter by name
-    if (filter.name && typeof filter.name === "string" && !item.name.toLowerCase().includes(filter.name.toLowerCase())) {
+    if (
+      filter.name &&
+      typeof filter.name === "string" &&
+      !item.name.toLowerCase().includes(filter.name.toLowerCase())
+    ) {
       return false;
     }
-    
+
     return true;
   });
 
@@ -56,9 +69,9 @@ export default function CraftingRecipes() {
         }
       >
         <p>
-          These are all the recipes available through the Crafting occupation.
-          Each recipe shows the materials required to craft the item. To craft items, you must
-          have the Crafting occupation selected and the required materials in your
+          These are all the recipes available through the Crafting occupation. Each
+          recipe shows the materials required to craft the item. To craft items, you
+          must have the Crafting occupation selected and the required materials in your
           inventory.
         </p>
       </ContentBox>
@@ -86,11 +99,7 @@ export default function CraftingRecipes() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {item.craftingRequirements.map((req, index) => (
-                      <Badge
-                        key={index}
-                        variant="outline"
-                        className="text-sm"
-                      >
+                      <Badge key={index} variant="outline" className="text-sm">
                         {req.quantity}x {req.requirementItem?.name || "Unknown Item"}
                       </Badge>
                     ))}
@@ -103,4 +112,3 @@ export default function CraftingRecipes() {
     </>
   );
 }
-

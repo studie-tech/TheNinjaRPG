@@ -14,7 +14,7 @@ interface WordCloudProps {
 
 const WordCloud: React.FC<WordCloudProps> = (props) => {
   const chartRef = useRef<HTMLCanvasElement>(null);
-  const chartInstance = useRef<ChartJS | null>(null);
+  const chartInstanceRef = useRef<ChartJS | null>(null);
 
   // Reduce to word frequency
   const stopWords = [
@@ -250,9 +250,9 @@ const WordCloud: React.FC<WordCloudProps> = (props) => {
     }
 
     // Clean up previous chart instance
-    if (chartInstance.current) {
-      chartInstance.current.destroy();
-      chartInstance.current = null;
+    if (chartInstanceRef.current) {
+      chartInstanceRef.current.destroy();
+      chartInstanceRef.current = null;
     }
 
     const ctx = chartRef.current.getContext("2d");
@@ -288,7 +288,7 @@ const WordCloud: React.FC<WordCloudProps> = (props) => {
 
       try {
         // Create new chart
-        chartInstance.current = new ChartJS(ctx, {
+        chartInstanceRef.current = new ChartJS(ctx, {
           type: WordCloudController.id,
           data: chartConfig,
           options: options,
@@ -314,9 +314,9 @@ const WordCloud: React.FC<WordCloudProps> = (props) => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (chartInstance.current) {
-        chartInstance.current.destroy();
-        chartInstance.current = null;
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.destroy();
+        chartInstanceRef.current = null;
       }
     };
   }, []);

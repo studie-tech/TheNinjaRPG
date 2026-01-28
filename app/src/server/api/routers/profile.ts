@@ -70,7 +70,7 @@ import {
   TUTORIAL_STEPS_COUNT,
 } from "@/drizzle/constants";
 import { REGEN_SECONDS } from "@/drizzle/constants";
-import { createStatSchema } from "@/libs/combat/types";
+import { createStatSchema } from "@/validators/combat";
 import { isAvailableUserQuests } from "@/libs/quest";
 import {
   getGameSettingBoost,
@@ -117,6 +117,7 @@ import sanitize from "@/utils/sanitize";
 import { deleteUser } from "@/server/api/routers/staff";
 import { moderateContent } from "@/libs/moderator";
 import { getReskinnedBloodline } from "@/libs/bloodline";
+import { getRaidObjectiveData } from "@/libs/raids";
 import { fetchKageReplacement } from "@/routers/kage";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import type { BloodlineReskin } from "@/drizzle/schema";
@@ -284,7 +285,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Get all AI names
   getAllAiNames: publicProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle.query.userData.findMany({
+    return ctx.drizzle.query.userData.findMany({
       where: and(eq(userData.isAi, true), ne(userData.rank, "ELDER")),
       columns: {
         userId: true,
@@ -293,6 +294,7 @@ export const profileRouter = createTRPCRouter({
         avatar: true,
         isSummon: true,
         inArena: true,
+        aiProfileId: true,
       },
       orderBy: asc(userData.level),
     });
@@ -481,6 +483,34 @@ export const profileRouter = createTRPCRouter({
         href: "/travel",
         name: `We are attacking ${warOffenseSectors.length > 1 ? "Sectors" : "Sector"} (${warOffenseSectors.length > 1 ? "Sectors" : "Sector"} ${warOffenseSectors.join(", ")})`,
         color: "blue",
+        alwaysShow: true,
+      });
+    }
+
+    // Raid notifications
+    const openRaids =
+      userWithRelations?.activeRaids?.filter((r) => r.raidType === "open") ?? [];
+    const exclusiveRaids =
+      userWithRelations?.activeRaids?.filter((r) => r.raidType === "exclusive") ?? [];
+
+    // Group by sector to avoid duplicate sector mentions
+    const openRaidSectors = [...new Set(openRaids.map((r) => r.sector))];
+    const exclusiveRaidSectors = [...new Set(exclusiveRaids.map((r) => r.sector))];
+
+    if (openRaidSectors.length > 0) {
+      notifications.push({
+        href: "/travel",
+        name: `Open ${openRaidSectors.length > 1 ? "Raids" : "Raid"} available (${openRaidSectors.length > 1 ? "Sectors" : "Sector"} ${openRaidSectors.join(", ")})`,
+        color: "red",
+        alwaysShow: true,
+      });
+    }
+
+    if (exclusiveRaidSectors.length > 0) {
+      notifications.push({
+        href: "/travel",
+        name: `Village ${exclusiveRaidSectors.length > 1 ? "Raids" : "Raid"} active (${exclusiveRaidSectors.length > 1 ? "Sectors" : "Sector"} ${exclusiveRaidSectors.join(", ")})`,
+        color: "red",
         alwaysShow: true,
       });
     }
@@ -2047,6 +2077,7 @@ export const fetchUpdatedUser = async (props: {
     hasUnvotedPolls,
     allActiveWars,
     activeShrineBattles,
+    activeRaids,
   ] = await Promise.all([
     client
       .select()
@@ -2133,6 +2164,15 @@ export const fetchUpdatedUser = async (props: {
         isNull(mpvpBattleQueue.battleId),
       ),
     }),
+    // Fetch all active raids (boss not defeated, not ended)
+    client.query.quest.findMany({
+      where: and(
+        eq(quest.questType, "raid"),
+        eq(quest.hidden, false),
+        gte(quest.raidBossCurrentHealth, 1),
+        or(isNull(quest.raidEndsAt), gte(quest.raidEndsAt, now)),
+      ),
+    }),
   ]);
 
   // Reskin bloodline if needed
@@ -2179,6 +2219,56 @@ export const fetchUpdatedUser = async (props: {
         b.defenderEntityId === user.villageId || b.attackerEntityId === user.villageId,
     );
     (user as NonNullable<UserWithRelations>).shrineBattles = userActiveShrineBattles;
+  }
+
+  // Filter and attach active raids
+  if (user) {
+    // Get village-owned sectors for exclusive raid filtering
+    const ownedSectorNumbers = new Set(
+      user.village?.sectors?.map((s) => s.sector) ?? [],
+    );
+
+    const userActiveRaids = activeRaids
+      .map((raid) => {
+        const raidData = getRaidObjectiveData(raid);
+        if (!raidData) return null;
+
+        // Open raids are available to everyone
+        if (raidData.isOpen) {
+          return {
+            id: raid.id,
+            name: raid.name,
+            sector: raidData.sector,
+            raidType: "open" as const,
+          };
+        }
+
+        // Exclusive raids require village sector ownership
+        if (raidData.isExclusive && user.villageId && raidData.sector !== null) {
+          const ownsCurrentSector = ownedSectorNumbers.has(raidData.sector);
+
+          // Check capture deadline and grace period
+          if (raid.raidCaptureDeadline && raid.raidCaptureDeadline < now) {
+            if (!raid.raidGracePeriodEnd || raid.raidGracePeriodEnd < now) {
+              return null; // Deadline passed, no access
+            }
+          }
+
+          if (ownsCurrentSector) {
+            return {
+              id: raid.id,
+              name: raid.name,
+              sector: raidData.sector,
+              raidType: "exclusive" as const,
+            };
+          }
+        }
+
+        return null;
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    (user as NonNullable<UserWithRelations>).activeRaids = userActiveRaids;
   }
 
   if (user) {
@@ -2600,6 +2690,12 @@ export type UserWithRelations =
         sector: number | null;
         attackerEntityId: string;
         defenderEntityId: string;
+      }[];
+      activeRaids?: {
+        id: string;
+        name: string;
+        sector: number;
+        raidType: "open" | "exclusive";
       }[];
     })
   | undefined;

@@ -11,11 +11,9 @@ import { FilePlus, FileMinus } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { SkillTreeValidator } from "@/libs/combat/types";
+import { SkillTreeValidator, DamageTag, tagTypes } from "@/validators/combat";
 import { canChangeContent } from "@/utils/permissions";
 import { useSkillTreeEditForm } from "@/hooks/skillTree";
-import { DamageTag } from "@/libs/combat/types";
-import { tagTypes } from "@/libs/combat/types";
 import type { SkillTree } from "@/drizzle/schema";
 
 export default function SkillTreeEdit(props: { params: Promise<{ skillid: string }> }) {

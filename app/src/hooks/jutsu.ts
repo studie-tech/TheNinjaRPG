@@ -4,7 +4,7 @@ import { calculateContentDiff } from "@/utils/diff";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { JutsuValidator } from "@/libs/combat/types";
+import { JutsuValidator } from "@/validators/combat";
 import { AttackTargets } from "@/drizzle/constants";
 import { AttackMethods } from "@/drizzle/constants";
 import { LetterRanks } from "@/drizzle/constants";
@@ -14,8 +14,7 @@ import { UserRanks } from "@/drizzle/constants";
 import { StatTypes } from "@/drizzle/constants";
 import { BattleUsageTypes } from "@/drizzle/constants";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
-import type { ZodAllTags } from "@/libs/combat/types";
-import type { ZodJutsuType } from "@/libs/combat/types";
+import type { ZodAllTags, ZodJutsuType } from "@/validators/combat";
 import type { FormEntry } from "@/layout/EditContent";
 import type { Jutsu } from "@/drizzle/schema";
 

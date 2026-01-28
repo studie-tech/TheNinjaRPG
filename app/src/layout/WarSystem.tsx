@@ -10,7 +10,7 @@ import NavTabs from "@/layout/NavTabs";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import Building from "@/layout/Building";
 import Table from "@/layout/Table";
-import { Handshake, Info, LandPlot, Swords, Trophy, Trash2 } from "lucide-react";
+import { Handshake, Info, LandPlot, Swords, Trophy, Trash2, Locate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { showMutationToast } from "@/libs/toast";
 import { DoorClosed } from "lucide-react";
@@ -35,7 +35,8 @@ import { WAR_SHRINE_CAPTURE_WARHEALTH_DMG } from "@/drizzle/constants";
 import { WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL } from "@/drizzle/constants";
 import { WAR_RECAPTURE_THRESHOLD } from "@/drizzle/constants";
 import { MAP_RESERVED_SECTORS } from "@/drizzle/constants";
-import { useForm } from "react-hook-form";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { Village, VillageAlliance, VillageStructure } from "@/drizzle/schema";
@@ -275,6 +276,20 @@ export const WarMap: React.FC<{
   const [showModal, setShowModal] = useState<boolean>(false);
   const [targetSector, setTargetSector] = useState<number | null>(null);
   const [structureRoute, setStructureRoute] = useState("/townhall");
+  const [focusSector, setFocusSector] = useState<number | null>(null);
+
+  // Find sector form
+  const findSectorSchema = z.object({
+    sector: z.coerce.number().int().min(0).max(492),
+  });
+  const findSectorForm = useForm<z.infer<typeof findSectorSchema>>({
+    mode: "all",
+    resolver: zodResolver(findSectorSchema),
+  });
+  const findSectorValue = useWatch({
+    control: findSectorForm.control,
+    name: "sector",
+  });
 
   // Query data
   const { data: userData } = useRequiredUserData();
@@ -475,12 +490,80 @@ export const WarMap: React.FC<{
   // Depending on which tile the user clicked, we're either declaring a sector war, village war, or faction raid
   return (
     <div className="relative">
+      {/* Find Sector Control */}
+      <div className="absolute top-2 right-2 z-10">
+        <Popover>
+          <PopoverTrigger>
+            <Button
+              variant="outline"
+              size="icon"
+              className={focusSector !== null ? "text-purple-500" : ""}
+            >
+              <Locate className="h-5 w-5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent>
+            <p className="py-2 font-semibold">Find Sector</p>
+            <p className="pb-2 text-sm text-muted-foreground">
+              Enter a sector ID to locate it on the map.
+            </p>
+            <Form {...findSectorForm}>
+              <form
+                onSubmit={findSectorForm.handleSubmit((data) => {
+                  setFocusSector(data.sector);
+                })}
+                className="flex flex-col gap-2"
+              >
+                <FormField
+                  control={findSectorForm.control}
+                  name="sector"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input
+                          className="w-full"
+                          placeholder="Sector ID (0-492)"
+                          type="number"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="flex-1"
+                    disabled={findSectorValue === undefined}
+                  >
+                    Find Sector {findSectorValue ?? "..."}
+                  </Button>
+                  {focusSector !== null && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setFocusSector(null)}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </Form>
+          </PopoverContent>
+        </Popover>
+      </div>
       {villages && globe && (
         <GlobalMap
           intersection={true}
           highlights={villages}
           userLocation={true}
           showOwnership={true}
+          focusSector={focusSector}
+          focusSectorLabel="Target"
           onTileClick={(sector) => {
             if (!canDeclareWar) {
               showMutationToast({ success: false, message: "You are not the leader" });
@@ -1359,7 +1442,7 @@ export const VillageWar: React.FC<{
             )}
           </div>
         </div>
-      </Modal2>      
+      </Modal2>
 
       {/* Town Halls Section */}
       <div className="border border-border rounded-lg p-4">
@@ -1369,14 +1452,18 @@ export const VillageWar: React.FC<{
             village={isAttacker ? war.attackerVillage : war.defenderVillage}
             warStatus={war.status}
             warHealth={isAttacker ? war.attackerWarHealth : war.defenderWarHealth}
-            warHealthMax={isAttacker ? war.attackerWarHealthMax : war.defenderWarHealthMax}
+            warHealthMax={
+              isAttacker ? war.attackerWarHealthMax : war.defenderWarHealthMax
+            }
           />
           <WarSideTownHall
             structure={isAttacker ? defenderStructure : attackerStructure}
             village={isAttacker ? war.defenderVillage : war.attackerVillage}
             warStatus={war.status}
             warHealth={isAttacker ? war.defenderWarHealth : war.attackerWarHealth}
-            warHealthMax={isAttacker ? war.defenderWarHealthMax : war.attackerWarHealthMax}
+            warHealthMax={
+              isAttacker ? war.defenderWarHealthMax : war.attackerWarHealthMax
+            }
           />
         </div>
       </div>
@@ -1388,14 +1475,22 @@ export const VillageWar: React.FC<{
             <WarSideShrine
               village={isAttacker ? war.attackerVillage : war.defenderVillage}
               shrineHp={isAttacker ? war.attackerShrineHp : war.defenderShrineHp}
-              shrineMaxHp={isAttacker ? war.attackerShrineMaxHp : war.defenderShrineMaxHp}
-              shrineStatus={isAttacker ? war.attackerShrineStatus : war.defenderShrineStatus}
+              shrineMaxHp={
+                isAttacker ? war.attackerShrineMaxHp : war.defenderShrineMaxHp
+              }
+              shrineStatus={
+                isAttacker ? war.attackerShrineStatus : war.defenderShrineStatus
+              }
             />
             <WarSideShrine
               village={isAttacker ? war.defenderVillage : war.attackerVillage}
               shrineHp={isAttacker ? war.defenderShrineHp : war.attackerShrineHp}
-              shrineMaxHp={isAttacker ? war.defenderShrineMaxHp : war.attackerShrineMaxHp}
-              shrineStatus={isAttacker ? war.defenderShrineStatus : war.attackerShrineStatus}
+              shrineMaxHp={
+                isAttacker ? war.defenderShrineMaxHp : war.attackerShrineMaxHp
+              }
+              shrineStatus={
+                isAttacker ? war.defenderShrineStatus : war.attackerShrineStatus
+              }
             />
           </div>
           <div className="flex justify-center mt-3">
@@ -1580,8 +1675,8 @@ export const VillageWar: React.FC<{
               onCancel={({ id }) => cancelAllyOffer({ offerId: id })}
             />
           </ContentBox>
-        )}{/* Shrine HP Status for Village Wars and Raids */}
-        
+        )}
+      {/* Shrine HP Status for Village Wars and Raids */}
     </div>
   );
 };

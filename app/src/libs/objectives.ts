@@ -31,10 +31,12 @@ import {
   IMG_BADGE_WIN_QUEST,
   IMG_BADGE_NEW_QUEST,
   IMG_BADGE_START_BATTLE,
+  IMG_BADGE_OPEN_RAID,
+  IMG_BADGE_EXCLUSIVE_RAID,
 } from "@/drizzle/constants";
-import { ObjectiveReward } from "@/validators/objectives";
+import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 import type { Quest } from "@/drizzle/schema";
-import type { AllObjectivesType, ObjectiveRewardType } from "@/validators/objectives";
+import type { AllObjectivesType } from "@/validators/objectives";
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { ElementDefinition } from "cytoscape";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
@@ -136,6 +138,10 @@ export const getObjectiveImage = (objective: AllObjectivesType) => {
       return { image: IMG_BADGE_START_BATTLE, title: "Start Battle" };
     case "dialog":
       return { image: IMG_BADGE_DIALOG, title: "Dialog" };
+    case "open_raid":
+      return { image: IMG_BADGE_OPEN_RAID, title: "Open Raid" };
+    case "exclusive_raid":
+      return { image: IMG_BADGE_EXCLUSIVE_RAID, title: "Exclusive Raid" };
     default:
       return { image: "", title: "???" };
   }

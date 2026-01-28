@@ -198,8 +198,8 @@ export default function VillageOverview() {
                   </TooltipTrigger>
                   <TooltipContent>
                     Tokens earned through PvP and quests can be used to improve{" "}
-                    {userData?.isOutlaw ? "faction" : "village"}.
-                    Current tokens: {villageData?.tokens.toLocaleString()}.
+                    {userData?.isOutlaw ? "faction" : "village"}. Current tokens:{" "}
+                    {villageData?.tokens.toLocaleString()}.
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

@@ -25,7 +25,7 @@ import { ActionMoveTowardsOpponent } from "@/validators/ai";
 import { getBackupRules, enforceExtraRules } from "@/validators/ai";
 import { canChangeContent } from "@/utils/permissions";
 import { AvailableTargets } from "@/validators/ai";
-import { tagTypes } from "@/libs/combat/types";
+import { tagTypes } from "@/validators/combat";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { MultiSelect } from "@/components/ui/multi-select";
 import type { AiRuleType, ZodAllAiCondition } from "@/validators/ai";
@@ -314,7 +314,12 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                         max="100"
                         value={condition.threshold}
                         onChange={(e) => {
-                          updateCondition(i, j, "threshold", (parseInt(e.target.value) || 0).toString());
+                          updateCondition(
+                            i,
+                            j,
+                            "threshold",
+                            (parseInt(e.target.value) || 0).toString(),
+                          );
                         }}
                         placeholder="Effect threshold (0-100)"
                       />

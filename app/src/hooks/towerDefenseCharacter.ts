@@ -73,7 +73,10 @@ export const useTowerDefenseCharacterEditForm = (
   };
 
   // Update a single animation's state mapping
-  const updateAnimationState = (animIndex: number, newState: CharacterAnimationState) => {
+  const updateAnimationState = (
+    animIndex: number,
+    newState: CharacterAnimationState,
+  ) => {
     if (!assetConfig) return;
 
     const updatedAnimations = [...assetConfig.animations];
@@ -139,4 +142,3 @@ export const useTowerDefenseCharacterEditForm = (
     characterAnimationStates,
   };
 };
-

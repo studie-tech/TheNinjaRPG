@@ -4,7 +4,7 @@ import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { serverError } from "../trpc";
 import { eq, and, gt, desc } from "drizzle-orm";
 import { damageSimulation } from "@/drizzle/schema";
-import { statSchema, actSchema } from "../../../libs/combat/types";
+import { statSchema, actSchema } from "@/validators/combat";
 import type { DrizzleClient } from "../../db";
 
 export const simulatorRouter = createTRPCRouter({

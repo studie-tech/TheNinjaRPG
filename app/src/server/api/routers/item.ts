@@ -19,7 +19,7 @@ import { fetchStructures } from "@/routers/village";
 import { fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/api/trpc";
 import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
-import { ItemValidator } from "@/libs/combat/types";
+import { ItemValidator } from "@/validators/combat";
 import { canChangeContent, canAwardReputation } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/socials";
 import { getStrucBoost } from "@/utils/village";
@@ -36,7 +36,7 @@ import { calcMaxItems, calcMaxEventItems, calcMaxMaterials } from "@/libs/item";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { calculateContentDiff } from "@/utils/diff";
 import { fetchUserSkills } from "@/routers/skillTree";
-import { HealTag, NonCombatGainSkill } from "@/libs/combat/types";
+import { HealTag, NonCombatGainSkill } from "@/validators/combat";
 import { itemFilteringSchema } from "@/validators/item";
 import { filterRollableBloodlines } from "@/libs/bloodline";
 import { fetchBloodlines } from "@/routers/bloodline";
@@ -44,7 +44,7 @@ import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { fedItemLoadouts } from "@/utils/paypal";
 import type { UserItemWithRelations, UserData } from "@/drizzle/schema";
 import type { ItemSlot } from "@/drizzle/constants";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { ZodAllTags } from "@/validators/combat";
 import type { DrizzleClient } from "@/server/db";
 import type { ItemLoadout } from "@/drizzle/schema";
 import type { ItemFilteringSchema } from "@/validators/item";
@@ -52,7 +52,7 @@ import type { QueryCondition } from "@/utils/typeutils";
 import { postProcessRewards, type PostProcessedRewards } from "@/libs/quest";
 import { updateRewards } from "./quests";
 import { collapseRewards } from "@/libs/quest";
-import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/objectives";
+import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 
 export const itemRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
@@ -298,7 +298,8 @@ export const itemRouter = createTRPCRouter({
             const reputations = signatureToReputations.get(sig);
             // Pop the first available reputation value to prevent reuse
             const existingReputation = reputations?.shift() ?? 0;
-            (effect as { reward_reputation?: number }).reward_reputation = existingReputation;
+            (effect as { reward_reputation?: number }).reward_reputation =
+              existingReputation;
           }
         });
       }
@@ -841,12 +842,7 @@ export const itemRouter = createTRPCRouter({
       const moneyUpdateResult = await ctx.drizzle
         .update(userData)
         .set({ money: sql`${userData.money} - ${repairCost}` })
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            gte(userData.money, repairCost),
-          ),
-        );
+        .where(and(eq(userData.userId, ctx.userId), gte(userData.money, repairCost)));
       if (moneyUpdateResult.rowsAffected !== 1) {
         return errorResponse("Insufficient funds for this repair");
       }
@@ -861,69 +857,64 @@ export const itemRouter = createTRPCRouter({
       };
     }),
   // Repair all user items
-  repairAll: protectedProcedure
-    .output(baseServerResponse)
-    .mutation(async ({ ctx }) => {
-      // Query
-      const [user, useritems] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
-      ]);
-      // Guard
-      if (!user) return errorResponse("User not found");
-      if (user.occupation !== "CRAFTING") {
-        return errorResponse("You must have the Crafting occupation to repair items");
-      }
-      if (user.status !== "AWAKE") {
-        return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
-      }
-      // Filter items that need repair
-      const itemsNeedingRepair = useritems.filter(
-        (useritem) =>
-          useritem.durability < useritem.item.maxDurability &&
-          useritem.item.maxDurability > 0,
+  repairAll: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
+    // Query
+    const [user, useritems] = await Promise.all([
+      fetchUser(ctx.drizzle, ctx.userId),
+      fetchUserItems(ctx.drizzle, ctx.userId),
+    ]);
+    // Guard
+    if (!user) return errorResponse("User not found");
+    if (user.occupation !== "CRAFTING") {
+      return errorResponse("You must have the Crafting occupation to repair items");
+    }
+    if (user.status !== "AWAKE") {
+      return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
+    }
+    // Filter items that need repair
+    const itemsNeedingRepair = useritems.filter(
+      (useritem) =>
+        useritem.durability < useritem.item.maxDurability &&
+        useritem.item.maxDurability > 0,
+    );
+    if (itemsNeedingRepair.length === 0) {
+      return errorResponse("No items need repair");
+    }
+    // Calculate total repair cost
+    const totalRepairCost = itemsNeedingRepair.reduce(
+      (total, useritem) => total + calcItemRepairCost(useritem),
+      0,
+    );
+    if (user.money < totalRepairCost) {
+      return errorResponse(
+        `Insufficient funds. Total repair cost is ${totalRepairCost} ryo, but you only have ${user.money} ryo`,
       );
-      if (itemsNeedingRepair.length === 0) {
-        return errorResponse("No items need repair");
-      }
-      // Calculate total repair cost
-      const totalRepairCost = itemsNeedingRepair.reduce(
-        (total, useritem) => total + calcItemRepairCost(useritem),
-        0,
+    }
+    // Mutate - repair all items and update money
+    // Update money with conditional guard to prevent race conditions
+    const moneyUpdateResult = await ctx.drizzle
+      .update(userData)
+      .set({ money: sql`${userData.money} - ${totalRepairCost}` })
+      .where(
+        and(eq(userData.userId, ctx.userId), gte(userData.money, totalRepairCost)),
       );
-      if (user.money < totalRepairCost) {
-        return errorResponse(
-          `Insufficient funds. Total repair cost is ${totalRepairCost} ryo, but you only have ${user.money} ryo`,
-        );
-      }
-      // Mutate - repair all items and update money
-      // Update money with conditional guard to prevent race conditions
-      const moneyUpdateResult = await ctx.drizzle
-        .update(userData)
-        .set({ money: sql`${userData.money} - ${totalRepairCost}` })
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            gte(userData.money, totalRepairCost),
-          ),
-        );
-      if (moneyUpdateResult.rowsAffected !== 1) {
-        return errorResponse("Insufficient funds for this repair");
-      }
-      // Update item durabilities
-      await Promise.all(
-        itemsNeedingRepair.map((useritem) =>
-          ctx.drizzle
-            .update(userItem)
-            .set({ durability: useritem.item.maxDurability })
-            .where(eq(userItem.id, useritem.id)),
-        ),
-      );
-      return {
-        success: true,
-        message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} for ${totalRepairCost.toLocaleString()} ryo`,
-      };
-    }),
+    if (moneyUpdateResult.rowsAffected !== 1) {
+      return errorResponse("Insufficient funds for this repair");
+    }
+    // Update item durabilities
+    await Promise.all(
+      itemsNeedingRepair.map((useritem) =>
+        ctx.drizzle
+          .update(userItem)
+          .set({ durability: useritem.item.maxDurability })
+          .where(eq(userItem.id, useritem.id)),
+      ),
+    );
+    return {
+      success: true,
+      message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} for ${totalRepairCost.toLocaleString()} ryo`,
+    };
+  }),
   // Use repair item on another item
   useRepairItem: protectedProcedure
     .input(z.object({ repairItemId: z.string(), targetItemId: z.string() }))
@@ -939,12 +930,17 @@ export const itemRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       if (!repairUserItem) return errorResponse("Repair item not found");
       if (!targetUserItem) return errorResponse("Target item not found");
-      if (repairUserItem.userId !== user.userId) return errorResponse("Not your repair item");
-      if (targetUserItem.userId !== user.userId) return errorResponse("Not your target item");
+      if (repairUserItem.userId !== user.userId)
+        return errorResponse("Not your repair item");
+      if (targetUserItem.userId !== user.userId)
+        return errorResponse("Not your target item");
       if (user.status !== "AWAKE") {
         return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
       }
-      if (repairUserItem.craftingFinishedAt && repairUserItem.craftingFinishedAt > new Date()) {
+      if (
+        repairUserItem.craftingFinishedAt &&
+        repairUserItem.craftingFinishedAt > new Date()
+      ) {
         return errorResponse("Cannot use repair item that is being crafted");
       }
       if (repairUserItem.quantity <= 0) {
@@ -1039,7 +1035,9 @@ export const itemRouter = createTRPCRouter({
       const repairKits = useritems
         .filter(
           (userItem) =>
-            userItem.item?.effects?.some((e: { type: string }) => e.type === "repair") &&
+            userItem.item?.effects?.some(
+              (e: { type: string }) => e.type === "repair",
+            ) &&
             userItem.quantity > 0 &&
             (!userItem.craftingFinishedAt || userItem.craftingFinishedAt < new Date()),
         )
@@ -1075,7 +1073,10 @@ export const itemRouter = createTRPCRouter({
       }
 
       // Group kits by power level and aggregate quantities
-      const kitsByPower = new Map<number, Array<{ kitId: string; available: number; power: number }>>();
+      const kitsByPower = new Map<
+        number,
+        Array<{ kitId: string; available: number; power: number }>
+      >();
       for (const kit of repairKits) {
         const available = kitAvailability.get(kit.userItem.id) || 0;
         if (available <= 0) continue;
@@ -1099,8 +1100,11 @@ export const itemRouter = createTRPCRouter({
         if (remainingDurability <= 0) break;
 
         const kitsWithThisPower = kitsByPower.get(power)!;
-        const totalAvailable = kitsWithThisPower.reduce((sum, k) => sum + k.available, 0);
-        
+        const totalAvailable = kitsWithThisPower.reduce(
+          (sum, k) => sum + k.available,
+          0,
+        );
+
         if (totalAvailable <= 0) continue;
 
         const kitsNeeded = Math.ceil(remainingDurability / power);
@@ -1273,7 +1277,7 @@ export const itemRouter = createTRPCRouter({
         user.level >= info.requiredLevel &&
         (!info.bloodlineId || info.bloodlineId === user.bloodlineId) &&
         (!info.bloodlineId || !hasBloodlineItemEquipped);
-      
+
       if (canAutoEquip) {
         ItemSlots.forEach((slot) => {
           if (slot.includes(info.slot) && !useritems.find((i) => i.equipped === slot)) {
@@ -1486,7 +1490,8 @@ export const selectItemLoadout = async (
       // Try to find a valid slot for this item type
       const itemSlotType = useritem.item.slot;
       const matchingSlot = ItemSlots.find(
-        (slot) => slot.includes(itemSlotType) && !validItemData.find((v) => v.slot === slot),
+        (slot) =>
+          slot.includes(itemSlotType) && !validItemData.find((v) => v.slot === slot),
       );
       if (matchingSlot) {
         validItemData.push({ itemId: itemEntry.itemId, slot: matchingSlot });
@@ -1848,9 +1853,7 @@ export const itemDatabaseFilter = (
       : []),
 
     // Level filter - only show items the user can use
-    ...(input?.maxLevel !== undefined
-      ? [lte(item.requiredLevel, input.maxLevel)]
-      : []),
+    ...(input?.maxLevel !== undefined ? [lte(item.requiredLevel, input.maxLevel)] : []),
 
     // Cost filters
     gte(item.cost, input?.minCost ?? 0),
@@ -1861,7 +1864,9 @@ export const itemDatabaseFilter = (
       : []),
 
     // Battle usage type filter
-    ...(input?.battleUsageType ? [eq(item.battleUsageType, input.battleUsageType)] : []),
+    ...(input?.battleUsageType
+      ? [eq(item.battleUsageType, input.battleUsageType)]
+      : []),
 
     // Action cost filter
     ...(input?.actionCostPerc !== undefined

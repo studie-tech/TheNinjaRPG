@@ -217,10 +217,12 @@ export function ActivityStreakPanel() {
                   <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="font-medium text-orange-700 dark:text-orange-400">
-                      {streak.daysToGo ?? 1} day{(streak.daysToGo ?? 1) > 1 ? "s" : ""} behind!
+                      {streak.daysToGo ?? 1} day{(streak.daysToGo ?? 1) > 1 ? "s" : ""}{" "}
+                      behind!
                     </p>
                     <p className="text-sm text-orange-600 dark:text-orange-500 mt-1">
-                      Pay {COST_STREAK_CATCHUP_DAY} rep per day to catch up, or reset your streak.
+                      Pay {COST_STREAK_CATCHUP_DAY} rep per day to catch up, or reset
+                      your streak.
                     </p>
                   </div>
                 </div>
@@ -232,13 +234,16 @@ export function ActivityStreakPanel() {
                     {streak.theoreticalMaxDay ?? streak.totalDays}
                   </span>
                   <span className="font-medium">
-                    {streak.daysToGo ?? 1} day{(streak.daysToGo ?? 1) > 1 ? "s" : ""} to catch up
+                    {streak.daysToGo ?? 1} day{(streak.daysToGo ?? 1) > 1 ? "s" : ""} to
+                    catch up
                   </span>
                 </div>
 
                 {/* Next reward preview */}
                 <div className="text-sm text-muted-foreground">
-                  <span className="font-medium">Day {streak.nextDayNumber} rewards: </span>
+                  <span className="font-medium">
+                    Day {streak.nextDayNumber} rewards:{" "}
+                  </span>
                   {getRewardPreview(streak.nextRewards) || "Daily reward"}
                 </div>
 
@@ -275,7 +280,10 @@ export function ActivityStreakPanel() {
                     disabled={claimStreak.isPending}
                     className="flex-1"
                     onClick={() =>
-                      claimStreak.mutate({ configId: streak.configId, payCatchUp: true })
+                      claimStreak.mutate({
+                        configId: streak.configId,
+                        payCatchUp: true,
+                      })
                     }
                   >
                     <ArrowRight className="h-4 w-4 mr-2" />

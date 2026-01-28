@@ -69,40 +69,48 @@ export const kageRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, kage, elders, recent, village, previous, activeWars, kageChallenges] =
-  await Promise.all([
-    fetchUser(ctx.drizzle, ctx.userId),
-    fetchUser(ctx.drizzle, input.kageId),
-    fetchElders(ctx.drizzle, input.villageId),
-    // Recent challenges by THIS challenger (rate limit)
-    fetchRequests(ctx.drizzle, ["KAGE"], KAGE_CHALLENGE_SECS, ctx.userId),
-    fetchVillage(ctx.drizzle, input.villageId),
-    ctx.drizzle
-      .select({ count: sql<number>`count(*)`.mapWith(Number) })
-      .from(kageDefendedChallenges)
-      .where(
-        and(
-          eq(kageDefendedChallenges.villageId, input.villageId),
-          eq(kageDefendedChallenges.userId, ctx.userId),
-          gte(kageDefendedChallenges.createdAt, sql`NOW() - INTERVAL 1 DAY`),
-        ),
-      ),
-    fetchActiveWars(ctx.drizzle, input.villageId),
-    // All recent Kage requests involving this Kage (to prevent parallel challenges)
-    fetchRequests(ctx.drizzle, ["KAGE"], KAGE_CHALLENGE_SECS, input.kageId),
-  ]);
+      const [
+        user,
+        kage,
+        elders,
+        recent,
+        village,
+        previous,
+        activeWars,
+        kageChallenges,
+      ] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, input.kageId),
+        fetchElders(ctx.drizzle, input.villageId),
+        // Recent challenges by THIS challenger (rate limit)
+        fetchRequests(ctx.drizzle, ["KAGE"], KAGE_CHALLENGE_SECS, ctx.userId),
+        fetchVillage(ctx.drizzle, input.villageId),
+        ctx.drizzle
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(kageDefendedChallenges)
+          .where(
+            and(
+              eq(kageDefendedChallenges.villageId, input.villageId),
+              eq(kageDefendedChallenges.userId, ctx.userId),
+              gte(kageDefendedChallenges.createdAt, sql`NOW() - INTERVAL 1 DAY`),
+            ),
+          ),
+        fetchActiveWars(ctx.drizzle, input.villageId),
+        // All recent Kage requests involving this Kage (to prevent parallel challenges)
+        fetchRequests(ctx.drizzle, ["KAGE"], KAGE_CHALLENGE_SECS, input.kageId),
+      ]);
       const previousCount = previous?.[0]?.count ?? 0;
       const activeVillageWars = activeWars?.filter((w) => w.type === "VILLAGE_WAR");
-      
-      // Check if this Kage already has a pending Kage challenge in this window
-const activeKageChallenges =
-  kageChallenges?.filter(
-    (r) => r.status === "PENDING" && r.receiverId === kage.userId,
-  ) ?? [];
 
-if (activeKageChallenges.length > 0) {
-  return errorResponse("Kage is already defending a challenge");
-}
+      // Check if this Kage already has a pending Kage challenge in this window
+      const activeKageChallenges =
+        kageChallenges?.filter(
+          (r) => r.status === "PENDING" && r.receiverId === kage.userId,
+        ) ?? [];
+
+      if (activeKageChallenges.length > 0) {
+        return errorResponse("Kage is already defending a challenge");
+      }
 
       // Guard
       if (!village) return errorResponse("Village not found");

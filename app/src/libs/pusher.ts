@@ -133,3 +133,35 @@ export const updateUserOnMap = async (
     ...(user.maxHealth ? { maxHealth: user.maxHealth } : {}),
   });
 };
+
+/**
+ * Triggers a raid team update event on the sector channel.
+ * This notifies all users in the sector that raid teams have changed.
+ * @param pusher - The Pusher client instance.
+ * @param sector - The sector number where the raid team update occurred.
+ */
+export const updateRaidTeamsOnSector = async (
+  pusher: PusherClient,
+  sector: number | null,
+) => {
+  if (sector === null) return;
+  await pusher.trigger(sector.toString(), "raidTeamUpdate", {
+    type: "raidTeamUpdate",
+  });
+};
+
+/**
+ * Broadcasts a raid availability change event on the sector channel.
+ * This notifies all users in the sector that raids have changed (e.g., new raid activated).
+ * @param pusher - The Pusher client instance.
+ * @param sector - The sector number where the raid availability changed.
+ */
+export const broadcastRaidAvailability = async (
+  pusher: PusherClient,
+  sector: number | null,
+) => {
+  if (sector === null) return;
+  await pusher.trigger(sector.toString(), "raidAvailabilityChange", {
+    type: "raidAvailabilityChange",
+  });
+};

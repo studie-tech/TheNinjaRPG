@@ -113,7 +113,8 @@ export const registerRouter = createTRPCRouter({
       ]);
 
       // Guard
-      if (existingUser) return errorResponse("Character already created for this account");
+      if (existingUser)
+        return errorResponse("Character already created for this account");
       if (usernameTaken) return errorResponse("Username already taken");
       if (!villageData) return errorResponse("Horizon village not found");
       if (villageData.type !== "VILLAGE")

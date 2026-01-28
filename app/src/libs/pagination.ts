@@ -13,33 +13,33 @@ export const useInfinitePagination = ({
   lastElement,
 }: Pagination) => {
   const [page, setPage] = useState(0);
-  const observer = useRef<IntersectionObserver | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   /**
    * Mount only once
    */
   useEffect(() => {
-    observer.current = new IntersectionObserver((entries) => {
+    observerRef.current = new IntersectionObserver((entries) => {
       const first = entries[0];
       if (first?.isIntersecting) {
         setPage((prev: number) => prev + 1);
       }
     });
     return () => {
-      observer.current?.disconnect();
+      observerRef.current?.disconnect();
     };
   }, []); // do this only once, on mount
 
   /**
-   * Update observer when last element changes
+   * Update observerRef when last element changes
    */
   useEffect(() => {
-    if (lastElement && observer.current) {
-      observer.current.observe(lastElement);
+    if (lastElement && observerRef.current) {
+      observerRef.current.observe(lastElement);
     }
     return () => {
-      if (lastElement && observer.current) {
-        observer.current.unobserve(lastElement);
+      if (lastElement && observerRef.current) {
+        observerRef.current.unobserve(lastElement);
       }
     };
   }, [lastElement]);

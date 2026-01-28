@@ -14,7 +14,9 @@ function CalendarRoot({
   rootRef,
   ...props
 }: React.ComponentProps<"div"> & { rootRef?: React.Ref<HTMLDivElement> }) {
-  return <div data-slot="calendar" ref={rootRef} className={cn(className)} {...props} />;
+  return (
+    <div data-slot="calendar" ref={rootRef} className={cn(className)} {...props} />
+  );
 }
 
 function CalendarChevron({
@@ -36,7 +38,9 @@ function CalendarChevron({
   }
 
   if (orientation === "up") {
-    return <ChevronDownIcon className={cn("size-4 rotate-180", className)} {...props} />;
+    return (
+      <ChevronDownIcon className={cn("size-4 rotate-180", className)} {...props} />
+    );
   }
 
   return <ChevronDownIcon className={cn("size-4", className)} {...props} />;
@@ -139,10 +143,7 @@ function Calendar({
       classNames={{
         root: cn("w-full", defaultClassNames.root),
 
-        months: cn(
-          "relative flex flex-col gap-4",
-          defaultClassNames.months,
-        ),
+        months: cn("relative flex flex-col gap-4", defaultClassNames.months),
         month: cn("flex w-full flex-col gap-3", defaultClassNames.month),
 
         nav: cn(
@@ -227,10 +228,7 @@ function Calendar({
           "text-muted-foreground aria-selected:text-muted-foreground",
           defaultClassNames.outside,
         ),
-        disabled: cn(
-          "text-muted-foreground opacity-50",
-          defaultClassNames.disabled,
-        ),
+        disabled: cn("text-muted-foreground opacity-50", defaultClassNames.disabled),
         hidden: cn("invisible", defaultClassNames.hidden),
 
         ...classNames,

@@ -21,14 +21,14 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import { getRewardArray } from "@/libs/objectives";
-import { ObjectiveReward } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
 import {
   activityStreakFormSchema,
   type ActivityStreakFormType,
 } from "@/validators/activityStreak";
 import type { FormEntry } from "@/layout/EditContent";
 import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
-import type { ObjectiveRewardType } from "@/validators/objectives";
+import type { ObjectiveRewardType } from "@/validators/rewards";
 
 type ConfigWithRewards = ActivityStreakConfig & { rewards: ActivityStreakReward[] };
 
@@ -242,7 +242,10 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
                             max={60}
                             value={reward.dayNumber}
                             onChange={(e) =>
-                              updateRewardDay(originalIndex, parseInt(e.target.value) || 1)
+                              updateRewardDay(
+                                originalIndex,
+                                parseInt(e.target.value) || 1,
+                              )
                             }
                             className="w-20"
                           />

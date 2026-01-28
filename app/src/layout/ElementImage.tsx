@@ -53,7 +53,7 @@ import type {
   ElementName,
   AdjustableBasicAction,
 } from "@/drizzle/constants";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { ZodAllTags } from "@/validators/combat";
 
 interface ElementImageProps {
   element:

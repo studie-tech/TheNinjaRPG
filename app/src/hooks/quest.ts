@@ -1,7 +1,7 @@
 import { calculateContentDiff } from "@/utils/diff";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { QuestValidator, ObjectiveReward } from "@/validators/objectives";
+import { QuestFormSchema } from "@/validators/objectives";
 import {
   LetterRanks,
   QuestTypes,
@@ -13,7 +13,6 @@ import {
   STARTER_VILLAGES,
   QuestTypesWithMaxAttempts,
 } from "@/drizzle/constants";
-import { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { IMG_AVATAR_DEFAULT, IMG_BADGE_DIALOG } from "@/drizzle/constants";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
@@ -22,15 +21,10 @@ import { canAwardReputation } from "@/utils/permissions";
 import type { AllObjectivesType } from "@/validators/objectives";
 import type { Quest } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
-import type { ZodQuestType, QuestContentType } from "@/validators/objectives";
-import type { ObjectiveRewardType } from "@/validators/objectives";
+import type { QuestContentType, ZodQuestFormType } from "@/validators/objectives";
 
 // A merged type for quest with its rewards, so that we can show both in the same form
-export type ZodCombinedQuest = ZodQuestType &
-  ObjectiveRewardType & {
-    sceneBackground: string;
-    sceneCharacters: string[];
-  };
+export type ZodCombinedQuest = ZodQuestFormType;
 
 /**
  * Hook used when creating frontend forms for editing items
@@ -42,13 +36,8 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   const userRole = userData?.role ?? "USER";
   const hasReputationPermission = canAwardReputation(userRole);
 
-  // Schema used
-  const schema = QuestValidator._def.schema.merge(ObjectiveReward).merge(
-    z.object({
-      sceneBackground: z.string().default(""),
-      sceneCharacters: z.array(z.string()).default([]),
-    }),
-  );
+  // Schema used - includes superRefine validations for frontend validation
+  const schema = QuestFormSchema;
 
   // Form handling
   const endsAt = quest.endsAt ? quest.endsAt.slice(0, 10) : "";
@@ -286,6 +275,20 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     formData.push({ id: "tierLevel", type: "number" });
   }
 
+  // For raids, add raid-specific fields (AI and sector are in the objective)
+  if (questType === "raid") {
+    formData.push({
+      id: "raidBossMaxHealth",
+      type: "number",
+      label: "Boss Max Health",
+    });
+    formData.push({
+      id: "raidBossCurrentHealth",
+      type: "number",
+      label: "Boss Current Health",
+    });
+  }
+
   // Rewards
   formData.push({ id: "reward_hunter_items", type: "boolean" });
   formData.push({ id: "reward_gathering_items", type: "boolean" });
@@ -310,8 +313,8 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   formData.push({ id: "reward_exp", type: "number" });
   formData.push({ id: "reward_tokens", type: "number" });
   formData.push({ id: "reward_prestige", type: "number" });
-  formData.push({ 
-    id: "reward_reputation", 
+  formData.push({
+    id: "reward_reputation",
     type: "number",
     readonly: !hasReputationPermission,
   });

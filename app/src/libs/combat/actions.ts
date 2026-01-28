@@ -4,8 +4,9 @@ import {
   FleeTag,
   HealTag,
   InjectJutsusTag,
-} from "@/libs/combat/types";
-import { ClearTag, CleanseTag } from "@/libs/combat/types";
+  ClearTag,
+  CleanseTag,
+} from "@/validators/combat";
 import { nanoid } from "nanoid";
 import {
   getAffectedTiles,
@@ -24,7 +25,7 @@ import {
   IncreaseRangeTag,
   IncreaseCooldownTag,
   DecreaseCooldownTag,
-} from "@/libs/combat/types";
+} from "@/validators/combat";
 import {
   isUserStealthed,
   isUserImmobilized,

@@ -31,7 +31,7 @@ import { sendGTMEvent } from "@next/third-parties/google";
 import { Swords } from "lucide-react";
 import { RankedArenaMain, RankedLoadoutSelector } from "@/layout/PvpRank";
 import { BATTLE_ARENA_DAILY_LIMIT } from "@/drizzle/constants";
-import { createStatSchema } from "@/libs/combat/types";
+import { createStatSchema } from "@/validators/combat";
 import QuestPicker from "@/layout/QuestPicker";
 import {
   Form,
@@ -47,7 +47,7 @@ import { useSleepToggle } from "@/hooks/sleep";
 import { Sun } from "lucide-react";
 import type { z } from "zod";
 import type { GenericObject } from "@/layout/ItemWithEffects";
-import type { StatSchemaType } from "@/libs/combat/types";
+import type { StatSchemaType } from "@/validators/combat";
 import { TUTORIAL_ARENA_DUMMY_ID } from "@/drizzle/constants";
 import { useState } from "react";
 

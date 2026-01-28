@@ -439,6 +439,7 @@ export const BattleTypes = [
   "TRAINING",
   "RANKED_PVP",
   "RANKED_SPARRING",
+  "RAID",
 ] as const;
 export type BattleType = (typeof BattleTypes)[number];
 
@@ -460,9 +461,10 @@ export const PveBattleTypes: BattleType[] = [
   "TRAINING",
   "VILLAGE_PROTECTOR",
   "CLAN_CHALLENGE",
+  "RAID",
 ];
 
-export const QuestBattleTypes: BattleType[] = ["QUEST", "RANDOM_ENCOUNTER"];
+export const QuestBattleTypes: BattleType[] = ["QUEST", "RANDOM_ENCOUNTER", "RAID"];
 
 export const BattleUsageTypes = ["PVE", "PVP", "BOTH"] as const;
 export type BattleUsageType = (typeof BattleUsageTypes)[number];
@@ -555,6 +557,7 @@ export const QuestTypes = [
   "pvp",
   "achievement",
   "war",
+  "raid",
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
 export const QUESTS_CONCURRENT_LIMIT = 4;
@@ -590,7 +593,7 @@ export const QuestRewardMetrics = [
 ] as const;
 export type QuestRewardMetric = (typeof QuestRewardMetrics)[number];
 
-export const QuestTypesWithMaxAttempts = ["event", "story", "battlepyramid", "starter"];
+export const QuestTypesWithMaxAttempts = ["event", "story", "battlepyramid", "starter", "raid"];
 export type QuestTypeWithMaxAttempts = (typeof QuestTypesWithMaxAttempts)[number];
 
 export const SmileyEmotions = ["like", "love", "laugh"] as const;
@@ -1314,7 +1317,7 @@ export const PVP_KILL_ANBU_POINTS_REWARD = 5; // ANBU points for PvP kill by ANB
 export const WAR_TORN_SECTOR_BASE_MONEY = 2000; // Base money reward for battles in war-torn sector (sector 335)
 
 // MPVP Battle Types (for generalized multiplayer PvP battles)
-export const MPVP_BATTLE_TYPES = ["CLAN_BATTLE", "SHRINE_BATTLE"] as const;
+export const MPVP_BATTLE_TYPES = ["CLAN_BATTLE", "SHRINE_BATTLE", "RAID_BATTLE"] as const;
 export type MpvpBattleType = (typeof MPVP_BATTLE_TYPES)[number];
 
 export const MPVP_BATTLE_SIDES = ["ATTACKER", "DEFENDER"] as const;
@@ -1324,6 +1327,11 @@ export type MpvpBattleSide = (typeof MPVP_BATTLE_SIDES)[number];
 export const SHRINE_BATTLE_MIN_ATTACKERS = 2;
 export const SHRINE_BATTLE_MAX_USERS_PER_SIDE = 3;
 export const SHRINE_BATTLE_LOBBY_SECONDS = 60;
+
+// Raid Battle Config
+export const RAID_BATTLE_MAX_USERS_PER_TEAM = 3;
+export const RAID_MAX_CONCURRENT_TEAMS = 5;
+export const RAID_BATTLE_LOBBY_SECONDS = 60;
 
 // Clans config
 export const CLAN_MPVP_MAX_USERS_PER_SIDE = 3;
@@ -1621,6 +1629,10 @@ export const IMG_BADGE_COLLECT_ITEM =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtxtluhUYJDfpFXWm3nrcPluEtIZqyLkaSV1j";
 export const IMG_BADGE_DEFEAT_OPPONENTS =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYwI8YKOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
+export const IMG_BADGE_EXCLUSIVE_RAID = 
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJw7O7n2PT2j854CWbaITZyegfXimvd7s16cO0";
+export const IMG_BADGE_OPEN_RAID = 
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdEQfdeP62PI3ciLaYzgVX8FopBADxSrGmvQl";
 export const IMG_BADGE_MEDICAL_EXPERIENCE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzr5NPBemvaQu94EYJs8HpxVzofny6iPtbgCZ";
 export const IMG_BADGE_GATHERING_EXPERIENCE =

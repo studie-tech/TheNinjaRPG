@@ -861,10 +861,8 @@ export const shrineRouter = createTRPCRouter({
           // Village wars/raids: check if user is at the opposing village's sector
           // Attackers attack at defender's village sector
           // Defenders counter-attack at attacker's village sector
-          const atDefenderVillage =
-            w.defenderVillage?.sector === input.sectorNumber;
-          const atAttackerVillage =
-            w.attackerVillage?.sector === input.sectorNumber;
+          const atDefenderVillage = w.defenderVillage?.sector === input.sectorNumber;
+          const atAttackerVillage = w.attackerVillage?.sector === input.sectorNumber;
 
           return (
             (atDefenderVillage && isUserOnAttackerSide(w)) ||

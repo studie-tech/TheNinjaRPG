@@ -64,7 +64,7 @@ import type {
   ReturnedBattleDynamic,
 } from "./types";
 import type { CombatAction, BattleUserState } from "./types";
-import type { ZodAllTags } from "./types";
+import type { ZodAllTags } from "@/validators/combat";
 import type { GroundEffect, UserEffect, BattleEffect } from "@/libs/combat/types";
 import type { Battle, UserItem } from "@/drizzle/schema";
 import type { GameSetting, VillageAlliance } from "@/drizzle/schema";
@@ -266,10 +266,7 @@ export const getQuestDataFromBattle = (
  * Hydrate a BattleUserState with data from extraState for use with e.g. getNewTrackers.
  * Returns a fully hydrated user with relations populated from battle.extraState.
  */
-export const hydrateUserForQuests = (
-  battle: CompleteBattle,
-  user: BattleUserState,
-) => {
+export const hydrateUserForQuests = (battle: CompleteBattle, user: BattleUserState) => {
   // Hydrate relations from extraState
   const userQuests = getUserQuestsFromBattle(battle, user.controllerId);
   const completedQuests = getCompletedQuestsFromBattle(battle, user.controllerId);
@@ -382,6 +379,8 @@ export const getDefaultBattleSizes = (battleType: BattleType, userLevel: number)
     case "RANKED_PVP":
       return { width: 12, height: 10 };
     case "RANKED_SPARRING":
+      return { width: 12, height: 10 };
+    case "RAID":
       return { width: 12, height: 10 };
   }
 };
@@ -1300,8 +1299,7 @@ export const calcBattleResult = (
                     warHealthInfo[targetVillageName]! -= WAR_HEALTH_REMOVE;
                   }
                   if (targetVillage?.kageId === target.userId) {
-                    warHealthInfo[targetVillageName]! -=
-                      WAR_HEALTH_KAGEDEATH_REMOVE;
+                    warHealthInfo[targetVillageName]! -= WAR_HEALTH_KAGEDEATH_REMOVE;
                   }
                 } else {
                   if (targetVillage?.kageId === target.userId) {
@@ -1387,10 +1385,8 @@ export const calcBattleResult = (
                   );
 
                 // Determine which shrine is being targeted based on user's sector
-                const atAttackerVillage =
-                  war.attackerVillage?.sector === user.sector;
-                const atDefenderVillage =
-                  war.defenderVillage?.sector === user.sector;
+                const atAttackerVillage = war.attackerVillage?.sector === user.sector;
+                const atDefenderVillage = war.defenderVillage?.sector === user.sector;
 
                 // AI shrine battles (SHRINE_WAR) - attacking the shrine directly
                 if (battleType === "SHRINE_WAR") {
@@ -1548,10 +1544,8 @@ export const calcBattleResult = (
           Object.keys(villageWarShrineInfo).forEach((warId) => {
             const absAttacker = Math.abs(villageWarShrineInfo[warId]!.attacker);
             const absDefender = Math.abs(villageWarShrineInfo[warId]!.defender);
-            if (absAttacker !== 0)
-              villageWarShrineInfo[warId]!.attacker /= absAttacker;
-            if (absDefender !== 0)
-              villageWarShrineInfo[warId]!.defender /= absDefender;
+            if (absAttacker !== 0) villageWarShrineInfo[warId]!.attacker /= absAttacker;
+            if (absDefender !== 0) villageWarShrineInfo[warId]!.defender /= absDefender;
           });
         }
       }

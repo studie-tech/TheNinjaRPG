@@ -11,7 +11,9 @@ import {
   userData,
   notification,
   actionLog,
+  quest,
 } from "@/drizzle/schema";
+import { findActiveExclusiveRaidForSector } from "@/libs/raids";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchVillages, fetchAlliances, fetchStructures } from "@/routers/village";
 import { nanoid } from "nanoid";
@@ -107,12 +109,16 @@ export const warRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user }, activeWar] = await Promise.all([
+      const [{ user }, activeWar, exclusiveRaids] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         fetchActiveWar(ctx.drizzle, input.warId),
+        // Fetch all exclusive raids (filter by sector after we know the war's sector)
+        ctx.drizzle.query.quest.findMany({
+          where: and(eq(quest.questType, "raid"), eq(quest.hidden, false)),
+        }),
       ]);
 
       // Guard
@@ -140,6 +146,19 @@ export const warRouter = createTRPCRouter({
       if (MAP_RESERVED_SECTORS.includes(activeWar.sector)) {
         return errorResponse("Shrine cannot be built on reserved sectors");
       }
+
+      // Check if there's an active exclusive raid for this sector that must be completed first
+      const activeExclusiveRaid = findActiveExclusiveRaidForSector(
+        exclusiveRaids,
+        activeWar.sector,
+      );
+
+      if (activeExclusiveRaid) {
+        return errorResponse(
+          "You must defeat the raid boss before claiming this sector! Check the shrine page to join the raid.",
+        );
+      }
+
       if (user.village.tokens < WAR_PURCHASE_SHRINE_TOKEN_COST) {
         return errorResponse(
           `Your village needs ${WAR_PURCHASE_SHRINE_TOKEN_COST} tokens to build a shrine`,

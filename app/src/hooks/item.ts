@@ -1,7 +1,7 @@
 import { calculateContentDiff } from "@/utils/diff";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ItemValidator } from "@/libs/combat/types";
+import { ItemValidator } from "@/validators/combat";
 import { WeaponTypes } from "@/drizzle/constants";
 import { AttackTargets } from "@/drizzle/constants";
 import { AttackMethods } from "@/drizzle/constants";
@@ -12,9 +12,8 @@ import { BattleUsageTypes } from "@/drizzle/constants";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import type { Item, CraftingRequirement } from "@/drizzle/schema";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { ZodAllTags, ZodItemType } from "@/validators/combat";
 import type { FormEntry } from "@/layout/EditContent";
-import type { ZodItemType } from "@/libs/combat/types";
 
 /**
  * Hook used when creating frontend forms for editing items
@@ -59,9 +58,9 @@ export const useItemEditForm = (
   // Form submission
   const handleItemSubmit = form.handleSubmit(
     (data: ZodItemType) => {
-      const newItem = { 
-        ...item, 
-        ...data
+      const newItem = {
+        ...item,
+        ...data,
       };
       const diff = calculateContentDiff(item, newItem);
       if (diff.length > 0) {

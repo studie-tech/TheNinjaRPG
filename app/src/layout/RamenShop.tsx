@@ -65,7 +65,9 @@ const RamenShop: React.FC<RamenShopProps> = (props) => {
         />
       )}
       {isPending && <Loader explanation="Purchasing food" />}
-      <div className={`grid grid-cols-3 text-center font-bold italic p-3 ${isPending ? "hidden" : ""}`}>
+      <div
+        className={`grid grid-cols-3 text-center font-bold italic p-3 ${isPending ? "hidden" : ""}`}
+      >
         <MenuEntry
           title="Small Bowl"
           entry="small"

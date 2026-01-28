@@ -23,7 +23,11 @@ import { cn } from "src/libs/shadui";
 import { createAuctionListingSchema } from "@/validators/auction";
 import type { CreateAuctionListingSchema } from "@/validators/auction";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { AUCTION_LISTING_STATES, AUCTION_LISTING_TYPES, TRADEABLE_CURRENCY_TYPES } from "@/drizzle/constants";
+import {
+  AUCTION_LISTING_STATES,
+  AUCTION_LISTING_TYPES,
+  TRADEABLE_CURRENCY_TYPES,
+} from "@/drizzle/constants";
 import { useInfinitePagination } from "@/libs/pagination";
 import {
   Select,
@@ -163,11 +167,13 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
       currentPrice: (
         <div>
           <p className="font-bold text-green-600">
-            {listing.currentPrice.toLocaleString()} {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
+            {listing.currentPrice.toLocaleString()}{" "}
+            {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
           </p>
           {listing.buyoutPrice && (
             <p className="text-sm text-muted-foreground">
-              Buyout: {listing.buyoutPrice.toLocaleString()} {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
+              Buyout: {listing.buyoutPrice.toLocaleString()}{" "}
+              {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
             </p>
           )}
         </div>
@@ -496,11 +502,13 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             )}
             <div className="flex flex-col items-center">
               <p className="text-2xl font-bold text-green-600">
-                {listing.currentPrice.toLocaleString()} {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
+                {listing.currentPrice.toLocaleString()}{" "}
+                {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
               </p>
               {listing.buyoutPrice && (
                 <p className="text-sm text-muted-foreground">
-                  Buyout: {listing.buyoutPrice.toLocaleString()} {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
+                  Buyout: {listing.buyoutPrice.toLocaleString()}{" "}
+                  {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
                 </p>
               )}
             </div>
@@ -621,12 +629,14 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             <AlertDialogDescription>
               Are you sure you want to place a bid of{" "}
               <span className="font-semibold">
-                {pendingBidAmount?.toLocaleString()} {listing?.currencyType === "MONEY" ? "ryo" : "reputation"}
+                {pendingBidAmount?.toLocaleString()}{" "}
+                {listing?.currencyType === "MONEY" ? "ryo" : "reputation"}
               </span>{" "}
               on this auction?
               {userBid && (
                 <span className="block mt-2 text-sm">
-                  Your current bid of {userBid.amount.toLocaleString()} will be replaced.
+                  Your current bid of {userBid.amount.toLocaleString()} will be
+                  replaced.
                 </span>
               )}
             </AlertDialogDescription>
@@ -639,21 +649,27 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
       </AlertDialog>
 
       {/* Buyout Confirmation Dialog */}
-      <AlertDialog open={showBuyoutConfirmation} onOpenChange={setShowBuyoutConfirmation}>
+      <AlertDialog
+        open={showBuyoutConfirmation}
+        onOpenChange={setShowBuyoutConfirmation}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Buyout</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to buyout this auction for{" "}
               <span className="font-semibold">
-                {listing?.buyoutPrice?.toLocaleString()} {listing?.currencyType === "MONEY" ? "ryo" : "reputation"}
+                {listing?.buyoutPrice?.toLocaleString()}{" "}
+                {listing?.currencyType === "MONEY" ? "ryo" : "reputation"}
               </span>
               ? This will immediately complete the auction and transfer the item to you.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmBuyout}>Confirm Buyout</AlertDialogAction>
+            <AlertDialogAction onClick={confirmBuyout}>
+              Confirm Buyout
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -728,8 +744,7 @@ export const NewAuctionListingDialog: React.FC = () => {
 
   // Get the selected item to check if it's stackable
   const selectedItem = filteredItems.find((item) => item.id === watchedUserItemId);
-  const showQuantityInput =
-    selectedItem?.item?.canStack && selectedItem.quantity > 1;
+  const showQuantityInput = selectedItem?.item?.canStack && selectedItem.quantity > 1;
 
   // Reset quantity when item selection changes
   useEffect(() => {
@@ -812,7 +827,10 @@ export const NewAuctionListingDialog: React.FC = () => {
                         placeholder={`1-${selectedItem?.quantity || 1}`}
                         {...field}
                         onChange={(e) => {
-                          const value = e.target.value === "" ? undefined : parseInt(e.target.value, 10);
+                          const value =
+                            e.target.value === ""
+                              ? undefined
+                              : parseInt(e.target.value, 10);
                           field.onChange(isNaN(value || 0) ? undefined : value);
                         }}
                         value={field.value || ""}

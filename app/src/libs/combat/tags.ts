@@ -6,17 +6,16 @@ import {
   IncreaseRangeTag,
   IncreaseCooldownTag,
   DecreaseCooldownTag,
-} from "./types";
+  HealTag,
+} from "@/validators/combat";
 import { isEffectActive } from "@/libs/combat/util";
-import { HealTag } from "@/libs/combat/types";
 import type { BattleUserState, Consequence, ReturnedUserState } from "./types";
 import type { GroundEffect, UserEffect, ActionEffect } from "./types";
 import type { StatNames, GenNames, DmgConfig } from "./constants";
-import type { WeaknessTagType } from "@/libs/combat/types";
-import type { ShieldTagType } from "@/libs/combat/types";
+import type { WeaknessTagType, ShieldTagType } from "@/validators/combat";
+import type { CombatAction } from "@/libs/combat/types";
 import type { GeneralType } from "@/drizzle/constants";
 import type { BattleType } from "@/drizzle/constants";
-import type { CombatAction } from "@/libs/combat/types";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import type { BattleEffect } from "./types";
 import type { ReturnedBattle } from "./types";
@@ -2846,6 +2845,7 @@ export const getStatTypeFromStat = (stat: (typeof StatNames)[number]) => {
     case "bukijutsuDefence":
       return "Bukijutsu";
     default:
+      console.error("Invalid stat type", stat);
       throw Error("Invalid stat type");
   }
 };

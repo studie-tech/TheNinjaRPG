@@ -84,19 +84,21 @@ export default function OccupationCrafting() {
     },
   });
 
-  const finishCraftingImmediatelyMutation = api.occupation.finishCraftingImmediately.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      await utils.item.getUserItems.invalidate();
-    },
-  });
+  const finishCraftingImmediatelyMutation =
+    api.occupation.finishCraftingImmediately.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await utils.item.getUserItems.invalidate();
+      },
+    });
 
-  const finishImbuingImmediatelyMutation = api.occupation.finishImbuingImmediately.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      await utils.item.getUserItems.invalidate();
-    },
-  });
+  const finishImbuingImmediatelyMutation =
+    api.occupation.finishImbuingImmediately.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await utils.item.getUserItems.invalidate();
+      },
+    });
 
   const removeImbuementMutation = api.occupation.removeImbuement.useMutation({
     onSuccess: async (data) => {
@@ -125,7 +127,6 @@ export default function OccupationCrafting() {
     },
   });
 
-
   const [selectedItem, setSelectedItem] = useState<Item | undefined>(undefined);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [craftQuantity, setCraftQuantity] = useState<number>(1);
@@ -145,10 +146,10 @@ export default function OccupationCrafting() {
   // Calculate max craftable quantity at component level
   const maxCraftable = useMemo(() => {
     if (!selectedItem || !craftableItems || !userItems) return 10;
-    
+
     const craftableItem = craftableItems.find((item) => item.id === selectedItem.id);
     if (!craftableItem?.craftingRequirements) return 10;
-    
+
     let max = 10;
     for (const req of craftableItem.craftingRequirements) {
       const totalQuantity = getTotalItemQuantity(userItems, req.requirementItemId);
@@ -259,26 +260,32 @@ export default function OccupationCrafting() {
                     <div className="text-sm text-green-600 font-medium">Finished!</div>
                   )}
                 {/* Find the currently crafting userItem to get its ID */}
-                {userItems && (() => {
-                  const currentlyCraftingUserItem = userItems.find(
-                    (ui) =>
-                      ui.craftingFinishedAt &&
-                      new Date(ui.craftingFinishedAt) > new Date()
-                  );
-                  return currentlyCraftingUserItem && canChangeContent(userData?.role || "USER") ? (
-                    <Button
-                      onClick={() => finishCraftingImmediatelyMutation.mutate({ userItemId: currentlyCraftingUserItem.id })}
-                      disabled={finishCraftingImmediatelyMutation.isPending}
-                      loading={finishCraftingImmediatelyMutation.isPending}
-                      variant="outline"
-                      size="sm"
-                      className="w-fit"
-                    >
-                      <Zap className="h-4 w-4 mr-2" />
-                      Instant Finish (Staff)
-                    </Button>
-                  ) : null;
-                })()}
+                {userItems &&
+                  (() => {
+                    const currentlyCraftingUserItem = userItems.find(
+                      (ui) =>
+                        ui.craftingFinishedAt &&
+                        new Date(ui.craftingFinishedAt) > new Date(),
+                    );
+                    return currentlyCraftingUserItem &&
+                      canChangeContent(userData?.role || "USER") ? (
+                      <Button
+                        onClick={() =>
+                          finishCraftingImmediatelyMutation.mutate({
+                            userItemId: currentlyCraftingUserItem.id,
+                          })
+                        }
+                        disabled={finishCraftingImmediatelyMutation.isPending}
+                        loading={finishCraftingImmediatelyMutation.isPending}
+                        variant="outline"
+                        size="sm"
+                        className="w-fit"
+                      >
+                        <Zap className="h-4 w-4 mr-2" />
+                        Instant Finish (Staff)
+                      </Button>
+                    ) : null;
+                  })()}
               </div>
             </CardContent>
           </Card>
@@ -417,8 +424,10 @@ export default function OccupationCrafting() {
                       const displayCraftSeconds = Math.round(
                         craftingTime * 60 * shrineBoostFactor * displayQuantity,
                       );
-                      const displayTimeValue = formatSecondsToTimeDisplay(displayCraftSeconds);
-                      const displayExpGain = (selectedItem.craftingExperience ?? 0) * displayQuantity;
+                      const displayTimeValue =
+                        formatSecondsToTimeDisplay(displayCraftSeconds);
+                      const displayExpGain =
+                        (selectedItem.craftingExperience ?? 0) * displayQuantity;
 
                       return (
                         <>
@@ -448,7 +457,9 @@ export default function OccupationCrafting() {
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium">
-                                  {canAffordAny ? "Total Crafting Time:" : "Crafting Time (per item):"}
+                                  {canAffordAny
+                                    ? "Total Crafting Time:"
+                                    : "Crafting Time (per item):"}
                                 </span>
                                 <span className="text-sm font-semibold">
                                   {displayTimeValue}
@@ -457,7 +468,9 @@ export default function OccupationCrafting() {
                               {displayExpGain > 0 && (
                                 <div className="flex items-center justify-between">
                                   <span className="text-sm font-medium">
-                                    {canAffordAny ? "Total Experience Gain:" : "Experience Gain (per item):"}
+                                    {canAffordAny
+                                      ? "Total Experience Gain:"
+                                      : "Experience Gain (per item):"}
                                   </span>
                                   <span className="text-sm font-semibold text-green-600">
                                     +{displayExpGain} EXP
@@ -469,41 +482,45 @@ export default function OccupationCrafting() {
 
                           {/* Required Materials */}
                           {hasRequirements && (
-                        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3">
-                          <h4 className="font-semibold text-sm mb-2">
-                            Required Materials
-                          </h4>
-                          <div className="space-y-2">
-                            {craftableItem.craftingRequirements.map((req, index) => {
-                              const totalQuantity = getTotalItemQuantity(
-                                userItems || [],
-                                req.requirementItemId,
-                              );
-                              const required = req.quantity * craftQuantity;
-                              const hasEnough = totalQuantity >= required;
+                            <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3">
+                              <h4 className="font-semibold text-sm mb-2">
+                                Required Materials
+                              </h4>
+                              <div className="space-y-2">
+                                {craftableItem.craftingRequirements.map(
+                                  (req, index) => {
+                                    const totalQuantity = getTotalItemQuantity(
+                                      userItems || [],
+                                      req.requirementItemId,
+                                    );
+                                    const required = req.quantity * craftQuantity;
+                                    const hasEnough = totalQuantity >= required;
 
-                              return (
-                                <div
-                                  key={index}
-                                  className="flex items-center justify-between"
-                                >
-                                  <span className="text-sm">
-                                    {required}x{" "}
-                                    {req.requirementItem?.name || "Unknown Item"}
-                                  </span>
-                                  <div
-                                    className={`text-sm font-medium ${
-                                      hasEnough ? "text-green-600" : "text-red-600"
-                                    }`}
-                                  >
-                                    {totalQuantity}/{required}
-                                    {hasEnough ? " ✓" : " ✗"}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
+                                    return (
+                                      <div
+                                        key={index}
+                                        className="flex items-center justify-between"
+                                      >
+                                        <span className="text-sm">
+                                          {required}x{" "}
+                                          {req.requirementItem?.name || "Unknown Item"}
+                                        </span>
+                                        <div
+                                          className={`text-sm font-medium ${
+                                            hasEnough
+                                              ? "text-green-600"
+                                              : "text-red-600"
+                                          }`}
+                                        >
+                                          {totalQuantity}/{required}
+                                          {hasEnough ? " ✓" : " ✗"}
+                                        </div>
+                                      </div>
+                                    );
+                                  },
+                                )}
+                              </div>
+                            </div>
                           )}
                         </>
                       );
@@ -548,7 +565,11 @@ export default function OccupationCrafting() {
                 />
                 {canChangeContent(userData?.role || "USER") && activeImbuement && (
                   <Button
-                    onClick={() => finishImbuingImmediatelyMutation.mutate({ userItemImbuementId: activeImbuement.id })}
+                    onClick={() =>
+                      finishImbuingImmediatelyMutation.mutate({
+                        userItemImbuementId: activeImbuement.id,
+                      })
+                    }
                     disabled={finishImbuingImmediatelyMutation.isPending}
                     loading={finishImbuingImmediatelyMutation.isPending}
                     variant="outline"
@@ -640,21 +661,26 @@ export default function OccupationCrafting() {
                       <div>
                         <h4 className="font-medium mb-2">Select Crystal</h4>
                         <p className="text-sm text-muted-foreground mb-2">
-                          Only crystals compatible with <strong>{selectedImbuableItem.item?.itemType}</strong> items are shown.
+                          Only crystals compatible with{" "}
+                          <strong>{selectedImbuableItem.item?.itemType}</strong> items
+                          are shown.
                         </p>
                         <ActionSelector
                           items={crystals
                             .filter((userItem) => {
                               const crystal = userItem.item;
                               if (!crystal) return false;
-                              
+
                               // If crystal has no target types specified, it can be used on any item
                               if (!crystal.crystalTargetTypes) {
                                 return true;
                               }
-                              
+
                               // Check if the target item type matches the crystal's allowed type
-                              return crystal.crystalTargetTypes === selectedImbuableItem.item?.itemType;
+                              return (
+                                crystal.crystalTargetTypes ===
+                                selectedImbuableItem.item?.itemType
+                              );
                             })
                             .map((userItem) => ({
                               id: userItem.id,
@@ -738,15 +764,16 @@ export default function OccupationCrafting() {
         {/* Manage Existing Imbuements */}
         {(() => {
           const itemsWithImbuements = (userItems || []).filter(
-            (userItem) => 
-              userItem.imbuements && 
+            (userItem) =>
+              userItem.imbuements &&
               userItem.imbuements.length > 0 &&
-              userItem.imbuements.some(imbuement => 
-                !imbuement.craftingFinishedAt || 
-                new Date(imbuement.craftingFinishedAt) <= new Date()
-              )
+              userItem.imbuements.some(
+                (imbuement) =>
+                  !imbuement.craftingFinishedAt ||
+                  new Date(imbuement.craftingFinishedAt) <= new Date(),
+              ),
           );
-          
+
           return itemsWithImbuements.length > 0 ? (
             <Card>
               <CardHeader>
@@ -754,7 +781,8 @@ export default function OccupationCrafting() {
                   <Star className="h-5 w-5" />
                   Manage Existing Imbuements
                   <Badge variant="outline" className="ml-auto">
-                    {itemsWithImbuements.length} item{itemsWithImbuements.length !== 1 ? 's' : ''}
+                    {itemsWithImbuements.length} item
+                    {itemsWithImbuements.length !== 1 ? "s" : ""}
                   </Badge>
                 </CardTitle>
               </CardHeader>
@@ -772,11 +800,13 @@ export default function OccupationCrafting() {
                           <h4 className="font-semibold">{userItem.item?.name}</h4>
                           {(() => {
                             const done = (userItem.imbuements || []).filter(
-                              i => !i.craftingFinishedAt || new Date(i.craftingFinishedAt) <= new Date()
+                              (i) =>
+                                !i.craftingFinishedAt ||
+                                new Date(i.craftingFinishedAt) <= new Date(),
                             ).length;
                             return (
                               <p className="text-sm text-muted-foreground">
-                                {done} imbuement{done !== 1 ? 's' : ''}
+                                {done} imbuement{done !== 1 ? "s" : ""}
                               </p>
                             );
                           })()}
@@ -791,39 +821,55 @@ export default function OccupationCrafting() {
                       {/* Imbuements with remove buttons */}
                       {userItem.imbuements && userItem.imbuements.length > 0 && (
                         <div className="mt-3 rounded-lg bg-purple-100 p-3">
-                          <h4 className="font-semibold text-purple-800 mb-2">Imbuements</h4>
+                          <h4 className="font-semibold text-purple-800 mb-2">
+                            Imbuements
+                          </h4>
                           <div className="space-y-2">
                             {userItem.imbuements
-                              .filter(imbuement => 
-                                !imbuement.craftingFinishedAt || 
-                                new Date(imbuement.craftingFinishedAt) <= new Date()
+                              .filter(
+                                (imbuement) =>
+                                  !imbuement.craftingFinishedAt ||
+                                  new Date(imbuement.craftingFinishedAt) <= new Date(),
                               )
                               .map((imbuement) => (
-                              <div key={imbuement.id} className="flex items-center justify-between bg-white rounded p-2">
-                                <div className="flex items-center space-x-2">
-                                  <ContentImage
-                                    image={imbuement.item.image}
-                                    alt={imbuement.item.name}
-                                    className="w-8 h-8"
-                                  />
-                                  <span className="font-medium">{imbuement.item.name}</span>
-                                </div>
-                                <Confirm2
-                                  title="Remove Imbuement"
-                                  proceed_label="Remove"
-                                  button={
-                                    <Button variant="destructive" size="sm">
-                                      Remove
-                                    </Button>
-                                  }
-                                  onAccept={() => removeImbuementMutation.mutate({ userItemImbuementId: imbuement.id })}
+                                <div
+                                  key={imbuement.id}
+                                  className="flex items-center justify-between bg-white rounded p-2"
                                 >
-                                  <p>
-                                    Are you sure you want to remove the <strong>{imbuement.item.name}</strong> imbuement from <strong>{userItem.item?.name}</strong>? This action cannot be undone and you will not get the crystal back.
-                                  </p>
-                                </Confirm2>
-                              </div>
-                            ))}
+                                  <div className="flex items-center space-x-2">
+                                    <ContentImage
+                                      image={imbuement.item.image}
+                                      alt={imbuement.item.name}
+                                      className="w-8 h-8"
+                                    />
+                                    <span className="font-medium">
+                                      {imbuement.item.name}
+                                    </span>
+                                  </div>
+                                  <Confirm2
+                                    title="Remove Imbuement"
+                                    proceed_label="Remove"
+                                    button={
+                                      <Button variant="destructive" size="sm">
+                                        Remove
+                                      </Button>
+                                    }
+                                    onAccept={() =>
+                                      removeImbuementMutation.mutate({
+                                        userItemImbuementId: imbuement.id,
+                                      })
+                                    }
+                                  >
+                                    <p>
+                                      Are you sure you want to remove the{" "}
+                                      <strong>{imbuement.item.name}</strong> imbuement
+                                      from <strong>{userItem.item?.name}</strong>? This
+                                      action cannot be undone and you will not get the
+                                      crystal back.
+                                    </p>
+                                  </Confirm2>
+                                </div>
+                              ))}
                           </div>
                         </div>
                       )}
@@ -850,7 +896,8 @@ export default function OccupationCrafting() {
                   <Wrench className="h-5 w-5" />
                   Repair Items
                   <Badge variant="outline" className="ml-auto">
-                    {itemsNeedingRepair.length} item{itemsNeedingRepair.length !== 1 ? "s" : ""}
+                    {itemsNeedingRepair.length} item
+                    {itemsNeedingRepair.length !== 1 ? "s" : ""}
                   </Badge>
                 </CardTitle>
               </CardHeader>
@@ -869,7 +916,9 @@ export default function OccupationCrafting() {
                           <p className="font-semibold">Repair All Items</p>
                           <p className="text-sm text-muted-foreground">
                             Total cost:{" "}
-                            <span className={canAfford ? "text-green-600" : "text-red-600"}>
+                            <span
+                              className={canAfford ? "text-green-600" : "text-red-600"}
+                            >
                               {totalRepairCost.toLocaleString()} ryo
                             </span>
                             {!canAfford && (
@@ -897,7 +946,8 @@ export default function OccupationCrafting() {
                           onAccept={() => repairAllMutation.mutate()}
                         >
                           <p>
-                            Are you sure you want to repair all {itemsNeedingRepair.length} item
+                            Are you sure you want to repair all{" "}
+                            {itemsNeedingRepair.length} item
                             {itemsNeedingRepair.length !== 1 ? "s" : ""} for{" "}
                             <strong>{totalRepairCost.toLocaleString()} ryo</strong>?
                           </p>
@@ -921,8 +971,8 @@ export default function OccupationCrafting() {
                           <div className="flex-1">
                             <h4 className="font-semibold">{userItem.item?.name}</h4>
                             <p className="text-sm text-muted-foreground">
-                              Durability: {userItem.durability} / {userItem.item.maxDurability} (
-                              {durabilityPercent}%)
+                              Durability: {userItem.durability} /{" "}
+                              {userItem.item.maxDurability} ({durabilityPercent}%)
                             </p>
                           </div>
                         </div>
@@ -936,11 +986,15 @@ export default function OccupationCrafting() {
                         <div className="mt-3 flex items-center justify-between">
                           <div className="text-sm">
                             <span className="font-medium">Repair Cost: </span>
-                            <span className="text-green-600">{repairCost.toLocaleString()} ryo</span>
+                            <span className="text-green-600">
+                              {repairCost.toLocaleString()} ryo
+                            </span>
                           </div>
                           <Button
                             variant="info"
-                            onClick={() => repairItemMutation.mutate({ userItemId: userItem.id })}
+                            onClick={() =>
+                              repairItemMutation.mutate({ userItemId: userItem.id })
+                            }
                             disabled={repairItemMutation.isPending}
                             loading={repairItemMutation.isPending}
                           >
@@ -971,7 +1025,8 @@ export default function OccupationCrafting() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
                     <Badge variant="outline" className="mb-2">
-                      Novice (0-{(CRAFTING_REQUIRED_EXP.APPRENTICE - 1).toLocaleString()} exp)
+                      Novice (0-
+                      {(CRAFTING_REQUIRED_EXP.APPRENTICE - 1).toLocaleString()} exp)
                     </Badge>
                     <ul className="space-y-1 text-muted-foreground">
                       <li>• Common: {CRAFTING_TIMES_MINS.NOVICE.COMMON} minutes</li>

@@ -7,7 +7,7 @@ import {
 } from "@/layout/ContentFiltering";
 import { api } from "@/app/_trpc/client";
 import { BattleTypes } from "@/drizzle/constants";
-import { effectFilters } from "@/libs/combat/types";
+import { effectFilters } from "@/validators/combat";
 
 interface JutsuBalanceFilteringProps {
   state: JutsuBalanceFilteringState;

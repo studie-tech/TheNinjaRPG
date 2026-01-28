@@ -5,7 +5,7 @@ import { usernameSchema } from "@/validators/register";
 import type { LetterRank, QuestType } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 import type { ElementName } from "@/drizzle/constants";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { ZodAllTags } from "@/validators/combat";
 
 export const updateUserSchema = z.object({
   username: usernameSchema,

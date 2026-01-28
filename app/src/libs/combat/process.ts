@@ -1,5 +1,5 @@
 import { dmgConfig as config } from "./constants";
-import { VisualTag } from "./types";
+import { VisualTag } from "@/validators/combat";
 import { findUser, findBarrier, getItem } from "./util";
 import { collapseConsequences, sortEffects } from "./util";
 import { calcApplyRatio } from "./util";
@@ -51,7 +51,7 @@ import {
 import type { BattleUserState } from "./types";
 import type { GroundEffect, UserEffect, ActionEffect, BattleEffect } from "./types";
 import type { CompleteBattle, Consequence, CombatAction } from "./types";
-import type { ShieldTagType } from "./types";
+import type { ShieldTagType } from "@/validators/combat";
 /**
  * Minimal user type for checkFriendlyFire
  */

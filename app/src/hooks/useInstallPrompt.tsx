@@ -61,7 +61,9 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
       if (!standalone && mobile) {
         const timeoutId = setTimeout(() => {
           // Check for long-term dismissal (60 days)
-          const dismissedLongTime = safeLocalStorageGetItem("pwa-install-dismissed-long");
+          const dismissedLongTime = safeLocalStorageGetItem(
+            "pwa-install-dismissed-long",
+          );
           if (
             dismissedLongTime &&
             Date.now() - parseInt(dismissedLongTime) < 60 * 24 * 60 * 60 * 1000

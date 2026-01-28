@@ -18,6 +18,8 @@ import {
 } from "@/drizzle/constants";
 import RamenShop from "@/layout/RamenShop";
 import ShrineBattleLobby from "@/layout/ShrineBattleLobby";
+import RaidBrowser from "@/layout/RaidBrowser";
+import { isRaidCurrentlyActive } from "@/libs/raids";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type War } from "@/drizzle/schema";
 
@@ -55,6 +57,12 @@ export default function Shrine() {
   const { data: userQueuedBattle } = api.shrine.getUserQueuedShrineBattle.useQuery(
     undefined,
     { enabled: userData?.status === "QUEUED" },
+  );
+
+  // Query for available raids in this sector (for exclusive raid on shrine defeat)
+  const { data: availableRaidsData } = api.raids.getAvailableRaids.useQuery(
+    { sector: userData?.sector || 0 },
+    { enabled: !!userData?.sector },
   );
 
   // Loaders
@@ -170,7 +178,8 @@ export default function Shrine() {
         (wa) =>
           wa.villageId === userData.villageId &&
           wa.supportVillageId === war.attackerVillageId,
-      ) ?? false),
+      ) ??
+        false),
   );
   const userIsDefender = userWars.some(
     (war) =>
@@ -179,10 +188,76 @@ export default function Shrine() {
         (wa) =>
           wa.villageId === userData.villageId &&
           wa.supportVillageId === war.defenderVillageId,
-      ) ?? false),
+      ) ??
+        false),
   );
 
   const hasNoActiveWars = !activeWars || activeWars.length === 0;
+
+  // Check for active exclusive raid in this sector (for when sector war shrine is defeated)
+  const availableRaids = availableRaidsData?.raids ?? [];
+  const activeExclusiveRaid = availableRaids.find(
+    (raid) => raid.raidType === "exclusive" && isRaidCurrentlyActive(raid),
+  );
+
+  // Check if user is attacker in a sector war with defeated shrine (for exclusive raid flow)
+  const userSectorWarWithDefeatedShrine = userWars.find(
+    (war) =>
+      war.type === "SECTOR_WAR" &&
+      war.defenderShrineHp <= 0 &&
+      (war.attackerVillageId === userData.villageId ||
+        war.warAllies?.some(
+          (wa) =>
+            wa.villageId === userData.villageId &&
+            wa.supportVillageId === war.attackerVillageId,
+        )),
+  );
+
+  // Show exclusive raid flow when shrine is defeated and user is attacker
+  const showExclusiveRaidFlow = !!userSectorWarWithDefeatedShrine;
+
+  // If showing raid flow, determine if raid is active or completed
+  if (showExclusiveRaidFlow) {
+    return (
+      <div>
+        {activeExclusiveRaid ? (
+          // Raid is active - show raid browser
+          <RaidBrowser
+            title="Defeat the Raid Boss!"
+            subtitle="Complete to claim sector"
+            initialBreak={false}
+            sectorFilter={userData.sector}
+          />
+        ) : (
+          // Raid completed or not configured - show message to finalize
+          <ContentBox
+            title="Sector Ready to Claim!"
+            subtitle={`Sector ${userData.sector}`}
+            defaultBackHref="/travel"
+          >
+            <div className="text-center space-y-4">
+              <Image
+                src={WAR_SHRINE_IMAGE}
+                alt="War Shrine"
+                width={200}
+                height={200}
+                className="mx-auto opacity-50 grayscale"
+              />
+              <h3 className="text-2xl font-bold">Victory!</h3>
+              <p>
+                The shrine has been defeated! Return to your village&apos;s Town Hall to
+                finalize the war and claim the sector.
+              </p>
+              <Link href="/travel">
+                <Button size="lg">Travel to Village</Button>
+              </Link>
+            </div>
+          </ContentBox>
+        )}
+        <RamenShop initialBreak={true} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -219,8 +294,8 @@ export default function Shrine() {
                 ) : canShowMpvpOption ? (
                   <div className="mb-4 text-sm text-muted-foreground">
                     Form a team to attack this shrine together! Up to 3 attackers can
-                    join the assault, and defenders from the owning village can queue
-                    to defend.
+                    join the assault, and defenders from the owning village can queue to
+                    defend.
                   </div>
                 ) : isUserQueuedForThisSector ? (
                   <div className="mb-4 text-sm text-muted-foreground">
@@ -268,8 +343,8 @@ export default function Shrine() {
               {sectorData.sectorData ? (
                 userIsOwner ? (
                   <p>
-                    This sector is owned by your village. You can defend it when
-                    other villages attack.
+                    This sector is owned by your village. You can defend it when other
+                    villages attack.
                   </p>
                 ) : (
                   <p>
@@ -328,6 +403,7 @@ export default function Shrine() {
                     onAttack={() => attack({ sector: userData.sector })}
                     isAttacking={isAttacking}
                     isProtected={isProtected}
+                    hasActiveExclusiveRaid={!!activeExclusiveRaid}
                   />
                 ))}
               </div>
@@ -345,6 +421,7 @@ export default function Shrine() {
                       isAttacking={false}
                       hideAttackButton={true}
                       isProtected={isProtected}
+                      hasActiveExclusiveRaid={!!activeExclusiveRaid}
                     />
                   ))}
                 </div>
@@ -359,9 +436,9 @@ export default function Shrine() {
                     </div>
                   ) : (
                     <div className="mb-4 text-sm text-muted-foreground">
-                      Form a team to attack this shrine together! Up to 3 attackers
-                      can join the assault, and defenders from the owning village can
-                      queue to defend.
+                      Form a team to attack this shrine together! Up to 3 attackers can
+                      join the assault, and defenders from the owning village can queue
+                      to defend.
                     </div>
                   )}
                   <ShrineBattleLobby
@@ -411,6 +488,7 @@ export default function Shrine() {
                 onAttack={() => attack({ sector: userData.sector })}
                 isAttacking={isAttacking}
                 isProtected={isProtected}
+                hasActiveExclusiveRaid={!!activeExclusiveRaid}
               />
             ))}
           </div>
@@ -431,6 +509,7 @@ const WarCard = ({
   isAttacking,
   hideAttackButton = false,
   isProtected = false,
+  hasActiveExclusiveRaid = false,
 }: {
   war: War & {
     attackerVillage: { name: string; villageGraphic: string; sector?: number };
@@ -443,21 +522,20 @@ const WarCard = ({
   isAttacking: boolean;
   hideAttackButton?: boolean;
   isProtected?: boolean;
+  hasActiveExclusiveRaid?: boolean;
 }) => {
   // Check if user is attacker or defender (including via war allies)
   const isUserAttacker =
     war.attackerVillageId === villageId ||
     war.warAllies.some(
       (wa) =>
-        wa.villageId === villageId &&
-        wa.supportVillageId === war.attackerVillageId,
+        wa.villageId === villageId && wa.supportVillageId === war.attackerVillageId,
     );
   const isUserDefender =
     war.defenderVillageId === villageId ||
     war.warAllies.some(
       (wa) =>
-        wa.villageId === villageId &&
-        wa.supportVillageId === war.defenderVillageId,
+        wa.villageId === villageId && wa.supportVillageId === war.defenderVillageId,
     );
   const isVillageWar = ["VILLAGE_WAR", "WAR_RAID"].includes(war.type);
 
@@ -489,10 +567,14 @@ const WarCard = ({
   // Attackers at enemy village = attack
   // Defenders at own village = defend (if shrine damaged)
   // Defenders at enemy village = attack
-  const isDefendAction = isVillageWar && (
-    (isUserAttacker && atAttackerVillage && war.attackerShrineHp < war.attackerShrineMaxHp) ||
-    (isUserDefender && atDefenderVillage && war.defenderShrineHp < war.defenderShrineMaxHp)
-  );
+  const isDefendAction =
+    isVillageWar &&
+    ((isUserAttacker &&
+      atAttackerVillage &&
+      war.attackerShrineHp < war.attackerShrineMaxHp) ||
+      (isUserDefender &&
+        atDefenderVillage &&
+        war.defenderShrineHp < war.defenderShrineMaxHp));
 
   // For Village Wars: users can attack/defend based on location and shrine state
   const canAttackVillageWar =
@@ -500,29 +582,41 @@ const WarCard = ({
     !hideAttackButton &&
     !isProtected &&
     ((isUserAttacker && atDefenderVillage && war.defenderShrineHp > 0) ||
-     (isUserDefender && atAttackerVillage && war.attackerShrineHp > 0));
+      (isUserDefender && atAttackerVillage && war.attackerShrineHp > 0));
 
   const canDefendVillageWar =
-    isVillageWar &&
-    !hideAttackButton &&
-    !isProtected &&
-    isDefendAction;
+    isVillageWar && !hideAttackButton && !isProtected && isDefendAction;
 
   // For Sector Wars: only attackers can attack
   const canAttackSectorWar =
-    !isVillageWar && isUserAttacker && war.defenderShrineHp > 0 && !hideAttackButton && !isProtected;
+    !isVillageWar &&
+    isUserAttacker &&
+    war.defenderShrineHp > 0 &&
+    !hideAttackButton &&
+    !isProtected;
 
   const canAttack = canAttackVillageWar || canAttackSectorWar;
   const canDefend = canDefendVillageWar;
 
+  // For SECTOR_WAR, shrine is "captured" when HP reaches 0 (no status tracking)
+  // For VILLAGE_WAR/WAR_RAID, shrine is captured when status is "CAPTURED"
+  const isShrineDefeated = isVillageWar
+    ? targetShrineStatus === "CAPTURED"
+    : targetShrineHp <= 0;
+
   // Get shrine status display
-  const getShrineStatusBadge = (hp: number, maxHp: number, status: string) => {
-    if (status === "CAPTURED") return { text: "Captured", className: "bg-red-500/20 text-red-500" };
-    if (hp < maxHp * 0.25) return { text: "Damaged", className: "bg-yellow-500/20 text-yellow-500" };
+  const getShrineStatusBadge = (hp: number, maxHp: number, defeated: boolean) => {
+    if (defeated) return { text: "Captured", className: "bg-red-500/20 text-red-500" };
+    if (hp < maxHp * 0.25)
+      return { text: "Damaged", className: "bg-yellow-500/20 text-yellow-500" };
     return { text: "Active", className: "bg-green-500/20 text-green-500" };
   };
 
-  const statusBadge = getShrineStatusBadge(targetShrineHp, targetShrineMaxHp, targetShrineStatus);
+  const statusBadge = getShrineStatusBadge(
+    targetShrineHp,
+    targetShrineMaxHp,
+    isShrineDefeated,
+  );
 
   // Determine the shrine sector to display
   const displaySector = isVillageWar
@@ -553,13 +647,15 @@ const WarCard = ({
             alt="War Shrine"
             width={200}
             height={200}
-            className={`${targetShrineStatus === "CAPTURED" ? "opacity-50 grayscale" : ""}`}
+            className={`${isShrineDefeated ? "opacity-50 grayscale" : ""}`}
           />
           <div className="w-full max-w-md space-y-4">
             <div>
               <p className="text-sm font-medium">
                 Shrine - Sector {displaySector}
-                <span className={`ml-2 text-xs px-2 py-0.5 rounded ${statusBadge.className}`}>
+                <span
+                  className={`ml-2 text-xs px-2 py-0.5 rounded ${statusBadge.className}`}
+                >
                   {statusBadge.text}
                 </span>
               </p>
@@ -575,10 +671,10 @@ const WarCard = ({
                       : "Competing war"}
               </p>
               <StatusBar
-                key={`${targetShrineHp}-${targetShrineStatus}`}
+                key={`${targetShrineHp}-${isShrineDefeated}`}
                 title="HP"
                 tooltip="Shrine Health"
-                color={targetShrineStatus === "CAPTURED" ? "bg-red-500" : "bg-green-500"}
+                color={isShrineDefeated ? "bg-red-500" : "bg-green-500"}
                 showText={true}
                 status="AWAKE"
                 current={Math.max(0, targetShrineHp)}
@@ -631,13 +727,15 @@ const WarCard = ({
             <div className="min-h-64">
               <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
                 <div className="m-auto text-white">
-                  <p className="text-5xl">{canDefend ? "Defending" : "Attacking"} the Shrine</p>
+                  <p className="text-5xl">
+                    {canDefend ? "Defending" : "Attacking"} the Shrine
+                  </p>
                   <Loader />
                 </div>
               </div>
             </div>
           ))}
-        {targetShrineStatus === "CAPTURED" && (
+        {isShrineDefeated && (
           <div className="text-center space-y-4 mt-4">
             <h3 className="text-2xl font-bold">Shrine Captured!</h3>
             {isVillageWar ? (
@@ -651,28 +749,40 @@ const WarCard = ({
                 ) : isUserDefender ? (
                   <p>
                     Your shrine has been captured! Your war health has taken damage.
-                    Defend this shrine to recover HP. Once the shrine HP rises above 25%,
-                    your war health will heal.
+                    Defend this shrine to recover HP. Once the shrine HP rises above
+                    25%, your war health will heal.
                   </p>
                 ) : (
                   <p>The shrine has been captured in this war.</p>
                 )
+              ) : isUserDefender ? (
+                <p>
+                  The attacker&apos;s shrine has been captured! Their war health has
+                  taken damage. Keep fighting to prevent them from recovering.
+                </p>
+              ) : isUserAttacker ? (
+                <p>
+                  Your shrine has been captured! Your war health has taken damage.
+                  Defend this shrine to recover HP. Once the shrine HP rises above 25%,
+                  your war health will heal.
+                </p>
               ) : (
-                isUserDefender ? (
-                  <p>
-                    The attacker&apos;s shrine has been captured! Their war health has
-                    taken damage. Keep fighting to prevent them from recovering.
-                  </p>
-                ) : isUserAttacker ? (
-                  <p>
-                    Your shrine has been captured! Your war health has taken damage.
-                    Defend this shrine to recover HP. Once the shrine HP rises above 25%,
-                    your war health will heal.
-                  </p>
-                ) : (
-                  <p>The shrine has been captured in this war.</p>
-                )
+                <p>The shrine has been captured in this war.</p>
               )
+            ) : hasActiveExclusiveRaid ? (
+              <>
+                <p className="mb-4">
+                  The shrine has been defeated! But before you can claim this sector,
+                  you must defeat the raid boss. Join forces with your village to take
+                  down the boss!
+                </p>
+                <RaidBrowser
+                  title="Defeat the Raid Boss!"
+                  subtitle="Complete to claim sector"
+                  initialBreak={false}
+                  sectorFilter={sector}
+                />
+              </>
             ) : (
               <>
                 <p>

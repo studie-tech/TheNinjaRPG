@@ -38,7 +38,7 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
   const categoryChartRef = useRef<HTMLCanvasElement>(null);
 
   // Chart instance for cleanup
-  const chartInstance = useRef<ChartJS<keyof ChartTypeRegistry> | null>(null);
+  const chartInstanceRef = useRef<ChartJS<keyof ChartTypeRegistry> | null>(null);
 
   // Format data for category chart - filter out totalEntries and only include categories with values > 0
   const categoryChartData = data
@@ -56,14 +56,14 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
     if (!data || !categoryChartRef.current || categoryChartData.length === 0) return;
 
     // Clean up previous chart instance
-    if (chartInstance.current) {
-      chartInstance.current.destroy();
-      chartInstance.current = null;
+    if (chartInstanceRef.current) {
+      chartInstanceRef.current.destroy();
+      chartInstanceRef.current = null;
     }
 
     const ctx = categoryChartRef.current.getContext("2d");
     if (ctx) {
-      chartInstance.current = new ChartJS(ctx, {
+      chartInstanceRef.current = new ChartJS(ctx, {
         type: "bar",
         data: {
           labels: categoryChartData.map((item) => item.category),
@@ -114,9 +114,9 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
 
     // Cleanup function
     return () => {
-      if (chartInstance.current) {
-        chartInstance.current.destroy();
-        chartInstance.current = null;
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.destroy();
+        chartInstanceRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,5 +1,6 @@
 import { detailedDiff } from "deep-object-diff";
 import { z } from "zod";
+import { tagTypes } from "@/validators/combat";
 
 export const AvailableTargets = [
   "BARRIER_BETWEEN",
@@ -61,10 +62,11 @@ export const ConditionDoesNotHaveSummon = z.object({
   description: z.string().default("Does not have a summon active"),
 });
 
-import { tagTypes } from "@/libs/combat/types";
-
 // Import effect types from the combat system
-export const AvailableEffectTypes = (tagTypes.length > 0 ? tagTypes : ["damage"]) as [string, ...string[]];
+export const AvailableEffectTypes = (tagTypes.length > 0 ? tagTypes : ["damage"]) as [
+  string,
+  ...string[],
+];
 export type AvailableEffectType = (typeof AvailableEffectTypes)[number];
 
 export const ConditionHasEffect = z.object({
@@ -81,7 +83,6 @@ export const ConditionTargetHasEffect = z.object({
   target: z.enum(AvailableTargets).default("CLOSEST_OPPONENT"),
   threshold: z.coerce.number().int().min(0).max(100).default(0),
 });
-
 
 export const ZodAllAiConditions = z.union([
   ConditionHealthBelow,

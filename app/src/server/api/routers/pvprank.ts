@@ -185,7 +185,8 @@ export const pvpRankRouter = createTRPCRouter({
           const existingDivisionReward = existingSeason.rewards.find(
             (r) => r.division === divisionReward.division,
           );
-          const existingReputation = existingDivisionReward?.rewards?.reward_reputation ?? 0;
+          const existingReputation =
+            existingDivisionReward?.rewards?.reward_reputation ?? 0;
           return {
             ...divisionReward,
             rewards: {
@@ -746,9 +747,7 @@ export const endRankedSeason = async (client: DrizzleClient, seasonId: string) =
 
   // Determine top players LP for "Sannin" rank calculation
   // Sannin is only the top 10 players who have reached Legend rank (900+ LP)
-  const legendPlayers = users.filter(
-    (u) => u.rankedLp >= RANKED_LEGEND_LP_REQUIREMENT,
-  );
+  const legendPlayers = users.filter((u) => u.rankedLp >= RANKED_LEGEND_LP_REQUIREMENT);
   const topPlayersLP = legendPlayers
     .slice(0, RANKED_SANNIN_TOP_PLAYERS)
     .map((u) => u.rankedLp);

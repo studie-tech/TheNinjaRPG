@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { rewardFields } from "./objectives";
+import { rewardFields } from "./rewards";
 
 // Possible rewards are the same as for objectives, so that we can re-use code
 export const rewardSchema = z.object(rewardFields);

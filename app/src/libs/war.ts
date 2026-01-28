@@ -252,10 +252,11 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
   } else if (activeWar.type === "SECTOR_WAR" && status === "ATTACKER_VICTORY") {
     notificationContent = `Sector ${activeWar.sector} has been claimed by ${activeWar.attackerVillage.name}. `;
   }
-  // Run updates
+
+  // Run all mutations in parallel
   await Promise.all([
-    // General updates
-    drizzleDB
+      // General updates
+      drizzleDB
       .update(war)
       .set({ status, endedAt })
       .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
@@ -562,3 +563,4 @@ export const isVillageInvolvedInAnyWar = (
     return war.warAllies.some((ally) => ally.villageId === villageId);
   });
 };
+

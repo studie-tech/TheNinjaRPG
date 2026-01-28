@@ -25,18 +25,17 @@ import * as consts from "@/drizzle/constants";
 import { createInsertSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { AllTags, SuperRefineEffects } from "@/libs/combat/types";
+import { AllTags, SuperRefineEffects } from "@/validators/combat";
+import type { ZodAllTags } from "@/validators/combat";
 import type {
-  ZodAllTags,
   ExtraState,
   BattleUserState,
   UserEffect,
   GroundEffect,
   ActionEffect,
 } from "@/libs/combat/types";
-import type { QuestContentType } from "@/validators/objectives";
-import type { QuestTrackerType } from "@/validators/objectives";
-import type { ObjectiveRewardType } from "@/validators/objectives";
+import type { QuestContentType, QuestTrackerType } from "@/validators/objectives";
+import type { ObjectiveRewardType } from "@/validators/rewards";
 import type {
   RankedSeasonDivisionReward,
   RankedLoadoutSchema,
@@ -2266,6 +2265,8 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   userSkills: many(userSkill),
   battleHistory: many(battleHistory, { relationName: "attacker" }),
   streakProgress: many(userStreakProgress),
+  raidParticipations: many(raidParticipation),
+  raidBuffs: many(userRaidBuff),
 }));
 
 export const userActivityEvent = mysqlTable("UserActivityEvent", {
@@ -3059,6 +3060,12 @@ export const quest = mysqlTable(
       .notNull(),
     endsAt: date("endsAt", { mode: "string" }),
     startsAt: date("startsAt", { mode: "string" }),
+    // Raid-specific fields (AI and sector are stored in the objective, not here)
+    raidBossMaxHealth: bigint("raidBossMaxHealth", { mode: "number" }),
+    raidBossCurrentHealth: bigint("raidBossCurrentHealth", { mode: "number" }),
+    raidEndsAt: datetime("raidEndsAt", { mode: "date", fsp: 3 }),
+    raidCaptureDeadline: datetime("raidCaptureDeadline", { mode: "date", fsp: 3 }),
+    raidGracePeriodEnd: datetime("raidGracePeriodEnd", { mode: "date", fsp: 3 }),
   },
   (table) => {
     return {
@@ -3082,12 +3089,14 @@ export const quest = mysqlTable(
         table.questRank,
         table.requiredLevel,
       ),
+      // Raid-specific indexes
+      raidEndsAtIdx: index("Quest_raidEndsAt_idx").on(table.raidEndsAt),
     };
   },
 );
 export type Quest = InferSelectModel<typeof quest>;
 
-export const questRelations = relations(quest, ({ one }) => ({
+export const questRelations = relations(quest, ({ one, many }) => ({
   village: one(village, {
     fields: [quest.requiredVillage],
     references: [village.id],
@@ -3096,6 +3105,8 @@ export const questRelations = relations(quest, ({ one }) => ({
     fields: [quest.requiredBloodlineId],
     references: [bloodline.id],
   }),
+  raidParticipations: many(raidParticipation),
+  raidDamageThresholds: many(raidDamageThreshold),
 }));
 
 export const questHistory = mysqlTable(
@@ -3159,6 +3170,124 @@ export const questHistoryRelations = relations(questHistory, ({ one }) => ({
   }),
   quest: one(quest, {
     fields: [questHistory.questId],
+    references: [quest.id],
+  }),
+}));
+
+// ============================================
+// Raid System Tables
+// ============================================
+
+export const raidParticipation = mysqlTable(
+  "RaidParticipation",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    questId: varchar("questId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    damageDealt: bigint("damageDealt", { mode: "number" }).default(0).notNull(),
+    battleCount: int("battleCount").default(0).notNull(),
+    rewardsClaimed: json("rewardsClaimed").$type<string[]>().default([]).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      uniqueQuestUserKey: unique("RaidParticipation_questId_userId").on(
+        table.questId,
+        table.userId,
+      ),
+      questIdIdx: index("RaidParticipation_questId_idx").on(table.questId),
+      userIdIdx: index("RaidParticipation_userId_idx").on(table.userId),
+      damageDealtIdx: index("RaidParticipation_damageDealt_idx").on(table.damageDealt),
+      // Composite index for leaderboard queries: WHERE questId = ? ORDER BY damageDealt DESC
+      questIdDamageDealtIdx: index("RaidParticipation_questId_damageDealt_idx").on(
+        table.questId,
+        table.damageDealt,
+      ),
+    };
+  },
+);
+export type RaidParticipation = InferSelectModel<typeof raidParticipation>;
+
+export const raidParticipationRelations = relations(raidParticipation, ({ one }) => ({
+  quest: one(quest, {
+    fields: [raidParticipation.questId],
+    references: [quest.id],
+  }),
+  user: one(userData, {
+    fields: [raidParticipation.userId],
+    references: [userData.userId],
+  }),
+}));
+
+export const raidDamageThreshold = mysqlTable(
+  "RaidDamageThreshold",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    questId: varchar("questId", { length: 191 }).notNull(),
+    damageRequired: bigint("damageRequired", { mode: "number" }).notNull(),
+    sortOrder: tinyint("sortOrder").default(0).notNull(),
+    rewards: json("rewards").$type<ObjectiveRewardType>().notNull(),
+    effects: json("effects").$type<ZodAllTags[]>().default([]).notNull(),
+    effectDurationMinutes: int("effectDurationMinutes").default(60).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      questIdIdx: index("RaidDamageThreshold_questId_idx").on(table.questId),
+      sortOrderIdx: index("RaidDamageThreshold_sortOrder_idx").on(table.sortOrder),
+    };
+  },
+);
+export type RaidDamageThreshold = InferSelectModel<typeof raidDamageThreshold>;
+
+export const raidDamageThresholdRelations = relations(raidDamageThreshold, ({ one }) => ({
+  quest: one(quest, {
+    fields: [raidDamageThreshold.questId],
+    references: [quest.id],
+  }),
+}));
+
+export const userRaidBuff = mysqlTable(
+  "UserRaidBuff",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    questId: varchar("questId", { length: 191 }).notNull(),
+    effects: json("effects").$type<ZodAllTags[]>().default([]).notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("UserRaidBuff_userId_idx").on(table.userId),
+      questIdIdx: index("UserRaidBuff_questId_idx").on(table.questId),
+      expiresAtIdx: index("UserRaidBuff_expiresAt_idx").on(table.expiresAt),
+      // Composite index for loading active buffs: WHERE userId = ? AND expiresAt > NOW()
+      userIdExpiresAtIdx: index("UserRaidBuff_userId_expiresAt_idx").on(
+        table.userId,
+        table.expiresAt,
+      ),
+    };
+  },
+);
+export type UserRaidBuff = InferSelectModel<typeof userRaidBuff>;
+
+export const userRaidBuffRelations = relations(userRaidBuff, ({ one }) => ({
+  user: one(userData, {
+    fields: [userRaidBuff.userId],
+    references: [userData.userId],
+  }),
+  quest: one(quest, {
+    fields: [userRaidBuff.questId],
     references: [quest.id],
   }),
 }));

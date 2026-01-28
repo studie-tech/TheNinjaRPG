@@ -11,7 +11,11 @@ import { serverError, baseServerResponse, errorResponse } from "../trpc";
 import { calcGlobalTravelTime } from "@/libs/travel";
 import { calcIsInVillage } from "@/libs/travel";
 import { isAtEdge, maxDistance } from "@/libs/travel";
-import { SECTOR_HEIGHT, SECTOR_WIDTH, MAP_WAR_TORN_BATTLEGROUND_SECTOR } from "@/drizzle/constants";
+import {
+  SECTOR_HEIGHT,
+  SECTOR_WIDTH,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+} from "@/drizzle/constants";
 import { secondsFromNow } from "@/utils/time";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { userData, clan, village, actionLog, war } from "@/drizzle/schema";
@@ -259,8 +263,9 @@ export const travelRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
 
-      // Guard: Only awake users can scout
-      if (!["AWAKE", "TRAVEL"].includes(user.status)) {
+      // Guard: Only awake/travel/queued users can scout
+      // QUEUED is included so users in raid queues can still see war/sector data
+      if (!["AWAKE", "TRAVEL", "QUEUED"].includes(user.status)) {
         return { users: [], village: null, sectorData: null, warData: null };
       }
       const [users, villageData, sectorData, warData] = await Promise.all([
@@ -294,10 +299,7 @@ export const travelRouter = createTRPCRouter({
           where: and(
             eq(userData.sector, user.sector),
             inArray(userData.status, ["AWAKE", "BATTLE"]),
-            or(
-              eq(userData.isBanned, false),
-              eq(userData.userId, ctx.userId),
-            ),
+            or(eq(userData.isBanned, false), eq(userData.userId, ctx.userId)),
             or(
               gte(userData.updatedAt, secondsFromNow(-36000)),
               eq(userData.userId, ctx.userId),

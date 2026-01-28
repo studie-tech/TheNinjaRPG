@@ -14,7 +14,7 @@ import { getReducedGainsDays } from "@/libs/train";
 import { getGameSettingBoost } from "@/libs/gamesettings";
 import { HomeTypeDetails } from "@/drizzle/constants";
 import type { UserRank } from "@/drizzle/constants";
-import type { StatSchemaType } from "./combat/types";
+import type { StatSchemaType } from "@/validators/combat";
 
 /**
  * Calculate the experience requirements for a given level

@@ -1,15 +1,23 @@
 import { z } from "zod";
 import { DateTimeRegExp } from "@/utils/regex";
 import {
-  UserRanks,
   LetterRanks,
   QuestTypes,
   RetryQuestDelays,
   MEDNIN_RANKS,
   HUNTING_RANKS,
   GATHERING_RANKS,
-  STARTER_VILLAGES,
 } from "@/drizzle/constants";
+import { AllTags } from "@/validators/combat";
+import { idsWithNumberField } from "@/validators/base";
+import {
+  rewardFields,
+  ObjectiveReward,
+  type ObjectiveRewardType,
+} from "@/validators/rewards";
+
+// Re-export idsWithNumberField so consumers can import from objectives
+export { idsWithNumberField };
 
 export const SimpleTasks = [
   "pvp_kills",
@@ -57,6 +65,9 @@ export const InstantTasks = [
 ] as const;
 export type InstantTasksType = (typeof InstantTasks)[number];
 
+export const RaidTasks = ["open_raid", "exclusive_raid"] as const;
+export type RaidTasksType = (typeof RaidTasks)[number];
+
 export const LocationTasks = [
   "move_to_location",
   "win_encounter_at_location",
@@ -70,85 +81,29 @@ export const allObjectiveTasks = [
   ...SimpleTasks,
   ...LocationTasks,
   ...InstantTasks,
+  ...RaidTasks,
   "reset_quest",
   "dialog",
 ] as const;
 export type AllObjectiveTask = (typeof allObjectiveTasks)[number];
-
-export const idsWithNumberField = z
-  .array(
-    z.object({
-      ids: z.array(z.string()).default([]),
-      number: z.number().default(100), // Drop chance % (0-100), default 100 = guaranteed
-      quantity: z.number().default(1), // How many items to give
-    }),
-  )
-  .default([]);
-
-export const rewardFields = {
-  reward_hunter_items: z.boolean().default(false),
-  reward_hunter_items_ids: z.array(z.string()).default([]),
-  reward_gathering_items: z.boolean().default(false),
-  reward_gathering_items_ids: z.array(z.string()).default([]),
-  reward_seichi_silver: z.coerce.number().default(0),
-  reward_money: z.coerce.number().default(0),
-  reward_clanpoints: z.coerce.number().default(0),
-  reward_anbupoints: z.coerce.number().default(0),
-  reward_exp: z.coerce.number().default(0),
-  reward_tokens: z.coerce.number().default(0),
-  reward_prestige: z.coerce.number().default(0),
-  reward_reputation: z.coerce.number().default(0),
-  reward_skillpoints: z.coerce.number().default(0),
-  reward_rank: z.enum(UserRanks).default("NONE"),
-  reward_village_membership: z.enum(STARTER_VILLAGES).default("NONE"),
-  reward_items: idsWithNumberField,
-  reward_jutsus: z.array(z.string()).default([]),
-  reward_bloodlines: z.array(z.string()).default([]),
-  reward_badges: z.array(z.string()).default([]),
-  reward_medical_experience: z.coerce.number().default(0),
-  reward_hunting_experience: z.coerce.number().default(0),
-  reward_crafting_experience: z.coerce.number().default(0),
-  reward_gathering_experience: z.coerce.number().default(0),
-  reward_war_damage: z.coerce.number().default(0), // Damage to enemy war health
-  reward_war_healing: z.coerce.number().default(0), // Heal own war health
-};
-
-export const ObjectiveReward = z.object(rewardFields);
-export type ObjectiveRewardType = z.infer<typeof ObjectiveReward>;
-
-export const hasReward = (reward: ObjectiveRewardType) => {
-  const parsedReward = ObjectiveReward.parse(reward);
-  return (
-    parsedReward.reward_money > 0 ||
-    parsedReward.reward_seichi_silver > 0 ||
-    parsedReward.reward_clanpoints > 0 ||
-    parsedReward.reward_anbupoints > 0 ||
-    parsedReward.reward_exp > 0 ||
-    parsedReward.reward_prestige > 0 ||
-    parsedReward.reward_reputation > 0 ||
-    parsedReward.reward_skillpoints > 0 ||
-    parsedReward.reward_medical_experience > 0 ||
-    parsedReward.reward_hunting_experience > 0 ||
-    parsedReward.reward_crafting_experience > 0 ||
-    parsedReward.reward_gathering_experience > 0 ||
-    parsedReward.reward_war_damage > 0 ||
-    parsedReward.reward_war_healing > 0 ||
-    parsedReward.reward_rank !== "NONE" ||
-    parsedReward.reward_village_membership !== "NONE" ||
-    parsedReward.reward_items.length > 0 ||
-    parsedReward.reward_jutsus.length > 0 ||
-    parsedReward.reward_bloodlines.length > 0 ||
-    parsedReward.reward_badges.length > 0 ||
-    parsedReward.reward_hunter_items ||
-    parsedReward.reward_gathering_items
-  );
-};
 
 export const attackerFields = {
   attackers: idsWithNumberField,
   attackers_scaled_to_user: z.coerce.boolean().default(false),
   attackers_scale_gains: z.coerce.number().min(0).max(1).default(1),
   attackers_max_per_battle: z.coerce.number().min(0).max(100).default(1),
+};
+
+// Shared fields for battle objectives (start_battle, raids, defeat_opponents)
+export const battleObjectiveFields = {
+  failObjectiveId: z.string().optional(),
+  opponent_scaled_to_user: z.coerce.boolean().default(false),
+  completionOutcome: z.enum(["Win", "Lose", "Flee", "Draw", "Any"]).default("Win"),
+  failDescription: z.string().default("You failed to defeat the opponent"),
+  fleeDescription: z.string().default("You fled from the opponent"),
+  drawDescription: z.string().default("The battle ended in a draw"),
+  scaleGains: z.coerce.number().min(0).max(1).default(1),
+  keepOriginalPools: z.coerce.boolean().default(false),
 };
 
 export const baseObjectiveFields = {
@@ -194,18 +149,11 @@ export const InstantNewQuestObjective = z.object({
 
 export const InstantStartBattleObjective = z.object({
   ...baseObjectiveFields,
-  failObjectiveId: z.string().optional(),
+  ...battleObjectiveFields,
   task: z.literal("start_battle").default("start_battle"),
   opponentAIs: idsWithNumberField.refine((data) => data.length > 0, {
     message: "At least one opponent AI is required",
   }),
-  opponent_scaled_to_user: z.coerce.boolean().default(false),
-  completionOutcome: z.enum(["Win", "Lose", "Flee", "Draw", "Any"]).default("Win"),
-  failDescription: z.string().default("You failed to defeat the opponent"),
-  fleeDescription: z.string().default("You fled from the opponent"),
-  drawDescription: z.string().default("The battle ended in a draw"),
-  scaleGains: z.coerce.number().min(0).max(1).default(1),
-  keepOriginalPools: z.coerce.boolean().default(false),
   ...rewardFields,
 });
 
@@ -294,18 +242,28 @@ export type DeliverItemType = z.infer<typeof DeliverItem>;
 
 export const DefeatOpponents = z.object({
   ...baseObjectiveFields,
-  failObjectiveId: z.string().optional(),
+  ...battleObjectiveFields,
   task: z.literal("defeat_opponents").default("defeat_opponents"),
   opponentAIs: idsWithNumberField,
-  opponent_scaled_to_user: z.coerce.boolean().default(false),
-  completionOutcome: z.enum(["Win", "Lose", "Flee", "Draw", "Any"]).default("Win"),
-  failDescription: z.string().default("You failed to defeat the opponent"),
-  fleeDescription: z.string().default("You fled from the opponent"),
-  drawDescription: z.string().default("The battle ended in a draw"),
-  scaleGains: z.coerce.number().min(0).max(1).default(1),
-  keepOriginalPools: z.coerce.boolean().default(false),
   ...complexObjectiveFields,
 });
+
+export const RaidObjective = z.object({
+  ...baseObjectiveFields,
+  ...battleObjectiveFields,
+  task: z.enum(["open_raid", "exclusive_raid"]),
+  image: z.string().default(""),
+  // Override sector from baseObjectiveFields to be required for raids
+  sector: z.coerce.number().min(0),
+  opponentAIs: idsWithNumberField.refine((data) => data.length > 0, {
+    message: "At least one raid boss AI is required",
+  }),
+  // Override default descriptions for raid context
+  failDescription: z.string().default("You failed to defeat the raid boss"),
+  fleeDescription: z.string().default("You fled from the raid boss"),
+  ...rewardFields,
+});
+export type RaidObjectiveType = z.infer<typeof RaidObjective>;
 
 export const AllObjectives = z.union([
   SimpleObjective,
@@ -319,6 +277,7 @@ export const AllObjectives = z.union([
   DefeatOpponents,
   DialogObjective,
   EncountersAtLocation,
+  RaidObjective,
 ]);
 export type AllObjectivesType = z.infer<typeof AllObjectives>;
 
@@ -379,8 +338,15 @@ export const QuestValidatorRawSchema = z.object({
   consecutiveObjectives: z.coerce.boolean(),
   endsAt: z.string().regex(DateTimeRegExp, "Must be of format YYYY-MM-DD").nullable(),
   startsAt: z.string().regex(DateTimeRegExp, "Must be of format YYYY-MM-DD").nullable(),
+  // Raid-specific fields (only persisted data, AI and sector come from objective)
+  raidBossMaxHealth: z.coerce.number().min(1).optional().nullish(),
+  raidBossCurrentHealth: z.coerce.number().min(0).optional().nullish(),
 });
-export const QuestValidator = QuestValidatorRawSchema.superRefine((val, ctx) => {
+// Shared superRefine logic for quest validation
+const questSuperRefine = (
+  val: z.infer<typeof QuestValidatorRawSchema>,
+  ctx: z.RefinementCtx,
+) => {
   if (["daily"].includes(val.questType)) {
     if (val.content.objectives.length < 3 || val.content.objectives.length > 7) {
       ctx.addIssue({
@@ -389,8 +355,91 @@ export const QuestValidator = QuestValidatorRawSchema.superRefine((val, ctx) => 
       });
     }
   }
-});
+  if (val.questType === "raid") {
+    if (val.content.objectives.length !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Raid quests must have exactly one objective",
+      });
+    }
+    const objective = val.content.objectives[0];
+    const objectiveTask = objective?.task;
+    if (objectiveTask && !["open_raid", "exclusive_raid"].includes(objectiveTask)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Raid quest objective must be 'open_raid' or 'exclusive_raid'",
+      });
+    }
+    // Validate opponentAIs is present in objective (handled by schema refinement, but validate here too)
+    const opponentAIs = (objective as { opponentAIs?: { ids: string[] }[] })
+      ?.opponentAIs;
+    if (!opponentAIs || opponentAIs.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "Raid quest objective must have at least one boss AI (configure opponentAIs in the objective)",
+        path: ["content", "objectives", 0, "opponentAIs"],
+      });
+    }
+
+    // Both raid types require a sector number in the objective
+    const sector = (objective as { sector?: number })?.sector;
+    if (sector === null || sector === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Raids require a sector number in the objective (sector field)",
+        path: ["content", "objectives", 0, "sector"],
+      });
+    }
+
+    // Validate raid-specific fields (persisted in quest table)
+    if (!val.raidBossMaxHealth || val.raidBossMaxHealth < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Raid quests require a boss max health > 0",
+        path: ["raidBossMaxHealth"],
+      });
+    }
+    if (val.raidBossCurrentHealth === null || val.raidBossCurrentHealth === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Raid quests require current boss health",
+        path: ["raidBossCurrentHealth"],
+      });
+    }
+    // Validate that raidBossCurrentHealth doesn't exceed raidBossMaxHealth
+    if (
+      val.raidBossCurrentHealth !== undefined &&
+      val.raidBossCurrentHealth !== null &&
+      val.raidBossMaxHealth !== undefined &&
+      val.raidBossMaxHealth !== null &&
+      val.raidBossCurrentHealth > val.raidBossMaxHealth
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Raid boss current health cannot exceed max health",
+        path: ["raidBossCurrentHealth"],
+      });
+    }
+  }
+};
+
+export const QuestValidator = QuestValidatorRawSchema.superRefine(questSuperRefine);
 export type ZodQuestType = z.infer<typeof QuestValidator>;
+
+// Combined schema for the quest edit form that includes:
+// - All quest fields from QuestValidatorRawSchema
+// - Reward fields at top level (for easy form binding)
+// - Scene fields at top level (for easy form binding)
+// - The superRefine validations
+export const QuestFormRawSchema = QuestValidatorRawSchema.merge(ObjectiveReward).merge(
+  z.object({
+    sceneBackground: z.string().default(""),
+    sceneCharacters: z.array(z.string()).default([]),
+  }),
+);
+export const QuestFormSchema = QuestFormRawSchema.superRefine(questSuperRefine);
+export type ZodQuestFormType = z.infer<typeof QuestFormSchema>;
 
 export const getObjectiveSchema = (type: string) => {
   if (SimpleTasks.includes(type as (typeof SimpleTasks)[number])) {
@@ -415,6 +464,8 @@ export const getObjectiveSchema = (type: string) => {
     return DialogObjective;
   } else if (type === "win_encounter_at_location") {
     return EncountersAtLocation;
+  } else if (type === "open_raid" || type === "exclusive_raid") {
+    return RaidObjective;
   }
   throw new Error(`Unknown objective task ${type}`);
 };
@@ -426,3 +477,18 @@ export const allObjectiveSchema = z.union([
   DeliverItem,
   DefeatOpponents,
 ]);
+
+/**
+ * Validator schema for Raid Damage Threshold configuration.
+ * Used for creating/updating threshold records via the admin UI.
+ */
+export const RaidDamageThresholdValidator = z.object({
+  id: z.string().optional(), // Optional for creates
+  questId: z.string(),
+  damageRequired: z.coerce.number().min(1, "Damage must be at least 1"),
+  sortOrder: z.coerce.number().min(0).max(255).default(0),
+  rewards: ObjectiveReward,
+  effects: z.array(AllTags).default([]),
+  effectDurationMinutes: z.coerce.number().min(1).max(10080).default(60),
+});
+export type RaidDamageThresholdType = z.infer<typeof RaidDamageThresholdValidator>;

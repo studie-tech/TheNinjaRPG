@@ -21,5 +21,3 @@ export default __t.object("Projectile", {
   damage: __t.u32(),
   critRoll: __t.f64(),
 });
-
-

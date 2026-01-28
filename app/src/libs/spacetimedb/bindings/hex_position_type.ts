@@ -14,5 +14,3 @@ export default __t.object("HexPosition", {
   col: __t.u32(),
   row: __t.u32(),
 });
-
-

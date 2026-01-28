@@ -6,7 +6,7 @@ import Modal2 from "@/layout/Modal2";
 import { CircleHelp, RotateCcw } from "lucide-react";
 import { getObjectiveImage } from "@/libs/objectives";
 import { X, Check, Gift, Loader2 } from "lucide-react";
-import { hasReward } from "@/validators/objectives";
+import { hasReward } from "@/validators/rewards";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { getObjectiveSchema } from "@/validators/objectives";
 import { isObjectiveComplete } from "@/libs/objectives";
@@ -16,7 +16,8 @@ import { secondsFromDate } from "@/utils/time";
 
 import { Button } from "@/components/ui/button";
 import type { Quest } from "@/drizzle/schema";
-import type { AllObjectivesType, ObjectiveRewardType } from "@/validators/objectives";
+import type { AllObjectivesType } from "@/validators/objectives";
+import type { ObjectiveRewardType } from "@/validators/rewards";
 import type { QuestTrackerType } from "@/validators/objectives";
 
 interface ObjectiveProps {

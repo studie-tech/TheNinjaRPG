@@ -43,5 +43,3 @@ export default __t.object("GameSession", {
   createdAt: __t.u64(),
   spacetimedbIdentity: __t.string(),
 });
-
-

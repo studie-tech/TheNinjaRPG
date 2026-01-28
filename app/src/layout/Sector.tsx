@@ -68,6 +68,8 @@ import { createGenericStructure } from "@/libs/threejs/sector";
 import { hasRequiredRank } from "@/libs/train";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import HealingPopover from "@/layout/HealingPopover";
+import RaidBrowser from "@/layout/RaidBrowser";
+import { Swords } from "lucide-react";
 
 interface SectorProps {
   sector: number;
@@ -106,21 +108,22 @@ const Sector: React.FC<SectorProps> = (props) => {
   );
   const [logbookModalOpen, setLogbookModalOpen] = useState<boolean>(false);
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
+  const [showRaidModal, setShowRaidModal] = useState<boolean>(false);
 
   // References which shouldn't update
-  const origin = useRef<TerrainHex | undefined>(undefined);
+  const originRef = useRef<TerrainHex | undefined>(undefined);
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const pathFinder = useRef<PathCalculator | null>(null);
-  const grid = useRef<Grid<TerrainHex> | null>(null);
-  const users = useRef<SectorUser[]>([]);
-  const showUsers = useRef<boolean>(showActive);
-  const minLevelDraw = useRef<number>(storedLvl);
-  const showAllyAttack = useRef<boolean>(allyAttack);
+  const pathFinderRef = useRef<PathCalculator | null>(null);
+  const gridRef = useRef<Grid<TerrainHex> | null>(null);
+  const usersRef = useRef<SectorUser[]>([]);
+  const showUsersRef = useRef<boolean>(showActive);
+  const minLevelDrawRef = useRef<number>(storedLvl);
+  const showAllyAttackRef = useRef<boolean>(allyAttack);
   const userRef = useRef<UserWithRelations>(undefined);
-  const lastAutoAttackTime = useRef<number | null>(null);
+  const lastAutoAttackTimeRef = useRef<number | null>(null);
   const cameraRef = useRef<OrthographicCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const cameraTargetPosition = useRef<{ x: number; y: number } | null>(null);
+  const cameraTargetPositionRef = useRef<{ x: number; y: number } | null>(null);
   const mouse = new Vector2();
 
   // tRPC utility
@@ -136,6 +139,13 @@ const Sector: React.FC<SectorProps> = (props) => {
   const fetchedUsers = data?.users;
   const warData = data?.warData;
   const structures = villageData?.structures || [];
+
+  // Query for raids in this sector (only when user is in this sector)
+  const { data: sectorRaidsData } = api.raids.getAvailableRaids.useQuery(
+    { sector: sector },
+    { enabled: userData?.sector === sector && sector !== undefined },
+  );
+  const activeRaid = sectorRaidsData?.raids?.[0] ?? null;
 
   // If we're in an active sector war, then we add a shrine to the center of the sector
   if (!structures.find((s) => s.route === "/shrine")) {
@@ -175,9 +185,9 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   // Movement based on ASDQWE keys
   const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (origin.current && pathFinder.current) {
-      const x = origin.current.col;
-      const y = origin.current.row;
+    if (originRef.current && pathFinderRef.current) {
+      const x = originRef.current.col;
+      const y = originRef.current.row;
       switch (event.key) {
         // Up & Down
         case "w":
@@ -242,50 +252,50 @@ const Sector: React.FC<SectorProps> = (props) => {
     skipStateUpdate = false,
   ) => {
     if (data.userId) {
-      if (users.current) {
+      if (usersRef.current) {
         // Filter out stealthed users (defense in depth - server should already filter these)
         // Only filter if it's not the current user (user should always see themselves)
         // Uses isUserCurrentlyStealthed to check expiry, mirroring server-side logic
         if (isUserCurrentlyStealthed(data) && data.userId !== userData?.userId) {
           // Remove from local users list if they went stealth
-          const idx = users.current.findIndex((u) => u.userId === data.userId);
+          const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
           if (idx !== -1) {
-            users.current.splice(idx, 1);
+            usersRef.current.splice(idx, 1);
             if (!skipStateUpdate) {
-              setSorrounding(users.current.filter((u) => u?.userId) || []);
+              setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
             }
           }
           return;
         }
 
         const allianceStatus = getAllyStatus(userData?.village, data.villageId);
-        const idx = users.current
+        const idx = usersRef.current
           .filter((u) => u.userId)
           .findIndex((u) => u.userId === data.userId);
-        if (idx !== -1 && users.current[idx]) {
+        if (idx !== -1 && usersRef.current[idx]) {
           if (instantMove) {
             // User exists - instant movement
-            users.current[idx] = { ...data, allianceStatus };
+            usersRef.current[idx] = { ...data, allianceStatus };
           } else {
             // User exists - animate movement
-            const currentHex = findHex(grid.current, {
-              x: users.current[idx]?.longitude ?? 0,
-              y: users.current[idx]?.latitude ?? 0,
+            const currentHex = findHex(gridRef.current, {
+              x: usersRef.current[idx]?.longitude ?? 0,
+              y: usersRef.current[idx]?.latitude ?? 0,
             });
-            const targetHex = findHex(grid.current, {
+            const targetHex = findHex(gridRef.current, {
               x: data.longitude,
               y: data.latitude,
             });
-            if (pathFinder.current && currentHex && targetHex) {
-              const path = pathFinder.current.getShortestPath(currentHex, targetHex);
+            if (pathFinderRef.current && currentHex && targetHex) {
+              const path = pathFinderRef.current.getShortestPath(currentHex, targetHex);
               if (path) {
                 for (const tile of path) {
-                  if (users.current[idx]) {
-                    users.current[idx] = {
+                  if (usersRef.current[idx]) {
+                    usersRef.current[idx] = {
                       ...data,
-                      avatar: users.current[idx].avatar,
-                      avatarLight: users.current[idx].avatarLight,
-                      username: users.current[idx].username,
+                      avatar: usersRef.current[idx].avatar,
+                      avatarLight: usersRef.current[idx].avatarLight,
+                      username: usersRef.current[idx].username,
                       allianceStatus,
                       longitude: tile.col,
                       latitude: tile.row,
@@ -298,19 +308,19 @@ const Sector: React.FC<SectorProps> = (props) => {
           }
         } else {
           // New user enters
-          users.current.push({ ...data, allianceStatus });
+          usersRef.current.push({ ...data, allianceStatus });
         }
         // Remove users who are no longer in the sector
-        users.current
+        usersRef.current
           .map((user, idx) => (user.sector !== props.sector ? idx : null))
           .filter((idx): idx is number => idx !== null)
           .reverse()
-          .map((idx) => users.current?.splice(idx, 1));
+          .map((idx) => usersRef.current?.splice(idx, 1));
       }
     }
     // Only update state if not explicitly skipped (to avoid excessive updates during animation)
     if (!skipStateUpdate) {
-      setSorrounding(users.current.filter((u) => u?.userId) || []);
+      setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
     }
   };
 
@@ -328,15 +338,24 @@ const Sector: React.FC<SectorProps> = (props) => {
       }
       // If success with data, then we moved
       const data = res.data;
-      if (userData && res.success && data && pathFinder.current && origin.current) {
+      if (
+        userData &&
+        res.success &&
+        data &&
+        pathFinderRef.current &&
+        originRef.current
+      ) {
         // Get the path the user moved
-        const target = findHex(grid.current, { x: data.longitude, y: data.latitude });
+        const target = findHex(gridRef.current, {
+          x: data.longitude,
+          y: data.latitude,
+        });
         if (!target) return;
-        const path = pathFinder.current.getShortestPath(origin.current, target);
+        const path = pathFinderRef.current.getShortestPath(originRef.current, target);
         if (!path) return;
         // Show movement 1 step at a time with a small sleep between moves
         for (const tile of path) {
-          origin.current = tile;
+          originRef.current = tile;
           void updateUsersList(
             {
               ...userData,
@@ -351,7 +370,7 @@ const Sector: React.FC<SectorProps> = (props) => {
           // Update camera target position if zoomed in
           if (cameraRef.current && cameraRef.current.zoom > 1.5) {
             const { x, y } = tile.center;
-            cameraTargetPosition.current = { x, y };
+            cameraTargetPositionRef.current = { x, y };
           }
 
           await sleep(50);
@@ -366,7 +385,7 @@ const Sector: React.FC<SectorProps> = (props) => {
           latitude: data.latitude,
         });
         // Update surrounding users state at the end
-        setSorrounding(users.current.filter((u) => u?.userId) || []);
+        setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
       }
       // Check Quests
       if (userData && data) {
@@ -437,11 +456,11 @@ const Sector: React.FC<SectorProps> = (props) => {
   });
 
   useEffect(() => {
-    minLevelDraw.current = storedLvl;
+    minLevelDrawRef.current = storedLvl;
   }, [storedLvl]);
 
   useEffect(() => {
-    showAllyAttack.current = allyAttack;
+    showAllyAttackRef.current = allyAttack;
   }, [allyAttack]);
 
   // Listening to webcket events
@@ -461,7 +480,7 @@ const Sector: React.FC<SectorProps> = (props) => {
   }, []);
 
   useEffect(() => {
-    showUsers.current = showActive;
+    showUsersRef.current = showActive;
   }, [showActive]);
 
   // Auto-attack logic for ANBU users
@@ -470,14 +489,14 @@ const Sector: React.FC<SectorProps> = (props) => {
       autoAttackMode &&
       userData?.anbuId &&
       userData?.status === "AWAKE" &&
-      origin.current &&
+      originRef.current &&
       !isMoving &&
       !isAttacking &&
       sector === userData?.village?.sector
     ) {
       // Check if enough time has passed since last attack
       const now = Date.now();
-      const lastAttackTime = lastAutoAttackTime.current;
+      const lastAttackTime = lastAutoAttackTimeRef.current;
       const attackDelaySeconds = parseInt(
         safeLocalStorageGetItem("autoAttackDelay") || "5",
       );
@@ -488,7 +507,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       }
 
       // Find nearby enemies to attack
-      const nearbyEnemies = users.current.filter((user) => {
+      const nearbyEnemies = usersRef.current.filter((user) => {
         if (!user.userId || user.userId === userData.userId) return false;
         if (user.status !== "AWAKE") return false;
 
@@ -520,27 +539,27 @@ const Sector: React.FC<SectorProps> = (props) => {
         // Find the closest enemy
         const closestEnemy = nearbyEnemies.reduce((closest, enemy) => {
           const currentDistance =
-            Math.abs(enemy.longitude - origin.current!.col) +
-            Math.abs(enemy.latitude - origin.current!.row);
+            Math.abs(enemy.longitude - originRef.current!.col) +
+            Math.abs(enemy.latitude - originRef.current!.row);
           const closestDistance =
-            Math.abs(closest.longitude - origin.current!.col) +
-            Math.abs(closest.latitude - origin.current!.row);
+            Math.abs(closest.longitude - originRef.current!.col) +
+            Math.abs(closest.latitude - originRef.current!.row);
 
           return currentDistance < closestDistance ? enemy : closest;
         });
         // If on the same tile, attack, otherwise setTarget
         if (
-          closestEnemy.longitude === origin.current.col &&
-          closestEnemy.latitude === origin.current.row
+          closestEnemy.longitude === originRef.current.col &&
+          closestEnemy.latitude === originRef.current.row
         ) {
           // Update last attack time and attack
-          lastAutoAttackTime.current = now;
+          lastAutoAttackTimeRef.current = now;
           attack({
             userId: closestEnemy.userId,
             longitude: closestEnemy.longitude,
             latitude: closestEnemy.latitude,
             sector: sector,
-            asset: origin.current?.asset,
+            asset: originRef.current?.asset,
           });
         } else {
           setTarget({ x: closestEnemy.longitude, y: closestEnemy.latitude });
@@ -552,10 +571,10 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   // Clear heal target if user moves away or target moves away
   useEffect(() => {
-    if (healTargetUser && userData && origin.current) {
+    if (healTargetUser && userData && originRef.current) {
       const isOnSameTile =
-        healTargetUser.longitude === origin.current.col &&
-        healTargetUser.latitude === origin.current.row;
+        healTargetUser.longitude === originRef.current.col &&
+        healTargetUser.latitude === originRef.current.row;
 
       if (!isOnSameTile) {
         setHealTargetUser(null);
@@ -565,17 +584,24 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   // This is where the actual movement happens
   useEffect(() => {
-    if (target && origin.current && pathFinder.current && userData && userData.avatar) {
+    if (
+      target &&
+      originRef.current &&
+      pathFinderRef.current &&
+      userData &&
+      userData.avatar
+    ) {
       // Check user status
       if (userData.status !== "AWAKE") {
         setTarget(null);
         return;
       }
       // Get target hex
-      const targetHex = grid?.current?.getHex({ col: target.x, row: target.y });
+      const targetHex = gridRef?.current?.getHex({ col: target.x, row: target.y });
       // Guards
       if (!targetHex) return;
-      if (target.x === origin.current.col && target.y === origin.current.row) return;
+      if (target.x === originRef.current.col && target.y === originRef.current.row)
+        return;
       // Clear heal target if moving away
       if (healTargetUser) {
         setHealTargetUser(null);
@@ -584,8 +610,8 @@ const Sector: React.FC<SectorProps> = (props) => {
       if (!isMoving) {
         document.body.style.cursor = "wait";
         move({
-          curLongitude: origin.current.col,
-          curLatitude: origin.current.row,
+          curLongitude: originRef.current.col,
+          curLatitude: originRef.current.row,
           longitude: targetHex.col,
           latitude: targetHex.row,
           sector: sector,
@@ -620,7 +646,7 @@ const Sector: React.FC<SectorProps> = (props) => {
           })
           .filter((u) => u?.userId) || [];
       setSorrounding(enrichedData);
-      users.current = enrichedData;
+      usersRef.current = enrichedData;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchedUsers]);
@@ -699,7 +725,10 @@ const Sector: React.FC<SectorProps> = (props) => {
         isContextLost = false;
       };
       renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
-      renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored);
+      renderer.domElement.addEventListener(
+        "webglcontextrestored",
+        handleContextRestored,
+      );
 
       // Setup camara
       const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
@@ -717,16 +746,16 @@ const Sector: React.FC<SectorProps> = (props) => {
         animatedMaterials,
         honeycombGrid,
       } = drawSector(WIDTH, prng, villageData, props.tile, lightLayout, structures);
-      grid.current = honeycombGrid;
+      gridRef.current = honeycombGrid;
 
       // Draw any village in this sector
-      drawVillage(group_assets, villageData, structures, grid.current, lightLayout);
+      drawVillage(group_assets, villageData, structures, gridRef.current, lightLayout);
 
       // Reverse the order of objects in the group_assets
       group_assets.children.sort((a, b) => b.position.y - a.position.y);
 
       // Store current highlights and create a path calculator object
-      pathFinder.current = new PathCalculator(grid.current);
+      pathFinderRef.current = new PathCalculator(gridRef.current);
 
       // Intersections & highlights from interactions
       let highlights = new Set<string>();
@@ -737,8 +766,8 @@ const Sector: React.FC<SectorProps> = (props) => {
       const group_quest = new Group();
 
       // Set the origin
-      if (!origin.current) {
-        origin.current = grid?.current?.getHex({
+      if (!originRef.current) {
+        originRef.current = gridRef?.current?.getHex({
           col: userRef.current.longitude,
           row: userRef.current.latitude,
         });
@@ -763,8 +792,8 @@ const Sector: React.FC<SectorProps> = (props) => {
       controls.addEventListener("change", onZoomChange);
 
       // Set initial position of controls & camera
-      if (isInSector && origin.current) {
-        const { x, y } = origin.current.center;
+      if (isInSector && originRef.current) {
+        const { x, y } = originRef.current.center;
         controls.target.set(-WIDTH / 2 - x, -HEIGHT / 2 - y, 0);
         camera.position.copy(controls.target);
       }
@@ -795,14 +824,14 @@ const Sector: React.FC<SectorProps> = (props) => {
               const target = i.object.userData.tile as TerrainHex;
               setTarget({ x: target.col, y: target.row });
               return false;
-            } else if (showUsers.current && i.object.userData.type === "attack") {
-              const target = users.current?.find(
+            } else if (showUsersRef.current && i.object.userData.type === "attack") {
+              const target = usersRef.current?.find(
                 (u) => u.userId === i.object.userData.userId,
               );
               if (target) {
                 if (
-                  target.longitude === origin.current?.col &&
-                  target.latitude === origin.current?.row &&
+                  target.longitude === originRef.current?.col &&
+                  target.latitude === originRef.current?.row &&
                   !isAttacking
                 ) {
                   document.body.style.cursor = "wait";
@@ -812,21 +841,21 @@ const Sector: React.FC<SectorProps> = (props) => {
                     longitude: target.longitude,
                     latitude: target.latitude,
                     sector: sector,
-                    asset: origin.current?.asset,
+                    asset: originRef.current?.asset,
                   });
                 } else {
                   setTarget({ x: target.longitude, y: target.latitude });
                 }
               }
               return false;
-            } else if (showUsers.current && i.object.userData.type === "heal") {
-              const target = users.current?.find(
+            } else if (showUsersRef.current && i.object.userData.type === "heal") {
+              const target = usersRef.current?.find(
                 (u) => u.userId === i.object.userData.userId,
               );
               if (target) {
                 if (
-                  target.longitude === origin.current?.col &&
-                  target.latitude === origin.current?.row
+                  target.longitude === originRef.current?.col &&
+                  target.latitude === originRef.current?.row
                 ) {
                   setHealTargetUser(target);
                 } else {
@@ -834,11 +863,11 @@ const Sector: React.FC<SectorProps> = (props) => {
                 }
               }
               return false;
-            } else if (showUsers.current && i.object.userData.type === "info") {
+            } else if (showUsersRef.current && i.object.userData.type === "info") {
               const userId = i.object.userData.userId as string;
               void router.push(`/userid/${userId}`);
               return false;
-            } else if (showUsers.current && i.object.userData.type === "marker") {
+            } else if (showUsersRef.current && i.object.userData.type === "marker") {
               return true;
             } else if (
               i.object.userData.type === "battleMarker" &&
@@ -882,18 +911,18 @@ const Sector: React.FC<SectorProps> = (props) => {
         raycaster.setFromCamera(mouse, camera);
 
         // Assume we have user, users and a grid
-        if (userRef.current && users.current && grid.current) {
+        if (userRef.current && usersRef.current && gridRef.current) {
           // Draw all users on the map + indicators for positions with multiple users
           const endUsers = profiler.mark("animate_users");
           userAngle = drawUsers({
             group_users: group_users,
-            users: showUsers.current
-              ? users.current
-              : users.current.filter((u) => u.userId === userRef?.current?.userId),
-            grid: grid.current,
+            users: showUsersRef.current
+              ? usersRef.current
+              : usersRef.current.filter((u) => u.userId === userRef?.current?.userId),
+            grid: gridRef.current,
             lastTime: lastTime,
             angle: userAngle,
-            minLevel: minLevelDraw.current,
+            minLevel: minLevelDrawRef.current,
           });
           lastTime = Date.now();
           endUsers();
@@ -903,8 +932,8 @@ const Sector: React.FC<SectorProps> = (props) => {
           currentTooltips = intersectUsers({
             group_users,
             raycaster,
-            allyAttack: showAllyAttack.current,
-            users: users.current,
+            allyAttack: showAllyAttackRef.current,
+            users: usersRef.current,
             userData: userRef.current,
             currentTooltips,
           });
@@ -912,18 +941,18 @@ const Sector: React.FC<SectorProps> = (props) => {
 
           // Draw quests
           const endQuest = profiler.mark("animate_quest");
-          drawQuest({ group_quest, user: userRef.current, grid: grid.current });
+          drawQuest({ group_quest, user: userRef.current, grid: gridRef.current });
           endQuest();
         }
 
         // Detect intersections with tiles for movement
-        if (pathFinder.current && origin.current) {
+        if (pathFinderRef.current && originRef.current) {
           const endIntersectTiles = profiler.mark("animate_intersect_tiles");
           highlights = intersectTiles({
             group_tiles: group_interaction, // PERFORMANCE: Raycast against interaction meshes
             raycaster,
-            pathFinder: pathFinder.current,
-            origin: origin.current,
+            pathFinder: pathFinderRef.current,
+            origin: originRef.current,
             currentHighlights: highlights,
           });
           endIntersectTiles();
@@ -935,7 +964,7 @@ const Sector: React.FC<SectorProps> = (props) => {
           smoothCameraFollow({
             camera: cameraRef.current,
             controls: controlsRef.current,
-            targetPosition: cameraTargetPosition.current,
+            targetPosition: cameraTargetPositionRef.current,
             width: cachedWidth,
             height: cachedHeight,
           });
@@ -992,7 +1021,10 @@ const Sector: React.FC<SectorProps> = (props) => {
           sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
           controls.removeEventListener("change", onZoomChange);
           rendererElement.removeEventListener("click", onClick, true);
-          renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+          renderer.domElement.removeEventListener(
+            "webglcontextlost",
+            handleContextLost,
+          );
           renderer.domElement.removeEventListener(
             "webglcontextrestored",
             handleContextRestored,
@@ -1045,14 +1077,43 @@ const Sector: React.FC<SectorProps> = (props) => {
           </div>
         </div>
       )}
-      {props.showSorrounding && sorrounding && userData && origin.current && (
+      {activeRaid && (
+        <div className="absolute bottom-4 right-4 z-20 rounded-lg bg-black/70 p-4 text-white shadow-lg">
+          <div className="flex items-center gap-4">
+            <Swords className="h-12 w-12 text-red-500" />
+            <div>
+              <h3 className="text-lg font-semibold">{activeRaid.name}</h3>
+              <p className="text-sm text-gray-300">Active Raid in this sector</p>
+              <button
+                type="button"
+                onClick={() => setShowRaidModal(true)}
+                className="mt-2 inline-block rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+              >
+                View Raid
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showRaidModal && userData && (
+        <Modal2 isOpen={showRaidModal} setIsOpen={setShowRaidModal} title="Sector Raid">
+          <RaidBrowser
+            title="Sector Raid"
+            subtitle={`Sector ${userData.sector}`}
+            initialBreak={false}
+            viewOnly={false}
+            sectorFilter={userData.sector}
+          />
+        </Modal2>
+      )}
+      {props.showSorrounding && sorrounding && userData && originRef.current && (
         <SorroundingUsers
           setIsOpen={props.setShowSorrounding}
           users={sorrounding}
           userData={userData}
           timeDiff={timeDiff}
           updateUser={updateUser}
-          hex={origin.current}
+          hex={originRef.current}
           allyAttack={allyAttack}
           setAllyAttack={setAllyAttack}
           storedLvl={storedLvl}
@@ -1065,7 +1126,7 @@ const Sector: React.FC<SectorProps> = (props) => {
                 longitude: target.longitude,
                 latitude: target.latitude,
                 sector: sector,
-                asset: origin.current?.asset,
+                asset: originRef.current?.asset,
               });
             }
           }}
@@ -1115,7 +1176,7 @@ const Sector: React.FC<SectorProps> = (props) => {
           </div>
         </div>
       )}
-      {healTargetUser && userData && origin.current && (
+      {healTargetUser && userData && originRef.current && (
         <div className="pointer-events-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
           <HealingPopover
             targetUser={healTargetUser}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { rewardFields } from "./objectives";
+import { rewardFields } from "./rewards";
 import { ActivityStreakTypes } from "@/drizzle/constants";
 
 // Reward schema - reuse from objectives

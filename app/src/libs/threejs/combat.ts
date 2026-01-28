@@ -70,7 +70,8 @@ import {
 import type { GameAsset, UserData } from "@/drizzle/schema";
 import type { Object3D } from "three";
 import type { TerrainHex, HexagonalFaceMesh } from "../hexgrid";
-import type { GroundEffect, UserEffect, BarrierTagType } from "@/libs/combat/types";
+import type { BarrierTagType } from "@/validators/combat";
+import type { GroundEffect, UserEffect } from "@/libs/combat/types";
 import type { ReturnedUserState, CombatAction } from "@/libs/combat/types";
 import type { ReturnedBattle, CachedIntersections } from "@/libs/combat/types";
 import type { BattleMaps } from "@/hooks/combat";

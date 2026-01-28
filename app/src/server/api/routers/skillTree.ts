@@ -9,7 +9,7 @@ import { canChangeContent } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/socials";
 import { calculateContentDiff } from "@/utils/diff";
 import { IMG_AVATAR_DEFAULT, COST_SKILL_RESET } from "@/drizzle/constants";
-import { SkillTreeValidator } from "@/libs/combat/types";
+import { SkillTreeValidator } from "@/validators/combat";
 import { canUnequipAllUsers } from "@/utils/permissions";
 import { actionLog } from "@/drizzle/schema";
 import { getUserFederalStatus } from "@/utils/paypal";

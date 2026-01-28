@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { damageUser } from "@/libs/combat/tags";
 import { calcLevel, calcHP } from "@/libs/profile";
 import { StatTypes, GeneralTypes } from "@/drizzle/constants";
-import { statSchema, actSchema, confSchema } from "@/libs/combat/types";
+import { statSchema, actSchema, confSchema } from "@/validators/combat";
 import { dmgConfig } from "@/libs/combat/constants";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";

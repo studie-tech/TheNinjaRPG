@@ -10,6 +10,7 @@ import { battleHistory, battleAction, historicalAvatar, clan } from "@/drizzle/s
 import { conversation, user2conversation, conversationComment } from "@/drizzle/schema";
 import { rankedPvpQueue, warKill, dataBattleAction } from "@/drizzle/schema";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
+import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { secondsFromNow } from "@/utils/time";
 import { updateGameSetting, checkGameTimer } from "@/libs/gamesettings";
 import { automatedModeration, dailyBankInterest } from "@/drizzle/schema";
@@ -360,6 +361,9 @@ export async function GET() {
     await drizzleDB.execute(
       sql`DELETE FROM ${dataBattleAction} WHERE updatedAt < CURRENT_TIMESTAMP(3) - INTERVAL 30 DAY`,
     );
+
+    // Handle expired exclusive raids - return sectors to neutral if raid timed out without boss defeat
+    await cleanupExpiredExclusiveRaids(drizzleDB);
 
     return Response.json(`OK`);
   } catch (cause) {

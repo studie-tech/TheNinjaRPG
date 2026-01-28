@@ -128,19 +128,23 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
           <b>Offences</b>
           <div className="flex flex-row items-center">
             <ElementImage element="Ninjutsu" className="w-6 h-6 mr-1 mb-1" />
-            Ninjutsu offence: {Number(userData.ninjutsuOffence.toFixed(2)).toLocaleString()}
+            Ninjutsu offence:{" "}
+            {Number(userData.ninjutsuOffence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Genjutsu" className="w-6 h-6 mr-1 mb-1" />
-            Genjutsu offence: {Number(userData.genjutsuOffence.toFixed(2)).toLocaleString()}
+            Genjutsu offence:{" "}
+            {Number(userData.genjutsuOffence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Taijutsu" className="w-6 h-6 mr-1 mb-1" />
-            Taijutsu offence: {Number(userData.taijutsuOffence.toFixed(2)).toLocaleString()}
+            Taijutsu offence:{" "}
+            {Number(userData.taijutsuOffence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Bukijutsu" className="w-6 h-6 mr-1 mb-1" />
-            Bukijutsu offence: {Number(userData.bukijutsuOffence.toFixed(2)).toLocaleString()}
+            Bukijutsu offence:{" "}
+            {Number(userData.bukijutsuOffence.toFixed(2)).toLocaleString()}
           </div>
         </div>
 
@@ -148,19 +152,23 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
           <b>Defences</b>
           <div className="flex flex-row items-center">
             <ElementImage element="Ninjutsu" className="w-6 h-6 mr-1 mb-1" />
-            Ninjutsu defence: {Number(userData.ninjutsuDefence.toFixed(2)).toLocaleString()}
+            Ninjutsu defence:{" "}
+            {Number(userData.ninjutsuDefence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Genjutsu" className="w-6 h-6 mr-1 mb-1" />
-            Genjutsu defence: {Number(userData.genjutsuDefence.toFixed(2)).toLocaleString()}
+            Genjutsu defence:{" "}
+            {Number(userData.genjutsuDefence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Taijutsu" className="w-6 h-6 mr-1 mb-1" />
-            Taijutsu defence: {Number(userData.taijutsuDefence.toFixed(2)).toLocaleString()}
+            Taijutsu defence:{" "}
+            {Number(userData.taijutsuDefence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Bukijutsu" className="w-6 h-6 mr-1 mb-1" />
-            Bukijutsu defence: {Number(userData.bukijutsuDefence.toFixed(2)).toLocaleString()}
+            Bukijutsu defence:{" "}
+            {Number(userData.bukijutsuDefence.toFixed(2)).toLocaleString()}
           </div>
         </div>
       </div>
@@ -214,13 +222,13 @@ interface GraphsTabProps {
 }
 
 export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
-  const statsChart = useRef<HTMLCanvasElement>(null);
-  const generalsChart = useRef<HTMLCanvasElement>(null);
+  const statsChartRef = useRef<HTMLCanvasElement>(null);
+  const generalsChartRef = useRef<HTMLCanvasElement>(null);
   const userElements = getUserElements(userData);
 
   useEffect(() => {
-    const statsCtx = statsChart?.current?.getContext("2d");
-    const generalsCtx = generalsChart?.current?.getContext("2d");
+    const statsCtx = statsChartRef?.current?.getContext("2d");
+    const generalsCtx = generalsChartRef?.current?.getContext("2d");
     if (statsCtx && generalsCtx && userData) {
       // Update stats chart
       const localTheme = safeLocalStorageGetItem("theme");
@@ -343,13 +351,13 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
       <div>
         <p className="font-bold">Generals</p>
         <div className="relative w-[99%] p-3">
-          <canvas ref={generalsChart} id="generalsChart"></canvas>
+          <canvas ref={generalsChartRef} id="generalsChartRef"></canvas>
         </div>
       </div>
       <div>
         <p className="font-bold">Strengths</p>
         <div className="relative w-[99%]">
-          <canvas ref={statsChart} id="statsChart"></canvas>
+          <canvas ref={statsChartRef} id="statsChartRef"></canvas>
         </div>
         <p className="font-bold pt-2">Elemental Proficiency</p>
         <div className="flex flex-row w-full justify-center gap-2 pt-2">
@@ -535,7 +543,6 @@ export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
       </div>
 
       {/* Training Link */}
-      
     </div>
   );
 };

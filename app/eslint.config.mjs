@@ -37,6 +37,7 @@ const config = [
       "@eslint-react/hooks-extra/no-direct-set-state-in-use-effect": "off",
       "@eslint-react/naming-convention/use-state": "off",
       "@eslint-react/no-array-index-key": "off",
+      "@eslint-react/no-use-context": "off",
 
       // TypeScript rules - these extend the nextVitals config which includes typescript-eslint
       "@typescript-eslint/array-type": "off",

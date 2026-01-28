@@ -42,7 +42,7 @@ import { Filter } from "lucide-react";
 import type { GeneralType, StatType, ElementName } from "@/drizzle/constants";
 import type { UserStatuses } from "@/drizzle/constants";
 import type { UserEffect, GroundEffect } from "@/libs/combat/types";
-import { isPositiveUserEffect, isNegativeUserEffect } from "@/libs/combat/types";
+import { isPositiveUserEffect, isNegativeUserEffect } from "@/validators/combat";
 import { api } from "@/app/_trpc/client";
 import { useFiltering, getFilter } from "@/layout/JutsuFiltering";
 
@@ -146,9 +146,9 @@ const MenuBoxProfile: React.FC = () => {
         );
       case "QUEUED":
         return (
-          <div className="flex flex-row hover:text-orange-500">
+          <span className="flex flex-row hover:text-orange-500">
             QUEUED <Swords className="ml-1 h-6 w-6 hover:text-orange-500" />
-          </div>
+          </span>
         );
       case "AWAKE":
         if (location) {
@@ -288,7 +288,8 @@ const MenuBoxProfile: React.FC = () => {
                   className="hover:text-orange-500"
                 >
                   <div className="flex flex-row items-center">
-                    <p className="text-xl mr-3">両</p>{userData?.money?.toLocaleString() ?? "??"}
+                    <p className="text-xl mr-3">両</p>
+                    {userData?.money?.toLocaleString() ?? "??"}
                   </div>
                 </Link>
               </TooltipTrigger>

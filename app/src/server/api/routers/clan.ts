@@ -502,7 +502,10 @@ export const clanRouter = createTRPCRouter({
         if (user.clanId) return errorResponse(`Already in a ${groupLabel}`);
       if (user.isAi) return errorResponse("AI cannot be leader");
       if (user.money < CLAN_CREATE_RYO_COST) return errorResponse("Not enough ryo");
-      if (clans.length > getEffectiveStructureLevel(structure) * CLANS_PER_STRUCTURE_LEVEL) {
+      if (
+        clans.length >
+        getEffectiveStructureLevel(structure) * CLANS_PER_STRUCTURE_LEVEL
+      ) {
         return errorResponse(`Max ${user.isOutlaw ? "factions" : "clans"} reached`);
       }
       if (user.villagePrestige < CLAN_CREATE_PRESTIGE_REQUIREMENT) {
@@ -1160,7 +1163,8 @@ export const clanRouter = createTRPCRouter({
         return errorResponse("Not in the clan battle");
       }
       // Derive side based on clan membership
-      const side = clanBattleData.attackerEntityId === user.clanId ? "ATTACKER" : "DEFENDER";
+      const side =
+        clanBattleData.attackerEntityId === user.clanId ? "ATTACKER" : "DEFENDER";
 
       // Find available slots for this side
       const existingSlots = clanBattleData.queue

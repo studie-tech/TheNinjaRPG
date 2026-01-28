@@ -237,9 +237,7 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
           {isLoading && <Loader explanation="Processing..." />}
         </div>
 
-        {uploadError && (
-          <p className="text-destructive text-sm mt-2">{uploadError}</p>
-        )}
+        {uploadError && <p className="text-destructive text-sm mt-2">{uploadError}</p>}
       </div>
 
       {/* Asset Config Display */}
@@ -280,7 +278,8 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
                     <div>
                       <h5 className="font-medium">{anim.name}</h5>
                       <p className="text-xs text-muted-foreground">
-                        {Object.values(anim.frames)[0]?.length ?? 0} frames per direction
+                        {Object.values(anim.frames)[0]?.length ?? 0} frames per
+                        direction
                       </p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -342,7 +341,9 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
 
                   {/* Frame preview */}
                   <div className="mt-3">
-                    <p className="text-xs text-muted-foreground mb-1">Preview (south):</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Preview (south):
+                    </p>
                     <div className="flex gap-1 overflow-x-auto pb-2">
                       {(anim.frames.south || []).slice(0, 8).map((url, frameIdx) => (
                         <div
@@ -380,4 +381,3 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
     </div>
   );
 };
-

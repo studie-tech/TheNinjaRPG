@@ -14,5 +14,3 @@ export default __t.object("GameLoopSchedule", {
   scheduledId: __t.u64(),
   scheduledAt: __t.scheduleAt(),
 });
-
-

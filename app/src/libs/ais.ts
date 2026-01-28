@@ -9,7 +9,7 @@ import type { InsertAiSchema } from "@/drizzle/schema";
 import type { UserData } from "@/drizzle/schema";
 import type { UserJutsu } from "@/drizzle/schema";
 import type { UserItem } from "@/drizzle/schema";
-import type { ZodAllTags } from "@/libs/combat/types";
+import type { ZodAllTags } from "@/validators/combat";
 import type { FormEntry } from "@/layout/EditContent";
 
 /**

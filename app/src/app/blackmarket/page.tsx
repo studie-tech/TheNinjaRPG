@@ -490,9 +490,9 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
         <div className="pb-5">
           <p className="p-3">
             You have <b>{tradeableReps.toLocaleString()} reputation points</b> and{" "}
-            <b>{userData.money.toLocaleString()} ryo</b> in your pocket. You may list reputation points
-            here for sale, so that other users may buy them for a pre-determined amount
-            of ryo. Once listed, your sale cannot be delisted for{" "}
+            <b>{userData.money.toLocaleString()} ryo</b> in your pocket. You may list
+            reputation points here for sale, so that other users may buy them for a
+            pre-determined amount of ryo. Once listed, your sale cannot be delisted for{" "}
             {RYO_FOR_REP_DAYS_FROZEN} days. You can not trade the first 10 reputation
             points given on your account.
           </p>
@@ -590,11 +590,17 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                         <p>
                           Confirm that you wish to put{" "}
                           {Number(offerReps).toLocaleString()} reputation points up for
-                          sale for a total price of{" "} {Number(offerRyo).toLocaleString()}
-                          ryo, i.e. at a{" "}<b>ryo/rep price of{" "}
-                          {round(Number(offerRyo) / Number(offerReps)).toLocaleString()}</b>
-                          . This offer will be listed for at least{" "}{RYO_FOR_REP_DAYS_FROZEN}
-                           days, after which you can delist them.
+                          sale for a total price of {Number(offerRyo).toLocaleString()}
+                          ryo, i.e. at a{" "}
+                          <b>
+                            ryo/rep price of{" "}
+                            {round(
+                              Number(offerRyo) / Number(offerReps),
+                            ).toLocaleString()}
+                          </b>
+                          . This offer will be listed for at least{" "}
+                          {RYO_FOR_REP_DAYS_FROZEN}
+                          days, after which you can delist them.
                         </p>
                       )}
                       {(offerReps === 0 || offerRyo === 0) && (

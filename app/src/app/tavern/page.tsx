@@ -83,7 +83,12 @@ export default function Tavern() {
 
   // Redirect to village tavern if global is disabled and user is on Global (only for USER role)
   useEffect(() => {
-    if (userData && userData.role === "USER" && !globalTavernEnabled && activeTab === "Global") {
+    if (
+      userData &&
+      userData.role === "USER" &&
+      !globalTavernEnabled &&
+      activeTab === "Global"
+    ) {
       setActiveTab(localTavern);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

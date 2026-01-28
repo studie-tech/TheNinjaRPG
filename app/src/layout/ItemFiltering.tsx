@@ -15,7 +15,7 @@ import {
   AttackMethods,
   BattleUsageTypes,
 } from "@/drizzle/constants";
-import { effectFilters } from "@/libs/combat/types";
+import { effectFilters } from "@/validators/combat";
 import { formatBattleUsageType } from "@/utils/string";
 
 // Inline schema (single source of truth)

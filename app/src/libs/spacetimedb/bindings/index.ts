@@ -92,105 +92,106 @@ export { SessionUpgrade };
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema(
-  __table({
-    name: 'completed_run',
-    indexes: [
-      { name: 'id', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'completed_run_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, CompletedRunRow),
-  __table({
-    name: 'enemy',
-    indexes: [
-      { name: 'id', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'enemy_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, EnemyRow),
-  __table({
-    name: 'enemy_queued',
-    indexes: [
-      { name: 'id', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'enemy_queued_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, EnemyQueuedRow),
-  __table({
-    name: 'enemy_spawn',
-    indexes: [
-      { name: 'enemy_id', algorithm: 'btree', columns: [
-        'enemyId',
-      ] },
-    ],
-    constraints: [
-      { name: 'enemy_spawn_enemy_id_key', constraint: 'unique', columns: ['enemyId'] },
-    ],
-  }, EnemySpawnRow),
-  __table({
-    name: 'game_loop_schedule',
-    indexes: [
-      { name: 'scheduled_id', algorithm: 'btree', columns: [
-        'scheduledId',
-      ] },
-    ],
-    constraints: [
-      { name: 'game_loop_schedule_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
-    ],
-  }, GameLoopScheduleRow),
-  __table({
-    name: 'game_session',
-    indexes: [
-      { name: 'id', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'game_session_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, GameSessionRow),
-  __table({
-    name: 'projectile',
-    indexes: [
-      { name: 'id', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'projectile_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, ProjectileRow),
-  __table({
-    name: 'session_state',
-    indexes: [
-      { name: 'session_id', algorithm: 'btree', columns: [
-        'sessionId',
-      ] },
-    ],
-    constraints: [
-      { name: 'session_state_session_id_key', constraint: 'unique', columns: ['sessionId'] },
-    ],
-  }, SessionStateRow),
-  __table({
-    name: 'session_upgrade',
-    indexes: [
-      { name: 'id', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'session_upgrade_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, SessionUpgradeRow),
+  __table(
+    {
+      name: "completed_run",
+      indexes: [{ name: "id", algorithm: "btree", columns: ["id"] }],
+      constraints: [
+        { name: "completed_run_id_key", constraint: "unique", columns: ["id"] },
+      ],
+    },
+    CompletedRunRow,
+  ),
+  __table(
+    {
+      name: "enemy",
+      indexes: [{ name: "id", algorithm: "btree", columns: ["id"] }],
+      constraints: [{ name: "enemy_id_key", constraint: "unique", columns: ["id"] }],
+    },
+    EnemyRow,
+  ),
+  __table(
+    {
+      name: "enemy_queued",
+      indexes: [{ name: "id", algorithm: "btree", columns: ["id"] }],
+      constraints: [
+        { name: "enemy_queued_id_key", constraint: "unique", columns: ["id"] },
+      ],
+    },
+    EnemyQueuedRow,
+  ),
+  __table(
+    {
+      name: "enemy_spawn",
+      indexes: [{ name: "enemy_id", algorithm: "btree", columns: ["enemyId"] }],
+      constraints: [
+        {
+          name: "enemy_spawn_enemy_id_key",
+          constraint: "unique",
+          columns: ["enemyId"],
+        },
+      ],
+    },
+    EnemySpawnRow,
+  ),
+  __table(
+    {
+      name: "game_loop_schedule",
+      indexes: [{ name: "scheduled_id", algorithm: "btree", columns: ["scheduledId"] }],
+      constraints: [
+        {
+          name: "game_loop_schedule_scheduled_id_key",
+          constraint: "unique",
+          columns: ["scheduledId"],
+        },
+      ],
+    },
+    GameLoopScheduleRow,
+  ),
+  __table(
+    {
+      name: "game_session",
+      indexes: [{ name: "id", algorithm: "btree", columns: ["id"] }],
+      constraints: [
+        { name: "game_session_id_key", constraint: "unique", columns: ["id"] },
+      ],
+    },
+    GameSessionRow,
+  ),
+  __table(
+    {
+      name: "projectile",
+      indexes: [{ name: "id", algorithm: "btree", columns: ["id"] }],
+      constraints: [
+        { name: "projectile_id_key", constraint: "unique", columns: ["id"] },
+      ],
+    },
+    ProjectileRow,
+  ),
+  __table(
+    {
+      name: "session_state",
+      indexes: [{ name: "session_id", algorithm: "btree", columns: ["sessionId"] }],
+      constraints: [
+        {
+          name: "session_state_session_id_key",
+          constraint: "unique",
+          columns: ["sessionId"],
+        },
+      ],
+    },
+    SessionStateRow,
+  ),
+  __table(
+    {
+      name: "session_upgrade",
+      indexes: [{ name: "id", algorithm: "btree", columns: ["id"] }],
+      constraints: [
+        { name: "session_upgrade_id_key", constraint: "unique", columns: ["id"] },
+      ],
+    },
+    SessionUpgradeRow,
+  ),
 );
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -205,8 +206,7 @@ const reducersSchema = __reducers(
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
-const proceduresSchema = __procedures(
-);
+const proceduresSchema = __procedures();
 
 /** The remote SpacetimeDB module schema, both runtime and type information. */
 const REMOTE_MODULE = {
@@ -233,14 +233,18 @@ export type EventContext = __EventContextInterface<typeof REMOTE_MODULE>;
 /** The context type returned in callbacks for reducer events. */
 export type ReducerEventContext = __ReducerEventContextInterface<typeof REMOTE_MODULE>;
 /** The context type returned in callbacks for subscription events. */
-export type SubscriptionEventContext = __SubscriptionEventContextInterface<typeof REMOTE_MODULE>;
+export type SubscriptionEventContext = __SubscriptionEventContextInterface<
+  typeof REMOTE_MODULE
+>;
 /** The context type returned in callbacks for error events. */
 export type ErrorContext = __ErrorContextInterface<typeof REMOTE_MODULE>;
 /** The subscription handle type to manage active subscriptions created from a {@link SubscriptionBuilder}. */
 export type SubscriptionHandle = __SubscriptionHandleImpl<typeof REMOTE_MODULE>;
 
 /** Builder class to configure a new subscription to the remote SpacetimeDB instance. */
-export class SubscriptionBuilder extends __SubscriptionBuilderImpl<typeof REMOTE_MODULE> {}
+export class SubscriptionBuilder extends __SubscriptionBuilderImpl<
+  typeof REMOTE_MODULE
+> {}
 
 /** Builder class to configure a new database connection to the remote SpacetimeDB instance. */
 export class DbConnectionBuilder extends __DbConnectionBuilder<DbConnection> {}
@@ -249,7 +253,10 @@ export class DbConnectionBuilder extends __DbConnectionBuilder<DbConnection> {}
 export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
   /** Creates a new {@link DbConnectionBuilder} to configure and connect to the remote SpacetimeDB instance. */
   static builder = (): DbConnectionBuilder => {
-    return new DbConnectionBuilder(REMOTE_MODULE, (config: __DbConnectionConfig<typeof REMOTE_MODULE>) => new DbConnection(config));
+    return new DbConnectionBuilder(
+      REMOTE_MODULE,
+      (config: __DbConnectionConfig<typeof REMOTE_MODULE>) => new DbConnection(config),
+    );
   };
 
   /** Creates a new {@link SubscriptionBuilder} to configure a subscription to the remote SpacetimeDB instance. */
@@ -257,4 +264,3 @@ export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
     return new SubscriptionBuilder(this);
   };
 }
-

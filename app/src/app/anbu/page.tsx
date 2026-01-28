@@ -150,7 +150,8 @@ export default function ANBU() {
   // Derived
   const isKage = userData.userId === sectorVillage.kageId;
   const isElder = userData.rank === "ELDER";
-  const canCreateMore = allSquads && allSquads?.length < getEffectiveStructureLevel(structure);
+  const canCreateMore =
+    allSquads && allSquads?.length < getEffectiveStructureLevel(structure);
 
   return (
     <>

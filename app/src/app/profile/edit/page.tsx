@@ -996,12 +996,8 @@ const SwapVillage: React.FC = () => {
             : "bg-red-600 text-white hover:bg-red-700"
         }
       >
-        {village && !isSwapping && (
-          <ItemWithEffects item={village} key={village.id} />
-        )}
-        {isSwapping && village && (
-          <Loader explanation={`Purchasing ${village.name}`} />
-        )}
+        {village && !isSwapping && <ItemWithEffects item={village} key={village.id} />}
+        {isSwapping && village && <Loader explanation={`Purchasing ${village.name}`} />}
       </Modal2>
     </div>
   );
@@ -1851,7 +1847,8 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
   const utils = api.useUtils();
 
   // Global tavern toggle
-  const { data: globalTavernEnabled = true } = api.misc.getGlobalTavernEnabled.useQuery();
+  const { data: globalTavernEnabled = true } =
+    api.misc.getGlobalTavernEnabled.useQuery();
   const { mutate: toggleGlobalTavern, isPending: isTogglingTavern } =
     api.misc.toggleGlobalTavern.useMutation({
       onSuccess: (result) => {

@@ -24,4 +24,10 @@ app/spacetimedb/node_modules/
 
 # AI clutter
 .cursor
-.claude
+.claude/review*
+.claude/tasks*
+.claude/commands/common
+.claude/commands/fix-pr*
+.claude/commands/fix-sentry-issue*
+.claude/commands/implement-issue*
+.claude/commands/review-pr*

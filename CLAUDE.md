@@ -19,10 +19,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## After Implementing
 
 - After implementing, review whether the changes conform to the standards defined in the Claude.md file
-- After successfully implementing a feature or fix, run `coderabbit review --plain` to get automated feedback
-- Review each piece of CodeRabbit feedback and apply improvements iteratively
-- Use good judgment: if CodeRabbit feedback conflicts with guidelines in this file or is incorrect, skip that suggestion
-- Continue iterating until CodeRabbit feedback is addressed or consciously rejected
 - Document any rejected feedback reasoning in the task .md-file if significant
 
 ## Development Commands
@@ -34,6 +30,7 @@ All make commands should be run from the root directory `/`, not from `/app`.
 - `make build` - Build the Next.js application. Only run if explicitly asked.
 - `make test` - Run unit tests with vitest
 - `make lint` - Run ESLint on the codebase
+- `make typecheck` - Run typechecking on the codebase
 
 **Database Management:**
 
@@ -215,6 +212,7 @@ Centralized permission logic in `/app/src/utils/permissions.ts`.
 When adding errors to the Sentry ignore list or `beforeSend` filter:
 
 1. **Never just ignore - ensure graceful UX handling**: Before filtering an error from Sentry, verify that the error is handled gracefully for users. The global tRPC error handler in `_trpc/Provider.tsx` shows toast notifications for most API errors, but check that:
+
    - Users see a meaningful error message (via toast, inline error, or error boundary)
    - The application doesn't break or show blank screens
    - Any loading states are properly resolved

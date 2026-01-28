@@ -128,10 +128,14 @@ export const occupationRouter = createTRPCRouter({
           : rankCraftingTime;
       // Guards - check rank eligibility regardless of item type
       if (rankCraftingTime === 0) {
-        const requiredRank = 
-          itemWithRequirements.rarity === "RARE" ? "Apprentice" :
-          itemWithRequirements.rarity === "EPIC" ? "Master" :
-          itemWithRequirements.rarity === "LEGENDARY" ? "Forgemaster" : "Unknown";
+        const requiredRank =
+          itemWithRequirements.rarity === "RARE"
+            ? "Apprentice"
+            : itemWithRequirements.rarity === "EPIC"
+              ? "Master"
+              : itemWithRequirements.rarity === "LEGENDARY"
+                ? "Forgemaster"
+                : "Unknown";
         return errorResponse(
           `You need to be at least ${requiredRank} rank to craft ${itemWithRequirements.rarity} items`,
         );
@@ -155,7 +159,9 @@ export const occupationRouter = createTRPCRouter({
       const sectors = user.village?.sectors?.length || 0;
       const shrineBoost = getShrineBoost(sectors, "Crafting", user.village);
       const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
-      const craftSeconds = Math.round(craftingTime * 60 * shrineBoostFactor * input.quantity);
+      const craftSeconds = Math.round(
+        craftingTime * 60 * shrineBoostFactor * input.quantity,
+      );
 
       // Calculate crafting finish time
       const finishTime = new Date(Date.now() + craftSeconds * 1000);

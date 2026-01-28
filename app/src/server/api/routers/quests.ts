@@ -30,6 +30,7 @@ import { getHuntingItemDrops } from "@/libs/hunting";
 import { getGatheringItemDrops } from "@/libs/gathering";
 import { userJutsu, userItem, userData, userBadge } from "@/drizzle/schema";
 import { quest, questHistory, actionLog, village, userRewards } from "@/drizzle/schema";
+import { raidParticipation, raidDamageThreshold, userRaidBuff } from "@/drizzle/schema";
 import { QuestValidator } from "@/validators/objectives";
 import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
 import {
@@ -835,7 +836,8 @@ export const questsRouter = createTRPCRouter({
         const data = input.data;
         // Server-side enforcement: preserve existing reward_reputation if user lacks permission
         if (!canAwardReputation(user.role)) {
-          data.content.reward.reward_reputation = entry.content.reward.reward_reputation;
+          data.content.reward.reward_reputation =
+            entry.content.reward.reward_reputation;
           // Preserve by objective id; new objectives should not gain reputation
           const existingObjectivesById = new Map(
             entry.content.objectives.map((objective) => [objective.id, objective]),
@@ -991,10 +993,12 @@ export const questsRouter = createTRPCRouter({
       // Server-side enforcement: zero out reward_reputation when cloning if user lacks permission
       if (!canAwardReputation(user.role)) {
         questData.content.reward.reward_reputation = 0;
-        questData.content.objectives = questData.content.objectives.map((objective) => ({
-          ...objective,
-          reward_reputation: 0,
-        }));
+        questData.content.objectives = questData.content.objectives.map(
+          (objective) => ({
+            ...objective,
+            reward_reputation: 0,
+          }),
+        );
       }
       await ctx.drizzle.insert(quest).values(questData);
 
@@ -1020,6 +1024,13 @@ export const questsRouter = createTRPCRouter({
         await Promise.all([
           ctx.drizzle.delete(quest).where(eq(quest.id, input.id)),
           ctx.drizzle.delete(questHistory).where(eq(questHistory.questId, input.id)),
+          ctx.drizzle
+            .delete(raidParticipation)
+            .where(eq(raidParticipation.questId, input.id)),
+          ctx.drizzle
+            .delete(raidDamageThreshold)
+            .where(eq(raidDamageThreshold.questId, input.id)),
+          ctx.drizzle.delete(userRaidBuff).where(eq(userRaidBuff.questId, input.id)),
           ctx.drizzle.insert(actionLog).values({
             id: nanoid(),
             userId: ctx.userId,
@@ -1445,7 +1456,11 @@ export const updateRewards = async (info: {
       let remaining = count;
       while (remaining > 0) {
         const qty = Math.min(remaining, itemData.stackSize);
-        expandedRewardItems.push({ id: itemData.id, name: itemData.name, quantity: qty });
+        expandedRewardItems.push({
+          id: itemData.id,
+          name: itemData.name,
+          quantity: qty,
+        });
         remaining -= qty;
       }
     } else {

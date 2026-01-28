@@ -46,8 +46,8 @@ import {
   HEX_ASPECT_RATIO,
 } from "@/drizzle/constants";
 import type { Grid } from "honeycomb-grid";
-import type { ReturnedBattle, StatSchemaType } from "@/libs/combat/types";
-import type { CachedIntersections } from "@/libs/combat/types";
+import type { StatSchemaType } from "@/validators/combat";
+import type { ReturnedBattle, CachedIntersections } from "@/libs/combat/types";
 import type { CombatAction } from "@/libs/combat/types";
 import type { BattleState } from "@/libs/combat/types";
 import type { TerrainHex } from "@/libs/hexgrid";
@@ -98,16 +98,16 @@ const Combat: React.FC<CombatProps> = (props) => {
   // References which shouldn't update
   const [webglError, setWebglError] = useState<boolean>(false);
   const [hasFocus, setHasFocus] = useState<boolean>(true);
-  const lastActions = useRef<Date[]>([]);
-  const battle = useRef<ReturnedBattle | null | undefined>(battleState.battle);
-  const action = useRef<CombatAction | undefined>(props.action);
-  const userId = useRef<string>(props.userId);
+  const lastActionsRef = useRef<Date[]>([]);
+  const battleRef = useRef<ReturnedBattle | null | undefined>(battleState.battle);
+  const actionRef = useRef<CombatAction | undefined>(props.action);
+  const userIdRef = useRef<string>(props.userId);
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const grid = useRef<Grid<TerrainHex> | null>(null);
+  const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const mouse = new Vector2();
-  const mouseScreen = useRef({ x: 0, y: 0 });
-  const battleId = battle.current?.id;
-  const battleType = battle.current?.battleType;
+  const mouseScreenRef = useRef({ x: 0, y: 0 });
+  const battleId = battleRef.current?.id;
+  const battleType = battleRef.current?.battleType;
 
   // Reference to group holding tile names for toggling visibility
   const groupNamesRef = useRef<Group | null>(null);
@@ -115,10 +115,10 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Camera following refs
   const cameraRef = useRef<OrthographicCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const cameraTargetPosition = useRef<{ x: number; y: number } | null>(null);
+  const cameraTargetPositionRef = useRef<{ x: number; y: number } | null>(null);
 
   // Track if component is mounted to prevent stale render callbacks
-  const isMounted = useRef<boolean>(false);
+  const isMountedRef = useRef<boolean>(false);
 
   // Tutorial step
   const { currentStep, handleNextStepAsync } = useTutorialStep();
@@ -136,15 +136,15 @@ const Combat: React.FC<CombatProps> = (props) => {
   const suid = userData?.userId;
   // Precompute available actions for the session user; recompute on version change
   const precomputedActions = useMemo(() => {
-    if (battle.current && suid) {
-      return availableUserActions(battle.current, suid);
+    if (battleRef.current && suid) {
+      return availableUserActions(battleRef.current, suid);
     }
     return [] as CombatAction[];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [battle.current?.version, suid]);
+  }, [battleRef.current?.version, suid]);
 
   // Precompute maps for ground effects, user effects, and user positions
-  const battleMaps = useBattleMaps(battle.current ?? null);
+  const battleMaps = useBattleMaps(battleRef.current ?? null);
 
   // Get effects for hovered element (can include both user and ground effects)
   const hoveredEffects = useMemo(() => {
@@ -177,52 +177,52 @@ const Combat: React.FC<CombatProps> = (props) => {
   }, [battleMaps, setHoveredEffect]);
 
   // Session battle user state
-  const battleSessionUser = battle.current?.usersState.find(
+  const battleSessionUser = battleRef.current?.usersState.find(
     (u) => u.userId === userData?.userId,
   );
 
   // Asset IDs to fetch
-  const textureAssets = battle.current?.extraState.textureAssets || [];
-  const sfxAssets = battle.current?.extraState.sfxAssets || [];
+  const textureAssets = battleRef.current?.extraState.textureAssets || [];
+  const sfxAssets = battleRef.current?.extraState.sfxAssets || [];
   const allAssets = [...textureAssets, ...sfxAssets];
 
   // Query data
   const { data: gameAssets } = api.misc.getAllGameAssetNames.useQuery(
     { ids: allAssets },
-    { enabled: !!battle.current },
+    { enabled: !!battleRef.current },
   );
 
   // Preload all combat-related asset textures once assets list is ready
   useEffect(() => {
     if (!gameAssets || gameAssets.length === 0) return;
-    const ids = battle.current?.extraState.textureAssets || [];
+    const ids = battleRef.current?.extraState.textureAssets || [];
     if (ids.length === 0) return;
     const urls = gameAssets
       .filter((a) => ids.includes(a.id))
       .map((a) => a.image)
       .filter(Boolean);
     void preloadTextures(urls);
-  }, [battle.current?.id, battle.current?.version, gameAssets]);
+  }, [battleRef.current?.id, battleRef.current?.version, gameAssets]);
 
   // Preload combat-related SFX (AudioBuffers via Web Audio API) once assets list is ready
   useEffect(() => {
     if (!gameAssets || gameAssets.length === 0) return;
-    const sfxIds = battle.current?.extraState.sfxAssets || [];
+    const sfxIds = battleRef.current?.extraState.sfxAssets || [];
     if (!sfxIds || sfxIds.length === 0) return;
     const urls = gameAssets
       .filter((a) => sfxIds.includes(a.id))
       .map((a) => a.url)
       .filter(Boolean);
     void preloadAudioBuffers(urls);
-  }, [battle.current?.id, battle.current?.version, gameAssets]);
+  }, [battleRef.current?.id, battleRef.current?.version, gameAssets]);
 
   // Convenience method for helping people to not move too fast
   const canPerformAction = () => {
     const minuteAgo = secondsFromNow(-60);
-    const newActions = lastActions.current.filter((a) => a > minuteAgo);
+    const newActions = lastActionsRef.current.filter((a) => a > minuteAgo);
     newActions.push(new Date());
     if (newActions.length < 55) {
-      lastActions.current = newActions;
+      lastActionsRef.current = newActions;
       return true;
     } else {
       document.body.style.cursor = "default";
@@ -241,7 +241,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         startArenaBattle({
           aiId: arenaOpponentId!,
           stats:
-            battle.current?.battleType === "TRAINING" ? statDistribution : undefined,
+            battleRef.current?.battleType === "TRAINING" ? statDistribution : undefined,
         });
       } else {
         showMutationToast(data);
@@ -272,7 +272,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     onMutate: () => {
       onMutateCheck();
       document.body.style.cursor = "wait";
-      setBattleState({ battle: battle.current, result: null, isPending: true });
+      setBattleState({ battle: battleRef.current, result: null, isPending: true });
     },
     onSuccess: async (data) => {
       // Notifications (if any)
@@ -321,7 +321,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       if (battleId && data.logEntries && data.battleUpdate) {
         const prevData = utils.combat.getBattleEntries.getData({
           battleId,
-          refreshKey: battle.current?.version,
+          refreshKey: battleRef.current?.version,
         });
         utils.combat.getBattleEntries.setData(
           { battleId, refreshKey: data.battleUpdate.version },
@@ -341,19 +341,19 @@ const Combat: React.FC<CombatProps> = (props) => {
         }
       }
       // Update battle state - merge dynamic update with existing extraState
-      if (data.updateClient && data.battleUpdate && battle.current?.extraState) {
+      if (data.updateClient && data.battleUpdate && battleRef.current?.extraState) {
         // Merge the dynamic battle update with the existing extraState
         const mergedBattle = {
           ...data.battleUpdate,
-          extraState: battle.current.extraState,
+          extraState: battleRef.current.extraState,
         };
-        battle.current = mergedBattle;
+        battleRef.current = mergedBattle;
         setBattleState({
           battle: mergedBattle,
           result: data.result,
           isPending: false,
         });
-        setBattleAtom(battle.current);
+        setBattleAtom(battleRef.current);
       }
     },
   });
@@ -362,8 +362,8 @@ const Combat: React.FC<CombatProps> = (props) => {
   const { mutate: iAmHere } = api.combat.iAmHere.useMutation({
     onSuccess: (data) => {
       if ("battle" in data && data.success && data.battle) {
-        battle.current = data.battle;
-        setBattleAtom(battle.current);
+        battleRef.current = data.battle;
+        setBattleAtom(battleRef.current);
         setBattleState({ battle: data.battle, result: null, isPending: false });
       } else {
         showMutationToast({ success: false, message: data.message });
@@ -375,8 +375,8 @@ const Combat: React.FC<CombatProps> = (props) => {
   const { mutate: selectLoadout } = api.combat.updateCombatLoadout.useMutation({
     onSuccess: (data) => {
       if ("battle" in data && data.success && data.battle) {
-        battle.current = data.battle;
-        setBattleAtom(battle.current);
+        battleRef.current = data.battle;
+        setBattleAtom(battleRef.current);
         setBattleState({ battle: data.battle, result: null, isPending: false });
       } else {
         showMutationToast({ success: false, message: data.message });
@@ -386,8 +386,8 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Handle key-presses
   const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (battle.current) {
-      const { actor } = calcActiveUser(battle.current, suid, timeDiff, {
+    if (battleRef.current) {
+      const { actor } = calcActiveUser(battleRef.current, suid, timeDiff, {
         precomputedUserId: suid,
         precomputedActions,
       });
@@ -397,12 +397,12 @@ const Combat: React.FC<CombatProps> = (props) => {
             document.body.style.cursor = "wait";
             if (canPerformAction()) {
               performAction({
-                battleId: battle.current.id,
-                userId: userId.current,
+                battleId: battleRef.current.id,
+                userId: userIdRef.current,
                 actionId: "wait",
                 longitude: actor.longitude,
                 latitude: actor.latitude,
-                version: battle.current.version,
+                version: battleRef.current.version,
               });
             }
           }
@@ -425,8 +425,8 @@ const Combat: React.FC<CombatProps> = (props) => {
       mouse.x = (event.offsetX / bounding_box.width) * 2 - 1;
       mouse.y = -((event.offsetY / bounding_box.height) * 2 - 1);
       // Also track screen coordinates for tooltips
-      mouseScreen.current.x = event.clientX;
-      mouseScreen.current.y = event.clientY;
+      mouseScreenRef.current.x = event.clientX;
+      mouseScreenRef.current.y = event.clientY;
     }
   };
   const onDocumentMouseLeave = () => {
@@ -446,8 +446,8 @@ const Combat: React.FC<CombatProps> = (props) => {
         const offsetY = touch.clientY - bounding_box.top;
         mouse.x = (offsetX / bounding_box.width) * 2 - 1;
         mouse.y = -((offsetY / bounding_box.height) * 2 - 1);
-        mouseScreen.current.x = touch.clientX;
-        mouseScreen.current.y = touch.clientY;
+        mouseScreenRef.current.x = touch.clientX;
+        mouseScreenRef.current.y = touch.clientY;
       }
     }
   };
@@ -458,29 +458,34 @@ const Combat: React.FC<CombatProps> = (props) => {
       const focusCheck = document.hasFocus();
       if (!focusCheck && process.env.NODE_ENV !== "development") setHasFocus(false);
       if (!hasFocus || !focusCheck) return;
-      if (suid && battle.current && userId.current && !isPending && !result) {
-        const { actor, changedActor } = calcActiveUser(battle.current, suid, timeDiff, {
-          precomputedUserId: suid,
-          precomputedActions,
-        });
+      if (suid && battleRef.current && userIdRef.current && !isPending && !result) {
+        const { actor, changedActor } = calcActiveUser(
+          battleRef.current,
+          suid,
+          timeDiff,
+          {
+            precomputedUserId: suid,
+            precomputedActions,
+          },
+        );
         // Scenario 1: it is now AIs turn, perform action
         if (actor.isAi && !isPending) {
           if (canPerformAction()) {
             performAction({
-              battleId: battle.current.id,
-              version: battle.current.version,
+              battleId: battleRef.current.id,
+              version: battleRef.current.version,
             });
           }
         } else {
           // Scenario 2: more than 10 seconds passed, or actor is no longer the same as active user - refetch
           const updatePassed =
-            Date.now() - timeDiff - battle.current.roundStartAt.getTime();
+            Date.now() - timeDiff - battleRef.current.roundStartAt.getTime();
           const createPassed =
-            Date.now() - timeDiff - battle.current.createdAt.getTime();
+            Date.now() - timeDiff - battleRef.current.createdAt.getTime();
           const check1 = updatePassed > COMBAT_SECONDS * 1000;
           const check2 = createPassed > (COMBAT_LOBBY_SECONDS + COMBAT_SECONDS) * 1000;
           if ((check1 && check2) || changedActor) {
-            battle.current.roundStartAt = new Date();
+            battleRef.current.roundStartAt = new Date();
             void utils.combat.getBattle.invalidate();
           }
         }
@@ -491,13 +496,21 @@ const Combat: React.FC<CombatProps> = (props) => {
   }, [isPending, timeDiff, result, suid]);
 
   useEffect(() => {
-    action.current = props.action;
-    userId.current = props.userId;
-    battle.current = props.battleState.battle;
+    actionRef.current = props.action;
+    userIdRef.current = props.userId;
+    battleRef.current = props.battleState.battle;
     if (props.battleState.result) {
       void Promise.all([
         utils.profile.getUser.invalidate(),
         utils.travel.getSectorData.invalidate(),
+        // Invalidate raid queries when a RAID battle ends so boss HP is refreshed
+        ...(props.battleState.battle?.battleType === "RAID"
+          ? [
+              utils.raids.getRaidDetails.invalidate(),
+              utils.raids.getAvailableRaids.invalidate(),
+              utils.raids.getRaidLeaderboard.invalidate(),
+            ]
+          : []),
       ]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -507,7 +520,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     if (battleId && pusher) {
       const channel = pusher.subscribe(battleId);
       channel.bind("event", (data: { version: number }) => {
-        if (battle.current?.version !== data.version && !result) {
+        if (battleRef.current?.version !== data.version && !result) {
           void utils.combat.getBattle.invalidate();
         }
       });
@@ -523,7 +536,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     if (isInLobby) {
       const interval = setInterval(() => {
         const syncedTime = Date.now() - timeDiff;
-        if (battle.current && battle.current.createdAt.getTime() > syncedTime) {
+        if (battleRef.current && battleRef.current.createdAt.getTime() > syncedTime) {
           setIsInLobby(true);
         } else {
           setIsInLobby(false);
@@ -531,19 +544,20 @@ const Combat: React.FC<CombatProps> = (props) => {
       }, 500);
       return () => clearInterval(interval);
     }
-  }, [battle, timeDiff, isInLobby]);
+  }, [battleRef.current?.version, timeDiff, isInLobby]);
 
   useEffect(() => {
     // Reference to the mount
     const sceneRef = mountRef.current;
 
-    if (sceneRef && battle.current && gameAssets !== undefined) {
+    if (sceneRef && battleRef.current && gameAssets !== undefined) {
       // Mark component as mounted
-      isMounted.current = true;
+      isMountedRef.current = true;
       // Used for map size calculations
       const width2height =
-        ((battle.current.height + 2) * HEX_ASPECT_RATIO) /
-        (battle.current.width - HEX_STACKING_DISPLACEMENT * (battle.current.width - 1));
+        ((battleRef.current.height + 2) * HEX_ASPECT_RATIO) /
+        (battleRef.current.width -
+          HEX_STACKING_DISPLACEMENT * (battleRef.current.width - 1));
 
       // Map size
       const WIDTH = sceneRef.getBoundingClientRect().width;
@@ -555,7 +569,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       sceneRef.addEventListener("touchstart", onDocumentTouchStart, { passive: true });
 
       // Get background color based on battle background/biome
-      const { color } = getBackgroundColor(battle.current.background);
+      const { color } = getBackgroundColor(battleRef.current.background);
 
       // Setup scene, renderer and raycaster
       const { scene, renderer, raycaster, handleResize } = setupScene({
@@ -587,7 +601,10 @@ const Combat: React.FC<CombatProps> = (props) => {
         isContextLost = false;
       };
       renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
-      renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored);
+      renderer.domElement.addEventListener(
+        "webglcontextrestored",
+        handleContextRestored,
+      );
 
       // Setup camara
       const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
@@ -596,7 +613,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       cameraRef.current = camera;
 
       // Seeded noise generator for map gen from battle ID
-      const prng = alea(battle.current.id);
+      const prng = alea(battleRef.current.id);
 
       // Draw the background
       const {
@@ -607,8 +624,8 @@ const Combat: React.FC<CombatProps> = (props) => {
         group_names,
         group_assets,
         honeycombGrid,
-      } = drawCombatBackground(WIDTH, battle.current, prng, lightLayout);
-      grid.current = honeycombGrid;
+      } = drawCombatBackground(WIDTH, battleRef.current, prng, lightLayout);
+      gridRef.current = honeycombGrid;
 
       // Set initial visibility based on prop and store reference
       group_names.visible = config.showGridNumbers;
@@ -667,22 +684,22 @@ const Combat: React.FC<CombatProps> = (props) => {
               document.body.style.cursor !== "wait"
             ) {
               // Check basic requirements
-              if (!action.current || !battle.current || !grid.current) {
+              if (!actionRef.current || !battleRef.current || !gridRef.current) {
                 return true;
               }
 
               const target = i.object.userData.tile as TerrainHex;
-              const user = battle.current.usersState.find(
-                (u) => u.userId === userId.current,
+              const user = battleRef.current.usersState.find(
+                (u) => u.userId === userIdRef.current,
               );
               if (!user) return true;
 
               // Validate using shared function (same logic as highlightTiles)
               const { isValid } = validateActionTarget({
                 user,
-                battle: battle.current,
-                action: action.current,
-                grid: grid.current,
+                battle: battleRef.current,
+                action: actionRef.current,
+                grid: gridRef.current,
                 target,
                 timeDiff,
                 precomputedUserId: suid,
@@ -695,12 +712,12 @@ const Combat: React.FC<CombatProps> = (props) => {
               if (canPerformAction()) {
                 document.body.style.cursor = "wait";
                 performAction({
-                  battleId: battle.current.id,
-                  userId: userId.current,
-                  actionId: action.current.id,
+                  battleId: battleRef.current.id,
+                  userId: userIdRef.current,
+                  actionId: actionRef.current.id,
                   longitude: target.col,
                   latitude: target.row,
-                  version: battle.current.version,
+                  version: battleRef.current.version,
                 });
               }
               return false;
@@ -742,7 +759,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       clock.start();
       function render() {
         // Guard against stale render callbacks after unmount
-        if (!isMounted.current) return;
+        if (!isMountedRef.current) return;
 
         // Performance profiling
         profiler?.beginFrame();
@@ -758,20 +775,20 @@ const Combat: React.FC<CombatProps> = (props) => {
         raycaster.setFromCamera(mouse, camera);
 
         // Assume we have battle and a grid
-        if (userData && battle.current && grid.current) {
+        if (userData && battleRef.current && gridRef.current) {
           // Get the selected user
-          const user = battle.current.usersState.find(
-            (u) => u.userId === userId.current,
+          const user = battleRef.current.usersState.find(
+            (u) => u.userId === userIdRef.current,
           );
 
           // Draw all users on the map
           const endDrawUsers = profiler?.mark("animate_draw_users") ?? (() => {});
           const isAnyUserMoving = drawCombatUsers({
             group_users: group_users,
-            grid: grid.current,
+            grid: gridRef.current,
             playerId: suid,
             userData: userData,
-            battle: battle.current,
+            battle: battleRef.current,
             group_assets: group_assets,
             sfxEnabled: Boolean(userData?.sfxOn ?? true),
             sfxVolume: sfxVolume,
@@ -781,13 +798,13 @@ const Combat: React.FC<CombatProps> = (props) => {
 
           // Update camera target to follow player's character
           if (user && cameraRef.current && cameraRef.current.zoom > 1.5) {
-            const tile = grid.current.getHex({
+            const tile = gridRef.current.getHex({
               col: user.longitude,
               row: user.latitude,
             });
             if (tile) {
               const { x, y } = tile.center;
-              cameraTargetPosition.current = { x, y };
+              cameraTargetPositionRef.current = { x, y };
             }
           }
 
@@ -795,8 +812,8 @@ const Combat: React.FC<CombatProps> = (props) => {
           const endDrawEffects = profiler?.mark("animate_draw_effects") ?? (() => {});
           drawCombatEffects({
             groupEffects: group_effects,
-            battle: battle.current,
-            grid: grid.current,
+            battle: battleRef.current,
+            grid: gridRef.current,
             animationId,
             spriteMixer,
             gameAssets: gameAssets ?? [],
@@ -817,28 +834,30 @@ const Combat: React.FC<CombatProps> = (props) => {
           endRaycast();
 
           // Highlight information on user hover
-          const endHighlightUsers = profiler?.mark("animate_highlight_users") ?? (() => {});
+          const endHighlightUsers =
+            profiler?.mark("animate_highlight_users") ?? (() => {});
           userHighlights = highlightUsers({
             group_users,
             cachedIntersections,
-            userId: userId.current,
-            users: battle.current.usersState,
+            userId: userIdRef.current,
+            users: battleRef.current.usersState,
             currentHighlights: userHighlights,
           });
           endHighlightUsers();
 
           // Detect intersections with tiles for movement/action
           if (user) {
-            const endHighlightTiles = profiler?.mark("animate_highlight_tiles") ?? (() => {});
+            const endHighlightTiles =
+              profiler?.mark("animate_highlight_tiles") ?? (() => {});
             highlights = highlightTiles({
               group_tiles,
               group_highlight_edges,
               cachedIntersections,
               user,
               timeDiff,
-              action: action.current,
-              battle: battle.current,
-              grid: grid.current,
+              action: actionRef.current,
+              battle: battleRef.current,
+              grid: gridRef.current,
               currentHighlights: highlights,
               precomputedActions,
             });
@@ -846,11 +865,12 @@ const Combat: React.FC<CombatProps> = (props) => {
           }
 
           // Highlight tooltips when hovering on battlefield
-          const endHighlightTooltips = profiler?.mark("animate_highlight_tooltips") ?? (() => {});
+          const endHighlightTooltips =
+            profiler?.mark("animate_highlight_tooltips") ?? (() => {});
           tooltips = highlightTooltips({
             group_ground,
             cachedIntersections,
-            battle: battle.current,
+            battle: battleRef.current,
             currentTooltips: tooltips,
           });
 
@@ -859,8 +879,8 @@ const Combat: React.FC<CombatProps> = (props) => {
             group_tiles,
             cachedIntersections,
             battleMaps: battleMapsRef.current,
-            mouseX: mouseScreen.current.x,
-            mouseY: mouseScreen.current.y,
+            mouseX: mouseScreenRef.current.x,
+            mouseY: mouseScreenRef.current.y,
             onHoverChange: (hover) => {
               // Only update state if hover target actually changed
               const newKey = hover
@@ -883,7 +903,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           smoothCameraFollow({
             camera: cameraRef.current,
             controls: controlsRef.current,
-            targetPosition: cameraTargetPosition.current,
+            targetPosition: cameraTargetPositionRef.current,
             width: cachedWidth,
             height: cachedHeight,
           });
@@ -926,7 +946,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       // Remove the mouseover listener
       return () => {
         // Mark component as unmounted FIRST to prevent stale render callbacks
-        isMounted.current = false;
+        isMountedRef.current = false;
 
         // Cancel animation frame before cleanup
         performanceMonitor.cancelFrame(animationId);
@@ -947,7 +967,10 @@ const Combat: React.FC<CombatProps> = (props) => {
           sceneRef.removeEventListener("touchstart", onDocumentTouchStart);
           controls.removeEventListener("change", onZoomChange);
           rendererElement.removeEventListener("click", onClick, true);
-          renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+          renderer.domElement.removeEventListener(
+            "webglcontextlost",
+            handleContextLost,
+          );
           renderer.domElement.removeEventListener(
             "webglcontextrestored",
             handleContextRestored,
@@ -998,11 +1021,11 @@ const Combat: React.FC<CombatProps> = (props) => {
     result?.outcome === "Won" && (battleType === "ARENA" || battleType === "TRAINING");
   const showShrineAgain = result?.outcome === "Won" && battleType === "SHRINE_WAR";
   const showTravelBtn = battleType === "QUEST";
-  const arenaOpponentId = battle.current?.usersState.find(
+  const arenaOpponentId = battleRef.current?.usersState.find(
     (u) => u.userId !== suid && !u.isSummon && u.isAi,
   )?.controllerId;
-  const initiveWinner = battle.current?.usersState.find(
-    (u) => u.userId === battle.current?.activeUserId,
+  const initiveWinner = battleRef.current?.usersState.find(
+    (u) => u.userId === battleRef.current?.activeUserId,
   );
   const modalUserQuest = userData?.userQuests?.find(
     (q) => q.questId === logbookModalQuestId,
@@ -1043,14 +1066,17 @@ const Combat: React.FC<CombatProps> = (props) => {
       {webglError && <WebGlError />}
       {/* BATTLE LOBBY SCREEN */}
       {isInLobby &&
-        battle.current &&
-        PvpBattleTypes.includes(battle.current.battleType) && (
+        battleRef.current &&
+        PvpBattleTypes.includes(battleRef.current.battleType) && (
           <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto bg-black opacity-90">
             <div className="flex flex-col items-center justify-center text-white h-full">
               <p className="text-3xl">Waiting for opponent</p>
               <p className="text-xl">
                 Time Left:{" "}
-                <Countdown targetDate={battle.current.createdAt} timeDiff={timeDiff} />
+                <Countdown
+                  targetDate={battleRef.current.createdAt}
+                  timeDiff={timeDiff}
+                />
               </p>
               <p className="text-lg mb-2 flex flex-row">
                 Initiative Winner: {initiveWinner?.username}{" "}
@@ -1059,7 +1085,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                 </Link>
               </p>
               <div className="flex flex-row gap-4">
-                {battle.current.usersState
+                {battleRef.current.usersState
                   .filter((u) => u.isOriginal && !u.isAi)
                   .map((u) => {
                     return (
@@ -1088,9 +1114,9 @@ const Combat: React.FC<CombatProps> = (props) => {
                   size="small"
                   label="Item Loadout"
                   onSelectOverride={(loadoutId) => {
-                    if (battle?.current) {
+                    if (battleRef?.current) {
                       selectLoadout({
-                        battleId: battle.current.id,
+                        battleId: battleRef.current.id,
                         itemLoadoutId: loadoutId,
                       });
                     }
@@ -1101,9 +1127,9 @@ const Combat: React.FC<CombatProps> = (props) => {
                   size="small"
                   label="Jutsu Loadout"
                   onSelectOverride={(loadoutId) => {
-                    if (battle?.current) {
+                    if (battleRef?.current) {
                       selectLoadout({
-                        battleId: battle.current.id,
+                        battleId: battleRef.current.id,
                         jutsuLoadoutId: loadoutId,
                       });
                     }
@@ -1114,8 +1140,8 @@ const Combat: React.FC<CombatProps> = (props) => {
                   variant="secondary"
                   disabled={battleSessionUser?.iAmHere}
                   onClick={() => {
-                    if (battle.current && suid) {
-                      iAmHere({ battleId: battle.current.id });
+                    if (battleRef.current && suid) {
+                      iAmHere({ battleId: battleRef.current.id });
                     }
                   }}
                 >
@@ -1287,7 +1313,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                         startArenaBattle({
                           aiId: arenaOpponentId,
                           stats:
-                            battle.current?.battleType === "TRAINING"
+                            battleRef.current?.battleType === "TRAINING"
                               ? statDistribution
                               : undefined,
                         })

@@ -14,7 +14,7 @@ import { initiateBattle } from "@/routers/combat";
 import { TOURNAMENT_ROUND_SECONDS } from "@/drizzle/constants";
 import { secondsFromDate } from "@/utils/time";
 import { updateRewards } from "@/routers/quests";
-import { ObjectiveReward } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
 import { postProcessRewards } from "@/libs/quest";
 import type { TournamentMatch } from "@/drizzle/schema";
 import type { TournamentMatchState } from "@/drizzle/constants";

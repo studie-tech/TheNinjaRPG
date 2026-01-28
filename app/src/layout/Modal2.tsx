@@ -42,7 +42,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
       // Don't trigger if the active element is a button (it will handle Enter itself)
       const activeElement = document.activeElement;
       const isButton = activeElement?.tagName === "BUTTON";
-      
+
       if (event.key === "Enter" && props?.onAccept && !isButton) {
         props.onAccept(event as unknown as React.KeyboardEvent<KeyboardEvent>);
       }
