@@ -369,7 +369,9 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                         {raid.raidEndsAt && (
                           <p className="text-xs text-muted-foreground">
                             {isCompleted ? (
-                              <>Ended: {new Date(raid.raidEndsAt).toLocaleDateString()}</>
+                              <>
+                                Ended: {new Date(raid.raidEndsAt).toLocaleDateString()}
+                              </>
                             ) : (
                               <Countdown
                                 targetDate={new Date(raid.raidEndsAt)}
@@ -938,18 +940,22 @@ const RaidEmptySlot: React.FC<RaidEmptySlotProps> = ({
 }) => {
   return (
     <div className="flex flex-col items-center gap-1 w-16">
-      <div
+      <button
+        type="button"
         className={cn(
-          "flex h-12 w-12 items-center justify-center rounded-md border-2 border-dashed border-gray-300 text-gray-400 text-sm flex-shrink-0",
+          "flex h-12 w-12 items-center justify-center rounded-md border-2 border-dashed border-gray-300 text-gray-400 text-sm flex-shrink-0 bg-transparent",
           canJoin &&
             !isJoining &&
             "cursor-pointer hover:border-orange-500 hover:bg-orange-50 hover:text-orange-500 dark:hover:bg-orange-950/30",
+          (!canJoin || isJoining) && "cursor-default",
         )}
         onClick={canJoin && !isJoining ? onJoin : undefined}
+        disabled={!canJoin || isJoining}
         title={canJoin ? "Click to join" : undefined}
+        aria-label={canJoin ? "Join slot" : "Empty slot"}
       >
         {isJoining ? <Loader2 className="h-4 w-4 animate-spin" /> : "?"}
-      </div>
+      </button>
       <span className="text-xs text-muted-foreground">
         {canJoin ? "Join" : "Empty"}
       </span>

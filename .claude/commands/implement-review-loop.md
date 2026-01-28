@@ -41,6 +41,7 @@ Wait for the Task to complete. Parse the returned summary table.
 ### Step 3: Parse Review Results
 
 Examine the code review summary. For each review that returned `NEEDS FIXES`, note:
+
 - The review type (e.g., Frontend, tRPC, Logic, etc.)
 - The findings file path (e.g., `.claude/review/<IDENTIFIER>/frontend.md`)
 
@@ -67,7 +68,7 @@ Instructions:
 Do not ask for clarification - make reasonable decisions based on the documented issues.
 ```
 
-Replace `FINDINGS_FILE_PATH` with the actual path (e.g., `.claude/review/frontend.md`).
+Replace `FINDINGS_FILE_PATH` with the actual path (e.g., `.claude/review/<IDENTIFIER>/frontend.md` such as `.claude/review/review-loop-20240124-143052/frontend.md`).
 
 **Launch ALL fixer agents in parallel** - they work on different aspects of the code and are independent.
 
@@ -78,6 +79,7 @@ Wait for all fixer agents to complete.
 After all fixer agents complete, **go back to Step 2** and run the code review again (reusing the same identifier).
 
 This creates an iterative loop:
+
 1. Run code review
 2. If all pass → Proceed to Step 6
 3. If any need fixes → Launch fixer agents
@@ -116,6 +118,7 @@ The implementation is ready for commit.
 
 1. Run `/code-review`
 2. Results:
+
    - Guidelines: PASS
    - Tests: PASS
    - Lint: NEEDS FIXES → `.claude/review/review-loop-20240124-143052/lint.md`
@@ -124,6 +127,7 @@ The implementation is ready for commit.
    - (etc.)
 
 3. Launch 2 parallel fixer agents:
+
    ```
    Task: "Fix all code review findings documented in: .claude/review/review-loop-20240124-143052/lint.md ..."
    Task: "Fix all code review findings documented in: .claude/review/review-loop-20240124-143052/frontend.md ..."
@@ -135,6 +139,7 @@ The implementation is ready for commit.
 
 1. Run `/code-review` again
 2. Results:
+
    - All reviews: PASS
 
 3. Output: "Review Loop Complete - All quality checks passed."

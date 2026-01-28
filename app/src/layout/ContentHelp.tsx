@@ -1025,11 +1025,12 @@ const renderRaidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
   const hasBossHealth = quest.raidBossMaxHealth && quest.raidBossMaxHealth > 0;
   const hasCurrentHealth =
     quest.raidBossCurrentHealth !== null && quest.raidBossCurrentHealth !== undefined;
-  const opponentAIs = (objective as { opponentAIs?: { ids: string[] }[] })?.opponentAIs;
+  const opponentAIs = (objective as { opponentAIs?: { ids?: string[] }[] })
+    ?.opponentAIs;
   const hasBossAI =
     opponentAIs &&
     opponentAIs.length > 0 &&
-    opponentAIs.some((ai) => ai.ids.length > 0);
+    opponentAIs.some((ai) => (ai.ids?.length ?? 0) > 0);
   const sector = (objective as { sector?: number })?.sector;
   const hasSector = sector !== null && sector !== undefined;
 
