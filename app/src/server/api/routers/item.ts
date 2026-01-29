@@ -425,26 +425,61 @@ export const itemRouter = createTRPCRouter({
       const filteredUserItems = userItems.filter(
         (i) =>
           i.imbuements.length === 0 &&
-          (!i.craftingFinishedAt || i.craftingFinishedAt < new Date()) && !i.isInAuction,
+          (!i.craftingFinishedAt || i.craftingFinishedAt < new Date()) &&
+          !i.isInAuction,
       );
       const totalQuantity = filteredUserItems.reduce((acc, i) => acc + i.quantity, 0);
       if (info && filteredUserItems.length > 0) {
-        let currentCount = 0;
-        for (const i of filteredUserItems.keys()) {
-          const id = filteredUserItems?.[i]?.id;
-          const newQuantity = Math.min(info.stackSize, totalQuantity - currentCount);
-          if (id) {
-            if (newQuantity > 0) {
-              currentCount += newQuantity;
-              await ctx.drizzle
-                .update(userItem)
-                .set({ quantity: newQuantity })
-                .where(eq(userItem.id, id));
-            } else {
-              await ctx.drizzle.delete(userItem).where(eq(userItem.id, id));
-            }
-          }
+        const stackSize = info.stackSize;
+        const numFullStacks = Math.floor(totalQuantity / stackSize);
+        const remainder = totalQuantity % stackSize;
+        const targetStacks = numFullStacks + (remainder > 0 ? 1 : 0);
+
+        // Sort items by ID for deterministic processing
+        const sortedItems = [...filteredUserItems].sort((a, b) =>
+          a.id.localeCompare(b.id),
+        );
+
+        // Determine which items to keep and which to delete
+        const itemsToKeep = sortedItems.slice(0, targetStacks);
+        const itemsToDelete = sortedItems.slice(targetStacks);
+
+        // Build update promises with guard clauses
+        const updatePromises = itemsToKeep.map((item, index) => {
+          const targetQuantity =
+            index < numFullStacks ? stackSize : remainder || stackSize;
+          return ctx.drizzle
+            .update(userItem)
+            .set({ quantity: targetQuantity })
+            .where(
+              and(
+                eq(userItem.id, item.id),
+                eq(userItem.userId, ctx.userId),
+                eq(userItem.isInAuction, false),
+              ),
+            );
+        });
+
+        // Build delete promises with guard clauses
+        const deletePromises = itemsToDelete.map((item) =>
+          ctx.drizzle
+            .delete(userItem)
+            .where(
+              and(
+                eq(userItem.id, item.id),
+                eq(userItem.userId, ctx.userId),
+                eq(userItem.isInAuction, false),
+              ),
+            ),
+        );
+
+        // Execute all operations in parallel for atomicity
+        const results = await Promise.all([...updatePromises, ...deletePromises]);
+        const allSucceeded = results.every((r) => r.rowsAffected > 0);
+        if (!allSucceeded) {
+          return { success: false, message: "Some stack operations failed" };
         }
+
         return { success: true, message: `Merged stacks of ${info.name}` };
       }
       return { success: false, message: "Failed to merge stacks" };
