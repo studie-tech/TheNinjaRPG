@@ -446,8 +446,7 @@ export const itemRouter = createTRPCRouter({
 
         // Build update promises with guard clauses
         const updatePromises = itemsToKeep.map((item, index) => {
-          const targetQuantity =
-            index < numFullStacks ? stackSize : remainder || stackSize;
+          const targetQuantity = index < numFullStacks ? stackSize : remainder;
           return ctx.drizzle
             .update(userItem)
             .set({ quantity: targetQuantity })
