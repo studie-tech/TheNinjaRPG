@@ -2965,8 +2965,8 @@ const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) => {
       e.statTypes?.forEach((statType) =>
         tags.push(
           statType === "Highest" && e.highestOffence
-            ? getStatTypeFromStat(e.highestOffence)
-            : statType,
+            ? getStatTypeFromStat(e.highestOffence).toLowerCase()
+            : statType.toLowerCase(),
         ),
       );
     }
@@ -2974,9 +2974,9 @@ const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) => {
       tags.push(...getLowerGenerals(e.generalTypes, e.highestGenerals));
     }
     if ("elements" in e && e.elements && e.elements.length > 0) {
-      tags.push(...e.elements);
+      tags.push(...e.elements.map((el) => el.toLowerCase()));
     } else {
-      tags.push("None");
+      tags.push("none");
     }
     return tags;
   };
