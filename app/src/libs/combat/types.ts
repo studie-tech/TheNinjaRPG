@@ -314,6 +314,7 @@ export type ExtraState = {
   // Raid-specific data
   raidQuestId?: string; // The quest ID for raid battles
   raidInitialBossHp?: number; // Initial boss HP at start of raid battle
+  raidStartBattleCount?: Record<string, number>; // userId -> battleCount at battle start
   // Exclusive raids for SHRINE_WAR battles (pre-loaded at initiation)
   sectorExclusiveRaids?: Quest[];
 };

@@ -77,7 +77,14 @@ import {
 import { fetchUpdatedUser, fetchUser } from "./profile";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { userData, questHistory, quest, gameSetting, jutsu } from "@/drizzle/schema";
-import { battle, battleAction, battleHistory, war, item } from "@/drizzle/schema";
+import {
+  battle,
+  battleAction,
+  battleHistory,
+  war,
+  item,
+  raidParticipation,
+} from "@/drizzle/schema";
 import { villageAlliance, village, tournamentMatch, bounty } from "@/drizzle/schema";
 import { sector, gameAsset } from "@/drizzle/schema";
 import { performActionSchema, statSchema, BarrierTag } from "@/validators/combat";
@@ -269,7 +276,7 @@ export const combatRouter = createTRPCRouter({
               updateUser(ctx.drizzle, pusher, userBattle, result, ctx.userId),
               updateWars(ctx.drizzle, pusher, userBattle, result, ctx.userId),
               updateKage(ctx.drizzle, userBattle, result), // no ctx.userId needed
-              updateRaidProgress(ctx.drizzle, userBattle),
+              updateRaidProgress(ctx.drizzle, userBattle, ctx.userId),
             ]);
           }
 
@@ -682,7 +689,7 @@ export const combatRouter = createTRPCRouter({
               updateVillageAnbuClan(db, newBattle, result, suid),
               updateWars(db, pusher, newBattle, result, suid),
               updateTournament(db, newBattle, result, suid),
-              result ? updateRaidProgress(db, newBattle) : Promise.resolve(),
+              result ? updateRaidProgress(db, newBattle, suid) : Promise.resolve(),
             ]);
             // Return dynamic battle update (excludes extraState for efficiency)
             // Frontend should merge this with existing extraState
@@ -1406,6 +1413,7 @@ export const initiateBattle = async (
     injectableJutsus,
     raidQuest,
     sectorExclusiveRaids,
+    raidParticipations,
   ] = await Promise.all([
     // Essentials
     fetchBattleEssentials(client),
@@ -1519,6 +1527,13 @@ export const initiateBattle = async (
     battleType === "SHRINE_WAR"
       ? client.query.quest.findMany({
           where: and(eq(quest.questType, "raid"), eq(quest.hidden, false)),
+        })
+      : [],
+    // Fetch raid participation records for battleCount guard (if applicable)
+    battleType === "RAID" && info.raidQuestId
+      ? client.query.raidParticipation.findMany({
+          where: eq(raidParticipation.questId, info.raidQuestId),
+          columns: { userId: true, battleCount: true },
         })
       : [],
   ]);
@@ -1992,6 +2007,10 @@ export const initiateBattle = async (
         initialDurability: initialDurability,
         raidQuestId: info.raidQuestId,
         raidInitialBossHp: raidInitialBossHp,
+        raidStartBattleCount: raidParticipations.reduce(
+          (acc, p) => ({ ...acc, [p.userId]: p.battleCount }),
+          {} as Record<string, number>,
+        ),
         sectorExclusiveRaids: sectorExclusiveRaids,
       },
       rewardScaling: rewardScaling,

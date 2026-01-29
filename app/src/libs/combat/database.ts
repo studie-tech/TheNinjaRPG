@@ -874,13 +874,17 @@ export const updateVillageAnbuClan = async (
  * Handles boss HP reduction, damage tracking per player, and defeat notifications.
  *
  * Protection against duplicate processing:
- * 1. gte(quest.raidBossCurrentHealth, 1) guard ensures only one battle can reduce HP to 0
- * 2. questUpdate.rowsAffected check prevents duplicate notifications
- * 3. onDuplicateKeyUpdate for participation records handles concurrent upserts safely
+ * 1. Each user deducts only their share of damage (totalDamage / numAttackers)
+ * 2. battleCount is used as an optimistic lock - the upsert only succeeds if
+ *    battleCount matches the value stored at battle start
+ * 3. rowsAffected === 0 indicates a duplicate call - skip HP deduction
+ * 4. This ensures each user's damage is only counted once, regardless of how
+ *    many times their endpoint is called
  */
 export const updateRaidProgress = async (
   client: DrizzleClient,
   curBattle: CompleteBattle,
+  userId: string,
 ) => {
   // Guard: Only process RAID battles with a raid quest ID
   if (curBattle.battleType !== "RAID" || !curBattle.extraState.raidQuestId) {
@@ -893,12 +897,15 @@ export const updateRaidProgress = async (
   // Find the boss in the battle state (exclude summons, which also have isAi=true)
   const boss = curBattle.usersState.find((u) => u.isAi && !u.isSummon);
 
-  // Get all human players (attackers) sorted by userId for deterministic damage distribution
-  const attackers = curBattle.usersState
-    .filter((u) => !u.isAi && !u.isSummon)
-    .sort((a, b) => a.userId.localeCompare(b.userId));
+  // Find this user in the battle
+  const user = curBattle.usersState.find(
+    (u) => u.userId === userId && !u.isAi && !u.isSummon,
+  );
 
-  if (!boss || raidInitialBossHp <= 0 || attackers.length === 0) {
+  // Get all human players (attackers) for damage distribution calculation
+  const attackers = curBattle.usersState.filter((u) => !u.isAi && !u.isSummon);
+
+  if (!boss || !user || raidInitialBossHp <= 0 || attackers.length === 0) {
     return;
   }
 
@@ -910,56 +917,52 @@ export const updateRaidProgress = async (
     return;
   }
 
-  // Distribute damage among all attackers with remainder distribution
-  const baseDamagePerPlayer = Math.floor(totalDamage / attackers.length);
-  const remainder = totalDamage % attackers.length;
-
-  // Step 1: Run quest HP update and participation records in PARALLEL
-  // These are independent operations - no data dependency between them
-  const [questUpdate] = await Promise.all([
-    // Update raid boss HP in quest table
-    client
-      .update(quest)
-      .set({
-        raidBossCurrentHealth: sql`GREATEST(0, ${quest.raidBossCurrentHealth} - ${totalDamage})`,
-      })
-      .where(
-        and(
-          eq(quest.id, raidQuestId),
-          eq(quest.questType, "raid"),
-          gte(quest.raidBossCurrentHealth, 1),
-        ),
-      ),
-    // Update/insert participation records for ALL attackers using atomic upsert
-    // Remainder damage is distributed to the first N attackers (deterministic since sorted by userId)
-    ...attackers.map((attacker, index) => {
-      const damageForPlayer = baseDamagePerPlayer + (index < remainder ? 1 : 0);
-      return client
-        .insert(raidParticipation)
-        .values({
-          id: nanoid(),
-          questId: raidQuestId,
-          userId: attacker.userId,
-          damageDealt: damageForPlayer,
-          battleCount: 1,
-          rewardsClaimed: [],
-        })
-        .onDuplicateKeyUpdate({
-          set: {
-            damageDealt: sql`${raidParticipation.damageDealt} + ${damageForPlayer}`,
-            battleCount: sql`${raidParticipation.battleCount} + 1`,
-            updatedAt: new Date(),
-          },
-        });
-    }),
-  ]);
-
-  // Step 2: Only proceed if this battle actually reduced HP (prevents duplicate notifications)
-  if (questUpdate.rowsAffected === 0) {
+  // Calculate this user's share of damage (equal distribution)
+  const userDamage = Math.floor(totalDamage / attackers.length);
+  if (userDamage <= 0) {
     return;
   }
 
-  // Step 3: Fetch updated quest and participants in PARALLEL
+  // Get the battleCount at the start of this battle (0 if user hasn't participated before)
+  const startBattleCount = curBattle.extraState.raidStartBattleCount?.[userId] ?? 0;
+
+  // Step 1: Try to upsert participation record with battleCount guard
+  // The IF conditions ensure the update only happens if battleCount matches startBattleCount
+  // If battleCount has changed (another call already processed), values stay the same
+  const upsertResult = await client
+    .insert(raidParticipation)
+    .values({
+      id: nanoid(),
+      questId: raidQuestId,
+      userId: userId,
+      damageDealt: userDamage,
+      battleCount: 1,
+      rewardsClaimed: [],
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        damageDealt: sql`IF(${raidParticipation.battleCount} = ${startBattleCount}, ${raidParticipation.damageDealt} + ${userDamage}, ${raidParticipation.damageDealt})`,
+        battleCount: sql`IF(${raidParticipation.battleCount} = ${startBattleCount}, ${raidParticipation.battleCount} + 1, ${raidParticipation.battleCount})`,
+        updatedAt: sql`IF(${raidParticipation.battleCount} = ${startBattleCount}, NOW(), ${raidParticipation.updatedAt})`,
+      },
+    });
+
+  // Step 2: Check rowsAffected to see if the upsert actually changed data
+  // rowsAffected = 1 (new insert) or 2 (update with changes) → proceed
+  // rowsAffected = 0 (no changes because battleCount didn't match) → skip
+  if (upsertResult.rowsAffected === 0) {
+    return;
+  }
+
+  // Step 3: Deduct this user's share of damage from boss HP
+  await client
+    .update(quest)
+    .set({
+      raidBossCurrentHealth: sql`GREATEST(0, ${quest.raidBossCurrentHealth} - ${userDamage})`,
+    })
+    .where(and(eq(quest.id, raidQuestId), eq(quest.questType, "raid")));
+
+  // Step 4: Fetch updated quest and participants in PARALLEL
   const [updatedQuest, participants] = await Promise.all([
     client.query.quest.findFirst({
       where: eq(quest.id, raidQuestId),
@@ -976,7 +979,7 @@ export const updateRaidProgress = async (
     return;
   }
 
-  // Step 4: Send notifications in PARALLEL
+  // Step 5: Send notifications in PARALLEL
   const raidName = updatedQuest?.name ?? "the raid";
 
   await Promise.all([
