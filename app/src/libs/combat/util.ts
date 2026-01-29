@@ -660,6 +660,8 @@ export const sortEffects = (
     "summonprevent",
     "weakness",
     // Pre-modifiers
+    "elementalseal",
+    "injectjutsus",
     "cleanse",
     "clear",
     "decreasepoolcost",
