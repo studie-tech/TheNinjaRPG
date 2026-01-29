@@ -982,22 +982,18 @@ export const updateRaidProgress = async (
   // Step 5: Send notifications in PARALLEL
   const raidName = updatedQuest?.name ?? "the raid";
 
+  // Only update the user this is being called for
   await Promise.all([
-    client.insert(notification).values(
-      participants.map((p) => ({
-        userId: p.userId,
+    client.insert(notification).values([
+      {
+        userId,
         content: `The boss in ${raidName} has been defeated! Check if you've earned any rewards.`,
-      })),
-    ),
+      },
+    ]),
     client
       .update(userData)
       .set({ unreadNotifications: sql`unreadNotifications + 1` })
-      .where(
-        inArray(
-          userData.userId,
-          participants.map((p) => p.userId),
-        ),
-      ),
+      .where(eq(userData.userId, userId)),
   ]);
 };
 
