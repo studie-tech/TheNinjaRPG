@@ -615,14 +615,10 @@ export const raidsRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ teamId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Query - parallel fetch all required data upfront
-      const [{ user }, raid, existingQueue, teamData] = await Promise.all([
+      const [{ user }, raid, teamData] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         ctx.drizzle.query.quest.findFirst({
           where: and(eq(quest.id, input.questId), eq(quest.questType, "raid")),
-        }),
-        ctx.drizzle.query.mpvpBattleUser.findFirst({
-          where: eq(mpvpBattleUser.userId, ctx.userId),
-          with: { clanBattle: true },
         }),
         // Fetch team if joining existing, otherwise skip
         input.teamId
@@ -643,9 +639,6 @@ export const raidsRouter = createTRPCRouter({
       if (!raid) return errorResponse("Raid not found");
       if (user.status !== "AWAKE") {
         return errorResponse("You cannot join a raid queue in your current status");
-      }
-      if (existingQueue?.clanBattle?.battleId === null) {
-        return errorResponse("You are already in a battle queue");
       }
 
       // Guard - raid active state
@@ -974,13 +967,14 @@ export const raidsRouter = createTRPCRouter({
         return errorResponse("You are not in this team");
       }
 
-      // Guard - lobby time check
+      // Guard - lobby time check (with 2 second buffer for network latency)
       const lobbyTimeElapsed = secondsFromDate(
         RAID_BATTLE_LOBBY_SECONDS,
         team.createdAt,
       );
+      const LOBBY_BUFFER_MS = 2000;
       if (
-        new Date() < lobbyTimeElapsed &&
+        Date.now() < lobbyTimeElapsed.getTime() - LOBBY_BUFFER_MS &&
         team.queue.length < RAID_BATTLE_MAX_USERS_PER_TEAM
       ) {
         return errorResponse("Please wait for the lobby timer or full team");
