@@ -35,10 +35,11 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     resolver: zodResolver(JutsuValidator),
   });
 
-  // Query for bloodlines and villages
+  // Query for bloodlines, villages, and items
   const { data: bloodlines, isPending: l1 } =
     api.bloodline.getAllNames.useQuery(undefined);
   const { data: villages, isPending: l2 } = api.village.getAllNames.useQuery(undefined);
+  const { data: items, isPending: l4 } = api.item.getAllNames.useQuery(undefined);
 
   // Mutation for updating jutsu
   const { mutate: updateJutsu, isPending: l3 } = api.jutsu.update.useMutation({
@@ -72,7 +73,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   };
 
   // Are we loading data
-  const loading = l1 || l2 || l3;
+  const loading = l1 || l2 || l3 || l4;
 
   // Watch for changes to avatar
   const imageUrl = useWatch({
@@ -81,6 +82,11 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   });
 
   // Object for form values
+  const requiredItemOptions = items?.map((item) => ({
+    id: item.name,
+    name: item.name,
+  }));
+
   const formData: FormEntry<keyof ZodJutsuType>[] = [
     { id: "image", type: "avatar", href: imageUrl },
     { id: "name", type: "text" },
@@ -109,7 +115,13 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     { id: "battleUsageType", type: "str_array", values: BattleUsageTypes },
     { id: "hidden", type: "boolean" },
     { id: "injectableInBattle", type: "boolean" },
-    { id: "requiredItemIds", type: "textarea", label: "Required Item IDs (one per line)" },
+    {
+      id: "requiredItemIds",
+      type: "db_values",
+      values: requiredItemOptions,
+      multiple: true,
+      label: "Required Items",
+    },
   ];
 
   return { jutsu, effects, form, formData, loading, setEffects, handleJutsuSubmit };

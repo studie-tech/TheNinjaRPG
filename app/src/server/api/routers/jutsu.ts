@@ -14,6 +14,7 @@ import {
   quest,
 } from "@/drizzle/schema";
 import { fetchUser, fetchUpdatedUser } from "./profile";
+import { fetchUserItems } from "@/routers/item";
 import { canTrainJutsu } from "@/libs/train";
 import { getNewTrackers } from "@/libs/quest";
 import {
@@ -429,33 +430,19 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("Cannot hide tutorial jutsu");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
 
-      // Validate and sanitize requiredItemIds if present
+      // Validate requiredItemIds (item names) if present
       if (input.data.requiredItemIds && input.data.requiredItemIds.length > 0) {
-        // Sanitize: remove empty strings, whitespace-only, and duplicates
-        const sanitizedIds = [
-          ...new Set(
-            input.data.requiredItemIds
-              .map((id) => id.trim())
-              .filter((id) => id.length > 0),
-          ),
-        ];
-        
-        if (sanitizedIds.length === 0) {
-          return errorResponse("requiredItemIds contains only empty values");
-        }
-        
-        // Update input with sanitized values
-        input.data.requiredItemIds = sanitizedIds;
-        
         const itemsExist = await ctx.drizzle.query.item.findMany({
-          columns: { id: true },
-          where: inArray(item.id, sanitizedIds),
+          columns: { name: true },
+          where: inArray(item.name, input.data.requiredItemIds),
         });
-        const foundIds = new Set(itemsExist.map((i) => i.id));
-        const invalidIds = sanitizedIds.filter((id) => !foundIds.has(id));
-        if (invalidIds.length > 0) {
+        const foundNames = new Set(itemsExist.map((i) => i.name));
+        const invalidNames = input.data.requiredItemIds.filter(
+          (name) => !foundNames.has(name),
+        );
+        if (invalidNames.length > 0) {
           return errorResponse(
-            `Invalid item IDs: ${invalidIds.join(", ")}. Please check the item IDs are correct.`,
+            `Invalid item names: ${invalidNames.join(", ")}. Please check the item names are correct.`,
           );
         }
       }
@@ -643,7 +630,7 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [data, info, userjutsus, students] = await Promise.all([
+      const [data, info, userjutsus, students, allUserItems] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -651,13 +638,21 @@ export const jutsuRouter = createTRPCRouter({
         fetchJutsu(ctx.drizzle, input.jutsuId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchStudents(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
 
+      const userWithAllItems = {
+        ...user,
+        items: allUserItems ?? user.items,
+      };
+
       // Derived
       const userjutsuObj = userjutsus.find((j) => j.jutsuId === input.jutsuId);
-      const filteredJutsus = userjutsus.filter((uj) => canTrainJutsu(uj.jutsu, user));
+      const filteredJutsus = userjutsus.filter((uj) =>
+        canTrainJutsu(uj.jutsu, userWithAllItems),
+      );
       const curEquip = filteredJutsus?.filter((j) => j.equipped).length || 0;
       const maxEquip = userData && calcJutsuEquipLimit(user);
       const equippedJutsus = userjutsus.filter((uj) => uj.equipped);
@@ -676,7 +671,8 @@ export const jutsuRouter = createTRPCRouter({
       );
 
       if (!info) return errorResponse("Jutsu not found");
-      if (!canTrainJutsu(info, user)) return errorResponse("Jutsu not for you");
+      if (!canTrainJutsu(info, userWithAllItems))
+        return errorResponse("Jutsu not for you");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
 
       const level = userjutsuObj ? userjutsuObj.level : 0;

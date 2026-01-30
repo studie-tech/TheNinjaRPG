@@ -173,38 +173,47 @@ export const checkJutsuItems = (
   const hasRequiredItems =
     Array.isArray(requiredItemIds) && requiredItemIds.length > 0;
 
+  const itemsWithRelation =
+    userItemsWithItem ??
+    userItems?.filter((ui): ui is UserItemWithItem => "item" in ui);
+
   // If specific required items are defined (AND semantics - ALL items required)
   if (hasRequiredItems) {
-    if (requireEquipped) {
-      // For combat/usage: require ALL items to be equipped
-      const allItemsEquipped = requiredItemIds.every((reqId: string) =>
-        userItems?.some((ui) => ui.itemId === reqId && ui.equipped !== "NONE"),
-      );
-      if (!allItemsEquipped) return false;
-    } else {
-      // For training: require ALL items to be owned (in inventory)
-      const allItemsOwned = requiredItemIds.every((reqId: string) =>
-        userItems?.some((ui) => ui.itemId === reqId),
-      );
-      if (!allItemsOwned) return false;
-    }
+    const allItemsSatisfied = requiredItemIds.every((reqId: string) => {
+      if (itemsWithRelation && itemsWithRelation.length > 0) {
+        return itemsWithRelation.some(
+          (ui) =>
+            ui.item?.name === reqId &&
+            (!requireEquipped || ui.equipped !== "NONE"),
+        );
+      }
+      return !requireEquipped;
+    });
+    if (!allItemsSatisfied) return false;
     return true;
   }
 
   // Otherwise fall back to weapon-type requirement
   if (jutsu.jutsuWeapon !== "NONE") {
-    // Prefer relations if provided; otherwise try to infer when available. If we
-    // cannot access weaponType, fail closed (no weapon = requirement not met).
-    const itemsWithRelation =
-      userItemsWithItem ??
-      userItems?.filter((ui): ui is UserItemWithItem => "item" in ui);
+    // Prefer relations if provided; otherwise try to infer when available
+    // If we can't access item relations and this is a training check (not combat),
+    // we can't verify weapon type, so we pass (training shouldn't fail on this).
+    // For combat (requireEquipped=true), we fail closed for safety.
+    if (!itemsWithRelation || itemsWithRelation.length === 0) {
+      return !requireEquipped; // Pass for training, fail for combat
+    }
 
-    if (!itemsWithRelation || itemsWithRelation.length === 0) return false;
-
-    const equippedWeapon = itemsWithRelation.find(
-      (ui) => ui.item.weaponType === jutsu.jutsuWeapon && ui.equipped !== "NONE",
-    );
-    if (!equippedWeapon) return false;
+    if (requireEquipped) {
+      const equippedWeapon = itemsWithRelation.find(
+        (ui) => ui.item.weaponType === jutsu.jutsuWeapon && ui.equipped !== "NONE",
+      );
+      if (!equippedWeapon) return false;
+    } else {
+      const ownedWeapon = itemsWithRelation.find(
+        (ui) => ui.item.weaponType === jutsu.jutsuWeapon,
+      );
+      if (!ownedWeapon) return false;
+    }
   }
   return true;
 };

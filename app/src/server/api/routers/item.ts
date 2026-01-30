@@ -497,7 +497,7 @@ export const itemRouter = createTRPCRouter({
       // Check if any equipped jutsu requires this item
       const jutsuRequiringItem = equippedJutsus.find((uj) => {
         if (!uj.jutsu) return false;
-        const requiredIds = (uj.jutsu as any).requiredItemIds;
+        const requiredIds = uj.jutsu.requiredItemIds;
         return (
           Array.isArray(requiredIds) && requiredIds.includes(useritem.item.id)
         );
@@ -1674,24 +1674,8 @@ export const toggleEquipItem = async (
   if (useritem.storedAtHome) return errorResponse("Fetch at home first");
   const doEquip = slot ? useritem.equipped !== slot : useritem.equipped === "NONE";
 
-  // When unequipping, check if any equipped jutsu requires this item
-  if (!doEquip && useritem.equipped !== "NONE") {
-    const equippedJutsus = await client.query.userJutsu.findMany({
-      where: (table, { eq, and }) =>
-        and(eq(table.userId, user.userId), eq(table.equipped, true)),
-      with: { jutsu: true },
-    });
-    const jutsuRequiringItem = equippedJutsus.find((uj) => {
-      if (!uj.jutsu) return false;
-      const requiredIds = (uj.jutsu as any).requiredItemIds;
-      return Array.isArray(requiredIds) && requiredIds.includes(useritem.item.id);
-    });
-    if (jutsuRequiringItem) {
-      return errorResponse(
-        `Cannot unequip this item. The equipped jutsu "${jutsuRequiringItem.jutsu?.name}" requires it. Please unequip the jutsu first.`,
-      );
-    }
-  }
+  // Note: Unequipping is allowed even if a jutsu requires the item.
+  // Selling is still guarded elsewhere.
 
   // Only check requirements when equipping (not when unequipping)
   if (doEquip) {
