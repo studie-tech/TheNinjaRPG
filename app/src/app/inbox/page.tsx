@@ -278,6 +278,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
 
   const createConversation = api.comments.createConversation.useMutation({
     onSuccess: (data) => {
+      showMutationToast({ success: true, message: "Message sent." });
       create.reset();
       if (data.conversationId) {
         props.setSelectedConvo?.(data.conversationId);
