@@ -1,7 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { Trash2, CircleFadingArrowUp, ArrowRightLeft, Palette } from "lucide-react";
+import { useState, useMemo } from "react";
+import {
+  Trash2,
+  CircleFadingArrowUp,
+  ArrowRightLeft,
+  Palette,
+  ChevronsDown,
+} from "lucide-react";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import ContentBox from "@/layout/ContentBox";
 import Modal2 from "@/layout/Modal2";
@@ -45,7 +51,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { COST_RESKIN_JUTSU, RESKIN_LIMIT } from "@/drizzle/constants";
 import { canReskinFreely } from "@/utils/permissions";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { jutsuReskinCreateSchema } from "@/validators/jutsu";
 import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
@@ -53,6 +59,8 @@ import type { UserJutsuWithRelations } from "@/drizzle/schema";
 import { Label } from "@/components/ui/label";
 import { UploadButton } from "@/utils/uploadthing";
 import AvatarImage from "@/layout/Avatar";
+import type { UserItemWithItem } from "@/drizzle/schema";
+import type { ElementName } from "@/drizzle/constants";
 
 export default function MyJutsu() {
   // tRPC utility
@@ -78,6 +86,23 @@ export default function MyJutsu() {
   const [modalType, setModalType] = useState<string | null>(null);
   const [reskinData, setReskinData] = useState<JutsuReskinCreateSchema | null>(null);
 
+  // Accordion state for jutsu category sections (multiple can be open simultaneously)
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    () => new Set(["bloodline", "pvpOnly", "pveOnly", "general"]),
+  );
+
+  const toggleSection = (section: string) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  };
+
   // Reskin form
   const reskinForm = useForm<JutsuReskinCreateSchema>({
     mode: "onChange",
@@ -89,6 +114,12 @@ export default function MyJutsu() {
       battleDescription: "",
       image: undefined,
     },
+  });
+
+  // Watch reskin image for React Compiler compatibility
+  const watchedReskinImage = useWatch({
+    control: reskinForm.control,
+    name: "image",
   });
 
   // User Jutsus & items
@@ -267,53 +298,54 @@ export default function MyJutsu() {
   const isFetching = l1 || l2;
 
   // Collapse UserItem and Item
-  const userElements = new Set(getUserElements(userData));
-  const actionItems = userJutsus?.map((uj) => {
-    let warning = "";
-    if (userData) {
-      if (!checkJutsuItems(uj.jutsu, userItems)) {
-        warning = `No ${uj.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
-      }
-      if (!checkJutsuElements(uj.jutsu, userElements)) {
-        warning = "You do not have the required elements to use this jutsu.";
-      }
-      if (!hasRequiredRank(userData.rank, uj.jutsu.requiredRank)) {
-        warning = "You do not have the required rank to use this jutsu.";
-      }
-      if (!hasRequiredLevel(userData.level, uj.jutsu.requiredLevel)) {
-        warning = "You do not have the required level to use this jutsu.";
-      }
-      if (!checkJutsuRank(uj.jutsu.jutsuRank, userData.rank)) {
-        warning = "You do not have the required rank to use this jutsu.";
-      }
-      if (!checkJutsuVillage(uj.jutsu, userData)) {
-        warning = "You do not have the required village to use this jutsu.";
-      }
-      if (!checkJutsuBloodline(uj.jutsu, userData)) {
-        warning = "You do not have the required bloodline to use this jutsu.";
-      }
-    }
-    return {
-      ...uj.jutsu,
-      ...uj,
-      type: "jutsu" as const,
-      highlight: !!uj.equipped,
-      warning,
-      isReskinned: !!uj.activeReskin,
-    };
-  });
+  const userElements = useMemo(
+    () => new Set(getUserElements(userData)),
+    [userData],
+  );
 
-  // Sort if we have a loadout
-  if (userData?.loadout?.jutsuIds && userJutsus) {
-    userJutsus.sort((a, b) => {
-      const aIndex = userData?.loadout?.jutsuIds.indexOf(a.jutsuId) ?? -1;
-      const bIndex = userData?.loadout?.jutsuIds.indexOf(b.jutsuId) ?? -1;
-      if (aIndex === -1 && bIndex === -1) return 0;
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
+  // Categorize jutsu for organized display
+  const categorizedJutsus = useMemo(() => {
+    if (!userData) return null;
+    return categorizeJutsus(userJutsus, userData, userItems, userElements);
+  }, [userJutsus, userData, userItems, userElements]);
+
+  // Transform jutsu to action items with warnings
+  const transformToActionItems = (jutsus: UserJutsuWithRelations[]) => {
+    return jutsus.map((uj) => {
+      let warning = "";
+      if (userData) {
+        if (!checkJutsuItems(uj.jutsu, userItems)) {
+          warning = `No ${uj.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
+        }
+        if (!checkJutsuElements(uj.jutsu, userElements)) {
+          warning = "You do not have the required elements to use this jutsu.";
+        }
+        if (!hasRequiredRank(userData.rank, uj.jutsu.requiredRank)) {
+          warning = "You do not have the required rank to use this jutsu.";
+        }
+        if (!hasRequiredLevel(userData.level, uj.jutsu.requiredLevel)) {
+          warning = "You do not have the required level to use this jutsu.";
+        }
+        if (!checkJutsuRank(uj.jutsu.jutsuRank, userData.rank)) {
+          warning = "You do not have the required rank to use this jutsu.";
+        }
+        if (!checkJutsuVillage(uj.jutsu, userData)) {
+          warning = "You do not have the required village to use this jutsu.";
+        }
+        if (!checkJutsuBloodline(uj.jutsu, userData)) {
+          warning = "You do not have the required bloodline to use this jutsu.";
+        }
+      }
+      return {
+        ...uj.jutsu,
+        ...uj,
+        type: "jutsu" as const,
+        highlight: !!uj.equipped,
+        warning,
+        isReskinned: !!uj.activeReskin,
+      };
     });
-  }
+  };
 
   // Derived calculations
   const curEquip = userJutsus?.filter((j) => j.equipped).length;
@@ -343,9 +375,9 @@ export default function MyJutsu() {
         title="Jutsu Management"
         subtitle={subtitle}
         bottomRightContent={
-          <Button onClick={() => unequipAll()}>
+          <Button onClick={() => unequipAll()} disabled={isUnequipping}>
             <OctagonX className="h-6 w-6 mr-2" />
-            Unequip All
+            {isUnequipping ? "Unequipping..." : "Unequip All"}
           </Button>
         }
         topRightContent={
@@ -384,18 +416,116 @@ export default function MyJutsu() {
         }
       >
         {isFetching && <Loader explanation="Loading Jutsu" />}
-        <ActionSelector
-          items={actionItems}
-          counts={userJutsuCounts}
-          labelSingles={true}
-          onClick={(id) => {
-            setUserJutsu(userJutsus?.find((uj) => uj.id === id));
-            setIsOpen(true);
-          }}
-          showBgColor={false}
-          showLabels={true}
-          emptyText="You have not learned any jutsu. Go to the training grounds in your village to learn some."
-        />
+
+        {/* Equipped Section - Always Visible */}
+        {categorizedJutsus && (
+          <div className="mb-4">
+            <h3 className="font-bold text-lg px-3 py-2">
+              Equipped Jutsu ({categorizedJutsus.equipped.length}/{maxEquip})
+            </h3>
+            <ActionSelector
+              items={transformToActionItems(
+                // Sort equipped by loadout order
+                [...categorizedJutsus.equipped].sort((a, b) => {
+                  const aIndex =
+                    userData?.loadout?.jutsuIds.indexOf(a.jutsuId) ?? -1;
+                  const bIndex =
+                    userData?.loadout?.jutsuIds.indexOf(b.jutsuId) ?? -1;
+                  if (aIndex === -1 && bIndex === -1) return 0;
+                  if (aIndex === -1) return 1;
+                  if (bIndex === -1) return -1;
+                  return aIndex - bIndex;
+                }),
+              )}
+              counts={userJutsuCounts?.filter((c) =>
+                categorizedJutsus.equipped.some((j) => j.id === c.id),
+              )}
+              labelSingles={true}
+              onClick={(id) => {
+                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
+                setIsOpen(true);
+              }}
+              showBgColor={false}
+              showLabels={true}
+              emptyText="No jutsu equipped. Select jutsu from the categories below to equip."
+            />
+          </div>
+        )}
+
+        {/* Accordion Sections for Non-Equipped Jutsu */}
+        {categorizedJutsus && (
+          <div>
+            <JutsuCategorySection
+              title="Bloodline Jutsu"
+              jutsus={categorizedJutsus.bloodline}
+              isOpen={openSections.has("bloodline")}
+              onToggle={() => toggleSection("bloodline")}
+              onClick={(id) => {
+                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
+                setIsOpen(true);
+              }}
+              counts={userJutsuCounts}
+              transformToActionItems={transformToActionItems}
+            />
+            <JutsuCategorySection
+              title="PVP Jutsu"
+              jutsus={categorizedJutsus.pvpOnly}
+              isOpen={openSections.has("pvpOnly")}
+              onToggle={() => toggleSection("pvpOnly")}
+              onClick={(id) => {
+                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
+                setIsOpen(true);
+              }}
+              counts={userJutsuCounts}
+              transformToActionItems={transformToActionItems}
+            />
+            <JutsuCategorySection
+              title="PVE Jutsu"
+              jutsus={categorizedJutsus.pveOnly}
+              isOpen={openSections.has("pveOnly")}
+              onToggle={() => toggleSection("pveOnly")}
+              onClick={(id) => {
+                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
+                setIsOpen(true);
+              }}
+              counts={userJutsuCounts}
+              transformToActionItems={transformToActionItems}
+            />
+            <JutsuCategorySection
+              title="General Jutsu"
+              jutsus={categorizedJutsus.general}
+              isOpen={openSections.has("general")}
+              onToggle={() => toggleSection("general")}
+              onClick={(id) => {
+                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
+                setIsOpen(true);
+              }}
+              counts={userJutsuCounts}
+              transformToActionItems={transformToActionItems}
+            />
+            <JutsuCategorySection
+              title="Unavailable Jutsu"
+              jutsus={categorizedJutsus.unavailable}
+              isOpen={openSections.has("unavailable")}
+              onToggle={() => toggleSection("unavailable")}
+              onClick={(id) => {
+                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
+                setIsOpen(true);
+              }}
+              counts={userJutsuCounts}
+              transformToActionItems={transformToActionItems}
+            />
+          </div>
+        )}
+
+        {/* Show message when no jutsu */}
+        {!categorizedJutsus && !isFetching && (
+          <p className="text-muted-foreground text-center py-4">
+            You have not learned any jutsu. Go to the training grounds in your
+            village to learn some.
+          </p>
+        )}
+
         {isOpen && userData && userjutsu && (
           <Modal2
             title="Edit Jutsu"
@@ -685,7 +815,7 @@ export default function MyJutsu() {
                     </p>
                     <div className="flex items-center gap-3 flex-col">
                       <AvatarImage
-                        href={reskinForm.watch("image") || userjutsu.jutsu.image}
+                        href={watchedReskinImage || userjutsu.jutsu.image}
                         alt={userjutsu.jutsu.name}
                         size={64}
                         hover_effect={false}
@@ -896,3 +1026,146 @@ export default function MyJutsu() {
     </>
   );
 }
+
+// Sub-component for rendering accordion-style jutsu category sections
+interface JutsuCategorySectionProps {
+  title: string;
+  jutsus: UserJutsuWithRelations[];
+  isOpen: boolean;
+  onToggle: () => void;
+  onClick: (id: string) => void;
+  counts: { id: string; quantity: number }[] | undefined;
+  transformToActionItems: (jutsus: UserJutsuWithRelations[]) => {
+    id: string;
+    name: string;
+    image: string;
+    type: "jutsu";
+    highlight: boolean;
+    warning: string;
+    isReskinned: boolean;
+  }[];
+}
+
+const JutsuCategorySection: React.FC<JutsuCategorySectionProps> = ({
+  title,
+  jutsus,
+  isOpen,
+  onToggle,
+  onClick,
+  counts,
+  transformToActionItems,
+}) => {
+  if (jutsus.length === 0) return null;
+
+  return (
+    <div className="border-b-2 px-3 py-1">
+      <div
+        className="flex flex-row items-center cursor-pointer hover:bg-popover"
+        onClick={onToggle}
+      >
+        <h2 className="font-bold mt-2">
+          {title} ({jutsus.length})
+        </h2>
+        <div className="grow"></div>
+        <ChevronsDown
+          className={`h-6 w-6 hover:text-orange-500 ${isOpen ? "transform rotate-180" : ""}`}
+        />
+      </div>
+      {isOpen && (
+        <div className="py-2">
+          <ActionSelector
+            items={transformToActionItems(jutsus)}
+            counts={counts?.filter((c) => jutsus.some((j) => j.id === c.id))}
+            labelSingles={true}
+            onClick={onClick}
+            showBgColor={false}
+            showLabels={true}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Helper types and functions
+
+// Categorization types for organizing jutsu by usage type
+interface CategorizedJutsus {
+  equipped: UserJutsuWithRelations[];
+  bloodline: UserJutsuWithRelations[];
+  pvpOnly: UserJutsuWithRelations[];
+  pveOnly: UserJutsuWithRelations[];
+  general: UserJutsuWithRelations[];
+  unavailable: UserJutsuWithRelations[];
+}
+
+// Categorizes user jutsu into sections based on equipped status, bloodline, and battle usage type
+const categorizeJutsus = (
+  userJutsus: UserJutsuWithRelations[] | undefined,
+  userData: {
+    rank: string;
+    level: number;
+    villageId: string | null;
+    bloodlineId: string | null;
+    isOutlaw: boolean;
+  },
+  userItems: UserItemWithItem[] | undefined,
+  userElements: Set<ElementName>,
+): CategorizedJutsus => {
+  const result: CategorizedJutsus = {
+    equipped: [],
+    bloodline: [],
+    pvpOnly: [],
+    pveOnly: [],
+    general: [],
+    unavailable: [],
+  };
+
+  if (!userJutsus) return result;
+
+  for (const uj of userJutsus) {
+    // Equipped jutsu go to their own section
+    if (uj.equipped) {
+      result.equipped.push(uj);
+      continue;
+    }
+
+    // Check if user can equip this jutsu
+    const canEquipJutsu =
+      checkJutsuItems(uj.jutsu, userItems) &&
+      checkJutsuElements(uj.jutsu, userElements) &&
+      hasRequiredRank(
+        userData.rank as Parameters<typeof hasRequiredRank>[0],
+        uj.jutsu.requiredRank,
+      ) &&
+      hasRequiredLevel(userData.level, uj.jutsu.requiredLevel) &&
+      checkJutsuRank(
+        uj.jutsu.jutsuRank,
+        userData.rank as Parameters<typeof checkJutsuRank>[1],
+      ) &&
+      checkJutsuVillage(uj.jutsu, userData as Parameters<typeof checkJutsuVillage>[1]) &&
+      checkJutsuBloodline(
+        uj.jutsu,
+        userData as Parameters<typeof checkJutsuBloodline>[1],
+      );
+
+    if (!canEquipJutsu) {
+      result.unavailable.push(uj);
+      continue;
+    }
+
+    // Bloodline jutsu have priority category
+    if (uj.jutsu.jutsuType === "BLOODLINE") {
+      result.bloodline.push(uj);
+    } else if (uj.jutsu.battleUsageType === "PVP") {
+      result.pvpOnly.push(uj);
+    } else if (uj.jutsu.battleUsageType === "PVE") {
+      result.pveOnly.push(uj);
+    } else {
+      // battleUsageType === "BOTH" or default
+      result.general.push(uj);
+    }
+  }
+
+  return result;
+};
