@@ -332,13 +332,22 @@ function isThirdPartyInjectedError(event: Sentry.ErrorEvent): boolean {
     (frame) =>
       frame.filename?.includes("inject_content.js") ||
       frame.filename?.includes("uc.js") ||
-      frame.filename?.includes("cc.js") ||
       frame.abs_path?.includes("inject_content.js") ||
-      frame.abs_path?.includes("uc.js") ||
-      frame.abs_path?.includes("cc.js"),
+      frame.abs_path?.includes("uc.js"),
   );
 
-  return isInjectedScript && message.includes("Illegal invocation");
+  // Cookiebot's cc.js script errors - filter all errors from this script.
+  // These are third-party consent management errors we cannot control.
+  // UX note: Cookiebot handles these errors gracefully - users can still
+  // interact with the consent dialog even when these occur.
+  const isCookiebotScript = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("cc.js") || frame.abs_path?.includes("cc.js"),
+  );
+
+  // For generic injected scripts, only filter "Illegal invocation" errors
+  // For Cookiebot specifically, filter all errors as they are third-party issues
+  return (isInjectedScript && message.includes("Illegal invocation")) || isCookiebotScript;
 }
 
 /**
