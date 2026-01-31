@@ -296,7 +296,7 @@ const MenuBoxProfile: React.FC = () => {
               <TooltipContent>Money on hand</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {userData && userData.immunityUntil > new Date() && (
+          {userData && immunitySecsLeft > 0 && (
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger className="w-full">
@@ -450,8 +450,11 @@ const Cooldown: React.FC<CooldownProps> = (props) => {
   const hasNotifiedRef = React.useRef(false);
 
   useEffect(() => {
-    // Reset notification flag when countdown restarts
-    hasNotifiedRef.current = false;
+    // Only reset notification flag when countdown actually restarts (has time remaining)
+    const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
+    if (secondsLeft > 0) {
+      hasNotifiedRef.current = false;
+    }
   }, [createdAt, totalSeconds]);
 
   useEffect(() => {
