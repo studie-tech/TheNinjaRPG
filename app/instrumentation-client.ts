@@ -109,6 +109,9 @@ Sentry.init({
     if (isWalletExtensionError(event)) {
       return null; // Drop cryptocurrency wallet extension errors (MetaMask, etc.)
     }
+    if (isExternalHookCountError(event)) {
+      return null; // Drop React hook count errors caused by external DOM manipulation
+    }
     return event;
   },
 
@@ -597,6 +600,74 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   );
 
   return isFromWalletScript;
+};
+
+/**
+ * Check if an error is a React hook count mismatch caused by external DOM manipulation.
+ * These occur when browser extensions (Google Translate, ad blockers, password managers)
+ * or third-party scripts modify the DOM, causing React's reconciliation to fail.
+ *
+ * UX note: These errors are not user-visible - React recovers gracefully and continues
+ * rendering. The error is caught by React's error boundary which typically re-renders
+ * the component tree without visible impact.
+ *
+ * THENINJARPG-271: Filter these errors only when they originate from external code.
+ * The filter checks for stack traces that indicate the error came from:
+ * - Browser extensions (extension://, inject, inject_content)
+ * - Third-party scripts with no identifiable source
+ * - React internals only (no application code in stack)
+ */
+const isExternalHookCountError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Check for React hook count error messages
+  const isHookCountError =
+    message.includes("Rendered more hooks than during the previous render") ||
+    message.includes("Rendered fewer hooks than expected");
+
+  if (!isHookCountError) return false;
+
+  // If there's no stack trace, likely from external injection
+  if (stackFrames.length === 0) return true;
+
+  // Check if any frame originates from our application code
+  // Our application code has paths containing our source directories
+  const hasAppCode = stackFrames.some((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+
+    // Check for app source directories that indicate our code
+    return (
+      (filename.includes("app/src/") || absPath.includes("app/src/")) &&
+      !filename.includes("node_modules") &&
+      !absPath.includes("node_modules")
+    );
+  });
+
+  // If there's no app code in the stack, it's external
+  if (!hasAppCode) return true;
+
+  // Check if stack trace indicates external origin (extensions, injected scripts)
+  const hasExternalOrigin = stackFrames.some((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+
+    return (
+      filename.includes("extension://") ||
+      absPath.includes("extension://") ||
+      filename.includes("inject") ||
+      absPath.includes("inject") ||
+      filename.includes("translate.goog") ||
+      absPath.includes("translate.goog") ||
+      filename === "<anonymous>" ||
+      absPath === "<anonymous>"
+    );
+  });
+
+  // Only filter if external origin is detected (even if app code is present)
+  // This catches cases where extension code triggers errors in our app
+  return hasExternalOrigin;
 };
 
 function ensureBrowserErrorHandler() {
