@@ -42,7 +42,8 @@ import {
   canAwardReputation,
 } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/socials";
-import { LetterRanks, UserRanks, STARTER_VILLAGES } from "@/drizzle/constants";
+import { LetterRanks } from "@/drizzle/constants";
+import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { calculateContentDiff } from "@/utils/diff";
 import { initiateBattle } from "@/routers/combat";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
@@ -1059,33 +1060,7 @@ export const questsRouter = createTRPCRouter({
         z.object({
           success: z.literal(true),
           notifications: z.array(z.string()),
-          rewards: z.object({
-            reward_money: z.number(),
-            reward_seichi_silver: z.number(),
-            reward_clanpoints: z.number(),
-            reward_anbupoints: z.number(),
-            reward_exp: z.number(),
-            reward_tokens: z.number(),
-            reward_prestige: z.number(),
-            reward_reputation: z.number(),
-            reward_skillpoints: z.number(),
-            reward_medical_experience: z.number(),
-            reward_hunting_experience: z.number(),
-            reward_crafting_experience: z.number(),
-            reward_gathering_experience: z.number(),
-            reward_war_damage: z.number(),
-            reward_war_healing: z.number(),
-            reward_rank: z.enum(UserRanks),
-            reward_village_membership: z.enum(STARTER_VILLAGES),
-            reward_items: z.array(z.string()),
-            reward_jutsus: z.array(z.string()),
-            reward_badges: z.array(z.string()),
-            reward_bloodlines: z.array(z.string()),
-            reward_hunter_items: z.boolean(),
-            reward_gathering_items: z.boolean(),
-            reward_hunter_items_ids: z.array(z.string()),
-            reward_gathering_items_ids: z.array(z.string()),
-          }),
+          rewards: PostProcessedRewardSchema,
           userQuest: z
             .object({
               questId: z.string(),

@@ -33,6 +33,27 @@ export const rewardFields = {
 export const ObjectiveReward = z.object(rewardFields);
 export type ObjectiveRewardType = z.infer<typeof ObjectiveReward>;
 
+/**
+ * Schema for post-processed rewards where item/jutsu/bloodline/badge IDs
+ * have been resolved to names (simple string arrays).
+ * Used as output schema for API responses that return processed rewards.
+ *
+ * This is the SINGLE SOURCE OF TRUTH for post-processed reward types.
+ * The postProcessRewards function in quest.ts uses this type as its return type
+ * to ensure type safety if the function implementation changes.
+ */
+export const PostProcessedRewardSchema = z.object({
+  ...rewardFields,
+  // Override fields that get resolved to names after processing
+  reward_items: z.array(z.string()).default([]),
+  reward_jutsus: z.array(z.string()).default([]),
+  reward_bloodlines: z.array(z.string()).default([]),
+  reward_badges: z.array(z.string()).default([]),
+});
+
+/** Type for post-processed rewards - single source of truth */
+export type PostProcessedRewards = z.infer<typeof PostProcessedRewardSchema>;
+
 export const hasReward = (reward: ObjectiveRewardType) => {
   const parsedReward = ObjectiveReward.parse(reward);
   return (

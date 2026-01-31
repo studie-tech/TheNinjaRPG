@@ -1,4 +1,4 @@
-import { ObjectiveReward } from "@/validators/rewards";
+import { ObjectiveReward, type PostProcessedRewards } from "@/validators/rewards";
 import { getQuestCounterFieldName } from "@/validators/user";
 import { ObjectiveTracker, QuestTracker } from "@/validators/objectives";
 import { secondsPassed } from "@/utils/time";
@@ -326,9 +326,15 @@ export type GetRewardResult = ReturnType<typeof getReward>["rewards"];
 /**
  * Post-process rewards to ensure that the rewards are valid
  * @param rewards - Rewards to post-process
- * @returns Post-processed rewards
+ * @returns Post-processed rewards with item IDs as flat string array
+ *
+ * NOTE: Return type is explicitly annotated with PostProcessedRewards from
+ * @/validators/rewards to ensure type safety. If this function's return value
+ * changes, TypeScript will error, alerting us to update the schema.
  */
-export const postProcessRewards = (rewards: ObjectiveRewardType) => {
+export const postProcessRewards = (
+  rewards: ObjectiveRewardType,
+): PostProcessedRewards => {
   // Defensive check: ensure reward_items is an array (handles malformed DB data)
   const rewardItems = Array.isArray(rewards?.reward_items) ? rewards.reward_items : [];
   return {
@@ -348,7 +354,6 @@ export const postProcessRewards = (rewards: ObjectiveRewardType) => {
       }),
   };
 };
-export type PostProcessedRewards = ReturnType<typeof postProcessRewards>;
 
 /**
  * Collapse multiple rewards into a single reward

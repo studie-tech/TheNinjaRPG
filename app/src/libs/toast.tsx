@@ -4,7 +4,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { CheckCircle, XOctagon } from "lucide-react";
 import type { FieldErrors } from "react-hook-form";
 import type { ToastActionElement } from "src/components/ui/toast";
-import type { PostProcessedRewards } from "@/libs/quest";
+import type { PostProcessedRewards } from "@/validators/rewards";
 import type { Quest } from "@/drizzle/schema";
 import { parseHtml } from "@/utils/parse";
 import Image from "@/layout/Image";
