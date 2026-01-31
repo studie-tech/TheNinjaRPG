@@ -1332,6 +1332,7 @@ export const SHRINE_BATTLE_LOBBY_SECONDS = 60;
 export const RAID_BATTLE_MAX_USERS_PER_TEAM = 3;
 export const RAID_MAX_CONCURRENT_TEAMS = 5;
 export const RAID_BATTLE_LOBBY_SECONDS = 60;
+export const RAID_CLAIMING_TIMEOUT_MS = 30000; // 30 seconds timeout for claiming state
 
 // Clans config
 export const CLAN_MPVP_MAX_USERS_PER_SIDE = 3;

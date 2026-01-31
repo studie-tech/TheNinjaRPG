@@ -28,6 +28,7 @@ import {
   RAID_BATTLE_MAX_USERS_PER_TEAM,
   RAID_MAX_CONCURRENT_TEAMS,
   RAID_BATTLE_LOBBY_SECONDS,
+  RAID_CLAIMING_TIMEOUT_MS,
 } from "@/drizzle/constants";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { initiateBattle } from "@/routers/combat";
@@ -373,14 +374,17 @@ export const raidsRouter = createTRPCRouter({
 
     // Guard
     if (!queue || queue.clanBattle?.battleType !== "RAID_BATTLE") {
-      return { inQueue: false, queue: null };
+      return { inQueue: false, queue: null, isClaiming: false };
     }
-    if (queue.clanBattle.battleId !== null) {
-      return { inQueue: false, queue: null };
+    // Allow teams in "claiming-" state to be visible (they're stuck during battle initialization)
+    const isClaimingState = queue.clanBattle.battleId?.startsWith("claiming-") ?? false;
+    if (queue.clanBattle.battleId !== null && !isClaimingState) {
+      return { inQueue: false, queue: null, isClaiming: false };
     }
 
     return {
       inQueue: true,
+      isClaiming: isClaimingState,
       queue: {
         id: queue.clanBattle.id,
         questId: queue.clanBattle.attackerEntityId,
@@ -560,12 +564,12 @@ export const raidsRouter = createTRPCRouter({
   getActiveRaidTeams: protectedProcedure
     .input(z.object({ questId: z.string() }))
     .query(async ({ ctx, input }) => {
-      // Query
+      // Query - include teams in "claiming-" state (stuck during battle initialization)
       const teams = await ctx.drizzle.query.mpvpBattleQueue.findMany({
         where: and(
           eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
           eq(mpvpBattleQueue.attackerEntityId, input.questId),
-          isNull(mpvpBattleQueue.battleId),
+          sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE 'claiming-%')`,
         ),
         with: {
           queue: {
@@ -585,17 +589,22 @@ export const raidsRouter = createTRPCRouter({
 
       // Derived
       return {
-        teams: teams.map((team) => ({
-          id: team.id,
-          createdAt: team.createdAt,
-          members: team.queue.map((m) => ({
-            slot: m.slot,
-            visibleId: m.userId,
-            username: m.user.username,
-            avatar: m.user.avatar,
-          })),
-          canJoin: team.queue.length < RAID_BATTLE_MAX_USERS_PER_TEAM,
-        })),
+        teams: teams.map((team) => {
+          const isClaiming = team.battleId?.startsWith("claiming-") ?? false;
+          return {
+            id: team.id,
+            createdAt: team.createdAt,
+            isClaiming,
+            members: team.queue.map((m) => ({
+              slot: m.slot,
+              visibleId: m.userId,
+              username: m.user.username,
+              avatar: m.user.avatar,
+            })),
+            // Don't allow joining teams that are in claiming state
+            canJoin: !isClaiming && team.queue.length < RAID_BATTLE_MAX_USERS_PER_TEAM,
+          };
+        }),
         maxTeams: RAID_MAX_CONCURRENT_TEAMS,
       };
     }),
@@ -943,14 +952,13 @@ export const raidsRouter = createTRPCRouter({
     .input(z.object({ teamId: z.string() }))
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      // Query - parallel fetch user, team, and raid
+      // Query - parallel fetch user and team
       const [{ user }, team] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         ctx.drizzle.query.mpvpBattleQueue.findFirst({
           where: and(
             eq(mpvpBattleQueue.id, input.teamId),
             eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
-            isNull(mpvpBattleQueue.battleId),
           ),
           with: {
             queue: { with: { user: true } },
@@ -960,7 +968,33 @@ export const raidsRouter = createTRPCRouter({
 
       // Guard - basic validations
       if (!user) return errorResponse("User not found");
-      if (!team) return errorResponse("Team not found or battle already started");
+      if (!team) return errorResponse("Team not found");
+
+      // Check battleId state - handle stale claiming states or already started battles
+      if (team.battleId !== null) {
+        const isStaleClaimingState =
+          team.battleId.startsWith("claiming-") &&
+          team.createdAt.getTime() < Date.now() - RAID_CLAIMING_TIMEOUT_MS;
+
+        if (isStaleClaimingState) {
+          // Reset the stale claiming state
+          await ctx.drizzle
+            .update(mpvpBattleQueue)
+            .set({ battleId: null })
+            .where(
+              and(
+                eq(mpvpBattleQueue.id, input.teamId),
+                sql`${mpvpBattleQueue.battleId} LIKE 'claiming-%'`,
+                lt(
+                  mpvpBattleQueue.createdAt,
+                  new Date(Date.now() - RAID_CLAIMING_TIMEOUT_MS),
+                ),
+              ),
+            );
+        } else {
+          return errorResponse("Battle already started or being claimed");
+        }
+      }
 
       const userInTeam = team.queue.find((m) => m.userId === ctx.userId);
       if (!userInTeam) {

@@ -177,6 +177,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   );
   const displayedRaids = viewMode === "active" ? availableRaids : completedRaids;
   const userQueue = userQueueData?.inQueue ? userQueueData.queue : null;
+  const userQueueIsClaiming = userQueueData?.isClaiming ?? false;
   const userBuffs = userBuffsData?.buffs ?? [];
   const raidDetails = raidDetailsData?.raid;
   const participation = raidDetailsData?.participation;
@@ -546,6 +547,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                   maxTeams={maxTeams}
                   userId={userData.userId}
                   userInQueue={userInSelectedRaidQueue}
+                  userTeamIsClaiming={userQueueIsClaiming}
                   onJoinTeam={handleJoinQueue}
                   onCreateTeam={() => handleJoinQueue()}
                   onLeave={handleLeaveQueue}
@@ -717,6 +719,7 @@ interface RaidTeam {
   createdAt: Date;
   members: RaidTeamMember[];
   canJoin: boolean;
+  isClaiming?: boolean;
 }
 
 interface RaidTeamsDisplayProps {
@@ -724,6 +727,7 @@ interface RaidTeamsDisplayProps {
   maxTeams: number;
   userId: string;
   userInQueue: boolean;
+  userTeamIsClaiming: boolean;
   onJoinTeam: (teamId: string) => void;
   onCreateTeam: () => void;
   onLeave: () => void;
@@ -738,6 +742,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
   maxTeams,
   userId,
   userInQueue,
+  userTeamIsClaiming,
   onJoinTeam,
   onCreateTeam,
   onLeave,
@@ -837,6 +842,13 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                 {/* Action Buttons for user's team */}
                 {isUserTeam && (
                   <div className="flex flex-col items-center gap-2 border-t pt-3 sm:flex-row sm:justify-end">
+                    {/* Show claiming state message */}
+                    {userTeamIsClaiming && (
+                      <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 mr-auto">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Starting battle...</span>
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
@@ -848,7 +860,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                         {isLeaving ? "Leaving..." : "Leave"}
                       </Button>
 
-                      {isUserLeader && (
+                      {isUserLeader && !userTeamIsClaiming && (
                         <Button size="sm" onClick={onStart} disabled={isStarting}>
                           {isStarting ? (
                             <Loader2 className="h-4 w-4 animate-spin mr-1" />
@@ -878,9 +890,15 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                 )}
 
                 {/* Info for non-leaders */}
-                {isUserTeam && !isUserLeader && (
+                {isUserTeam && !isUserLeader && !userTeamIsClaiming && (
                   <p className="mt-2 text-center text-xs text-muted-foreground">
                     Waiting for team leader to start the battle
+                  </p>
+                )}
+                {isUserTeam && !isUserLeader && userTeamIsClaiming && (
+                  <p className="mt-2 text-center text-xs text-amber-600 dark:text-amber-400">
+                    Battle is being initialized... If this persists, you can leave and
+                    rejoin.
                   </p>
                 )}
               </div>
