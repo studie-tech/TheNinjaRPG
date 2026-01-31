@@ -991,6 +991,9 @@ export const raidsRouter = createTRPCRouter({
                 ),
               ),
             );
+          // Notify other users that the team is available again
+          const pusher = getServerPusher();
+          void updateRaidTeamsOnSector(pusher, team.sector);
         } else {
           return errorResponse("Battle already started or being claimed");
         }
