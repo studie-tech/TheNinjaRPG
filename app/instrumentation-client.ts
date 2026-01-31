@@ -100,6 +100,9 @@ Sentry.init({
     if (isClerkSyntaxError(event)) {
       return null; // Drop Clerk script parsing errors (network truncation)
     }
+    if (isDatabaseQueryError(event)) {
+      return null; // Drop transient database query errors
+    }
     return event;
   },
 
@@ -535,6 +538,31 @@ const isClerkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
       frame.abs_path?.includes("@clerk/clerk-js") ||
       frame.abs_path?.includes("clerk.browser"),
   );
+};
+
+/**
+ * Check if an error is a transient database query failure from Drizzle/PlanetScale.
+ * These occur when the database query times out or the connection is temporarily unavailable.
+ * The error format is "Failed query: select..." from the Drizzle ORM / PlanetScale driver.
+ *
+ * UX note: These errors are displayed to users via the global tRPC error handler
+ * in Provider.tsx which shows a toast notification. Users can retry the operation.
+ * This filter only suppresses Sentry logging for transient infrastructure issues.
+ *
+ * THENINJARPG-2D2: Filter transient database query errors from Sentry.
+ */
+const isDatabaseQueryError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+
+  // Check for Drizzle/PlanetScale "Failed query" error pattern
+  // This error occurs when database queries fail transiently
+  const isFailedQueryError = message.startsWith("Failed query:");
+
+  // This error comes from tRPC client as TRPCClientError
+  const isTrpcError = errorType === "TRPCClientError";
+
+  return isFailedQueryError && isTrpcError;
 };
 
 function ensureBrowserErrorHandler() {
