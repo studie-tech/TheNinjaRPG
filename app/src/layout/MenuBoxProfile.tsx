@@ -447,6 +447,12 @@ const Cooldown: React.FC<CooldownProps> = (props) => {
   // Track if we've already notified parent that countdown finished
   const hasNotifiedRef = React.useRef(false);
 
+  // Reset notification flag when countdown restarts (new immunity received)
+  useEffect(() => {
+    hasNotifiedRef.current = false;
+    setCounter(getTimeStr(createdAt + totalSeconds * 1000 - Date.now()));
+  }, [createdAt, totalSeconds]);
+
   useEffect(() => {
     if (totalSeconds) {
       const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
