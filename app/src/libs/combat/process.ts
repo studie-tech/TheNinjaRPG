@@ -1,4 +1,4 @@
-import { dmgConfig as config } from "./constants";
+import { dmgConfig as config, damageModifierTypes } from "./constants";
 import { VisualTag } from "@/validators/combat";
 import { findUser, findBarrier, getItem } from "./util";
 import { collapseConsequences, sortEffects, getEffectStage } from "./util";
@@ -271,14 +271,6 @@ export const applyEffects = (
         action,
       );
     });
-
-  // Define damage modifier effect types for staged processing
-  const damageModifierTypes = [
-    "decreasedamagetaken",
-    "decreasedamagegiven",
-    "increasedamagetaken",
-    "increasedamagegiven",
-  ];
 
   // Separate non-damage-modifier effects from damage modifier effects
   const nonDamageModifierEffects = usersEffects

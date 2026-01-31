@@ -114,3 +114,13 @@ export const StatNames = [
 ] as const;
 
 export const GenNames = ["strength", "intelligence", "willpower", "speed"] as const;
+
+/**
+ * Damage modifier effect types that require staged processing
+ */
+export const damageModifierTypes: string[] = [
+  "decreasedamagetaken",
+  "decreasedamagegiven",
+  "increasedamagetaken",
+  "increasedamagegiven",
+];
