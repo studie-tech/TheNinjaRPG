@@ -167,7 +167,7 @@ export const showRewardToast = (
   rewards: PostProcessedRewards,
   title: string,
   resolved?: boolean,
-  quest?: Quest,
+  quest?: Pick<Quest, "successDescription">,
   badges?: { id: string; name: string; image: string }[],
 ) => {
   const message = (

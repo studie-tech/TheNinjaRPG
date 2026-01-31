@@ -42,7 +42,7 @@ import {
   canAwardReputation,
 } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/socials";
-import { LetterRanks } from "@/drizzle/constants";
+import { LetterRanks, UserRanks, STARTER_VILLAGES } from "@/drizzle/constants";
 import { calculateContentDiff } from "@/utils/diff";
 import { initiateBattle } from "@/routers/combat";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
@@ -1048,6 +1048,64 @@ export const questsRouter = createTRPCRouter({
     }),
   checkRewards: protectedProcedure
     .input(z.object({ questId: z.string(), nextObjectiveId: z.string().optional() }))
+    .output(
+      z.union([
+        // Error response
+        z.object({
+          success: z.literal(false),
+          message: z.string(),
+        }),
+        // Success response
+        z.object({
+          success: z.literal(true),
+          notifications: z.array(z.string()),
+          rewards: z.object({
+            reward_money: z.number(),
+            reward_seichi_silver: z.number(),
+            reward_clanpoints: z.number(),
+            reward_anbupoints: z.number(),
+            reward_exp: z.number(),
+            reward_tokens: z.number(),
+            reward_prestige: z.number(),
+            reward_reputation: z.number(),
+            reward_skillpoints: z.number(),
+            reward_medical_experience: z.number(),
+            reward_hunting_experience: z.number(),
+            reward_crafting_experience: z.number(),
+            reward_gathering_experience: z.number(),
+            reward_war_damage: z.number(),
+            reward_war_healing: z.number(),
+            reward_rank: z.enum(UserRanks),
+            reward_village_membership: z.enum(STARTER_VILLAGES),
+            reward_items: z.array(z.string()),
+            reward_jutsus: z.array(z.string()),
+            reward_badges: z.array(z.string()),
+            reward_bloodlines: z.array(z.string()),
+            reward_hunter_items: z.boolean(),
+            reward_gathering_items: z.boolean(),
+            reward_hunter_items_ids: z.array(z.string()),
+            reward_gathering_items_ids: z.array(z.string()),
+          }),
+          userQuest: z
+            .object({
+              questId: z.string(),
+              quest: z.object({
+                name: z.string(),
+                successDescription: z.string().nullable(),
+              }),
+            })
+            .nullable(),
+          resolved: z.boolean(),
+          badges: z.array(
+            z.object({
+              id: z.string(),
+              name: z.string(),
+              image: z.string(),
+            }),
+          ),
+        }),
+      ]),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
       const { user, toastMessages, settings } = await fetchUpdatedUser({
@@ -1161,7 +1219,15 @@ export const questsRouter = createTRPCRouter({
         success: true,
         notifications: finalNotifications,
         rewards,
-        userQuest,
+        userQuest: userQuest
+          ? {
+              questId: userQuest.questId,
+              quest: {
+                name: userQuest.quest.name,
+                successDescription: userQuest.quest.successDescription,
+              },
+            }
+          : null,
         resolved,
         badges,
       };

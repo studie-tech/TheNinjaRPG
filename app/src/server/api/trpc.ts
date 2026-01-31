@@ -204,5 +204,5 @@ export const baseServerResponse = z.object({
 export type BaseServerResponse = z.infer<typeof baseServerResponse>;
 
 export const errorResponse = (msg: string) => {
-  return { success: false, message: msg };
+  return { success: false as const, message: msg };
 };
