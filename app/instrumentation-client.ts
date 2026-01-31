@@ -60,6 +60,7 @@ Sentry.init({
     "failed to load script", // Clerk's underlying script loading error (cause of the above) - network issues on mobile devices
     "Illegal invocation", // Third-party script error (Facebook in-app browser or Cookiebot)
     "Can't find variable: EmptyRanges", // Browser extension error (CodeMirror-based extensions)
+    "Can't find variable: DarkReader", // DarkReader browser extension error - dark mode extension may fail to initialize
     "postMessage is not a function", // Clerk internal error - occurs in clerk.browser.js with Web Workers
     "module factory is not available", // Turbopack runtime error - occurs when browser caches stale JS chunks after deployment
     "Cannot assign to read only property 'then' of object", // Turbopack Promise assignment error - occurs when browser extensions freeze Promise objects or stale caches cause conflicts
