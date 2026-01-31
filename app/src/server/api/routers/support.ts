@@ -1034,7 +1034,7 @@ export const sanitizeSupportTicketForPublic = (
       )
       .map((activity) => ({
         ...activity,
-        author: anonymizeStaffInfo(activity.author, viewer),
+        author: activity.author ? anonymizeStaffInfo(activity.author, viewer) : null,
       }));
   }
   return sanitized;

@@ -529,7 +529,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                 className="flex items-center gap-2 text-sm text-gray-600"
               >
                 <Clock className="h-3 w-3" />
-                <span>{activity.author.username}</span>
+                <span>{activity.author?.username ?? "Deleted User"}</span>
                 <span>{activity.action.toLowerCase().replace("_", " ")}</span>
                 {activity.oldValue && activity.newValue && (
                   <span>
