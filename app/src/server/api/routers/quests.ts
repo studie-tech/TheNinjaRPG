@@ -43,6 +43,7 @@ import {
 } from "@/utils/permissions";
 import { callDiscordContent } from "@/libs/socials";
 import { LetterRanks } from "@/drizzle/constants";
+import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { calculateContentDiff } from "@/utils/diff";
 import { initiateBattle } from "@/routers/combat";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
@@ -1048,6 +1049,38 @@ export const questsRouter = createTRPCRouter({
     }),
   checkRewards: protectedProcedure
     .input(z.object({ questId: z.string(), nextObjectiveId: z.string().optional() }))
+    .output(
+      z.union([
+        // Error response
+        z.object({
+          success: z.literal(false),
+          message: z.string(),
+        }),
+        // Success response
+        z.object({
+          success: z.literal(true),
+          notifications: z.array(z.string()),
+          rewards: PostProcessedRewardSchema,
+          userQuest: z
+            .object({
+              questId: z.string(),
+              quest: z.object({
+                name: z.string(),
+                successDescription: z.string().nullable(),
+              }),
+            })
+            .nullable(),
+          resolved: z.boolean(),
+          badges: z.array(
+            z.object({
+              id: z.string(),
+              name: z.string(),
+              image: z.string(),
+            }),
+          ),
+        }),
+      ]),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
       const { user, toastMessages, settings } = await fetchUpdatedUser({
@@ -1161,7 +1194,15 @@ export const questsRouter = createTRPCRouter({
         success: true,
         notifications: finalNotifications,
         rewards,
-        userQuest,
+        userQuest: userQuest
+          ? {
+              questId: userQuest.questId,
+              quest: {
+                name: userQuest.quest.name,
+                successDescription: userQuest.quest.successDescription,
+              },
+            }
+          : null,
         resolved,
         badges,
       };
