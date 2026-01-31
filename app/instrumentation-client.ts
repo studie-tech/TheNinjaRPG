@@ -260,9 +260,14 @@ function isGoogleTranslateError(event: Sentry.ErrorEvent): boolean {
  * Check if an error is a PayPal SDK cleanup error that should be filtered.
  * These occur when users navigate away while PayPal buttons are initializing,
  * or when users close the PayPal popup before the transaction completes.
+ *
+ * THENINJARPG-278: Also filters stack overflow errors from PayPal SDK's zoid library,
+ * which can occur during component cleanup when the internal promise handlers
+ * (dispatch/resolve/reject) enter infinite recursion.
  */
 function isPayPalSdkError(event: Sentry.ErrorEvent): boolean {
   const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
   // Check message for PayPal-related error patterns
@@ -291,6 +296,17 @@ function isPayPalSdkError(event: Sentry.ErrorEvent): boolean {
   );
 
   if (isFromPayPalSdk && message.includes("closed")) {
+    return true;
+  }
+
+  // THENINJARPG-278: Filter PayPal SDK stack overflow errors
+  // These occur when zoid's internal promise handlers (dispatch/resolve) enter infinite
+  // recursion during component cleanup. This is an internal SDK bug we cannot fix.
+  // UX note: Users don't see this error - it occurs during navigation/cleanup.
+  const isStackOverflow =
+    errorType === "RangeError" && message.includes("Maximum call stack size exceeded");
+
+  if (isStackOverflow && isFromPayPalSdk) {
     return true;
   }
 
