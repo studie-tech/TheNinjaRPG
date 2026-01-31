@@ -146,8 +146,13 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
   // Infinite pagination
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  // Flatten all pages data
-  const allListings = listings?.pages.map((page) => page.data).flat() ?? [];
+  // Flatten all pages data and filter out listings with missing userItem data
+  // (can happen if item was deleted between query time and render time)
+  const allListings =
+    listings?.pages
+      .map((page) => page.data)
+      .flat()
+      .filter((listing) => listing.userItem && listing.userItem.item) ?? [];
 
   // Transform data to include JSX directly in the objects
   const transformedData =
@@ -375,6 +380,18 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
     return (
       <Modal2 title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>
         <Loader />
+      </Modal2>
+    );
+  }
+  if (!listing.userItem || !listing.userItem.item) {
+    return (
+      <Modal2 title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>
+        <div className="p-4 text-center">
+          <p className="text-red-600">This auction is no longer available.</p>
+          <p className="text-muted-foreground text-sm mt-2">
+            The item associated with this auction could not be found.
+          </p>
+        </div>
       </Modal2>
     );
   }
