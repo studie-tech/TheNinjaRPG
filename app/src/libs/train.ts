@@ -183,7 +183,7 @@ export const checkJutsuItems = (
       if (itemsWithRelation && itemsWithRelation.length > 0) {
         return itemsWithRelation.some(
           (ui) =>
-            ui.item?.name === reqId &&
+            ui.item?.id === reqId &&
             (!requireEquipped || ui.equipped !== "NONE"),
         );
       }
