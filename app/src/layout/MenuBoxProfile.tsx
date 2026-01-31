@@ -456,7 +456,14 @@ const Cooldown: React.FC<CooldownProps> = (props) => {
   useEffect(() => {
     if (totalSeconds) {
       const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
-      if (secondsLeft > 0) {
+      if (secondsLeft <= 0) {
+        // Already expired - immediately show Done and notify
+        setCounter(`Done`);
+        if (!hasNotifiedRef.current) {
+          hasNotifiedRef.current = true;
+          setState((prev) => prev + 1);
+        }
+      } else {
         const interval = setInterval(() => {
           const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
           if (secondsLeft <= 0) {
@@ -472,9 +479,6 @@ const Cooldown: React.FC<CooldownProps> = (props) => {
           }
         }, 1000);
         return () => clearInterval(interval);
-      } else {
-        // Already done on mount - just show Done, don't notify
-        setCounter(`Done`);
       }
     }
   }, [totalSeconds, createdAt, setState]);
