@@ -109,6 +109,9 @@ Sentry.init({
     if (isWalletExtensionError(event)) {
       return null; // Drop cryptocurrency wallet extension errors (MetaMask, etc.)
     }
+    if (isThirdPartyStackOverflowError(event)) {
+      return null; // Drop third-party stack overflow errors (tracking scripts)
+    }
     return event;
   },
 
@@ -597,6 +600,51 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   );
 
   return isFromWalletScript;
+};
+
+/**
+ * Check if an error is a "Maximum call stack size exceeded" RangeError from third-party scripts.
+ * These occur when third-party tracking scripts (TikTok Pixel, Google Analytics, Facebook Pixel, etc.)
+ * cause infinite recursion due to buggy event handlers or circular observer patterns.
+ *
+ * UX note: These errors are not visible to users and do not affect application functionality.
+ * They occur in isolated third-party script contexts and are caught by the global error handler.
+ * Since we have no control over third-party script code, filtering is the appropriate action.
+ *
+ * THENINJARPG-1XW: Filter stack overflow errors from third-party tracking scripts.
+ */
+const isThirdPartyStackOverflowError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must be a RangeError with "Maximum call stack size exceeded" message
+  if (errorType !== "RangeError") return false;
+  if (!message.includes("Maximum call stack size exceeded")) return false;
+
+  // Third-party cross-origin scripts produce errors with no useful stack trace
+  // (empty frames or only anonymous frames due to CORS restrictions)
+  if (stackFrames.length === 0) return true;
+
+  // Check if all frames are anonymous/unidentifiable (third-party pattern)
+  const hasNoMeaningfulStackTrace = stackFrames.every((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+    const func = frame.function ?? "";
+
+    // No identifiable source file
+    if (!filename && !absPath) return true;
+
+    // Anonymous script markers
+    if (filename === "<anonymous>" || absPath === "<anonymous>") return true;
+
+    // Check for the "undefined:? in ?" pattern (function is "?" with no filename)
+    if (func === "?" && !filename && !absPath) return true;
+
+    return false;
+  });
+
+  return hasNoMeaningfulStackTrace;
 };
 
 function ensureBrowserErrorHandler() {
