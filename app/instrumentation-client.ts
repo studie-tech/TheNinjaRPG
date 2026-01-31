@@ -672,9 +672,10 @@ const isCytoscapeEmitError = (event: Sentry.ErrorEvent): boolean => {
   if (errorType !== "TypeError") return false;
 
   // Check for the specific error pattern (may vary slightly in minified code)
+  // Safari-style messages show `evaluating 'z.emit'` while others show `.emit`
   const isCytoscapeEmitMessage =
     message.includes("undefined is not an object") &&
-    message.includes(".emit");
+    (message.includes(".emit") || message.includes("emit'"));
 
   if (!isCytoscapeEmitMessage) return false;
 
