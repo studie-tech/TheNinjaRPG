@@ -94,6 +94,9 @@ Sentry.init({
     if (isHtmlResponseError(event)) {
       return null; // Drop HTML response parsing errors (CDN/proxy outages)
     }
+    if (isServerTextResponseError(event)) {
+      return null; // Drop server text response parsing errors (transient infrastructure issues)
+    }
     if (isInjectedJsonParseError(event)) {
       return null; // Drop JSON parsing errors from anonymous/injected code (browser extensions)
     }
@@ -455,6 +458,33 @@ const isHtmlResponseError = (event: Sentry.ErrorEvent): boolean => {
     errorType === "TRPCClientError" || errorType === "SyntaxError";
 
   return isHtmlParsingError && isTrpcOrSyntaxError;
+};
+
+/**
+ * Check if an error is a server text response parsing error from tRPC.
+ * These occur when a server or proxy returns plain text like "A server error occurred"
+ * instead of JSON, causing the tRPC client to fail parsing the response.
+ *
+ * UX note: These errors are handled gracefully:
+ * - tRPC retry logic (Provider.tsx) automatically retries up to 3 times for queries
+ * - Silent ignore in tRPC onError prevents alarming toast notifications
+ * - Users only see errors if the request fails after all retries
+ *
+ * THENINJARPG-2D7: Filter these errors from Sentry as they are transient infrastructure issues.
+ */
+const isServerTextResponseError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+
+  // Check for "A server e" in JSON parsing error (server returning plain text error)
+  const isServerTextParsingError =
+    message.includes('"A server e"') && message.includes("is not valid JSON");
+
+  // This error comes from tRPC client as TRPCClientError or SyntaxError
+  const isTrpcOrSyntaxError =
+    errorType === "TRPCClientError" || errorType === "SyntaxError";
+
+  return isServerTextParsingError && isTrpcOrSyntaxError;
 };
 
 /**
