@@ -273,9 +273,15 @@ export const applyEffects = (
     });
 
   // Separate non-damage-modifier effects from damage modifier effects
+  // Note: pierce is explicitly excluded here to maintain the sortEffects ordering
+  // where damage modifiers run BEFORE pierce (pierce bypasses damage reduction)
   const nonDamageModifierEffects = usersEffects
     .filter((e) => e.type !== "mirror" && e.type !== "copy")
-    .filter((e) => !damageModifierTypes.includes(e.type));
+    .filter((e) => !damageModifierTypes.includes(e.type))
+    .filter((e) => e.type !== "pierce");
+
+  // Separate pierce effects (must run AFTER damage modifiers per sortEffects ordering)
+  const pierceEffects = usersEffects.filter((e) => e.type === "pierce");
 
   // Separate damage modifier effects by stage
   const stage1DamageModifiers = usersEffects
@@ -328,6 +334,23 @@ export const applyEffects = (
 
   // Apply Stage 2 damage modifiers (in-battle effects)
   stage2DamageModifiers.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Apply pierce effects AFTER all damage modifiers
+  // This maintains the sortEffects ordering where pierce bypasses damage reduction
+  pierceEffects.sort(sortEffects).forEach((effect) => {
     applySingleEffect(
       consequences,
       newUsersState,
