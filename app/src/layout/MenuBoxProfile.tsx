@@ -296,7 +296,7 @@ const MenuBoxProfile: React.FC = () => {
               <TooltipContent>Money on hand</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {userData && userData.immunityUntil > new Date() && (
+          {userData && immunitySecsLeft > 0 && (
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger className="w-full">
@@ -305,7 +305,6 @@ const MenuBoxProfile: React.FC = () => {
                     <Cooldown
                       createdAt={immunityData.createdAt}
                       totalSeconds={immunitySecsLeft}
-                      initialSecondsLeft={immunitySecsLeft}
                       setState={setState}
                     />
                   </div>
@@ -429,7 +428,6 @@ const getTimeStr = (secondsLeft: number) => {
 };
 
 interface CooldownProps {
-  initialSecondsLeft: number;
   totalSeconds: number;
   createdAt: number;
   setState: React.Dispatch<React.SetStateAction<number>>;
@@ -442,17 +440,12 @@ interface CooldownProps {
  * @returns The rendered `Cooldown` component.
  */
 const Cooldown: React.FC<CooldownProps> = (props) => {
-  const { createdAt, totalSeconds, initialSecondsLeft, setState } = props;
+  const { createdAt, totalSeconds, setState } = props;
   const [counter, setCounter] = useState<string>(() =>
-    getTimeStr(initialSecondsLeft * 1000),
+    getTimeStr(createdAt + totalSeconds * 1000 - Date.now()),
   );
   // Track if we've already notified parent that countdown finished
   const hasNotifiedRef = React.useRef(false);
-
-  useEffect(() => {
-    // Reset notification flag when countdown restarts
-    hasNotifiedRef.current = false;
-  }, [createdAt, totalSeconds]);
 
   useEffect(() => {
     if (totalSeconds) {
@@ -460,19 +453,25 @@ const Cooldown: React.FC<CooldownProps> = (props) => {
       if (secondsLeft > 0) {
         const interval = setInterval(() => {
           const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
-          setCounter(getTimeStr(secondsLeft));
+          if (secondsLeft <= 0) {
+            setCounter(`Done`);
+            // Notify parent that countdown just finished (transition from active to done)
+            if (!hasNotifiedRef.current) {
+              hasNotifiedRef.current = true;
+              setState((prev) => prev + 1);
+            }
+            clearInterval(interval);
+          } else {
+            setCounter(getTimeStr(secondsLeft));
+          }
         }, 1000);
         return () => clearInterval(interval);
       } else {
-        // Only notify parent once to prevent infinite loop
-        if (initialSecondsLeft > 0 && !hasNotifiedRef.current) {
-          hasNotifiedRef.current = true;
-          setState((prev) => prev + 1);
-        }
+        // Already done on mount - just show Done, don't notify
         setCounter(`Done`);
       }
     }
-  }, [totalSeconds, createdAt, initialSecondsLeft, setState]);
+  }, [totalSeconds, createdAt, setState]);
 
   return counter ? <>[{counter}]</> : <></>;
 };
