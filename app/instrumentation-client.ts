@@ -36,6 +36,7 @@ Sentry.init({
     "Cannot read properties of null (reading 'parentNode')", // Cookiebot error in calcFadeState when clicking "More Details"
     "null is not an object (evaluating 'element.parentNode')", // Cookiebot error in calcFadeState (Safari format)
     "UnrecognizedActionError", // New deployment
+    "An unexpected response was received from the server.", // Next.js server-action-reducer error - transient CDN/network issue during SSO callbacks (UC Browser, mobile)
     "undefined is not an object (evaluating 'e[a].call')", // Somethign internal never seen by user.
     "Hydration Error", // Based on sentry inspection not seen by user
     "Hydration failed - the server rendered HTML didn't match the client.", // Based on sentry inspection not seen by user
