@@ -637,9 +637,23 @@ const isExternalHookCountError = (event: Sentry.ErrorEvent): boolean => {
     const filename = frame.filename ?? "";
     const absPath = frame.abs_path ?? "";
 
-    // Check for app source directories that indicate our code
+    // Check for specific app source directories that indicate our code
+    const isInAppDirectory =
+      filename.includes("/src/app/") ||
+      filename.includes("/src/libs/") ||
+      filename.includes("/src/layout/") ||
+      filename.includes("/src/hooks/") ||
+      filename.includes("/src/utils/") ||
+      filename.includes("/src/validators/") ||
+      absPath.includes("/src/app/") ||
+      absPath.includes("/src/libs/") ||
+      absPath.includes("/src/layout/") ||
+      absPath.includes("/src/hooks/") ||
+      absPath.includes("/src/utils/") ||
+      absPath.includes("/src/validators/");
+
     return (
-      (filename.includes("app/src/") || absPath.includes("app/src/")) &&
+      isInAppDirectory &&
       !filename.includes("node_modules") &&
       !absPath.includes("node_modules")
     );
@@ -648,26 +662,35 @@ const isExternalHookCountError = (event: Sentry.ErrorEvent): boolean => {
   // If there's no app code in the stack, it's external
   if (!hasAppCode) return true;
 
-  // Check if stack trace indicates external origin (extensions, injected scripts)
-  const hasExternalOrigin = stackFrames.some((frame) => {
+  // Check if stack trace indicates clear external origin (extensions, injected scripts)
+  // Use more specific patterns to avoid false positives from minified code
+  const hasClearExternalOrigin = stackFrames.some((frame) => {
     const filename = frame.filename ?? "";
     const absPath = frame.abs_path ?? "";
 
     return (
+      // Browser extension protocols are unambiguous
       filename.includes("extension://") ||
       absPath.includes("extension://") ||
-      filename.includes("inject") ||
-      absPath.includes("inject") ||
+      filename.includes("chrome-extension://") ||
+      absPath.includes("chrome-extension://") ||
+      filename.includes("moz-extension://") ||
+      absPath.includes("moz-extension://") ||
+      // Specific injected script patterns (not just "inject" substring)
+      filename.includes("inject_content") ||
+      absPath.includes("inject_content") ||
+      filename.includes("content_script") ||
+      absPath.includes("content_script") ||
+      // Google Translate proxy domain
       filename.includes("translate.goog") ||
-      absPath.includes("translate.goog") ||
-      filename === "<anonymous>" ||
-      absPath === "<anonymous>"
+      absPath.includes("translate.goog")
     );
   });
 
-  // Only filter if external origin is detected (even if app code is present)
-  // This catches cases where extension code triggers errors in our app
-  return hasExternalOrigin;
+  // Only filter if clear external origin is detected AND app code is present
+  // When app code is in the stack, we need strong evidence of external interference
+  // to avoid silencing real bugs
+  return hasClearExternalOrigin;
 };
 
 function ensureBrowserErrorHandler() {
