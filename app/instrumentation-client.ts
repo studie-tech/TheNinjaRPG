@@ -109,6 +109,9 @@ Sentry.init({
     if (isWalletExtensionError(event)) {
       return null; // Drop cryptocurrency wallet extension errors (MetaMask, etc.)
     }
+    if (isCytoscapeCleanupError(event)) {
+      return null; // Drop Cytoscape cleanup race condition errors
+    }
     return event;
   },
 
@@ -392,7 +395,7 @@ function isDataCloneError(event: Sentry.ErrorEvent): boolean {
  * UX note: These errors are still displayed to users via the global tRPC error handler
  * in Provider.tsx which shows a toast notification. This filter only suppresses Sentry logging.
  *
- * THENINJARPG-2D1: Added safety filter error filtering for Replicate's content moderation.
+ * Safety filter error filtering handles Replicate's content moderation responses.
  */
 const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -533,6 +536,34 @@ const isInjectedJsonParseError = (event: Sentry.ErrorEvent): boolean => {
   });
 
   return isFromAnonymousOrInjectedCode;
+};
+
+/**
+ * Check if an error is a Cytoscape cleanup race condition error that should be filtered.
+ * These occur on mobile devices when touch events fire during/after the Cytoscape
+ * instance is being destroyed during React component unmount.
+ *
+ * UX note: This error occurs during component unmount cleanup - users do not see any
+ * error or broken UI. The Battle Graph dialog simply closes as expected. The
+ * GraphUsersGeneric component handles this gracefully with try/catch during destruction.
+ *
+ * Filters Cytoscape emit errors from mobile touch event race conditions.
+ */
+const isCytoscapeCleanupError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Check for the specific error message pattern
+  if (!message.includes("Cannot read properties of undefined (reading 'emit')")) {
+    return false;
+  }
+
+  // Check if the error originates from Cytoscape
+  return stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("cytoscape") ||
+      frame.abs_path?.includes("cytoscape"),
+  );
 };
 
 /**

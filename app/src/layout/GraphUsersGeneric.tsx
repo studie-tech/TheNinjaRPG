@@ -48,8 +48,10 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
         // Remove all listeners before destroying
         cyRefInstance.removeAllListeners();
         // Use setTimeout to allow any pending touch event handlers to complete
-        // before destroying the instance. This prevents the "Cannot read properties
-        // of undefined (reading 'emit')" error on mobile devices.
+        // before destroying the instance. The 300ms delay accounts for the Radix
+        // Dialog closing animation (200ms) plus buffer for mobile touch events.
+        // This prevents the "Cannot read properties of undefined (reading 'emit')"
+        // error on mobile devices.
         // Intentionally fire-and-forget since this is cleanup code
         // eslint-disable-next-line @eslint-react/web-api/no-leaked-timeout
         setTimeout(() => {
@@ -58,7 +60,7 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
           } catch {
             // Ignore errors during cleanup - the instance may already be partially destroyed
           }
-        }, 0);
+        }, 300);
       }
     };
   }, []);
