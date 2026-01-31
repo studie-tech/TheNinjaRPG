@@ -112,6 +112,9 @@ Sentry.init({
     if (isThirdPartyStackOverflowError(event)) {
       return null; // Drop third-party stack overflow errors (tracking scripts)
     }
+    if (isCytoscapeEmitError(event)) {
+      return null; // Drop Cytoscape internal emit errors (iOS Safari race condition)
+    }
     return event;
   },
 
@@ -645,6 +648,42 @@ const isThirdPartyStackOverflowError = (event: Sentry.ErrorEvent): boolean => {
   });
 
   return hasNoMeaningfulStackTrace;
+};
+
+/**
+ * Check if an error is a Cytoscape internal emit error that should be filtered.
+ * These occur on iOS Safari when the Cytoscape graph component is unmounted while
+ * touch events are still being processed. The internal event handler tries to emit
+ * on a destroyed/undefined element reference.
+ *
+ * UX note: Users don't see this error - it occurs during dialog close or navigation.
+ * The graph component has cleanup code (GraphUsersGeneric.tsx) that disables
+ * interactions before destroy, but iOS Safari's async touch event handling can
+ * still trigger this race condition inside Cytoscape's internal code.
+ *
+ * THENINJARPG-2ER: Filter Cytoscape internal emit errors from Sentry.
+ */
+const isCytoscapeEmitError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must be a TypeError
+  if (errorType !== "TypeError") return false;
+
+  // Check for the specific error pattern (may vary slightly in minified code)
+  const isCytoscapeEmitMessage =
+    message.includes("undefined is not an object") &&
+    message.includes(".emit");
+
+  if (!isCytoscapeEmitMessage) return false;
+
+  // Verify error originates from Cytoscape
+  return stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("cytoscape") ||
+      frame.abs_path?.includes("cytoscape"),
+  );
 };
 
 function ensureBrowserErrorHandler() {
