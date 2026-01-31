@@ -18,6 +18,7 @@ Sentry.init({
   // Which errors to ignore from frontend
   ignoreErrors: [
     "window.ethereum",
+    "Cannot redefine property: walletRouter", // Cryptocurrency wallet extension error - occurs when wallet extensions (MetaMask, Coinbase Wallet, etc.) conflict or reinitialize
     "ClerkJS: Token refresh failed",
     "Converting circular structure to JSON",
     "Uncaught NetworkError: Failed to execute 'importScripts' on 'WorkerGlobalScope'",
