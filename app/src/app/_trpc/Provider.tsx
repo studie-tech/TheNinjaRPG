@@ -196,6 +196,18 @@ export const onError = (err: unknown) => {
       showMutationToast({ success: false, message: err.message });
       return;
     }
+    // Filter Zod input validation errors - these are expected user input errors, not bugs.
+    // Zod errors from tRPC input validation have BAD_REQUEST code and a JSON array message
+    // containing error objects like: [{"code":"too_small","minimum":1,"path":["power"],...}]
+    // UX note: Users see these errors via the validation toast below.
+    if (errorCode === "BAD_REQUEST" && err.message.startsWith("[")) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Please check your input values",
+      });
+      return;
+    }
     Sentry.captureException(err, { extra: { message: "TRPC Client Error" } });
     toast({
       variant: "destructive",
