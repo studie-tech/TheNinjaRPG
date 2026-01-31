@@ -46,8 +46,9 @@ const ActivityStreakPopup: React.FC = () => {
   // Determine if we should show the popup
   const hasUnclaimedRewards =
     userStreaks?.streaks.some((s) => s.canClaimToday) ?? false;
+  const needsCatchUp = userStreaks?.streaks.some((s) => s.needsCatchUp) ?? false;
   const hasRecurringToEnroll = !!userStreaks?.activeRecurringConfig;
-  const shouldShowPopup = hasUnclaimedRewards || hasRecurringToEnroll;
+  const shouldShowPopup = hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll;
 
   // Show modal when there are unclaimed rewards and user hasn't dismissed today
   useEffect(() => {

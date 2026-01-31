@@ -15,6 +15,7 @@ import {
   lifesteal,
   drain,
   shield,
+  immunity,
   poison,
   finalStand,
   increaseRange,
@@ -738,6 +739,7 @@ export const applySingleEffect = (
       appliedEffects.add(idx);
       longitude = curTarget?.longitude;
       latitude = curTarget?.latitude;
+
       // Figure if tag should be applied
       const ratio = calcApplyRatio(effect, battle, effect.targetId, isTargetOrNew);
       if (ratio > 0) {
@@ -824,37 +826,39 @@ export const applySingleEffect = (
         } else if (effect.type === "lifesteal") {
           info = lifesteal(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "fleeprevent") {
-          info = fleePrevent(effect, curTarget);
+          info = fleePrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "healprevent") {
-          info = healPrevent(effect, curTarget);
+          info = healPrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "stealth") {
           info = stealth(effect, curTarget);
         } else if (effect.type === "elementalseal") {
           info = elementalseal(effect, curTarget);
         } else if (effect.type === "buffprevent") {
-          info = buffPrevent(effect, curTarget);
+          info = buffPrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "debuffprevent") {
-          info = debuffPrevent(effect, curTarget);
+          info = debuffPrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "onehitkillprevent") {
-          info = onehitkillPrevent(effect, curTarget);
+          info = onehitkillPrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "robprevent") {
-          info = robPrevent(effect, curTarget);
+          info = robPrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "cleanseprevent") {
-          info = cleansePrevent(effect, curTarget);
+          info = cleansePrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "clearprevent") {
-          info = clearPrevent(effect, curTarget);
+          info = clearPrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "sealprevent") {
-          info = sealPrevent(effect, curTarget);
+          info = sealPrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "stunprevent") {
-          info = stunPrevent(effect, curTarget);
+          info = stunPrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "moveprevent") {
-          info = movePrevent(effect, curTarget);
+          info = movePrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "summonprevent") {
-          info = summonPrevent(effect, curTarget);
+          info = summonPrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "weakness") {
           info = weakness(effect, curTarget);
         } else if (effect.type === "shield") {
           info = shield(effect, curTarget);
+        } else if (effect.type === "immunity") {
+          info = immunity(effect, curTarget);
         } else if (effect.type === "poison" && action) {
           info = poison(effect, action, actorId, consequences, curTarget, usersEffects);
         } else if (effect.type === "injectjutsus") {

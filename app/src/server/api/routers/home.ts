@@ -137,12 +137,25 @@ export const homeRouter = createTRPCRouter({
     if (!user) return [];
     // Derived
     const currentHomeIndex = HomeTypes.indexOf(user.homeType);
-    // Return all other home types, with a boolean indicating if it's an upgrade or downgrade
-    const upgrades = HomeTypes.map((homeType, i) => ({
-      type: homeType,
-      ...HomeTypeDetails[homeType],
-      isUpgrade: i > currentHomeIndex,
-    })).filter((upgrade) => upgrade.type !== user.homeType);
+    const currentHomeCost = HomeTypeDetails[user.homeType].cost;
+    // Return all other home types; upgradeCost is what the user pays (target cost minus current home value)
+    const upgrades = HomeTypes.map((homeType, i) => {
+      const details = HomeTypeDetails[homeType];
+      const isUpgrade = i > currentHomeIndex;
+      const upgradeCost = isUpgrade
+        ? Math.max(0, details.cost - currentHomeCost)
+        : 0;
+      const downgradeRefund = !isUpgrade
+        ? Math.floor((currentHomeCost - details.cost) * 0.75)
+        : 0;
+      return {
+        type: homeType,
+        ...details,
+        isUpgrade,
+        upgradeCost,
+        downgradeRefund,
+      };
+    }).filter((upgrade) => upgrade.type !== user.homeType);
     return upgrades;
   }),
 
@@ -166,16 +179,27 @@ export const homeRouter = createTRPCRouter({
         return errorResponse("You already own this home type");
       // Derived
       const targetHome = HomeTypeDetails[input.homeType];
+      const currentHomeCost = HomeTypeDetails[user.homeType].cost;
+      const upgradeCost = Math.max(0, targetHome.cost - currentHomeCost);
       // Upgrading or downgrading
       if (HomeTypes.indexOf(input.homeType) > HomeTypes.indexOf(user.homeType)) {
-        if (user.money < targetHome.cost) return errorResponse("Not enough Ryo");
-        await ctx.drizzle
+        if (user.money < upgradeCost) return errorResponse("Not enough Ryo");
+        const result = await ctx.drizzle
           .update(userData)
           .set({
-            money: sql`${user.money} - ${targetHome.cost}`,
+            money: sql`${userData.money} - ${upgradeCost}`,
             homeType: input.homeType,
           })
-          .where(eq(userData.userId, ctx.userId));
+          .where(
+            and(
+              eq(userData.userId, ctx.userId),
+              eq(userData.homeType, user.homeType),
+              gte(userData.money, upgradeCost),
+            ),
+          );
+        if (result.rowsAffected === 0) {
+          return errorResponse("Not enough Ryo or home already changed");
+        }
         return { success: true, message: `Upgraded to ${targetHome.name}` };
       } else {
         const storedNormalItems =
@@ -192,10 +216,24 @@ export const homeRouter = createTRPCRouter({
             `You need to remove some materials from storage first (max ${calcMaxHouseMaterials(user, targetHome.storage)})`,
           );
         }
-        await ctx.drizzle
+        const downgradeRefund = Math.floor(
+          (currentHomeCost - targetHome.cost) * 0.75,
+        );
+        const result = await ctx.drizzle
           .update(userData)
-          .set({ homeType: input.homeType })
-          .where(eq(userData.userId, ctx.userId));
+          .set({
+            homeType: input.homeType,
+            money: sql`${userData.money} + ${downgradeRefund}`,
+          })
+          .where(
+            and(
+              eq(userData.userId, ctx.userId),
+              eq(userData.homeType, user.homeType),
+            ),
+          );
+        if (result.rowsAffected === 0) {
+          return errorResponse("Home type changed during transaction");
+        }
         return { success: true, message: `Downgraded to ${targetHome.name}` };
       }
     }),

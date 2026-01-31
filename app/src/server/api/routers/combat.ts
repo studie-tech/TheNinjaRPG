@@ -77,9 +77,16 @@ import {
 import { fetchUpdatedUser, fetchUser } from "./profile";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { userData, questHistory, quest, gameSetting, jutsu } from "@/drizzle/schema";
-import { battle, battleAction, battleHistory, war, item } from "@/drizzle/schema";
+import {
+  battle,
+  battleAction,
+  battleHistory,
+  war,
+  item,
+  raidParticipation,
+} from "@/drizzle/schema";
 import { villageAlliance, village, tournamentMatch, bounty } from "@/drizzle/schema";
-import { sector } from "@/drizzle/schema";
+import { sector, gameAsset } from "@/drizzle/schema";
 import { performActionSchema, statSchema, BarrierTag } from "@/validators/combat";
 import { performBattleAction, stillInBattle } from "@/libs/combat/actions";
 import { availableUserActions } from "@/libs/combat/actions";
@@ -269,7 +276,7 @@ export const combatRouter = createTRPCRouter({
               updateUser(ctx.drizzle, pusher, userBattle, result, ctx.userId),
               updateWars(ctx.drizzle, pusher, userBattle, result, ctx.userId),
               updateKage(ctx.drizzle, userBattle, result), // no ctx.userId needed
-              updateRaidProgress(ctx.drizzle, userBattle),
+              updateRaidProgress(ctx.drizzle, userBattle, ctx.userId),
             ]);
           }
 
@@ -682,7 +689,7 @@ export const combatRouter = createTRPCRouter({
               updateVillageAnbuClan(db, newBattle, result, suid),
               updateWars(db, pusher, newBattle, result, suid),
               updateTournament(db, newBattle, result, suid),
-              result ? updateRaidProgress(db, newBattle) : Promise.resolve(),
+              result ? updateRaidProgress(db, newBattle, suid) : Promise.resolve(),
             ]);
             // Return dynamic battle update (excludes extraState for efficiency)
             // Frontend should merge this with existing extraState
@@ -1406,11 +1413,14 @@ export const initiateBattle = async (
     injectableJutsus,
     raidQuest,
     sectorExclusiveRaids,
+    raidParticipations,
   ] = await Promise.all([
     // Essentials
     fetchBattleEssentials(client),
-    // Fetch game assets
-    fetchGameAssets(client),
+    // Fetch game assets (only battlefield ones to avoid row limit)
+    client.query.gameAsset.findMany({
+      where: and(eq(gameAsset.hidden, false), eq(gameAsset.onInitialBattleField, true)),
+    }),
     // Fetch achievements
     client
       .select()
@@ -1517,6 +1527,13 @@ export const initiateBattle = async (
     battleType === "SHRINE_WAR"
       ? client.query.quest.findMany({
           where: and(eq(quest.questType, "raid"), eq(quest.hidden, false)),
+        })
+      : [],
+    // Fetch raid participation records for battleCount guard (if applicable)
+    battleType === "RAID" && info.raidQuestId
+      ? client.query.raidParticipation.findMany({
+          where: eq(raidParticipation.questId, info.raidQuestId),
+          columns: { userId: true, battleCount: true },
         })
       : [],
   ]);
@@ -1990,6 +2007,10 @@ export const initiateBattle = async (
         initialDurability: initialDurability,
         raidQuestId: info.raidQuestId,
         raidInitialBossHp: raidInitialBossHp,
+        raidStartBattleCount: raidParticipations.reduce(
+          (acc, p) => ({ ...acc, [p.userId]: p.battleCount }),
+          {} as Record<string, number>,
+        ),
         sectorExclusiveRaids: sectorExclusiveRaids,
       },
       rewardScaling: rewardScaling,
@@ -2223,16 +2244,32 @@ export const processUsersForBattle = async (
       relationIds: [],
       warIds: [],
       // Initialize jutsus and items (will be processed below)
-      jutsus: inputUser.jutsus.map((uj) => ({
-        ...uj,
-        lastUsedRound: -uj.jutsu.cooldown,
-        originalCooldown: uj.jutsu.cooldown,
-      })),
-      items: inputUser.items.map((ui) => ({
-        ...ui,
-        lastUsedRound: -ui.item.cooldown,
-        originalCooldown: ui.item.cooldown,
-      })),
+      jutsus: inputUser.jutsus
+        .filter((uj) => {
+          if (!uj.jutsu) {
+            console.error(`Jutsu not found for UserJutsu ${uj.id}`);
+            return false;
+          }
+          return true;
+        })
+        .map((uj) => ({
+          ...uj,
+          lastUsedRound: -uj.jutsu.cooldown,
+          originalCooldown: uj.jutsu.cooldown,
+        })),
+      items: inputUser.items
+        .filter((ui) => {
+          if (!ui.item) {
+            console.error(`Item not found for UserItem ${ui.id}`);
+            return false;
+          }
+          return true;
+        })
+        .map((ui) => ({
+          ...ui,
+          lastUsedRound: -ui.item.cooldown,
+          originalCooldown: ui.item.cooldown,
+        })),
     };
 
     // Add regen to pools. Pools are not updated "live" in the database, but rather are calculated on the frontend

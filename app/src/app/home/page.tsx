@@ -270,7 +270,9 @@ export default function HomePage() {
                                     </div>
                                     <div className="flex flex-col items-center ">
                                       <span className="font-semibold text-lg">
-                                        {upgrade.cost.toLocaleString()} Ryo
+                                        {upgrade.upgradeCost > 0
+                                          ? `${upgrade.upgradeCost.toLocaleString()} Ryo`
+                                          : "Free"}
                                       </span>
                                       <Button
                                         onClick={() =>
@@ -278,7 +280,7 @@ export default function HomePage() {
                                         }
                                         disabled={
                                           isUpgrading ||
-                                          (userData?.money ?? 0) < upgrade.cost
+                                          (userData?.money ?? 0) < upgrade.upgradeCost
                                         }
                                         size="sm"
                                       >
@@ -322,17 +324,16 @@ export default function HomePage() {
                                       </div>
                                     </div>
                                     <div className="flex flex-col items-center ">
-                                      <span className="font-semibold text-lg">
-                                        {downgrade.cost.toLocaleString()} Ryo
+                                      <span className="font-semibold text-lg text-muted-foreground">
+                                        {downgrade.downgradeRefund > 0
+                                          ? `${downgrade.downgradeRefund.toLocaleString()} Ryo back (75%)`
+                                          : "No cost"}
                                       </span>
                                       <Button
                                         onClick={() =>
                                           upgradeHome({ homeType: downgrade.type })
                                         }
-                                        disabled={
-                                          isUpgrading ||
-                                          (userData?.money ?? 0) < downgrade.cost
-                                        }
+                                        disabled={isUpgrading}
                                         size="sm"
                                       >
                                         <MinusCircle className="mr-2 h-4 w-4" />{" "}

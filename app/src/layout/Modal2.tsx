@@ -36,9 +36,10 @@ const Modal2: React.FC<Modal2Props> = (props) => {
     ? props.confirmClassName
     : "bg-blue-600 text-white hover:bg-blue-700";
 
-  // Handle key-presses for Enter key
+  // Handle key-presses for Enter key only when this modal is open
   useEffect(() => {
     const onDocumentKeyDown = (event: KeyboardEvent) => {
+      if (!props.isOpen) return;
       // Don't trigger if the active element is a button (it will handle Enter itself)
       const activeElement = document.activeElement;
       const isButton = activeElement?.tagName === "BUTTON";
@@ -52,7 +53,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.onAccept]);
+  }, [props.isOpen, props.onAccept]);
 
   const handleDialogClose = () => {
     if (props.onClose) props.onClose();

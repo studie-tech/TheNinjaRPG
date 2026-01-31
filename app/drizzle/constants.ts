@@ -2006,23 +2006,27 @@ export const HomeTypes = [
   "SMALL_MANSION",
   "SMALL_ESTATE",
   "LARGE_ESTATE",
+  "PALACE",
+  "MARSHMALLOWOPOLIS",
 ] as const;
 export type HomeType = (typeof HomeTypes)[number];
 
 export const HomeTypeDetails = {
   NONE: { regen: 0, storage: 0, cost: 0, name: "No Home" },
-  STUDIO_APARTMENT: { regen: 20, storage: 5, cost: 3000000, name: "Studio Apartment" },
+  STUDIO_APARTMENT: { regen: 20, storage: 25, cost: 3000000, name: "Studio Apartment" },
   ONE_BED_APARTMENT: {
     regen: 50,
-    storage: 10,
+    storage: 30,
     cost: 10000000,
     name: "One Bedroom Apartment",
   },
-  TWO_BED_HOUSE: { regen: 70, storage: 15, cost: 20000000, name: "Two Bedroom House" },
-  TOWN_HOUSE: { regen: 100, storage: 20, cost: 35000000, name: "Town House" },
-  SMALL_MANSION: { regen: 130, storage: 25, cost: 45000000, name: "Small Mansion" },
-  SMALL_ESTATE: { regen: 150, storage: 30, cost: 60000000, name: "Small Estate" },
-  LARGE_ESTATE: { regen: 200, storage: 40, cost: 100000000, name: "Large Estate" },
+  TWO_BED_HOUSE: { regen: 70, storage: 35, cost: 20000000, name: "Two Bedroom House" },
+  TOWN_HOUSE: { regen: 100, storage: 40, cost: 35000000, name: "Town House" },
+  SMALL_MANSION: { regen: 130, storage: 45, cost: 45000000, name: "Small Mansion" },
+  SMALL_ESTATE: { regen: 150, storage: 50, cost: 60000000, name: "Small Estate" },
+  LARGE_ESTATE: { regen: 200, storage: 60, cost: 100000000, name: "Large Estate" },
+  PALACE: { regen: 300, storage: 80, cost: 300000000, name: "Palace" },
+  MARSHMALLOWOPOLIS: { regen: 400, storage: 100, cost: 500000000, name: "Marshmallowopolis" },
 } as const;
 export type HomeTypeDetails = (typeof HomeTypeDetails)[keyof typeof HomeTypeDetails];
 

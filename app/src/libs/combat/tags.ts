@@ -8,11 +8,16 @@ import {
   DecreaseCooldownTag,
   HealTag,
 } from "@/validators/combat";
-import { isEffectActive } from "@/libs/combat/util";
+import { isEffectActive, getPreventTypeName } from "@/libs/combat/util";
 import type { BattleUserState, Consequence, ReturnedUserState } from "./types";
 import type { GroundEffect, UserEffect, ActionEffect } from "./types";
 import type { StatNames, GenNames, DmgConfig } from "./constants";
-import type { WeaknessTagType, ShieldTagType } from "@/validators/combat";
+import type {
+  WeaknessTagType,
+  ShieldTagType,
+  ImmunityTagType,
+  PreventTagType,
+} from "@/validators/combat";
 import type { CombatAction } from "@/libs/combat/types";
 import type { GeneralType } from "@/drizzle/constants";
 import type { BattleType } from "@/drizzle/constants";
@@ -141,11 +146,45 @@ export const absorb = (
   );
 };
 
+/**
+ * Check if an immunity effect blocks a prevent effect.
+ * Only checks immunity for NEW effects being applied.
+ * Returns an ActionEffect if blocked, undefined if not blocked.
+ */
+const checkPreventImmunity = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+  preventName: string,
+): ActionEffect | undefined => {
+  if (effect.isNew) {
+    const hasImmunity = usersEffects.some(
+      (e) =>
+        e.type === "immunity" &&
+        e.targetId === target.userId &&
+        (e.rounds === undefined || e.rounds > 0) &&
+        "blocks" in e &&
+        e.blocks === effect.type,
+    );
+    if (hasImmunity) {
+      effect.rounds = 0;
+      return {
+        txt: `${target.username}'s immunity blocked ${preventName} prevention!`,
+        color: "blue" as const,
+      };
+    }
+  }
+  return undefined;
+};
+
 /** Prevent buffing */
 export const buffPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "buff");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -357,8 +396,11 @@ export const injectjutsus = (
 /** Prevent debuffing */
 export const debuffPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "debuff");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -412,6 +454,29 @@ export const getAffected = (effect: UserEffect, type?: "offence" | "defence") =>
   return result;
 };
 
+/**
+ * Helper to apply a percentage stat modifier additively.
+ * Uses baseStatsForModifiers to ensure additive stacking when multiple modifiers are applied.
+ */
+const applyPercentageStatModifier = (
+  target: BattleUserState,
+  statName: keyof NonNullable<BattleUserState["baseStatsForModifiers"]>,
+  power: number,
+) => {
+  // Initialize baseStatsForModifiers if not present
+  if (!target.baseStatsForModifiers) {
+    target.baseStatsForModifiers = {};
+  }
+  // Store base stat value if not already stored
+  if (target.baseStatsForModifiers[statName] === undefined) {
+    target.baseStatsForModifiers[statName] = target[statName] as number;
+  }
+  // Use base stat for percentage calculation to ensure additive stacking
+  const baseStat = target.baseStatsForModifiers[statName]!;
+  const change = (power / 100) * baseStat;
+  (target[statName] as number) = (target[statName] as number) + change;
+};
+
 /** Adjust stats of target based on effect */
 export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
   const { power, adverb, qualifier } = getPower(effect);
@@ -454,37 +519,12 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               }
             }
           } else {
+            // Percentage calculation - use additive stacking
             if (effect.direction === "offence" || effect.direction === "both") {
-              switch (target.highestOffence) {
-                case "ninjutsuOffence":
-                  target.ninjutsuOffence *= (100 + power) / 100;
-                  break;
-                case "genjutsuOffence":
-                  target.genjutsuOffence *= (100 + power) / 100;
-                  break;
-                case "taijutsuOffence":
-                  target.taijutsuOffence *= (100 + power) / 100;
-                  break;
-                case "bukijutsuOffence":
-                  target.bukijutsuOffence *= (100 + power) / 100;
-                  break;
-              }
+              applyPercentageStatModifier(target, target.highestOffence, power);
             }
             if (effect.direction === "defence" || effect.direction === "both") {
-              switch (target.highestDefence) {
-                case "ninjutsuDefence":
-                  target.ninjutsuDefence *= (100 + power) / 100;
-                  break;
-                case "genjutsuDefence":
-                  target.genjutsuDefence *= (100 + power) / 100;
-                  break;
-                case "taijutsuDefence":
-                  target.taijutsuDefence *= (100 + power) / 100;
-                  break;
-                case "bukijutsuDefence":
-                  target.bukijutsuDefence *= (100 + power) / 100;
-                  break;
-              }
+              applyPercentageStatModifier(target, target.highestDefence, power);
             }
           }
         } else if (stat === "Ninjutsu") {
@@ -496,11 +536,12 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               target.ninjutsuDefence += power;
             }
           } else {
+            // Percentage calculation - use additive stacking
             if (effect.direction === "offence" || effect.direction === "both") {
-              target.ninjutsuOffence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "ninjutsuOffence", power);
             }
             if (effect.direction === "defence" || effect.direction === "both") {
-              target.ninjutsuDefence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "ninjutsuDefence", power);
             }
           }
         } else if (stat === "Genjutsu") {
@@ -512,11 +553,12 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               target.genjutsuDefence += power;
             }
           } else {
+            // Percentage calculation - use additive stacking
             if (effect.direction === "offence" || effect.direction === "both") {
-              target.genjutsuOffence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "genjutsuOffence", power);
             }
             if (effect.direction === "defence" || effect.direction === "both") {
-              target.genjutsuDefence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "genjutsuDefence", power);
             }
           }
         } else if (stat === "Taijutsu") {
@@ -528,11 +570,12 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               target.taijutsuDefence += power;
             }
           } else {
+            // Percentage calculation - use additive stacking
             if (effect.direction === "offence" || effect.direction === "both") {
-              target.taijutsuOffence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "taijutsuOffence", power);
             }
             if (effect.direction === "defence" || effect.direction === "both") {
-              target.taijutsuDefence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "taijutsuDefence", power);
             }
           }
         } else if (stat === "Bukijutsu") {
@@ -544,11 +587,12 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               target.bukijutsuDefence += power;
             }
           } else {
+            // Percentage calculation - use additive stacking
             if (effect.direction === "offence" || effect.direction === "both") {
-              target.bukijutsuOffence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "bukijutsuOffence", power);
             }
             if (effect.direction === "defence" || effect.direction === "both") {
-              target.bukijutsuDefence *= (100 + power) / 100;
+              applyPercentageStatModifier(target, "bukijutsuDefence", power);
             }
           }
         }
@@ -560,33 +604,34 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
               target[gen] += power;
             });
           } else if (effect.calculation === "percentage") {
+            // Percentage calculation - use additive stacking
             target.highestGenerals.forEach((gen) => {
-              target[gen] *= (100 + power) / 100;
+              applyPercentageStatModifier(target, gen, power);
             });
           }
         } else if (general === "Strength") {
           if (effect.calculation === "static") {
             target.strength += power;
           } else if (effect.calculation === "percentage") {
-            target.strength *= (100 + power) / 100;
+            applyPercentageStatModifier(target, "strength", power);
           }
         } else if (general === "Intelligence") {
           if (effect.calculation === "static") {
             target.intelligence += power;
           } else if (effect.calculation === "percentage") {
-            target.intelligence *= (100 + power) / 100;
+            applyPercentageStatModifier(target, "intelligence", power);
           }
         } else if (general === "Willpower") {
           if (effect.calculation === "static") {
             target.willpower += power;
           } else if (effect.calculation === "percentage") {
-            target.willpower *= (100 + power) / 100;
+            applyPercentageStatModifier(target, "willpower", power);
           }
         } else if (general === "Speed") {
           if (effect.calculation === "static") {
             target.speed += power;
           } else if (effect.calculation === "percentage") {
-            target.speed *= (100 + power) / 100;
+            applyPercentageStatModifier(target, "speed", power);
           }
         }
       });
@@ -736,10 +781,11 @@ export const adjustDamageGiven = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
+          // Use baseDamageForModifiers for percentage calculations to ensure additive stacking
+          // This prevents multiplicative behavior when multiple modifiers are applied
+          const baseDamage = consequence.baseDamageForModifiers ?? consequence.damage;
           const change =
-            effect.calculation === "percentage"
-              ? (power / 100) * consequence.damage
-              : power;
+            effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           if (effect.fromType === "bloodline") {
             if (
               "allowBloodlineDamageIncrease" in damageEffect &&
@@ -805,10 +851,11 @@ export const adjustDamageTaken = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
+          // Use baseDamageForModifiers for percentage calculations to ensure additive stacking
+          // This prevents multiplicative behavior when multiple modifiers are applied
+          const baseDamage = consequence.baseDamageForModifiers ?? consequence.damage;
           const change =
-            effect.calculation === "percentage"
-              ? (power / 100) * consequence.damage
-              : power;
+            effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           consequence.damage = consequence.damage + change * ratio;
         }
       }
@@ -1266,8 +1313,12 @@ export const damageUser = (
       userId: effect.creatorId,
       targetId: effect.targetId,
       types: types,
-      ...(instant ? { damage: damage, rawDamage: rawDamage } : {}),
-      ...(residual ? { residual: damage, rawResidual: rawDamage } : {}),
+      ...(instant
+        ? { damage: damage, rawDamage: rawDamage, baseDamageForModifiers: damage }
+        : {}),
+      ...(residual
+        ? { residual: damage, rawResidual: rawDamage, baseDamageForModifiers: damage }
+        : {}),
     });
   }
   return getInfo(target, effect, "will take damage");
@@ -1357,8 +1408,11 @@ export const flee = (
 /** Check if flee prevent is successful depending on static chance calculation */
 export const fleePrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "flee");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -1430,8 +1484,11 @@ export const heal = (
 /** Prevent healing */
 export const healPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "heal");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -1849,6 +1906,16 @@ export const shield = (effect: UserEffect, target: BattleUserState) => {
   return info;
 };
 
+/** Blocks prevent effects from being applied to the target */
+export const immunity = (effect: UserEffect, target: BattleUserState) => {
+  const immunityEffect = effect as ImmunityTagType;
+  if (effect.isNew && effect.rounds) {
+    const preventType = getPreventTypeName(immunityEffect.blocks);
+    return getInfo(target, effect, `has immunity to ${preventType} prevention`);
+  }
+  return undefined;
+};
+
 /** Prevents the user from being reduced below 1 HP */
 export const finalStand = (effect: UserEffect, target: BattleUserState) => {
   const { power } = getPower(effect);
@@ -1920,8 +1987,16 @@ export const move = (
 /** Prevent target from moving */
 export const movePrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(
+    effect,
+    usersEffects,
+    target,
+    "movement",
+  );
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -1965,8 +2040,16 @@ export const onehitkill = (
 /** Status effect to prevent OHKO */
 export const onehitkillPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(
+    effect,
+    usersEffects,
+    target,
+    "one-hit-kill",
+  );
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2040,8 +2123,11 @@ export const rob = (
 /** Prevent robbing */
 export const robPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "rob");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2060,8 +2146,11 @@ export const robPrevent = (
 /** Prevent cleansing */
 export const cleansePrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "cleanse");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2080,8 +2169,11 @@ export const cleansePrevent = (
 /** Prevent clearing */
 export const clearPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "clear");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2134,8 +2226,11 @@ export const sealCheck = (effect: UserEffect, sealEffects: UserEffect[]) => {
 /** Prevent sealing of bloodline effects with a static chance */
 export const sealPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "seal");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2589,8 +2684,11 @@ export const redirection = (
 /** Prevent target from being stunned */
 export const stunPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "stun");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2724,11 +2822,14 @@ export const summon = (
   }
 };
 
-/** Prevent target from being stunned */
+/** Prevent target from summoning */
 export const summonPrevent = (
   effect: UserEffect,
+  usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "summon");
+  if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
@@ -2898,13 +2999,14 @@ const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) => {
  */
 const preventCheck = (
   usersEffects: UserEffect[],
-  type: string,
+  type: PreventTagType,
   target: BattleUserState,
   effect?: UserEffect, // Add optional effect parameter to check creation time
 ) => {
   const preventTag = usersEffects.find(
     (e) => e.type == type && e.targetId === target.userId && !e.castThisRound,
   );
+
   if (preventTag && (preventTag.rounds === undefined || preventTag.rounds > 0)) {
     // Only prevent if the effect being checked was created after the prevent effect
     if (effect && preventTag.createdRound >= effect.createdRound) {

@@ -163,6 +163,21 @@ export type CombatUserFields = {
   // Reference IDs to static data in extraState
   relationIds: string[];
   warIds: string[];
+  /** Base stat values used for additive percentage modifier calculations (e.g., increaseStat, decreaseStat) */
+  baseStatsForModifiers?: {
+    ninjutsuOffence?: number;
+    ninjutsuDefence?: number;
+    genjutsuOffence?: number;
+    genjutsuDefence?: number;
+    taijutsuOffence?: number;
+    taijutsuDefence?: number;
+    bukijutsuOffence?: number;
+    bukijutsuDefence?: number;
+    strength?: number;
+    speed?: number;
+    intelligence?: number;
+    willpower?: number;
+  };
 };
 
 /**
@@ -299,6 +314,7 @@ export type ExtraState = {
   // Raid-specific data
   raidQuestId?: string; // The quest ID for raid battles
   raidInitialBossHp?: number; // Initial boss HP at start of raid battle
+  raidStartBattleCount?: Record<string, number>; // userId -> battleCount at battle start
   // Exclusive raids for SHRINE_WAR battles (pre-loaded at initiation)
   sectorExclusiveRaids?: Quest[];
 };
@@ -448,6 +464,8 @@ export type Consequence = {
   rawDamage?: number;
   residual?: number;
   rawResidual?: number;
+  /** Base damage value used for additive percentage modifier calculations (e.g., increaseDamageGiven) */
+  baseDamageForModifiers?: number;
   wound?: number;
   reflect?: number;
   recoil?: number;

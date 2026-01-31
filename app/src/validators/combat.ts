@@ -114,6 +114,25 @@ const IncludeStats = {
 /******************** */
 /*******  TAGS  *******/
 /******************** */
+
+// Prevent-type effect tags that can be blocked by ImmunityTag (content-selectable)
+export const PreventTagTypes = [
+  "buffprevent",
+  "clearprevent",
+  "cleanseprevent",
+  "debuffprevent",
+  "fleeprevent",
+  "healprevent",
+  "moveprevent",
+  "onehitkillprevent",
+  "robprevent",
+  "sealprevent",
+  "stunprevent",
+  "summonprevent",
+] as const;
+
+export type PreventTagType = (typeof PreventTagTypes)[number];
+
 export const AbsorbTag = z.object({
   ...BaseAttributes,
   ...IncludeStats,
@@ -639,6 +658,18 @@ export const StunPreventTag = z.object({
   description: msg("Prevents being stunned"),
 });
 
+export const ImmunityTag = z.object({
+  ...BaseAttributes,
+  ...PowerAttributes,
+  type: z.literal("immunity").default("immunity"),
+  description: msg("Grants immunity against the specified prevent-type effect"),
+  target: z.enum(BaseTagTargets).optional().default("SELF"),
+  blocks: z.enum(PreventTagTypes).default("buffprevent"),
+  rounds: z.coerce.number().int().min(1).max(20).default(2),
+  calculation: z.enum(["static"]).default("static"),
+});
+export type ImmunityTagType = z.infer<typeof ImmunityTag>;
+
 export const StunTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
@@ -765,6 +796,7 @@ export const AllTags = z.union([
   IncreasePoolCostTag.default({}),
   IncreaseRangeTag.default({}),
   IncreaseStatTag.default({}),
+  ImmunityTag.default({}),
   LifeStealTag.default({}),
   MirrorTag.default({}),
   MovePreventTag.default({}),
@@ -837,6 +869,7 @@ export const isPositiveUserEffect = (tag: ZodAllTags) => {
       "summon",
       "timedilation",
       "injectjutsus",
+      "immunity",
     ].includes(tag.type)
   ) {
     return true;

@@ -660,6 +660,8 @@ export const sortEffects = (
     "summonprevent",
     "weakness",
     // Pre-modifiers
+    "elementalseal",
+    "injectjutsus",
     "cleanse",
     "clear",
     "decreasepoolcost",
@@ -2270,4 +2272,13 @@ export const getDistanceToClosestEnemy = (
   );
 
   return Math.min(...distances);
+};
+
+/**
+ * Extracts the base name from a prevent type by removing the "prevent" suffix
+ * @param preventType - The full prevent type (e.g., "buffprevent", "healprevent")
+ * @returns The base name without "prevent" suffix (e.g., "buff", "heal")
+ */
+export const getPreventTypeName = (preventType: string): string => {
+  return preventType.replace(/prevent$/, "");
 };

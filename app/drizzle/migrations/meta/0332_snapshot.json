@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "56eb573d-6cd9-446b-a793-52e197c88eae",
+  "id": "8207789c-c14e-4d9b-aaf3-b97ee043537a",
   "prevId": "c5d4436e-3844-4d18-9ce4-44101ca5bfc1",
   "tables": {
     "AbEvent": {
@@ -10945,7 +10945,7 @@
         },
         "homeType": {
           "name": "homeType",
-          "type": "enum('NONE','STUDIO_APARTMENT','ONE_BED_APARTMENT','TWO_BED_HOUSE','TOWN_HOUSE','SMALL_MANSION','SMALL_ESTATE','LARGE_ESTATE')",
+          "type": "enum('NONE','STUDIO_APARTMENT','ONE_BED_APARTMENT','TWO_BED_HOUSE','TOWN_HOUSE','SMALL_MANSION','SMALL_ESTATE','LARGE_ESTATE','PALACE','MARSHMALLOWOPOLIS')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
