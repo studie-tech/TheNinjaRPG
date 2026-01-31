@@ -8,7 +8,7 @@ import {
   DecreaseCooldownTag,
   HealTag,
 } from "@/validators/combat";
-import { isEffectActive, getPreventTypeName } from "@/libs/combat/util";
+import { isEffectActive, getPreventTypeName, getEffectStage } from "@/libs/combat/util";
 import type { BattleUserState, Consequence, ReturnedUserState } from "./types";
 import type { GroundEffect, UserEffect, ActionEffect } from "./types";
 import type { StatNames, GenNames, DmgConfig } from "./constants";
@@ -781,9 +781,16 @@ export const adjustDamageGiven = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
-          // Use baseDamageForModifiers for percentage calculations to ensure additive stacking
-          // This prevents multiplicative behavior when multiple modifiers are applied
-          const baseDamage = consequence.baseDamageForModifiers ?? consequence.damage;
+          // Use staged base damage for percentage calculations
+          // Stage 1 (equipment/pre-battle): use original baseDamageForModifiers
+          // Stage 2 (in-battle): use baseDamageAfterStage1 (post-equipment damage)
+          const effectStage = getEffectStage(effect);
+          const baseDamage =
+            effectStage === 1
+              ? (consequence.baseDamageForModifiers ?? consequence.damage)
+              : (consequence.baseDamageAfterStage1 ??
+                consequence.baseDamageForModifiers ??
+                consequence.damage);
           const change =
             effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           if (effect.fromType === "bloodline") {
@@ -851,9 +858,16 @@ export const adjustDamageTaken = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
-          // Use baseDamageForModifiers for percentage calculations to ensure additive stacking
-          // This prevents multiplicative behavior when multiple modifiers are applied
-          const baseDamage = consequence.baseDamageForModifiers ?? consequence.damage;
+          // Use staged base damage for percentage calculations
+          // Stage 1 (equipment/pre-battle): use original baseDamageForModifiers
+          // Stage 2 (in-battle): use baseDamageAfterStage1 (post-equipment damage)
+          const effectStage = getEffectStage(effect);
+          const baseDamage =
+            effectStage === 1
+              ? (consequence.baseDamageForModifiers ?? consequence.damage)
+              : (consequence.baseDamageAfterStage1 ??
+                consequence.baseDamageForModifiers ??
+                consequence.damage);
           const change =
             effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           consequence.damage = consequence.damage + change * ratio;

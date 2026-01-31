@@ -637,6 +637,22 @@ export const isEffectActive = (effect: UserEffect | GroundEffect) => {
 };
 
 /**
+ * Determines the processing stage for a damage modifier effect.
+ * Stage 1 (Equipment/Pre-Battle): armor, skill, village, ranked
+ * Stage 2 (In-Battle): bloodline, jutsu, item, basic, undefined
+ *
+ * This is used for staged damage calculation where equipment effects
+ * apply first (Stage 1), then in-battle effects apply to the result (Stage 2).
+ */
+export const getEffectStage = (effect: UserEffect | GroundEffect): 1 | 2 => {
+  const stage1Types = ["armor", "skill", "village", "ranked"];
+  if ("fromType" in effect && effect.fromType && stage1Types.includes(effect.fromType)) {
+    return 1;
+  }
+  return 2;
+};
+
+/**
  * Sort order in which effects are applied
  */
 export const sortEffects = (
@@ -713,9 +729,26 @@ export const sortEffects = (
     const aIndex = ordered.indexOf(a.type);
     const bIndex = ordered.indexOf(b.type);
 
+    // Define damage modifier effect types for stage-based sorting
+    const damageModifierTypes = [
+      "decreasedamagetaken",
+      "decreasedamagegiven",
+      "increasedamagetaken",
+      "increasedamagegiven",
+    ];
+
     // If they're the same type, handle special ordering
     if (aIndex === bIndex) {
-      // For damage reduction effects, sort static before percentage
+      // For damage modifier effects, sort by stage first (Stage 1 before Stage 2)
+      if (damageModifierTypes.includes(a.type) && damageModifierTypes.includes(b.type)) {
+        const aStage = getEffectStage(a);
+        const bStage = getEffectStage(b);
+        if (aStage !== bStage) {
+          return aStage - bStage; // Stage 1 before Stage 2
+        }
+      }
+
+      // For damage reduction effects, sort static before percentage (within same stage)
       if (a.type === "decreasedamagetaken" && b.type === "decreasedamagetaken") {
         if (a.calculation === "static" && b.calculation === "percentage") return -1;
         if (a.calculation === "percentage" && b.calculation === "static") return 1;
@@ -725,6 +758,15 @@ export const sortEffects = (
         if (a.calculation === "percentage" && b.calculation === "static") return 1;
       }
       return 0; // Same type, same calculation, maintain original order
+    }
+
+    // Special handling for different damage modifier types - sort by stage first
+    if (damageModifierTypes.includes(a.type) && damageModifierTypes.includes(b.type)) {
+      const aStage = getEffectStage(a);
+      const bStage = getEffectStage(b);
+      if (aStage !== bStage) {
+        return aStage - bStage; // Stage 1 before Stage 2
+      }
     }
 
     // Special handling for damage reduction effects to ensure proper ordering

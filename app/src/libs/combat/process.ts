@@ -1,7 +1,7 @@
 import { dmgConfig as config } from "./constants";
 import { VisualTag } from "@/validators/combat";
 import { findUser, findBarrier, getItem } from "./util";
-import { collapseConsequences, sortEffects } from "./util";
+import { collapseConsequences, sortEffects, getEffectStage } from "./util";
 import { calcApplyRatio } from "./util";
 import { calcEffectRoundInfo, isEffectActive } from "./util";
 import { nanoid } from "nanoid";
@@ -272,24 +272,83 @@ export const applyEffects = (
       );
     });
 
-  // Apply all other user effects to their target users
-  usersEffects
+  // Define damage modifier effect types for staged processing
+  const damageModifierTypes = [
+    "decreasedamagetaken",
+    "decreasedamagegiven",
+    "increasedamagetaken",
+    "increasedamagegiven",
+  ];
+
+  // Separate non-damage-modifier effects from damage modifier effects
+  const nonDamageModifierEffects = usersEffects
     .filter((e) => e.type !== "mirror" && e.type !== "copy")
-    .sort(sortEffects)
-    .forEach((effect) => {
-      applySingleEffect(
-        consequences,
-        newUsersState,
-        newUsersEffects,
-        newGroundEffects,
-        actionEffects,
-        appliedEffects,
-        battle,
-        actorId,
-        effect,
-        action,
-      );
-    });
+    .filter((e) => !damageModifierTypes.includes(e.type));
+
+  // Separate damage modifier effects by stage
+  const stage1DamageModifiers = usersEffects
+    .filter((e) => damageModifierTypes.includes(e.type))
+    .filter((e) => getEffectStage(e) === 1);
+
+  const stage2DamageModifiers = usersEffects
+    .filter((e) => damageModifierTypes.includes(e.type))
+    .filter((e) => getEffectStage(e) === 2);
+
+  // Apply non-damage-modifier effects first (maintains existing ordering)
+  nonDamageModifierEffects.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Apply Stage 1 damage modifiers (equipment/pre-battle effects)
+  stage1DamageModifiers.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Capture baseDamageAfterStage1 for all consequences with damage
+  // This becomes the base for Stage 2 percentage calculations
+  consequences.forEach((consequence) => {
+    if (consequence.damage !== undefined) {
+      consequence.baseDamageAfterStage1 = consequence.damage;
+    }
+  });
+
+  // Apply Stage 2 damage modifiers (in-battle effects)
+  stage2DamageModifiers.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
 
   // Apply consequences to users
   Array.from(consequences.values())
