@@ -35,7 +35,7 @@
     "@gltf-transform/extensions": "^4.1.4",
     "@gltf-transform/functions": "^4.1.4",
     "@hookform/error-message": "^2.0.1",
-    "@hookform/resolvers": "^3.9.1",
+    "@hookform/resolvers": "^3.10.0",
     "@icons-pack/react-simple-icons": "^13.1.0",
     "@next/bundle-analyzer": "16.1.0",
     "@next/third-parties": "16.1.0",
