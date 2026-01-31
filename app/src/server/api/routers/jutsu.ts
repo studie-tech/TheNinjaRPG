@@ -432,19 +432,38 @@ export const jutsuRouter = createTRPCRouter({
 
       // Validate requiredItemIds (item names) if present
       if (input.data.requiredItemIds && input.data.requiredItemIds.length > 0) {
-        const itemsExist = await ctx.drizzle.query.item.findMany({
-          columns: { name: true },
+        // Accept both names and IDs from the frontend
+        // First, try to find items by name
+        const itemsByName = await ctx.drizzle.query.item.findMany({
+          columns: { id: true, name: true },
           where: inArray(item.name, input.data.requiredItemIds),
         });
-        const foundNames = new Set(itemsExist.map((i) => i.name));
-        const invalidNames = input.data.requiredItemIds.filter(
-          (name) => !foundNames.has(name),
+        // Then, try to find items by ID
+        const itemsById = await ctx.drizzle.query.item.findMany({
+          columns: { id: true, name: true },
+          where: inArray(item.id, input.data.requiredItemIds),
+        });
+        // Merge found IDs
+        const foundIds = new Set([
+          ...itemsByName.map((i) => i.id),
+          ...itemsById.map((i) => i.id),
+        ]);
+        // Map all input names to IDs if possible
+        const allItems = [...itemsByName, ...itemsById];
+        // If any input is not found by name or ID, report as invalid
+        const invalidInputs = input.data.requiredItemIds.filter(
+          (val) => !allItems.some((i) => i.id === val || i.name === val),
         );
-        if (invalidNames.length > 0) {
+        if (invalidInputs.length > 0) {
           return errorResponse(
-            `Invalid item names: ${invalidNames.join(", ")}. Please check the item names are correct.`,
+            `Invalid item names or IDs: ${invalidInputs.join(", ")}. Please check the item names or IDs are correct.`,
           );
         }
+        // Replace names with IDs for storage/validation
+        input.data.requiredItemIds = input.data.requiredItemIds.map((val) => {
+          const found = allItems.find((i) => i.id === val || i.name === val);
+          return found ? found.id : val;
+        });
       }
 
       if (!input.data.injectableInBattle) {

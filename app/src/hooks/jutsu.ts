@@ -83,8 +83,8 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
 
   // Object for form values
   const requiredItemOptions = items?.map((item) => ({
-    id: item.name,
-    name: item.name,
+    id: item.id, // Use ID for value
+    name: item.name, // Keep name for display/search
   }));
 
   const formData: FormEntry<keyof ZodJutsuType>[] = [
