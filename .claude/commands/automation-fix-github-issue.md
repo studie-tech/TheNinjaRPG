@@ -1,6 +1,6 @@
 ---
 description: Fix GitHub issues and create PRs. Use /automation-fix-github-issue <ISSUE_NUMBER_OR_URL>
-allowed-tools: Bash(bash .claude/commands/common/*:*), Bash(git *:*), Bash(gh *:*), Task, Skill
+allowed-tools: Bash(bash .claude/commands/common/*:*), Bash(git *:*), Bash(gh *:*), Bash(codex *:*), Task, Skill, Read
 ---
 
 # Fix GitHub Issue (Automated)
@@ -34,11 +34,16 @@ gh issue edit <ISSUE_NUMBER> --add-assignee @me
 
 **Do NOT read/fetch the full issue details** - the subagents will do that.
 
-### Step 2: Generate Implementation Plans (3 Parallel Subagents)
+### Step 2: Generate Implementation Plans (6 Parallel Planners)
 
-Launch **3 parallel subagents** using the `Task` tool, each running the `/plan-github-fix` skill with the GitHub issue number. This generates diverse perspectives on the solution.
+Launch **6 parallel planners** to generate diverse perspectives on the solution:
 
-For each of the 3 subagents, use this prompt:
+- **3 Claude Task subagents** using the `Task` tool
+- **3 Codex CLI planners** using the `Shell` tool
+
+#### 2a: Claude Task Subagents (3 parallel)
+
+For each of the 3 subagents, use this prompt with the `Task` tool:
 
 ```
 Run the /plan-github-fix skill with the argument: GITHUB_ISSUE_NUMBER
@@ -46,21 +51,34 @@ Run the /plan-github-fix skill with the argument: GITHUB_ISSUE_NUMBER
 After completion, report the path to the saved plan file.
 ```
 
-Replace `GITHUB_ISSUE_NUMBER` with the actual issue number from `$ARGUMENTS`.
+#### 2b: Codex CLI Planners (3 parallel)
 
-**Wait for all 3 subagents to complete.** Collect the 3 plan file paths they return (e.g., `.claude/tasks/20250131-143052_GH123_PLAN-abc123-fix_null.md`).
+For each of the 3 Codex planners, run this command in the `Shell` tool with `block_until_ms: 0` to background immediately:
+
+```bash
+codex exec --dangerously-bypass-approvals-and-sandbox "Run the /plan-github-fix command found in .claude/commands folder with argument GITHUB_ISSUE_NUMBER. After completion, report the path to the saved plan file."
+```
+
+**Important**: Run each codex command in a separate Shell call so they run in parallel. After launching, monitor the terminal files to wait for completion and extract the plan file paths from the output.
+
+Replace `GITHUB_ISSUE_NUMBER` with the actual issue number from `$ARGUMENTS` in all commands.
+
+**Wait for all 6 planners to complete.** Collect the 6 plan file paths they return (e.g., `.claude/tasks/20250131-143052_GH123_PLAN-abc123-fix_null.md`).
 
 ### Step 3: Aggregate Plans
 
-Launch a subagent using the `Task` tool to aggregate the 3 plans into one comprehensive plan:
+Launch a subagent using the `Task` tool to aggregate all 6 plans into one comprehensive plan:
 
 ```
-Run the /plan-aggregate skill with the arguments: PLAN1_PATH PLAN2_PATH PLAN3_PATH
+Run the /plan-aggregate skill with the arguments: PLAN1_PATH PLAN2_PATH PLAN3_PATH PLAN4_PATH PLAN5_PATH PLAN6_PATH
 
 Where:
-- PLAN1_PATH = [path from subagent 1]
-- PLAN2_PATH = [path from subagent 2]
-- PLAN3_PATH = [path from subagent 3]
+- PLAN1_PATH = [path from Claude subagent 1]
+- PLAN2_PATH = [path from Claude subagent 2]
+- PLAN3_PATH = [path from Claude subagent 3]
+- PLAN4_PATH = [path from Codex planner 1]
+- PLAN5_PATH = [path from Codex planner 2]
+- PLAN6_PATH = [path from Codex planner 3]
 
 After completion, report the path to the aggregated plan file.
 ```
@@ -179,8 +197,8 @@ User: `/automation-fix-github-issue 123`
 **Todo list**:
 
 1. [ ] Extract issue number and assign to self
-2. [ ] Run 3 parallel `/plan-github-fix 123` subagents
-3. [ ] Aggregate plans with `/plan-aggregate`
+2. [ ] Run 6 parallel planners (3 Claude, 3 Codex)
+3. [ ] Aggregate all 6 plans with `/plan-aggregate`
 4. [ ] Implement with `/implement` (implementation only)
 5. [ ] Run `/implement-review-loop` (code review)
 6. [ ] Commit changes (create branch if on main)
@@ -195,7 +213,9 @@ User: `/automation-fix-github-issue 123`
    gh issue edit 123 --add-assignee @me
    ```
 
-2. Run 3 parallel subagents (all at the same time):
+2. Run 6 parallel planners (all at the same time):
+
+   **Claude Task subagents:**
 
    ```
    Task: "Run /plan-github-fix 123"
@@ -203,16 +223,27 @@ User: `/automation-fix-github-issue 123`
    Task: "Run /plan-github-fix 123"
    ```
 
-   Results:
+   **Codex CLI planners (in Shell with block_until_ms: 0):**
 
-   - Plan 1: `.claude/tasks/20250131-143052_GH123_PLAN-abc123-null_check.md`
-   - Plan 2: `.claude/tasks/20250131-143053_GH123_PLAN-def456-validation.md`
-   - Plan 3: `.claude/tasks/20250131-143054_GH123_PLAN-ghi789-error_handling.md`
+   ```bash
+   codex exec --dangerously-bypass-approvals-and-sandbox "Run the /plan-github-fix command found in .claude/commands folder with argument 123. After completion, report the path to the saved plan file."
+   ```
 
-3. Aggregate plans:
+   (Run 3 times in parallel Shell calls)
+
+   Results (after monitoring terminal output for completion):
+
+   - Claude Plan 1: `.claude/tasks/20250131-143052_GH123_PLAN-abc123-null_check.md`
+   - Claude Plan 2: `.claude/tasks/20250131-143053_GH123_PLAN-def456-validation.md`
+   - Claude Plan 3: `.claude/tasks/20250131-143054_GH123_PLAN-ghi789-error_handling.md`
+   - Codex Plan 1: `.claude/tasks/20250131-143055_GH123_PLAN-jkl012-input_sanitize.md`
+   - Codex Plan 2: `.claude/tasks/20250131-143056_GH123_PLAN-mno345-boundary_check.md`
+   - Codex Plan 3: `.claude/tasks/20250131-143057_GH123_PLAN-pqr678-type_guard.md`
+
+3. Aggregate all 6 plans:
 
    ```
-   Task: "Run /plan-aggregate .claude/tasks/20250131-143052_GH123_PLAN-abc123-null_check.md .claude/tasks/20250131-143053_GH123_PLAN-def456-validation.md .claude/tasks/20250131-143054_GH123_PLAN-ghi789-error_handling.md"
+   Task: "Run /plan-aggregate .claude/tasks/20250131-143052_GH123_PLAN-abc123-null_check.md .claude/tasks/20250131-143053_GH123_PLAN-def456-validation.md .claude/tasks/20250131-143054_GH123_PLAN-ghi789-error_handling.md .claude/tasks/20250131-143055_GH123_PLAN-jkl012-input_sanitize.md .claude/tasks/20250131-143056_GH123_PLAN-mno345-boundary_check.md .claude/tasks/20250131-143057_GH123_PLAN-pqr678-type_guard.md"
    ```
 
    Result: `.claude/tasks/20250131-143100_GH123_AGGREGATED-xyz789-merged_fix.md`
@@ -265,8 +296,9 @@ User: `/automation-fix-github-issue 123`
 
 - **Never add .claude files to git** - The `.claude` folder is gitignored and should not be committed
 - **Do NOT add Co-Authored-By lines** - Don't include co-author attribution in commits or PRs
-- **Do NOT read GitHub issue in main agent** - Let the subagents fetch and analyze the issue details
-- **3 parallel plans** - Running multiple subagents increases solution quality through diverse analysis
+- **Do NOT read GitHub issue in main agent** - Let the planners fetch and analyze the issue details
+- **6 parallel plans** - Running 6 planners (3 Claude, 3 Codex) maximizes solution quality through diverse analysis from different AI models
+- **Monitor CLI planners** - The Codex CLI commands run in the background; monitor their terminal output files to detect completion and extract the plan file paths
 - **Separate review loop** - Code review runs in the main thread via `/implement-review-loop` after implementation completes
 - **Auto-close issue** - The "Closes #NUMBER" in the PR will automatically close the issue when merged
 

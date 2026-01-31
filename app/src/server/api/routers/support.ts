@@ -1032,9 +1032,10 @@ export const sanitizeSupportTicketForPublic = (
         (activity) =>
           !["ASSIGNED", "UNASSIGNED", "TAGGED", "UNTAGGED"].includes(activity.action),
       )
+      .filter((activity) => activity.author !== null)
       .map((activity) => ({
         ...activity,
-        author: activity.author ? anonymizeStaffInfo(activity.author, viewer) : null,
+        author: anonymizeStaffInfo(activity.author, viewer),
       }));
   }
   return sanitized;

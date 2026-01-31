@@ -24,8 +24,11 @@ Use the GitHub CLI to get issue details from the provided argument:
 Fetch the issue details:
 
 ```bash
-gh issue view <ISSUE_NUMBER> --json number,title,body,labels,assignees,state,comments
+gh issue view <ISSUE_NUMBER> --json number,title,body,labels,assignees,state,comments \
+  --jq '{number, title, body, labels, assignees, state, comments: [.comments[] | select(.isMinimized == false)]}'
 ```
+
+This command filters out minimized/hidden comments, keeping only visible ones.
 
 Extract from the issue:
 
@@ -33,8 +36,22 @@ Extract from the issue:
 - **Title**: The issue title/summary
 - **Description**: The main issue body with problem description
 - **Labels**: Any labels (bug, enhancement, feature, etc.)
-- **Comments**: Any additional context from comments
+- **Comments**: Any additional context from comments (see comment analysis below)
 - **Acceptance Criteria**: Any specific requirements mentioned
+
+**Comment Analysis** (Critical for understanding full context):
+
+Carefully read through ALL visible comments to identify:
+
+1. **Clarifications**: Additional details from the reporter or maintainers that refine the issue
+2. **Reproduction steps**: Any steps provided in comments that weren't in the original description
+3. **Failed attempts**: Solutions that were tried and didn't work (avoid repeating these)
+4. **Partial solutions**: Workarounds or hints that point toward the fix
+5. **Related context**: Links to related issues, PRs, or documentation
+6. **Scope changes**: Any updates to requirements or acceptance criteria discussed in comments
+7. **Developer insights**: Technical observations from team members about root cause
+
+Comments often contain crucial information not in the original issue body. Integrate all relevant comment insights into your analysis.
 
 ### Step 2: Categorize the Issue
 
@@ -142,6 +159,15 @@ Create a detailed implementation plan document with the following structure:
 - **Labels**: [List of labels]
 - **Description**: [Brief description of the issue]
 
+## Key Insights from Comments
+
+[Summarize important information gathered from issue comments that informed this plan. Include:
+
+- Additional context or clarifications from reporters/maintainers
+- Failed attempts or workarounds mentioned
+- Any scope changes or refined requirements
+- Technical observations from team members]
+
 ## Analysis
 
 ### For Bug Fixes:
@@ -225,6 +251,7 @@ Example: `.claude/tasks/20250131-143052_GH123_PLAN-fdosdg-fix_null_reference.md`
 **Ask yourself**:
 
 - [ ] Does this plan address the ACTUAL issue, not just a symptom?
+- [ ] Have I incorporated insights from ALL issue comments, not just the original description?
 - [ ] Have I considered all the ways this code path can be reached?
 - [ ] Is there any scenario where this solution would not work?
 - [ ] Am I introducing any new failure modes?
@@ -246,7 +273,7 @@ After completing all steps, report:
 ## Important Notes
 
 - **Take your time** - A thorough analysis prevents multiple fix attempts
-- **Read the full issue** - Including all comments for context
+- **Read the full issue AND all comments** - Comments often contain critical context, clarifications, failed attempts, or scope changes not in the original description
 - **Check existing patterns** - The codebase likely has similar handling you can follow
 - **Document assumptions** - If you're uncertain about something, note it in the plan
 - **Be skeptical** - Question your own analysis before finalizing
