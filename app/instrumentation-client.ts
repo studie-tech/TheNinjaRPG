@@ -434,6 +434,29 @@ const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
+ * Check if an error is a tRPC JSON parsing error with a specific content pattern.
+ * These occur when a server/CDN/proxy returns non-JSON content, causing the
+ * tRPC client to fail parsing the response.
+ *
+ * @param event - Sentry error event
+ * @param contentPattern - Pattern to match in the JSON parsing error (e.g., '"<!DOCTYPE "')
+ */
+const isTrpcJsonParsingError = (
+  event: Sentry.ErrorEvent,
+  contentPattern: string,
+): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+
+  const hasContentPattern =
+    message.includes(contentPattern) && message.includes("is not valid JSON");
+  const isTrpcOrSyntaxError =
+    errorType === "TRPCClientError" || errorType === "SyntaxError";
+
+  return hasContentPattern && isTrpcOrSyntaxError;
+};
+
+/**
  * Check if an error is an HTML response parsing error from tRPC.
  * These occur when a CDN or reverse proxy returns an HTML error page (502/503/504)
  * instead of JSON, causing the tRPC client to fail parsing the response.
@@ -446,18 +469,7 @@ const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
  * THENINJARPG-2D7: Filter these errors from Sentry as they are transient infrastructure issues.
  */
 const isHtmlResponseError = (event: Sentry.ErrorEvent): boolean => {
-  const message = event.exception?.values?.[0]?.value ?? "";
-  const errorType = event.exception?.values?.[0]?.type ?? "";
-
-  // Check for HTML DOCTYPE in JSON parsing error (CDN/proxy returning HTML error page)
-  const isHtmlParsingError =
-    message.includes('"<!DOCTYPE "') && message.includes("is not valid JSON");
-
-  // This error comes from tRPC client as TRPCClientError or SyntaxError
-  const isTrpcOrSyntaxError =
-    errorType === "TRPCClientError" || errorType === "SyntaxError";
-
-  return isHtmlParsingError && isTrpcOrSyntaxError;
+  return isTrpcJsonParsingError(event, '"<!DOCTYPE "');
 };
 
 /**
@@ -473,18 +485,7 @@ const isHtmlResponseError = (event: Sentry.ErrorEvent): boolean => {
  * THENINJARPG-2D7: Filter these errors from Sentry as they are transient infrastructure issues.
  */
 const isServerTextResponseError = (event: Sentry.ErrorEvent): boolean => {
-  const message = event.exception?.values?.[0]?.value ?? "";
-  const errorType = event.exception?.values?.[0]?.type ?? "";
-
-  // Check for "A server e" in JSON parsing error (server returning plain text error)
-  const isServerTextParsingError =
-    message.includes('"A server e"') && message.includes("is not valid JSON");
-
-  // This error comes from tRPC client as TRPCClientError or SyntaxError
-  const isTrpcOrSyntaxError =
-    errorType === "TRPCClientError" || errorType === "SyntaxError";
-
-  return isServerTextParsingError && isTrpcOrSyntaxError;
+  return isTrpcJsonParsingError(event, '"A server e"');
 };
 
 /**
