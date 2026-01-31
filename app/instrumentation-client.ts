@@ -109,6 +109,9 @@ Sentry.init({
     if (isWalletExtensionError(event)) {
       return null; // Drop cryptocurrency wallet extension errors (MetaMask, etc.)
     }
+    if (isRecoverableHydrationError(event)) {
+      return null; // Drop React recoverable errors (hydration recovery)
+    }
     return event;
   },
 
@@ -597,6 +600,37 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   );
 
   return isFromWalletScript;
+};
+
+/**
+ * Check if an error is a React recoverable error that should be filtered.
+ * These occur when React encounters and recovers from an error during hydration
+ * or rendering. The errors appear as "Object captured as exception with keys:
+ * message, name, stack, toString" because React throws error-like objects
+ * (not Error instances) during recovery.
+ *
+ * UX note: These errors are completely invisible to users - React successfully
+ * recovers and continues rendering. The user experience is unaffected.
+ *
+ * THENINJARPG-219: Filter recoverable errors from Sentry.
+ */
+const isRecoverableHydrationError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Check for Sentry's "Object captured as exception" message pattern
+  // This occurs when a non-Error object with error-like properties is thrown
+  const isObjectAsException = message.includes("Object captured as exception");
+
+  if (!isObjectAsException) return false;
+
+  // Check if the error originates from Next.js's onRecoverableError handler
+  return stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("on-recoverable-error") ||
+      frame.abs_path?.includes("on-recoverable-error") ||
+      frame.function?.includes("onRecoverableError"),
+  );
 };
 
 function ensureBrowserErrorHandler() {
