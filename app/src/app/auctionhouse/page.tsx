@@ -27,6 +27,7 @@ import {
   AUCTION_LISTING_STATES,
   AUCTION_LISTING_TYPES,
   TRADEABLE_CURRENCY_TYPES,
+  IMG_AVATAR_DEFAULT,
 } from "@/drizzle/constants";
 import { useInfinitePagination } from "@/libs/pagination";
 import {
@@ -178,7 +179,7 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
           )}
         </div>
       ),
-      seller: listing.seller.avatar,
+      seller: listing.seller?.avatar ?? IMG_AVATAR_DEFAULT,
       listingType:
         listing.listingType === "AUCTION" ? (
           <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-xs font-medium">
@@ -481,11 +482,11 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             <div className="flex flex-col items-center">
               <div className="flex flex-col items-center gap-2 w-20">
                 <AvatarImage
-                  href={listing.seller.avatar}
-                  alt={listing.seller.username}
+                  href={listing.seller?.avatar ?? IMG_AVATAR_DEFAULT}
+                  alt={listing.seller?.username ?? "Deleted User"}
                   size={40}
                 />
-                <span>{listing.seller.username}</span>
+                <span>{listing.seller?.username ?? "Deleted User"}</span>
               </div>
             </div>
             {listing.listingType === "DIRECT" && listing.targetUser && (
@@ -524,7 +525,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             <Table
               data={listing.bids.map((bid) => ({
                 ...bid,
-                bidder: bid.bidder.avatar,
+                bidder: bid.bidder?.avatar ?? IMG_AVATAR_DEFAULT,
               }))}
               columns={[
                 { key: "bidder", header: "Bidder", type: "avatar" },
