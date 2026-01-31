@@ -36,7 +36,6 @@ Sentry.init({
     "Cannot read properties of null (reading 'parentNode')", // Cookiebot error in calcFadeState when clicking "More Details"
     "null is not an object (evaluating 'element.parentNode')", // Cookiebot error in calcFadeState (Safari format)
     "UnrecognizedActionError", // New deployment
-    "An unexpected response was received from the server.", // Next.js server-action-reducer error - transient CDN/network issue during SSO callbacks (UC Browser, mobile)
     "undefined is not an object (evaluating 'e[a].call')", // Somethign internal never seen by user.
     "Hydration Error", // Based on sentry inspection not seen by user
     "Hydration failed - the server rendered HTML didn't match the client.", // Based on sentry inspection not seen by user
@@ -112,6 +111,9 @@ Sentry.init({
     }
     if (isThirdPartyStackOverflowError(event)) {
       return null; // Drop third-party stack overflow errors (tracking scripts)
+    }
+    if (isServerActionSsoCallbackError(event)) {
+      return null; // Drop server action errors on SSO callback page (transient network issues)
     }
     return event;
   },
@@ -601,6 +603,34 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   );
 
   return isFromWalletScript;
+};
+
+/**
+ * Check if an error is a Next.js server action reducer error on the SSO callback page.
+ * These occur when network issues (transient CDN errors, mobile network changes) cause
+ * server action responses to fail during the SSO authentication flow on UC Browser and mobile devices.
+ *
+ * UX note: Users experience a temporary error during SSO callback, but can retry or
+ * manually navigate to complete authentication. This is a transient infrastructure issue
+ * that doesn't indicate a bug in our code.
+ *
+ * THENINJARPG-1NM: Filter server action errors specifically on the SSO callback URL.
+ */
+const isServerActionSsoCallbackError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const url = event.request?.url ?? "";
+
+  // Must be the specific Next.js server action error message
+  if (!message.includes("An unexpected response was received from the server")) {
+    return false;
+  }
+
+  // Must be on the SSO callback URL path
+  // Matches: https://www.theninja-rpg.com/signup/sso-callback or similar paths
+  const isSsoCallbackUrl =
+    url.includes("/signup/sso-callback") || url.includes("/signin/sso-callback");
+
+  return isSsoCallbackUrl;
 };
 
 /**
