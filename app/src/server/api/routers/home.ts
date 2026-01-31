@@ -120,10 +120,18 @@ export const homeRouter = createTRPCRouter({
     // Guard
     if (!user) return null;
     // Return
+    const homeDetails = HomeTypeDetails[user.homeType];
+    if (!homeDetails) {
+      return {
+        homeType: user.homeType,
+        regen: 0,
+        storage: 0,
+      };
+    }
     return {
       homeType: user.homeType,
-      regen: HomeTypeDetails[user.homeType].regen,
-      storage: HomeTypeDetails[user.homeType].storage,
+      regen: homeDetails.regen,
+      storage: homeDetails.storage,
     };
   }),
 
@@ -136,8 +144,12 @@ export const homeRouter = createTRPCRouter({
     // Guard
     if (!user) return [];
     // Derived
+    const currentHomeDetails = HomeTypeDetails[user.homeType];
+    if (!currentHomeDetails) {
+      return [];
+    }
     const currentHomeIndex = HomeTypes.indexOf(user.homeType);
-    const currentHomeCost = HomeTypeDetails[user.homeType].cost;
+    const currentHomeCost = currentHomeDetails.cost;
     // Return all other home types; upgradeCost is what the user pays (target cost minus current home value)
     const upgrades = HomeTypes.map((homeType, i) => {
       const details = HomeTypeDetails[homeType];
@@ -171,7 +183,7 @@ export const homeRouter = createTRPCRouter({
           userId: ctx.userId,
         }),
       ]);
-      const storedItems = useritems.filter((ui) => ui.storedAtHome);
+      const storedItems = useritems.filter((ui) => ui.storedAtHome && ui.item);
       // Guard
       if (!user) return errorResponse("User not found");
       if (user.isBanned) return errorResponse("You are banned");
@@ -179,7 +191,11 @@ export const homeRouter = createTRPCRouter({
         return errorResponse("You already own this home type");
       // Derived
       const targetHome = HomeTypeDetails[input.homeType];
-      const currentHomeCost = HomeTypeDetails[user.homeType].cost;
+      const currentHomeDetails = HomeTypeDetails[user.homeType];
+      if (!currentHomeDetails) {
+        return errorResponse("Invalid home type configuration");
+      }
+      const currentHomeCost = currentHomeDetails.cost;
       const upgradeCost = Math.max(0, targetHome.cost - currentHomeCost);
       // Upgrading or downgrading
       if (HomeTypes.indexOf(input.homeType) > HomeTypes.indexOf(user.homeType)) {
@@ -250,8 +266,8 @@ export const homeRouter = createTRPCRouter({
           userId: ctx.userId,
         }),
       ]);
-      const storedItems = useritems.filter((ui) => ui.storedAtHome);
-      const nonStoredItems = useritems.filter((ui) => !ui.storedAtHome);
+      const storedItems = useritems.filter((ui) => ui.storedAtHome && ui.item);
+      const nonStoredItems = useritems.filter((ui) => !ui.storedAtHome && ui.item);
       const userItemResult = useritems.find((ui) => ui.id === input.userItemId);
       // Guard
       if (!user) return errorResponse("User not found");
@@ -262,6 +278,10 @@ export const homeRouter = createTRPCRouter({
       }
       if (userItemResult.equipped !== "NONE") {
         return errorResponse("You can't store/retrieve already equipped items");
+      }
+      const userHomeDetails = HomeTypeDetails[user.homeType];
+      if (!userHomeDetails) {
+        return errorResponse("Invalid home configuration");
       }
       // Mutate
       if (userItemResult.storedAtHome) {
@@ -299,7 +319,7 @@ export const homeRouter = createTRPCRouter({
             storedItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
           if (
             storedMaterials >=
-            calcMaxHouseMaterials(user, HomeTypeDetails[user.homeType].storage)
+            calcMaxHouseMaterials(user, userHomeDetails.storage)
           ) {
             return errorResponse("Your home materials storage is full");
           }
@@ -307,7 +327,7 @@ export const homeRouter = createTRPCRouter({
           // For normal items, check normal item storage limit
           const storedNormalItems =
             storedItems.filter((ui) => ui.item.itemType !== "MATERIAL").length || 0;
-          if (storedNormalItems >= HomeTypeDetails[user.homeType].storage) {
+          if (storedNormalItems >= userHomeDetails.storage) {
             return errorResponse("Your home storage is full");
           }
         }
