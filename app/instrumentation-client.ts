@@ -63,6 +63,8 @@ Sentry.init({
     "postMessage is not a function", // Clerk internal error - occurs in clerk.browser.js with Web Workers
     "module factory is not available", // Turbopack runtime error - occurs when browser caches stale JS chunks after deployment
     "Cannot assign to read only property 'then' of object", // Turbopack Promise assignment error - occurs when browser extensions freeze Promise objects or stale caches cause conflicts
+    "Failed to connect to MetaMask", // MetaMask extension error - occurs when extension is disabled/uninstalled but inpage.js still runs
+    "No extension found with id:", // Browser extension not found error - occurs when any extension (MetaMask, etc.) is disabled after page load
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -99,6 +101,9 @@ Sentry.init({
     }
     if (isClerkSyntaxError(event)) {
       return null; // Drop Clerk script parsing errors (network truncation)
+    }
+    if (isWalletExtensionError(event)) {
+      return null; // Drop cryptocurrency wallet extension errors (MetaMask, etc.)
     }
     return event;
   },
@@ -535,6 +540,43 @@ const isClerkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
       frame.abs_path?.includes("@clerk/clerk-js") ||
       frame.abs_path?.includes("clerk.browser"),
   );
+};
+
+/**
+ * Check if an error is from a cryptocurrency wallet browser extension.
+ * These occur when users have MetaMask or similar wallet extensions installed,
+ * and the extension's injected script encounters an error independently of our app.
+ *
+ * UX note: These errors are not actionable - they originate from third-party
+ * browser extensions we don't control. Users don't see these errors as they
+ * occur in the extension's isolated context. The application has no Web3/
+ * cryptocurrency functionality.
+ */
+const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Check for wallet-specific error patterns
+  const isWalletErrorMessage =
+    message.includes("Failed to connect to MetaMask") ||
+    message.includes("No extension found with id:");
+
+  if (isWalletErrorMessage) {
+    return true;
+  }
+
+  // Check if error originates from wallet extension's injected script
+  // - inpage.js is the common name for wallet extension content scripts
+  // - app:///scripts/ is the URL scheme for browser extension injected scripts
+  const isFromWalletScript = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("inpage.js") ||
+      frame.filename?.startsWith("app:///scripts/") ||
+      frame.abs_path?.includes("inpage.js") ||
+      frame.abs_path?.startsWith("app:///scripts/"),
+  );
+
+  return isFromWalletScript;
 };
 
 function ensureBrowserErrorHandler() {
