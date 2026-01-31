@@ -966,7 +966,7 @@ export const getTargetUser = (
     if (target === "SELF") {
       result = users.find((u) => u.userId === user.userId && u.hex === tile);
     } else if (target === "OPPONENT") {
-      result = users.find((u) => u.villageId !== user.villageId && u.hex === tile);
+      result = users.find((u) => u.direction !== user.direction && u.hex === tile);
     } else if (target === "ALLY") {
       result = users.find((u) => u.villageId === user.villageId && u.hex === tile);
     } else if (target === "OTHER_USER") {

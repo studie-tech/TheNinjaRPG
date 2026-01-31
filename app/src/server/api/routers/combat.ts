@@ -90,7 +90,6 @@ import { sector, gameAsset } from "@/drizzle/schema";
 import { performActionSchema, statSchema, BarrierTag } from "@/validators/combat";
 import { performBattleAction, stillInBattle } from "@/libs/combat/actions";
 import { availableUserActions } from "@/libs/combat/actions";
-import { fetchGameAssets } from "@/routers/misc";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { getRandomElement } from "@/utils/array";
 import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
@@ -928,8 +927,10 @@ export const combatRouter = createTRPCRouter({
         (e) => e.creatorId !== ctx.userId,
       );
 
-      // Preserve original initiative to avoid changing it when updating loadouts
+      // Preserve original initiative and direction to avoid changing them when updating loadouts
+      // Direction is important for RAID battles where friendly fire is determined by direction
       const originalInitiative = user.initiative;
+      const originalDirection = user.direction;
 
       // Hydrate jutsus and items from extraState if not using new loadouts
       // We reconstruct CombatQueryUser format from BattleUserState refs + extraState
@@ -1023,9 +1024,10 @@ export const combatRouter = createTRPCRouter({
         },
       );
 
-      // Restore original initiative
+      // Restore original initiative and direction
       if (usersState[0]) {
         usersState[0].initiative = originalInitiative;
+        usersState[0].direction = originalDirection;
       }
 
       // Merge the user's state with the other user's state
@@ -2199,8 +2201,8 @@ export const processUsersForBattle = async (
       // Set controllerID and mark this user as the original
       controllerId: inputUser.userId,
       userId: inputUser.isAi ? nanoid() : inputUser.userId,
-      // Set direction
-      direction: i % 2 === 0 ? "right" : "left",
+      // Set direction based on team membership (leftSideUserIds determines left team)
+      direction: leftSideUserIds?.includes(inputUser.userId) ? "left" : "right",
       // Set the updated at to now, so that action bar starts at 0
       updatedAt: new Date(),
       // If no village, set to syndicate

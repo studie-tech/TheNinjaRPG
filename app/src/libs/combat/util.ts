@@ -2036,7 +2036,9 @@ export const rollInitiative = (
 };
 
 /**
- * Checks if a move is valid on the battlefield
+ * Checks if a move is valid on the battlefield.
+ * Uses the 'direction' property to determine OPPONENT/ALLY - users on opposite
+ * sides are opponents, users on the same side are allies.
  * @param info {
  *  action: CombatAction;
  *  target: TerrainHex;
@@ -2056,7 +2058,7 @@ export const isValidMove = (info: {
   clicked: TerrainHex;
 }) => {
   const { action, user, users, target, clicked, barriers } = info;
-  const { villageId, userId } = user;
+  const { userId, direction } = user;
   const barrier = barriers.find(
     (b) => b.longitude === target.col && b.latitude === target.row,
   );
@@ -2071,11 +2073,13 @@ export const isValidMove = (info: {
     if (action.target === "CHARACTER") {
       if (opponent) return true;
     } else if (action.target === "OPPONENT") {
-      if (opponent && opponent?.villageId !== villageId) return true;
+      // Opponent = different direction/team
+      if (opponent && opponent.direction !== direction) return true;
     } else if (action.target === "OTHER_USER") {
       if (opponent && opponent?.userId !== userId) return true;
     } else if (action.target === "ALLY") {
-      if (opponent && opponent?.villageId === villageId) return true;
+      // Ally = same direction/team
+      if (opponent && opponent.direction === direction) return true;
     } else if (action.target === "SELF") {
       // Allow self-targeting abilities like basic heal even when stealthed
       if (opponent && opponent?.userId === userId) return true;

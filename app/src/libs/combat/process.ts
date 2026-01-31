@@ -53,6 +53,7 @@ import type { BattleUserState } from "./types";
 import type { GroundEffect, UserEffect, ActionEffect, BattleEffect } from "./types";
 import type { CompleteBattle, Consequence, CombatAction } from "./types";
 import type { ShieldTagType } from "@/validators/combat";
+
 /**
  * Minimal user type for checkFriendlyFire
  */
@@ -60,11 +61,14 @@ type FriendlyFireUser = {
   userId: string;
   isSummon?: boolean;
   controllerId: string;
-  villageId: string | null;
+  direction: "left" | "right";
 };
 
 /**
- * Check whether to apply given effect to a user, based on friendly fire settings
+ * Check whether to apply given effect to a user, based on friendly fire settings.
+ * Uses the 'direction' property to determine teams - users on the same side (left/right)
+ * are allies, users on opposite sides are enemies. This works for all battle types
+ * because direction is set based on userIds (attackers=left) vs targetIds (defenders=right).
  */
 export const checkFriendlyFire = (
   effect: BattleEffect,
@@ -75,46 +79,24 @@ export const checkFriendlyFire = (
   const creator = usersState.find((u) => u.userId === effect.creatorId);
   if (!creator) return false;
 
-  // For summoned units, always check if they belong to the creator
+  // For summoned units, check if they belong to the creator (same team)
   if (target.isSummon) {
     const isFriendly = target.controllerId === creator.userId;
     return effect.friendlyFire === "FRIENDLY" ? isFriendly : !isFriendly;
   }
 
-  // Get unique village IDs from real (non-summoned) users
-  const uniqueVillages = new Set(
-    usersState.filter((u) => !u.isSummon).map((u) => u.villageId),
-  );
-
-  // If all real users are from the same village, treat them as enemies
-  const isIntraVillageBattle = uniqueVillages.size === 1;
-
-  // In same-village battles, everyone except summons is an enemy
-  if (isIntraVillageBattle) {
-    if (!effect.friendlyFire || effect.friendlyFire === "ALL") {
-      return true; // Allow all
-    }
-    if (effect.friendlyFire === "FRIENDLY") {
-      return false; // Block friendly-only effects in intra-village battles
-    }
-    if (effect.friendlyFire === "ENEMIES") {
-      return effect.creatorId !== target.userId; // Only allow targeting others, not self
-    }
-    return false;
-  }
-
-  // In multi-village battles, players from same village are allies
-  const isFriendly = creator.villageId === target.villageId;
+  // Determine if target is friendly based on direction (same side = allies)
+  const isFriendly = creator.direction === target.direction;
 
   // Check if effect should be applied based on friendly fire settings
   if (!effect.friendlyFire || effect.friendlyFire === "ALL") {
     return true; // Allow all
   }
   if (effect.friendlyFire === "FRIENDLY") {
-    return isFriendly; // Only apply to friends (same village)
+    return isFriendly; // Only apply to friends (same direction/team)
   }
   if (effect.friendlyFire === "ENEMIES") {
-    return !isFriendly; // Only apply to enemies (different village)
+    return !isFriendly; // Only apply to enemies (different direction/team)
   }
   return false;
 };
