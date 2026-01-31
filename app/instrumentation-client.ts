@@ -359,12 +359,15 @@ function isDataCloneError(event: Sentry.ErrorEvent): boolean {
 }
 
 /**
- * Check if an error is a Replicate API gateway error that should be filtered.
- * These occur when Replicate's API returns 502/503/504 errors during image generation.
- * These are transient third-party infrastructure issues we cannot fix.
+ * Check if an error is a Replicate API error that should be filtered.
+ * This includes:
+ * - Gateway errors (502/503/504) - transient infrastructure issues
+ * - Safety filter errors (E005) - expected when users try to generate sensitive content
  *
  * UX note: These errors are still displayed to users via the global tRPC error handler
  * in Provider.tsx which shows a toast notification. This filter only suppresses Sentry logging.
+ *
+ * THENINJARPG-2D1: Added safety filter error filtering for Replicate's content moderation.
  */
 const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -375,12 +378,21 @@ const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
   const isReplicateDomain =
     /(?:^|[/:])api\.replicate\.com(?:[/:$?]|$)/.test(message);
 
-  return (
+  const isGatewayError =
     isReplicateDomain &&
     (message.includes("502 Bad Gateway") ||
       message.includes("503 Service") ||
-      message.includes("504 Gateway"))
-  );
+      message.includes("504 Gateway"));
+
+  // Match Replicate safety filter errors (E005) - these occur when content moderation
+  // flags the input or output as sensitive. This is expected user behavior, not a bug.
+  // Error format: "Prediction failed: The input or output was flagged as sensitive. Please try again with different inputs. (E005)"
+  const isSafetyFilterError =
+    message.includes("Prediction failed") &&
+    message.includes("flagged as sensitive") &&
+    message.includes("E005");
+
+  return isGatewayError || isSafetyFilterError;
 };
 
 /**

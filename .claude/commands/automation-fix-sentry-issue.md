@@ -294,6 +294,39 @@ User: `/automation-fix-sentry-issue THENINJARPG-123`
 - **3 parallel plans** - Running multiple subagents increases solution quality through diverse analysis
 - **Separate review loop** - Code review runs in the main thread via `/implement-review-loop` after implementation completes
 
+## Handling Regressions
+
+If the subagents report that an issue was already fixed (existing plan file, merged PR), but **recent Sentry events indicate the issue is still occurring**, this is likely a **regression**. Do NOT assume the issue is resolved.
+
+**Investigation steps for regressions:**
+
+1. **Check if the fix is actually in the current code**:
+   ```bash
+   git log --oneline -10 -- <file_that_was_fixed>
+   ```
+   Look for commits AFTER the fix that may have reverted or overwritten the changes.
+
+2. **Search for the error message in the codebase**:
+   ```bash
+   grep -r "exact error message" app/src/
+   ```
+   If the error message doesn't exist, the fix may have been deployed but there's caching/deployment lag.
+
+3. **Check if subsequent commits modified the fixed file**:
+   ```bash
+   git show <later_commit> -- <fixed_file>
+   ```
+   A later commit may have inadvertently reverted the fix while addressing a different issue.
+
+4. **If the fix was overwritten**: Re-apply the fix, ensuring it doesn't conflict with the changes that overwrote it. Consider if the original fix was incomplete or caused other issues that led to reversion.
+
+5. **If the error doesn't exist in code**: The issue may be:
+   - Deployment lag (old code still serving some users)
+   - Edge caching serving stale JavaScript bundles
+   - Sentry aggregating historical events
+
+**Document regression findings** in a new task file, noting what happened to the original fix and why it needs to be re-applied or modified.
+
 ## Configuration
 
 The Sentry configuration for this project:
