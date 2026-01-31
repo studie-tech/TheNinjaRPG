@@ -24,10 +24,14 @@ const Countdown: React.FC<CountdownProps> = (props) => {
   const onFinishRef = useRef(onFinish);
   onFinishRef.current = onFinish;
 
-  // Reset finish flag when target changes
+  // Reset finish flag when target changes - but only if the new countdown is in the future
   if (prevTargetTimeRef.current !== targetTime) {
     prevTargetTimeRef.current = targetTime;
-    hasCalledOnFinishRef.current = false;
+    // Only reset onFinish flag if the new countdown is actually in the future
+    // This prevents infinite loops when targetDate changes after countdown completes
+    if (targetTime > Date.now()) {
+      hasCalledOnFinishRef.current = false;
+    }
   }
 
   const calcCountString = () => {
