@@ -29,6 +29,9 @@ import { canChangeContent } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { SkillTreeFolder } from "@/drizzle/schema";
 
+/** Increment used when assigning order to new folders */
+const FOLDER_ORDER_INCREMENT = 10;
+
 export default function ManualSkillTreeFolder() {
   const router = useRouter();
   const { data: userData } = useRequiredUserData();
@@ -126,7 +129,7 @@ export default function ManualSkillTreeFolder() {
       image: formImage || undefined,
       description: formDescription || undefined,
       hidden: formHidden,
-      order: (folders?.length || 0) * 10,
+      order: (folders?.length || 0) * FOLDER_ORDER_INCREMENT,
     });
   };
 

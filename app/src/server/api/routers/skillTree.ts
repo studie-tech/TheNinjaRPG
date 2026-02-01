@@ -148,12 +148,18 @@ export const skillTreeRouter = createTRPCRouter({
       }
 
       // Purchase the skill (add to userSkill table, activated by default)
-      await ctx.drizzle.insert(userSkill).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        skillId: input.skillId,
-        activated: true,
-      });
+      // Uses onDuplicateKeyUpdate to handle race conditions where concurrent requests
+      // both pass the ownership check. The unique index on (userId, skillId) ensures
+      // only one record exists, and we simply update activated=true if it already exists.
+      await ctx.drizzle
+        .insert(userSkill)
+        .values({
+          id: nanoid(),
+          userId: ctx.userId,
+          skillId: input.skillId,
+          activated: true,
+        })
+        .onDuplicateKeyUpdate({ set: { activated: true } });
 
       return { success: true, message: `Successfully purchased ${skill.name}!` };
     }),
@@ -320,25 +326,32 @@ export const skillTreeRouter = createTRPCRouter({
         );
       }
 
-      // Perform the reset (parallel operations)
-      const updates: Promise<unknown>[] = [];
-      // Delete all user skills (skill points remain, just reset used skills)
-      updates.push(
-        ctx.drizzle.delete(userSkill).where(eq(userSkill.userId, ctx.userId)),
-      );
+      // For paid resets, atomically deduct reputation points with a WHERE guard
+      // to prevent race conditions where concurrent requests bypass the balance check
       if (!isFreeReset) {
-        updates.push(
-          ctx.drizzle
-            .update(userData)
-            .set({
-              reputationPoints: sql`${userData.reputationPoints} - ${COST_SKILL_RESET}`,
-            })
-            .where(eq(userData.userId, ctx.userId)),
-        );
+        const result = await ctx.drizzle
+          .update(userData)
+          .set({
+            reputationPoints: sql`${userData.reputationPoints} - ${COST_SKILL_RESET}`,
+          })
+          .where(
+            and(
+              eq(userData.userId, ctx.userId),
+              gte(userData.reputationPoints, COST_SKILL_RESET),
+            ),
+          );
+        if (result.rowsAffected === 0) {
+          return errorResponse(
+            `Not enough reputation points. Need ${COST_SKILL_RESET} reputation points.`,
+          );
+        }
       }
 
-      // Log the reset for monthly tracking
-      updates.push(
+      // Perform the reset (parallel operations)
+      await Promise.all([
+        // Delete all user skills (skill points remain, just reset used skills)
+        ctx.drizzle.delete(userSkill).where(eq(userSkill.userId, ctx.userId)),
+        // Log the reset for monthly tracking
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
@@ -359,10 +372,7 @@ export const skillTreeRouter = createTRPCRouter({
           relatedImage: user.avatarLight,
           relatedValue: isFreeReset ? 0 : COST_SKILL_RESET,
         }),
-      );
-
-      // Execute all promises
-      await Promise.all(updates);
+      ]);
 
       return {
         success: true,
@@ -465,15 +475,6 @@ export const skillTreeRouter = createTRPCRouter({
       });
     }),
 
-  // Get single folder by ID
-  getFolder: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      return await ctx.drizzle.query.skillTreeFolder.findFirst({
-        where: eq(skillTreeFolder.id, input.id),
-      });
-    }),
-
   // Get folder stats (owned/total skill counts per folder for current user)
   getFolderStats: protectedProcedure.query(async ({ ctx }) => {
     // Fetch all data in parallel for efficiency
@@ -555,18 +556,19 @@ export const skillTreeRouter = createTRPCRouter({
     .input(z.object({ id: z.string(), data: skillTreeFolderSchema }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Check permissions
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      // Check permissions and fetch folder in parallel
+      const [{ user }, folder] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        ctx.drizzle.query.skillTreeFolder.findFirst({
+          where: eq(skillTreeFolder.id, input.id),
+        }),
+      ]);
       if (!user || !canChangeContent(user.role)) {
         throw serverError("UNAUTHORIZED", "You are not authorized to edit folders");
       }
-
-      const folder = await ctx.drizzle.query.skillTreeFolder.findFirst({
-        where: eq(skillTreeFolder.id, input.id),
-      });
       if (!folder) return errorResponse("Folder not found");
 
       await ctx.drizzle
@@ -589,21 +591,20 @@ export const skillTreeRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Check permissions
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      // Check permissions and fetch skills in folder in parallel
+      const [{ user }, skillsInFolder] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        ctx.drizzle.query.skillTree.findMany({
+          where: eq(skillTree.folderId, input.id),
+          columns: { id: true },
+        }),
+      ]);
       if (!user || !canChangeContent(user.role)) {
         throw serverError("UNAUTHORIZED", "You are not authorized to delete folders");
       }
-
-      // Check if folder has skills
-      const skillsInFolder = await ctx.drizzle.query.skillTree.findMany({
-        where: eq(skillTree.folderId, input.id),
-        columns: { id: true },
-      });
-
       if (skillsInFolder.length > 0) {
         return errorResponse(
           `Cannot delete folder that contains ${skillsInFolder.length} skill(s). Please move or delete skills first.`,

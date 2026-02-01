@@ -19,8 +19,10 @@ interface Modal2Props {
   children: string | React.ReactNode;
   className?: string;
   proceed_label?: string | null;
+  proceed_loading_label?: string | null;
   confirmClassName?: string;
   isValid?: boolean;
+  isLoading?: boolean;
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   onAccept?: (
@@ -85,6 +87,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
             <>
               <Button
                 id={props.id ? `${props.id}-proceed` : undefined}
+                disabled={props.isLoading}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -95,7 +98,9 @@ const Modal2: React.FC<Modal2Props> = (props) => {
                 }}
                 className={`rounded-lg z-30 ${confirmBtnClassName}`}
               >
-                {props.proceed_label}
+                {props.isLoading && props.proceed_loading_label
+                  ? props.proceed_loading_label
+                  : props.proceed_label}
               </Button>
               <div className="grow"></div>
             </>

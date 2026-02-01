@@ -19,6 +19,7 @@ interface SkillTreeFolderModalProps {
   onPurchaseSkill: (skillId: string) => void;
   onNavigateToFolder: (folderId: string) => void;
   selectedEffects: string[];
+  isPurchasing?: boolean;
 }
 
 export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
@@ -32,6 +33,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
   onPurchaseSkill,
   onNavigateToFolder,
   selectedEffects,
+  isPurchasing,
 }) => {
   const [selectedSkill, setSelectedSkill] = useState<SkillTree | null>(null);
   const [navigationHistory, setNavigationHistory] = useState<string[]>([]);
@@ -76,7 +78,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
       activatedSkillIds.includes(reqId),
     );
     const hasPoints = userSkillPoints >= skill.costSkillPoints;
-    const canPurchase = (!isOwned || (isOwned && !isActivated)) && hasPrereqs && hasPoints;
+    const canPurchase = !isActivated && hasPrereqs && hasPoints;
 
     return { isOwned, isActivated, hasPrereqs, hasPoints, canPurchase };
   };
@@ -140,6 +142,8 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
             : null
           : null
       }
+      proceed_loading_label="Purchasing..."
+      isLoading={isPurchasing}
       onAccept={selectedSkill && getSkillStatus(selectedSkill).canPurchase ? handlePurchase : undefined}
       className="max-w-2xl"
     >

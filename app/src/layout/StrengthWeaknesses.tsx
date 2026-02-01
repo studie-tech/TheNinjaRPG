@@ -410,19 +410,20 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   });
 
   // Skill Tree Mutations
-  const { mutate: purchaseSkill } = api.skillTree.purchaseSkill.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await Promise.all([
-          utils.skillTree.getUserSkills.invalidate(),
-          utils.skillTree.getAll.invalidate(),
-          utils.skillTree.getFolderStats.invalidate(),
-          utils.profile.getUser.invalidate(),
-        ]);
-      }
-    },
-  });
+  const { mutate: purchaseSkill, isPending: isPurchasing } =
+    api.skillTree.purchaseSkill.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await Promise.all([
+            utils.skillTree.getUserSkills.invalidate(),
+            utils.skillTree.getAll.invalidate(),
+            utils.skillTree.getFolderStats.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
+        }
+      },
+    });
 
   // Skill tree derived data
   const allSkillsData = allSkills?.data ?? [];
@@ -511,6 +512,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
         onPurchaseSkill={(skillId) => purchaseSkill({ skillId })}
         onNavigateToFolder={handleNavigateToFolder}
         selectedEffects={selectedEffects}
+        isPurchasing={isPurchasing}
       />
     </>
   );

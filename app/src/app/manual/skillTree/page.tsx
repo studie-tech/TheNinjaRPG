@@ -136,9 +136,8 @@ export default function ManualSkillTree() {
       >
         {totalLoading && <Loader explanation="Loading data" />}
         {allSkills.map((skill, i) => (
-          <div key={i} ref={i === allSkills.length - 1 ? setLastElement : null}>
+          <div key={skill.id} ref={i === allSkills.length - 1 ? setLastElement : null}>
             <ItemWithEffects
-              key={skill.id}
               item={skill}
               showEdit={
                 userData && canChangeContent(userData.role) ? "skillTree" : undefined
