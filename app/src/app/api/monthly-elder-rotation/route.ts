@@ -224,13 +224,16 @@ async function handleRotation() {
             .set({ rank: "ELDER" })
             .where(inArray(userData.userId, toPromote))
         : Promise.resolve(),
-      drizzleDB.update(clan).set({
-        activityPoints: 0,
-        elderNomineeId: null,
-        elderCutoffMonth: null,
-        elderCutoffYear: null,
-        elderCutoffRank: null,
-      }),
+      drizzleDB
+        .update(clan)
+        .set({
+          activityPoints: 0,
+          elderNomineeId: null,
+          elderCutoffMonth: null,
+          elderCutoffYear: null,
+          elderCutoffRank: null,
+        })
+        .where(inArray(clan.villageId, villageIds)),
     ]);
 
     return Response.json(`OK - Elder rotation completed`);
