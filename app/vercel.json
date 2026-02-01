@@ -82,7 +82,7 @@
     },
     {
       "path": "/api/monthly-elder-rotation",
-      "schedule": "0 0 1,25 * *"
+      "schedule": "0 0 25,28 * *"
     }
   ],
   "functions": {

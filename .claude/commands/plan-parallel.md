@@ -16,7 +16,7 @@ Generate a high-quality implementation plan by running 6 parallel planning agent
 Launch **6 parallel planners** to generate diverse perspectives on the implementation approach:
 
 - **3 Claude Task subagents** using the `Task` tool
-- **3 Codex CLI planners** using the `Shell` tool
+- **3 Codex CLI planners** using the `Bash` tool
 
 #### 1a: Claude Task Subagents (3 parallel)
 
@@ -30,13 +30,13 @@ After completion, report ONLY the path to the saved plan file.
 
 #### 1b: Codex CLI Planners (3 parallel)
 
-For each of the 3 Codex planners, run this command in the `Shell` tool with `block_until_ms: 0` to background immediately:
+For each of the 3 Codex planners, run this command in the `Bash` tool with `block_until_ms: 0` to background immediately:
 
 ```bash
 codex exec --dangerously-bypass-approvals-and-sandbox "Run the /plan-implementation command found in .claude/commands folder with argument: INSTRUCTIONS. After completion, report the path to the saved plan file."
 ```
 
-**Important**: Run each codex command in a separate Shell call so they run in parallel. After launching, monitor the terminal files to wait for completion and extract the plan file paths from the output.
+**Important**: Run each codex command in a separate Bash call so they run in parallel. After launching, monitor the terminal files to wait for completion and extract the plan file paths from the output.
 
 Replace `INSTRUCTIONS` with the exact content from `$ARGUMENTS` in all commands:
 
@@ -90,13 +90,13 @@ User: `/plan-parallel Add a new settings page that allows users to configure not
    Task: "Run /plan-implementation Add a new settings page that allows users to configure notification preferences"
    ```
 
-   **Codex CLI planners (in Shell with block_until_ms: 0):**
+   **Codex CLI planners (in Bash with block_until_ms: 0):**
 
    ```bash
    codex exec --dangerously-bypass-approvals-and-sandbox "Run the /plan-implementation command found in .claude/commands folder with argument: Add a new settings page that allows users to configure notification preferences. After completion, report the path to the saved plan file."
    ```
 
-   (Run 3 times in parallel Shell calls)
+   (Run 3 times in parallel Bash calls)
 
    Results (after monitoring terminal output for completion):
 

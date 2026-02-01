@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, sql, and, or, gte, like, isNull, inArray } from "drizzle-orm";
+import { eq, sql, and, or, gte, like, isNull, inArray, desc } from "drizzle-orm";
 import { getTableColumns } from "drizzle-orm";
 import { villageStructure, conversation, sector } from "@/drizzle/schema";
 import { war, warAlly, warKill } from "@/drizzle/schema";
@@ -49,6 +49,7 @@ import { CLAN_COLOR_CHANGE_REP_COST } from "@/drizzle/constants";
 import {
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
+  KAGE_MAX_ELDERS,
 } from "@/drizzle/constants";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { DrizzleClient } from "@/server/db";
@@ -1034,8 +1035,8 @@ export const clanRouter = createTRPCRouter({
       if (nominee.clanId !== clanData.id) {
         return errorResponse(`Nominee must be a ${groupLabel} member`);
       }
-      if (nominee.rank !== "JONIN") {
-        return errorResponse("Nominee must be a Jonin");
+      if (!hasRequiredRank(nominee.rank, "JONIN")) {
+        return errorResponse("Nominee must be at least Jonin rank");
       }
       if (nominee.villageId !== clanData.villageId) {
         return errorResponse("Nominee must be in the same village");
@@ -1054,16 +1055,26 @@ export const clanRouter = createTRPCRouter({
           `Elder nominations are only open from the ${ELDER_NOMINATION_CUTOFF_DAY}th to the ${ELDER_NOMINATION_DEADLINE_DAY}th of each month`,
         );
       }
-      // Eligibility validation - clan must be in top 3 by activity (cutoff snapshot)
+      // Eligibility validation - clan must be in top 3 by activity (cutoff snapshot or live fallback)
       const currentMonth = now.getUTCMonth() + 1;
       const currentYear = now.getUTCFullYear();
-      if (
-        clanData.elderCutoffMonth !== currentMonth ||
-        clanData.elderCutoffYear !== currentYear
-      ) {
-        return errorResponse(
-          "Your clan is not eligible for elder nomination this month (not in top 3 by activity points)",
-        );
+      const hasCutoffSnapshot =
+        clanData.elderCutoffMonth === currentMonth &&
+        clanData.elderCutoffYear === currentYear;
+      if (!hasCutoffSnapshot) {
+        // Fallback: calculate live eligibility if cutoff snapshot is missing
+        const liveRankings = await ctx.drizzle.query.clan.findMany({
+          where: eq(clan.villageId, clanData.villageId),
+          orderBy: [desc(clan.activityPoints), desc(clan.points)],
+          limit: KAGE_MAX_ELDERS,
+          columns: { id: true },
+        });
+        const isInTop3 = liveRankings.some((c) => c.id === clanData.id);
+        if (!isInTop3) {
+          return errorResponse(
+            "Your clan is not eligible for elder nomination this month (not in top 3 by activity points)",
+          );
+        }
       }
       // Mutate
       await ctx.drizzle

@@ -1295,8 +1295,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                     Nominations are open from the {ELDER_NOMINATION_CUTOFF_DAY}th to the{" "}
                     {ELDER_NOMINATION_DEADLINE_DAY}th of each month. Top 3 clans by
                     activity points (determined on the {ELDER_NOMINATION_CUTOFF_DAY}th)
-                    can nominate a member to become elder. ANBU members cannot be
-                    nominated.
+                    can nominate a member to become elder. Nominees must be at least
+                    Jonin rank and cannot be ANBU members.
                   </p>
                   {!isWithinWindow && (
                     <p className="text-sm text-amber-600 mb-2">
@@ -1327,7 +1327,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                       </SelectTrigger>
                       <SelectContent>
                         {clanData.members
-                          .filter((m) => !m.anbuId)
+                          .filter((m) => !m.anbuId && hasRequiredRank(m.rank, "JONIN"))
                           .map((member) => (
                             <SelectItem key={member.userId} value={member.userId}>
                               {member.username} (Lvl. {member.level})

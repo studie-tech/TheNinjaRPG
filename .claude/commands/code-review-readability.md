@@ -36,10 +36,10 @@ Mark each todo as completed after performing it.
    - `git diff --name-only -- '*.ts' '*.tsx' ':!**/migrations/**'` (unstaged)
 2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
 3. **Locate the changed code within the file**, then examine the ENTIRE function/block containing those changes
-4. **For every function over 30 lines:**
+4. **For every function over 50 lines (mandatory):**
    - Check if it could be broken into smaller functions
    - Check if complex logic is explained
-   - This check is mandatory even if only part of the function was changed
+   - This check applies even if only part of the function was changed
 5. **For every conditional or loop:**
    - Count nesting levels
    - Check for early return opportunities

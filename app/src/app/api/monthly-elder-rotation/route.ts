@@ -1,4 +1,4 @@
-import { eq, and, desc, isNotNull, asc } from "drizzle-orm";
+import { eq, and, desc, isNotNull, asc, inArray, isNull } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
 import { userData, clan, village } from "@/drizzle/schema";
 import { updateGameSetting } from "@/libs/gamesettings";
@@ -7,6 +7,7 @@ import { cookies } from "next/headers";
 import {
   KAGE_MAX_ELDERS,
   ELDER_NOMINATION_CUTOFF_DAY,
+  ELDER_NOMINATION_DEADLINE_DAY,
 } from "@/drizzle/constants";
 
 export async function GET() {
@@ -17,15 +18,22 @@ export async function GET() {
   const dayOfMonth = now.getUTCDate();
 
   // Route to appropriate handler based on day of month
+  // Cron fires on ELDER_NOMINATION_CUTOFF_DAY (25th) and ELDER_NOMINATION_DEADLINE_DAY (28th)
   if (dayOfMonth === ELDER_NOMINATION_CUTOFF_DAY) {
     return handleCutoff();
-  } else {
+  } else if (dayOfMonth === ELDER_NOMINATION_DEADLINE_DAY) {
     return handleRotation();
+  } else {
+    return Response.json(
+      { error: "Elder rotation cron should only run on cutoff or deadline days" },
+      { status: 400 },
+    );
   }
 }
 
 /**
- * Cutoff handler - runs on the 25th to snapshot top 3 clans per village
+ * Cutoff handler - runs on ELDER_NOMINATION_CUTOFF_DAY (25th) to snapshot top 3 clans per village
+ * This determines which clans are eligible for elder positions before the nomination window opens.
  */
 async function handleCutoff() {
   const timerCheck = await lockWithMonthlyTimer(drizzleDB, "monthly-elder-cutoff");
@@ -90,7 +98,8 @@ async function handleCutoff() {
 }
 
 /**
- * Rotation handler - runs on the 1st to promote elders and reset points
+ * Rotation handler - runs on ELDER_NOMINATION_DEADLINE_DAY (28th) to promote elders and reset points
+ * By this time nominations have closed, so nominees are final and ready for promotion.
  */
 async function handleRotation() {
   const timerCheck = await lockWithMonthlyTimer(drizzleDB, "monthly-elder-rotation");
@@ -103,13 +112,10 @@ async function handleRotation() {
     });
 
     for (const villageData of villages) {
-      // Find eligible clans using cutoff snapshot (set on the 25th)
+      // Find eligible clans using cutoff snapshot (set on ELDER_NOMINATION_CUTOFF_DAY)
       // If cutoff snapshot exists, use it; otherwise fall back to live calculation
       let eligibleClans = await drizzleDB.query.clan.findMany({
-        where: and(
-          eq(clan.villageId, villageData.id),
-          isNotNull(clan.elderCutoffRank),
-        ),
+        where: and(eq(clan.villageId, villageData.id), isNotNull(clan.elderCutoffRank)),
         orderBy: asc(clan.elderCutoffRank), // Sort by rank 1, 2, 3
         columns: {
           id: true,
@@ -141,40 +147,44 @@ async function handleRotation() {
       await drizzleDB
         .update(userData)
         .set({ rank: "JONIN" })
-        .where(
-          and(eq(userData.villageId, villageData.id), eq(userData.rank, "ELDER")),
-        );
+        .where(and(eq(userData.villageId, villageData.id), eq(userData.rank, "ELDER")));
 
-      // For each eligible clan, promote nominee (or leader fallback) to ELDER
-      for (const topClan of eligibleClans) {
-        const nomineeId = topClan.elderNomineeId || topClan.leaderId;
-        if (nomineeId) {
-          // Check that nominee is in same village, not ANBU, still in clan, not banned
-          const nominee = await drizzleDB.query.userData.findFirst({
-            where: and(
-              eq(userData.userId, nomineeId),
-              eq(userData.villageId, villageData.id),
-              eq(userData.isBanned, false),
-            ),
-            columns: { userId: true, anbuId: true, clanId: true, rank: true },
-          });
+      // Batch fetch all nominees at once
+      const nomineeIds = eligibleClans
+        .map((c) => c.elderNomineeId || c.leaderId)
+        .filter((id): id is string => id !== null);
 
-          // Only promote if nominee is valid:
-          // - Exists and not banned (from query)
-          // - Not in ANBU
-          // - Still in the eligible clan (not just any clan)
-          // - Still JONIN rank (not already promoted somehow)
-          if (
-            nominee &&
-            !nominee.anbuId &&
-            nominee.clanId === topClan.id &&
-            nominee.rank === "JONIN"
-          ) {
-            await drizzleDB
-              .update(userData)
-              .set({ rank: "ELDER" })
-              .where(eq(userData.userId, nomineeId));
-          }
+      if (nomineeIds.length > 0) {
+        const validNominees = await drizzleDB.query.userData.findMany({
+          where: and(
+            inArray(userData.userId, nomineeIds),
+            eq(userData.villageId, villageData.id),
+            eq(userData.isBanned, false),
+            eq(userData.rank, "JONIN"),
+            isNull(userData.anbuId),
+          ),
+          columns: { userId: true, clanId: true },
+        });
+
+        // Create map for O(1) lookups
+        const validNomineeMap = new Map(validNominees.map((n) => [n.userId, n]));
+
+        // Filter to nominees that are still in their eligible clan
+        const toPromote = eligibleClans
+          .map((clan) => {
+            const nomineeId = clan.elderNomineeId || clan.leaderId;
+            if (!nomineeId) return null;
+            const nominee = validNomineeMap.get(nomineeId);
+            return nominee && nominee.clanId === clan.id ? nomineeId : null;
+          })
+          .filter((id): id is string => id !== null);
+
+        // Batch promote all valid nominees
+        if (toPromote.length > 0) {
+          await drizzleDB
+            .update(userData)
+            .set({ rank: "ELDER" })
+            .where(inArray(userData.userId, toPromote));
         }
       }
     }
@@ -192,7 +202,12 @@ async function handleRotation() {
 
     return Response.json(`OK - Elder rotation completed`);
   } catch (cause) {
-    await updateGameSetting(drizzleDB, "monthly-elder-rotation", 0, timerCheck.prevTime);
+    await updateGameSetting(
+      drizzleDB,
+      "monthly-elder-rotation",
+      0,
+      timerCheck.prevTime,
+    );
     return handleEndpointError(cause);
   }
 }
