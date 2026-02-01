@@ -433,20 +433,16 @@ export const jutsuRouter = createTRPCRouter({
       // Validate requiredItemIds (item names) if present
       if (input.data.requiredItemIds && input.data.requiredItemIds.length > 0) {
         // Accept both names and IDs from the frontend
-        // First, try to find items by name
-        const itemsByName = await ctx.drizzle.query.item.findMany({
-          columns: { id: true, name: true },
-          where: inArray(item.name, input.data.requiredItemIds),
-        });
-        // Then, try to find items by ID
-        const itemsById = await ctx.drizzle.query.item.findMany({
-          columns: { id: true, name: true },
-          where: inArray(item.id, input.data.requiredItemIds),
-        });
-        // Merge found IDs
-        const foundIds = new Set([
-          ...itemsByName.map((i) => i.id),
-          ...itemsById.map((i) => i.id),
+        // Run both queries in parallel
+        const [itemsByName, itemsById] = await Promise.all([
+          ctx.drizzle.query.item.findMany({
+            columns: { id: true, name: true },
+            where: inArray(item.name, input.data.requiredItemIds),
+          }),
+          ctx.drizzle.query.item.findMany({
+            columns: { id: true, name: true },
+            where: inArray(item.id, input.data.requiredItemIds),
+          }),
         ]);
         // Map all input names to IDs if possible
         const allItems = [...itemsByName, ...itemsById];
@@ -843,18 +839,24 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [userjutsus, data, loadouts] = await Promise.all([
+      const [userjutsus, data, loadouts, allUserItems] = await Promise.all([
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
 
-      const filteredJutsus = userjutsus.filter((uj) => canTrainJutsu(uj.jutsu, user));
+      const userWithAllItems = {
+        ...user,
+        items: allUserItems ?? user.items,
+      };
+
+      const filteredJutsus = userjutsus.filter((uj) => canTrainJutsu(uj.jutsu, userWithAllItems));
       const userjutsuObj = filteredJutsus.find((j) => j.id === input.userJutsuId);
       const isEquipped = userjutsuObj?.equipped || false;
       const equippedJutsus = filteredJutsus.filter((j) => j.equipped);
@@ -898,7 +900,7 @@ export const jutsuRouter = createTRPCRouter({
       if (!userjutsuObj) return errorResponse("Jutsu not found");
 
       // Check if jutsu can be equipped (including bloodline check)
-      if (!isEquipped && !canTrainJutsu(userjutsuObj.jutsu, user)) {
+      if (!isEquipped && !canTrainJutsu(userjutsuObj.jutsu, userWithAllItems)) {
         return errorResponse("You cannot equip this jutsu due to missing requirements");
       }
 

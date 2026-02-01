@@ -179,16 +179,21 @@ export const checkJutsuItems = (
 
   // If specific required items are defined (AND semantics - ALL items required)
   if (hasRequiredItems) {
-    const allItemsSatisfied = requiredItemIds.every((reqId: string) => {
-      if (itemsWithRelation && itemsWithRelation.length > 0) {
-        return itemsWithRelation.some(
-          (ui) =>
-            ui.item?.id === reqId &&
-            (!requireEquipped || ui.equipped !== "NONE"),
-        );
-      }
-      return !requireEquipped;
-    });
+    const itemsForIdCheck = userItemsWithItem ?? userItems ?? [];
+    const allItemsSatisfied = requiredItemIds.every((reqId: string) =>
+      itemsForIdCheck.some((ui) => {
+        if (ui.itemId === reqId) {
+          return !requireEquipped || ui.equipped !== "NONE";
+        }
+        if ("item" in ui && ui.item) {
+          const item = ui.item as UserItemWithItem["item"];
+          if (item.id === reqId) {
+            return !requireEquipped || ui.equipped !== "NONE";
+          }
+        }
+        return false;
+      }),
+    );
     if (!allItemsSatisfied) return false;
     return true;
   }
@@ -204,14 +209,22 @@ export const checkJutsuItems = (
     }
 
     if (requireEquipped) {
-      const equippedWeapon = itemsWithRelation.find(
-        (ui) => ui.item.weaponType === jutsu.jutsuWeapon && ui.equipped !== "NONE",
-      );
+      const equippedWeapon = itemsWithRelation.find((ui) => {
+        if ("item" in ui && ui.item) {
+          const item = ui.item as UserItemWithItem["item"];
+          return item.weaponType === jutsu.jutsuWeapon && ui.equipped !== "NONE";
+        }
+        return false;
+      });
       if (!equippedWeapon) return false;
     } else {
-      const ownedWeapon = itemsWithRelation.find(
-        (ui) => ui.item.weaponType === jutsu.jutsuWeapon,
-      );
+      const ownedWeapon = itemsWithRelation.find((ui) => {
+        if ("item" in ui && ui.item) {
+          const item = ui.item as UserItemWithItem["item"];
+          return item.weaponType === jutsu.jutsuWeapon;
+        }
+        return false;
+      });
       if (!ownedWeapon) return false;
     }
   }
