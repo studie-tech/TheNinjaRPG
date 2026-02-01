@@ -23,6 +23,7 @@ import {
   bloodline,
   badge,
   war,
+  battle,
 } from "@/drizzle/schema";
 import {
   RAID_BATTLE_MAX_USERS_PER_TEAM,
@@ -38,7 +39,11 @@ import type { RaidObjectiveType } from "@/validators/objectives";
 import { postProcessRewards } from "@/libs/quest";
 import { getRaidObjectiveData, validateRaidIsActive } from "@/libs/raids";
 import { secondsFromDate } from "@/utils/time";
-import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
+import {
+  getServerPusher,
+  updateRaidTeamsOnSector,
+  updateUserOnMap,
+} from "@/libs/pusher";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent } from "@/utils/permissions";
 import { AllTags } from "@/validators/combat";
@@ -624,7 +629,7 @@ export const raidsRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ teamId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Query - parallel fetch all required data upfront
-      const [{ user }, raid, teamData] = await Promise.all([
+      const [{ user }, raid, teamData, existingQueueEntry] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         ctx.drizzle.query.quest.findFirst({
           where: and(eq(quest.id, input.questId), eq(quest.questType, "raid")),
@@ -641,6 +646,10 @@ export const raidsRouter = createTRPCRouter({
               with: { queue: true },
             })
           : Promise.resolve(null),
+        // Check if user already has a queue entry (prevents duplicate entries)
+        ctx.drizzle.query.mpvpBattleUser.findFirst({
+          where: eq(mpvpBattleUser.userId, ctx.userId),
+        }),
       ]);
 
       // Guard - basic validations
@@ -648,6 +657,11 @@ export const raidsRouter = createTRPCRouter({
       if (!raid) return errorResponse("Raid not found");
       if (user.status !== "AWAKE") {
         return errorResponse("You cannot join a raid queue in your current status");
+      }
+      if (existingQueueEntry) {
+        return errorResponse(
+          "You are already in a queue. Please leave your current queue first.",
+        );
       }
 
       // Guard - raid active state
@@ -899,7 +913,15 @@ export const raidsRouter = createTRPCRouter({
       const isClaimingState =
         queueEntry.clanBattle.battleId?.startsWith("claiming-") ?? false;
       if (queueEntry.clanBattle.battleId !== null && !isClaimingState) {
-        return errorResponse("Battle has already started");
+        // Verify the battle actually exists before blocking leave
+        const battleExists = await ctx.drizzle.query.battle.findFirst({
+          where: eq(battle.id, queueEntry.clanBattle.battleId),
+          columns: { id: true },
+        });
+        if (battleExists) {
+          return errorResponse("Battle has already started");
+        }
+        // Battle doesn't exist - treat as stale, allow leave to proceed
       }
 
       // Store sector before operations for Pusher notification
@@ -910,8 +932,8 @@ export const raidsRouter = createTRPCRouter({
         ctx.drizzle.delete(mpvpBattleUser).where(eq(mpvpBattleUser.id, queueEntry.id)),
         ctx.drizzle
           .update(userData)
-          .set({ status: "AWAKE" })
-          .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "QUEUED"))),
+          .set({ status: "AWAKE", battleId: null })
+          .where(eq(userData.userId, ctx.userId)),
         // Clean up claiming ID if present
         isClaimingState
           ? ctx.drizzle
@@ -941,6 +963,115 @@ export const raidsRouter = createTRPCRouter({
         success: true,
         message: "Left raid queue",
       };
+    }),
+
+  /**
+   * Self-service unstuck from raid queue
+   */
+  selfUnstuckFromRaid: protectedProcedure
+    .use(ratelimitMiddleware)
+    .use(hasUserMiddleware)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Query - fetch user and all queue entries in parallel
+      const [{ user }, queueEntries] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        ctx.drizzle.query.mpvpBattleUser.findMany({
+          where: eq(mpvpBattleUser.userId, ctx.userId),
+        }),
+      ]);
+
+      // Guard - user must exist
+      if (!user) return errorResponse("User not found");
+
+      // Guard - prevent abuse when user is in a real active battle
+      if (user.status === "BATTLE" && user.battleId) {
+        const battleExists = await ctx.drizzle.query.battle.findFirst({
+          where: eq(battle.id, user.battleId),
+          columns: { id: true },
+        });
+        if (battleExists) {
+          return errorResponse(
+            "You are in an active battle. Complete the battle first.",
+          );
+        }
+      }
+
+      // Guard - don't allow if user is in a normal state with no queue entries
+      if (user.status === "AWAKE" && queueEntries.length === 0 && !user.battleId) {
+        return errorResponse("You are not stuck in a raid queue.");
+      }
+
+      // Store clanBattleIds for cleanup
+      const clanBattleIds = [...new Set(queueEntries.map((e) => e.clanBattleId))];
+
+      // Mutation - clean up all queue entries and reset user status
+      await Promise.all([
+        ctx.drizzle
+          .delete(mpvpBattleUser)
+          .where(eq(mpvpBattleUser.userId, ctx.userId)),
+        ctx.drizzle
+          .update(userData)
+          .set({ status: "AWAKE", battleId: null })
+          .where(eq(userData.userId, ctx.userId)),
+      ]);
+
+      // Clean up empty teams or reset claiming state for remaining members
+      if (clanBattleIds.length > 0) {
+        // Fetch all remaining members for all affected teams in one query
+        const remainingMembers = await ctx.drizzle.query.mpvpBattleUser.findMany({
+          where: inArray(mpvpBattleUser.clanBattleId, clanBattleIds),
+          columns: { clanBattleId: true },
+        });
+
+        // Determine which teams still have members
+        const teamsWithMembers = new Set(remainingMembers.map((m) => m.clanBattleId));
+        const emptyTeamIds = clanBattleIds.filter((id) => !teamsWithMembers.has(id));
+        const teamsToResetClaiming = clanBattleIds.filter((id) =>
+          teamsWithMembers.has(id),
+        );
+
+        // Execute bulk operations in parallel
+        await Promise.all([
+          // Delete empty teams
+          emptyTeamIds.length > 0
+            ? ctx.drizzle
+                .delete(mpvpBattleQueue)
+                .where(inArray(mpvpBattleQueue.id, emptyTeamIds))
+            : Promise.resolve(),
+          // Reset claiming state for teams that still have members
+          teamsToResetClaiming.length > 0
+            ? ctx.drizzle
+                .update(mpvpBattleQueue)
+                .set({ battleId: null })
+                .where(
+                  and(
+                    inArray(mpvpBattleQueue.id, teamsToResetClaiming),
+                    sql`${mpvpBattleQueue.battleId} LIKE 'claiming-%'`,
+                  ),
+                )
+            : Promise.resolve(),
+        ]);
+      }
+
+      // Pusher - notify sector about user status change
+      const pusher = getServerPusher();
+      void updateUserOnMap(pusher, user.sector, {
+        longitude: user.longitude,
+        latitude: user.latitude,
+        sector: user.sector,
+        avatar: user.avatar,
+        avatarLight: user.avatarLight,
+        level: user.level,
+        villageId: user.villageId,
+        battleId: null,
+        username: user.username,
+        status: "AWAKE",
+        location: "",
+        userId: ctx.userId,
+      });
+
+      return { success: true, message: "Successfully reset your raid queue state." };
     }),
 
   /**
@@ -1125,13 +1256,8 @@ export const raidsRouter = createTRPCRouter({
               ),
             ctx.drizzle
               .update(userData)
-              .set({ status: "AWAKE" })
-              .where(
-                and(
-                  inArray(userData.userId, attackerUserIds),
-                  eq(userData.status, "QUEUED"),
-                ),
-              ),
+              .set({ status: "AWAKE", battleId: null })
+              .where(inArray(userData.userId, attackerUserIds)),
             ctx.drizzle
               .delete(mpvpBattleUser)
               .where(eq(mpvpBattleUser.clanBattleId, input.teamId)),
@@ -1153,13 +1279,8 @@ export const raidsRouter = createTRPCRouter({
             ),
           ctx.drizzle
             .update(userData)
-            .set({ status: "AWAKE" })
-            .where(
-              and(
-                inArray(userData.userId, attackerUserIds),
-                eq(userData.status, "QUEUED"),
-              ),
-            ),
+            .set({ status: "AWAKE", battleId: null })
+            .where(inArray(userData.userId, attackerUserIds)),
           ctx.drizzle
             .delete(mpvpBattleUser)
             .where(eq(mpvpBattleUser.clanBattleId, input.teamId)),

@@ -22,6 +22,7 @@ import {
   History,
   Skull,
   TimerOff,
+  AlertTriangle,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -139,6 +140,16 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
       },
     });
 
+  const { mutate: selfUnstuck, isPending: unstuckPending } =
+    api.raids.selfUnstuckFromRaid.useMutation({
+      onSuccess: (data) => {
+        showMutationToast(data);
+        void util.raids.getUserRaidQueue.invalidate();
+        void util.raids.getActiveRaidTeams.invalidate();
+        void util.profile.getUser.invalidate();
+      },
+    });
+
   // Event handlers
   const handleRaidSelect = (raidId: string) => {
     setSelectedRaidId((prev) => (prev === raidId ? null : raidId));
@@ -185,6 +196,9 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   const leaderboard = leaderboardData?.participations ?? [];
   const activeTeams = activeTeamsData?.teams ?? [];
   const maxTeams = activeTeamsData?.maxTeams ?? 5;
+
+  // Determine if user appears stuck in raid queue (status is QUEUED but not in any queue)
+  const appearStuck = userData?.status === "QUEUED" && !userQueueData?.inQueue;
 
   // Auto-select the only raid when sectorFilter is provided and there's exactly one raid
   useEffect(() => {
@@ -286,6 +300,40 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                 ? "Raids are cooperative boss battles where multiple teams fight to deal damage to a shared boss. Damage-based rewards are available to participants."
                 : "View completed raids, check leaderboards, and claim any unclaimed rewards from raids you participated in."}
             </p>
+
+            {/* Stuck State Warning Banner */}
+            {appearStuck && (
+              <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-amber-900 dark:text-amber-100">
+                      Stuck in Raid Queue
+                    </p>
+                    <p className="text-sm text-amber-800 dark:text-amber-200 mt-1">
+                      Your status shows you are in a queue, but no active queue entry was
+                      found. This can happen due to connection issues or server errors.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 border-amber-600 text-amber-700 hover:bg-amber-100 dark:border-amber-500 dark:text-amber-300 dark:hover:bg-amber-900"
+                      onClick={() => selfUnstuck()}
+                      disabled={unstuckPending}
+                    >
+                      {unstuckPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Resetting...
+                        </>
+                      ) : (
+                        "Reset Raid Status"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {displayedRaids.length > 0 ? (
               <div className="grid gap-3">
