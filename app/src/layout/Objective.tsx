@@ -13,6 +13,7 @@ import { isObjectiveComplete } from "@/libs/objectives";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
 import { secondsFromDate } from "@/utils/time";
+import { parseHtml } from "@/utils/parse";
 
 import { Button } from "@/components/ui/button";
 import type { Quest } from "@/drizzle/schema";
@@ -143,10 +144,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                   setIsOpen={() => setModalOpen(false)}
                   isOpen={modalOpen}
                 >
-                  <div
-                    // eslint-disable-next-line @eslint-react/dom/no-dangerously-set-innerhtml
-                    dangerouslySetInnerHTML={{ __html: objective.description }}
-                  />
+                  {parseHtml(objective.description)}
                 </Modal2>
               )}
             </>

@@ -68,9 +68,3 @@ UPDATE `SkillTree` SET `folderId` = 'folder-weapons-jutsu' WHERE `id` IN (
 
 -- Defense folder
 UPDATE `SkillTree` SET `folderId` = 'folder-defense' WHERE `id` = 'GgxxApe2BCSi3REGh16GO';
-
--- Assign any remaining skills without a folder to a General folder
-INSERT INTO `SkillTreeFolder` (`id`, `name`, `image`, `description`, `hidden`, `order`, `createdAt`, `updatedAt`) VALUES
-('folder-general', 'General', '', 'Uncategorized skills', false, 0, NOW(3), NOW(3));
-
-UPDATE `SkillTree` SET `folderId` = 'folder-general' WHERE `folderId` IS NULL;

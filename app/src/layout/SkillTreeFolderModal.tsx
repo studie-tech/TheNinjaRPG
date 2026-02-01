@@ -6,6 +6,7 @@ import Modal2 from "@/layout/Modal2";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Check, Lock, X, ChevronLeft, ExternalLink } from "lucide-react";
+import { parseHtml } from "@/utils/parse";
 import type { SkillTree, SkillTreeFolder, UserSkill } from "@/drizzle/schema";
 
 interface SkillTreeFolderModalProps {
@@ -144,7 +145,11 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
       }
       proceed_loading_label="Purchasing..."
       isLoading={isPurchasing}
-      onAccept={selectedSkill && getSkillStatus(selectedSkill).canPurchase ? handlePurchase : undefined}
+      onAccept={
+        selectedSkill && getSkillStatus(selectedSkill).canPurchase
+          ? handlePurchase
+          : undefined
+      }
       className="max-w-2xl"
     >
       {/* Back button if viewing skill details or from navigation */}
@@ -191,7 +196,9 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
           )}
 
           {folder.description && (
-            <p className="text-sm text-muted-foreground text-center">{folder.description}</p>
+            <p className="text-sm text-muted-foreground text-center">
+              {folder.description}
+            </p>
           )}
 
           {/* Skills grouped by tier */}
@@ -254,13 +261,15 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, status, onClick }) => {
       className={`
         relative cursor-pointer rounded-lg border-2 p-3 transition-all duration-200
         hover:shadow-md
-        ${effectivelyOwned
-          ? "border-green-500 bg-green-50 dark:bg-green-950/30"
-          : isAvailable
-            ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-            : isUnaffordable
-              ? "border-red-500 bg-red-50 dark:bg-red-950/30"
-              : "border-border bg-card"}
+        ${
+          effectivelyOwned
+            ? "border-green-500 bg-green-50 dark:bg-green-950/30"
+            : isAvailable
+              ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+              : isUnaffordable
+                ? "border-red-500 bg-red-50 dark:bg-red-950/30"
+                : "border-border bg-card"
+        }
       `}
     >
       {/* Status icon */}
@@ -278,7 +287,9 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, status, onClick }) => {
 
       {/* Skill image */}
       <div className="flex justify-center mb-2">
-        <div className={`relative w-12 h-12 rounded-full overflow-hidden ${isLocked || isUnaffordable ? "opacity-60 grayscale" : ""}`}>
+        <div
+          className={`relative w-12 h-12 rounded-full overflow-hidden ${isLocked || isUnaffordable ? "opacity-60 grayscale" : ""}`}
+        >
           <Image
             src={skill.image}
             alt={skill.name}
@@ -365,11 +376,9 @@ const SkillDetails: React.FC<SkillDetailsProps> = ({
       </div>
 
       {/* Description */}
-      <div
-        className="text-sm text-muted-foreground prose prose-sm dark:prose-invert max-w-none"
-        // eslint-disable-next-line @eslint-react/dom/no-dangerously-set-innerhtml
-        dangerouslySetInnerHTML={{ __html: skill.description }}
-      />
+      <div className="text-sm text-muted-foreground prose prose-sm dark:prose-invert max-w-none">
+        {parseHtml(skill.description)}
+      </div>
 
       {/* Prerequisites */}
       {skill.requiredSkillIds.length > 0 && (
@@ -379,7 +388,8 @@ const SkillDetails: React.FC<SkillDetailsProps> = ({
             {skill.requiredSkillIds.map((reqId) => {
               const prereq = allSkills.find((s) => s.id === reqId);
               const isPrereqActivated = activatedSkillIds.includes(reqId);
-              const isInDifferentFolder = prereq?.folderId && prereq.folderId !== folder.id;
+              const isInDifferentFolder =
+                prereq?.folderId && prereq.folderId !== folder.id;
               const prereqFolder = isInDifferentFolder
                 ? folders.find((f) => f.id === prereq?.folderId)
                 : null;
@@ -388,7 +398,9 @@ const SkillDetails: React.FC<SkillDetailsProps> = ({
                 <li
                   key={reqId}
                   className={`flex items-center gap-2 text-sm ${
-                    isPrereqActivated ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+                    isPrereqActivated
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-muted-foreground"
                   }`}
                 >
                   {isPrereqActivated ? (

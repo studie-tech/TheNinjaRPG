@@ -465,14 +465,24 @@ export const skillTreeRouter = createTRPCRouter({
   getAllFolders: publicProcedure
     .input(z.object({ includeHidden: z.boolean().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const filters = [];
-      if (!input?.includeHidden) {
-        filters.push(eq(skillTreeFolder.hidden, false));
+      // Run queries in parallel for efficiency
+      const [userResult, folders] = await Promise.all([
+        ctx.userId
+          ? fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId })
+          : Promise.resolve({ user: null }),
+        ctx.drizzle.query.skillTreeFolder.findMany({
+          orderBy: [asc(skillTreeFolder.order), asc(skillTreeFolder.name)],
+        }),
+      ]);
+
+      // Check if user is staff before honoring includeHidden
+      const isStaff = userResult.user ? canChangeContent(userResult.user.role) : false;
+
+      // Filter out hidden folders unless staff requested them
+      if (!input?.includeHidden || !isStaff) {
+        return folders.filter((folder) => !folder.hidden);
       }
-      return await ctx.drizzle.query.skillTreeFolder.findMany({
-        where: filters.length > 0 ? and(...filters) : undefined,
-        orderBy: [asc(skillTreeFolder.order), asc(skillTreeFolder.name)],
-      });
+      return folders;
     }),
 
   // Get folder stats (owned/total skill counts per folder for current user)
@@ -490,10 +500,8 @@ export const skillTreeRouter = createTRPCRouter({
       fetchUserSkills(ctx.drizzle, ctx.userId),
     ]);
 
-    // Get owned skill IDs
-    const ownedSkillIds = new Set(
-      userSkillsData.filter((us) => us.activated).map((us) => us.skillId),
-    );
+    // Get owned skill IDs (a userSkill record existing means ownership)
+    const ownedSkillIds = new Set(userSkillsData.map((us) => us.skillId));
 
     // Calculate stats per folder
     const folderStats = folders.map((folder) => {
