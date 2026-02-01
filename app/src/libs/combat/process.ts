@@ -627,7 +627,7 @@ export const applyEffects = (
         }
         if (c.absorb_sp !== undefined && c.absorb_sp >= 0) {
           target.curStamina += c.absorb_sp;
-          target.curStamina = Math.min(target.maxHealth, target.curStamina);
+          target.curStamina = Math.min(target.maxStamina, target.curStamina);
           actionEffects.push({
             txt: `${target.username} absorbs ${c.absorb_sp.toFixed(
               2,
@@ -637,7 +637,7 @@ export const applyEffects = (
         }
         if (c.absorb_cp !== undefined && c.absorb_cp >= 0) {
           target.curChakra += c.absorb_cp;
-          target.curChakra = Math.min(target.maxHealth, target.curChakra);
+          target.curChakra = Math.min(target.maxChakra, target.curChakra);
           actionEffects.push({
             txt: `${target.username} absorbs ${c.absorb_cp.toFixed(
               2,

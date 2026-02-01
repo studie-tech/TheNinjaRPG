@@ -1752,7 +1752,11 @@ export const lifesteal = (
   const { power, qualifier } = getPower(effect);
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
-      if (consequence.userId === effect.targetId && consequence.damage) {
+      if (
+        consequence.userId === effect.targetId &&
+        consequence.damage &&
+        consequence.damage > 0
+      ) {
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
