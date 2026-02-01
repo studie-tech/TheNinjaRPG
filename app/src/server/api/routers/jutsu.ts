@@ -455,10 +455,14 @@ export const jutsuRouter = createTRPCRouter({
             `Invalid item names or IDs: ${invalidInputs.join(", ")}. Please check the item names or IDs are correct.`,
           );
         }
-        // Replace names with IDs for storage/validation
+        // Replace names with IDs for storage/validation, prefer ID match over name match
         input.data.requiredItemIds = input.data.requiredItemIds.map((val) => {
-          const found = allItems.find((i) => i.id === val || i.name === val);
-          return found ? found.id : val;
+          // Prefer ID match
+          const idMatch = allItems.find((i) => i.id === val);
+          if (idMatch) return idMatch.id;
+          // Otherwise, fall back to name match
+          const nameMatch = allItems.find((i) => i.name === val);
+          return nameMatch ? nameMatch.id : val;
         });
       }
 

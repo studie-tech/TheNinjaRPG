@@ -201,11 +201,9 @@ export const checkJutsuItems = (
   // Otherwise fall back to weapon-type requirement
   if (jutsu.jutsuWeapon !== "NONE") {
     // Prefer relations if provided; otherwise try to infer when available
-    // If we can't access item relations and this is a training check (not combat),
-    // we can't verify weapon type, so we pass (training shouldn't fail on this).
-    // For combat (requireEquipped=true), we fail closed for safety.
+    // If user owns no items, always fail (cannot meet weapon requirement)
     if (!itemsWithRelation || itemsWithRelation.length === 0) {
-      return !requireEquipped; // Pass for training, fail for combat
+      return false;
     }
 
     if (requireEquipped) {
