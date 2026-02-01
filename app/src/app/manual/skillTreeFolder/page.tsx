@@ -21,6 +21,7 @@ import {
   ChevronDown,
   Folder,
   EyeOff,
+  Loader2,
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { api } from "@/app/_trpc/client";
@@ -52,10 +53,11 @@ export default function ManualSkillTreeFolder() {
   const tempFolderId = useMemo(() => nanoid(), []);
 
   // Queries
-  const { data: folders, isPending: foldersLoading } = api.skillTree.getAllFolders.useQuery(
-    { includeHidden: true },
-    { enabled: !!userData && canChangeContent(userData.role) },
-  );
+  const { data: folders, isPending: foldersLoading } =
+    api.skillTree.getAllFolders.useQuery(
+      { includeHidden: true },
+      { enabled: !!userData && canChangeContent(userData.role) },
+    );
 
   const { data: allSkills } = api.skillTree.getAll.useQuery(
     { limit: 500, hidden: undefined },
@@ -63,46 +65,50 @@ export default function ManualSkillTreeFolder() {
   );
 
   // Mutations
-  const { mutate: createFolder, isPending: createLoading } = api.skillTree.createFolder.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.skillTree.getAllFolders.invalidate();
-        setIsCreateOpen(false);
-        resetForm();
-      }
-    },
-  });
+  const { mutate: createFolder, isPending: createLoading } =
+    api.skillTree.createFolder.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.skillTree.getAllFolders.invalidate();
+          setIsCreateOpen(false);
+          resetForm();
+        }
+      },
+    });
 
-  const { mutate: updateFolder, isPending: updateLoading } = api.skillTree.updateFolder.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.skillTree.getAllFolders.invalidate();
-        setEditFolder(null);
-        resetForm();
-      }
-    },
-  });
+  const { mutate: updateFolder, isPending: updateLoading } =
+    api.skillTree.updateFolder.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.skillTree.getAllFolders.invalidate();
+          setEditFolder(null);
+          resetForm();
+        }
+      },
+    });
 
-  const { mutate: deleteFolderMutation, isPending: deleteLoading } = api.skillTree.deleteFolder.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.skillTree.getAllFolders.invalidate();
-        setDeleteFolder(null);
-      }
-    },
-  });
+  const { mutate: deleteFolderMutation, isPending: deleteLoading } =
+    api.skillTree.deleteFolder.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.skillTree.getAllFolders.invalidate();
+          setDeleteFolder(null);
+        }
+      },
+    });
 
-  const { mutate: reorderFolders, isPending: reorderLoading } = api.skillTree.reorderFolders.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.skillTree.getAllFolders.invalidate();
-      }
-    },
-  });
+  const { mutate: reorderFolders, isPending: reorderLoading } =
+    api.skillTree.reorderFolders.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.skillTree.getAllFolders.invalidate();
+        }
+      },
+    });
 
   // Reset form
   const resetForm = () => {
@@ -189,8 +195,6 @@ export default function ManualSkillTreeFolder() {
     return <Loader explanation="Checking permissions..." />;
   }
 
-  const isLoading = foldersLoading || createLoading || updateLoading || deleteLoading || reorderLoading;
-
   return (
     <>
       <ContentBox
@@ -198,7 +202,12 @@ export default function ManualSkillTreeFolder() {
         subtitle="Organize skills into categories"
         defaultBackHref="/manual/skillTree"
         topRightContent={
-          <Button onClick={() => { resetForm(); setIsCreateOpen(true); }}>
+          <Button
+            onClick={() => {
+              resetForm();
+              setIsCreateOpen(true);
+            }}
+          >
             <FilePlus className="mr-2 h-4 w-4" />
             New Folder
           </Button>
@@ -209,7 +218,7 @@ export default function ManualSkillTreeFolder() {
           will see skills grouped by folder in the skill tree view.
         </p>
 
-        {isLoading && <Loader explanation="Loading..." />}
+        {foldersLoading && <Loader explanation="Loading..." />}
 
         {!foldersLoading && folders && (
           <div className="space-y-2">
@@ -264,7 +273,11 @@ export default function ManualSkillTreeFolder() {
                     onClick={() => handleMoveUp(index)}
                     disabled={index === 0 || reorderLoading}
                   >
-                    <ChevronUp className="h-4 w-4" />
+                    {reorderLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ChevronUp className="h-4 w-4" />
+                    )}
                   </Button>
                   <Button
                     variant="ghost"
@@ -272,12 +285,19 @@ export default function ManualSkillTreeFolder() {
                     onClick={() => handleMoveDown(index)}
                     disabled={index === folders.length - 1 || reorderLoading}
                   >
-                    <ChevronDown className="h-4 w-4" />
+                    {reorderLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => { resetForm(); setEditFolder(folder); }}
+                    onClick={() => {
+                      resetForm();
+                      setEditFolder(folder);
+                    }}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -308,7 +328,10 @@ export default function ManualSkillTreeFolder() {
         setIsOpen={setIsCreateOpen}
         proceed_label={createLoading ? "Creating..." : "Create"}
         onAccept={handleCreate}
-        onClose={() => { setIsCreateOpen(false); resetForm(); }}
+        onClose={() => {
+          setIsCreateOpen(false);
+          resetForm();
+        }}
       >
         <FolderForm
           folderId={tempFolderId}
@@ -327,10 +350,18 @@ export default function ManualSkillTreeFolder() {
       <Modal2
         title="Edit Folder"
         isOpen={!!editFolder}
-        setIsOpen={(open) => { if (!open) { setEditFolder(null); resetForm(); } }}
+        setIsOpen={(open) => {
+          if (!open) {
+            setEditFolder(null);
+            resetForm();
+          }
+        }}
         proceed_label={updateLoading ? "Saving..." : "Save"}
         onAccept={handleUpdate}
-        onClose={() => { setEditFolder(null); resetForm(); }}
+        onClose={() => {
+          setEditFolder(null);
+          resetForm();
+        }}
       >
         <FolderForm
           folderId={editFolder?.id || tempFolderId}
@@ -349,7 +380,9 @@ export default function ManualSkillTreeFolder() {
       <Modal2
         title="Delete Folder"
         isOpen={!!deleteFolder}
-        setIsOpen={(open) => { if (!open) setDeleteFolder(null); }}
+        setIsOpen={(open) => {
+          if (!open) setDeleteFolder(null);
+        }}
         proceed_label={deleteLoading ? "Deleting..." : "Delete"}
         confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
         onAccept={handleDelete}

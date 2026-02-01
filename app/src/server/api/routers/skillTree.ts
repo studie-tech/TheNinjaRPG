@@ -500,8 +500,10 @@ export const skillTreeRouter = createTRPCRouter({
       fetchUserSkills(ctx.drizzle, ctx.userId),
     ]);
 
-    // Get owned skill IDs (a userSkill record existing means ownership)
-    const ownedSkillIds = new Set(userSkillsData.map((us) => us.skillId));
+    // Get activated skill IDs (only activated skills count toward progression)
+    const ownedSkillIds = new Set(
+      userSkillsData.filter((us) => us.activated).map((us) => us.skillId),
+    );
 
     // Calculate stats per folder
     const folderStats = folders.map((folder) => {

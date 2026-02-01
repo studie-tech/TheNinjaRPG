@@ -100,12 +100,12 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
   // Handle navigating to a prerequisite skill's folder
   const handleNavigateToPrereq = (prereqSkillId: string) => {
     const prereqSkill = allSkills.find((s) => s.id === prereqSkillId);
-    if (prereqSkill?.folderId && prereqSkill.folderId !== folder?.id) {
+    if (prereqSkill && prereqSkill.folderId !== folder?.id) {
       if (folder) {
         setNavigationHistory((prev) => [...prev, folder.id]);
       }
       setSelectedSkill(null);
-      onNavigateToFolder(prereqSkill.folderId);
+      onNavigateToFolder(prereqSkill.folderId ?? "uncategorized");
     }
   };
 
@@ -388,10 +388,9 @@ const SkillDetails: React.FC<SkillDetailsProps> = ({
             {skill.requiredSkillIds.map((reqId) => {
               const prereq = allSkills.find((s) => s.id === reqId);
               const isPrereqActivated = activatedSkillIds.includes(reqId);
-              const isInDifferentFolder =
-                prereq?.folderId && prereq.folderId !== folder.id;
-              const prereqFolder = isInDifferentFolder
-                ? folders.find((f) => f.id === prereq?.folderId)
+              const isInDifferentFolder = prereq && prereq.folderId !== folder.id;
+              const prereqFolder = prereq?.folderId
+                ? folders.find((f) => f.id === prereq.folderId)
                 : null;
 
               return (
@@ -409,7 +408,7 @@ const SkillDetails: React.FC<SkillDetailsProps> = ({
                     <X className="w-4 h-4" />
                   )}
                   <span>{prereq?.name || reqId}</span>
-                  {isInDifferentFolder && prereqFolder && (
+                  {isInDifferentFolder && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -417,7 +416,7 @@ const SkillDetails: React.FC<SkillDetailsProps> = ({
                       onClick={() => onNavigateToPrereq(reqId)}
                     >
                       <ExternalLink className="w-3 h-3 mr-1" />
-                      {prereqFolder.name}
+                      {prereqFolder?.name ?? "Uncategorized"}
                     </Button>
                   )}
                 </li>

@@ -156,6 +156,35 @@ Operations taking more than a few seconds should show progress.
 
 Forms with unsaved changes should warn before navigation.
 
+#### Page-Wide Loaders for Mutation States
+
+Mutations (create, update, delete, reorder) should NOT show full-page loaders that cause layout shifts. Instead, show loading indicators on the specific buttons/actions that triggered the mutation.
+
+**BAD:**
+
+```tsx
+const isLoading = createLoading || updateLoading || deleteLoading;
+
+{
+  isLoading && <Loader />;
+} // Causes page to jump on every action
+{
+  !loading && <Content />;
+}
+```
+
+**GOOD:**
+
+```tsx
+// Show full loader only for initial data fetch
+{
+  dataLoading && <Loader />;
+}
+
+// Show inline loading states on affected buttons
+<Button disabled={reorderLoading}>{reorderLoading ? <Loader2 className="animate-spin" /> : <ChevronUp />}</Button>;
+```
+
 ### Styling Consistency Issues
 
 #### Hardcoded Colors Instead of Theme Variables
