@@ -1,9 +1,11 @@
 import { FED_NORMAL_REPS_COST } from "@/drizzle/constants";
 import { FED_SILVER_REPS_COST } from "@/drizzle/constants";
 import { FED_GOLD_REPS_COST } from "@/drizzle/constants";
+import { FED_JUTSU_LOADOUTS_BASE } from "@/drizzle/constants";
 import { FED_NORMAL_JUTSU_LOADOUTS } from "@/drizzle/constants";
 import { FED_SILVER_JUTSU_LOADOUTS } from "@/drizzle/constants";
 import { FED_GOLD_JUTSU_LOADOUTS } from "@/drizzle/constants";
+import { FED_ITEM_LOADOUTS_BASE } from "@/drizzle/constants";
 import { FED_NORMAL_ITEM_LOADOUTS } from "@/drizzle/constants";
 import { FED_SILVER_ITEM_LOADOUTS } from "@/drizzle/constants";
 import { FED_GOLD_ITEM_LOADOUTS } from "@/drizzle/constants";
@@ -25,7 +27,7 @@ export const getUserFederalStatus = (
 export const fedJutsuLoadouts = (
   user?: Pick<UserData, "staffAccount" | "federalStatus">,
 ) => {
-  const base = 0;
+  const base = FED_JUTSU_LOADOUTS_BASE;
   if (!user) return base;
   const status = getUserFederalStatus(user);
   switch (status) {
@@ -42,7 +44,7 @@ export const fedJutsuLoadouts = (
 export const fedItemLoadouts = (
   user?: Pick<UserData, "staffAccount" | "federalStatus">,
 ) => {
-  const base = 0;
+  const base = FED_ITEM_LOADOUTS_BASE;
   if (!user) return base;
   const status = getUserFederalStatus(user);
   switch (status) {

@@ -1174,10 +1174,12 @@ export const FED_GOLD_INVENTORY_SLOTS = 10;
 export const FED_NORMAL_JUTSU_SLOTS = 1;
 export const FED_SILVER_JUTSU_SLOTS = 2;
 export const FED_GOLD_JUTSU_SLOTS = 3;
+export const FED_JUTSU_LOADOUTS_BASE = 2;
 export const FED_NORMAL_JUTSU_LOADOUTS = 1;
 export const FED_SILVER_JUTSU_LOADOUTS = 2;
 export const FED_GOLD_JUTSU_LOADOUTS = 3;
 
+export const FED_ITEM_LOADOUTS_BASE = 2;
 export const FED_NORMAL_ITEM_LOADOUTS = 1;
 export const FED_SILVER_ITEM_LOADOUTS = 2;
 export const FED_GOLD_ITEM_LOADOUTS = 3;

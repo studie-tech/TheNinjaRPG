@@ -52,9 +52,11 @@ import { FED_EVENT_ITEMS_NORMAL } from "@/drizzle/constants";
 import { FED_EVENT_ITEMS_SILVER } from "@/drizzle/constants";
 import { FED_EVENT_ITEMS_GOLD } from "@/drizzle/constants";
 import { FED_EVENT_ITEMS_DEFAULT } from "@/drizzle/constants";
+import { FED_JUTSU_LOADOUTS_BASE } from "@/drizzle/constants";
 import { FED_NORMAL_JUTSU_LOADOUTS } from "@/drizzle/constants";
 import { FED_SILVER_JUTSU_LOADOUTS } from "@/drizzle/constants";
 import { FED_GOLD_JUTSU_LOADOUTS } from "@/drizzle/constants";
+import { FED_ITEM_LOADOUTS_BASE } from "@/drizzle/constants";
 import { FED_NORMAL_ITEM_LOADOUTS } from "@/drizzle/constants";
 import { FED_SILVER_ITEM_LOADOUTS } from "@/drizzle/constants";
 import { FED_GOLD_ITEM_LOADOUTS } from "@/drizzle/constants";
@@ -477,8 +479,8 @@ const PayPalSubscriptionButton = (props: {
         </li>
         <li>+{FED_NORMAL_JUTSU_SLOTS} Jutsu slot</li>
         <li>+{FED_NORMAL_BANK_INTEREST}% bank interest</li>
-        <li>{FED_NORMAL_JUTSU_LOADOUTS} jutsu loadouts</li>
-        <li>{FED_NORMAL_ITEM_LOADOUTS} item loadouts</li>
+        <li>{FED_JUTSU_LOADOUTS_BASE + FED_NORMAL_JUTSU_LOADOUTS} jutsu loadouts</li>
+        <li>{FED_ITEM_LOADOUTS_BASE + FED_NORMAL_ITEM_LOADOUTS} item loadouts</li>
         <li>+{SKILL_TREE_RESET_FREE_NORMAL} skill tree resets per month</li>
         <li>Custom avatar (512KB)</li>
       </ul>
@@ -496,8 +498,8 @@ const PayPalSubscriptionButton = (props: {
         </li>
         <li>+{FED_SILVER_JUTSU_SLOTS} Jutsu slots</li>
         <li>+{FED_SILVER_BANK_INTEREST}% bank interest</li>
-        <li>{FED_SILVER_JUTSU_LOADOUTS} jutsu loadouts</li>
-        <li>{FED_SILVER_ITEM_LOADOUTS} item loadouts</li>
+        <li>{FED_JUTSU_LOADOUTS_BASE + FED_SILVER_JUTSU_LOADOUTS} jutsu loadouts</li>
+        <li>{FED_ITEM_LOADOUTS_BASE + FED_SILVER_ITEM_LOADOUTS} item loadouts</li>
         <li>+{SKILL_TREE_RESET_FREE_SILVER} skill tree resets per month</li>
         <li>Custom avatar (1MB)</li>
       </ul>
@@ -513,8 +515,8 @@ const PayPalSubscriptionButton = (props: {
         <li>+{FED_EVENT_ITEMS_GOLD - FED_EVENT_ITEMS_DEFAULT} Event inventory space</li>
         <li>+{FED_GOLD_JUTSU_SLOTS} Jutsu slots</li>
         <li>+{FED_GOLD_BANK_INTEREST}% bank interest</li>
-        <li>{FED_GOLD_JUTSU_LOADOUTS} jutsu loadouts</li>
-        <li>{FED_GOLD_ITEM_LOADOUTS} item loadouts</li>
+        <li>{FED_JUTSU_LOADOUTS_BASE + FED_GOLD_JUTSU_LOADOUTS} jutsu loadouts</li>
+        <li>{FED_ITEM_LOADOUTS_BASE + FED_GOLD_ITEM_LOADOUTS} item loadouts</li>
         <li>+{SKILL_TREE_RESET_FREE_GOLD} skill tree resets per month</li>
         <li>Custom avatar (2MB)</li>
       </ul>
