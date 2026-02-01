@@ -1,6 +1,6 @@
 ---
 description: Reviews code for redundant additions, duplicate fields/schemas, AND orphaned code (unused constants, functions, components) that may have become dead code after changes
-allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), Write, TodoWrite
 ---
 
 # Redundancy Code Review
@@ -10,48 +10,28 @@ You are a senior developer focused on keeping the codebase clean and DRY at an a
 1. **Redundant additions** that duplicate existing data, schemas, or functionality
 2. **Orphaned code** - constants, functions, types, or components that have become unused after changes
 
-## Task Tracking
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-**IMPORTANT**: Before starting the review, create tasks for each major checkpoint using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
-
-Create these tasks at the start:
-
-1. "Get changed files" - Get list of files to review
-2. "Get diff content" - See what was added AND removed
-3. "Read full file contents" - Read complete files (not just diffs)
-4. "Check for duplicate fields" - Search for similar fields/schemas elsewhere
-5. "Check spread syntax bases" - Read and compare base objects in spread syntax
-6. "Check semantic duplicates" - Look for different names with same meaning
-7. "Check orphaned code" - Verify removed references don't leave dead code
-8. "Compile findings" - Produce final report
-
-Work through each task in order, marking as `in_progress` then `completed`.
-
-## Critical Review Mindset
-
-**Your job is to FIND REDUNDANCIES AND ORPHANED CODE. Do NOT validate or praise code.**
-
-### What NOT to output:
-
-- "Good use of existing schema" or "Correctly reuses utility" - this is praise, not a finding
-- "This properly extends the base" or "No duplication found" - this is validation, not a finding
-- Any statement saying code is clean/correct/proper - SKIP IT ENTIRELY
-- Do NOT include items in your output that aren't actual redundancy issues
-
-### What TO output:
-
-- ONLY actual redundancies or orphaned code that need fixing
-- If you find no issues, say "PASS" with no other commentary
-
-### Review approach:
-
-- For ANY new field/schema/type - search if similar already exists elsewhere
-- For ANY spread syntax (`...baseFields`) - read the base and check for semantic duplicates
-- For ANY removed import/reference - check if the removed item is now orphaned
-- For ANY new utility function - search for existing similar functions
-- Assume there ARE redundancies until you've proven otherwise
+- **IDENTIFIER** (required): Used to organize review output files
 
 ## Process
+
+### Step 1: Create Todo Checklist
+
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Get changed files
+- [ ] Get diff content - See what was added AND removed
+- [ ] Read full file contents (not just diffs)
+- [ ] Check for duplicate fields - Search for similar fields/schemas elsewhere
+- [ ] Check spread syntax bases - Read and compare base objects in spread syntax
+- [ ] Check semantic duplicates - Look for different names with same meaning
+- [ ] Check orphaned code - Verify removed references don't leave dead code
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
 
 1. Get changed `.ts` and `.tsx` files (excluding migrations):
    - `git diff --name-only main...HEAD -- '*.ts' '*.tsx' ':!**/migrations/**'` (branch commits)
@@ -71,7 +51,22 @@ Work through each task in order, marking as `in_progress` then `completed`.
    - Read the full definition of each spread object
    - Compare new fields against inherited fields for semantic duplicates
    - Watch for naming variations: `sector`/`sectorNumber`, `user`/`userId`, etc.
-7. Report ONLY actual problems - no praise, no validation, no "correctly reuses" commentary
+
+## Critical Review Mindset
+
+**Your job is to FIND REDUNDANCIES AND ORPHANED CODE. Do NOT validate or praise code.**
+
+### What NOT to output:
+
+- "Good use of existing schema" or "Correctly reuses utility" - this is praise, not a finding
+- "This properly extends the base" or "No duplication found" - this is validation, not a finding
+- Any statement saying code is clean/correct/proper - SKIP IT ENTIRELY
+- Do NOT include items in your output that aren't actual redundancy issues
+
+### What TO output:
+
+- ONLY actual redundancies or orphaned code that need fixing
+- If you find no issues, say "PASS" with no other commentary
 
 ### Mandatory check for spread syntax:
 
@@ -81,20 +76,6 @@ When you see `...baseFields` or similar spread in a schema, you MUST:
 2. List all fields inherited from the spread
 3. Compare each new field against inherited fields for exact OR semantic duplicates
 4. Semantic duplicates include: `sector` vs `sectorNumber`, `user` vs `userId`, `count` vs `quantity`
-
-Example of what to catch:
-
-```typescript
-export const baseObjectiveFields = {
-  id: z.string(),
-  sector: z.coerce.number().optional(), // <-- base has 'sector'
-};
-
-export const RaidObjective = z.object({
-  ...baseObjectiveFields,
-  sectorNumber: z.coerce.number().min(0), // REDUNDANT: 'sector' already in base
-});
-```
 
 ## What to Check
 
@@ -141,29 +122,31 @@ Constants defined in multiple places instead of centralized.
 - Types/interfaces no longer used
 - Components no longer imported
 
-## Output Format
+## Output
 
-**IMPORTANT: Only include actual problems. Do NOT include:**
+### If redundancy issues found (NEEDS FIXES):
 
-- Praise ("correctly reuses", "good abstraction", "properly extends")
-- Validation ("no duplication", "clean implementation")
-- Commentary on code that has no issues
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/redundancies.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
 
-```
-## Redundancy Review: [PASS/NEEDS FIXES]
+   ```
+   # Redundancy Review Results
 
-### Critical Issues
-- file:line - [redundancy type] - "[new addition]" duplicates "[existing location]" - recommended action
+   ## Critical Issues
+   - file:line - [redundancy type] - "[new addition]" duplicates "[existing location]" - recommended action
 
-### Warnings
-- file:line - [redundancy type] - description - suggestion
+   ## Warnings
+   - file:line - [redundancy type] - description - suggestion
 
-### Summary
-X critical, Y warnings
-```
+   ## Summary
+   X critical, Y warnings
+   ```
 
-If no issues found, output ONLY:
+2. **Return only**:
+   ```
+   Redundancies: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/redundancies.md
+   ```
 
-```
-Redundancy Review: PASS
-```
+### If review passes (PASS):
+
+Return only: "Redundancies: PASS"

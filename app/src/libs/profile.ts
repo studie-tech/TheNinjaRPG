@@ -7,7 +7,7 @@ import type {
   Clan,
 } from "@/drizzle/schema";
 import { HP_PER_LVL, SP_PER_LVL, CP_PER_LVL } from "@/drizzle/constants";
-import { CLAN_MAX_REGEN_BOOST, getUserCaps } from "@/drizzle/constants";
+import { CLAN_BOOST_MAX_LEVEL, CLAN_BOOST_PERCENT_PER_LEVEL, getUserCaps } from "@/drizzle/constants";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { getStrucBoost } from "@/utils/village";
 import { getReducedGainsDays } from "@/libs/train";
@@ -255,10 +255,11 @@ export const calcActiveUserRegen = (
   }
 
   // Clan boost (in percentage)
+  const maxRegenBoost = CLAN_BOOST_MAX_LEVEL * CLAN_BOOST_PERCENT_PER_LEVEL;
   if (
     user.clan?.regenBoost &&
     user.clan?.regenBoost > 0 &&
-    user.clan?.regenBoost <= CLAN_MAX_REGEN_BOOST
+    user.clan?.regenBoost <= maxRegenBoost
   ) {
     regeneration *= (100 + user.clan.regenBoost) / 100;
   }

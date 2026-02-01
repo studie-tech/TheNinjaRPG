@@ -1,23 +1,28 @@
 ---
 description: Runs CodeRabbit analysis
-allowed-tools: Bash(coderabbit review:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Bash(coderabbit review:*), Write, TodoWrite
 ---
 
 Run CodeRabbit and summarize findings.
 
-**Working directory**: $ARGUMENTS (or current directory if not provided)
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-## Task Tracking
-
-**IMPORTANT**: Create tasks to track progress using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
-
-Create these tasks at the start:
-1. "Run CodeRabbit" - Execute coderabbit review command
-2. "Extract feedback" - Parse actionable findings
-3. "Categorize issues" - Sort by severity (critical, warning, suggestion)
-4. "Compile findings" - Produce final report
+- **IDENTIFIER** (required): Used to organize review output files
 
 ## Process
+
+### Step 1: Create Todo Checklist
+
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Run CodeRabbit (`coderabbit review --plain`)
+- [ ] Extract actionable findings
+- [ ] Categorize issues (critical, warning, suggestion)
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
 
 1. Run: `coderabbit review --plain`
 2. Extract actionable feedback
@@ -25,9 +30,32 @@ Create these tasks at the start:
 
 ## Output
 
-For each issue:
-```
-file:line - severity - description - recommendation
-```
+### If CodeRabbit issues found (NEEDS FIXES):
 
-If clean: "CodeRabbit: PASS"
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/coderabbit.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
+
+   ```
+   # CodeRabbit Results
+
+   ## Critical Issues
+   - file:line - severity - description - recommendation
+
+   ## Warnings
+   - file:line - severity - description - recommendation
+
+   ## Suggestions
+   - file:line - description - recommendation
+
+   ## Summary
+   X critical, Y warnings, Z suggestions
+   ```
+
+2. **Return only**:
+   ```
+   CodeRabbit: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/coderabbit.md
+   ```
+
+### If CodeRabbit passes (PASS):
+
+Return only: "CodeRabbit: PASS"

@@ -1,31 +1,53 @@
 ---
 description: Runs test suite
-allowed-tools: Bash(make test:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Bash(make test:*), Write, TodoWrite
 ---
 
 Run tests and report results.
 
-**Working directory**: $ARGUMENTS (or current directory if not provided)
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-## Task Tracking
-
-**IMPORTANT**: Create tasks to track progress using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
-
-Create these tasks at the start:
-1. "Run tests" - Execute make test command
-2. "Parse results" - Extract pass/fail counts
-3. "Compile findings" - Produce final report
+- **IDENTIFIER** (required): Used to organize review output files
 
 ## Process
 
+### Step 1: Create Todo Checklist
+
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Run tests (`make test`)
+- [ ] Parse pass/fail counts
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
+
 1. Run: `make test`
-2. Parse pass/fail counts
+2. Parse pass/fail counts from output
 
 ## Output
 
-```
-Tests: PASS/FAIL
-Stats: X passed, Y failed, Z total
-Failures (if any):
-- test name: error message
-```
+### If test failures found (NEEDS FIXES):
+
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/tests.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
+
+   ```
+   # Test Results
+
+   Stats: X passed, Y failed, Z total
+
+   ## Failures
+   - test name: error message
+   ...
+   ```
+
+2. **Return only**:
+   ```
+   Tests: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/tests.md
+   ```
+
+### If tests pass (PASS):
+
+Return only: "Tests: PASS"

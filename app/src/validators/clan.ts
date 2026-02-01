@@ -1,6 +1,8 @@
 import { z } from "zod";
-import { CoreVillages } from "@/drizzle/constants";
+import { CoreVillages, ClanBoostTypes } from "@/drizzle/constants";
 import type { Clan } from "@/drizzle/schema";
+
+export const clanBoostTypeSchema = z.enum(ClanBoostTypes);
 
 const bannedNames = ["Freedom State", "Horizon", ...CoreVillages];
 

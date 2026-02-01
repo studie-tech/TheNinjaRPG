@@ -1,57 +1,37 @@
 ---
 description: Reviews code for CLAUDE.md compliance
-allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), Write, TodoWrite
 ---
 
 # Guidelines Review
 
 Review code changes for compliance with project guidelines.
 
-## Task Tracking
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-**IMPORTANT**: Before starting the review, create tasks for each major checkpoint using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
-
-Create these tasks at the start:
-
-1. "Read CLAUDE.md" - Understand project guidelines
-2. "Get changed files" - Get list of files to review
-3. "Read full file contents" - Read complete files (not just diffs)
-4. "Check TypeScript strict mode" - No `any` types or unsafe operations
-5. "Check functional patterns" - No unnecessary classes
-6. "Check arrow functions" - Arrow functions over function declarations
-7. "Check naming conventions" - Descriptive names with auxiliary verbs
-8. "Check component structure" - exported → subcomponents → helpers → types
-9. "Check DRY principles" - No code duplication
-10. "Check for over-engineering" - No unnecessary abstractions
-11. "Compile findings" - Produce final report
-
-Work through each task in order, marking as `in_progress` then `completed`.
-
-## Critical Review Mindset
-
-**Your job is to FIND GUIDELINE VIOLATIONS. Do NOT validate or praise code.**
-
-### What NOT to output:
-
-- "Follows guidelines correctly" or "Good naming convention" - this is praise, not a finding
-- "This properly uses functional patterns" or "Correct structure" - this is validation, not a finding
-- Any statement saying code is compliant/correct/proper - SKIP IT ENTIRELY
-- Do NOT include items in your output that aren't actual guideline violations
-
-### What TO output:
-
-- ONLY actual guideline violations that need fixing
-- If you find no issues, say "PASS" with no other commentary
-
-### Review approach:
-
-- Look for ANY `any` type usage - should be properly typed
-- Look for ANY class usage - should be functional
-- Look for ANY function declaration - should be arrow function
-- Look for ANY new file/function - does similar exist in codebase?
-- Assume there ARE violations until you've proven otherwise
+- **IDENTIFIER** (required): Used to organize review output files
 
 ## Process
+
+### Step 1: Create Todo Checklist
+
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Read CLAUDE.md for project guidelines
+- [ ] Get changed files
+- [ ] Read full file contents (not just diffs)
+- [ ] Check TypeScript strict mode - No `any` types
+- [ ] Check functional patterns - No unnecessary classes
+- [ ] Check arrow functions - Arrow functions over function declarations
+- [ ] Check naming conventions - Descriptive names with auxiliary verbs
+- [ ] Check component structure - exported → subcomponents → helpers → types
+- [ ] Check DRY principles - No code duplication
+- [ ] Check for over-engineering
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
 
 1. Read `CLAUDE.md` for project guidelines
 2. Get changed `.ts` and `.tsx` files (excluding migrations):
@@ -82,28 +62,44 @@ Work through each task in order, marking as `in_progress` then `completed`.
 
    **Comments**: No unnatural tracking markers or unnecessary comments
 
-6. Report ONLY actual problems - no praise, no validation, no "correctly follows" commentary
+## Critical Review Mindset
 
-## Output Format
+**Your job is to FIND GUIDELINE VIOLATIONS. Do NOT validate or praise code.**
 
-**IMPORTANT: Only include actual problems. Do NOT include:**
+### What NOT to output:
 
-- Praise ("follows guidelines", "good structure", "correct pattern")
-- Validation ("properly implements", "correctly uses")
-- Commentary on code that has no issues
+- "Follows guidelines correctly" or "Good naming convention" - this is praise, not a finding
+- "This properly uses functional patterns" or "Correct structure" - this is validation, not a finding
+- Any statement saying code is compliant/correct/proper - SKIP IT ENTIRELY
+- Do NOT include items in your output that aren't actual guideline violations
 
-```
-## Guidelines Review: [PASS/NEEDS FIXES]
+### What TO output:
 
-### Issues
-- file:line - [guideline] - [description] - [fix]
+- ONLY actual guideline violations that need fixing
+- If you find no issues, say "PASS" with no other commentary
 
-### Summary
-X issues found
-```
+## Output
 
-If no issues found, output ONLY:
+### If issues found (NEEDS FIXES):
 
-```
-Guidelines Review: PASS
-```
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/guidelines.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
+
+   ```
+   # Guidelines Review Results
+
+   ## Issues
+   - file:line - [guideline] - [description] - [fix]
+
+   ## Summary
+   X issues found
+   ```
+
+2. **Return only**:
+   ```
+   Guidelines: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/guidelines.md
+   ```
+
+### If review passes (PASS):
+
+Return only: "Guidelines: PASS"

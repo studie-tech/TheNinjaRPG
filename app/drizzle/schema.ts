@@ -631,6 +631,16 @@ export const clan = mysqlTable(
     trainingBoost: double("trainingBoost").default(0).notNull(),
     ryoBoost: double("ryoBoost").default(0).notNull(),
     regenBoost: double("regenBoost").default(0).notNull(),
+    missionRewardBoost: double("missionRewardBoost").default(0).notNull(),
+    craftingTimeBoost: double("craftingTimeBoost").default(0).notNull(),
+    craftingExpBoost: double("craftingExpBoost").default(0).notNull(),
+    hunterExpBoost: double("hunterExpBoost").default(0).notNull(),
+    gathererExpBoost: double("gathererExpBoost").default(0).notNull(),
+    elderNomineeId: varchar("elderNomineeId", { length: 191 }),
+    elderCutoffMonth: tinyint("elderCutoffMonth"),
+    elderCutoffYear: smallint("elderCutoffYear"),
+    elderCutoffRank: tinyint("elderCutoffRank"),
+    activityPoints: int("activityPoints").default(0).notNull(),
     points: int("points").default(0).notNull(),
     bank: bigint("bank", { mode: "number" }).default(0).notNull(),
     pvpActivity: int("pvpActivity").default(0).notNull(),
@@ -669,6 +679,10 @@ export const clanRelations = relations(clan, ({ one, many }) => ({
   leaderOrder: one(userNindo, {
     fields: [clan.leaderOrderId],
     references: [userNindo.userId],
+  }),
+  elderNominee: one(userData, {
+    fields: [clan.elderNomineeId],
+    references: [userData.userId],
   }),
 }));
 

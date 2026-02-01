@@ -1,28 +1,48 @@
 ---
 description: Reviews code for readability, clarity, and maintainability
-allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), Write, TodoWrite
 ---
 
 # Code Readability Review
 
 Review code for readability and clarity, ensuring code is easy to understand and maintain.
 
-## Task Tracking
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-**IMPORTANT**: Before starting the review, create tasks for each major checkpoint using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
+- **IDENTIFIER** (required): Used to organize review output files
 
-Create these tasks at the start:
+## Process
 
-1. "Get changed files" - Get list of files to review
-2. "Read full file contents" - Read complete files (not just diffs)
-3. "Check function length" - Flag functions over 50 lines
-4. "Check nesting depth" - Flag nesting over 3 levels
-5. "Check naming clarity" - Verify variable/function names are descriptive
-6. "Check magic values" - Flag unexplained literal values
-7. "Check complex expressions" - Flag complex ternaries and boolean expressions
-8. "Compile findings" - Produce final report
+### Step 1: Create Todo Checklist
 
-Work through each task in order, marking as `in_progress` then `completed`.
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Get changed files
+- [ ] Read full file contents (not just diffs)
+- [ ] Check function length - Flag functions over 50 lines
+- [ ] Check nesting depth - Flag nesting over 3 levels
+- [ ] Check naming clarity - Verify variable/function names are descriptive
+- [ ] Check magic values - Flag unexplained literal values
+- [ ] Check complex expressions - Flag complex ternaries and boolean expressions
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
+
+1. Get changed `.ts` and `.tsx` files (excluding migrations):
+   - `git diff --name-only main...HEAD -- '*.ts' '*.tsx' ':!**/migrations/**'` (branch commits)
+   - `git diff --name-only --cached -- '*.ts' '*.tsx' ':!**/migrations/**'` (staged)
+   - `git diff --name-only -- '*.ts' '*.tsx' ':!**/migrations/**'` (unstaged)
+2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
+3. **Locate the changed code within the file**, then examine the ENTIRE function/block containing those changes
+4. **For every function over 30 lines:**
+   - Check if it could be broken into smaller functions
+   - Check if complex logic is explained
+   - This check is mandatory even if only part of the function was changed
+5. **For every conditional or loop:**
+   - Count nesting levels
+   - Check for early return opportunities
 
 ## Critical Review Mindset
 
@@ -40,40 +60,9 @@ Work through each task in order, marking as `in_progress` then `completed`.
 - ONLY actual readability issues that need fixing
 - If you find no issues, say "PASS" with no other commentary
 
-### Review approach:
-
-- Look for ANY complex logic - is it explained with comments or clear naming?
-- Look for ANY function over 50 lines - can it be broken up?
-- Look for ANY nesting over 3 levels - should it use early returns?
-- Look for ANY magic numbers/strings - should they be constants?
-- Assume there ARE readability problems until you've proven otherwise
-
 ## Important: Read-Only Review
 
 **This is a review-only skill. DO NOT edit, modify, or change any code files.**
-
-Your role is to:
-
-- Analyze code and identify issues
-- Report findings with file paths and line numbers
-- Provide suggestions in the output report
-
-## Process
-
-1. Get changed `.ts` and `.tsx` files (excluding migrations):
-   - `git diff --name-only main...HEAD -- '*.ts' '*.tsx' ':!**/migrations/**'` (branch commits)
-   - `git diff --name-only --cached -- '*.ts' '*.tsx' ':!**/migrations/**'` (staged)
-   - `git diff --name-only -- '*.ts' '*.tsx' ':!**/migrations/**'` (unstaged)
-2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
-3. **Locate the changed code within the file**, then examine the ENTIRE function/block containing those changes
-4. **For every function over 30 lines:**
-   - Check if it could be broken into smaller functions
-   - Check if complex logic is explained
-   - This check is mandatory even if only part of the function was changed
-5. **For every conditional or loop:**
-   - Count nesting levels
-   - Check for early return opportunities
-6. Report ONLY actual problems - no praise, no validation, no "well-written" commentary
 
 ## Patterns to Check
 
@@ -121,29 +110,31 @@ Your role is to:
 
 - Similar operations done differently in the same file
 
-## Output Format
+## Output
 
-**IMPORTANT: Only include actual problems. Do NOT include:**
+### If readability issues found (NEEDS FIXES):
 
-- Praise ("well-structured", "clear naming", "readable code")
-- Validation ("this is easy to follow", "good organization")
-- Commentary on code that has no issues
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/readability.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
 
-```
-## Readability Review: [PASS/NEEDS FIXES]
+   ```
+   # Readability Review Results
 
-### Critical Issues
-- `file.ts:line` - [issue type] - [description] - [suggestion]
+   ## Critical Issues
+   - `file.ts:line` - [issue type] - [description] - [suggestion]
 
-### Warnings
-- `file.ts:line` - [warning type] - [description]
+   ## Warnings
+   - `file.ts:line` - [warning type] - [description]
 
-### Summary
-X critical issues, Y warnings
-```
+   ## Summary
+   X critical issues, Y warnings
+   ```
 
-If no issues found, output ONLY:
+2. **Return only**:
+   ```
+   Readability: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/readability.md
+   ```
 
-```
-Readability Review: PASS
-```
+### If review passes (PASS):
+
+Return only: "Readability: PASS"

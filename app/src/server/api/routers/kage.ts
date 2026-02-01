@@ -15,11 +15,10 @@ import { errorResponse, baseServerResponse } from "@/server/api/trpc";
 import { initiateBattle } from "@/routers/combat";
 import { fetchVillage } from "@/routers/village";
 import { fetchUser, fetchUpdatedUser, updateNindo } from "@/routers/profile";
-import { canChallengeKage, canBeElder, calculateDailyLockedTime } from "@/utils/kage";
+import { canChallengeKage, calculateDailyLockedTime } from "@/utils/kage";
 import { calcStructureUpgrade } from "@/utils/village";
 import {
   KAGE_MAX_DAILIES,
-  KAGE_MAX_ELDERS,
   KAGE_DELAY_SECS,
   KAGE_PRESTIGE_REQUIREMENT,
   KAGE_DEFAULT_PRESTIGE,
@@ -490,61 +489,6 @@ export const kageRouter = createTRPCRouter({
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
       return await fetchElders(ctx.drizzle, input.villageId);
-    }),
-  toggleElder: protectedProcedure
-    .input(z.object({ userId: z.string(), villageId: z.string().nullish() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const villageId = input.villageId ?? "syndicate";
-      const [kage, prospect, village, elders] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
-        fetchVillage(ctx.drizzle, villageId),
-        fetchElders(ctx.drizzle, villageId),
-      ]);
-      // Derived
-      const isHideoutOrTown = ["HIDEOUT", "TOWN"].includes(village?.type ?? "");
-      const lockout = isHideoutOrTown ? 0 : KAGE_DELAY_SECS;
-      const newRank = prospect.rank === "ELDER" ? "JONIN" : "ELDER";
-      // Guards
-      if (!kage) return errorResponse("User not found");
-      if (!prospect) return errorResponse("Target not found");
-      if (!village) return errorResponse("Village not found");
-      // Allow elder removal after 3 days
-      if (newRank !== "ELDER") {
-        const threeDaysAgo = new Date(Date.now() - KAGE_DELAY_SECS * 1000);
-        if (village.leaderUpdatedAt > threeDaysAgo) {
-          return errorResponse("Cannot remove elder until 3 days after becoming kage");
-        }
-      }
-      if (prospect.anbuId) return errorResponse("Cannot promote ANBU to elder");
-      if (prospect.isAi) return errorResponse("Do not touch the AI");
-      if (kage.villageId !== village.id) return errorResponse("Wrong village");
-      if (village.kageId !== kage.userId) return errorResponse("Not kage");
-      if (village.type !== "VILLAGE") return errorResponse("Only for village");
-      if (prospect.villageId !== village.id) return errorResponse("Not in village");
-      // Only enforce max when PROMOTING to ELDER
-      if (newRank === "ELDER" && elders.length >= KAGE_MAX_ELDERS) {
-        return errorResponse(`Already have ${KAGE_MAX_ELDERS} elders`);
-      }
-      if (secondsFromDate(lockout, village.leaderUpdatedAt) > new Date()) {
-        return errorResponse(
-          `Must have been kage for ${Math.floor(lockout / (24 * 60 * 60))} days`,
-        );
-      }
-      if (prospect.rank !== "ELDER" && !canBeElder(prospect)) {
-        return errorResponse("Must be in village for 100 days to be elder");
-      }
-      // Mutate
-      await ctx.drizzle
-        .update(userData)
-        .set({ rank: newRank })
-        .where(eq(userData.userId, prospect.userId));
-      return {
-        success: true,
-        message: `User rank updated to ${newRank.toLowerCase()}`,
-      };
     }),
   upgradeStructure: protectedProcedure
     .input(

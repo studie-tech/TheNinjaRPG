@@ -1,29 +1,50 @@
 ---
 description: Reviews game logic for correctness, safety, and consistency
-allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), Write, TodoWrite
 ---
 
 # Game Logic Review
 
 Review code for game logic correctness, ensuring attribution, transfers, ownership, and state management are handled safely.
 
-## Task Tracking
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-**IMPORTANT**: Before starting the review, create tasks for each major checkpoint using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
+- **IDENTIFIER** (required): Used to organize review output files
 
-Create these tasks at the start:
+## Process
 
-1. "Get changed files" - Get list of files to review
-2. "Read full file contents" - Read complete files (not just diffs)
-3. "Check attribution" - Verify rewards/XP go to correct user
-4. "Check resource transfers" - Verify balance checks before deductions
-5. "Check ownership verification" - Verify user owns items before modifying
-6. "Check self-targeting" - Verify actions can't inappropriately self-target
-7. "Check double-spend" - Verify actions can't be exploited for multiple rewards
-8. "Check race conditions" - Verify atomic guards on read-then-write patterns
-9. "Compile findings" - Produce final report
+### Step 1: Create Todo Checklist
 
-Work through each task in order, marking as `in_progress` then `completed`.
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Get changed files
+- [ ] Read full file contents (not just diffs)
+- [ ] Check attribution - Verify rewards/XP go to correct user
+- [ ] Check resource transfers - Verify balance checks before deductions
+- [ ] Check ownership verification - Verify user owns items before modifying
+- [ ] Check self-targeting - Verify actions can't inappropriately self-target
+- [ ] Check double-spend - Verify actions can't be exploited for multiple rewards
+- [ ] Check race conditions - Verify atomic guards on read-then-write patterns
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
+
+1. Get changed `.ts` and `.tsx` files (excluding migrations):
+   - `git diff --name-only main...HEAD -- '*.ts' '*.tsx' ':!**/migrations/**'` (branch commits)
+   - `git diff --name-only --cached -- '*.ts' '*.tsx' ':!**/migrations/**'` (staged)
+   - `git diff --name-only -- '*.ts' '*.tsx' ':!**/migrations/**'` (unstaged)
+2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
+3. **Locate the changed code within the file**, then examine the ENTIRE function containing those changes
+4. **For every database update that modifies resources (money, XP, items):**
+   - Check if there's a WHERE clause guard for sufficient balance
+   - Check if the correct userId is being modified
+   - Check if affected rows are verified after the update
+   - This check is mandatory even if only part of the mutation was changed
+5. **For every action that targets another entity:**
+   - Check for self-targeting prevention if applicable
+   - Check for ownership verification
 
 ## Critical Review Mindset
 
@@ -40,33 +61,6 @@ Work through each task in order, marking as `in_progress` then `completed`.
 
 - ONLY actual logic bugs or exploit risks that need fixing
 - If you find no issues, say "PASS" with no other commentary
-
-### Review approach:
-
-- Look for ANY reward/XP/money grant - is it attributed to the correct user?
-- Look for ANY resource deduction - is there a balance check?
-- Look for ANY item/resource modification - is ownership verified?
-- Look for ANY action - can it be self-targeted when it shouldn't be?
-- Look for ANY reward - can it be claimed multiple times?
-- Assume there ARE logic bugs until you've proven otherwise
-
-## Process
-
-1. Get changed `.ts` and `.tsx` files (excluding migrations):
-   - `git diff --name-only main...HEAD -- '*.ts' '*.tsx' ':!**/migrations/**'` (branch commits)
-   - `git diff --name-only --cached -- '*.ts' '*.tsx' ':!**/migrations/**'` (staged)
-   - `git diff --name-only -- '*.ts' '*.tsx' ':!**/migrations/**'` (unstaged)
-2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
-3. **Locate the changed code within the file**, then examine the ENTIRE function containing those changes
-4. **For every database update that modifies resources (money, XP, items):**
-   - Check if there's a WHERE clause guard for sufficient balance
-   - Check if the correct userId is being modified
-   - Check if affected rows are verified after the update
-   - This check is mandatory even if only part of the mutation was changed
-5. **For every action that targets another entity:**
-   - Check for self-targeting prevention if applicable
-   - Check for ownership verification
-6. Report ONLY actual problems - no praise, no validation, no "correctly handles" commentary
 
 ### Mandatory check for resource modifications:
 
@@ -151,29 +145,31 @@ if (result.rowsAffected === 0) {
 
 - Off-by-one errors, zero/max value edge cases, division without zero-check
 
-## Output Format
+## Output
 
-**IMPORTANT: Only include actual problems. Do NOT include:**
+### If logic issues found (NEEDS FIXES):
 
-- Praise ("correct attribution", "safe implementation", "good guard")
-- Validation ("properly handles", "correctly checks")
-- Commentary on code that has no issues
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/logic.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
 
-```
-## Game Logic Review: [PASS/NEEDS FIXES]
+   ```
+   # Game Logic Review Results
 
-### Critical Issues
-- `file.ts:line` - [issue type] - [description] - [fix suggestion]
+   ## Critical Issues
+   - `file.ts:line` - [issue type] - [description] - [fix suggestion]
 
-### Warnings
-- `file.ts:line` - [warning type] - [description]
+   ## Warnings
+   - `file.ts:line` - [warning type] - [description]
 
-### Summary
-X critical issues, Y warnings
-```
+   ## Summary
+   X critical issues, Y warnings
+   ```
 
-If no issues found, output ONLY:
+2. **Return only**:
+   ```
+   Logic: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/logic.md
+   ```
 
-```
-Game Logic Review: PASS
-```
+### If review passes (PASS):
+
+Return only: "Logic: PASS"

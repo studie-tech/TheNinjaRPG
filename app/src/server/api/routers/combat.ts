@@ -2194,7 +2194,7 @@ export const processUsersForBattle = async (
   const takenLocations: { x: number; y: number }[] = [];
 
   // Loop through users and transform to ProcessingBattleUser
-  const usersState: ProcessingBattleUser[] = users.map((inputUser, i) => {
+  const usersState: ProcessingBattleUser[] = users.map((inputUser) => {
     // Build the processing user object with all required fields
     const user: ProcessingBattleUser = {
       ...inputUser,

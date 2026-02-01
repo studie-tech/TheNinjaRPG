@@ -862,6 +862,7 @@ export const updateVillageAnbuClan = async (
             .set({
               pvpActivity: sql`${clan.pvpActivity} + 1`,
               points: sql`${clan.points} + ${result.clanPoints}`,
+              activityPoints: sql`${clan.activityPoints} + ${result.clanPoints}`,
             })
             .where(eq(clan.id, user.clanId)),
         ]

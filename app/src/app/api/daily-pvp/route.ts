@@ -27,8 +27,14 @@ export async function GET() {
       }),
       drizzleDB.update(clan).set({
         pvpActivity: sql`${clan.pvpActivity} * 0.95`,
-        trainingBoost: sql`CASE WHEN ${clan.trainingBoost} > 0 THEN ${clan.trainingBoost} - 1 ELSE ${clan.trainingBoost} END`,
-        ryoBoost: sql`CASE WHEN ${clan.ryoBoost} > 0 THEN ${clan.ryoBoost} - 1 ELSE ${clan.ryoBoost} END`,
+        trainingBoost: sql`CASE WHEN ${clan.trainingBoost} > 0 THEN ${clan.trainingBoost} - 2 ELSE 0 END`,
+        ryoBoost: sql`CASE WHEN ${clan.ryoBoost} > 0 THEN ${clan.ryoBoost} - 2 ELSE 0 END`,
+        regenBoost: sql`CASE WHEN ${clan.regenBoost} > 0 THEN ${clan.regenBoost} - 2 ELSE 0 END`,
+        missionRewardBoost: sql`CASE WHEN ${clan.missionRewardBoost} > 0 THEN ${clan.missionRewardBoost} - 2 ELSE 0 END`,
+        craftingTimeBoost: sql`CASE WHEN ${clan.craftingTimeBoost} > 0 THEN ${clan.craftingTimeBoost} - 2 ELSE 0 END`,
+        craftingExpBoost: sql`CASE WHEN ${clan.craftingExpBoost} > 0 THEN ${clan.craftingExpBoost} - 2 ELSE 0 END`,
+        hunterExpBoost: sql`CASE WHEN ${clan.hunterExpBoost} > 0 THEN ${clan.hunterExpBoost} - 2 ELSE 0 END`,
+        gathererExpBoost: sql`CASE WHEN ${clan.gathererExpBoost} > 0 THEN ${clan.gathererExpBoost} - 2 ELSE 0 END`,
       }),
     ]);
     return Response.json(`OK`);

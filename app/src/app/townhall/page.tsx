@@ -12,9 +12,8 @@ import NavTabs from "@/layout/NavTabs";
 import AvatarImage from "@/layout/Avatar";
 import PublicUserComponent from "@/layout/PublicUser";
 import UserRequestSystem from "@/layout/UserRequestSystem";
-import UserSearchSelect from "@/layout/UserSearchSelect";
 import { Handshake, LandPlot, DoorOpen, Swords } from "lucide-react";
-import { CircleArrowUp, Lock, LockOpen, Ban } from "lucide-react";
+import { CircleArrowUp, Lock, LockOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { showMutationToast } from "@/libs/toast";
 import { secondsPassed, secondsFromDate } from "@/utils/time";
@@ -27,16 +26,15 @@ import { canChallengeKage } from "@/utils/kage";
 import { findRelationship } from "@/utils/alliance";
 import { KAGE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
 import { KAGE_CHALLENGE_SECS, KAGE_CHALLENGE_MINS } from "@/drizzle/constants";
-import {
-  KAGE_RANK_REQUIREMENT,
-  WAR_FUNDS_COST,
-  KAGE_DELAY_SECS,
-} from "@/drizzle/constants";
+import { KAGE_RANK_REQUIREMENT, WAR_FUNDS_COST } from "@/drizzle/constants";
 import { KAGE_PRESTIGE_COST } from "@/drizzle/constants";
 import { KAGE_MIN_DAYS_IN_VILLAGE } from "@/drizzle/constants";
 import { KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS } from "@/drizzle/constants";
-import { getSearchValidator } from "@/validators/register";
-import { useForm, useWatch } from "react-hook-form";
+import {
+  ELDER_NOMINATION_CUTOFF_DAY,
+  ELDER_NOMINATION_DEADLINE_DAY,
+} from "@/drizzle/constants";
+import { useForm } from "react-hook-form";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -103,40 +101,27 @@ const ElderHall: React.FC<{
   user: NonNullable<UserWithRelations>;
   navTabs: React.ReactNode;
 }> = ({ user, navTabs }) => {
-  // API utility
-  const utils = api.useUtils();
-
   // Fetch elders
   const { data: elders, isPending } = api.kage.getElders.useQuery(
     { villageId: user.villageId ?? "" },
     { staleTime: 10000, enabled: !!user.villageId },
   );
 
-  // Mutations for promoting & resigning elders
-  const { mutate: toggleElder } = api.kage.toggleElder.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.kage.getElders.invalidate();
-      }
-    },
-  });
+  // Fetch clans for activity ranking
+  const { data: clans } = api.clan.getAll.useQuery(
+    { villageId: user.villageId ?? "", isOutlaw: false },
+    { staleTime: 10000, enabled: !!user.villageId },
+  );
 
-  // User search
-  const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUser = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
-
-  // Derived
-  const isKage = user.userId === user.village?.kageId;
+  // Sort clans by activity points, with all-time points as tie-breaker
+  const rankedClans = clans
+    ?.slice()
+    .sort((a, b) => {
+      const activityDiff = (b.activityPoints ?? 0) - (a.activityPoints ?? 0);
+      if (activityDiff !== 0) return activityDiff;
+      return (b.points ?? 0) - (a.points ?? 0);
+    })
+    .slice(0, 3);
 
   return (
     <>
@@ -148,19 +133,25 @@ const ElderHall: React.FC<{
         topRightContent={navTabs}
       >
         <p className="pb-2">
-          The Elder Council, composed of respected individuals, advises the Kage and
-          ensures the village&apos;s prosperity. Known for their wisdom and leadership,
-          they guide crucial decisions, maintain order, and uphold traditions. Chosen
-          for their skills and dedication, these experienced ninjas play a vital role in
-          shaping the village&apos;s future and its continued success.
+          The Elder Council is composed of representatives from the village&apos;s most
+          active clans. Each month, elders are automatically selected from the top 3
+          clans by activity points. Clan rankings are locked on the{" "}
+          {ELDER_NOMINATION_CUTOFF_DAY}th of each month, and clan leaders can nominate
+          a member to become elder between the {ELDER_NOMINATION_CUTOFF_DAY}th and{" "}
+          {ELDER_NOMINATION_DEADLINE_DAY}th if their clan qualifies.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Activity points are earned through PvP combat, completing quests, and other
+          clan activities. Points reset at the start of each month. All-time clan
+          points are used as a tie-breaker when clans have equal activity points.
         </p>
       </ContentBox>
-      {/* SHOW ELDERS */}
+      {/* SHOW CURRENT ELDERS */}
       {elders && elders.length > 0 && (
         <ContentBox
           title="Current Elders"
           initialBreak={true}
-          subtitle={`Currently elected elders in the village`}
+          subtitle={`Currently serving elders`}
         >
           {isPending && <Loader explanation="Loading Elders" />}
           <div className="grid grid-cols-3 pt-3">
@@ -181,86 +172,67 @@ const ElderHall: React.FC<{
                       Lvl. {elder.level} {capitalizeFirstLetter(elder.rank)}
                     </div>
                   </div>
-                  {isKage &&
-                    (() => {
-                      const threeDaysAgo = new Date(
-                        Date.now() - KAGE_DELAY_SECS * 1000,
-                      );
-                      const canRemove =
-                        user.village?.leaderUpdatedAt &&
-                        new Date(user.village.leaderUpdatedAt) <= threeDaysAgo;
-                      return canRemove ? (
-                        <Confirm2
-                          title="Confirm Demotion"
-                          button={
-                            <Ban className="absolute right-[13%] top-[3%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
-                          }
-                          onAccept={(e) => {
-                            e.preventDefault();
-                            toggleElder({
-                              userId: elder.userId,
-                              villageId: elder.villageId,
-                            });
-                          }}
-                        >
-                          You are about to remove this user as a village elder. Are you
-                          sure?
-                        </Confirm2>
-                      ) : (
-                        <div className="absolute right-[13%] top-[3%] h-9 w-9 rounded-full bg-gray-200 p-1 flex items-center justify-center">
-                          <span className="text-xs text-gray-500">3d</span>
-                        </div>
-                      );
-                    })()}
                 </Link>
               </div>
             ))}
           </div>
         </ContentBox>
       )}
-      {/* KAGE CONTROL */}
-      {isKage && (
-        <ContentBox
-          title="Appoint Elder"
-          initialBreak={true}
-          subtitle="Search for someone to promote to elder"
-        >
-          <p className="pb-2"></p>
-          <UserSearchSelect
-            useFormMethods={userSearchMethods}
-            label="Search for receiver"
-            selectedUsers={[]}
-            showYourself={false}
-            showAi={false}
-            inline={true}
-            maxUsers={maxUsers}
-          />
-          {targetUser && (
-            <div>
-              {targetUser.rank !== "JONIN" && targetUser.rank !== "ELITE JONIN" && (
-                <p className="text-red-500 font-bold text-center pt-2">
-                  User must be at least Jonin!
-                </p>
-              )}
-              {(targetUser.rank === "JONIN" || targetUser.rank === "ELITE JONIN") && (
-                <Button
-                  id="promote"
-                  className="mt-2 w-full"
-                  onClick={() =>
-                    toggleElder({
-                      userId: targetUser.userId,
-                      villageId: user.villageId,
-                    })
-                  }
-                >
-                  <CircleArrowUp className="h-5 w-5 mr-2" />
-                  Promote
-                </Button>
-              )}
-            </div>
-          )}
-        </ContentBox>
-      )}
+      {/* CLAN ACTIVITY RANKINGS */}
+      <ContentBox
+        title="Clan Activity Rankings"
+        initialBreak={true}
+        subtitle="Top 3 clans will have their nominees become elders next month"
+      >
+        {rankedClans && rankedClans.length > 0 ? (
+          <div className="space-y-2">
+            {rankedClans.map((clan, i) => (
+              <div
+                key={clan.id}
+                className={`flex items-center justify-between p-3 rounded-lg ${
+                  i === 0
+                    ? "bg-amber-500/20 border border-amber-500/40"
+                    : i === 1
+                      ? "bg-muted border border-border"
+                      : "bg-orange-500/10 border border-orange-500/30"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-lg">#{i + 1}</span>
+                  <Link href={`/clanhall/${clan.id}`}>
+                    <AvatarImage
+                      href={clan.image}
+                      alt={clan.name}
+                      size={50}
+                      hover_effect={true}
+                    />
+                  </Link>
+                  <div>
+                    <Link
+                      href={`/clanhall/${clan.id}`}
+                      className="font-bold hover:text-orange-500"
+                    >
+                      {clan.name}
+                    </Link>
+                    <div className="text-sm text-muted-foreground">
+                      {clan.members.length} members
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold">{clan.activityPoints ?? 0}</div>
+                  <div className="text-sm text-muted-foreground">activity points</div>
+                  <div className="text-xs text-muted-foreground">
+                    {clan.points ?? 0} all-time pts
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted-foreground">No clans found in this village.</p>
+        )}
+      </ContentBox>
     </>
   );
 };

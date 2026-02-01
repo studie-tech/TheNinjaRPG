@@ -1610,11 +1610,14 @@ export const updateRewards = async (info: {
           .set({ tokens: sql`${village.tokens} + ${rewards.reward_tokens}` })
           .where(eq(village.id, user.villageId))
       : undefined,
-    // Update clan points
+    // Update clan points and activity points
     rewards.reward_clanpoints > 0 && user.clanId
       ? client
           .update(clan)
-          .set({ points: sql`${clan.points} + ${rewards.reward_clanpoints}` })
+          .set({
+            points: sql`${clan.points} + ${rewards.reward_clanpoints}`,
+            activityPoints: sql`${clan.activityPoints} + ${rewards.reward_clanpoints}`,
+          })
           .where(eq(clan.id, user.clanId))
       : undefined,
     // Update anbu points

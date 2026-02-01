@@ -132,10 +132,12 @@ export const getReward = (
     const sectors = user.village?.sectors?.length || 0;
     const errandsBoost = getShrineBoost(sectors, "Errands", user.village);
     const missionBoost = getShrineBoost(sectors, "Mission", user.village);
+    // Get clan mission reward boost (percentage as decimal)
+    const clanMissionBoost = (user.clan?.missionRewardBoost ?? 0) / 100;
     let boostFactor = 1;
     if (userQuest?.quest.questType) {
       if (["mission", "crime", "medical"].includes(userQuest.quest.questType)) {
-        boostFactor = 1 + missionBoost;
+        boostFactor = 1 + missionBoost + clanMissionBoost;
       } else if (userQuest.quest.questType === "errand") {
         boostFactor = 1 + errandsBoost;
       }
@@ -251,6 +253,26 @@ export const getReward = (
     rawRewards.reward_seichi_silver = Math.floor(
       rawRewards.reward_seichi_silver * factor,
     );
+
+    // Apply clan experience boosts (percentages stored in clan object)
+    const clanHunterExpBoost = (user.clan?.hunterExpBoost ?? 0) / 100;
+    const clanGathererExpBoost = (user.clan?.gathererExpBoost ?? 0) / 100;
+    const clanCraftingExpBoost = (user.clan?.craftingExpBoost ?? 0) / 100;
+    if (clanHunterExpBoost > 0 && rawRewards.reward_hunting_experience > 0) {
+      rawRewards.reward_hunting_experience = Math.floor(
+        rawRewards.reward_hunting_experience * (1 + clanHunterExpBoost),
+      );
+    }
+    if (clanGathererExpBoost > 0 && rawRewards.reward_gathering_experience > 0) {
+      rawRewards.reward_gathering_experience = Math.floor(
+        rawRewards.reward_gathering_experience * (1 + clanGathererExpBoost),
+      );
+    }
+    if (clanCraftingExpBoost > 0 && rawRewards.reward_crafting_experience > 0) {
+      rawRewards.reward_crafting_experience = Math.floor(
+        rawRewards.reward_crafting_experience * (1 + clanCraftingExpBoost),
+      );
+    }
 
     // Chunin mission experience bonus (≤ level 40)
     if (

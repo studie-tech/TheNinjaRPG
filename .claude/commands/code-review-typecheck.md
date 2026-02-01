@@ -1,31 +1,53 @@
 ---
 description: Runs TypeScript type checking
-allowed-tools: Bash(make typecheck:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Bash(make typecheck:*), Write, TodoWrite
 ---
 
 Run TypeScript type checking and report results.
 
-**Working directory**: $ARGUMENTS (or current directory if not provided)
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-## Task Tracking
-
-**IMPORTANT**: Create tasks to track progress using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
-
-Create these tasks at the start:
-1. "Run typecheck" - Execute make typecheck command
-2. "Parse results" - Extract type errors
-3. "Compile findings" - Produce final report
+- **IDENTIFIER** (required): Used to organize review output files
 
 ## Process
 
+### Step 1: Create Todo Checklist
+
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Run typecheck (`make typecheck`)
+- [ ] Parse type errors from output
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
+
 1. Run: `make typecheck`
-2. Parse errors/warnings
+2. Parse errors from output
 
 ## Output
 
-```
-Typecheck: PASS/FAIL
-Stats: X errors
-Issues (if any):
-- file:line - error code - message
-```
+### If type errors found (NEEDS FIXES):
+
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/typecheck.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
+
+   ```
+   # TypeScript Results
+
+   Stats: X errors
+
+   ## Errors
+   - file:line - error code - message
+   ...
+   ```
+
+2. **Return only**:
+   ```
+   Typecheck: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/typecheck.md
+   ```
+
+### If typecheck passes (PASS):
+
+Return only: "Typecheck: PASS"

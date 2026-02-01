@@ -1,4 +1,4 @@
-import { publicState, allState, damageModifierTypes } from "./constants";
+import { publicState, allState } from "./constants";
 import { getPower } from "./tags";
 import { randomInt } from "@/utils/math";
 import { secondsPassed } from "@/utils/time";

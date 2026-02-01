@@ -1,31 +1,53 @@
 ---
 description: Runs ESLint
-allowed-tools: Bash(make lint:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Bash(make lint:*), Write, TodoWrite
 ---
 
 Run ESLint and report results.
 
-**Working directory**: $ARGUMENTS (or current directory if not provided)
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-## Task Tracking
-
-**IMPORTANT**: Create tasks to track progress using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
-
-Create these tasks at the start:
-1. "Run ESLint" - Execute make lint command
-2. "Parse results" - Extract errors and warnings
-3. "Compile findings" - Produce final report
+- **IDENTIFIER** (required): Used to organize review output files
 
 ## Process
 
+### Step 1: Create Todo Checklist
+
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Run ESLint (`make lint`)
+- [ ] Parse errors/warnings from output
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
+
 1. Run: `make lint`
-2. Parse errors/warnings
+2. Parse errors/warnings from output
 
 ## Output
 
-```
-Lint: PASS/FAIL
-Stats: X errors, Y warnings
-Issues (if any):
-- file:line - rule - message
-```
+### If lint issues found (NEEDS FIXES):
+
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/lint.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
+
+   ```
+   # ESLint Results
+
+   Stats: X errors, Y warnings
+
+   ## Issues
+   - file:line - rule - message
+   ...
+   ```
+
+2. **Return only**:
+   ```
+   Lint: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/lint.md
+   ```
+
+### If lint passes (PASS):
+
+Return only: "Lint: PASS"

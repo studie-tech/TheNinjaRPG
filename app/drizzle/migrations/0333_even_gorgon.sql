@@ -1,0 +1,10 @@
+ALTER TABLE `Clan` ADD `missionRewardBoost` double DEFAULT 0 NOT NULL;
+ALTER TABLE `Clan` ADD `craftingTimeBoost` double DEFAULT 0 NOT NULL;
+ALTER TABLE `Clan` ADD `craftingExpBoost` double DEFAULT 0 NOT NULL;
+ALTER TABLE `Clan` ADD `hunterExpBoost` double DEFAULT 0 NOT NULL;
+ALTER TABLE `Clan` ADD `gathererExpBoost` double DEFAULT 0 NOT NULL;
+ALTER TABLE `Clan` ADD `elderNomineeId` varchar(191);
+ALTER TABLE `Clan` ADD `elderCutoffMonth` tinyint;
+ALTER TABLE `Clan` ADD `elderCutoffYear` smallint;
+ALTER TABLE `Clan` ADD `elderCutoffRank` tinyint;
+ALTER TABLE `Clan` ADD `activityPoints` int DEFAULT 0 NOT NULL;

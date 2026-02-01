@@ -1,92 +1,98 @@
 ---
-description: Review code for quality and guideline compliance. Use /code-review [WORKTREE_PATH]
+description: Review code for quality and guideline compliance. Use /code-review <IDENTIFIER>
 allowed-tools: Task, TaskCreate, TaskUpdate, TaskList, TaskGet
 ---
 
 # Code Review
 
-## Task Tracking
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-**IMPORTANT**: Create a task for each sub-review before launching agents. Update tasks as each sub-review completes.
+- **IDENTIFIER** (required): Used to organize review output files (e.g., PR ID, branch name, feature name)
 
-Create these tasks at the start:
-1. "Guidelines review" - CLAUDE.md compliance
-2. "Tests review" - Run test suite
-3. "Lint review" - Run ESLint
-4. "Typecheck review" - TypeScript checking
-5. "Security review" - Security vulnerabilities
-6. "tRPC review" - Router patterns
-7. "Logic review" - Game logic correctness
-8. "Readability review" - Code clarity
-9. "DRY review" - Code duplication
-10. "Frontend review" - React best practices
-11. "UX review" - User experience quality
-12. "Redundancies review" - Orphaned/duplicate code
-13. "Specific Ignores review" - Error handling specificity
-14. "Compile summary" - Aggregate all results
+## Execution
 
-Mark each task as `in_progress` when launching its agent, and `completed` when you receive results.
+### Step 1: Create Todo List
 
-Review code by launching 13 parallel Task agents:
+**BEFORE launching agents, create a task list to track all 14 review types.** Use TaskCreate with all reviews as pending:
 
-1. **Guidelines**: `Skill(skill="code-review-guidelines", args="$ARGUMENTS")`
-2. **Tests**: `Skill(skill="code-review-tests", args="$ARGUMENTS")`
-3. **Lint**: `Skill(skill="code-review-lint", args="$ARGUMENTS")`
-4. **Typecheck**: `Skill(skill="code-review-typecheck", args="$ARGUMENTS")`
-5. **Security**: `Skill(skill="code-review-security", args="$ARGUMENTS")`
-6. **tRPC**: `Skill(skill="code-review-trpc", args="$ARGUMENTS")`
-7. **Logic**: `Skill(skill="code-review-logic", args="$ARGUMENTS")`
-8. **Readability**: `Skill(skill="code-review-readability", args="$ARGUMENTS")`
-9. **DRY**: `Skill(skill="code-review-dry", args="$ARGUMENTS")`
-10. **Frontend**: `Skill(skill="code-review-frontend", args="$ARGUMENTS")`
-11. **UX**: `Skill(skill="code-review-ux", args="$ARGUMENTS")`
-12. **Redundancies**: `Skill(skill="code-review-redundancies", args="$ARGUMENTS")`
-13. **Specific Ignores**: `Skill(skill="code-review-specific-ignores", args="$ARGUMENTS")`
+- [ ] Guidelines review
+- [ ] Tests review
+- [ ] Lint review
+- [ ] Typecheck review
+- [ ] Security review
+- [ ] tRPC review
+- [ ] Logic review
+- [ ] Readability review
+- [ ] DRY review
+- [ ] Frontend review
+- [ ] UX review
+- [ ] Redundancies review
+- [ ] Specific Ignores review
+- [ ] Fullstack Link review
 
-Use Task tool with `run_in_background: true` for parallel execution.
+### Step 2: Launch Parallel Agents
 
-After all complete, compile into:
+Launch 14 parallel Task agents. For each agent, use this **exact prompt format** (do NOT include the command file content in the prompt):
+
+```
+Read and execute the instructions in .claude/commands/code-review-<TYPE>.md
+
+Arguments: <IDENTIFIER>
+
+Return ONLY the final result line (e.g., "tRPC: PASS" or "tRPC: NEEDS FIXES - see .claude/review/<IDENTIFIER>/trpc.md")
+```
+
+Replace `<TYPE>` with the review type and `<IDENTIFIER>` with the actual identifier from $ARGUMENTS.
+
+### Review Types to Launch (all in parallel)
+
+| Agent Name       | Command File                      |
+| ---------------- | --------------------------------- |
+| Guidelines       | `code-review-guidelines.md`       |
+| Tests            | `code-review-tests.md`            |
+| Lint             | `code-review-lint.md`             |
+| Typecheck        | `code-review-typecheck.md`        |
+| Security         | `code-review-security.md`         |
+| tRPC             | `code-review-trpc.md`             |
+| Logic            | `code-review-logic.md`            |
+| Readability      | `code-review-readability.md`      |
+| DRY              | `code-review-dry.md`              |
+| Frontend         | `code-review-frontend.md`         |
+| UX               | `code-review-ux.md`               |
+| Redundancies     | `code-review-redundancies.md`     |
+| Specific Ignores | `code-review-specific-ignores.md` |
+| Fullstack Link   | `code-review-fullstack-link.md`   |
+
+**IMPORTANT**: Keep prompts minimal. The subagent will read the command file itself - do NOT paste its contents into the prompt.
+
+Each sub-skill will either return:
+
+- `[Review Type]: PASS` if no issues found
+- `[Review Type]: NEEDS FIXES` with path to `.claude/review/<IDENTIFIER>/<skill>.md` for detailed findings
+
+### Step 3: Track Results and Compile Summary
+
+As each agent completes, mark the corresponding todo as completed using TodoWrite with `merge: true`.
+
+After all complete, compile into a summary (replace `<IDENTIFIER>` with the actual identifier from arguments):
 
 ## Code Review Summary
 
-### Guidelines
-<result>
+| Review           | Status           | Findings                                          |
+| ---------------- | ---------------- | ------------------------------------------------- |
+| Guidelines       | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/guidelines.md`       |
+| Tests            | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/tests.md`            |
+| Lint             | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/lint.md`             |
+| Typecheck        | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/typecheck.md`        |
+| Security         | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/security.md`         |
+| tRPC             | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/trpc.md`             |
+| Logic            | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/logic.md`            |
+| Readability      | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/readability.md`      |
+| DRY              | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/dry.md`              |
+| Frontend         | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/frontend.md`         |
+| UX               | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/ux.md`               |
+| Redundancies     | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/redundancies.md`     |
+| Specific Ignores | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/specific-ignores.md` |
+| Fullstack Link   | PASS/NEEDS FIXES | `.claude/review/<IDENTIFIER>/fullstack-link.md`   |
 
-### Tests
-<result>
-
-### Lint
-<result>
-
-### Typecheck
-<result>
-
-### Security
-<result>
-
-### tRPC
-<result>
-
-### Logic
-<result>
-
-### Readability
-<result>
-
-### DRY
-<result>
-
-### Frontend
-<result>
-
-### UX
-<result>
-
-### Redundancies
-<result>
-
-### Specific Ignores
-<result>
-
-### Recommendation
-PASS if all passed, otherwise NEEDS FIXES
+**Note**: Only include the findings path if status is NEEDS FIXES.

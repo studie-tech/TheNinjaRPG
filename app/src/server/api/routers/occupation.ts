@@ -159,8 +159,12 @@ export const occupationRouter = createTRPCRouter({
       const sectors = user.village?.sectors?.length || 0;
       const shrineBoost = getShrineBoost(sectors, "Crafting", user.village);
       const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
+      // Clan crafting time reduction (percentage stored in clan object)
+      // Clamp to 10% minimum time (90% max reduction) to prevent 0 or negative times
+      const clanCraftingTimeBoost = Math.min((user.clan?.craftingTimeBoost ?? 0) / 100, 0.9);
+      const clanCraftingTimeFactor = 1 - clanCraftingTimeBoost;
       const craftSeconds = Math.round(
-        craftingTime * 60 * shrineBoostFactor * input.quantity,
+        craftingTime * 60 * shrineBoostFactor * clanCraftingTimeFactor * input.quantity,
       );
 
       // Calculate crafting finish time
@@ -235,7 +239,10 @@ export const occupationRouter = createTRPCRouter({
       }
 
       // Award crafting experience (from item config, or 0 if not set)
-      const expGain = (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
+      // Apply clan crafting experience boost
+      const clanCraftingExpBoost = (user.clan?.craftingExpBoost ?? 0) / 100;
+      const baseExpGain = (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
+      const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
       // Update trackers with crafting experience gained
       const { trackers } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },
@@ -368,7 +375,10 @@ export const occupationRouter = createTRPCRouter({
       });
 
       // Award small amount of crafting experience (half of crystal's crafting experience, or 0 if not set)
-      const expGain = Math.floor((crystalItem.craftingExperience ?? 0) / 2);
+      // Apply clan crafting experience boost
+      const clanCraftingExpBoost = (user.clan?.craftingExpBoost ?? 0) / 100;
+      const baseExpGain = Math.floor((crystalItem.craftingExperience ?? 0) / 2);
+      const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
       // Update trackers with crafting experience gained
       const { trackers } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },

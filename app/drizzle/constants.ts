@@ -593,7 +593,13 @@ export const QuestRewardMetrics = [
 ] as const;
 export type QuestRewardMetric = (typeof QuestRewardMetrics)[number];
 
-export const QuestTypesWithMaxAttempts = ["event", "story", "battlepyramid", "starter", "raid"];
+export const QuestTypesWithMaxAttempts = [
+  "event",
+  "story",
+  "battlepyramid",
+  "starter",
+  "raid",
+];
 export type QuestTypeWithMaxAttempts = (typeof QuestTypesWithMaxAttempts)[number];
 
 export const SmileyEmotions = ["like", "love", "laugh"] as const;
@@ -1317,7 +1323,11 @@ export const PVP_KILL_ANBU_POINTS_REWARD = 5; // ANBU points for PvP kill by ANB
 export const WAR_TORN_SECTOR_BASE_MONEY = 2000; // Base money reward for battles in war-torn sector (sector 335)
 
 // MPVP Battle Types (for generalized multiplayer PvP battles)
-export const MPVP_BATTLE_TYPES = ["CLAN_BATTLE", "SHRINE_BATTLE", "RAID_BATTLE"] as const;
+export const MPVP_BATTLE_TYPES = [
+  "CLAN_BATTLE",
+  "SHRINE_BATTLE",
+  "RAID_BATTLE",
+] as const;
 export type MpvpBattleType = (typeof MPVP_BATTLE_TYPES)[number];
 
 export const MPVP_BATTLE_SIDES = ["ATTACKER", "DEFENDER"] as const;
@@ -1340,15 +1350,100 @@ export const CLAN_CREATE_PRESTIGE_REQUIREMENT = 100;
 export const CLAN_CREATE_RYO_COST = 10000000;
 export const CLAN_RANK_REQUIREMENT = "GENIN";
 export const CLAN_MAX_MEMBERS = 100;
+
+// Elder nomination schedule
+export const ELDER_NOMINATION_CUTOFF_DAY = 25;
+export const ELDER_NOMINATION_DEADLINE_DAY = 28;
 export const CLANS_PER_STRUCTURE_LEVEL = 999999;
 export const CLAN_LOBBY_SECONDS = 30;
 export const CLAN_BATTLE_REWARD_POINTS = 50;
-export const CLAN_MAX_TRAINING_BOOST = 15;
-export const CLAN_MAX_RYO_BOOST = 15;
-export const CLAN_MAX_REGEN_BOOST = 15;
-export const CLAN_TRAINING_BOOST_COST = 300;
-export const CLAN_RYO_BOOST_COST = 100;
-export const CLAN_REGEN_BOOST_COST = 300;
+
+// Clan boost system - Ryo-based
+export const CLAN_BOOST_MAX_LEVEL = 10;
+export const CLAN_BOOST_PERCENT_PER_LEVEL = 2;
+export const CLAN_TRAINING_BOOST_BASE_COST = 100000;
+export const CLAN_TRAINING_BOOST_PER_LEVEL_COST = 30000;
+export const CLAN_RYO_BOOST_BASE_COST = 50000;
+export const CLAN_RYO_BOOST_PER_LEVEL_COST = 30000;
+export const CLAN_REGEN_BOOST_BASE_COST = 50000;
+export const CLAN_REGEN_BOOST_PER_LEVEL_COST = 20000;
+export const CLAN_MISSION_BOOST_BASE_COST = 100000;
+export const CLAN_MISSION_BOOST_PER_LEVEL_COST = 30000;
+export const CLAN_CRAFTING_TIME_BOOST_BASE_COST = 200000;
+export const CLAN_CRAFTING_TIME_BOOST_PER_LEVEL_COST = 30000;
+export const CLAN_CRAFTING_EXP_BOOST_BASE_COST = 200000;
+export const CLAN_CRAFTING_EXP_BOOST_PER_LEVEL_COST = 40000;
+export const CLAN_HUNTER_EXP_BOOST_BASE_COST = 200000;
+export const CLAN_HUNTER_EXP_BOOST_PER_LEVEL_COST = 40000;
+export const CLAN_GATHERER_EXP_BOOST_BASE_COST = 200000;
+export const CLAN_GATHERER_EXP_BOOST_PER_LEVEL_COST = 40000;
+
+export const ClanBoostTypes = [
+  "trainingBoost",
+  "ryoBoost",
+  "regenBoost",
+  "missionRewardBoost",
+  "craftingTimeBoost",
+  "craftingExpBoost",
+  "hunterExpBoost",
+  "gathererExpBoost",
+] as const;
+export type ClanBoostType = (typeof ClanBoostTypes)[number];
+
+export const CLAN_BOOST_CONFIG: Record<
+  ClanBoostType,
+  { baseCost: number; perLevelCost: number; label: string; factionOnly: boolean }
+> = {
+  trainingBoost: {
+    baseCost: CLAN_TRAINING_BOOST_BASE_COST,
+    perLevelCost: CLAN_TRAINING_BOOST_PER_LEVEL_COST,
+    label: "Training boost",
+    factionOnly: false,
+  },
+  ryoBoost: {
+    baseCost: CLAN_RYO_BOOST_BASE_COST,
+    perLevelCost: CLAN_RYO_BOOST_PER_LEVEL_COST,
+    label: "Ryo boost",
+    factionOnly: false,
+  },
+  regenBoost: {
+    baseCost: CLAN_REGEN_BOOST_BASE_COST,
+    perLevelCost: CLAN_REGEN_BOOST_PER_LEVEL_COST,
+    label: "Regen boost",
+    factionOnly: false,
+  },
+  missionRewardBoost: {
+    baseCost: CLAN_MISSION_BOOST_BASE_COST,
+    perLevelCost: CLAN_MISSION_BOOST_PER_LEVEL_COST,
+    label: "Mission reward boost",
+    factionOnly: false,
+  },
+  craftingTimeBoost: {
+    baseCost: CLAN_CRAFTING_TIME_BOOST_BASE_COST,
+    perLevelCost: CLAN_CRAFTING_TIME_BOOST_PER_LEVEL_COST,
+    label: "Crafting time reduction",
+    factionOnly: false,
+  },
+  craftingExpBoost: {
+    baseCost: CLAN_CRAFTING_EXP_BOOST_BASE_COST,
+    perLevelCost: CLAN_CRAFTING_EXP_BOOST_PER_LEVEL_COST,
+    label: "Crafting experience boost",
+    factionOnly: false,
+  },
+  hunterExpBoost: {
+    baseCost: CLAN_HUNTER_EXP_BOOST_BASE_COST,
+    perLevelCost: CLAN_HUNTER_EXP_BOOST_PER_LEVEL_COST,
+    label: "Hunter experience boost",
+    factionOnly: false,
+  },
+  gathererExpBoost: {
+    baseCost: CLAN_GATHERER_EXP_BOOST_BASE_COST,
+    perLevelCost: CLAN_GATHERER_EXP_BOOST_PER_LEVEL_COST,
+    label: "Gatherer experience boost",
+    factionOnly: false,
+  },
+};
+
 export const CLAN_COLOR_CHANGE_REP_COST = 50;
 export const CLAN_ASSASSIN_SLOTS = [
   "assassin1",
@@ -1630,9 +1725,9 @@ export const IMG_BADGE_COLLECT_ITEM =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtxtluhUYJDfpFXWm3nrcPluEtIZqyLkaSV1j";
 export const IMG_BADGE_DEFEAT_OPPONENTS =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYwI8YKOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
-export const IMG_BADGE_EXCLUSIVE_RAID = 
+export const IMG_BADGE_EXCLUSIVE_RAID =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJw7O7n2PT2j854CWbaITZyegfXimvd7s16cO0";
-export const IMG_BADGE_OPEN_RAID = 
+export const IMG_BADGE_OPEN_RAID =
   "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdEQfdeP62PI3ciLaYzgVX8FopBADxSrGmvQl";
 export const IMG_BADGE_MEDICAL_EXPERIENCE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzr5NPBemvaQu94EYJs8HpxVzofny6iPtbgCZ";
@@ -2027,7 +2122,12 @@ export const HomeTypeDetails = {
   SMALL_ESTATE: { regen: 150, storage: 50, cost: 60000000, name: "Small Estate" },
   LARGE_ESTATE: { regen: 200, storage: 60, cost: 100000000, name: "Large Estate" },
   PALACE: { regen: 300, storage: 80, cost: 300000000, name: "Palace" },
-  MARSHMALLOWOPOLIS: { regen: 400, storage: 100, cost: 500000000, name: "Marshmallowopolis" },
+  MARSHMALLOWOPOLIS: {
+    regen: 400,
+    storage: 100,
+    cost: 500000000,
+    name: "Marshmallowopolis",
+  },
 } as const;
 export type HomeTypeDetails = (typeof HomeTypeDetails)[keyof typeof HomeTypeDetails];
 

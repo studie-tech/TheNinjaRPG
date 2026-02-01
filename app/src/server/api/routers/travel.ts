@@ -185,7 +185,10 @@ export const travelRouter = createTRPCRouter({
             ? [
                 ctx.drizzle
                   .update(clan)
-                  .set({ points: sql`${clan.points} + 1` })
+                  .set({
+                    points: sql`${clan.points} + 1`,
+                    activityPoints: sql`${clan.activityPoints} + 1`,
+                  })
                   .where(eq(clan.id, user.clanId)),
               ]
             : []),

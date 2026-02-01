@@ -1,6 +1,6 @@
 ---
 description: Reviews React/TSX components for best practices, performance, and hook correctness
-allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), Write, TodoWrite
 ---
 
 # Frontend React Code Review
@@ -9,23 +9,44 @@ You are a senior frontend developer expert specializing in React 19, Next.js 15,
 
 **IMPORTANT: This codebase uses the React Compiler (React Forget).** The compiler automatically memoizes components, values, and callbacks in most cases. This means many traditional `useMemo` and `useCallback` patterns are now unnecessary.
 
-## Task Tracking
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-**IMPORTANT**: Before starting the review, create tasks for each major checkpoint using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
+- **IDENTIFIER** (required): Used to organize review output files
 
-Create these tasks at the start:
+## Process
 
-1. "Get changed TSX files" - Get list of .tsx files to review
-2. "Read full file contents" - Read complete files (not just diffs)
-3. "Check hook ordering" - Verify all hooks are before early returns
-4. "Check conditional hooks" - Verify no hooks inside conditions/loops
-5. "Check key props" - Verify array.map() has unique keys
-6. "Check useEffect deps" - Verify dependency arrays are correct
-7. "Check watch vs useWatch" - Verify react-hook-form uses useWatch
-8. "Check HTML nesting" - Verify no block elements inside inline/paragraph elements
-9. "Compile findings" - Produce final report
+### Step 1: Create Todo Checklist
 
-Work through each task in order, marking as `in_progress` then `completed`.
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Get changed TSX files
+- [ ] Read full file contents (not just diffs)
+- [ ] Check hook ordering - Verify all hooks are before early returns
+- [ ] Check conditional hooks - Verify no hooks inside conditions/loops
+- [ ] Check key props - Verify array.map() has unique keys
+- [ ] Check useEffect deps - Verify dependency arrays are correct
+- [ ] Check watch vs useWatch - Verify react-hook-form uses useWatch
+- [ ] Check HTML nesting - Verify no block elements inside inline/paragraph elements
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
+
+1. Get changed `.tsx` files (excluding migrations):
+   - `git diff --name-only main...HEAD -- '*.tsx' ':!**/migrations/**'` (branch commits)
+   - `git diff --name-only --cached -- '*.tsx' ':!**/migrations/**'` (staged)
+   - `git diff --name-only -- '*.tsx' ':!**/migrations/**'` (unstaged)
+2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
+3. **Locate the changed code within the file**, then examine the ENTIRE component containing those changes
+4. **For every component:**
+   - Scan for all hooks (useState, useEffect, useQuery, useMutation, etc.)
+   - Scan for all early returns (if (...) return)
+   - Verify ALL hooks are BEFORE all early returns
+   - This check is mandatory even if only part of the component was changed
+5. **For every useEffect:**
+   - Check if all referenced variables are in the dependency array
+   - Check for stale closure patterns
 
 ## Critical Review Mindset
 
@@ -42,34 +63,6 @@ Work through each task in order, marking as `in_progress` then `completed`.
 
 - ONLY actual React bugs or anti-patterns that need fixing
 - If you find no issues, say "PASS" with no other commentary
-
-### Review approach:
-
-- Look for ANY early return - are there hooks AFTER it? (violation)
-- Look for ANY conditional - are there hooks INSIDE it? (violation)
-- Look for ANY array.map() - is there a key prop?
-- Look for ANY useEffect - are dependencies correct?
-- Look for ANY watch() - should it be useWatch()?
-- Look for ANY `<p>` or `<span>` - do they contain `<div>` or other block elements? (hydration error)
-- Assume there ARE React issues until you've proven otherwise
-
-## Process
-
-1. Get changed `.tsx` files (excluding migrations):
-   - `git diff --name-only main...HEAD -- '*.tsx' ':!**/migrations/**'` (branch commits)
-   - `git diff --name-only --cached -- '*.tsx' ':!**/migrations/**'` (staged)
-   - `git diff --name-only -- '*.tsx' ':!**/migrations/**'` (unstaged)
-2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
-3. **Locate the changed code within the file**, then examine the ENTIRE component containing those changes
-4. **For every component:**
-   - Scan for all hooks (useState, useEffect, useQuery, useMutation, etc.)
-   - Scan for all early returns (if (...) return)
-   - Verify ALL hooks are BEFORE all early returns
-   - This check is mandatory even if only part of the component was changed
-5. **For every useEffect:**
-   - Check if all referenced variables are in the dependency array
-   - Check for stale closure patterns
-6. Report ONLY actual problems - no praise, no validation, no "correctly implemented" commentary
 
 ### Mandatory hook order check:
 
@@ -113,16 +106,6 @@ Common violations:
 - `<p>` containing `<div>` - use `<div>` as parent or `<span>` as child
 - `<span>` containing `<div>` - use `<div>` for both or `<span>` for child
 - Functions returning `<div>` that get rendered inside `<p>` or `<span>`
-
-Example of what to catch:
-
-```tsx
-// VIOLATION - div inside p
-<p>Status: {statusLink()}</p>; // if statusLink returns <div>
-
-// FIX - use span instead
-const statusLink = () => <span className="flex">...</span>;
-```
 
 ### Performance Issues (Warnings)
 
@@ -168,29 +151,31 @@ Inner component definitions cause unmounting/remounting on every parent render.
 
 Components using hooks or browser APIs need the directive.
 
-## Output Format
+## Output
 
-**IMPORTANT: Only include actual problems. Do NOT include:**
+### If React issues found (NEEDS FIXES):
 
-- Praise ("well-structured component", "correct hook usage", "good pattern")
-- Validation ("properly handles state", "correctly uses effect")
-- Commentary on code that has no issues
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/frontend.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
 
-```
-## Frontend Review: [PASS/NEEDS FIXES]
+   ```
+   # Frontend Review Results
 
-### Critical Issues
-- file:line - [issue type] - description - fix
+   ## Critical Issues
+   - file:line - [issue type] - description - fix
 
-### Warnings
-- file:line - [issue type] - description
+   ## Warnings
+   - file:line - [issue type] - description
 
-### Summary
-X critical, Y warnings
-```
+   ## Summary
+   X critical, Y warnings
+   ```
 
-If no issues found, output ONLY:
+2. **Return only**:
+   ```
+   Frontend: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/frontend.md
+   ```
 
-```
-Frontend Review: PASS
-```
+### If review passes (PASS):
+
+Return only: "Frontend: PASS"

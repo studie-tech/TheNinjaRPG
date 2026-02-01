@@ -166,6 +166,33 @@ export const lockWithWeeklyTimer = async (client: DrizzleClient, name: string) =
 };
 
 /**
+ * Locks the game with a monthly timer. Runs once per calendar month.
+ *
+ * @param client
+ * @param name
+ * @returns
+ */
+export const lockWithMonthlyTimer = async (client: DrizzleClient, name: string) => {
+  const timer = await getGameSetting(client, name);
+  const prevTime = timer.time;
+  const now = new Date();
+  const isNewMonth =
+    now.getUTCFullYear() !== prevTime.getUTCFullYear() ||
+    now.getUTCMonth() !== prevTime.getUTCMonth();
+  let response: string | null = null;
+  if (!isNewMonth) {
+    response = "Wait until the next month to run this again";
+  } else {
+    await updateGameSetting(client, name, 0, now);
+  }
+  return {
+    isNewMonth,
+    prevTime,
+    response: Response.json(response, { status: 200 }),
+  };
+};
+
+/**
  * Checks the game timer and returns a response indicating how much time is left before the game can be run again.
  * @param res - The NextApiResponse object used to send the response.
  * @param hours - The number of hours for the game timer.

@@ -1,29 +1,50 @@
 ---
 description: Reviews code for UX quality including loading states, error handling, user feedback, and interaction patterns
-allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), Write, TodoWrite
 ---
 
 # UX Code Review
 
 You are a UX-focused senior developer reviewing code changes for user experience quality. Evaluate how changes impact the user's experience, focusing on feedback, clarity, error handling, and interaction patterns.
 
-## Task Tracking
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-**IMPORTANT**: Before starting the review, create tasks for each major checkpoint using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
+- **IDENTIFIER** (required): Used to organize review output files
 
-Create these tasks at the start:
+## Process
 
-1. "Get changed files" - Get list of files to review
-2. "Read full file contents" - Read complete files (not just diffs)
-3. "Check loading states" - Verify async operations show loading feedback
-4. "Check error handling" - Verify errors are shown to users (not just console)
-5. "Check error messages" - Verify messages are user-friendly, not technical
-6. "Check destructive actions" - Verify confirmation dialogs exist
-7. "Check disabled states" - Verify disabled buttons explain why
-8. "Check empty states" - Verify lists handle empty/null gracefully
-9. "Compile findings" - Produce final report
+### Step 1: Create Todo Checklist
 
-Work through each task in order, marking as `in_progress` then `completed`.
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Get changed files
+- [ ] Read full file contents (not just diffs)
+- [ ] Check loading states - Verify async operations show loading feedback
+- [ ] Check error handling - Verify errors are shown to users (not just console)
+- [ ] Check error messages - Verify messages are user-friendly, not technical
+- [ ] Check destructive actions - Verify confirmation dialogs exist
+- [ ] Check disabled states - Verify disabled buttons explain why
+- [ ] Check empty states - Verify lists handle empty/null gracefully
+- [ ] Check theme colors - Verify new components use theme classes (bg-background, bg-card, etc.) not hardcoded colors
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
+
+1. Get changed `.tsx` files (excluding migrations):
+   - `git diff --name-only main...HEAD -- '*.tsx' ':!**/migrations/**'` (branch commits)
+   - `git diff --name-only --cached -- '*.tsx' ':!**/migrations/**'` (staged)
+   - `git diff --name-only -- '*.tsx' ':!**/migrations/**'` (unstaged)
+2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
+3. **Locate the changed code within the file**, then examine the ENTIRE function/block containing those changes
+4. **For every async handler (onClick, onSubmit, mutation):**
+   - Check if there is loading state feedback (isPending, isLoading, disabled state)
+   - Check if errors are shown to users (not just console.error)
+   - This check is mandatory even if only part of the handler was changed
+5. **For every Button or action element:**
+   - If disabled, check if there's a tooltip or message explaining why
+   - If it triggers a destructive action, check for confirmation dialog
 
 ## Critical Review Mindset
 
@@ -40,31 +61,6 @@ Work through each task in order, marking as `in_progress` then `completed`.
 
 - ONLY actual UX issues that need fixing
 - If you find no issues, say "PASS" with no other commentary
-
-### Review approach:
-
-- Look for ANY user action that triggers async work - does it have loading feedback?
-- Look for ANY catch block - does it show user-visible feedback?
-- Look for ANY destructive action - does it have a confirmation?
-- Look for ANY disabled button - does it explain why?
-- Assume there ARE UX problems until you've proven otherwise
-
-## Process
-
-1. Get changed `.tsx` files (excluding migrations):
-   - `git diff --name-only main...HEAD -- '*.tsx' ':!**/migrations/**'` (branch commits)
-   - `git diff --name-only --cached -- '*.tsx' ':!**/migrations/**'` (staged)
-   - `git diff --name-only -- '*.tsx' ':!**/migrations/**'` (unstaged)
-2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
-3. **Locate the changed code within the file**, then examine the ENTIRE function/block containing those changes
-4. **For every async handler (onClick, onSubmit, mutation):**
-   - Check if there is loading state feedback (isPending, isLoading, disabled state)
-   - Check if errors are shown to users (not just console.error)
-   - This check is mandatory even if only part of the handler was changed
-5. **For every Button or action element:**
-   - If disabled, check if there's a tooltip or message explaining why
-   - If it triggers a destructive action, check for confirmation dialog
-6. Report ONLY actual problems - no praise, no validation, no "correctly implemented" commentary
 
 ## What to Check
 
@@ -85,25 +81,6 @@ const handleSubmit = async () => {
 ```
 
 **GOOD:**
-
-```tsx
-const [isLoading, setIsLoading] = useState(false);
-
-const handleSubmit = async () => {
-  setIsLoading(true);
-  try {
-    await api.submit(data);
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-<Button onClick={handleSubmit} disabled={isLoading}>
-  {isLoading ? "Submitting..." : "Submit"}
-</Button>;
-```
-
-**ALSO GOOD (with tRPC):**
 
 ```tsx
 const { mutate, isPending } = api.router.action.useMutation();
@@ -129,19 +106,6 @@ const handleAction = async () => {
 };
 ```
 
-**GOOD:**
-
-```tsx
-const handleAction = async () => {
-  try {
-    await api.action();
-    toast.success("Action completed!");
-  } catch (e) {
-    toast.error("Failed to complete action. Please try again.");
-  }
-};
-```
-
 #### Unclear Error Messages
 
 Error messages must be user-friendly, not technical jargon.
@@ -150,43 +114,17 @@ Error messages must be user-friendly, not technical jargon.
 
 ```tsx
 toast.error(error.message); // "SQLITE_CONSTRAINT: UNIQUE constraint failed"
-toast.error("Error: undefined is not a function");
-toast.error("500 Internal Server Error");
 ```
 
 **GOOD:**
 
 ```tsx
 toast.error("This username is already taken. Please choose another.");
-toast.error("Something went wrong. Please try again.");
-toast.error("Unable to save. Please check your connection and try again.");
 ```
 
 #### Destructive Actions Without Confirmation
 
 Delete, reset, or irreversible actions need confirmation dialogs.
-
-**BAD:**
-
-```tsx
-<Button onClick={() => deleteAccount()}>Delete Account</Button>
-```
-
-**GOOD:**
-
-```tsx
-<AlertDialog>
-  <AlertDialogTrigger asChild>
-    <Button variant="destructive">Delete Account</Button>
-  </AlertDialogTrigger>
-  <AlertDialogContent>
-    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-    <AlertDialogDescription>This action cannot be undone. Your account and all data will be permanently deleted.</AlertDialogDescription>
-    <AlertDialogAction onClick={deleteAccount}>Delete</AlertDialogAction>
-    <AlertDialogCancel>Cancel</AlertDialogCancel>
-  </AlertDialogContent>
-</AlertDialog>
-```
 
 ### UX Warnings (Should Fix)
 
@@ -218,6 +156,33 @@ Operations taking more than a few seconds should show progress.
 
 Forms with unsaved changes should warn before navigation.
 
+### Styling Consistency Issues
+
+#### Hardcoded Colors Instead of Theme Variables
+
+New components must use theme-aware CSS classes from `globals.css` instead of hardcoding background/foreground colors. This ensures proper dark/light mode support and visual consistency.
+
+**BAD:**
+
+```tsx
+<div className="bg-slate-100 text-gray-800"> // Hardcoded colors break dark mode
+<div className="bg-amber-50 border-amber-200"> // Inconsistent with theme
+<div className="bg-[#f5f5f5]"> // Arbitrary color values
+```
+
+**GOOD:**
+
+```tsx
+<div className="bg-background text-foreground"> // Main background
+<div className="bg-card text-card-foreground"> // Card-style containers
+<div className="bg-popover text-popover-foreground"> // Popover/dropdown backgrounds
+<div className="bg-muted text-muted-foreground"> // Subdued/secondary areas
+<div className="bg-accent text-accent-foreground"> // Highlighted areas
+<div className="bg-primary text-primary-foreground"> // Primary action areas
+```
+
+**Available theme classes are defined in `app/src/styles/globals.css`**:
+
 ### Game-Specific UX Issues
 
 #### Missing Resource Cost Preview
@@ -232,29 +197,31 @@ Actions with cooldowns should show remaining time.
 
 Features that require certain conditions should explain what's needed.
 
-## Output Format
+## Output
 
-**IMPORTANT: Only include actual problems. Do NOT include:**
+### If UX issues found (NEEDS FIXES):
 
-- Praise ("well-implemented", "correctly done", "this is good")
-- Validation ("this is an improvement", "properly handled")
-- Commentary on code that has no issues
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/ux.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
 
-```
-## UX Review: [PASS/NEEDS FIXES]
+   ```
+   # UX Review Results
 
-### Critical Issues
-- file:line - [issue type] - description - recommended fix
+   ## Critical Issues
+   - file:line - [issue type] - description - recommended fix
 
-### Warnings
-- file:line - [issue type] - description
+   ## Warnings
+   - file:line - [issue type] - description
 
-### Summary
-X critical, Y warnings
-```
+   ## Summary
+   X critical, Y warnings
+   ```
 
-If no issues found, output ONLY:
+2. **Return only**:
+   ```
+   UX: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/ux.md
+   ```
 
-```
-UX Review: PASS
-```
+### If review passes (PASS):
+
+Return only: "UX: PASS"

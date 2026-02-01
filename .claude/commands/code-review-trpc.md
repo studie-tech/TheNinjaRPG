@@ -1,28 +1,48 @@
 ---
 description: Reviews tRPC routers for performance and pattern compliance
-allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*), TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Read, Grep, Glob, Bash(git diff:*, git status:*), Write, TodoWrite
 ---
 
 # tRPC Router Review
 
 Review tRPC router files in `app/src/server/api/routers/` for compliance with project patterns.
 
-## Task Tracking
+**Arguments**: `$ARGUMENTS` should contain `<IDENTIFIER>`
 
-**IMPORTANT**: Before starting the review, create tasks for each major checkpoint using TaskCreate. Update each task to `in_progress` when starting and `completed` when done.
+- **IDENTIFIER** (required): Used to organize review output files
 
-Create these tasks at the start:
+## Process
 
-1. "Get changed router files" - Get list of files in routers/ to review
-2. "Read full file contents" - Read complete files (not just diffs)
-3. "Check sequential queries" - Look for await statements that should be parallelized
-4. "Check Promise.all usage" - Verify awaits ABOVE Promise.all are merged in
-5. "Check mutation outputs" - Verify .output(baseServerResponse) on mutations
-6. "Check error handling" - Verify errorResponse() instead of throw new Error()
-7. "Check for transactions" - Flag any database transaction usage
-8. "Compile findings" - Produce final report
+### Step 1: Create Todo Checklist
 
-Work through each task in order, marking as `in_progress` then `completed`.
+**BEFORE starting, create a todo list with all checks.** Use TodoWrite:
+
+- [ ] Get changed router files
+- [ ] Read full file contents (not just diffs)
+- [ ] Check sequential queries - Look for await statements that should be parallelized
+- [ ] Check Promise.all usage - Verify awaits ABOVE Promise.all are merged in
+- [ ] Check mutation outputs - Verify .output(baseServerResponse) on mutations
+- [ ] Check error handling - Verify errorResponse() instead of throw new Error()
+- [ ] Check for transactions - Flag any database transaction usage
+- [ ] Write findings or return PASS
+
+Mark each todo as completed after performing it.
+
+### Step 2: Execute Review
+
+1. Get changed `.ts` files in routers (excluding migrations):
+   - `git diff --name-only main...HEAD -- 'app/src/server/api/routers/*.ts' ':!**/migrations/**'` (branch commits)
+   - `git diff --name-only --cached -- 'app/src/server/api/routers/*.ts' ':!**/migrations/**'` (staged)
+   - `git diff --name-only -- 'app/src/server/api/routers/*.ts' ':!**/migrations/**'` (unstaged)
+2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
+3. **Locate the changed code within the file**, then examine the ENTIRE procedure containing those changes
+4. **For every `Promise.all` in the function:**
+   - Look at the lines ABOVE the Promise.all (within the same function)
+   - If there is ANY `await` statement above it that doesn't depend on the Promise.all results, report it as a CRITICAL issue
+   - This check is mandatory even if the Promise.all itself was not changed
+5. **For every mutation:**
+   - Check if it has `.output(baseServerResponse)` in the chain
+   - Check if errors use `return errorResponse()` instead of `throw new Error()`
 
 ## Critical Review Mindset
 
@@ -39,31 +59,6 @@ Work through each task in order, marking as `in_progress` then `completed`.
 
 - ONLY actual tRPC pattern violations that need fixing
 - If you find no issues, say "PASS" with no other commentary
-
-### Review approach:
-
-- Look for ANY sequence of `await` statements - can they be parallelized?
-- Look for ANY mutation - does it have `.output(baseServerResponse)`?
-- Look for ANY `throw new Error` - should it be `return errorResponse()`?
-- Look for ANY transaction usage - should it be WHERE guards instead?
-- Assume there ARE pattern violations until you've proven otherwise
-
-## Process
-
-1. Get changed `.ts` files in routers (excluding migrations):
-   - `git diff --name-only main...HEAD -- 'app/src/server/api/routers/*.ts' ':!**/migrations/**'` (branch commits)
-   - `git diff --name-only --cached -- 'app/src/server/api/routers/*.ts' ':!**/migrations/**'` (staged)
-   - `git diff --name-only -- 'app/src/server/api/routers/*.ts' ':!**/migrations/**'` (unstaged)
-2. **Read the FULL file content** for each changed file - you MUST read the entire file, not just the diff
-3. **Locate the changed code within the file**, then examine the ENTIRE procedure containing those changes
-4. **For every `Promise.all` in the function:**
-   - Look at the lines ABOVE the Promise.all (within the same function)
-   - If there is ANY `await` statement above it that doesn't depend on the Promise.all results, report it as a CRITICAL issue
-   - This check is mandatory even if the Promise.all itself was not changed
-5. **For every mutation:**
-   - Check if it has `.output(baseServerResponse)` in the chain
-   - Check if errors use `return errorResponse()` instead of `throw new Error()`
-6. Report ONLY actual problems - no praise, no validation, no "correctly implemented" commentary
 
 ### Mandatory check for every Promise.all:
 
@@ -137,29 +132,31 @@ const [user, village] = await Promise.all([fetchUser(ctx.drizzle, userId), fetch
 
 - Fetch functions at bottom of file should be exported for reuse
 
-## Output Format
+## Output
 
-**IMPORTANT: Only include actual problems. Do NOT include:**
+### If tRPC issues found (NEEDS FIXES):
 
-- Praise ("well-parallelized", "correctly structured", "good pattern")
-- Validation ("this is an improvement", "properly follows convention")
-- Commentary on code that has no issues
+1. **Save detailed findings** to `.claude/review/$IDENTIFIER/trpc.md` using Write tool (replace `$IDENTIFIER` with actual identifier from arguments):
 
-```
-## tRPC Review: [PASS/NEEDS FIXES]
+   ```
+   # tRPC Review Results
 
-### Critical Issues
-- `file.ts:line` - [issue type] - [description] - [fix suggestion]
+   ## Critical Issues
+   - `file.ts:line` - [issue type] - [description] - [fix suggestion]
 
-### Warnings
-- `file.ts:line` - [warning type] - [description]
+   ## Warnings
+   - `file.ts:line` - [warning type] - [description]
 
-### Summary
-X critical issues, Y warnings
-```
+   ## Summary
+   X critical issues, Y warnings
+   ```
 
-If no issues found, output ONLY:
+2. **Return only**:
+   ```
+   tRPC: NEEDS FIXES
+   Findings saved to: .claude/review/$IDENTIFIER/trpc.md
+   ```
 
-```
-tRPC Review: PASS
-```
+### If review passes (PASS):
+
+Return only: "tRPC: PASS"
