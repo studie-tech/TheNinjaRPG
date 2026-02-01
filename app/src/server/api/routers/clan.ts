@@ -978,7 +978,9 @@ export const clanRouter = createTRPCRouter({
       const isLeader = clanData?.leaderId === user.userId;
       const isCoLeader = checkCoLeader(ctx.userId, clanData);
       const leaderLike = isLeader || isCoLeader;
-      const currentLevel = clanData?.[input.boostType] ?? 0;
+      // Convert stored percentage to actual level (e.g., 10% -> level 5)
+      const currentBoost = clanData?.[input.boostType] ?? 0;
+      const currentLevel = currentBoost / CLAN_BOOST_PERCENT_PER_LEVEL;
       const cost = config.baseCost + currentLevel * config.perLevelCost;
       // Guard
       if (!user) return errorResponse("User not found");

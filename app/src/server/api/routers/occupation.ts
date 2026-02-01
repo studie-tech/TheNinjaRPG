@@ -13,6 +13,8 @@ import {
   OCCUPATION_CHANGE_COOLDOWN_DAYS,
   CRAFTING_TIMES_MINS,
   CONSUMABLE_CRAFTING_TIMES_MINS,
+  CLAN_BOOST_MAX_LEVEL,
+  CLAN_BOOST_PERCENT_PER_LEVEL,
 } from "@/drizzle/constants";
 import {
   getCraftingRank,
@@ -161,9 +163,11 @@ export const occupationRouter = createTRPCRouter({
       const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
       // Clan crafting time reduction (percentage stored in clan object)
       // Max boost is 20% (10 levels × 2%), clamp as safety guard
+      const clanCraftingTimeBoostCap =
+        (CLAN_BOOST_MAX_LEVEL * CLAN_BOOST_PERCENT_PER_LEVEL) / 100;
       const clanCraftingTimeBoost = Math.min(
         (user.clan?.craftingTimeBoost ?? 0) / 100,
-        0.2,
+        clanCraftingTimeBoostCap,
       );
       const clanCraftingTimeFactor = 1 - clanCraftingTimeBoost;
       const craftSeconds = Math.round(

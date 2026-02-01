@@ -1,4 +1,4 @@
-import { eq, and, desc, isNotNull, asc, inArray, isNull } from "drizzle-orm";
+import { eq, and, isNotNull, inArray, isNull } from "drizzle-orm";
 import { drizzleDB } from "@/server/db";
 import { userData, clan, village } from "@/drizzle/schema";
 import { updateGameSetting } from "@/libs/gamesettings";
@@ -44,48 +44,60 @@ async function handleCutoff() {
     const currentMonth = now.getUTCMonth() + 1; // 1-12
     const currentYear = now.getUTCFullYear();
 
-    const villages = await drizzleDB.query.village.findMany({
-      where: eq(village.type, "VILLAGE"),
-      columns: { id: true, name: true },
-    });
+    // Fetch villages and all clans in parallel
+    const [villages, allClans] = await Promise.all([
+      drizzleDB.query.village.findMany({
+        where: eq(village.type, "VILLAGE"),
+        columns: { id: true, name: true },
+      }),
+      drizzleDB.query.clan.findMany({
+        where: isNotNull(clan.villageId),
+        columns: { id: true, villageId: true, activityPoints: true, points: true },
+      }),
+    ]);
 
-    for (const villageData of villages) {
-      // Clear previous cutoff fields for all clans in this village
-      await drizzleDB
-        .update(clan)
-        .set({
-          elderCutoffMonth: null,
-          elderCutoffYear: null,
-          elderCutoffRank: null,
-        })
-        .where(eq(clan.villageId, villageData.id));
+    const villageIds = villages.map((v) => v.id);
 
-      // Find top 3 clans by activityPoints, with points as tie-breaker
-      const topClans = await drizzleDB.query.clan.findMany({
-        where: eq(clan.villageId, villageData.id),
-        orderBy: [desc(clan.activityPoints), desc(clan.points)],
-        limit: KAGE_MAX_ELDERS,
-        columns: {
-          id: true,
-          activityPoints: true,
-        },
-      });
+    // Clear all cutoff fields in one query
+    await drizzleDB
+      .update(clan)
+      .set({ elderCutoffMonth: null, elderCutoffYear: null, elderCutoffRank: null })
+      .where(inArray(clan.villageId, villageIds));
 
-      // Mark top clans that have activity points with their cutoff rank
-      const clansWithActivity = topClans.filter((c) => c.activityPoints > 0);
-      for (let i = 0; i < clansWithActivity.length; i++) {
-        const topClan = clansWithActivity[i];
-        if (topClan) {
-          await drizzleDB
+    // Group clans by village and compute top 3 per village
+    const clansByVillage = new Map<string, typeof allClans>();
+    for (const c of allClans) {
+      if (c.villageId && villageIds.includes(c.villageId)) {
+        const list = clansByVillage.get(c.villageId) ?? [];
+        list.push(c);
+        clansByVillage.set(c.villageId, list);
+      }
+    }
+
+    // Determine clans to mark with cutoff rank
+    const clansToMark: { id: string; rank: number }[] = [];
+    for (const [, clans] of clansByVillage) {
+      const sorted = clans
+        .filter((c) => c.activityPoints > 0)
+        .sort((a, b) => b.activityPoints - a.activityPoints || b.points - a.points)
+        .slice(0, KAGE_MAX_ELDERS);
+      sorted.forEach((c, i) => clansToMark.push({ id: c.id, rank: i + 1 }));
+    }
+
+    // Batch update all eligible clans in parallel
+    if (clansToMark.length > 0) {
+      await Promise.all(
+        clansToMark.map((c) =>
+          drizzleDB
             .update(clan)
             .set({
               elderCutoffMonth: currentMonth,
               elderCutoffYear: currentYear,
-              elderCutoffRank: i + 1, // 1, 2, or 3
+              elderCutoffRank: c.rank,
             })
-            .where(eq(clan.id, topClan.id));
-        }
-      }
+            .where(eq(clan.id, c.id)),
+        ),
+      );
     }
 
     return Response.json(
@@ -106,97 +118,120 @@ async function handleRotation() {
   if (!timerCheck.isNewMonth && timerCheck.response) return timerCheck.response;
 
   try {
-    const villages = await drizzleDB.query.village.findMany({
-      where: eq(village.type, "VILLAGE"),
-      columns: { id: true, name: true },
-    });
-
-    for (const villageData of villages) {
-      // Find eligible clans using cutoff snapshot (set on ELDER_NOMINATION_CUTOFF_DAY)
-      // If cutoff snapshot exists, use it; otherwise fall back to live calculation
-      let eligibleClans = await drizzleDB.query.clan.findMany({
-        where: and(eq(clan.villageId, villageData.id), isNotNull(clan.elderCutoffRank)),
-        orderBy: asc(clan.elderCutoffRank), // Sort by rank 1, 2, 3
+    // Fetch all data in parallel
+    const [villages, clansWithCutoff, allClans] = await Promise.all([
+      drizzleDB.query.village.findMany({
+        where: eq(village.type, "VILLAGE"),
+        columns: { id: true, name: true },
+      }),
+      drizzleDB.query.clan.findMany({
+        where: isNotNull(clan.elderCutoffRank),
         columns: {
           id: true,
+          villageId: true,
           leaderId: true,
           elderNomineeId: true,
           elderCutoffRank: true,
           activityPoints: true,
+          points: true,
         },
-      });
+      }),
+      drizzleDB.query.clan.findMany({
+        where: isNotNull(clan.villageId),
+        columns: {
+          id: true,
+          villageId: true,
+          leaderId: true,
+          elderNomineeId: true,
+          elderCutoffRank: true,
+          activityPoints: true,
+          points: true,
+        },
+      }),
+    ]);
 
-      // Fall back to live calculation if no cutoff snapshot exists
-      if (eligibleClans.length === 0) {
-        eligibleClans = await drizzleDB.query.clan.findMany({
-          where: eq(clan.villageId, villageData.id),
-          orderBy: [desc(clan.activityPoints), desc(clan.points)],
-          limit: KAGE_MAX_ELDERS,
-          columns: {
-            id: true,
-            leaderId: true,
-            elderNomineeId: true,
-            elderCutoffRank: true,
-            activityPoints: true,
-          },
-        });
-        eligibleClans = eligibleClans.filter((c) => c.activityPoints > 0);
+    const villageIds = villages.map((v) => v.id);
+
+    // Build eligible clans per village (cutoff snapshot or fallback)
+    const eligibleByVillage = new Map<string, typeof clansWithCutoff>();
+    for (const villageId of villageIds) {
+      const cutoffClans = clansWithCutoff
+        .filter((c) => c.villageId === villageId)
+        .sort((a, b) => (a.elderCutoffRank ?? 0) - (b.elderCutoffRank ?? 0));
+      if (cutoffClans.length > 0) {
+        eligibleByVillage.set(villageId, cutoffClans);
+      } else {
+        // Fallback to live calculation
+        const fallback = allClans
+          .filter((c) => c.villageId === villageId && c.activityPoints > 0)
+          .sort((a, b) => b.activityPoints - a.activityPoints || b.points - a.points)
+          .slice(0, KAGE_MAX_ELDERS);
+        eligibleByVillage.set(villageId, fallback);
       }
+    }
 
-      // Demote current elders to JONIN
-      await drizzleDB
-        .update(userData)
-        .set({ rank: "JONIN" })
-        .where(and(eq(userData.villageId, villageData.id), eq(userData.rank, "ELDER")));
+    // Collect all nominee IDs across all villages
+    const allNomineeIds = new Set<string>();
+    for (const [, clans] of eligibleByVillage) {
+      for (const c of clans) {
+        const nomineeId = c.elderNomineeId || c.leaderId;
+        if (nomineeId) allNomineeIds.add(nomineeId);
+      }
+    }
 
-      // Batch fetch all nominees at once
-      const nomineeIds = eligibleClans
-        .map((c) => c.elderNomineeId || c.leaderId)
-        .filter((id): id is string => id !== null);
+    // Demote all elders first (must complete before nominee fetch so re-nominated elders pass JONIN check)
+    await drizzleDB
+      .update(userData)
+      .set({ rank: "JONIN" })
+      .where(and(inArray(userData.villageId, villageIds), eq(userData.rank, "ELDER")));
 
-      if (nomineeIds.length > 0) {
-        const validNominees = await drizzleDB.query.userData.findMany({
-          where: and(
-            inArray(userData.userId, nomineeIds),
-            eq(userData.villageId, villageData.id),
-            eq(userData.isBanned, false),
-            eq(userData.rank, "JONIN"),
-            isNull(userData.anbuId),
-          ),
-          columns: { userId: true, clanId: true },
-        });
-
-        // Create map for O(1) lookups
-        const validNomineeMap = new Map(validNominees.map((n) => [n.userId, n]));
-
-        // Filter to nominees that are still in their eligible clan
-        const toPromote = eligibleClans
-          .map((clan) => {
-            const nomineeId = clan.elderNomineeId || clan.leaderId;
-            if (!nomineeId) return null;
-            const nominee = validNomineeMap.get(nomineeId);
-            return nominee && nominee.clanId === clan.id ? nomineeId : null;
+    // Fetch all potential nominees
+    const validNominees =
+      allNomineeIds.size > 0
+        ? await drizzleDB.query.userData.findMany({
+            where: and(
+              inArray(userData.userId, [...allNomineeIds]),
+              inArray(userData.villageId, villageIds),
+              eq(userData.isBanned, false),
+              eq(userData.rank, "JONIN"),
+              isNull(userData.anbuId),
+            ),
+            columns: { userId: true, clanId: true, villageId: true },
           })
-          .filter((id): id is string => id !== null);
+        : [];
 
-        // Batch promote all valid nominees
-        if (toPromote.length > 0) {
-          await drizzleDB
-            .update(userData)
-            .set({ rank: "ELDER" })
-            .where(inArray(userData.userId, toPromote));
+    // Build map for O(1) lookups
+    const validNomineeMap = new Map(validNominees.map((n) => [n.userId, n]));
+
+    // Determine all users to promote
+    const toPromote: string[] = [];
+    for (const [villageId, clans] of eligibleByVillage) {
+      for (const c of clans) {
+        const nomineeId = c.elderNomineeId || c.leaderId;
+        if (!nomineeId) continue;
+        const nominee = validNomineeMap.get(nomineeId);
+        if (nominee && nominee.clanId === c.id && nominee.villageId === villageId) {
+          toPromote.push(nomineeId);
         }
       }
     }
 
-    // Reset activityPoints and clear nomination/cutoff fields in one query
-    await drizzleDB.update(clan).set({
-      activityPoints: 0,
-      elderNomineeId: null,
-      elderCutoffMonth: null,
-      elderCutoffYear: null,
-      elderCutoffRank: null,
-    });
+    // Batch promote all valid nominees and reset clan fields in parallel
+    await Promise.all([
+      toPromote.length > 0
+        ? drizzleDB
+            .update(userData)
+            .set({ rank: "ELDER" })
+            .where(inArray(userData.userId, toPromote))
+        : Promise.resolve(),
+      drizzleDB.update(clan).set({
+        activityPoints: 0,
+        elderNomineeId: null,
+        elderCutoffMonth: null,
+        elderCutoffYear: null,
+        elderCutoffRank: null,
+      }),
+    ]);
 
     return Response.json(`OK - Elder rotation completed`);
   } catch (cause) {

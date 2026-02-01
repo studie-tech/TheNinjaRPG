@@ -108,7 +108,7 @@ const ElderHall: React.FC<{
   );
 
   // Fetch clans for activity ranking
-  const { data: clans } = api.clan.getAll.useQuery(
+  const { data: clans, isPending: isClansLoading } = api.clan.getAll.useQuery(
     { villageId: user.villageId ?? "", isOutlaw: false },
     { staleTime: 10000, enabled: !!user.villageId },
   );
@@ -136,14 +136,14 @@ const ElderHall: React.FC<{
           The Elder Council is composed of representatives from the village&apos;s most
           active clans. Each month, elders are automatically selected from the top 3
           clans by activity points. Clan rankings are locked on the{" "}
-          {ELDER_NOMINATION_CUTOFF_DAY}th of each month, and clan leaders can nominate
-          a member to become elder between the {ELDER_NOMINATION_CUTOFF_DAY}th and{" "}
+          {ELDER_NOMINATION_CUTOFF_DAY}th of each month, and clan leaders can nominate a
+          member to become elder between the {ELDER_NOMINATION_CUTOFF_DAY}th and{" "}
           {ELDER_NOMINATION_DEADLINE_DAY}th if their clan qualifies.
         </p>
         <p className="text-sm text-muted-foreground">
           Activity points are earned through PvP combat, completing quests, and other
-          clan activities. Points reset at the start of each month. All-time clan
-          points are used as a tie-breaker when clans have equal activity points.
+          clan activities. Points reset at the start of each month. All-time clan points
+          are used as a tie-breaker when clans have equal activity points.
         </p>
       </ContentBox>
       {/* SHOW CURRENT ELDERS */}
@@ -184,7 +184,9 @@ const ElderHall: React.FC<{
         initialBreak={true}
         subtitle="Top 3 clans will have their nominees become elders next month"
       >
-        {rankedClans && rankedClans.length > 0 ? (
+        {isClansLoading ? (
+          <Loader explanation="Loading clan rankings" />
+        ) : rankedClans && rankedClans.length > 0 ? (
           <div className="space-y-2">
             {rankedClans.map((clan, i) => (
               <div

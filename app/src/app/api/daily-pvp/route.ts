@@ -28,14 +28,14 @@ export async function GET() {
       }),
       drizzleDB.update(clan).set({
         pvpActivity: sql`${clan.pvpActivity} * 0.95`,
-        trainingBoost: sql`CASE WHEN ${clan.trainingBoost} > 0 THEN ${clan.trainingBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL} ELSE 0 END`,
-        ryoBoost: sql`CASE WHEN ${clan.ryoBoost} > 0 THEN ${clan.ryoBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL} ELSE 0 END`,
-        regenBoost: sql`CASE WHEN ${clan.regenBoost} > 0 THEN ${clan.regenBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL} ELSE 0 END`,
-        missionRewardBoost: sql`CASE WHEN ${clan.missionRewardBoost} > 0 THEN ${clan.missionRewardBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL} ELSE 0 END`,
-        craftingTimeBoost: sql`CASE WHEN ${clan.craftingTimeBoost} > 0 THEN ${clan.craftingTimeBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL} ELSE 0 END`,
-        craftingExpBoost: sql`CASE WHEN ${clan.craftingExpBoost} > 0 THEN ${clan.craftingExpBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL} ELSE 0 END`,
-        hunterExpBoost: sql`CASE WHEN ${clan.hunterExpBoost} > 0 THEN ${clan.hunterExpBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL} ELSE 0 END`,
-        gathererExpBoost: sql`CASE WHEN ${clan.gathererExpBoost} > 0 THEN ${clan.gathererExpBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL} ELSE 0 END`,
+        trainingBoost: sql`GREATEST(${clan.trainingBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL}, 0)`,
+        ryoBoost: sql`GREATEST(${clan.ryoBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL}, 0)`,
+        regenBoost: sql`GREATEST(${clan.regenBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL}, 0)`,
+        missionRewardBoost: sql`GREATEST(${clan.missionRewardBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL}, 0)`,
+        craftingTimeBoost: sql`GREATEST(${clan.craftingTimeBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL}, 0)`,
+        craftingExpBoost: sql`GREATEST(${clan.craftingExpBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL}, 0)`,
+        hunterExpBoost: sql`GREATEST(${clan.hunterExpBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL}, 0)`,
+        gathererExpBoost: sql`GREATEST(${clan.gathererExpBoost} - ${CLAN_BOOST_PERCENT_PER_LEVEL}, 0)`,
       }),
     ]);
     return Response.json(`OK`);
