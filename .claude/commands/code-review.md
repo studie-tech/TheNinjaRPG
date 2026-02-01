@@ -1,6 +1,6 @@
 ---
 description: Review code for quality and guideline compliance. Use /code-review <IDENTIFIER>
-allowed-tools: Task, TaskCreate, TaskUpdate, TaskList, TaskGet
+allowed-tools: Task, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, Write
 ---
 
 # Code Review

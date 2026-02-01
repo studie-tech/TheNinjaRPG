@@ -189,11 +189,9 @@ async function handleRotation() {
       }
     }
 
-    // Reset activityPoints to 0 for all clans
-    await drizzleDB.update(clan).set({ activityPoints: 0 });
-
-    // Clear elderNomineeId and cutoff fields for all clans
+    // Reset activityPoints and clear nomination/cutoff fields in one query
     await drizzleDB.update(clan).set({
+      activityPoints: 0,
       elderNomineeId: null,
       elderCutoffMonth: null,
       elderCutoffYear: null,
