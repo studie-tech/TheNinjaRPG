@@ -32,7 +32,11 @@ import { CLAN_CREATE_RYO_COST, CLANS_PER_STRUCTURE_LEVEL } from "@/drizzle/const
 import { CLAN_CREATE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
 import { CLAN_MAX_MEMBERS } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { CLAN_BOOST_MAX_LEVEL, CLAN_BOOST_CONFIG } from "@/drizzle/constants";
+import {
+  CLAN_BOOST_MAX_LEVEL,
+  CLAN_BOOST_CONFIG,
+  CLAN_BOOST_PERCENT_PER_LEVEL,
+} from "@/drizzle/constants";
 import { HIDEOUT_COST, HIDEOUT_TOWN_UPGRADE } from "@/drizzle/constants";
 import { TOWN_REESTABLISH_COST } from "@/drizzle/constants";
 import { FACTION_MIN_POINTS_FOR_TOWN } from "@/drizzle/constants";
@@ -997,7 +1001,7 @@ export const clanRouter = createTRPCRouter({
       const result = await ctx.drizzle
         .update(clan)
         .set({
-          [input.boostType]: sql`${clan[input.boostType]} + 2`,
+          [input.boostType]: sql`${clan[input.boostType]} + ${CLAN_BOOST_PERCENT_PER_LEVEL}`,
           bank: sql`${clan.bank} - ${cost}`,
         })
         .where(and(eq(clan.id, clanData.id), gte(clan.bank, cost)));
