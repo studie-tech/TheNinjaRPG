@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import {
   Trash2,
   CircleFadingArrowUp,
@@ -298,10 +298,7 @@ export default function MyJutsu() {
   const isFetching = l1 || l2;
 
   // Collapse UserItem and Item
-  const userElements = useMemo(
-    () => new Set(getUserElements(userData)),
-    [userData],
-  );
+  const userElements = useMemo(() => new Set(getUserElements(userData)), [userData]);
 
   // Categorize jutsu for organized display
   const categorizedJutsus = useMemo(() => {
@@ -310,42 +307,45 @@ export default function MyJutsu() {
   }, [userJutsus, userData, userItems, userElements]);
 
   // Transform jutsu to action items with warnings
-  const transformToActionItems = (jutsus: UserJutsuWithRelations[]) => {
-    return jutsus.map((uj) => {
-      let warning = "";
-      if (userData) {
-        if (!checkJutsuItems(uj.jutsu, userItems)) {
-          warning = `No ${uj.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
+  const transformToActionItems = useCallback(
+    (jutsus: UserJutsuWithRelations[]) => {
+      return jutsus.map((uj) => {
+        let warning = "";
+        if (userData) {
+          if (!checkJutsuItems(uj.jutsu, userItems)) {
+            warning = `No ${uj.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
+          }
+          if (!checkJutsuElements(uj.jutsu, userElements)) {
+            warning = "You do not have the required elements to use this jutsu.";
+          }
+          if (!hasRequiredRank(userData.rank, uj.jutsu.requiredRank)) {
+            warning = "You do not have the required rank to use this jutsu.";
+          }
+          if (!hasRequiredLevel(userData.level, uj.jutsu.requiredLevel)) {
+            warning = "You do not have the required level to use this jutsu.";
+          }
+          if (!checkJutsuRank(uj.jutsu.jutsuRank, userData.rank)) {
+            warning = "You do not have the required rank to use this jutsu.";
+          }
+          if (!checkJutsuVillage(uj.jutsu, userData)) {
+            warning = "You do not have the required village to use this jutsu.";
+          }
+          if (!checkJutsuBloodline(uj.jutsu, userData)) {
+            warning = "You do not have the required bloodline to use this jutsu.";
+          }
         }
-        if (!checkJutsuElements(uj.jutsu, userElements)) {
-          warning = "You do not have the required elements to use this jutsu.";
-        }
-        if (!hasRequiredRank(userData.rank, uj.jutsu.requiredRank)) {
-          warning = "You do not have the required rank to use this jutsu.";
-        }
-        if (!hasRequiredLevel(userData.level, uj.jutsu.requiredLevel)) {
-          warning = "You do not have the required level to use this jutsu.";
-        }
-        if (!checkJutsuRank(uj.jutsu.jutsuRank, userData.rank)) {
-          warning = "You do not have the required rank to use this jutsu.";
-        }
-        if (!checkJutsuVillage(uj.jutsu, userData)) {
-          warning = "You do not have the required village to use this jutsu.";
-        }
-        if (!checkJutsuBloodline(uj.jutsu, userData)) {
-          warning = "You do not have the required bloodline to use this jutsu.";
-        }
-      }
-      return {
-        ...uj.jutsu,
-        ...uj,
-        type: "jutsu" as const,
-        highlight: !!uj.equipped,
-        warning,
-        isReskinned: !!uj.activeReskin,
-      };
-    });
-  };
+        return {
+          ...uj.jutsu,
+          ...uj,
+          type: "jutsu" as const,
+          highlight: !!uj.equipped,
+          warning,
+          isReskinned: !!uj.activeReskin,
+        };
+      });
+    },
+    [userData, userItems, userElements],
+  );
 
   // Derived calculations
   const curEquip = userJutsus?.filter((j) => j.equipped).length;
@@ -427,10 +427,8 @@ export default function MyJutsu() {
               items={transformToActionItems(
                 // Sort equipped by loadout order
                 [...categorizedJutsus.equipped].sort((a, b) => {
-                  const aIndex =
-                    userData?.loadout?.jutsuIds.indexOf(a.jutsuId) ?? -1;
-                  const bIndex =
-                    userData?.loadout?.jutsuIds.indexOf(b.jutsuId) ?? -1;
+                  const aIndex = userData?.loadout?.jutsuIds.indexOf(a.jutsuId) ?? -1;
+                  const bIndex = userData?.loadout?.jutsuIds.indexOf(b.jutsuId) ?? -1;
                   if (aIndex === -1 && bIndex === -1) return 0;
                   if (aIndex === -1) return 1;
                   if (bIndex === -1) return -1;
@@ -519,12 +517,14 @@ export default function MyJutsu() {
         )}
 
         {/* Show message when no jutsu */}
-        {!categorizedJutsus && !isFetching && (
-          <p className="text-muted-foreground text-center py-4">
-            You have not learned any jutsu. Go to the training grounds in your
-            village to learn some.
-          </p>
-        )}
+        {!isFetching &&
+          categorizedJutsus &&
+          Object.values(categorizedJutsus).every((arr) => arr.length === 0) && (
+            <p className="text-muted-foreground text-center py-4">
+              You have not learned any jutsu. Go to the training grounds in your village
+              to learn some.
+            </p>
+          )}
 
         {isOpen && userData && userjutsu && (
           <Modal2
@@ -1046,15 +1046,9 @@ interface JutsuCategorySectionProps {
   }[];
 }
 
-const JutsuCategorySection: React.FC<JutsuCategorySectionProps> = ({
-  title,
-  jutsus,
-  isOpen,
-  onToggle,
-  onClick,
-  counts,
-  transformToActionItems,
-}) => {
+const JutsuCategorySection = memo((props: JutsuCategorySectionProps) => {
+  const { title, jutsus, isOpen, onToggle, onClick, counts, transformToActionItems } =
+    props;
   if (jutsus.length === 0) return null;
 
   return (
@@ -1085,7 +1079,8 @@ const JutsuCategorySection: React.FC<JutsuCategorySectionProps> = ({
       )}
     </div>
   );
-};
+});
+JutsuCategorySection.displayName = "JutsuCategorySection";
 
 // Helper types and functions
 
@@ -1143,7 +1138,10 @@ const categorizeJutsus = (
         uj.jutsu.jutsuRank,
         userData.rank as Parameters<typeof checkJutsuRank>[1],
       ) &&
-      checkJutsuVillage(uj.jutsu, userData as Parameters<typeof checkJutsuVillage>[1]) &&
+      checkJutsuVillage(
+        uj.jutsu,
+        userData as Parameters<typeof checkJutsuVillage>[1],
+      ) &&
       checkJutsuBloodline(
         uj.jutsu,
         userData as Parameters<typeof checkJutsuBloodline>[1],

@@ -67,7 +67,9 @@ Replace `GITHUB_ISSUE_NUMBER` with the actual issue number from `$ARGUMENTS` in 
 
 ### Step 3: Aggregate Plans
 
-Launch a subagent using the `Task` tool to aggregate all 6 plans into one comprehensive plan:
+Launch a subagent using the `Task` tool to aggregate all 6 plans into one comprehensive plan.
+
+<important>DO NOT AGGREGATE UNTIL ALL PLANS HAVE BEEN GENERATED. CODEX MAY PRODUCE SLOW PLANS; BUT WAIT TILL THEY ARE DONE</important>
 
 ```
 Run the /plan-aggregate skill with the arguments: PLAN1_PATH PLAN2_PATH PLAN3_PATH PLAN4_PATH PLAN5_PATH PLAN6_PATH
