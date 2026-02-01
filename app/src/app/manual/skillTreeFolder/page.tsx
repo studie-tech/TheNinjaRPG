@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import ContentBox from "@/layout/ContentBox";
@@ -50,7 +50,7 @@ export default function ManualSkillTreeFolder() {
   const [formHidden, setFormHidden] = useState(false);
 
   // Generate a temporary ID for new folders (for image upload)
-  const tempFolderId = useMemo(() => nanoid(), []);
+  const [tempFolderId, setTempFolderId] = useState(() => nanoid());
 
   // Queries
   const { data: folders, isPending: foldersLoading } =
@@ -205,6 +205,7 @@ export default function ManualSkillTreeFolder() {
           <Button
             onClick={() => {
               resetForm();
+              setTempFolderId(nanoid());
               setIsCreateOpen(true);
             }}
           >

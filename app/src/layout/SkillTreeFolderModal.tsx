@@ -105,7 +105,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
         setNavigationHistory((prev) => [...prev, folder.id]);
       }
       setSelectedSkill(null);
-      onNavigateToFolder(prereqSkill.folderId ?? "uncategorized");
+      onNavigateToFolder(prereqSkill.folderId ?? "");
     }
   };
 
@@ -256,11 +256,13 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, status, onClick }) => {
   const isAvailable = !effectivelyOwned && status.hasPrereqs && status.hasPoints;
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
+      aria-disabled={isLocked || isUnaffordable}
       className={`
         relative cursor-pointer rounded-lg border-2 p-3 transition-all duration-200
-        hover:shadow-md
+        hover:shadow-md text-left w-full
         ${
           effectivelyOwned
             ? "border-green-500 bg-green-50 dark:bg-green-950/30"
@@ -312,7 +314,7 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, status, onClick }) => {
           {skill.costSkillPoints} SP
         </Badge>
       </div>
-    </div>
+    </button>
   );
 };
 
@@ -408,7 +410,7 @@ const SkillDetails: React.FC<SkillDetailsProps> = ({
                     <X className="w-4 h-4" />
                   )}
                   <span>{prereq?.name || reqId}</span>
-                  {isInDifferentFolder && (
+                  {isInDifferentFolder && prereqFolder && (
                     <Button
                       variant="ghost"
                       size="sm"

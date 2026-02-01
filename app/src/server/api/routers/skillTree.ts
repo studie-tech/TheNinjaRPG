@@ -601,11 +601,15 @@ export const skillTreeRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Check permissions and fetch skills in folder in parallel
-      const [{ user }, skillsInFolder] = await Promise.all([
+      // Check permissions, fetch folder, and fetch skills in folder in parallel
+      const [{ user }, folder, skillsInFolder] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
+        }),
+        ctx.drizzle.query.skillTreeFolder.findFirst({
+          where: eq(skillTreeFolder.id, input.id),
+          columns: { id: true },
         }),
         ctx.drizzle.query.skillTree.findMany({
           where: eq(skillTree.folderId, input.id),
@@ -614,6 +618,9 @@ export const skillTreeRouter = createTRPCRouter({
       ]);
       if (!user || !canChangeContent(user.role)) {
         throw serverError("UNAUTHORIZED", "You are not authorized to delete folders");
+      }
+      if (!folder) {
+        return errorResponse("Folder not found");
       }
       if (skillsInFolder.length > 0) {
         return errorResponse(
