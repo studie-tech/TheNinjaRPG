@@ -38,6 +38,12 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
     },
   );
 
+  // Query for all folders for folder selection
+  const { data: allFolders, isPending: l3 } = api.skillTree.getAllFolders.useQuery(
+    { includeHidden: true },
+    { refetchOnWindowFocus: false },
+  );
+
   // Mutation for updating skill
   const { mutate: updateSkillTree, isPending: l2 } = api.skillTree.update.useMutation({
     onSuccess: (data) => {
@@ -73,7 +79,7 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
   };
 
   // Are we loading data
-  const loading = l1 || l2;
+  const loading = l1 || l2 || l3;
 
   // Watch for changes to avatar
   const imageUrl = useWatch({
@@ -96,6 +102,13 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
     { id: "costSkillPoints", type: "number", label: "Skill Points Cost" },
     { id: "hidden", type: "boolean" },
     { id: "skillType", type: "str_array", values: SkillTreeEntryTypes },
+    {
+      id: "folderId",
+      type: "db_values",
+      values: allFolders?.map((f) => ({ id: f.id, name: f.name })) || [],
+      label: "Folder",
+      multiple: false,
+    },
     { id: "description", type: "richinput", doubleWidth: true },
     {
       id: "requiredSkillIds",

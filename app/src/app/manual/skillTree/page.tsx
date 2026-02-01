@@ -11,20 +11,18 @@ import SkillTreeFiltering, {
   getFilter,
 } from "@/layout/SkillTreeFiltering";
 import { Button } from "@/components/ui/button";
-import { FilePlus, Workflow, List, ChartCandlestick } from "lucide-react";
+import { FilePlus, FolderOpen, ChartCandlestick } from "lucide-react";
 import { useInfinitePagination } from "@/libs/pagination";
 import { api } from "@/app/_trpc/client";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import SkillTreeGraph from "@/layout/SkillTreeGraph";
 
 export default function ManualSkillTree() {
   // Settings
   const utils = api.useUtils();
   const { data: userData } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const [showGraph, setShowGraph] = useState(false);
 
   // Filtering
   const state = useFiltering();
@@ -81,11 +79,20 @@ export default function ManualSkillTree() {
         subtitle="Master your ninja abilities"
         defaultBackHref="/manual"
         topRightContent={
-          <Link href="/manual/skillTree/balance">
-            <Button id="skill-tree-balance" hoverText="Balance Statistics">
-              <ChartCandlestick className="h-6 w-6" />
-            </Button>
-          </Link>
+          <div className="flex flex-row items-center gap-2">
+            <Link href="/manual/skillTree/balance">
+              <Button id="skill-tree-balance" hoverText="Balance Statistics">
+                <ChartCandlestick className="h-6 w-6" />
+              </Button>
+            </Link>
+            {userData && canChangeContent(userData.role) && (
+              <Link href="/manual/skillTreeFolder">
+                <Button hoverText="Manage Folders">
+                  <FolderOpen className="h-6 w-6" />
+                </Button>
+              </Link>
+            )}
+          </div>
         }
       >
         <p>
@@ -104,10 +111,9 @@ export default function ManualSkillTree() {
           world.
         </p>
         <p className="pt-4">
-          Skills are organized into a branching tree structure where mastering
-          fundamental techniques opens pathways to more advanced specializations. Choose
-          your path wisely, as each skill point investment shapes your ninja&apos;s
-          unique fighting style and strategic approach to combat.
+          Skills are organized into folders for easier navigation. Choose your path
+          wisely, as each skill point investment shapes your ninja&apos;s unique
+          fighting style and strategic approach to combat.
         </p>
       </ContentBox>
 
@@ -123,46 +129,33 @@ export default function ManualSkillTree() {
                 {load1 ? "Creating..." : "New"}
               </Button>
             )}
-            <Button onClick={() => setShowGraph(!showGraph)}>
-              {showGraph ? (
-                <List className="mr-2 h-6 w-6" />
-              ) : (
-                <Workflow className="mr-2 h-6 w-6" />
-              )}
-              {showGraph ? "List" : "Graph"}
-            </Button>
 
             <SkillTreeFiltering state={state} />
           </div>
         }
       >
-        {showGraph && (
-          <div className="mb-6">
-            <SkillTreeGraph
-              skills={allSkills}
-              adminMode={userData && canChangeContent(userData.role)}
+        {totalLoading && <Loader explanation="Loading data" />}
+        {allSkills.map((skill, i) => (
+          <div key={i} ref={i === allSkills.length - 1 ? setLastElement : null}>
+            <ItemWithEffects
+              key={skill.id}
+              item={skill}
+              showEdit={
+                userData && canChangeContent(userData.role) ? "skillTree" : undefined
+              }
+              onDelete={
+                userData && canChangeContent(userData.role)
+                  ? (id: string) => deleteSkill({ id })
+                  : undefined
+              }
+              folderName={
+                userData && canChangeContent(userData.role)
+                  ? (skill.folder?.name ?? "Uncategorized")
+                  : undefined
+              }
             />
           </div>
-        )}
-
-        {totalLoading && <Loader explanation="Loading data" />}
-        {!showGraph &&
-          allSkills.map((skill, i) => (
-            <div key={i} ref={i === allSkills.length - 1 ? setLastElement : null}>
-              <ItemWithEffects
-                key={skill.id}
-                item={skill}
-                showEdit={
-                  userData && canChangeContent(userData.role) ? "skillTree" : undefined
-                }
-                onDelete={
-                  userData && canChangeContent(userData.role)
-                    ? (id: string) => deleteSkill({ id })
-                    : undefined
-                }
-              />
-            </div>
-          ))}
+        ))}
       </ContentBox>
     </>
   );

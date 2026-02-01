@@ -479,6 +479,34 @@ export const bloodlineReskinRelations = relations(bloodlineReskin, ({ one }) => 
   }),
 }));
 
+export const skillTreeFolder = mysqlTable(
+  "SkillTreeFolder",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    image: varchar("image", { length: 512 }).default("").notNull(),
+    description: text("description"),
+    hidden: boolean("hidden").default(false).notNull(),
+    order: int("order").default(0).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => [
+    index("SkillTreeFolder_name_idx").on(table.name),
+    index("SkillTreeFolder_order_idx").on(table.order),
+    index("SkillTreeFolder_hidden_idx").on(table.hidden),
+  ],
+);
+export type SkillTreeFolder = InferSelectModel<typeof skillTreeFolder>;
+
+export const skillTreeFolderRelations = relations(skillTreeFolder, ({ many }) => ({
+  skills: many(skillTree),
+}));
+
 export const skillTree = mysqlTable(
   "SkillTree",
   {
@@ -495,6 +523,7 @@ export const skillTree = mysqlTable(
     skillType: mysqlEnum("skillType", consts.SkillTreeEntryTypes)
       .default("DEFAULT")
       .notNull(),
+    folderId: varchar("folderId", { length: 191 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -508,13 +537,18 @@ export const skillTree = mysqlTable(
       tierIdx: index("SkillTree_tier_idx").on(table.tier),
       hiddenIdx: index("SkillTree_hidden_idx").on(table.hidden),
       skillTypeIdx: index("SkillTree_skillType_idx").on(table.skillType),
+      folderIdIdx: index("SkillTree_folderId_idx").on(table.folderId),
     };
   },
 );
 export type SkillTree = InferSelectModel<typeof skillTree>;
 
-export const skillTreeRelations = relations(skillTree, ({ many }) => ({
+export const skillTreeRelations = relations(skillTree, ({ one, many }) => ({
   userSkills: many(userSkill),
+  folder: one(skillTreeFolder, {
+    fields: [skillTree.folderId],
+    references: [skillTreeFolder.id],
+  }),
 }));
 
 export const userSkill = mysqlTable(

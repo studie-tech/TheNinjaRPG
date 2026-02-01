@@ -1157,6 +1157,7 @@ export const SkillTreeValidator = z.object({
   costSkillPoints: z.coerce.number().int().min(1),
   hidden: z.coerce.boolean().optional(),
   skillType: z.enum(SkillTreeEntryTypes).default("DEFAULT"),
+  folderId: z.string().nullish(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
 });
 export type ZodSkillTreeType = z.infer<typeof SkillTreeValidator>;

@@ -70,6 +70,7 @@ export interface ItemWithEffectsProps {
   hideDates?: boolean;
   hideData?: boolean;
   onDelete?: (id: string) => void;
+  folderName?: string;
 }
 
 const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
@@ -86,6 +87,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     hideDates,
     hideData,
     onDelete,
+    folderName,
   } = props;
   const { data: userData } = useUserData();
   const router = useRouter();
@@ -488,6 +490,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {"hidden" in item && (
                 <p>
                   <b>Hidden</b>: {item.hidden ? "yes" : "no"}
+                </p>
+              )}
+              {folderName && (
+                <p>
+                  <b>Folder</b>: {folderName}
                 </p>
               )}
               {"isEventItem" in item && item.isEventItem && (

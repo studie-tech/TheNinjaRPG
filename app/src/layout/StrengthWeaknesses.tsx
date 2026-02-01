@@ -4,7 +4,8 @@ import React, { useEffect, useState, useRef } from "react";
 import ContentBox from "@/layout/ContentBox";
 import NavTabs from "@/layout/NavTabs";
 import ElementImage from "@/layout/ElementImage";
-import SkillTreeGraph from "@/layout/SkillTreeGraph";
+import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
+import SkillTreeFolderModal from "@/layout/SkillTreeFolderModal";
 import { CircleHelp, Eye, Lock, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
@@ -382,6 +383,11 @@ interface SkillsTabProps {
 }
 
 export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
+  // State for folder UI
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
+
   // Get tRPC utils
   const utils = api.useUtils();
 
@@ -395,6 +401,14 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
     enabled: !!userData,
   });
 
+  const { data: folders } = api.skillTree.getAllFolders.useQuery(undefined, {
+    enabled: !!userData,
+  });
+
+  const { data: folderStats } = api.skillTree.getFolderStats.useQuery(undefined, {
+    enabled: !!userData,
+  });
+
   // Skill Tree Mutations
   const { mutate: purchaseSkill } = api.skillTree.purchaseSkill.useMutation({
     onSuccess: async (data) => {
@@ -403,6 +417,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
         await Promise.all([
           utils.skillTree.getUserSkills.invalidate(),
           utils.skillTree.getAll.invalidate(),
+          utils.skillTree.getFolderStats.invalidate(),
           utils.profile.getUser.invalidate(),
         ]);
       }
@@ -418,6 +433,20 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
     (total, userSkill) => total + userSkill.skill.costSkillPoints,
     0,
   );
+
+  // Get selected folder
+  const selectedFolder = folders?.find((f) => f.id === selectedFolderId) ?? null;
+
+  // Handle folder click
+  const handleFolderClick = (folderId: string) => {
+    setSelectedFolderId(folderId);
+    setIsModalOpen(true);
+  };
+
+  // Handle folder navigation (from prereq links)
+  const handleNavigateToFolder = (folderId: string) => {
+    setSelectedFolderId(folderId);
+  };
 
   // Check if user has chunin+ rank to access skill tree
   const hasSkillTreeAccess =
@@ -440,33 +469,49 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
     <>
       {/* Skill Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-600">
+        <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
             {activatedSkills.length}
           </div>
-          <div className="text-sm text-green-700">Skills Activated</div>
+          <div className="text-sm text-green-700 dark:text-green-300">Skills Activated</div>
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-blue-600">{totalSkillPoints}</div>
-          <div className="text-sm text-blue-700">Total Skill Points</div>
+        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalSkillPoints}</div>
+          <div className="text-sm text-blue-700 dark:text-blue-300">Total Skill Points</div>
         </div>
 
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-yellow-600">{usedSkillPoints}</div>
-          <div className="text-sm text-yellow-700">Used Skill Points</div>
+        <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{totalSkillPoints - usedSkillPoints}</div>
+          <div className="text-sm text-yellow-700 dark:text-yellow-300">Available SP</div>
         </div>
       </div>
 
-      {/* Skill Tree View */}
+      {/* Skill Tree Folder Grid */}
       <div className="mb-6">
-        <SkillTreeGraph
-          skills={allSkillsData}
-          userSkills={userSkills}
-          userSkillPoints={totalSkillPoints - usedSkillPoints}
-          onPurchaseSkill={(skillId) => purchaseSkill({ skillId })}
+        <SkillTreeFolderGrid
+          folders={folders ?? []}
+          folderStats={folderStats ?? []}
+          allSkills={allSkillsData}
+          onFolderClick={handleFolderClick}
+          selectedEffects={selectedEffects}
+          onEffectsChange={setSelectedEffects}
         />
       </div>
+
+      {/* Folder Modal */}
+      <SkillTreeFolderModal
+        isOpen={isModalOpen}
+        setIsOpen={setIsModalOpen}
+        folder={selectedFolder}
+        folders={folders ?? []}
+        allSkills={allSkillsData}
+        userSkills={userSkills ?? []}
+        userSkillPoints={totalSkillPoints - usedSkillPoints}
+        onPurchaseSkill={(skillId) => purchaseSkill({ skillId })}
+        onNavigateToFolder={handleNavigateToFolder}
+        selectedEffects={selectedEffects}
+      />
     </>
   );
 };

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { eq, and, sql, like, gte, lt } from "drizzle-orm";
-import { skillTree, userSkill, userData } from "@/drizzle/schema";
+import { eq, and, sql, like, gte, lt, asc, isNull } from "drizzle-orm";
+import { skillTree, userSkill, userData, skillTreeFolder } from "@/drizzle/schema";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/api/trpc";
 import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
 import { fetchUpdatedUser } from "@/routers/profile";
@@ -15,6 +15,7 @@ import { actionLog } from "@/drizzle/schema";
 import { getUserFederalStatus } from "@/utils/paypal";
 import {
   skillTreeFilteringSchema,
+  skillTreeFolderSchema,
   type SkillTreeFilteringSchema,
 } from "@/validators/skillTree";
 import {
@@ -67,6 +68,7 @@ export const skillTreeRouter = createTRPCRouter({
         orderBy: [skillTree.tier, skillTree.name],
         limit: limit,
         offset: skip,
+        with: { folder: true },
       });
 
       const nextCursor = results.length < limit ? null : currentCursor + 1;
@@ -230,6 +232,7 @@ export const skillTreeRouter = createTRPCRouter({
         costSkillPoints: input.data.costSkillPoints,
         hidden: input.data.hidden,
         skillType: input.data.skillType,
+        folderId: input.data.folderId || null,
       };
 
       const diff = calculateContentDiff(skill, {
@@ -443,6 +446,205 @@ export const skillTreeRouter = createTRPCRouter({
         message: `Reset skill trees for all ${allUsers.length} users`,
       };
     }),
+
+  // ============================================
+  // FOLDER ENDPOINTS
+  // ============================================
+
+  // Get all folders (with optional hidden filter for admins)
+  getAllFolders: publicProcedure
+    .input(z.object({ includeHidden: z.boolean().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const filters = [];
+      if (!input?.includeHidden) {
+        filters.push(eq(skillTreeFolder.hidden, false));
+      }
+      return await ctx.drizzle.query.skillTreeFolder.findMany({
+        where: filters.length > 0 ? and(...filters) : undefined,
+        orderBy: [asc(skillTreeFolder.order), asc(skillTreeFolder.name)],
+      });
+    }),
+
+  // Get single folder by ID
+  getFolder: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return await ctx.drizzle.query.skillTreeFolder.findFirst({
+        where: eq(skillTreeFolder.id, input.id),
+      });
+    }),
+
+  // Get folder stats (owned/total skill counts per folder for current user)
+  getFolderStats: protectedProcedure.query(async ({ ctx }) => {
+    // Fetch all data in parallel for efficiency
+    const [folders, allSkills, userSkillsData] = await Promise.all([
+      ctx.drizzle.query.skillTreeFolder.findMany({
+        where: eq(skillTreeFolder.hidden, false),
+        orderBy: [asc(skillTreeFolder.order), asc(skillTreeFolder.name)],
+      }),
+      ctx.drizzle.query.skillTree.findMany({
+        where: eq(skillTree.hidden, false),
+        columns: { id: true, folderId: true },
+      }),
+      fetchUserSkills(ctx.drizzle, ctx.userId),
+    ]);
+
+    // Get owned skill IDs
+    const ownedSkillIds = new Set(
+      userSkillsData.filter((us) => us.activated).map((us) => us.skillId),
+    );
+
+    // Calculate stats per folder
+    const folderStats = folders.map((folder) => {
+      const folderSkills = allSkills.filter((s) => s.folderId === folder.id);
+      const totalSkills = folderSkills.length;
+      const ownedSkills = folderSkills.filter((s) => ownedSkillIds.has(s.id)).length;
+      return {
+        folderId: folder.id,
+        folderName: folder.name,
+        folderImage: folder.image,
+        totalSkills,
+        ownedSkills,
+      };
+    });
+
+    // Also add stats for skills without a folder (if any)
+    const unassignedSkills = allSkills.filter((s) => !s.folderId);
+    if (unassignedSkills.length > 0) {
+      folderStats.push({
+        folderId: "",
+        folderName: "Uncategorized",
+        folderImage: "",
+        totalSkills: unassignedSkills.length,
+        ownedSkills: unassignedSkills.filter((s) => ownedSkillIds.has(s.id)).length,
+      });
+    }
+
+    return folderStats;
+  }),
+
+  // Admin: Create new folder
+  createFolder: protectedProcedure
+    .input(skillTreeFolderSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Check permissions
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      if (!user || !canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "You are not authorized to create folders");
+      }
+
+      const id = nanoid();
+      await ctx.drizzle.insert(skillTreeFolder).values({
+        id,
+        name: input.name,
+        image: input.image || "",
+        description: input.description || null,
+        hidden: input.hidden || false,
+        order: input.order || 0,
+      });
+
+      return { success: true, message: id };
+    }),
+
+  // Admin: Update folder
+  updateFolder: protectedProcedure
+    .input(z.object({ id: z.string(), data: skillTreeFolderSchema }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Check permissions
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      if (!user || !canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "You are not authorized to edit folders");
+      }
+
+      const folder = await ctx.drizzle.query.skillTreeFolder.findFirst({
+        where: eq(skillTreeFolder.id, input.id),
+      });
+      if (!folder) return errorResponse("Folder not found");
+
+      await ctx.drizzle
+        .update(skillTreeFolder)
+        .set({
+          name: input.data.name,
+          image: input.data.image || "",
+          description: input.data.description || null,
+          hidden: input.data.hidden || false,
+          order: input.data.order || 0,
+          updatedAt: new Date(),
+        })
+        .where(eq(skillTreeFolder.id, input.id));
+
+      return { success: true, message: "Folder updated successfully" };
+    }),
+
+  // Admin: Delete folder (with guard for non-empty folders)
+  deleteFolder: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Check permissions
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      if (!user || !canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "You are not authorized to delete folders");
+      }
+
+      // Check if folder has skills
+      const skillsInFolder = await ctx.drizzle.query.skillTree.findMany({
+        where: eq(skillTree.folderId, input.id),
+        columns: { id: true },
+      });
+
+      if (skillsInFolder.length > 0) {
+        return errorResponse(
+          `Cannot delete folder that contains ${skillsInFolder.length} skill(s). Please move or delete skills first.`,
+        );
+      }
+
+      await ctx.drizzle.delete(skillTreeFolder).where(eq(skillTreeFolder.id, input.id));
+
+      return { success: true, message: "Folder deleted successfully" };
+    }),
+
+  // Admin: Reorder folders (batch update folder ordering)
+  reorderFolders: protectedProcedure
+    .input(
+      z.object({
+        folderOrders: z.array(z.object({ id: z.string(), order: z.number() })),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Check permissions
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      if (!user || !canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "You are not authorized to reorder folders");
+      }
+
+      // Update each folder's order in parallel
+      await Promise.all(
+        input.folderOrders.map(({ id, order }) =>
+          ctx.drizzle
+            .update(skillTreeFolder)
+            .set({ order, updatedAt: new Date() })
+            .where(eq(skillTreeFolder.id, id)),
+        ),
+      );
+
+      return { success: true, message: "Folders reordered successfully" };
+    }),
 });
 
 /**
@@ -476,6 +678,15 @@ export const skillTreeDatabaseFilter = (input: SkillTreeFilteringSchema) => {
     filters.push(eq(skillTree.hidden, input.hidden));
   } else {
     filters.push(eq(skillTree.hidden, false));
+  }
+
+  // Filter by folder ID
+  if (input.folderId) {
+    if (input.folderId === "uncategorized") {
+      filters.push(isNull(skillTree.folderId));
+    } else {
+      filters.push(eq(skillTree.folderId, input.folderId));
+    }
   }
 
   return filters;

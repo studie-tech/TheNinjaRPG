@@ -2339,6 +2339,13 @@
       "when": 1769929105966,
       "tag": "0333_even_gorgon",
       "breakpoints": false
+    },
+    {
+      "idx": 334,
+      "version": "5",
+      "when": 1769937169930,
+      "tag": "0334_sticky_sleeper",
+      "breakpoints": false
     }
   ]
 }
