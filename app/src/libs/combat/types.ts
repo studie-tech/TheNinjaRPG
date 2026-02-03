@@ -178,6 +178,10 @@ export type CombatUserFields = {
     intelligence?: number;
     willpower?: number;
   };
+  // Internal tracking for pool adjustment deltas (set/cleared by applyPoolAdjustmentsToBase)
+  _prevHealthAdj?: number;
+  _prevChakraAdj?: number;
+  _prevStaminaAdj?: number;
 };
 
 /**

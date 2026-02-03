@@ -720,9 +720,9 @@ export const applyEffects = (
     );
     // Check if we have tracking fields from a previous adjustment
     const hadPoolEffects =
-      (user as any)._prevHealthAdj !== undefined ||
-      (user as any)._prevChakraAdj !== undefined ||
-      (user as any)._prevStaminaAdj !== undefined;
+      user._prevHealthAdj !== undefined ||
+      user._prevChakraAdj !== undefined ||
+      user._prevStaminaAdj !== undefined;
 
     // Call if we have pool effects now OR had them last round (to apply delta on expiration)
     if (hasPoolEffects || hadPoolEffects) {

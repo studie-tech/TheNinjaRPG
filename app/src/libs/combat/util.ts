@@ -347,7 +347,11 @@ export const getPoolKeys = (pool: PoolType): { max: PoolMaxKey; cur: PoolCurKey 
 export const getPoolsAffected = (
   effect: { poolsAffected?: PoolType[] } | UserEffect,
 ): PoolType[] => {
-  if ("poolsAffected" in effect && effect.poolsAffected && effect.poolsAffected.length > 0) {
+  if (
+    "poolsAffected" in effect &&
+    effect.poolsAffected &&
+    effect.poolsAffected.length > 0
+  ) {
     return effect.poolsAffected as PoolType[];
   }
   return ["Health"];
@@ -447,9 +451,9 @@ export const applyPoolAdjustmentsToBase = (
 ) => {
   // Store previous adjustments to calculate deltas
   // We track the previous adjustment amount, not the original max
-  const prevHealthAdj = ((target as any)._prevHealthAdj as number) ?? 0;
-  const prevChakraAdj = ((target as any)._prevChakraAdj as number) ?? 0;
-  const prevStaminaAdj = ((target as any)._prevStaminaAdj as number) ?? 0;
+  const prevHealthAdj = target._prevHealthAdj ?? 0;
+  const prevChakraAdj = target._prevChakraAdj ?? 0;
+  const prevStaminaAdj = target._prevStaminaAdj ?? 0;
 
   // Calculate next adjustments from active effects
   const nextHealthAdj = getPoolAdjustment(target, usersEffects, "Health");
@@ -499,14 +503,14 @@ export const applyPoolAdjustmentsToBase = (
 
   // Store current adjustments for next delta calculation
   if (nextHealthAdj !== 0 || nextChakraAdj !== 0 || nextStaminaAdj !== 0) {
-    (target as any)._prevHealthAdj = nextHealthAdj;
-    (target as any)._prevChakraAdj = nextChakraAdj;
-    (target as any)._prevStaminaAdj = nextStaminaAdj;
+    target._prevHealthAdj = nextHealthAdj;
+    target._prevChakraAdj = nextChakraAdj;
+    target._prevStaminaAdj = nextStaminaAdj;
   } else {
     // Clear tracking when all adjustments are 0
-    delete (target as any)._prevHealthAdj;
-    delete (target as any)._prevChakraAdj;
-    delete (target as any)._prevStaminaAdj;
+    target._prevHealthAdj = undefined;
+    target._prevChakraAdj = undefined;
+    target._prevStaminaAdj = undefined;
   }
 };
 
@@ -839,7 +843,11 @@ export const isEffectActive = (effect: UserEffect | GroundEffect) => {
  */
 export const getEffectStage = (effect: UserEffect | GroundEffect): 1 | 2 => {
   const stage1Types = ["armor", "skill", "village", "ranked"];
-  if ("fromType" in effect && effect.fromType && stage1Types.includes(effect.fromType)) {
+  if (
+    "fromType" in effect &&
+    effect.fromType &&
+    stage1Types.includes(effect.fromType)
+  ) {
     return 1;
   }
   return 2;
