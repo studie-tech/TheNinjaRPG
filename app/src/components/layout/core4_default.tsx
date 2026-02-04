@@ -1,10 +1,11 @@
 "use client";
-
-import { SignedIn, SignedOut, UserButton, useUser } from "@clerk/nextjs";
-import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
-import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import {
-  Bell,
+                    <Link
+                      href="/jobs"
+                      className="relative -top-2 flex justify-center"
+                      prefetch={true}
+                    >
+                      <Briefcase className={mobileNavbarButtonStyle} />
+                    </Link>
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -651,6 +652,13 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                       </>
                     )}
 
+                    <Link
+                      href="/jobs"
+                      className="relative -top-2 flex justify-center"
+                      prefetch={true}
+                    >
+                      <Briefcase className={mobileNavbarButtonStyle} />
+                    </Link>
                     <Link
                       href="/tavern"
                       className="relative -top-2 flex justify-center"
