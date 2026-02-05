@@ -56,6 +56,7 @@ Sentry.init({
     "Can not send postrobot", // PayPal SDK postrobot error - alternate format
     "Cannot set properties of undefined (setting 'iframeReady')", // Usercentrics (uc.js) consent management error - third-party script timing issue
     "Failed to fetch", // Network errors during navigation - occurs when user navigates away while fetch is in-flight (common on mobile)
+    "network error", // Chrome/Android network error - occurs when fetch fails due to network issues on mobile devices
     /^Load failed/, // iOS Safari network error - occurs when device goes to sleep, network changes, or CDN requests fail (may include domain suffix)
     "Clerk: Failed to load Clerk", // Clerk script load failure - typically on very old browsers (Android 5.x, Chrome 95) that don't support modern JS
     "failed to load script", // Clerk's underlying script loading error (cause of the above) - network issues on mobile devices
@@ -195,7 +196,7 @@ function isLocalStorageAccessError(err: unknown): boolean {
 function isNetworkFetchError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message ?? "";
-  return msg.startsWith("Load failed") || msg === "Failed to fetch";
+  return msg.startsWith("Load failed") || msg === "Failed to fetch" || msg === "network error";
 }
 
 /**
@@ -454,11 +455,14 @@ const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
   // Also check for "Failed to fetch" as a related network error
   const isFailedToFetch = message === "Failed to fetch";
 
+  // Check for Chrome/Android "network error" message
+  const isNetworkError = message === "network error";
+
   // These errors typically have no stack trace and are TypeError
   const isNetworkErrorShape =
     !hasStackTrace && (errorType === "TypeError" || errorType === "");
 
-  return (isLoadFailed || isFailedToFetch) && isNetworkErrorShape;
+  return (isLoadFailed || isFailedToFetch || isNetworkError) && isNetworkErrorShape;
 };
 
 /**
