@@ -1312,7 +1312,7 @@ export const itemRouter = createTRPCRouter({
       // Guard
       if (user.villageId !== input.villageId) return errorResponse("Wrong village");
       if (!info) return errorResponse("Item not found");
-      if (input.stack > 1 && !item.canStack) return errorResponse("Item cannot stack");
+      if (input.stack > 1 && !info.canStack) return errorResponse("Item cannot stack");
       if (input.stack > 1 && input.stack > info.stackSize)
         return errorResponse("You can not buy a stack with this many items");
       if (!info.inShop) return errorResponse("Item is not for sale");
