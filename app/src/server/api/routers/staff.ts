@@ -1016,69 +1016,112 @@ export type staffRouter = inferRouterOutputs<typeof staffRouter>;
  * @param userId - The ID of the user to delete.
  */
 export const deleteUser = async (client: DrizzleClient, userId: string) => {
+  // Sequential batches to prevent MySQL deadlock (errno 1213)
+  // Operations within each batch run in parallel, but batches execute sequentially
+  // This follows the pattern established in war.ts for avoiding deadlocks
+
+  // Batch 1: Update foreign key references (must run first)
+  await client
+    .update(userData)
+    .set({ senseiId: null })
+    .where(eq(userData.senseiId, userId));
+
+  // Batch 2: Communication & social relationships
   await Promise.all([
-    client
-      .update(userData)
-      .set({ senseiId: null })
-      .where(eq(userData.senseiId, userId)),
-    client.delete(userData).where(eq(userData.userId, userId)),
-    client.delete(mpvpBattleUser).where(eq(mpvpBattleUser.userId, userId)),
-    client.delete(bloodlineRolls).where(eq(bloodlineRolls.userId, userId)),
     client.delete(conversation).where(eq(conversation.createdById, userId)),
     client.delete(user2conversation).where(eq(user2conversation.userId, userId)),
     client.delete(conversationComment).where(eq(conversationComment.userId, userId)),
-    client.delete(damageSimulation).where(eq(damageSimulation.userId, userId)),
+    client.delete(notification).where(eq(notification.userId, userId)),
+    client.delete(userBlackList).where(eq(userBlackList.creatorUserId, userId)),
+    client.delete(userBlackList).where(eq(userBlackList.targetUserId, userId)),
+  ]);
+
+  // Batch 3: Forum & content
+  await Promise.all([
     client.delete(forumPost).where(eq(forumPost.userId, userId)),
     client.delete(forumThread).where(eq(forumThread.userId, userId)),
-    client.delete(historicalAvatar).where(eq(historicalAvatar.userId, userId)),
-    client.delete(historicalIp).where(eq(historicalIp.userId, userId)),
-    client.delete(userActivityEvent).where(eq(userActivityEvent.userId, userId)),
-    client.delete(jutsuLoadout).where(eq(jutsuLoadout.userId, userId)),
-    client.delete(notification).where(eq(notification.userId, userId)),
-    client.delete(reportLog).where(eq(reportLog.targetUserId, userId)),
-    client.delete(reportLog).where(eq(reportLog.staffUserId, userId)),
-    client.delete(actionLog).where(eq(actionLog.userId, userId)),
-    client.delete(trainingLog).where(eq(trainingLog.userId, userId)),
-    client.delete(userAttribute).where(eq(userAttribute.userId, userId)),
-    client.delete(userReview).where(eq(userReview.authorUserId, userId)),
-    client.delete(userRewards).where(eq(userRewards.awardedById, userId)),
-    client.delete(userRewards).where(eq(userRewards.receiverId, userId)),
-    client.delete(userReview).where(eq(userReview.targetUserId, userId)),
-    client.delete(userNindo).where(eq(userNindo.userId, userId)),
+    client.delete(poll).where(eq(poll.createdByUserId, userId)),
+    client.delete(userPollVote).where(eq(userPollVote.userId, userId)),
+    client.delete(pollOption).where(eq(pollOption.targetUserId, userId)),
+    client.delete(pollOption).where(eq(pollOption.createdByUserId, userId)),
+  ]);
+
+  // Batch 4: Game progress & items
+  await Promise.all([
     client.delete(userItem).where(eq(userItem.userId, userId)),
     client.delete(userJutsu).where(eq(userJutsu.userId, userId)),
     client.delete(userSkill).where(eq(userSkill.userId, userId)),
+    client.delete(userAttribute).where(eq(userAttribute.userId, userId)),
+    client.delete(jutsuLoadout).where(eq(jutsuLoadout.userId, userId)),
+    client.delete(questHistory).where(eq(questHistory.userId, userId)),
+    client.delete(bloodlineRolls).where(eq(bloodlineRolls.userId, userId)),
+  ]);
+
+  // Batch 5: History & logs
+  await Promise.all([
+    client.delete(historicalAvatar).where(eq(historicalAvatar.userId, userId)),
+    client.delete(historicalIp).where(eq(historicalIp.userId, userId)),
+    client.delete(userActivityEvent).where(eq(userActivityEvent.userId, userId)),
+    client.delete(actionLog).where(eq(actionLog.userId, userId)),
+    client.delete(trainingLog).where(eq(trainingLog.userId, userId)),
+  ]);
+
+  // Batch 6: Reports & moderation
+  await Promise.all([
+    client.delete(reportLog).where(eq(reportLog.targetUserId, userId)),
+    client.delete(reportLog).where(eq(reportLog.staffUserId, userId)),
     client.delete(userReport).where(eq(userReport.reporterUserId, userId)),
     client.delete(userReport).where(eq(userReport.reportedUserId, userId)),
     client.delete(userReportComment).where(eq(userReportComment.userId, userId)),
+    client.delete(automatedModeration).where(eq(automatedModeration.userId, userId)),
+  ]);
+
+  // Batch 7: Staff & applications
+  await Promise.all([
+    client.delete(staffApplication).where(eq(staffApplication.applicantUserId, userId)),
+    client.delete(supportReview).where(eq(supportReview.userId, userId)),
+  ]);
+
+  // Batch 8: Financial & rewards
+  await Promise.all([
     client.delete(bankTransfers).where(eq(bankTransfers.senderId, userId)),
     client.delete(bankTransfers).where(eq(bankTransfers.receiverId, userId)),
-    client.delete(automatedModeration).where(eq(automatedModeration.userId, userId)),
-    client.delete(supportReview).where(eq(supportReview.userId, userId)),
-    client
-      .delete(kageDefendedChallenges)
-      .where(eq(kageDefendedChallenges.userId, userId)),
-    client
-      .delete(kageDefendedChallenges)
-      .where(eq(kageDefendedChallenges.kageId, userId)),
-    client.delete(questHistory).where(eq(questHistory.userId, userId)),
+    client.delete(userRewards).where(eq(userRewards.awardedById, userId)),
+    client.delete(userRewards).where(eq(userRewards.receiverId, userId)),
+    client.delete(userVote).where(eq(userVote.userId, userId)),
+  ]);
+
+  // Batch 9: Reviews & social
+  await Promise.all([
+    client.delete(userReview).where(eq(userReview.authorUserId, userId)),
+    client.delete(userReview).where(eq(userReview.targetUserId, userId)),
+    client.delete(userNindo).where(eq(userNindo.userId, userId)),
     client.delete(userLikes).where(eq(userLikes.userId, userId)),
-    client.delete(staffApplication).where(eq(staffApplication.applicantUserId, userId)),
-    client.delete(conceptImage).where(eq(conceptImage.userId, userId)),
-    client.delete(userBadge).where(eq(userBadge.userId, userId)),
     client.delete(userRequest).where(eq(userRequest.senderId, userId)),
     client.delete(userRequest).where(eq(userRequest.receiverId, userId)),
-    client.delete(linkPromotion).where(eq(linkPromotion.userId, userId)),
-    client.delete(linkPromotion).where(eq(linkPromotion.reviewedBy, userId)),
-    client.delete(userVote).where(eq(userVote.userId, userId)),
-    client.delete(poll).where(eq(poll.createdByUserId, userId)),
-    client.delete(pollOption).where(eq(pollOption.targetUserId, userId)),
-    client.delete(pollOption).where(eq(pollOption.createdByUserId, userId)),
-    client.delete(userPollVote).where(eq(userPollVote.userId, userId)),
-    client.delete(userUpload).where(eq(userUpload.userId, userId)),
+  ]);
+
+  // Batch 10: Battle & war
+  await Promise.all([
+    client.delete(mpvpBattleUser).where(eq(mpvpBattleUser.userId, userId)),
+    client.delete(kageDefendedChallenges).where(eq(kageDefendedChallenges.userId, userId)),
+    client.delete(kageDefendedChallenges).where(eq(kageDefendedChallenges.kageId, userId)),
     client.delete(warKill).where(eq(warKill.killerId, userId)),
     client.delete(warKill).where(eq(warKill.victimId, userId)),
     client.delete(raidParticipation).where(eq(raidParticipation.userId, userId)),
     client.delete(userRaidBuff).where(eq(userRaidBuff.userId, userId)),
   ]);
+
+  // Batch 11: Misc
+  await Promise.all([
+    client.delete(damageSimulation).where(eq(damageSimulation.userId, userId)),
+    client.delete(conceptImage).where(eq(conceptImage.userId, userId)),
+    client.delete(userBadge).where(eq(userBadge.userId, userId)),
+    client.delete(linkPromotion).where(eq(linkPromotion.userId, userId)),
+    client.delete(linkPromotion).where(eq(linkPromotion.reviewedBy, userId)),
+    client.delete(userUpload).where(eq(userUpload.userId, userId)),
+  ]);
+
+  // Final batch: Delete main userData record (must be last)
+  await client.delete(userData).where(eq(userData.userId, userId));
 };
