@@ -454,17 +454,20 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
           subtitle={`Latest ${Math.min(REPORT_CONTEXT_WINDOW, report.additionalContext.length)} messages leading up to report`}
           initialBreak
         >
-          {report.additionalContext.map((context) => (
-            <Post
-              key={`context-${context.userId}-${context.createdAt.getTime()}`}
-              user={context}
-            >
-              {context.content}
-              <p className="absolute right-2 bottom-0 text-gray-600 text-xs italic">
-                @{context.createdAt.toLocaleString()}
-              </p>
-            </Post>
-          ))}
+          {report.additionalContext.map((context) => {
+            const createdAt = new Date(context.createdAt);
+            return (
+              <Post
+                key={`context-${context.userId}-${createdAt.getTime()}`}
+                user={context}
+              >
+                {context.content}
+                <p className="absolute right-2 bottom-0 text-gray-600 text-xs italic">
+                  @{createdAt.toLocaleString()}
+                </p>
+              </Post>
+            );
+          })}
         </ContentBox>
       )}
     </>
