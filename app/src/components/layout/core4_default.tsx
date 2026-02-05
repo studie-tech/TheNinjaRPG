@@ -726,9 +726,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
             </SheetTrigger>
             <SheetContent side="left">
               <SheetHeader className="text-left">
-                <VisuallyHidden>
+                <VisuallyHidden.Root>
                   <SheetTitle>Test</SheetTitle>
-                </VisuallyHidden>
+                </VisuallyHidden.Root>
                 <Suspense fallback={<Loader explanation="Loading..." />}>
                   {pathname === "/combat" ? (
                     <>
@@ -766,9 +766,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                 )}
               </SheetTrigger>
               <SheetContent>
-                <VisuallyHidden>
+                <VisuallyHidden.Root>
                   <SheetTitle>Test</SheetTitle>
-                </VisuallyHidden>
+                </VisuallyHidden.Root>
                 <Suspense fallback={<Loader explanation="Loading..." />}>
                   <SheetHeader>
                     {/* biome-ignore lint/a11y/useKeyWithClickEvents: Sheet panel - clicking outside content closes it, keyboard handled by Sheet component */}
