@@ -4,14 +4,11 @@ import {
   DURABILITY_USABILITY_THR,
   ID_ANIMATION_SMOKE,
   NO_DURABILITY_LOSS_COMBATS,
+  POST_DAMAGE_MODIFIER_TYPES,
 } from "@/drizzle/constants";
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
-import {
-  dmgConfig as config,
-  damageModifierTypes,
-  POST_PIERCE_TAGS,
-} from "./constants";
+import { dmgConfig as config, damageModifierTypes } from "./constants";
 import {
   absorb,
   afterburn,
@@ -318,21 +315,34 @@ export const applyEffects = (
       );
     });
 
-
   // Separate non-damage-modifier effects from damage modifier effects
-  // Note: pierce and post-pierce tags are explicitly excluded here to maintain
-  // the sortEffects ordering where damage modifiers run BEFORE pierce
+  // Note: pierce is explicitly excluded here to maintain the sortEffects ordering
+  // where damage modifiers run BEFORE pierce (pierce bypasses damage reduction)
+  // Note: POST_DAMAGE_MODIFIER_TYPES (wound, afterburn, reflect, recoil, lifesteal, absorb)
+  // are excluded here because they must read post-mitigated damage values
+  // Note: increaseheal/decreaseheal are excluded because they modify lifesteal_hp/absorb_hp
+  // which are set by post-damage modifiers
   const nonDamageModifierEffects = usersEffects
     .filter((e) => e.type !== "mirror" && e.type !== "copy")
     .filter((e) => !damageModifierTypes.includes(e.type))
+    .filter((e) => !POST_DAMAGE_MODIFIER_TYPES.includes(e.type))
     .filter((e) => e.type !== "pierce")
-    .filter((e) => !POST_PIERCE_TAGS.includes(e.type));
+    .filter((e) => e.type !== "increaseheal" && e.type !== "decreaseheal");
 
-  // Separate pierce effects (must run AFTER damage modifiers per sortEffects ordering)
+  // Separate pierce effects (must run AFTER damage modifiers, BEFORE post-damage modifiers)
   const pierceEffects = usersEffects.filter((e) => e.type === "pierce");
 
-  // Separate post-pierce effects (must run AFTER pierce per sortEffects ordering)
-  const postPierceEffects = usersEffects.filter((e) => POST_PIERCE_TAGS.includes(e.type));
+  // Separate post-damage-modifier effects (wound, afterburn, reflect, recoil, lifesteal, absorb)
+  // These depend on post-mitigated damage values, so they must run after pierce
+  const postDamageModifierEffects = usersEffects.filter((e) =>
+    POST_DAMAGE_MODIFIER_TYPES.includes(e.type),
+  );
+
+  // Separate heal adjustment effects (increaseheal/decreaseheal)
+  // These modify lifesteal_hp/absorb_hp so they must run AFTER post-damage modifiers set those values
+  const healAdjustmentEffects = usersEffects.filter(
+    (e) => e.type === "increaseheal" || e.type === "decreaseheal",
+  );
 
   // Separate damage modifier effects by stage
   const stage1DamageModifiers = usersEffects
@@ -399,8 +409,8 @@ export const applyEffects = (
     );
   });
 
-  // Apply pierce effects AFTER all damage modifiers
-  // This maintains the sortEffects ordering where pierce bypasses damage reduction
+  // Apply pierce effects AFTER damage modifiers but BEFORE post-damage modifiers
+  // Pierce adds damage that should be included in post-damage calculations (lifesteal, etc.)
   pierceEffects.sort(sortEffects).forEach((effect) => {
     applySingleEffect(
       consequences,
@@ -416,9 +426,27 @@ export const applyEffects = (
     );
   });
 
-  // Apply post-pierce effects AFTER pierce (lifesteal, wound, absorb, etc.)
-  // These tags read damage consequences from pierce, so they must run after pierce
-  postPierceEffects.sort(sortEffects).forEach((effect) => {
+  // Apply post-damage-modifier effects (wound, afterburn, reflect, recoil, lifesteal, absorb)
+  // These read consequence.damage to calculate their effect, so they must run after pierce
+  // to include pierce damage in their calculations
+  postDamageModifierEffects.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Apply heal adjustment effects (increaseheal/decreaseheal) AFTER post-damage modifiers
+  // These modify lifesteal_hp/absorb_hp values that are set by lifesteal/absorb effects
+  healAdjustmentEffects.sort(sortEffects).forEach((effect) => {
     applySingleEffect(
       consequences,
       newUsersState,

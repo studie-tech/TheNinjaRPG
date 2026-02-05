@@ -1154,6 +1154,19 @@ export const BATTLE_TAG_STACKING = true;
 export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
 export const STREAK_LEVEL_DIFF = 10;
 
+/**
+ * Effect types that depend on post-mitigated damage values.
+ * These must be processed AFTER damage modifiers and pierce have been applied.
+ */
+export const POST_DAMAGE_MODIFIER_TYPES: string[] = [
+  "wound",
+  "afterburn",
+  "reflect",
+  "recoil",
+  "lifesteal",
+  "absorb",
+];
+
 // Black market config
 export const RYO_FOR_REP_DAYS_FROZEN = 3;
 export const RYO_FOR_REP_DAYS_AUTO_DELIST = 30;
