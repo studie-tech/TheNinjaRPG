@@ -1,6 +1,6 @@
 "use client";
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import { SignedIn, SignedOut, UserButton, useUser } from "@clerk/nextjs";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   Bell,
   Briefcase,
@@ -1088,7 +1088,6 @@ const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
 /**
  * Show strongest users
  */
-import { useUser } from "@clerk/nextjs";
 
 const StrongestUsersBanner: React.FC = () => {
   // State
