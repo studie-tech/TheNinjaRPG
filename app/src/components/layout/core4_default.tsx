@@ -37,13 +37,6 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// ...existing code...
-
-// Example usage inside a component:
-// const mobileNavbarButtonStyle = "your-navbar-button-class";
-// <Link href="/jobs" className="relative -top-2 flex justify-center" prefetch={true}>
-//   <Briefcase className={mobileNavbarButtonStyle} />
-// </Link>
 import {
   Sheet,
   SheetContent,
@@ -603,7 +596,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                   <Footer />
                 </div>
                 {userData ? (
-                  <div className="absolute top-0 right-0 bottom-0 left-0 grid grid-cols-7 items-center justify-center md:hidden">
+                  <div className="absolute top-0 right-0 bottom-0 left-0 grid grid-cols-8 items-center justify-center md:hidden">
                     <div></div>
                     <Link
                       href="/profile"
