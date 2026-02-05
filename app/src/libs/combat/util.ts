@@ -59,7 +59,7 @@ import type { ZodAllTags } from "@/validators/combat";
 import type { PathCalculator, TerrainHex } from "../hexgrid";
 import { defineHex } from "../hexgrid";
 import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
-import { allState, publicState } from "./constants";
+import { allState, POST_PIERCE_TAGS, publicState } from "./constants";
 import { checkFriendlyFire } from "./process";
 import { getPower } from "./tags";
 import type {
@@ -910,17 +910,8 @@ export const sortEffects = (
     "increasedamagetaken",
     // Piercing damage
     "pierce",
-    // Post-modifiers after pierce
-    "lifesteal",
-    "drain",
-    "poison",
-    "afterburn",
-    "absorb",
-    "recoil",
-    "reflect",
-    "wound",
-    "decreaseheal",
-    "increaseheal",
+    // Post-modifiers after pierce (uses shared constant from constants.ts)
+    ...(POST_PIERCE_TAGS as ZodAllTags["type"][]),
     "copy",
     "mirror",
     // Time effects

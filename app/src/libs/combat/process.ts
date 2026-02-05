@@ -7,7 +7,11 @@ import {
 } from "@/drizzle/constants";
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
-import { dmgConfig as config, damageModifierTypes } from "./constants";
+import {
+  dmgConfig as config,
+  damageModifierTypes,
+  POST_PIERCE_TAGS,
+} from "./constants";
 import {
   absorb,
   afterburn,
@@ -314,18 +318,6 @@ export const applyEffects = (
       );
     });
 
-  // Post-pierce tags that must run AFTER pierce effects (per sortEffects ordering)
-  // These tags read damage consequences that pierce creates, so they must run after pierce
-  const postPierceTags = [
-    "lifesteal",
-    "drain",
-    "poison",
-    "afterburn",
-    "absorb",
-    "recoil",
-    "reflect",
-    "wound",
-  ];
 
   // Separate non-damage-modifier effects from damage modifier effects
   // Note: pierce and post-pierce tags are explicitly excluded here to maintain
@@ -334,13 +326,13 @@ export const applyEffects = (
     .filter((e) => e.type !== "mirror" && e.type !== "copy")
     .filter((e) => !damageModifierTypes.includes(e.type))
     .filter((e) => e.type !== "pierce")
-    .filter((e) => !postPierceTags.includes(e.type));
+    .filter((e) => !POST_PIERCE_TAGS.includes(e.type));
 
   // Separate pierce effects (must run AFTER damage modifiers per sortEffects ordering)
   const pierceEffects = usersEffects.filter((e) => e.type === "pierce");
 
   // Separate post-pierce effects (must run AFTER pierce per sortEffects ordering)
-  const postPierceEffects = usersEffects.filter((e) => postPierceTags.includes(e.type));
+  const postPierceEffects = usersEffects.filter((e) => POST_PIERCE_TAGS.includes(e.type));
 
   // Separate damage modifier effects by stage
   const stage1DamageModifiers = usersEffects
