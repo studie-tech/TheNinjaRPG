@@ -280,7 +280,11 @@ export const homeRouter = createTRPCRouter({
           nonStoredNonMaterials.filter((ui) => ui.item.isEventItem).length || 0;
         const nMaterials =
           nonStoredItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
-        if (!userItemResult.item.isEventItem && nRegularItems >= calcMaxItems(user)) {
+        if (
+          !userItemResult.item.isEventItem &&
+          userItemResult.item.itemType !== "MATERIAL" &&
+          nRegularItems >= calcMaxItems(user)
+        ) {
           return errorResponse("Inventory is full");
         }
         if (userItemResult.item.isEventItem && nEventItems >= calcMaxEventItems(user)) {
