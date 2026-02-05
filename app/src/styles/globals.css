@@ -382,6 +382,16 @@
   }
 }
 
+/* Fix iOS double-tap delay by disabling double-tap-to-zoom on interactive elements */
+@layer base {
+  button,
+  a,
+  [role="button"],
+  .cursor-pointer {
+    touch-action: manipulation;
+  }
+}
+
 ::-webkit-scrollbar {
   @apply w-5 h-2.5;
 }
