@@ -1,5 +1,6 @@
 "use client";
 import { SignedIn, SignedOut, UserButton, useUser } from "@clerk/nextjs";
+import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   Bell,
@@ -31,7 +32,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React, { Suspense, useEffect, useState } from "react";
 import ReactDOM from "react-dom";
-import { SiDiscord, SiGithub } from "react-icons/si";
 import { cn } from "src/libs/shadui";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
