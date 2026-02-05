@@ -51,6 +51,7 @@ import {
   COST_SWAP_VILLAGE,
 } from "@/drizzle/constants";
 import type { Bloodline, Village } from "@/drizzle/schema";
+import { useLocalStorage } from "@/hooks/localstorage";
 import Accordion from "@/layout/Accordion";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
@@ -67,6 +68,15 @@ import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import {
+  DEFAULT_MOBILE_NAV_CONFIG,
+  getMobileNavIcon,
+  getNavOptionById,
+  MOBILE_NAV_OPTIONS,
+  MOBILE_NAV_STORAGE_KEY,
+  type MobileNavConfig,
+  normalizeMobileNavConfig,
+} from "@/libs/mobileNavConfig";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
@@ -302,6 +312,15 @@ export default function EditProfile() {
           onClick={setActiveElement}
         >
           <BattleSettingsEdit userId={userData.userId} />
+        </Accordion>
+        <Accordion
+          title="Mobile Navigation"
+          selectedTitle={activeElement}
+          unselectedSubtitle="Customize mobile navigation bar buttons"
+          selectedSubtitle="Choose which shortcuts appear on mobile"
+          onClick={setActiveElement}
+        >
+          <MobileNavSettings />
         </Accordion>
         {canSwapBloodline(userData.role) && (
           <Accordion
@@ -2244,6 +2263,116 @@ const ResetSkills: React.FC = () => {
           : ` for ${COST_SKILL_RESET} reputation points`}
         . This action cannot be undone. Are you sure you want to continue?
       </Confirm2>
+    </div>
+  );
+};
+
+/**
+ * Mobile Navigation Settings component
+ */
+const MobileNavSettings: React.FC = () => {
+  const [config, setConfig] = useLocalStorage<MobileNavConfig>(
+    MOBILE_NAV_STORAGE_KEY,
+    DEFAULT_MOBILE_NAV_CONFIG,
+  );
+
+  const normalizedConfig = normalizeMobileNavConfig(config);
+
+  // Get all selected IDs to filter duplicates
+  const selectedIds = [...normalizedConfig.left, ...normalizedConfig.right];
+
+  const handleLeftChange = (index: number, newId: string) => {
+    const newLeft = [...normalizedConfig.left];
+    newLeft[index] = newId;
+    setConfig({ ...normalizedConfig, left: newLeft });
+  };
+
+  const handleRightChange = (index: number, newId: string) => {
+    const newRight = [...normalizedConfig.right];
+    newRight[index] = newId;
+    setConfig({ ...normalizedConfig, right: newRight });
+  };
+
+  const handleReset = () => {
+    setConfig(DEFAULT_MOBILE_NAV_CONFIG);
+  };
+
+  const renderSlotSelector = (
+    currentId: string,
+    onChange: (newId: string) => void,
+    label: string,
+  ) => {
+    const Icon = getMobileNavIcon(currentId);
+    return (
+      <div className="flex items-center gap-2">
+        <Label className="w-16 text-sm">{label}</Label>
+        <Select value={currentId} onValueChange={onChange}>
+          <SelectTrigger className="w-full">
+            <SelectValue>
+              <div className="flex items-center gap-2">
+                <Icon className="h-4 w-4" />
+                <span>{getNavOptionById(currentId)?.name}</span>
+              </div>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {MOBILE_NAV_OPTIONS.map((option) => {
+              const OptionIcon = getMobileNavIcon(option.id);
+              const isDisabled =
+                selectedIds.includes(option.id) && option.id !== currentId;
+              return (
+                <SelectItem key={option.id} value={option.id} disabled={isDisabled}>
+                  <div className="flex items-center gap-2">
+                    <OptionIcon className="h-4 w-4" />
+                    <span>{option.name}</span>
+                  </div>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4 p-3">
+      <p className="text-muted-foreground text-sm">
+        Customize the 5 buttons shown in your mobile navigation bar. The center button
+        automatically shows Village or Travel based on your location. Note: If you
+        configure Travel in a slot, it will be hidden when outside the village (since
+        the center button already shows Travel in that case).
+      </p>
+
+      <div className="space-y-3">
+        <div className="font-semibold text-sm">Left Side (2 buttons)</div>
+        {normalizedConfig.left.map((id, index) => (
+          <div key={`left-${index}`}>
+            {renderSlotSelector(
+              id,
+              (newId) => handleLeftChange(index, newId),
+              `Slot ${index + 1}`,
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <div className="font-semibold text-sm">Right Side (3 buttons)</div>
+        {normalizedConfig.right.map((id, index) => (
+          <div key={`right-${index}`}>
+            {renderSlotSelector(
+              id,
+              (newId) => handleRightChange(index, newId),
+              `Slot ${index + 1}`,
+            )}
+          </div>
+        ))}
+      </div>
+
+      <Button variant="outline" size="sm" onClick={handleReset}>
+        Reset to Default
+      </Button>
     </div>
   );
 };

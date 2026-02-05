@@ -8,22 +8,17 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  CircleUserRound,
-  Cog,
   Compass,
   Earth,
   Eclipse,
   Eye,
   EyeOff,
   House,
-  Inbox,
   Info,
   Link2,
   LogIn,
   Menu,
   MessageCircleWarning,
-  MessagesSquare,
-  Milk,
   Music,
   ShieldAlert,
   ShieldCheck,
@@ -85,6 +80,14 @@ import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import TutorialAssistant from "@/layout/TutorialAssistant";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { getMainNavbarLinks, useGameMenu } from "@/libs/menus";
+import {
+  DEFAULT_MOBILE_NAV_CONFIG,
+  getMobileNavIcon,
+  getNavOptionById,
+  MOBILE_NAV_STORAGE_KEY,
+  type MobileNavConfig,
+  normalizeMobileNavConfig,
+} from "@/libs/mobileNavConfig";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
 import { groupBy } from "@/utils/grouping";
@@ -368,11 +371,38 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
     </>
   );
 
+  // Mobile navigation config from localStorage
+  const [rawMobileNavConfig] = useLocalStorage<MobileNavConfig>(
+    MOBILE_NAV_STORAGE_KEY,
+    DEFAULT_MOBILE_NAV_CONFIG,
+  );
+  const mobileNavConfig = normalizeMobileNavConfig(rawMobileNavConfig);
+
   // Styling for yellow buttons
   const yellowButtonStyle =
     "h-14 w-14 sm:h-15 sm:w-15 md:h-16 md:w-16 bg-yellow-500 hover:bg-yellow-300 transition-colors text-orange-100 rounded-full p-3 shadow-md shadow-black border-2 stroke-3";
   const mobileNavbarButtonStyle =
     "h-16 w-16  hover:text-red-300 transition-colors text-orange-100 bg-opacity-50 p-2";
+
+  // Helper to render a mobile nav button from config.
+  // When outside village (!location), skip rendering "travel" since the center button shows Travel.
+  // Returns null to hide the button but the grid wrapper div is still rendered to maintain layout.
+  const renderMobileNavButton = (optionId: string) => {
+    // Skip rendering travel button when outside village (center button shows Travel instead)
+    if (optionId === "travel" && !location) return null;
+    const option = getNavOptionById(optionId);
+    if (!option) return null;
+    const Icon = getMobileNavIcon(optionId);
+    return (
+      <Link
+        href={option.href}
+        className="relative -top-2 flex justify-center"
+        prefetch={true}
+      >
+        <Icon className={mobileNavbarButtonStyle} />
+      </Link>
+    );
+  };
 
   return (
     <GlobalAudioProvider userData={userData}>
@@ -597,74 +627,36 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                 {userData ? (
                   <div className="absolute top-0 right-0 bottom-0 left-0 grid grid-cols-7 items-center justify-center md:hidden">
                     <div></div>
-                    <Link
-                      href="/profile"
-                      className="relative -top-2 flex justify-center"
-                      prefetch={true}
-                    >
-                      <CircleUserRound className={mobileNavbarButtonStyle} />
-                    </Link>
-                    <Link
-                      href="/inbox"
-                      className="relative -top-2 flex justify-center"
-                      prefetch={true}
-                    >
-                      <Inbox className={mobileNavbarButtonStyle} />
-                    </Link>
+                    {/* Left buttons from config */}
+                    {mobileNavConfig.left.map((optionId) => (
+                      <div key={optionId}>{renderMobileNavButton(optionId)}</div>
+                    ))}
+                    {/* CENTER button - unchanged conditional logic */}
                     {location ? (
-                      <>
-                        <Link
-                          href="/village"
-                          className="relative -top-8 flex justify-center"
-                          prefetch={true}
-                        >
-                          <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
-                            <House className={cn(yellowButtonStyle)} />
-                          </div>
-                        </Link>
-                        <Link
-                          href="/travel"
-                          className="relative -top-2 flex justify-center"
-                          prefetch={true}
-                        >
-                          <Compass className={mobileNavbarButtonStyle} />
-                        </Link>
-                      </>
+                      <Link
+                        href="/village"
+                        className="relative -top-8 flex justify-center"
+                        prefetch={true}
+                      >
+                        <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
+                          <House className={cn(yellowButtonStyle)} />
+                        </div>
+                      </Link>
                     ) : (
-                      <>
-                        <Link
-                          href="/travel"
-                          className="relative -top-8 flex justify-center"
-                          prefetch={true}
-                        >
-                          <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
-                            <Compass className={mobileNavbarButtonStyle} />
-                          </div>
-                        </Link>
-                        <Link
-                          href="/items"
-                          className="relative -top-2 flex justify-center"
-                          prefetch={true}
-                        >
-                          <Milk className={mobileNavbarButtonStyle} />
-                        </Link>
-                      </>
+                      <Link
+                        href="/travel"
+                        className="relative -top-8 flex justify-center"
+                        prefetch={true}
+                      >
+                        <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
+                          <Compass className={mobileNavbarButtonStyle} />
+                        </div>
+                      </Link>
                     )}
-
-                    <Link
-                      href="/tavern"
-                      className="relative -top-2 flex justify-center"
-                      prefetch={true}
-                    >
-                      <MessagesSquare className={mobileNavbarButtonStyle} />
-                    </Link>
-                    <Link
-                      href="/profile/edit"
-                      className="relative -top-2 flex justify-center"
-                      prefetch={true}
-                    >
-                      <Cog className={mobileNavbarButtonStyle} />
-                    </Link>
+                    {/* Right buttons from config */}
+                    {mobileNavConfig.right.map((optionId) => (
+                      <div key={optionId}>{renderMobileNavButton(optionId)}</div>
+                    ))}
                   </div>
                 ) : (
                   <div className="absolute top-4 right-0 left-0 block md:hidden">
