@@ -125,6 +125,8 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Queries
+  const parsedMinPrice = Number.parseFloat(minPrice);
+  const parsedMaxPrice = Number.parseFloat(maxPrice);
   const {
     data: listings,
     isLoading,
@@ -133,8 +135,14 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
   } = api.auction.getAuctionListings.useInfiniteQuery(
     {
       itemName: searchTerm || undefined,
-      minPrice: minPrice ? Math.max(0, parseFloat(minPrice)) || undefined : undefined,
-      maxPrice: maxPrice ? Math.max(0, parseFloat(maxPrice)) || undefined : undefined,
+      minPrice:
+        minPrice && Number.isFinite(parsedMinPrice)
+          ? Math.max(0, parsedMinPrice)
+          : undefined,
+      maxPrice:
+        maxPrice && Number.isFinite(parsedMaxPrice)
+          ? Math.max(0, parsedMaxPrice)
+          : undefined,
       status: selectedStatus as "ACTIVE" | "SOLD" | "EXPIRED" | "CANCELLED",
       limit: 10,
     },
