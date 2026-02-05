@@ -171,12 +171,12 @@ export const occupationRouter = createTRPCRouter({
       const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
       // Clan crafting time reduction (percentage stored in clan object)
       // Max boost is 20% (10 levels × 2%), clamp as safety guard
+      // Only apply for real clans, not outlaw factions/towns
       const clanCraftingTimeBoostCap =
         (CLAN_BOOST_MAX_LEVEL * CLAN_BOOST_PERCENT_PER_LEVEL) / 100;
-      const clanCraftingTimeBoost = Math.min(
-        (user.clan?.craftingTimeBoost ?? 0) / 100,
-        clanCraftingTimeBoostCap,
-      );
+      const clanCraftingTimeBoost = user.isOutlaw
+        ? 0
+        : Math.min((user.clan?.craftingTimeBoost ?? 0) / 100, clanCraftingTimeBoostCap);
       const clanCraftingTimeFactor = 1 - clanCraftingTimeBoost;
       const craftSeconds = Math.round(
         craftingTime * 60 * shrineBoostFactor * clanCraftingTimeFactor * input.quantity,
@@ -254,8 +254,8 @@ export const occupationRouter = createTRPCRouter({
       }
 
       // Award crafting experience (from item config, or 0 if not set)
-      // Apply clan crafting experience boost
-      const clanCraftingExpBoost = (user.clan?.craftingExpBoost ?? 0) / 100;
+      // Apply clan crafting experience boost (only for real clans, not outlaw factions/towns)
+      const clanCraftingExpBoost = user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100;
       const baseExpGain =
         (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
       const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
@@ -392,8 +392,8 @@ export const occupationRouter = createTRPCRouter({
       });
 
       // Award small amount of crafting experience (half of crystal's crafting experience, or 0 if not set)
-      // Apply clan crafting experience boost
-      const clanCraftingExpBoost = (user.clan?.craftingExpBoost ?? 0) / 100;
+      // Apply clan crafting experience boost (only for real clans, not outlaw factions/towns)
+      const clanCraftingExpBoost = user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100;
       const baseExpGain = Math.floor((crystalItem.craftingExperience ?? 0) / 2);
       const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
       // Update trackers with crafting experience gained

@@ -127,7 +127,8 @@ export const trainRouter = createTRPCRouter({
       const gameFactor = trainSetting?.value ?? 1;
       const warFactor = (100 + (warSetting?.value ?? 0)) / 100;
       const boost = getStrucBoost("trainBoostPerLvl", user.village?.structures) / 100;
-      const clanBoost = (user?.clan?.trainingBoost ?? 0) / 100;
+      // Only apply clan boost for real clans (not outlaw factions/towns)
+      const clanBoost = user?.isOutlaw ? 0 : (user?.clan?.trainingBoost ?? 0) / 100;
       const factor = gameFactor * (1 + boost + clanBoost + shrineBoost) * warFactor;
       const seconds = (Date.now() - user.trainingStartedAt.getTime()) / 1000;
       const minutes = seconds / 60;
