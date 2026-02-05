@@ -1,11 +1,9 @@
 "use client";
-                    <Link
-                      href="/jobs"
-                      className="relative -top-2 flex justify-center"
-                      prefetch={true}
-                    >
-                      <Briefcase className={mobileNavbarButtonStyle} />
-                    </Link>
+import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import {
+  Bell,
+  Briefcase,
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -33,10 +31,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React, { Suspense, useEffect, useState } from "react";
 import ReactDOM from "react-dom";
+import { SiDiscord, SiGithub } from "react-icons/si";
 import { cn } from "src/libs/shadui";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+// ...existing code...
+
+// Example usage inside a component:
+// const mobileNavbarButtonStyle = "your-navbar-button-class";
+// <Link href="/jobs" className="relative -top-2 flex justify-center" prefetch={true}>
+//   <Briefcase className={mobileNavbarButtonStyle} />
+// </Link>
 import {
   Sheet,
   SheetContent,
@@ -653,7 +660,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                     )}
 
                     <Link
-                      href="/jobs"
+                      href="/occupation"
                       className="relative -top-2 flex justify-center"
                       prefetch={true}
                     >
@@ -719,9 +726,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
             </SheetTrigger>
             <SheetContent side="left">
               <SheetHeader className="text-left">
-                <VisuallyHidden.Root>
+                <VisuallyHidden>
                   <SheetTitle>Test</SheetTitle>
-                </VisuallyHidden.Root>
+                </VisuallyHidden>
                 <Suspense fallback={<Loader explanation="Loading..." />}>
                   {pathname === "/combat" ? (
                     <>
@@ -759,9 +766,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                 )}
               </SheetTrigger>
               <SheetContent>
-                <VisuallyHidden.Root>
+                <VisuallyHidden>
                   <SheetTitle>Test</SheetTitle>
-                </VisuallyHidden.Root>
+                </VisuallyHidden>
                 <Suspense fallback={<Loader explanation="Loading..." />}>
                   <SheetHeader>
                     {/* biome-ignore lint/a11y/useKeyWithClickEvents: Sheet panel - clicking outside content closes it, keyboard handled by Sheet component */}
@@ -1081,6 +1088,8 @@ const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
 /**
  * Show strongest users
  */
+import { useUser } from "@clerk/nextjs";
+
 const StrongestUsersBanner: React.FC = () => {
   // State
   const { isLoaded } = useUser();
