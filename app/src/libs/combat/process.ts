@@ -314,16 +314,33 @@ export const applyEffects = (
       );
     });
 
+  // Post-pierce tags that must run AFTER pierce effects (per sortEffects ordering)
+  // These tags read damage consequences that pierce creates, so they must run after pierce
+  const postPierceTags = [
+    "lifesteal",
+    "drain",
+    "poison",
+    "afterburn",
+    "absorb",
+    "recoil",
+    "reflect",
+    "wound",
+  ];
+
   // Separate non-damage-modifier effects from damage modifier effects
-  // Note: pierce is explicitly excluded here to maintain the sortEffects ordering
-  // where damage modifiers run BEFORE pierce (pierce bypasses damage reduction)
+  // Note: pierce and post-pierce tags are explicitly excluded here to maintain
+  // the sortEffects ordering where damage modifiers run BEFORE pierce
   const nonDamageModifierEffects = usersEffects
     .filter((e) => e.type !== "mirror" && e.type !== "copy")
     .filter((e) => !damageModifierTypes.includes(e.type))
-    .filter((e) => e.type !== "pierce");
+    .filter((e) => e.type !== "pierce")
+    .filter((e) => !postPierceTags.includes(e.type));
 
   // Separate pierce effects (must run AFTER damage modifiers per sortEffects ordering)
   const pierceEffects = usersEffects.filter((e) => e.type === "pierce");
+
+  // Separate post-pierce effects (must run AFTER pierce per sortEffects ordering)
+  const postPierceEffects = usersEffects.filter((e) => postPierceTags.includes(e.type));
 
   // Separate damage modifier effects by stage
   const stage1DamageModifiers = usersEffects
@@ -393,6 +410,23 @@ export const applyEffects = (
   // Apply pierce effects AFTER all damage modifiers
   // This maintains the sortEffects ordering where pierce bypasses damage reduction
   pierceEffects.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Apply post-pierce effects AFTER pierce (lifesteal, wound, absorb, etc.)
+  // These tags read damage consequences from pierce, so they must run after pierce
+  postPierceEffects.sort(sortEffects).forEach((effect) => {
     applySingleEffect(
       consequences,
       newUsersState,
