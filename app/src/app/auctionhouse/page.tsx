@@ -133,8 +133,8 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
   } = api.auction.getAuctionListings.useInfiniteQuery(
     {
       itemName: searchTerm || undefined,
-      minPrice: minPrice ? parseFloat(minPrice) : undefined,
-      maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+      minPrice: minPrice ? Math.max(0, parseFloat(minPrice)) || undefined : undefined,
+      maxPrice: maxPrice ? Math.max(0, parseFloat(maxPrice)) || undefined : undefined,
       status: selectedStatus as "ACTIVE" | "SOLD" | "EXPIRED" | "CANCELLED",
       limit: 10,
     },
@@ -259,6 +259,7 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
             <Input
               id="minPrice"
               type="number"
+              min={0}
               placeholder="0"
               value={minPrice}
               onChange={(e) => setMinPrice(e.target.value)}
@@ -270,6 +271,7 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
             <Input
               id="maxPrice"
               type="number"
+              min={0}
               placeholder="∞"
               value={maxPrice}
               onChange={(e) => setMaxPrice(e.target.value)}
