@@ -69,6 +69,7 @@ Sentry.init({
     "No extension found with id:", // Browser extension not found error - occurs when any extension (MetaMask, etc.) is disabled after page load
     "ResizeObserver loop limit exceeded", // Benign browser warning from ResizeObserver specification - occurs when Radix UI components (Popover, Select) trigger layout changes during positioning
     "ResizeObserver loop completed with undelivered notifications", // Alternative format of the same benign ResizeObserver warning (used by some browsers)
+    "undefined is not an object (evaluating 'window.webkit.messageHandlers')", // iOS WebKit bridge error - third-party scripts attempting to use iOS native bridge APIs that aren't available in web browser context
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -114,6 +115,9 @@ Sentry.init({
     }
     if (isServerActionSsoCallbackError(event)) {
       return null; // Drop server action errors on SSO callback page (transient network issues)
+    }
+    if (isWebKitMessageHandlersError(event)) {
+      return null; // Drop iOS WebKit bridge errors from third-party scripts
     }
     return event;
   },
@@ -676,6 +680,27 @@ const isThirdPartyStackOverflowError = (event: Sentry.ErrorEvent): boolean => {
   });
 
   return hasNoMeaningfulStackTrace;
+};
+
+/**
+ * Check if an error is an iOS WebKit messageHandlers error.
+ * These occur when third-party scripts attempt to access the iOS WKWebView
+ * JavaScript-to-native bridge API on devices where it's not available.
+ *
+ * UX note: These errors are not visible to users and do not affect application
+ * functionality. They occur in third-party script contexts (analytics, tracking,
+ * consent management, Sentry SDK) that probe for native app features.
+ *
+ * THENINJARPG-2FP: Filter iOS WebKit bridge errors from third-party scripts.
+ */
+const isWebKitMessageHandlersError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+
+  // Check for webkit.messageHandlers access errors (various browser error formats)
+  return (
+    message.includes("window.webkit.messageHandlers") ||
+    message.includes("webkit.messageHandlers")
+  );
 };
 
 function ensureBrowserErrorHandler() {
