@@ -264,11 +264,11 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
                 {occupation.description}
               </p>
               {isCurrentOccupation && isChanging ? (
-                <Button disabled className="w-full">
+                <span className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm opacity-50">
                   Current Occupation
-                </Button>
+                </span>
               ) : selectedOccupation === occupation.type ? (
-                <Button disabled={isPending} className="w-full">
+                <span className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm">
                   {isPending
                     ? isChanging
                       ? "Changing..."
@@ -276,11 +276,11 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
                     : isChanging
                       ? "Confirm Change"
                       : "Confirm Selection"}
-                </Button>
+                </span>
               ) : (
-                <Button variant="outline" className="w-full">
+                <span className="inline-flex w-full items-center justify-center rounded-md border border-input bg-background px-4 py-2 font-medium text-sm hover:bg-accent hover:text-accent-foreground">
                   Select
-                </Button>
+                </span>
               )}
             </button>
           );

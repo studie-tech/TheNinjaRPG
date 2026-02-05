@@ -68,15 +68,21 @@ function MultiSelect({
   return (
     <Popover open={open} onOpenChange={setOpen} {...props}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
+        <div
           role="combobox"
           aria-expanded={open}
+          tabIndex={0}
           className={cn(
-            "h-max w-full justify-between",
+            "flex h-max w-full cursor-pointer items-center justify-between rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             isDirty ? "border-orange-300" : "border-input",
           )}
           onClick={() => setOpen(!open)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setOpen(!open);
+            }
+          }}
         >
           <div className="flex flex-wrap gap-1">
             {sortedSelected.length > 0 ? (
@@ -112,7 +118,7 @@ function MultiSelect({
             )}
           </div>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-        </Button>
+        </div>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0">
         <Command className={className}>

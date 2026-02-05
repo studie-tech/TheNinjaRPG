@@ -1,41 +1,36 @@
 "use client";
 
-import { Gem, Hammer, Info, Star, Wrench, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { BookOpen, Gem, Hammer, Info, Star, Wrench, Zap } from "lucide-react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import {
-  CONSUMABLE_CRAFTING_TIMES_MINS,
   CRAFTING_MAX_IMBUED_ITEMS,
   CRAFTING_REQUIRED_EXP,
   CRAFTING_TIMES_MINS,
 } from "@/drizzle/constants";
-import type { Item, UserItemWithRelations } from "@/drizzle/schema";
+import type { UserItemWithRelations } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
 import Countdown from "@/layout/Countdown";
+import CraftingCatalog from "@/layout/CraftingCatalog";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Modal2 from "@/layout/Modal2";
 import {
-  getCraftingRank,
   getCraftingRankProgress,
   getCurrentCraftingStatus,
   getEffectiveMaxImbuements,
-  getTotalItemQuantity,
 } from "@/libs/crafting";
 import { calcItemRepairCost } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { getShrineBoost } from "@/utils/village";
 
 export default function OccupationCrafting() {
   // Utils
@@ -64,15 +59,6 @@ export default function OccupationCrafting() {
       imbuement.craftingFinishedAt &&
       new Date(imbuement.craftingFinishedAt) > new Date(),
   );
-
-  const craftItemMutation = api.occupation.craftItem.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      setIsModalOpen(false);
-      setSelectedItem(undefined);
-      await utils.item.getUserItems.invalidate();
-    },
-  });
 
   const imbueItemMutation = api.occupation.imbueItem.useMutation({
     onSuccess: async (data) => {
@@ -127,9 +113,6 @@ export default function OccupationCrafting() {
     },
   });
 
-  const [selectedItem, setSelectedItem] = useState<Item | undefined>(undefined);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [craftQuantity, setCraftQuantity] = useState<number>(1);
   const [selectedImbuableItem, setSelectedImbuableItem] = useState<
     UserItemWithRelations | undefined
   >(undefined);
@@ -142,29 +125,6 @@ export default function OccupationCrafting() {
   const craftingStatus = userData
     ? getCurrentCraftingStatus(userData, userItems || [])
     : null;
-
-  // Calculate max craftable quantity at component level
-  const maxCraftable = useMemo(() => {
-    if (!selectedItem || !craftableItems || !userItems) return 10;
-
-    const craftableItem = craftableItems.find((item) => item.id === selectedItem.id);
-    if (!craftableItem?.craftingRequirements) return 10;
-
-    let max = 10;
-    for (const req of craftableItem.craftingRequirements) {
-      const totalQuantity = getTotalItemQuantity(userItems, req.requirementItemId);
-      const maxForThisMaterial = Math.floor(totalQuantity / req.quantity);
-      max = Math.min(max, maxForThisMaterial);
-    }
-    return max;
-  }, [selectedItem, craftableItems, userItems]);
-
-  // Sync craftQuantity state when maxCraftable changes
-  useEffect(() => {
-    if (craftQuantity > maxCraftable) {
-      setCraftQuantity(Math.max(1, maxCraftable));
-    }
-  }, [maxCraftable, craftQuantity]);
 
   // Derive crystals and imbuable items from user inventory
   const crystals = (userItems || []).filter(
@@ -180,15 +140,6 @@ export default function OccupationCrafting() {
 
   // Guard
   if (userData?.occupation !== "CRAFTING") return null;
-
-  /**
-   * Handle the craft item mutation
-   */
-  const handleCraftItem = () => {
-    if (selectedItem) {
-      craftItemMutation.mutate({ itemId: selectedItem.id, quantity: craftQuantity });
-    }
-  };
 
   const handleImbueItem = () => {
     if (selectedImbuableItem && selectedCrystalUserItem) {
@@ -225,6 +176,28 @@ export default function OccupationCrafting() {
               </div>
               <Progress value={rankProgress.progress} className="h-2" />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Crafting Catalog */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              Crafting Catalog
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4 text-muted-foreground text-sm">
+              Browse all craftable recipes by category. Select a category to view
+              available items.
+            </p>
+            <CraftingCatalog
+              craftableItems={craftableItems}
+              userItems={userItems}
+              userData={userData}
+              isCurrentlyCrafting={craftingStatus?.isCurrentlyCrafting || false}
+            />
           </CardContent>
         </Card>
 
@@ -287,249 +260,6 @@ export default function OccupationCrafting() {
                     ) : null;
                   })()}
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Craft New Item */}
-        {!craftingStatus?.isCurrentlyCrafting && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Hammer className="h-5 w-5" />
-                Available Items to Craft
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ActionSelector
-                items={craftableItems?.map((item) => ({
-                  id: item.id,
-                  name: item.name,
-                  image: item.image,
-                  rarity: item.rarity,
-                  type: "item" as const,
-                  effects: item.effects,
-                  hidden: item.hidden,
-                }))}
-                selectedId={selectedItem?.id}
-                showBgColor={false}
-                showLabels={true}
-                onClick={(id) => {
-                  if (id === selectedItem?.id) {
-                    setSelectedItem(undefined);
-                    setIsModalOpen(false);
-                    setCraftQuantity(1);
-                  } else {
-                    const item = craftableItems?.find((item) => item.id === id);
-                    setSelectedItem(item as Item);
-                    setIsModalOpen(true);
-                    setCraftQuantity(1);
-                  }
-                }}
-              />
-              {isModalOpen && selectedItem && (
-                <Modal2
-                  title="Craft Item"
-                  proceed_label={
-                    craftItemMutation.isPending
-                      ? undefined
-                      : (() => {
-                          const craftableItem = craftableItems?.find(
-                            (item) => item.id === selectedItem.id,
-                          );
-                          const canCraft =
-                            craftableItem?.craftingRequirements?.every((req) => {
-                              const totalQuantity = getTotalItemQuantity(
-                                userItems || [],
-                                req.requirementItemId,
-                              );
-                              return totalQuantity >= req.quantity * craftQuantity;
-                            }) ?? false;
-                          return canCraft ? "Start Crafting" : "Missing Materials";
-                        })()
-                  }
-                  isOpen={isModalOpen}
-                  setIsOpen={setIsModalOpen}
-                  isValid={false}
-                  onAccept={() => {
-                    const craftableItem = craftableItems?.find(
-                      (item) => item.id === selectedItem.id,
-                    );
-                    const canCraft =
-                      craftableItem?.craftingRequirements?.every((req) => {
-                        const totalQuantity = getTotalItemQuantity(
-                          userItems || [],
-                          req.requirementItemId,
-                        );
-                        return totalQuantity >= req.quantity * craftQuantity;
-                      }) ?? false;
-                    if (canCraft) {
-                      handleCraftItem();
-                    }
-                  }}
-                  confirmClassName={(() => {
-                    const craftableItem = craftableItems?.find(
-                      (item) => item.id === selectedItem.id,
-                    );
-                    const canCraft =
-                      craftableItem?.craftingRequirements?.every((req) => {
-                        const totalQuantity = getTotalItemQuantity(
-                          userItems || [],
-                          req.requirementItemId,
-                        );
-                        return totalQuantity >= req.quantity * craftQuantity;
-                      }) ?? false;
-                    return canCraft
-                      ? "bg-blue-600 text-white hover:bg-blue-700"
-                      : "bg-red-600 text-white hover:bg-red-700";
-                  })()}
-                >
-                  <div className="space-y-4">
-                    <ItemWithEffects item={selectedItem} />
-                    {(() => {
-                      const craftableItem = craftableItems?.find(
-                        (item) => item.id === selectedItem.id,
-                      );
-
-                      // Calculate crafting time
-                      const userCraftingRank = getCraftingRank(
-                        userData?.craftingExperience || 0,
-                      );
-                      const craftingTime =
-                        selectedItem.itemType === "CONSUMABLE"
-                          ? CONSUMABLE_CRAFTING_TIMES_MINS[selectedItem.rarity]
-                          : CRAFTING_TIMES_MINS[userCraftingRank][selectedItem.rarity];
-                      const sectors = userData?.village?.sectors?.length || 0;
-                      const shrineBoost = getShrineBoost(
-                        sectors,
-                        "Crafting",
-                        userData?.village,
-                      );
-                      const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
-
-                      // Use component-level maxCraftable (calculated in useMemo)
-                      const hasRequirements =
-                        craftableItem?.craftingRequirements &&
-                        craftableItem.craftingRequirements.length > 0;
-
-                      // Handle edge case where user has insufficient materials
-                      const canAffordAny = maxCraftable > 0;
-                      const effectiveMax = canAffordAny ? maxCraftable : 0;
-                      const effectiveQuantity = canAffordAny
-                        ? Math.min(craftQuantity, maxCraftable)
-                        : 0;
-
-                      // Calculate time and exp - total when materials available, per item when not
-                      const displayQuantity = canAffordAny ? effectiveQuantity : 1;
-                      const displayCraftSeconds = Math.round(
-                        craftingTime * 60 * shrineBoostFactor * displayQuantity,
-                      );
-                      const displayTimeValue =
-                        formatSecondsToTimeDisplay(displayCraftSeconds);
-                      const displayExpGain =
-                        (selectedItem.craftingExperience ?? 0) * displayQuantity;
-
-                      return (
-                        <>
-                          {/* Quantity Selector */}
-                          <div className="rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
-                            <label
-                              htmlFor="craft-quantity"
-                              className="mb-2 block font-medium text-sm"
-                            >
-                              Quantity to Craft (Max: {maxCraftable})
-                            </label>
-                            <Input
-                              id="craft-quantity"
-                              type="number"
-                              min={canAffordAny ? 1 : 0}
-                              max={canAffordAny ? effectiveMax : 0}
-                              value={effectiveQuantity}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 10);
-                                if (
-                                  !Number.isNaN(val) &&
-                                  val >= 1 &&
-                                  val <= effectiveMax
-                                ) {
-                                  setCraftQuantity(val);
-                                }
-                              }}
-                              disabled={!canAffordAny}
-                              className="w-full"
-                            />
-                          </div>
-
-                          {/* Crafting Info */}
-                          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium text-sm">
-                                  {canAffordAny
-                                    ? "Total Crafting Time:"
-                                    : "Crafting Time (per item):"}
-                                </span>
-                                <span className="font-semibold text-sm">
-                                  {displayTimeValue}
-                                </span>
-                              </div>
-                              {displayExpGain > 0 && (
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium text-sm">
-                                    {canAffordAny
-                                      ? "Total Experience Gain:"
-                                      : "Experience Gain (per item):"}
-                                  </span>
-                                  <span className="font-semibold text-green-600 text-sm">
-                                    +{displayExpGain} EXP
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Required Materials */}
-                          {hasRequirements && (
-                            <div className="rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
-                              <h4 className="mb-2 font-semibold text-sm">
-                                Required Materials
-                              </h4>
-                              <div className="space-y-2">
-                                {craftableItem.craftingRequirements.map((req) => {
-                                  const totalQuantity = getTotalItemQuantity(
-                                    userItems || [],
-                                    req.requirementItemId,
-                                  );
-                                  const required = req.quantity * craftQuantity;
-                                  const hasEnough = totalQuantity >= required;
-
-                                  return (
-                                    <div
-                                      key={req.requirementItemId}
-                                      className="flex items-center justify-between"
-                                    >
-                                      <span className="text-sm">
-                                        {required}x{" "}
-                                        {req.requirementItem?.name || "Unknown Item"}
-                                      </span>
-                                      <div
-                                        className={`font-medium text-sm ${hasEnough ? "text-green-600" : "text-red-600"}`}
-                                      >
-                                        {totalQuantity}/{required}
-                                        {hasEnough ? " ✓" : " ✗"}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </Modal2>
-              )}
             </CardContent>
           </Card>
         )}

@@ -1,10 +1,6 @@
 {
 	"editor.defaultFormatter": "biomejs.biome",
 	"editor.formatOnSave": true,
-	"editor.codeActionsOnSave": {
-		"quickfix.biome": "explicit",
-		"source.organizeImports.biome": "explicit"
-	},
 	"biome.lsp.bin": "./app/node_modules/@biomejs/biome/bin/biome",
 	"[typescript]": {
 		"editor.defaultFormatter": "biomejs.biome"
