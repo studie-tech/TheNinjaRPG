@@ -17,6 +17,8 @@ export const detectedUserSchema = z.object({
   username: z.string(),
   longitude: z.number(),
   latitude: z.number(),
+  villageId: z.string().nullable(),
+  level: z.number(),
 });
 
 export const activateStealthDataSchema = z.object({

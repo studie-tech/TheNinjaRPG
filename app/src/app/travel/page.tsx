@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -31,6 +32,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Tooltip,
@@ -68,6 +70,7 @@ import type { GlobalTile, SectorPoint } from "@/libs/threejs/types";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import { calcGlobalTravelTime, findNearestEdge, isAtEdge } from "@/libs/travel";
+import { findVillageUserRelationship } from "@/utils/alliance";
 import { useAwake } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
@@ -96,11 +99,22 @@ export default function Travel() {
     "autoAttackMode",
     false,
   );
+  const [sensoryAllyAttack, setSensoryAllyAttack] = useLocalStorage<boolean>(
+    "friendlyAttackSensory",
+    false,
+  );
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showSorrounding, setShowSorrounding] = useState<boolean>(false);
   const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
   const [revealedPlayers, setRevealedPlayers] = useState<
-    { userId: string; username: string; longitude: number; latitude: number }[]
+    {
+      userId: string;
+      username: string;
+      longitude: number;
+      latitude: number;
+      villageId: string | null;
+      level: number;
+    }[]
   >([]);
   const [showRevealedPlayersModal, setShowRevealedPlayersModal] =
     useState<boolean>(false);
@@ -517,7 +531,7 @@ export default function Travel() {
         padding={false}
         topRightContent={
           <div className="flex cursor-pointer flex-row items-center">
-            {activeTab === sectorLink && (
+            {!isGlobal && activeTab !== "" && (
               <>
                 {userData?.anbuId &&
                   (autoAttackMode ? (
@@ -913,6 +927,22 @@ export default function Travel() {
               const sameHex =
                 player.latitude === userData?.latitude &&
                 player.longitude === userData?.longitude;
+
+              // Look up village data
+              const village = villageData?.find((v) => v.id === player.villageId);
+              const villageName =
+                village?.name ?? (player.villageId ? "Unknown" : "Outlaw");
+              const villageColor = village?.hexColor ?? "gray";
+
+              // Check ally status
+              const relationship =
+                userData?.village &&
+                findVillageUserRelationship(userData.village, player.villageId);
+              const isAlly =
+                player.villageId === userData?.villageId ||
+                relationship?.status === "ALLY";
+              const showAttack = sensoryAllyAttack || !isAlly;
+
               return (
                 <div
                   key={player.userId}
@@ -921,12 +951,16 @@ export default function Travel() {
                   <div>
                     <p className="font-semibold">{player.username}</p>
                     <p className="text-muted-foreground text-sm">
+                      Lvl. {player.level} -{" "}
+                      <span style={{ color: villageColor }}>{villageName}</span>
+                    </p>
+                    <p className="text-muted-foreground text-sm">
                       Position: ({player.longitude}, {player.latitude})
                       {sameHex && " - Same hex as you!"}
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    {sameHex && userData ? (
+                    {showAttack && sameHex && userData ? (
                       <Button
                         variant="destructive"
                         size="sm"
@@ -943,7 +977,7 @@ export default function Travel() {
                         <Swords className="mr-1 h-4 w-4" />
                         Attack
                       </Button>
-                    ) : (
+                    ) : showAttack && !sameHex ? (
                       <Button
                         variant="destructive"
                         size="sm"
@@ -965,11 +999,22 @@ export default function Travel() {
                         <Swords className="mr-1 h-4 w-4" />
                         Attack
                       </Button>
-                    )}
+                    ) : !showAttack ? (
+                      <span className="text-muted-foreground text-sm italic">Ally</span>
+                    ) : null}
                   </div>
                 </div>
               );
             })}
+            {/* Ally attack toggle */}
+            <div className="flex flex-row items-center pt-3">
+              <Checkbox
+                className="m-1 mr-3"
+                checked={sensoryAllyAttack}
+                onCheckedChange={() => setSensoryAllyAttack(!sensoryAllyAttack)}
+              />
+              <Label>Attack button on allies</Label>
+            </div>
           </div>
         </Modal2>
       )}

@@ -414,9 +414,9 @@ export const activityStreakRouter = createTRPCRouter({
 
       // Handle explicit reset first - only allowed when behind and not claimed today
       if (input.reset) {
-        // Guard: must have progress to reset (can't reset from day 0 or day 1)
-        if (progress.currentDay <= 1) {
-          return errorResponse("Nothing to reset - you're already at the beginning");
+        // Guard: can't reset if haven't started yet (day 0)
+        if (progress.currentDay === 0) {
+          return errorResponse("Nothing to reset - you haven't started yet");
         }
         // Guard: can only reset if not already claimed today
         if (alreadyClaimedToday) {

@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { userData } from "@/drizzle/schema";
+import { userData, villageAlliance } from "@/drizzle/schema";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { secondsFromNow } from "@/utils/time";
@@ -177,7 +177,7 @@ export const stealthRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query (parallel)
-      const [{ user }, stealthedUsers] = await Promise.all([
+      const [{ user }, stealthedUsers, alliances] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -203,6 +203,7 @@ export const stealthRouter = createTRPCRouter({
             status: true,
           },
         }),
+        ctx.drizzle.select().from(villageAlliance),
       ]);
 
       // Guard
@@ -217,9 +218,22 @@ export const stealthRouter = createTRPCRouter({
         );
       }
 
-      // Derived
+      // Derived - get all allied village IDs (same village + formal allies)
+      const alliedVillageIds = alliances
+        .filter(
+          (a) => a.villageIdA === user.villageId || a.villageIdB === user.villageId,
+        )
+        .filter((a) => a.status === "ALLY")
+        .flatMap((a) => [a.villageIdA, a.villageIdB]);
+      const alliedSet = new Set(
+        user.villageId ? [user.villageId, ...alliedVillageIds] : [],
+      );
+
+      // Filter out allied users, then roll for detection
       const detectedUsers: (typeof stealthedUsers)[number][] = [];
       for (const stealthedUser of stealthedUsers) {
+        // Skip allied users - sensory doesn't reveal allies
+        if (stealthedUser.villageId && alliedSet.has(stealthedUser.villageId)) continue;
         if (rollSensoryDetection(user.sensory)) {
           detectedUsers.push(stealthedUser);
         }
@@ -288,6 +302,8 @@ export const stealthRouter = createTRPCRouter({
             username: u.username,
             longitude: u.longitude,
             latitude: u.latitude,
+            villageId: u.villageId,
+            level: u.level,
           })),
           lastSensoryAt,
         },
