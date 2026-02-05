@@ -26,6 +26,7 @@ Sentry.init({
     "Java bridge method invocation error",
     "Java object is gone", // Android WebView JavaScript-Java bridge error - occurs when password managers/autofill services scan for forms and the native component is garbage collected
     "Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.",
+    "The object can not be found here.", // Safari's version of the above removeChild error (DOMException code 8) - DOM modified externally during React reconciliation
     "Failed to execute 'insertBefore' on 'Node': The node before which the new node is to be inserted is not a child of this node.", // DOM modified externally (browser extensions, third-party scripts)
     "GME Provider is disconnected or locked", // timeout error
     "Connection closed", // timeout error
