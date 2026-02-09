@@ -23,9 +23,16 @@ export const avatarRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Generate a new AI avatar" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
-      // Fetch
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Fetch user directly with a query that returns null if not found
+      // This handles the case where the user was just created and the record
+      // may not be immediately available due to database replication lag
+      const user = await ctx.drizzle.query.userData.findFirst({
+        where: eq(userData.userId, ctx.userId),
+      });
       // Guard
+      if (!user) {
+        return errorResponse("User not found. Please try again in a moment.");
+      }
       if (user.reputationPoints < 1) {
         return errorResponse("Not enough reputation points");
       }

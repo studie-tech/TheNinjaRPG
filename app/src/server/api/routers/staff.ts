@@ -1011,15 +1011,58 @@ export const staffRouter = createTRPCRouter({
 export type staffRouter = inferRouterOutputs<typeof staffRouter>;
 
 /**
+ * Check if an error is a MySQL deadlock error (errno 1213).
+ * @param error - The error to check.
+ * @returns True if the error is a deadlock error.
+ */
+const isDeadlockError = (error: unknown): boolean => {
+  if (error instanceof Error) {
+    return error.message.includes("Deadlock") || error.message.includes("errno 1213");
+  }
+  return false;
+};
+
+/**
+ * Delay execution for a specified number of milliseconds.
+ * @param ms - The number of milliseconds to delay.
+ */
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
  * Delete a user from the database.
+ * Implements retry logic for MySQL deadlock errors (errno 1213) as recommended by MySQL.
  * @param client - The database client.
  * @param userId - The ID of the user to delete.
  */
 export const deleteUser = async (client: DrizzleClient, userId: string) => {
-  // Sequential batches to prevent MySQL deadlock (errno 1213)
-  // Operations within each batch run in parallel, but batches execute sequentially
-  // This follows the pattern established in war.ts for avoiding deadlocks
+  const MAX_RETRIES = 3;
+  const BASE_DELAY_MS = 100;
 
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await deleteUserInternal(client, userId);
+      return;
+    } catch (error) {
+      if (isDeadlockError(error) && attempt < MAX_RETRIES) {
+        // Exponential backoff: 100ms, 200ms, 400ms
+        const delayMs = BASE_DELAY_MS * 2 ** (attempt - 1);
+        await delay(delayMs);
+        continue;
+      }
+      throw error;
+    }
+  }
+};
+
+/**
+ * Internal implementation of user deletion.
+ * Sequential batches to prevent MySQL deadlock (errno 1213).
+ * Operations within each batch run in parallel, but batches execute sequentially.
+ * @param client - The database client.
+ * @param userId - The ID of the user to delete.
+ */
+const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
   // Batch 1: Update foreign key references (must run first)
   await client
     .update(userData)
@@ -1104,8 +1147,12 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
   // Batch 10: Battle & war
   await Promise.all([
     client.delete(mpvpBattleUser).where(eq(mpvpBattleUser.userId, userId)),
-    client.delete(kageDefendedChallenges).where(eq(kageDefendedChallenges.userId, userId)),
-    client.delete(kageDefendedChallenges).where(eq(kageDefendedChallenges.kageId, userId)),
+    client
+      .delete(kageDefendedChallenges)
+      .where(eq(kageDefendedChallenges.userId, userId)),
+    client
+      .delete(kageDefendedChallenges)
+      .where(eq(kageDefendedChallenges.kageId, userId)),
     client.delete(warKill).where(eq(warKill.killerId, userId)),
     client.delete(warKill).where(eq(warKill.victimId, userId)),
     client.delete(raidParticipation).where(eq(raidParticipation.userId, userId)),

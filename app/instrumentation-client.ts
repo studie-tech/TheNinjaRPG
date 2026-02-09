@@ -72,6 +72,8 @@ Sentry.init({
     "ResizeObserver loop limit exceeded", // Benign browser warning from ResizeObserver specification - occurs when Radix UI components (Popover, Select) trigger layout changes during positioning
     "ResizeObserver loop completed with undelivered notifications", // Alternative format of the same benign ResizeObserver warning (used by some browsers)
     "undefined is not an object (evaluating 'window.webkit.messageHandlers')", // iOS WebKit bridge error - third-party scripts attempting to use iOS native bridge APIs that aren't available in web browser context
+    "TransformStream is not defined", // Older browser compatibility error (Firefox Mobile <102, some Android browsers) - AI chat feature uses @ai-sdk/react which requires TransformStream for SSE parsing. Users see fallback UX (chat unavailable).
+    /No ack for postMessage .* in \d+ms/, // Third-party SDK postMessage timeout - occurs when Clerk or similar services fail to receive acknowledgment for cross-origin frame communication (THENINJARPG-2FV)
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -120,6 +122,9 @@ Sentry.init({
     }
     if (isWebKitMessageHandlersError(event)) {
       return null; // Drop iOS WebKit bridge errors from third-party scripts
+    }
+    if (isSpacetimeDBWebSocketConnectingError(event)) {
+      return null; // Drop SpacetimeDB WebSocket timing errors (transient)
     }
     return event;
   },
@@ -352,7 +357,23 @@ function isThirdPartyInjectedError(event: Sentry.ErrorEvent): boolean {
       frame.abs_path?.includes("cc.js"),
   );
 
-  return isInjectedScript && message.includes("Illegal invocation");
+  // Filter Illegal invocation errors from any injected script
+  if (isInjectedScript && message.includes("Illegal invocation")) {
+    return true;
+  }
+
+  // Filter Cookiebot-specific errors (cc.js) when manipulating DOM elements
+  // THENINJARPG-23Y: sortBannerButtons tries to set innerHTML on null element
+  const isCookiebotScript = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("cc.js") || frame.abs_path?.includes("cc.js"),
+  );
+
+  if (isCookiebotScript && message.includes("Cannot set properties of null")) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -706,6 +727,48 @@ const isWebKitMessageHandlersError = (event: Sentry.ErrorEvent): boolean => {
     message.includes("window.webkit.messageHandlers") ||
     message.includes("webkit.messageHandlers")
   );
+};
+
+/**
+ * Check if an error is a SpacetimeDB WebSocket "Still in CONNECTING state" error.
+ * These occur when the SpacetimeDB SDK tries to send a message on a WebSocket that
+ * hasn't fully transitioned to the OPEN state yet. This is a race condition in the
+ * SDK's internal connection handling that can occur on slower networks or mobile devices.
+ *
+ * UX note: These errors are transient and handled gracefully:
+ * - The useTowerDefense hook shows a "Connecting..." state during connection
+ * - Connection errors trigger a mode change back to "lobby" with an error message
+ * - Users can retry by clicking the "Start Game" button again
+ * - The SpacetimeDB client has waitForWebSocketReady() checks for critical operations
+ *
+ * We cannot fix this in the SpacetimeDB SDK itself as it's a third-party library.
+ * The error originates from the SDK's websocket_decompress_adapter.ts send() method.
+ *
+ * THENINJARPG-2CN: Filter SpacetimeDB WebSocket timing errors from Sentry.
+ */
+const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must be an InvalidStateError with the specific WebSocket CONNECTING message
+  if (errorType !== "InvalidStateError" && errorType !== "DOMException") return false;
+  if (!message.includes("Still in CONNECTING state")) return false;
+
+  // Additional check: verify it's from SpacetimeDB SDK (websocket_decompress_adapter or db_connection_impl)
+  const isFromSpacetimeDB = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("spacetimedb") ||
+      frame.filename?.includes("websocket_decompress_adapter") ||
+      frame.filename?.includes("db_connection_impl") ||
+      frame.abs_path?.includes("spacetimedb") ||
+      frame.abs_path?.includes("websocket_decompress_adapter") ||
+      frame.abs_path?.includes("db_connection_impl"),
+  );
+
+  // If we can verify it's from SpacetimeDB, filter it
+  // If stack trace is empty/anonymized (production builds), still filter based on message
+  return isFromSpacetimeDB || stackFrames.length === 0;
 };
 
 function ensureBrowserErrorHandler() {
