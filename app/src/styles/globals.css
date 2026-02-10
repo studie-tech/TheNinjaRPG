@@ -99,6 +99,7 @@
 
 @layer base {
   :root {
+    --font-scale: 1;
     --background: 55 92% 95%; /* yellow-50 */
     --foreground: 15 75% 28%;
 
@@ -219,7 +220,7 @@
 
 @layer utilities {
   html {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale, 1));
   }
 }
 

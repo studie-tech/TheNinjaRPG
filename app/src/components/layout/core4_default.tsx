@@ -136,6 +136,16 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
     if (savedLayout !== null) {
       setLightLayout(JSON.parse(savedLayout) as boolean);
     }
+    // Font scale
+    const savedFontScale = safeLocalStorageGetItem("fontScale");
+    if (savedFontScale) {
+      try {
+        const parsed = JSON.parse(savedFontScale) as number;
+        document.documentElement.style.setProperty("--font-scale", String(parsed));
+      } catch {
+        // Ignore parse errors, use default
+      }
+    }
     setIsMounted(true);
   }, []);
 

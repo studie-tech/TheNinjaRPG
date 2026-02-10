@@ -77,6 +77,7 @@ import {
   type MobileNavConfig,
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
+import { FONT_SCALE_OPTIONS, useFontScale } from "@/hooks/useFontScale";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
@@ -321,6 +322,15 @@ export default function EditProfile() {
           onClick={setActiveElement}
         >
           <MobileNavSettings />
+        </Accordion>
+        <Accordion
+          title="Display Settings"
+          selectedTitle={activeElement}
+          unselectedSubtitle="Adjust text size for accessibility"
+          selectedSubtitle="Choose your preferred text size"
+          onClick={setActiveElement}
+        >
+          <FontScaleSettings />
         </Accordion>
         {canSwapBloodline(userData.role) && (
           <Accordion
@@ -2373,6 +2383,46 @@ const MobileNavSettings: React.FC = () => {
       <Button variant="outline" size="sm" onClick={handleReset}>
         Reset to Default
       </Button>
+    </div>
+  );
+};
+
+/**
+ * Font Scale Settings component
+ */
+const FontScaleSettings: React.FC = () => {
+  const { fontScale, setFontScale } = useFontScale();
+
+  return (
+    <div className="space-y-4 p-3">
+      <p className="text-muted-foreground text-sm">
+        Adjust text size for better readability. This affects all text throughout the
+        game.
+      </p>
+
+      <div className="space-y-2">
+        <Label>Text Size</Label>
+        <Select
+          value={String(fontScale)}
+          onValueChange={(v) => setFontScale(Number(v) as typeof fontScale)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FONT_SCALE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={String(option.value)}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="rounded border p-3">
+        <p className="font-bold">Preview</p>
+        <p>This is how your text will appear throughout the game.</p>
+      </div>
     </div>
   );
 };
