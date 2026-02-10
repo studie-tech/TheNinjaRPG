@@ -1603,7 +1603,8 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     if (
       type instanceof z.ZodDefault ||
       type instanceof z.ZodOptional ||
-      type instanceof z.ZodNullable
+      type instanceof z.ZodNullable ||
+      type instanceof z.ZodPrefault
     ) {
       return getInner(type.unwrap() as z.ZodType);
     }
@@ -2003,7 +2004,8 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     if (
       type instanceof z.ZodDefault ||
       type instanceof z.ZodOptional ||
-      type instanceof z.ZodNullable
+      type instanceof z.ZodNullable ||
+      type instanceof z.ZodPrefault
     ) {
       return getInner(type.unwrap() as z.ZodType);
     }
@@ -2361,7 +2363,8 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
     if (
       type instanceof z.ZodDefault ||
       type instanceof z.ZodOptional ||
-      type instanceof z.ZodNullable
+      type instanceof z.ZodNullable ||
+      type instanceof z.ZodPrefault
     ) {
       return getInner(type.unwrap() as z.ZodType);
     }
