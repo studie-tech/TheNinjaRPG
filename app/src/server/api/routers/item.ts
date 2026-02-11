@@ -16,6 +16,7 @@ import {
   ItemSlots,
   ItemTypes,
   MAX_EXTRA_RESKIN_SLOTS,
+  MAX_MARRIAGE_SLOTS,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
   TUTORIAL_ITEM_ID,
 } from "@/drizzle/constants";
@@ -765,10 +766,10 @@ export const itemRouter = createTRPCRouter({
             messages.push(`Your bloodline could not be removed successfully.`);
           }
         } else if (effect.type === "marriageslotincrease") {
-          if (updates.marriageSlots < 7) {
+          if (updates.marriageSlots < MAX_MARRIAGE_SLOTS) {
             updates.marriageSlots += effect.power;
-            if (updates.marriageSlots > 7) {
-              updates.marriageSlots = 7;
+            if (updates.marriageSlots > MAX_MARRIAGE_SLOTS) {
+              updates.marriageSlots = MAX_MARRIAGE_SLOTS;
             }
             messages.push(`Your marriage slots were increased! `);
           } else {
