@@ -765,10 +765,10 @@ export const itemRouter = createTRPCRouter({
             messages.push(`Your bloodline could not be removed successfully.`);
           }
         } else if (effect.type === "marriageslotincrease") {
-          if (updates.marriageSlots < 5) {
+          if (updates.marriageSlots < 7) {
             updates.marriageSlots += effect.power;
-            if (updates.marriageSlots > 5) {
-              updates.marriageSlots = 5;
+            if (updates.marriageSlots > 7) {
+              updates.marriageSlots = 7;
             }
             messages.push(`Your marriage slots were increased! `);
           } else {
