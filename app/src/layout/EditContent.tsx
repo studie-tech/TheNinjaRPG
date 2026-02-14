@@ -2532,7 +2532,8 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     while (
       t instanceof z.ZodDefault ||
       t instanceof z.ZodOptional ||
-      t instanceof z.ZodNullable
+      t instanceof z.ZodNullable ||
+      t instanceof z.ZodPrefault
     ) {
       t = t.unwrap() as z.ZodType;
     }
@@ -2652,7 +2653,8 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     while (
       t instanceof z.ZodDefault ||
       t instanceof z.ZodOptional ||
-      t instanceof z.ZodNullable
+      t instanceof z.ZodNullable ||
+      t instanceof z.ZodPrefault
     ) {
       t = t.unwrap() as z.ZodType;
     }
