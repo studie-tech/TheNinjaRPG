@@ -448,6 +448,39 @@ const updateReportedStatus = async (
 };
 
 /**
+ * Classify if a prompt is attempting to generate NSFW content
+ * @param prompt - The prompt to classify
+ * @returns Whether the prompt is NSFW and the reason
+ */
+export const classifyNsfwPrompt = async (
+  prompt: string,
+): Promise<{ isNsfw: boolean; reason: string }> => {
+  const classificationSchema = z.object({
+    isNsfw: z.boolean(),
+    reason: z.string(),
+  });
+
+  const { object } = await generateObject({
+    model: openaiSdk(OPENAI_MODERATION_MODEL),
+    schema: classificationSchema,
+    prompt: `
+      You are a content classifier for an anime-style RPG game's AI art generator.
+
+      Analyze the following prompt and determine if it is attempting to generate NSFW content.
+
+      NSFW includes: sexual content, nudity, explicit violence/gore, content sexualizing minors,
+      explicit drug use, hate symbols.
+
+      Allowed: action/combat scenes, anime-style characters in appropriate clothing,
+      fantasy violence (ninja RPG), dramatic scenes.
+
+      <prompt>${prompt}</prompt>
+    `,
+  });
+  return object as z.infer<typeof classificationSchema>;
+};
+
+/**
  * Validate a user update reason
  * @param update - The update to validate
  * @param reason - The reason for the update

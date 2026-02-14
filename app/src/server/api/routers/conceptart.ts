@@ -8,6 +8,7 @@ import {
   SmileyEmotions,
 } from "@/drizzle/constants";
 import { conceptImage, userData, userLikes } from "@/drizzle/schema";
+import { classifyNsfwPrompt } from "@/libs/moderator";
 import {
   fastTxt2imgReplicate,
   getVideoGenerationStatus,
@@ -99,6 +100,11 @@ export const conceptartRouter = createTRPCRouter({
       if (user.reputationPoints < COST_CONCEPT_IMAGE) {
         return errorResponse("Not enough reputation points");
       }
+      // NSFW Check
+      const nsfwCheck = await classifyNsfwPrompt(input.prompt);
+      if (nsfwCheck.isNsfw) {
+        return errorResponse("Prompt rejected: contains inappropriate content");
+      }
       // Generate
       const prompt = `${input.prompt}, ${CONCEPT_PROMPT}`;
       const avatar = await fastTxt2imgReplicate({
@@ -143,6 +149,11 @@ export const conceptartRouter = createTRPCRouter({
         return errorResponse(
           `Not enough reputation points. Video generation costs ${COST_CONCEPT_VIDEO} reputation points.`,
         );
+      }
+      // NSFW Check (before deducting points)
+      const nsfwCheck = await classifyNsfwPrompt(input.prompt);
+      if (nsfwCheck.isNsfw) {
+        return errorResponse("Prompt rejected: contains inappropriate content");
       }
       // Deduct reputation points immediately to prevent spam
       // Use WHERE clause to ensure user still has enough points (prevents race condition)
