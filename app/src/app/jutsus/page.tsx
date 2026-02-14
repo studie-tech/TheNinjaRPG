@@ -311,7 +311,8 @@ export default function MyJutsu() {
         let warning = "";
         if (userData) {
           if (!checkJutsuItems(uj.jutsu, userItems, true)) {
-            warning = `No ${uj.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
+            const hasRequiredItems = Array.isArray(uj.jutsu.requiredItemIds) && uj.jutsu.requiredItemIds.length > 0;
+            warning = hasRequiredItems ? "Required items not equipped." : `No ${uj.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
           }
           if (!checkJutsuElements(uj.jutsu, userElements)) {
             warning = "You do not have the required elements to use this jutsu.";
