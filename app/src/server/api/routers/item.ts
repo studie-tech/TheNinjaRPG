@@ -1750,8 +1750,36 @@ export const toggleEquipItem = async (
   if (useritem.storedAtHome) return errorResponse("Fetch at home first");
   const doEquip = slot ? useritem.equipped !== slot : useritem.equipped === "NONE";
 
-  // Note: Unequipping is allowed even if a jutsu requires the item.
-  // Selling is still guarded elsewhere.
+  if (useritem.storedAtHome) return errorResponse("Fetch at home first");
+  const doEquip = slot ? useritem.equipped !== slot : useritem.equipped === "NONE";
+
+  // When unequipping, check if any equipped jutsu requires this item
+  if (!doEquip && useritem.equipped !== "NONE") {
+    // Fetch equipped jutsus that require this item
+    const equippedJutsus = await client.query.userJutsu.findMany({
+      where: and(
+        eq(userJutsu.userId, user.userId),
+        eq(userJutsu.equipped, true)
+      ),
+      with: { jutsu: true },
+    });
+
+    const jutsuRequiringItem = equippedJutsus.find((uj) => {
+      if (!uj.jutsu) return false;
+      const requiredIds = uj.jutsu.requiredItemIds;
+      return (
+        Array.isArray(requiredIds) && requiredIds.includes(useritem.item.id)
+      );
+    });
+
+    if (jutsuRequiringItem) {
+      return errorResponse(
+        `Cannot unequip this item. The equipped jutsu "${jutsuRequiringItem.jutsu?.name}" requires it. Please unequip the jutsu first.`
+      );
+    }
+  }
+
+  // Only check requirements when equipping (not when unequipping)
 
   // Only check requirements when equipping (not when unequipping)
   if (doEquip) {
