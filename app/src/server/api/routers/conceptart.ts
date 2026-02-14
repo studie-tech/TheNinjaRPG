@@ -101,9 +101,13 @@ export const conceptartRouter = createTRPCRouter({
         return errorResponse("Not enough reputation points");
       }
       // NSFW Check
-      const nsfwCheck = await classifyNsfwPrompt(input.prompt);
-      if (nsfwCheck.isNsfw) {
-        return errorResponse("Prompt rejected: contains inappropriate content");
+      try {
+        const nsfwCheck = await classifyNsfwPrompt(input.prompt);
+        if (nsfwCheck.isNsfw) {
+          return errorResponse("Prompt rejected: contains inappropriate content");
+        }
+      } catch {
+        return errorResponse("Unable to validate prompt. Please try again later.");
       }
       // Generate
       const prompt = `${input.prompt}, ${CONCEPT_PROMPT}`;
@@ -151,9 +155,13 @@ export const conceptartRouter = createTRPCRouter({
         );
       }
       // NSFW Check (before deducting points)
-      const nsfwCheck = await classifyNsfwPrompt(input.prompt);
-      if (nsfwCheck.isNsfw) {
-        return errorResponse("Prompt rejected: contains inappropriate content");
+      try {
+        const nsfwCheck = await classifyNsfwPrompt(input.prompt);
+        if (nsfwCheck.isNsfw) {
+          return errorResponse("Prompt rejected: contains inappropriate content");
+        }
+      } catch {
+        return errorResponse("Unable to validate prompt. Please try again later.");
       }
       // Deduct reputation points immediately to prevent spam
       // Use WHERE clause to ensure user still has enough points (prevents race condition)

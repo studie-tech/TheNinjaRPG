@@ -463,19 +463,16 @@ export const classifyNsfwPrompt = async (
   const { object } = await generateObject({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
     schema: classificationSchema,
-    prompt: `
-      You are a content classifier for an anime-style RPG game's AI art generator.
-
-      Analyze the following prompt and determine if it is attempting to generate NSFW content.
-
-      NSFW includes: sexual content, nudity, explicit violence/gore, content sexualizing minors,
-      explicit drug use, hate symbols.
-
-      Allowed: action/combat scenes, anime-style characters in appropriate clothing,
-      fantasy violence (ninja RPG), dramatic scenes.
-
-      <prompt>${prompt}</prompt>
-    `,
+    messages: [
+      {
+        role: "system",
+        content: `You are a content classifier for an anime-style RPG game's AI art generator.
+Analyze the user-provided prompt and determine if it is attempting to generate NSFW content.
+NSFW includes: sexual content, nudity, explicit violence/gore, content sexualizing minors, explicit drug use, hate symbols.
+Allowed: action/combat scenes, anime-style characters in appropriate clothing, fantasy violence (ninja RPG), dramatic scenes.`,
+      },
+      { role: "user", content: prompt },
+    ],
   });
   return object as z.infer<typeof classificationSchema>;
 };
@@ -494,26 +491,24 @@ export const validateUserUpdateReason = async (
   const { object } = await generateObject({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
     schema: validationSchema,
-    prompt: `
-      The following reason/explanation is supplied by a content member to update a piece of game content
-      Please determine if the reason is descriptive and if the update should be allowed.
-      Content members are tasked with testing things, helping users, etc, and thus the reasons serves mostly as a way to provide transparency to the end users as for why a given update was made.
-      You are not to judge the validity of the update, only verify that it explains the update in a way that reason is clear.
-
-      - The main purpose of the reason is to give a bit of context, and not just be a empty string or randomly filled letters.
-      - The reason must not be offensive.
-      - Ignore spelling errors, this is not important to the moderation process.
-      - If the reason is not valid, please provide a comment explaining why the update should not be allowed.
-      - The reason does not have to include details about the update, the previous state, or new state
-
-      <reason>
-        ${reason}
-      </reason>
-
-      <update>
-        ${update}
-      </update>
-    `,
+    messages: [
+      {
+        role: "system",
+        content: `You validate reasons supplied by content members for game content updates.
+Determine if the reason is descriptive and if the update should be allowed.
+Content members are tasked with testing things, helping users, etc, and thus the reason serves mostly as transparency for end users.
+You are not to judge the validity of the update, only verify that the reason is clear.
+- The main purpose of the reason is to give a bit of context, and not just be an empty string or randomly filled letters.
+- The reason must not be offensive.
+- Ignore spelling errors, this is not important to the moderation process.
+- If the reason is not valid, please provide a comment explaining why the update should not be allowed.
+- The reason does not have to include details about the update, the previous state, or new state.`,
+      },
+      {
+        role: "user",
+        content: `Reason: ${reason}\n\nUpdate: ${update}`,
+      },
+    ],
   });
   return object as z.infer<typeof validationSchema>;
 };
