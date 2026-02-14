@@ -3,12 +3,32 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Ban,
+  BarChart3,
   ChevronsLeft,
   ChevronsRight,
+  Dices,
+  Droplets,
+  Heart,
+  History,
+  Mail,
+  PenLine,
+  RotateCcw,
   SendHorizontal,
+  Settings,
+  Shield,
   ShieldOff,
+  SlidersHorizontal,
+  Smartphone,
+  Sparkles,
   SwitchCamera,
+  Swords,
+  Tag,
+  Tent,
   Trash2,
+  Trophy,
+  Type,
+  Upload,
+  Users,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
@@ -52,6 +72,7 @@ import {
 } from "@/drizzle/constants";
 import type { Bloodline, Village } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { FONT_SCALE_OPTIONS, useFontScale } from "@/hooks/useFontScale";
 import Accordion from "@/layout/Accordion";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
@@ -77,7 +98,6 @@ import {
   type MobileNavConfig,
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
-import { FONT_SCALE_OPTIONS, useFontScale } from "@/hooks/useFontScale";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
@@ -147,6 +167,7 @@ export default function EditProfile() {
           title="AI Avatar"
           selectedTitle={activeElement}
           unselectedSubtitle="Generate a new avatar"
+          icon={Sparkles}
           onClick={setActiveElement}
         >
           <NewAiAvatar />
@@ -155,6 +176,7 @@ export default function EditProfile() {
           title="Previous Avatar"
           selectedTitle={activeElement}
           unselectedSubtitle="Choose an old avatar"
+          icon={History}
           onClick={setActiveElement}
         >
           <HistoricalAiAvatar contentType="user" />
@@ -164,6 +186,7 @@ export default function EditProfile() {
           selectedTitle={activeElement}
           unselectedSubtitle="Upload a custom avatar"
           selectedSubtitle={`Avatar size is limited based on federal support status`}
+          icon={Upload}
           onClick={setActiveElement}
         >
           <AvatarChange />
@@ -172,6 +195,7 @@ export default function EditProfile() {
           title="User Blacklist"
           selectedTitle={activeElement}
           unselectedSubtitle="Filter away toxic profiles from your feeds"
+          icon={Ban}
           onClick={setActiveElement}
         >
           <UserBlacklistControl />
@@ -180,6 +204,7 @@ export default function EditProfile() {
           title="Nindo"
           selectedTitle={activeElement}
           unselectedSubtitle="Your personal way of the ninja"
+          icon={PenLine}
           onClick={setActiveElement}
         >
           <OwnNindoChange />
@@ -188,6 +213,7 @@ export default function EditProfile() {
           title="Marriage"
           selectedTitle={activeElement}
           unselectedSubtitle="Manage Marriage"
+          icon={Heart}
           onClick={setActiveElement}
         >
           <Marriage />
@@ -196,6 +222,7 @@ export default function EditProfile() {
           title="Activity Rewards"
           selectedTitle={activeElement}
           unselectedSubtitle="View and claim your daily activity streak"
+          icon={Trophy}
           onClick={setActiveElement}
         >
           <ActivityStreakPanel />
@@ -206,6 +233,7 @@ export default function EditProfile() {
           unselectedSubtitle="Change your username"
           selectedSubtitle={`You can change your username for ${COST_CHANGE_USERNAME} reputation points. You
           have ${userData.reputationPoints} reputation points.`}
+          icon={Type}
           onClick={setActiveElement}
         >
           <NameChange />
@@ -216,6 +244,7 @@ export default function EditProfile() {
           unselectedSubtitle="Set a custom title shown next to username"
           selectedSubtitle={`You can set your custom title for ${COST_CUSTOM_TITLE} reputation points. You
           have ${userData.reputationPoints} reputation points.`}
+          icon={Tag}
           onClick={setActiveElement}
         >
           <CustomTitle />
@@ -226,6 +255,7 @@ export default function EditProfile() {
           unselectedSubtitle="Change the gender of your character"
           selectedSubtitle={`Change your gender for ${COST_CHANGE_GENDER} reputation points. You
           have ${userData.reputationPoints} reputation points.`}
+          icon={Users}
           onClick={setActiveElement}
         >
           <ChangeGender />
@@ -235,6 +265,7 @@ export default function EditProfile() {
           selectedTitle={activeElement}
           unselectedSubtitle="Change character attributes"
           selectedSubtitle={`You can select a total of 5 attributes!`}
+          icon={SlidersHorizontal}
           onClick={setActiveElement}
         >
           <AttributeChange />
@@ -245,6 +276,7 @@ export default function EditProfile() {
           unselectedSubtitle="Redistribute your experience points"
           selectedSubtitle={`You can redistribute your stats for ${COST_RESET_STATS} reputation points. You
           have ${userData.reputationPoints} reputation points. You have ${userData.experience + 120} experience points to distribute.`}
+          icon={BarChart3}
           onClick={setActiveElement}
         >
           <ResetStats />
@@ -253,6 +285,7 @@ export default function EditProfile() {
           title="Reset Skills"
           selectedTitle={activeElement}
           unselectedSubtitle="Reset all skill tree investments"
+          icon={RotateCcw}
           selectedSubtitle={
             canChangeContent(userData.role)
               ? `You can reset your skill tree and get all spent skill points back for free as a staff member. You have ${userData.reputationPoints} reputation points.`
@@ -267,6 +300,7 @@ export default function EditProfile() {
             title="Email Reminder Settings"
             selectedTitle={activeElement}
             unselectedSubtitle="Manage your email notification preferences"
+            icon={Mail}
             onClick={setActiveElement}
           >
             <EmailReminderSettings emailReminder={emailReminder} />
@@ -276,6 +310,7 @@ export default function EditProfile() {
           title="Re-Roll Elements"
           selectedTitle={activeElement}
           unselectedSubtitle="Re-roll your primary elements"
+          icon={Dices}
           selectedSubtitle={
             <div>
               <p className="pb-3">
@@ -310,6 +345,7 @@ export default function EditProfile() {
           selectedTitle={activeElement}
           unselectedSubtitle="Customize battle preferences and AI behavior"
           selectedSubtitle=""
+          icon={Swords}
           onClick={setActiveElement}
         >
           <BattleSettingsEdit userId={userData.userId} />
@@ -319,6 +355,7 @@ export default function EditProfile() {
           selectedTitle={activeElement}
           unselectedSubtitle="Customize mobile navigation bar buttons"
           selectedSubtitle="Choose which shortcuts appear on mobile"
+          icon={Smartphone}
           onClick={setActiveElement}
         >
           <MobileNavSettings />
@@ -328,6 +365,7 @@ export default function EditProfile() {
           selectedTitle={activeElement}
           unselectedSubtitle="Adjust text size for accessibility"
           selectedSubtitle="Choose your preferred text size"
+          icon={Settings}
           onClick={setActiveElement}
         >
           <FontScaleSettings />
@@ -338,6 +376,7 @@ export default function EditProfile() {
             selectedTitle={activeElement}
             unselectedSubtitle="Change your bloodline of choice"
             selectedSubtitle={`You can swap your bloodline to any bloodline your character has previously possessed for ${COST_SWAP_BLOODLINE} reputation points. Note: Bloodlines purchased directly before 14/06/2025 have not been recorded and can therefore not be swapped. You have ${userData.reputationPoints} reputation points.`}
+            icon={Droplets}
             onClick={setActiveElement}
           >
             <SwapBloodline />
@@ -349,6 +388,7 @@ export default function EditProfile() {
             selectedTitle={activeElement}
             unselectedSubtitle="Change your village of choice"
             selectedSubtitle={`You can swap your current village for another for ${COST_SWAP_VILLAGE} reputation points. You have ${userData.reputationPoints} reputation points.`}
+            icon={Tent}
             onClick={setActiveElement}
           >
             <SwapVillage />
@@ -359,6 +399,7 @@ export default function EditProfile() {
             title="Management Commands"
             selectedTitle={activeElement}
             unselectedSubtitle="Staff Management Commands"
+            icon={Shield}
             onClick={setActiveElement}
           >
             <ManagementCommands user={userData} />

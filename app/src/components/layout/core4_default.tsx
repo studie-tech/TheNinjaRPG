@@ -69,6 +69,7 @@ import {
   safeLocalStorageSetItem,
   useLocalStorage,
 } from "@/hooks/localstorage";
+import { FONT_SCALE_STORAGE_KEY } from "@/hooks/useFontScale";
 import AvatarImage from "@/layout/Avatar";
 import Footer from "@/layout/Footer";
 import { GameSettingsPopover, GlobalAudioProvider } from "@/layout/GameSettings";
@@ -137,7 +138,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
       setLightLayout(JSON.parse(savedLayout) as boolean);
     }
     // Font scale
-    const savedFontScale = safeLocalStorageGetItem("fontScale");
+    const savedFontScale = safeLocalStorageGetItem(FONT_SCALE_STORAGE_KEY);
     if (savedFontScale) {
       try {
         const parsed = JSON.parse(savedFontScale) as number;

@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import { ChevronsDown } from "lucide-react";
 import type React from "react";
 import { cn } from "@/libs/shadui";
@@ -12,12 +13,14 @@ interface AccordionProps {
   selectedSubtitle?: string | React.ReactNode;
   children: string | React.ReactNode;
   options?: React.ReactNode;
+  icon?: LucideIcon;
   onClick: React.Dispatch<React.SetStateAction<string>>;
 }
 
 const Accordion: React.FC<AccordionProps> = (props) => {
   const { title, titlePrefix, titlePostfix } = props;
   const { unselectedSubtitle, selectedSubtitle, children, onClick } = props;
+  const Icon = props.icon;
 
   const active = title === props.selectedTitle;
   return (
@@ -30,6 +33,11 @@ const Accordion: React.FC<AccordionProps> = (props) => {
         )}
         onClick={() => !active && onClick(active ? "" : title)}
       >
+        {Icon && (
+          <div className="mr-3 flex shrink-0 items-center">
+            <Icon className="text-muted-foreground h-5 w-5" />
+          </div>
+        )}
         <div>
           <h2 className="mt-2 font-bold">
             {titlePrefix}

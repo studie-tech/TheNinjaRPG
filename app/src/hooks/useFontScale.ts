@@ -12,19 +12,30 @@ export const FONT_SCALE_OPTIONS = [
 
 export type FontScaleValue = (typeof FONT_SCALE_OPTIONS)[number]["value"];
 
-const FONT_SCALE_STORAGE_KEY = "fontScale";
+export const FONT_SCALE_STORAGE_KEY = "fontScale";
+
+const DEFAULT_FONT_SCALE: FontScaleValue = 1;
+const VALID_FONT_SCALES = FONT_SCALE_OPTIONS.map((o) => o.value) as readonly number[];
 
 export const useFontScale = () => {
   const [fontScale, setFontScale] = useLocalStorage<FontScaleValue>(
     FONT_SCALE_STORAGE_KEY,
-    1,
+    DEFAULT_FONT_SCALE,
   );
 
+  const validatedScale = VALID_FONT_SCALES.includes(fontScale)
+    ? fontScale
+    : DEFAULT_FONT_SCALE;
+
   useEffect(() => {
-    document.documentElement.style.setProperty("--font-scale", String(fontScale));
-  }, [fontScale]);
+    if (fontScale !== validatedScale) {
+      setFontScale(validatedScale);
+    }
+  }, [fontScale, validatedScale, setFontScale]);
 
-  return { fontScale, setFontScale };
+  useEffect(() => {
+    document.documentElement.style.setProperty("--font-scale", String(validatedScale));
+  }, [validatedScale]);
+
+  return { fontScale: validatedScale, setFontScale };
 };
-
-export { FONT_SCALE_STORAGE_KEY };
