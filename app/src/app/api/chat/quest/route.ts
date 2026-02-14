@@ -1,17 +1,17 @@
-import { streamText } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { checkContentAiAuth } from "@/libs/llm";
-import { QuestValidatorRawSchema } from "@/validators/objectives";
-import type { CoreMessage } from "ai";
+import type { ModelMessage } from "ai";
+import { stepCountIs, streamText } from "ai";
 import { OPENAI_CONTENT_MODEL } from "@/drizzle/constants";
+import { checkContentAiAuth } from "@/libs/llm";
 import { convertToOpenaiCompatibleSchema } from "@/libs/zod_utils";
+import { QuestValidatorRawSchema } from "@/validators/objectives";
 
 export async function POST(req: Request) {
   // Auth guard
   await checkContentAiAuth();
 
   // Call LLM
-  const { messages } = (await req.json()) as { messages: CoreMessage[] };
+  const { messages } = (await req.json()) as { messages: ModelMessage[] };
   const schema = convertToOpenaiCompatibleSchema(
     QuestValidatorRawSchema.omit({
       image: true,
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   );
   const result = streamText({
     model: openai(OPENAI_CONTENT_MODEL),
-    system: `You are a helpful assistant tasked with creating new quests set in the ninja world of Seichi. 
+    system: `You are a helpful assistant tasked with creating new quests set in the ninja world of Seichi.
     Your primary task is to call the function 'updateQuest' with appropriate parameters to update the quest shown to the user.
     Do not give detailed instructions to the user on what quest is created, instead just give a brief summary and start creating it.
     Do not use markdown.
@@ -31,11 +31,11 @@ export async function POST(req: Request) {
     tools: {
       updateQuest: {
         description: "Update quest shown to the user",
-        parameters: schema,
+        inputSchema: schema,
       },
     },
-    maxSteps: 2,
+    stopWhen: stepCountIs(2),
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }

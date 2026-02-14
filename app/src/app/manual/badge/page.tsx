@@ -1,19 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { FilePlus } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import type { Badge } from "@/drizzle/schema";
+import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import { Button } from "@/components/ui/button";
-import { ActionSelector } from "@/layout/CombatActions";
-import { api } from "@/app/_trpc/client";
-import { FilePlus } from "lucide-react";
-import { useUserData } from "@/utils/UserContext";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import type { Badge } from "@/drizzle/schema";
+import { useUserData } from "@/utils/UserContext";
 
 export default function ManualBadges() {
   // Settings
@@ -36,7 +36,7 @@ export default function ManualBadges() {
       placeholderData: (previousData) => previousData,
     },
   );
-  const allBadges = badges?.pages.map((page) => page.data).flat();
+  const allBadges = badges?.pages.flatMap((page) => page.data);
 
   // Mutations
   const { mutate: create, isPending: load1 } = api.badge.create.useMutation({

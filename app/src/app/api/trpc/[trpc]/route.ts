@@ -1,9 +1,9 @@
+import * as Sentry from "@sentry/node";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { cookies, headers } from "next/headers";
-import { createAppTRPCContext } from "@/api/trpc";
 import type { NextRequest } from "next/server";
 import { appRouter } from "@/api/root";
-import * as Sentry from "@sentry/node";
+import { createAppTRPCContext } from "@/api/trpc";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;

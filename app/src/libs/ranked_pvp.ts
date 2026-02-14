@@ -1,24 +1,24 @@
-import {
-  RANKED_RANKS,
-  RANKED_STREAK_BONUS,
-  RANKED_DIVISIONS,
-  RANKED_SANNIN_TOP_PLAYERS,
-  RANKED_LEGEND_LP_REQUIREMENT,
-  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
-  RANKED_LOADOUT_MAX_POISON_JUTSUS,
-  RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
-  RANKED_LOADOUT_MAX_POISON_ITEMS,
-  RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
-  RANKED_LOADOUT_MAX_JUTSUS,
-  RANKED_LOADOUT_MAX_WEAPONS,
-  RANKED_LOADOUT_MAX_CONSUMABLES,
-  RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
-  RANKED_LOADOUT_MAX_BARRIER_JUTSUS,
-  RANKED_LOADOUT_MAX_STUN_JUTSUS,
-  JUTSU_MAX_EVENT_EQUIPPED,
-} from "@/drizzle/constants";
-import type { Jutsu, UserData, Item } from "@/drizzle/schema";
 import type { RankedRank } from "@/drizzle/constants";
+import {
+  JUTSU_MAX_EVENT_EQUIPPED,
+  RANKED_DIVISIONS,
+  RANKED_LEGEND_LP_REQUIREMENT,
+  RANKED_LOADOUT_MAX_BARRIER_JUTSUS,
+  RANKED_LOADOUT_MAX_CONSUMABLES,
+  RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
+  RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
+  RANKED_LOADOUT_MAX_JUTSUS,
+  RANKED_LOADOUT_MAX_POISON_ITEMS,
+  RANKED_LOADOUT_MAX_POISON_JUTSUS,
+  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
+  RANKED_LOADOUT_MAX_STUN_JUTSUS,
+  RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
+  RANKED_LOADOUT_MAX_WEAPONS,
+  RANKED_RANKS,
+  RANKED_SANNIN_TOP_PLAYERS,
+  RANKED_STREAK_BONUS,
+} from "@/drizzle/constants";
+import type { Item, Jutsu, UserData } from "@/drizzle/schema";
 
 /**
  * Determine player rank based on LP and top players
@@ -80,8 +80,7 @@ export function calculateLpEloChange(
   topPlayersLP: number[],
 ): number {
   const kFactor = getKFactor(player.rankedLp);
-  const expectedScore =
-    1 / (1 + Math.pow(10, (opponent.rankedLp - player.rankedLp) / 400));
+  const expectedScore = 1 / (1 + 10 ** ((opponent.rankedLp - player.rankedLp) / 400));
   const actualScore = playerWon ? 1 : 0;
 
   let lpChange = kFactor * (actualScore - expectedScore);

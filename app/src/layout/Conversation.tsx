@@ -1,36 +1,36 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { nanoid } from "nanoid";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { parseHtml } from "@/utils/parse";
-import { CommentOnConversation } from "@/layout/Comment";
-import ContentBox from "@/layout/ContentBox";
-import RichInput from "@/layout/RichInput";
-import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
-import { RefreshCw, Search, X } from "lucide-react";
-import { useUserData } from "@/utils/UserContext";
-import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
-import { secondsFromNow } from "@/utils/time";
-import { showMutationToast } from "@/libs/toast";
-import { Check } from "lucide-react";
-import { mutateCommentSchema } from "@/validators/comments";
-import { useInfinitePagination } from "@/libs/pagination";
-import { CONVERSATION_QUIET_MINS } from "@/drizzle/constants";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useWatch } from "react-hook-form";
 import { format } from "date-fns";
-import { getNewReactions, processMentions } from "@/utils/chat";
-import { Quote } from "@/components/ui/quote";
+import { Check, RefreshCw, Search, X } from "lucide-react";
+import { nanoid } from "nanoid";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
-import { z } from "zod";
-import type { MutateCommentSchema } from "@/validators/comments";
-import type { ArrayElement } from "@/utils/typeutils";
-import { getSearchValidator } from "@/validators/register";
+import { Quote } from "@/components/ui/quote";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CONVERSATION_QUIET_MINS } from "@/drizzle/constants";
+import { CommentOnConversation } from "@/layout/Comment";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
+import { getNewReactions, processMentions } from "@/utils/chat";
+import { parseHtml } from "@/utils/parse";
 import { canPostAsAi } from "@/utils/permissions";
+import { secondsFromNow } from "@/utils/time";
+import type { ArrayElement } from "@/utils/typeutils";
+import { useUserData } from "@/utils/UserContext";
+import { type SearchFormSchema, searchFormSchema } from "@/validators/chat";
+import type { MutateCommentSchema } from "@/validators/comments";
+import { mutateCommentSchema } from "@/validators/comments";
+import { getSearchValidator } from "@/validators/register";
 
 interface ConversationProps {
   convo_title?: string;
@@ -56,15 +56,17 @@ export const ConversationSkeleton: React.FC<ConversationProps> = (props) => {
       onBack={props.onBack}
     >
       <div className="flex flex-col gap-2">
-        <Skeleton className="h-[100px] w-full items-center justify-center flex bg-popover">
+        <Skeleton className="flex h-[100px] w-full items-center justify-center bg-popover">
           <Loader explanation="Loading conversation" />
         </Skeleton>
-        {Array.from({ length: 10 }).map((_, i) => (
-          <div className="flex flex-row gap-2" key={i}>
-            <Skeleton className="h-[110px] lg:h-[150px] w-1/4 bg-popover" />
-            <Skeleton className="h-[110px] lg:h-[150px] w-3/4 bg-popover" />
-          </div>
-        ))}
+        {Array.from({ length: 10 }, (_, idx) => `conversation-skeleton-${idx}`).map(
+          (key) => (
+            <div className="flex flex-row gap-2" key={key}>
+              <Skeleton className="h-[110px] w-1/4 bg-popover lg:h-[150px]" />
+              <Skeleton className="h-[110px] w-3/4 bg-popover lg:h-[150px]" />
+            </div>
+          ),
+        )}
       </div>
     </ContentBox>
   );
@@ -108,26 +110,21 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     placeholderData: (previousData) => previousData,
   });
-  const allComments = comments?.pages.map((page) => page.data).flat();
+  const allComments = comments?.pages.flatMap((page) => page.data);
   const conversation = comments?.pages[0]?.convo;
   type ReturnedComment = ArrayElement<typeof allComments>;
 
   // Search functionality
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
-  // Create a search form schema
-  const searchFormSchema = z.object({
-    searchTerm: z.string(),
-  });
-
   // Create form for search
-  const searchForm = useForm<z.infer<typeof searchFormSchema>>({
+  const searchForm = useForm<SearchFormSchema>({
     resolver: zodResolver(searchFormSchema),
     defaultValues: { searchTerm: "" },
   });
 
   const onSearchSubmit = useCallback(
-    (values: z.infer<typeof searchFormSchema>) => {
+    (values: SearchFormSchema) => {
       setSearchQuery(values.searchTerm);
       void refetch();
     },
@@ -160,7 +157,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               onSubmit={searchForm.handleSubmit(onSearchSubmit)}
               className="flex flex-col gap-2"
             >
-              <div className="text-sm font-medium">Search in conversation</div>
+              <div className="font-medium text-sm">Search in conversation</div>
               <FormField
                 control={searchForm.control}
                 name="searchTerm"
@@ -204,7 +201,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
             </form>
           </Form>
           {searchQuery && (
-            <div className="text-xs text-muted-foreground mt-1">
+            <div className="mt-1 text-muted-foreground text-xs">
               Showing results for: <span className="font-medium">{searchQuery}</span>
             </div>
           )}
@@ -352,7 +349,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     if (conversation) {
       setValue("object_id", conversation.id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation?.id]);
 
   /**
@@ -537,10 +533,12 @@ const Conversation: React.FC<ConversationProps> = (props) => {
             case "typing":
               console.log(data);
               if (data?.fromId && data?.fromId !== userData?.userId && data?.username) {
+                const fromId = data.fromId;
+                const username = data.username;
                 setTypingUsers((prev) => {
                   const next = new Map(prev);
-                  next.set(data.fromId!, {
-                    username: data.username!,
+                  next.set(fromId, {
+                    username: username,
                     timestamp: Date.now(),
                   });
                   return next;
@@ -554,7 +552,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
         pusher.unsubscribe(conversation.id);
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [silence, conversation]);
 
   // Cleanup stale typing indicators every second
@@ -627,7 +624,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
           onBack={props.onBack}
         >
           {searchQuery && (
-            <div className="mb-4 flex items-center gap-2 bg-popover p-2 rounded-md">
+            <div className="mb-4 flex items-center gap-2 rounded-md bg-popover p-2">
               <p className="text-sm">
                 Showing messages containing: <strong>{searchQuery}</strong>
               </p>
@@ -669,7 +666,8 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                   quoteIds.length > 0 &&
                   quoteIds.map((quoteId) => {
                     const quote = allComments?.find((c) => c.id === quoteId);
-                    return quote ? (
+                    if (!quote) return null;
+                    return (
                       <Quote
                         key={quoteId}
                         author={quote.username || "Unknown"}
@@ -683,8 +681,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                       >
                         {quote.content}
                       </Quote>
-                    ) : (
-                      ""
                     );
                   })}
                 <div className="relative">
@@ -700,16 +696,16 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                     enableMentions={true}
                     allowClipboardPaste={true}
                   />
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-row-reverse">
+                  <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 transform flex-row-reverse">
                     {isCommenting && <Loader />}
                   </div>
                   <RefreshCw
-                    className="h-8 w-8 absolute right-24 top-[50%] translate-y-[-50%]  z-20 text-gray-400 hover:text-gray-600 opacity-50 hover:cursor-pointer"
+                    className="absolute top-[50%] right-24 z-20 h-8 w-8 translate-y-[-50%] text-gray-400 opacity-50 hover:cursor-pointer hover:text-gray-600"
                     onClick={invalidateComments}
                   />
                 </div>
                 {conversation?.isPublic && typingUsers.size > 0 && (
-                  <div className="text-xs text-muted-foreground mt-1 italic">
+                  <div className="mt-1 text-muted-foreground text-xs italic">
                     {(() => {
                       const names = Array.from(typingUsers.values()).map(
                         (u) => u.username,
@@ -772,8 +768,8 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               );
             })}
           {silence && (
-            <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex flex-col justify-start bg-black bg-opacity-80">
-              <div className="text-center text-white pt-10">
+            <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-start bg-black bg-opacity-80">
+              <div className="pt-10 text-center text-white">
                 <p className="p-5 text-5xl">Are you still there?</p>
                 <Button
                   size="xl"
@@ -782,7 +778,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                     await invalidateComments();
                   }}
                 >
-                  <Check className="w-8 h-8 mr-3" />
+                  <Check className="mr-3 h-8 w-8" />
                   Yep
                 </Button>
               </div>

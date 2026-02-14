@@ -1,10 +1,13 @@
-import { and, sql, eq, gt } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
-import { rankedSeason, userData, battleHistory } from "@/drizzle/schema";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { battleHistory, rankedSeason, userData } from "@/drizzle/schema";
+import {
+  handleEndpointError,
+  lockWithDailyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
 import { endRankedSeason } from "@/server/api/routers/pvprank";
+import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "daily-ranked-pvp";
 
@@ -22,7 +25,9 @@ export async function GET() {
   });
 
   // Check if any active season has expired
-  const endedSeason = activeSeasons.find((season) => season.endDate < new Date());
+  const endedSeason = activeSeasons.find(
+    (season: (typeof activeSeasons)[number]) => season.endDate < new Date(),
+  );
 
   // Perform work
   try {
@@ -61,6 +66,6 @@ export async function GET() {
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

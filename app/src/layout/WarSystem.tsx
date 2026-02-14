@@ -1,49 +1,22 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import dynamic from "next/dynamic";
-import Image from "@/layout/Image";
-import ContentBox from "@/layout/ContentBox";
-import Modal2 from "@/layout/Modal2";
-import Loader from "@/layout/Loader";
-import NavTabs from "@/layout/NavTabs";
-import UserRequestSystem from "@/layout/UserRequestSystem";
-import Building from "@/layout/Building";
-import Table from "@/layout/Table";
-import { Handshake, Info, LandPlot, Swords, Trophy, Trash2, Locate } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { showMutationToast } from "@/libs/toast";
-import { DoorClosed } from "lucide-react";
-import { api } from "@/app/_trpc/client";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { canAdministrateWars } from "@/utils/permissions";
-import { findRelationship } from "@/utils/alliance";
-import { WAR_FUNDS_COST } from "@/drizzle/constants";
-import { WAR_DECLARATION_COST } from "@/drizzle/constants";
-import {
-  WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
-  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5,
-  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8,
-} from "@/drizzle/constants";
-import { WAR_VICTORY_TOKEN_BONUS } from "@/drizzle/constants";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { WAR_ALLY_OFFER_MIN } from "@/drizzle/constants";
-import { WAR_SHRINE_IMAGE } from "@/drizzle/constants";
-import { WAR_PURCHASE_SHRINE_TOKEN_COST } from "@/drizzle/constants";
-import { WAR_SHRINE_CAPTURE_WARHEALTH_DMG } from "@/drizzle/constants";
-import { WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL } from "@/drizzle/constants";
-import { WAR_RECAPTURE_THRESHOLD } from "@/drizzle/constants";
-import { MAP_RESERVED_SECTORS } from "@/drizzle/constants";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import type { Village, VillageAlliance, VillageStructure } from "@/drizzle/schema";
-import type { UserWithRelations } from "@/routers/profile";
-import { Input } from "@/components/ui/input";
-import { canJoinWar } from "@/libs/war";
-import { calculateEnemyConsequences } from "@/utils/alliance";
+import {
+  DoorClosed,
+  Handshake,
+  Info,
+  LandPlot,
+  Locate,
+  Swords,
+  Trash2,
+  Trophy,
+} from "lucide-react";
+import dynamic from "next/dynamic";
+import type React from "react";
+import { useMemo, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -51,9 +24,8 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
-import { useMap } from "@/hooks/map";
-import StatusBar from "@/layout/StatusBar";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -61,10 +33,55 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ColumnDefinitionType } from "@/layout/Table";
-import type { ArrayElement } from "@/utils/typeutils";
+import {
+  MAP_RESERVED_SECTORS,
+  VILLAGE_SYNDICATE_ID,
+  WAR_ALLY_OFFER_MIN,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5,
+  WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8,
+  WAR_DECLARATION_COST,
+  WAR_FUNDS_COST,
+  WAR_PURCHASE_SHRINE_TOKEN_COST,
+  WAR_RECAPTURE_THRESHOLD,
+  WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
+  WAR_SHRINE_IMAGE,
+  WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
+  WAR_VICTORY_TOKEN_BONUS,
+} from "@/drizzle/constants";
+import type { Village, VillageAlliance, VillageStructure } from "@/drizzle/schema";
+import { useMap } from "@/hooks/map";
+import Building from "@/layout/Building";
 import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
+import Modal2 from "@/layout/Modal2";
+import NavTabs from "@/layout/NavTabs";
+import StatusBar from "@/layout/StatusBar";
+import type { ColumnDefinitionType } from "@/layout/Table";
+import Table from "@/layout/Table";
+import UserRequestSystem from "@/layout/UserRequestSystem";
+import { showMutationToast } from "@/libs/toast";
+import { canJoinWar } from "@/libs/war";
+import type { UserWithRelations } from "@/routers/profile";
+import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
+import { calculateEnemyConsequences, findRelationship } from "@/utils/alliance";
+import { canAdministrateWars } from "@/utils/permissions";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import type { ArrayElement } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
+import {
+  type FindSectorSchema,
+  type FindSectorSchemaInput,
+  findSectorSchema,
+} from "@/validators/travel";
+import {
+  type AllianceOfferSchema,
+  type AllianceOfferSchemaInput,
+  createAllianceOfferSchema,
+} from "@/validators/war";
 
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 
@@ -168,11 +185,11 @@ export const WarRoom: React.FC<{
             subtitle="Village is under war exhaustion"
             initialBreak={true}
           >
-            <div className="text-center space-y-2">
+            <div className="space-y-2 text-center">
               <p className="text-muted-foreground">
                 Your village cannot declare war until the exhaustion period ends.
               </p>
-              <p className="text-lg font-semibold">
+              <p className="font-semibold text-lg">
                 Exhaustion ends:{" "}
                 {new Date(userVillage.warExhaustionEndedAt).toLocaleString()}
               </p>
@@ -279,10 +296,7 @@ export const WarMap: React.FC<{
   const [focusSector, setFocusSector] = useState<number | null>(null);
 
   // Find sector form
-  const findSectorSchema = z.object({
-    sector: z.coerce.number().int().min(0).max(492),
-  });
-  const findSectorForm = useForm<z.infer<typeof findSectorSchema>>({
+  const findSectorForm = useForm<FindSectorSchemaInput, unknown, FindSectorSchema>({
     mode: "all",
     resolver: zodResolver(findSectorSchema),
   });
@@ -423,7 +437,7 @@ export const WarMap: React.FC<{
   let modalTitle = "Declare War";
   let proceedLabel: string | undefined = "Declare War";
   let onAccept: () => void = () => {};
-  let modalContent: React.ReactNode | undefined = undefined;
+  let modalContent: React.ReactNode | undefined;
   if (targetSector) {
     if (sectorVillage) {
       if (user.isOutlaw || ["TOWN", "HIDEOUT", "OUTLAW"].includes(sectorVillage.type)) {
@@ -504,7 +518,7 @@ export const WarMap: React.FC<{
           </PopoverTrigger>
           <PopoverContent>
             <p className="py-2 font-semibold">Find Sector</p>
-            <p className="pb-2 text-sm text-muted-foreground">
+            <p className="pb-2 text-muted-foreground text-sm">
               Enter a sector ID to locate it on the map.
             </p>
             <Form {...findSectorForm}>
@@ -525,6 +539,7 @@ export const WarMap: React.FC<{
                           placeholder="Sector ID (0-492)"
                           type="number"
                           {...field}
+                          value={field.value as number | undefined}
                         />
                       </FormControl>
                       <FormMessage />
@@ -538,7 +553,7 @@ export const WarMap: React.FC<{
                     className="flex-1"
                     disabled={findSectorValue === undefined}
                   >
-                    Find Sector {findSectorValue ?? "..."}
+                    Find Sector {(findSectorValue as number | undefined) ?? "..."}
                   </Button>
                   {focusSector !== null && (
                     <Button
@@ -601,9 +616,6 @@ export const SectorWar: React.FC<{
   user: NonNullable<UserWithRelations>;
   isKage: boolean;
 }> = ({ war, user, isKage }) => {
-  // Only show active sector wars
-  if (war.status !== "ACTIVE") return null;
-
   // tRPC utility
   const utils = api.useUtils();
 
@@ -631,6 +643,9 @@ export const SectorWar: React.FC<{
     },
   });
 
+  // Only show active sector wars
+  if (war.status !== "ACTIVE") return null;
+
   // Derived
   const canBuildShrine =
     isKage &&
@@ -641,10 +656,10 @@ export const SectorWar: React.FC<{
 
   // Render
   return (
-    <div className="border p-4 rounded-lg">
+    <div className="rounded-lg border p-4">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col items-center gap-2">
-          <div className="w-full flex justify-end">
+          <div className="flex w-full justify-end">
             {canAdministrateWars(user.role) && (
               <Confirm2
                 title="End War"
@@ -675,7 +690,7 @@ export const SectorWar: React.FC<{
           />
           <div className="w-full max-w-md space-y-2">
             <div>
-              <p className="text-sm font-medium">Shrine - Sector {war.sector}</p>
+              <p className="font-medium text-sm">Shrine - Sector {war.sector}</p>
               {war.defenderShrineHp > 0 && (
                 <StatusBar
                   title="HP"
@@ -688,22 +703,20 @@ export const SectorWar: React.FC<{
                 />
               )}
             </div>
-            <div className="mt-2 rounded-md bg-popover p-3 text-sm text-popover-foreground">
+            <div className="mt-2 rounded-md bg-popover p-3 text-popover-foreground text-sm">
               {war.defenderShrineHp > 0 ? (
-                <>
-                  {war.defenderVillageId === VILLAGE_SYNDICATE_ID ? (
-                    <p>
-                      <strong>Note:</strong> To attack this shrine, you must travel to
-                      sector {war.sector} and engage in combat with the shrine directly.
-                    </p>
-                  ) : (
-                    <p>
-                      <strong>Note:</strong> To damage this shrine, attack players from
-                      the defending village. Each victory will reduce the shrine&apos;s
-                      HP.
-                    </p>
-                  )}
-                </>
+                war.defenderVillageId === VILLAGE_SYNDICATE_ID ? (
+                  <p>
+                    <strong>Note:</strong> To attack this shrine, you must travel to
+                    sector {war.sector} and engage in combat with the shrine directly.
+                  </p>
+                ) : (
+                  <p>
+                    <strong>Note:</strong> To damage this shrine, attack players from
+                    the defending village. Each victory will reduce the shrine&apos;s
+                    HP.
+                  </p>
+                )
               ) : (
                 <p>
                   <strong>Note:</strong> This shrine has been destroyed, and your
@@ -719,7 +732,7 @@ export const SectorWar: React.FC<{
                 title="Build Shrine"
                 button={
                   <Button className="w-full" loading={isBuilding}>
-                    <LandPlot className="h-5 w-5 mr-2" />
+                    <LandPlot className="mr-2 h-5 w-5" />
                     Build Shrine ({WAR_PURCHASE_SHRINE_TOKEN_COST.toLocaleString()}{" "}
                     tokens)
                   </Button>
@@ -775,7 +788,7 @@ export const SectorVillageDialogContent: React.FC<DialogContentProps> = (props) 
         height={100}
         className="mx-auto mb-2 aspect-square"
       />
-      <p className={`text-sm mb-2 font-semibold ${props.textColor}`}>
+      <p className={`mb-2 font-semibold text-sm ${props.textColor}`}>
         {capitalizeFirstLetter(props.status)}
       </p>
     </div>
@@ -787,7 +800,7 @@ export const SectorVillageDialogContent: React.FC<DialogContentProps> = (props) 
  */
 export const DeclareSectorWarDialogContent: React.FC<DialogContentProps> = (props) => {
   return (
-    <div className="border p-4 rounded-lg text-center relative">
+    <div className="relative rounded-lg border p-4 text-center">
       <SectorVillageDialogContent {...props} />
       <p>
         You are about to declare war on sector {props.targetSector}
@@ -830,7 +843,7 @@ export const DeclareSectorWarDialogContent: React.FC<DialogContentProps> = (prop
 export const BreakAllianceDialogContent: React.FC<DialogContentProps> = (props) => {
   if (!props.sectorVillage) return null;
   return (
-    <div className="border p-4 rounded-lg text-center relative">
+    <div className="relative rounded-lg border p-4 text-center">
       <SectorVillageDialogContent {...props} />
       <p>You will break your alliance with {props.sectorVillage.name}. Are you sure?</p>
     </div>
@@ -843,7 +856,7 @@ export const BreakAllianceDialogContent: React.FC<DialogContentProps> = (props) 
 export const DeclareEnemyDialogContent: React.FC<DialogContentProps> = (props) => {
   if (!props.sectorVillage) return null;
   return (
-    <div className="border p-4 rounded-lg text-center relative">
+    <div className="relative rounded-lg border p-4 text-center">
       <SectorVillageDialogContent {...props} />
       <p>
         You are about to declare {props.sectorVillage.name} an enemy. Are you sure? The
@@ -889,7 +902,7 @@ export const InitiateVillageWarDialogContent: React.FC<DialogContentProps> = (
 ) => {
   if (!props.sectorVillage) return null;
   return (
-    <div className="border p-4 rounded-lg text-center relative">
+    <div className="relative rounded-lg border p-4 text-center">
       <SectorVillageDialogContent {...props} />
       <p>
         You are about to declare war on {props.sectorVillage.name}. Are you sure? The
@@ -907,7 +920,7 @@ export const InitiateVillageWarDialogContent: React.FC<DialogContentProps> = (
  */
 export const InitiateRaidDialogContent: React.FC<DialogContentProps> = (props) => {
   return (
-    <div className="border p-4 rounded-lg text-center relative">
+    <div className="relative rounded-lg border p-4 text-center">
       <SectorVillageDialogContent {...props} />
       <div>
         You have the option of initiating a raid in this sector, targeting a given
@@ -950,9 +963,9 @@ const WarSideTownHall: React.FC<{
 }> = ({ structure, village, warStatus, warHealth, warHealthMax }) => {
   return (
     <div className="flex flex-col items-center">
-      <h5 className="font-bold mb-2">{village.name}</h5>
+      <h5 className="mb-2 font-bold">{village.name}</h5>
       {warStatus === "ACTIVE" && (
-        <div className="w-full mb-2">
+        <div className="mb-2 w-full">
           <StatusBar
             title="HP"
             tooltip="War Health - Depletes from PvP kills"
@@ -990,21 +1003,15 @@ const WarSideShrine: React.FC<{
 
   return (
     <div className="flex flex-col items-center">
-      <div className="flex items-center gap-2 mb-2">
+      <div className="mb-2 flex items-center gap-2">
         <span className="font-semibold text-sm">{village.name} Shrine</span>
         <span
-          className={`text-xs px-2 py-0.5 rounded ${
-            isCaptured
-              ? "bg-red-500/20 text-red-500"
-              : isDamaged
-                ? "bg-yellow-500/20 text-yellow-500"
-                : "bg-green-500/20 text-green-500"
-          }`}
+          className={`rounded px-2 py-0.5 text-xs ${isCaptured ? "bg-red-500/20 text-red-500" : isDamaged ? "bg-yellow-500/20 text-yellow-500" : "bg-green-500/20 text-green-500"}`}
         >
           {isCaptured ? "Captured" : isDamaged ? "Damaged" : "Active"}
         </span>
       </div>
-      <div className="w-full mb-2">
+      <div className="mb-2 w-full">
         <StatusBar
           title="HP"
           tooltip="Shrine Health"
@@ -1015,7 +1022,7 @@ const WarSideShrine: React.FC<{
           total={shrineMaxHp}
         />
       </div>
-      <div className="w-full aspect-square max-w-[160px] relative">
+      <div className="relative aspect-square w-full max-w-[160px]">
         <Image
           src={WAR_SHRINE_IMAGE}
           alt={`${village.name} Shrine`}
@@ -1038,12 +1045,12 @@ const WarSideSupportingForces: React.FC<{
 
   return (
     <div className="flex flex-col items-center">
-      <p className="text-sm text-muted-foreground mb-2">{village.name}</p>
-      <div className="flex flex-wrap gap-2 justify-center">
+      <p className="mb-2 text-muted-foreground text-sm">{village.name}</p>
+      <div className="flex flex-wrap justify-center gap-2">
         {allies.map((warAlly) => (
           <div
             key={warAlly.villageId}
-            className="flex items-center space-x-2 bg-popover rounded-full px-3 py-1 border"
+            className="flex items-center space-x-2 rounded-full border bg-popover px-3 py-1"
           >
             <Image
               src={warAlly.village.villageGraphic}
@@ -1056,7 +1063,7 @@ const WarSideSupportingForces: React.FC<{
           </div>
         ))}
         {allies.length === 0 && (
-          <div className="text-sm text-muted-foreground italic">
+          <div className="text-muted-foreground text-sm italic">
             No supporting forces
           </div>
         )}
@@ -1170,16 +1177,9 @@ export const VillageWar: React.FC<{
   const utils = api.useUtils();
 
   // Form for token offer
-  const offerSchema = z.object({
-    amount: z.coerce
-      .number()
-      .int()
-      .positive()
-      .min(WAR_ALLY_OFFER_MIN)
-      .max(userVillage?.tokens ?? 0),
-  });
+  const offerSchema = createAllianceOfferSchema(userVillage?.tokens ?? 0);
 
-  const offerForm = useForm<z.infer<typeof offerSchema>>({
+  const offerForm = useForm<AllianceOfferSchemaInput, unknown, AllianceOfferSchema>({
     resolver: zodResolver(offerSchema),
     defaultValues: { amount: 1000 },
     mode: "onChange",
@@ -1293,8 +1293,8 @@ export const VillageWar: React.FC<{
   });
   if (!attackerStructure || !defenderStructure) return null;
   return (
-    <div className="border p-4 rounded-lg">
-      <div className="flex justify-between items-center mb-4">
+    <div className="rounded-lg border p-4">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h4 className="font-bold text-lg">
             {isAttacker ? "Attacking" : "Defending Against"}{" "}
@@ -1380,11 +1380,11 @@ export const VillageWar: React.FC<{
         className="max-w-[99%]"
       >
         <div className="min-h-[200px]">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Kills are recorded for 30 days after the war ends.
           </p>
           {warKills && warKills.length > 0 ? (
-            <div className="border rounded-lg">
+            <div className="rounded-lg border">
               <Table
                 data={tableData}
                 columns={killColumns}
@@ -1445,7 +1445,7 @@ export const VillageWar: React.FC<{
       </Modal2>
 
       {/* Town Halls Section */}
-      <div className="border border-border rounded-lg p-4">
+      <div className="rounded-lg border border-border p-4">
         <div className="grid grid-cols-2 gap-4">
           <WarSideTownHall
             structure={isAttacker ? attackerStructure : defenderStructure}
@@ -1470,7 +1470,7 @@ export const VillageWar: React.FC<{
 
       {/* Shrines Section */}
       {["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && war.status === "ACTIVE" && (
-        <div className="border border-border rounded-lg p-4 mt-4">
+        <div className="mt-4 rounded-lg border border-border p-4">
           <div className="grid grid-cols-2 gap-4">
             <WarSideShrine
               village={isAttacker ? war.attackerVillage : war.defenderVillage}
@@ -1493,13 +1493,13 @@ export const VillageWar: React.FC<{
               }
             />
           </div>
-          <div className="flex justify-center mt-3">
+          <div className="mt-3 flex justify-center">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowShrineMechanics(true)}
             >
-              <Info className="h-4 w-4 mr-1" />
+              <Info className="mr-1 h-4 w-4" />
               Shrine Mechanics
             </Button>
             <Modal2
@@ -1508,13 +1508,13 @@ export const VillageWar: React.FC<{
               setIsOpen={setShowShrineMechanics}
             >
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   The shrine is a key objective in village wars. Its HP determines
                   control of the shrine.
                 </p>
                 <div className="space-y-2">
                   <h6 className="font-semibold">Attack (Enemy Shrine):</h6>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     When you win shrine combat against an enemy at their shrine, you{" "}
                     <span className="font-semibold text-red-500">reduce</span> their
                     shrine&apos;s HP.
@@ -1522,7 +1522,7 @@ export const VillageWar: React.FC<{
                 </div>
                 <div className="space-y-2">
                   <h6 className="font-semibold">Defend (Your Shrine):</h6>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     When you win shrine combat against an enemy at your own shrine, you{" "}
                     <span className="font-semibold text-green-500">restore</span> your
                     shrine&apos;s HP.
@@ -1530,7 +1530,7 @@ export const VillageWar: React.FC<{
                 </div>
                 <div className="space-y-2">
                   <h6 className="font-semibold">Capture (HP reaches 0):</h6>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     When the shrine HP reaches 0, it is captured. This deals{" "}
                     <span className="font-semibold text-red-500">
                       -{WAR_SHRINE_CAPTURE_WARHEALTH_DMG} HP
@@ -1542,7 +1542,7 @@ export const VillageWar: React.FC<{
                   <h6 className="font-semibold">
                     Recapture (HP exceeds {WAR_RECAPTURE_THRESHOLD * 100}%):
                   </h6>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     When defenders recapture the shrine by raising its HP above{" "}
                     {WAR_RECAPTURE_THRESHOLD * 100}%, they heal{" "}
                     <span className="font-semibold text-green-500">
@@ -1559,8 +1559,8 @@ export const VillageWar: React.FC<{
 
       {/* Supporting Forces Section */}
       {["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && (
-        <div className="border border-border rounded-lg p-4 mt-4">
-          <h6 className="font-semibold text-sm mb-3 text-center">Supporting Forces</h6>
+        <div className="mt-4 rounded-lg border border-border p-4">
+          <h6 className="mb-3 text-center font-semibold text-sm">Supporting Forces</h6>
           <div className="grid grid-cols-2 gap-4">
             <WarSideSupportingForces
               village={isAttacker ? war.attackerVillage : war.defenderVillage}
@@ -1578,15 +1578,15 @@ export const VillageWar: React.FC<{
         war.status === "ACTIVE" &&
         ["VILLAGE_WAR", "WAR_RAID"].includes(war.type) && (
           <div className="mt-4">
-            <h5 className="font-bold mb-2">Send War Alliance Offers</h5>
-            <p className="text-sm text-muted-foreground mb-4">
+            <h5 className="mb-2 font-bold">Send War Alliance Offers</h5>
+            <p className="mb-4 text-muted-foreground text-sm">
               Send offers to factions or allied villages to join your war effort.
             </p>
             <div className="grid grid-cols-2 gap-2">
               {villagesThatCanJoin?.map((village) => (
                 <div
                   key={village.id}
-                  className="border rounded-lg py-1 px-2 hover:bg-popover transition-colors"
+                  className="rounded-lg border px-2 py-1 transition-colors hover:bg-popover"
                 >
                   <div className="flex items-center space-x-2">
                     <Image
@@ -1596,8 +1596,8 @@ export const VillageWar: React.FC<{
                       height={40}
                       className="rounded-full"
                     />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate">{village.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-sm">{village.name}</p>
                       <p className="text-sm">
                         {village.type === "VILLAGE" ? "Ally" : "Faction"}
                       </p>
@@ -1627,8 +1627,9 @@ export const VillageWar: React.FC<{
                                     type="number"
                                     placeholder={`Token offer (min ${WAR_ALLY_OFFER_MIN}, max ${userVillage?.tokens?.toLocaleString()})`}
                                     {...field}
+                                    value={field.value as number}
                                     onChange={(e) => {
-                                      const value = parseInt(e.target.value);
+                                      const value = parseInt(e.target.value, 10);
                                       field.onChange(value);
                                     }}
                                   />
@@ -1639,7 +1640,7 @@ export const VillageWar: React.FC<{
                           />
                         </form>
                       </Form>
-                      <p className="text-sm text-muted-foreground mt-4">
+                      <p className="mt-4 text-muted-foreground text-sm">
                         This will send an offer to {village.name} to join your side in
                         the war against{" "}
                         {war.attackerVillageId === user.villageId

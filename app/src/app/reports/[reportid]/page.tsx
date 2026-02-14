@@ -1,13 +1,13 @@
 "use client";
 
-import { use } from "react";
 import Link from "next/link";
+import { use } from "react";
+import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
 import ParsedReportJson from "@/layout/ReportReason";
-import Loader from "@/layout/Loader";
 import DisplayUserReport from "@/layout/UserReport";
-import { api } from "@/app/_trpc/client";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Report(props: { params: Promise<{ reportid: string }> }) {
@@ -35,8 +35,8 @@ export default function Report(props: { params: Promise<{ reportid: string }> })
           subtitle="Note: Search will be improved once Vector Search is available"
           initialBreak
         >
-          {prevReports?.map((report, i) => (
-            <Link href={"/reports/" + report.id} key={`report-key-${i}`}>
+          {prevReports?.map((report) => (
+            <Link href={`/reports/${report.id}`} key={report.id}>
               <Post hover_effect={true}>
                 <div className="p-2">
                   <ParsedReportJson report={report} viewer={userData} />

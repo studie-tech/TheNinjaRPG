@@ -1,11 +1,11 @@
+import { QuestRewardMetrics, QuestTypes } from "@/drizzle/constants";
 import {
-  ContentFiltering,
-  useContentFiltering,
   buildFilter,
+  ContentFiltering,
   defineFilteringSchema,
   toOptions,
+  useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { QuestTypes, QuestRewardMetrics } from "@/drizzle/constants";
 
 interface QuestRewardBalanceFilteringProps {
   state: QuestRewardBalanceFilteringState;

@@ -1,11 +1,11 @@
 "use client";
 
-import AvatarImage from "@/layout/Avatar";
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { secondsPassed } from "@/utils/time";
+import type React from "react";
+import { Button } from "@/components/ui/button";
+import AvatarImage from "@/layout/Avatar";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import React from "react";
+import { secondsPassed } from "@/utils/time";
 
 export type ColumnDefinitionType<T, K extends keyof T> = {
   key: K;
@@ -42,12 +42,12 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
   const router = useRouter();
 
   return (
-    <div className="relative flex-1 min-w-0 overflow-x-scroll">
-      <table className="w-full text-left text-sm ">
-        <thead className="bg-primary text-xs uppercase text-white">
+    <div className="relative min-w-0 flex-1 overflow-x-scroll">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-primary text-white text-xs uppercase">
           <tr>
-            {columns.map((column, i) => (
-              <th key={i} scope="col" className="px-3 py-3">
+            {columns.map((column) => (
+              <th key={String(column.key)} scope="col" className="px-3 py-3">
                 {column.header}
               </th>
             ))}
@@ -61,11 +61,13 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
         <tbody>
           {data?.map((row, i) => (
             <tr
-              key={`row-${i}`}
+              key={
+                (row as T & { id?: string }).id
+                  ? String((row as T & { id?: string }).id)
+                  : `row-${i}`
+              }
               ref={i === data.length - 1 ? props.setLastElement : null}
-              className={`border-b border-gray-700 ${
-                i % 2 == 0 ? "bg-card" : "bg-popover"
-              } ${props.linkColumn || props.onRowClick ? "cursor-pointer hover:bg-poppopover" : ""}`}
+              className={`border-gray-700 border-b ${i % 2 === 0 ? "bg-card" : "bg-popover"} ${props.linkColumn || props.onRowClick ? "cursor-pointer hover:bg-poppopover" : ""}`}
               onClick={(e) => {
                 e.preventDefault();
                 if (props.onRowClick) {
@@ -77,9 +79,9 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                 }
               }}
             >
-              {columns.map((column, i) => (
+              {columns.map((column) => (
                 <td
-                  key={`cell-${i}`}
+                  key={String(column.key)}
                   className={`px-3 py-2`}
                   style={{
                     width: column.width ? `${column.width}rem` : "auto",
@@ -129,10 +131,10 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
               ))}
               {props.buttons && (
                 <td className="px-6 py-4">
-                  {props.buttons.map((button, i) => (
+                  {props.buttons.map((button) => (
                     <Button
-                      id={`button-${i}`}
-                      key={`button-${i}`}
+                      id={`button-${button.label}`}
+                      key={`button-${button.label}`}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();

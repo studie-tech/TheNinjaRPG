@@ -1,31 +1,32 @@
 "use client";
-import { useState, useEffect } from "react";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { Clock, FastForward, Hand, ScanHeart } from "lucide-react";
-import Countdown from "@/layout/Countdown";
-import Loader from "@/layout/Loader";
-import ContentBox from "@/layout/ContentBox";
-import StatusBar, { calcCurrent } from "@/layout/StatusBar";
-import Image from "@/layout/Image";
-import { hasRequiredRank } from "@/libs/train";
-import { Button } from "@/components/ui/button";
-import { getStrucBoost } from "@/utils/village";
-import { calcIsInVillage } from "@/libs/travel";
-import { useRequireInVillage } from "@/utils/UserContext";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { showUserRank } from "@/libs/profile";
-import { showMutationToast } from "@/libs/toast";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { IMG_BUILDING_HOSPITAL, MEDNIN_MIN_RANK } from "@/drizzle/constants";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import StatusBar, { calcCurrent } from "@/layout/StatusBar";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import {
+  calcChakraToPools,
+  calcHealCost,
   calcHealFinish,
   calcMedninHealablePool,
   calcMedninRank,
 } from "@/libs/hospital";
-import { calcHealCost, calcChakraToPools } from "@/libs/hospital";
-import { MEDNIN_MIN_RANK, IMG_BUILDING_HOSPITAL } from "@/drizzle/constants";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import type { ArrayElement } from "@/utils/typeutils";
+import { showUserRank } from "@/libs/profile";
+import { showMutationToast } from "@/libs/toast";
+import { hasRequiredRank } from "@/libs/train";
+import { calcIsInVillage } from "@/libs/travel";
 import type { UserWithRelations } from "@/routers/profile";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import type { ArrayElement } from "@/utils/typeutils";
+import { useRequireInVillage } from "@/utils/UserContext";
+import { getStrucBoost } from "@/utils/village";
 
 export default function Hospital() {
   // Settings
@@ -65,7 +66,10 @@ export default function Hospital() {
   if (!access) return <Loader explanation="Accessing Hospital" />;
 
   // Hospital name
-  const inVillage = calcIsInVillage({ x: userData.longitude, y: userData.latitude });
+  const inVillage = calcIsInVillage({
+    x: userData.longitude,
+    y: userData.latitude,
+  });
   const ownVillage = userData.sector === userData.village?.sector;
   const outlawOut = userData.isOutlaw && inVillage && !ownVillage;
   const hospitalName = outlawOut
@@ -97,7 +101,7 @@ export default function Hospital() {
               ? "You are fully healed. You can check out now."
               : "You are hospitalized, either wait or pay to expedite treatment."}
           </p>
-          <div className="grid grid-cols-2 py-3 gap-2" id="tutorial-hospital-buttons">
+          <div className="grid grid-cols-2 gap-2 py-3" id="tutorial-hospital-buttons">
             <Button
               id="check"
               className="w-full"
@@ -315,7 +319,7 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
     <div>
       <div className="p-2">
         <Alert>
-          <ScanHeart className="w-6 h-6" />
+          <ScanHeart className="h-6 w-6" />
           <AlertTitle>Healing Capacity</AlertTitle>
           <AlertDescription>
             Your current medicial rank is {capitalizeFirstLetter(medninRank)}. You can

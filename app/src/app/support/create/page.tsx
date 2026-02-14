@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import RichInput from "@/layout/RichInput";
+import { CheckCircle, FileText, Info, Plus, Tag, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,29 +26,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   SUPPORT_TICKET_CATEGORY_DESCRIPTIONS,
-  SUPPORT_TICKET_PRIORITY_DESCRIPTIONS,
-} from "@/drizzle/constants";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileText, X, Plus, Info, CheckCircle, Tag } from "lucide-react";
-import { showMutationToast } from "@/libs/toast";
-import { api } from "@/app/_trpc/client";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { createSupportTicketSchema } from "@/validators/support";
-import {
-  type SupportTicketCategory,
-  type SupportTicketPriority,
-  SupportTicketCategories,
-  SupportTicketPriorities,
   SUPPORT_TICKET_COLORS,
   SUPPORT_TICKET_LIMITS,
+  SUPPORT_TICKET_PRIORITY_DESCRIPTIONS,
+  SupportTicketCategories,
+  type SupportTicketCategory,
+  SupportTicketPriorities,
+  type SupportTicketPriority,
 } from "@/drizzle/constants";
-import type { z } from "zod";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import RichInput from "@/layout/RichInput";
+import { showMutationToast } from "@/libs/toast";
+import { useRequiredUserData } from "@/utils/UserContext";
+import { createSupportTicketSchema } from "@/validators/support";
 
 type CreateTicketFormData = z.infer<typeof createSupportTicketSchema>;
+type CreateTicketFormDataInput = z.input<typeof createSupportTicketSchema>;
 
 export default function CreateSupportTicket() {
   const router = useRouter();
@@ -59,7 +58,7 @@ export default function CreateSupportTicket() {
     formState: { errors },
     setValue,
     control,
-  } = useForm<CreateTicketFormData>({
+  } = useForm<CreateTicketFormDataInput, unknown, CreateTicketFormData>({
     resolver: zodResolver(createSupportTicketSchema),
     defaultValues: {
       priority: "MEDIUM",
@@ -71,7 +70,7 @@ export default function CreateSupportTicket() {
   const watchedTitle = useWatch({ control, name: "title" });
   const watchedDescription = useWatch({ control, name: "description" });
   const watchedIsPublic = useWatch({ control, name: "isPublic" });
-  const watchedTags = useWatch({ control, name: "tags" });
+  const watchedTags = useWatch({ control, name: "tags" }) ?? [];
 
   // Create ticket mutation
   const createTicket = api.support.createTicket.useMutation({
@@ -148,9 +147,9 @@ export default function CreateSupportTicket() {
                 className={errors.title ? "border-red-500" : ""}
               />
               {errors.title && (
-                <p className="text-sm text-red-500">{errors.title.message}</p>
+                <p className="text-red-500 text-sm">{errors.title.message}</p>
               )}
-              <p className="text-xs text-gray-500">
+              <p className="text-gray-500 text-xs">
                 {watchedTitle?.length || 0} / {SUPPORT_TICKET_LIMITS.TITLE_MAX_LENGTH}{" "}
                 characters
               </p>
@@ -167,7 +166,7 @@ export default function CreateSupportTicket() {
                 error={errors.description?.message}
                 allowClipboardPaste={true}
               />
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs">
                 <p>
                   {watchedDescription?.length || 0} /{" "}
                   {SUPPORT_TICKET_LIMITS.DESCRIPTION_MAX_LENGTH} characters
@@ -202,13 +201,13 @@ export default function CreateSupportTicket() {
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {SupportTicketCategories.map((category) => (
-                    <SelectItem key={category} value={category}>
+                  {SupportTicketCategories.map((category, i) => (
+                    <SelectItem key={`${category}-${i}`} value={category}>
                       <div className="flex items-center gap-2">
                         <Badge className={SUPPORT_TICKET_COLORS.CATEGORY[category]}>
                           {category.replace("_", " ")}
                         </Badge>
-                        <span className="text-sm text-gray-600">
+                        <span className="text-gray-600 text-sm">
                           {SUPPORT_TICKET_CATEGORY_DESCRIPTIONS[category]}
                         </span>
                       </div>
@@ -217,7 +216,7 @@ export default function CreateSupportTicket() {
                 </SelectContent>
               </Select>
               {errors.category && (
-                <p className="text-sm text-red-500">{errors.category.message}</p>
+                <p className="text-red-500 text-sm">{errors.category.message}</p>
               )}
             </div>
 
@@ -233,13 +232,13 @@ export default function CreateSupportTicket() {
                   <SelectValue placeholder="Select priority" />
                 </SelectTrigger>
                 <SelectContent>
-                  {SupportTicketPriorities.map((priority) => (
-                    <SelectItem key={priority} value={priority}>
+                  {SupportTicketPriorities.map((priority, i) => (
+                    <SelectItem key={`${priority}-${i}`} value={priority}>
                       <div className="flex items-center gap-2">
                         <Badge className={SUPPORT_TICKET_COLORS.PRIORITY[priority]}>
                           {priority}
                         </Badge>
-                        <span className="text-sm text-gray-600">
+                        <span className="text-gray-600 text-sm">
                           {SUPPORT_TICKET_PRIORITY_DESCRIPTIONS[priority]}
                         </span>
                       </div>
@@ -273,10 +272,10 @@ export default function CreateSupportTicket() {
                 </Button>
               </div>
               {watchedTags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {watchedTags.map((tag) => (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {watchedTags.map((tag, i) => (
                     <Badge
-                      key={tag}
+                      key={`${tag}-${i}`}
                       variant="secondary"
                       className="flex items-center gap-1"
                     >
@@ -293,7 +292,7 @@ export default function CreateSupportTicket() {
                   ))}
                 </div>
               )}
-              <p className="text-xs text-gray-500">
+              <p className="text-gray-500 text-xs">
                 {watchedTags.length} / {SUPPORT_TICKET_LIMITS.MAX_TAGS} tags
               </p>
             </div>
@@ -311,7 +310,7 @@ export default function CreateSupportTicket() {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Make ticket public</Label>
-                <p className="text-sm text-gray-500">
+                <p className="text-gray-500 text-sm">
                   Allow other users to see this ticket
                 </p>
               </div>
@@ -343,7 +342,7 @@ export default function CreateSupportTicket() {
               </>
             ) : (
               <>
-                <CheckCircle className="h-4 w-4 mr-2" />
+                <CheckCircle className="mr-2 h-4 w-4" />
                 Create Ticket
               </>
             )}

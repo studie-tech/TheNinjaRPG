@@ -1,24 +1,24 @@
-import { useState } from "react";
-import Link from "next/link";
 import { FlaskConical, Scissors, Star } from "lucide-react";
-import Confirm2 from "@/layout/Confirm2";
-import Loader from "@/layout/Loader";
-import ContentBox from "@/layout/ContentBox";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import Modal2 from "@/layout/Modal2";
-import NavTabs from "@/layout/NavTabs";
-import BloodFiltering, { useFiltering, getFilter } from "@/layout/BloodlineFiltering";
+import Link from "next/link";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { ActionSelector } from "@/layout/CombatActions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import {
   BLOODLINE_COST,
   REMOVAL_COST,
   ROLL_CHANCE_PERCENTAGE,
 } from "@/drizzle/constants";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
 import type { Bloodline } from "@/drizzle/schema";
+import BloodFiltering, { getFilter, useFiltering } from "@/layout/BloodlineFiltering";
+import { ActionSelector } from "@/layout/CombatActions";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import NavTabs from "@/layout/NavTabs";
+import { showMutationToast } from "@/libs/toast";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 /**
  * Show Current bloodline & let user remove it
@@ -51,8 +51,7 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
     },
   );
   const allBloodlines = bloodlines?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .filter((b) => !b.villageId || b.villageId === userData?.villageId);
 
   // Mutations
@@ -101,7 +100,7 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
           {!canAfford && (
             <Link href="/points">
               <Button className="w-full" decoration="gold" animation="pulse">
-                <Star className="h-6 w-6 mr-2" />
+                <Star className="mr-2 h-6 w-6" />
                 Purchase Reputation Points
               </Button>
             </Link>
@@ -116,7 +115,7 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
           showBgColor={false}
           showLabels={true}
           onClick={(id) => {
-            if (id == bloodline?.id) {
+            if (id === bloodline?.id) {
               setBloodline(undefined);
               setIsOpen(false);
             } else {
@@ -275,7 +274,7 @@ export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
           You are about to get your genetics checked to see if you have a bloodline.
           Statistically, the chances for the different ranks of bloodlines are:
         </p>
-        <ul className="pl-5 pt-3">
+        <ul className="pt-3 pl-5">
           <li>S-Ranked: {ROLL_CHANCE_PERCENTAGE.S * 100}%</li>
           <li>A-Ranked: {ROLL_CHANCE_PERCENTAGE.A * 100}%</li>
           <li>B-Ranked: {ROLL_CHANCE_PERCENTAGE.B * 100}%</li>

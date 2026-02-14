@@ -1,9 +1,13 @@
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { baseServerResponse, errorResponse } from "@/server/api/trpc";
-import { fetchBadge } from "@/routers/badge";
+import { Client as PlanetScaleClient } from "@planetscale/database";
+import * as Sentry from "@sentry/nextjs";
+import type { inferRouterOutputs } from "@trpc/server";
+import { TRPCError } from "@trpc/server";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { after } from "next/server";
-import { fetchAttributes } from "@/routers/profile";
-import { eq, ne, and, desc, sql } from "drizzle-orm";
+import { z } from "zod";
+import type { UserStatus } from "@/drizzle/constants";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import {
   actionLog,
   aiProfile,
@@ -12,6 +16,7 @@ import {
   bloodlineRolls,
   captcha,
   conceptImage,
+  contentBackup,
   conversation,
   conversationComment,
   damageSimulation,
@@ -22,23 +27,25 @@ import {
   jutsuLoadout,
   kageDefendedChallenges,
   linkPromotion,
-  mpvpBattleUser,
   mpvpBattleQueue,
+  mpvpBattleUser,
   notification,
   paypalSubscription,
   paypalTransaction,
   poll,
-  staffApplication,
   pollOption,
   questHistory,
+  raidParticipation,
   rankedPvpQueue,
   rankedUserRewards,
   reportLog,
   ryoTrade,
   sector,
+  staffApplication,
   supportReview,
   trainingLog,
   user2conversation,
+  userActivityEvent,
   userAttribute,
   userBadge,
   userBlackList,
@@ -48,46 +55,41 @@ import {
   userLikes,
   userNindo,
   userPollVote,
+  userRaidBuff,
   userReport,
   userReportComment,
   userRequest,
   userReview,
   userRewards,
+  userSkill,
   userUpload,
   userVote,
-  userSkill,
   village,
-  userActivityEvent,
   warKill,
-  raidParticipation,
-  userRaidBuff,
 } from "@/drizzle/schema";
-import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
+import { fetchBadge } from "@/routers/badge";
+import { fetchAttributes, fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchVillages } from "@/routers/village";
-import { z } from "zod";
-import { nanoid } from "nanoid";
 import {
-  canUnstuckVillage,
-  canModifyUserBadges,
-  canSeeIps,
-  canSeeActivityEvents,
-  canUnequipAllUsers,
-  canUseMonitoringTests,
-  canDeleteReferral,
-  canControlBackups,
-} from "@/utils/permissions";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { canCloneUser, canClearSectors } from "@/utils/permissions";
-import { TRPCError } from "@trpc/server";
-import * as Sentry from "@sentry/nextjs";
-import type { inferRouterOutputs } from "@trpc/server";
-import type { UserStatus } from "@/drizzle/constants";
-
-import { Client as PlanetScaleClient } from "@planetscale/database";
-import { contentBackup } from "@/drizzle/schema";
-
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  canClearSectors,
+  canCloneUser,
+  canControlBackups,
+  canDeleteReferral,
+  canModifyUserBadges,
+  canSeeActivityEvents,
+  canSeeIps,
+  canUnequipAllUsers,
+  canUnstuckVillage,
+  canUseMonitoringTests,
+} from "@/utils/permissions";
 import { fetchSector } from "./village";
 
 export const staffRouter = createTRPCRouter({
@@ -161,9 +163,7 @@ export const staffRouter = createTRPCRouter({
         .map((r) => `(${columns.map((c) => toSqlVal(r[c])).join(", ")})`)
         .join(",\n");
 
-      const insertSql = `INSERT INTO \`${tableName}\` (${columns
-        .map((c) => `\`${c}\``)
-        .join(", ")}) VALUES\n${valuesSql};`;
+      const insertSql = `INSERT INTO \`${tableName}\` (${columns.map((c) => `\`${c}\``).join(", ")}) VALUES\n${valuesSql};`;
 
       await ctx.drizzle.insert(contentBackup).values({
         id: nanoid(),
@@ -635,7 +635,7 @@ export const staffRouter = createTRPCRouter({
       return historicalIps;
     }),
   releaseSector: protectedProcedure
-    .input(z.object({ sector: z.number().int() }))
+    .input(z.object({ sector: z.int() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
@@ -1011,74 +1011,164 @@ export const staffRouter = createTRPCRouter({
 export type staffRouter = inferRouterOutputs<typeof staffRouter>;
 
 /**
+ * Check if an error is a MySQL deadlock error (errno 1213).
+ * @param error - The error to check.
+ * @returns True if the error is a deadlock error.
+ */
+const isDeadlockError = (error: unknown): boolean => {
+  if (error instanceof Error) {
+    return error.message.includes("Deadlock") || error.message.includes("errno 1213");
+  }
+  return false;
+};
+
+/**
+ * Delay execution for a specified number of milliseconds.
+ * @param ms - The number of milliseconds to delay.
+ */
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
  * Delete a user from the database.
+ * Implements retry logic for MySQL deadlock errors (errno 1213) as recommended by MySQL.
  * @param client - The database client.
  * @param userId - The ID of the user to delete.
  */
 export const deleteUser = async (client: DrizzleClient, userId: string) => {
+  const MAX_RETRIES = 3;
+  const BASE_DELAY_MS = 100;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await deleteUserInternal(client, userId);
+      return;
+    } catch (error) {
+      if (isDeadlockError(error) && attempt < MAX_RETRIES) {
+        // Exponential backoff: 100ms, 200ms, 400ms
+        const delayMs = BASE_DELAY_MS * 2 ** (attempt - 1);
+        await delay(delayMs);
+        continue;
+      }
+      throw error;
+    }
+  }
+};
+
+/**
+ * Internal implementation of user deletion.
+ * Sequential batches to prevent MySQL deadlock (errno 1213).
+ * Operations within each batch run in parallel, but batches execute sequentially.
+ * @param client - The database client.
+ * @param userId - The ID of the user to delete.
+ */
+const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
+  // Batch 1: Update foreign key references (must run first)
+  await client
+    .update(userData)
+    .set({ senseiId: null })
+    .where(eq(userData.senseiId, userId));
+
+  // Batch 2: Communication & social relationships
   await Promise.all([
-    client
-      .update(userData)
-      .set({ senseiId: null })
-      .where(eq(userData.senseiId, userId)),
-    client.delete(userData).where(eq(userData.userId, userId)),
-    client.delete(mpvpBattleUser).where(eq(mpvpBattleUser.userId, userId)),
-    client.delete(bloodlineRolls).where(eq(bloodlineRolls.userId, userId)),
     client.delete(conversation).where(eq(conversation.createdById, userId)),
     client.delete(user2conversation).where(eq(user2conversation.userId, userId)),
     client.delete(conversationComment).where(eq(conversationComment.userId, userId)),
-    client.delete(damageSimulation).where(eq(damageSimulation.userId, userId)),
+    client.delete(notification).where(eq(notification.userId, userId)),
+    client.delete(userBlackList).where(eq(userBlackList.creatorUserId, userId)),
+    client.delete(userBlackList).where(eq(userBlackList.targetUserId, userId)),
+  ]);
+
+  // Batch 3: Forum & content
+  await Promise.all([
     client.delete(forumPost).where(eq(forumPost.userId, userId)),
     client.delete(forumThread).where(eq(forumThread.userId, userId)),
-    client.delete(historicalAvatar).where(eq(historicalAvatar.userId, userId)),
-    client.delete(historicalIp).where(eq(historicalIp.userId, userId)),
-    client.delete(userActivityEvent).where(eq(userActivityEvent.userId, userId)),
-    client.delete(jutsuLoadout).where(eq(jutsuLoadout.userId, userId)),
-    client.delete(notification).where(eq(notification.userId, userId)),
-    client.delete(reportLog).where(eq(reportLog.targetUserId, userId)),
-    client.delete(reportLog).where(eq(reportLog.staffUserId, userId)),
-    client.delete(actionLog).where(eq(actionLog.userId, userId)),
-    client.delete(trainingLog).where(eq(trainingLog.userId, userId)),
-    client.delete(userAttribute).where(eq(userAttribute.userId, userId)),
-    client.delete(userReview).where(eq(userReview.authorUserId, userId)),
-    client.delete(userRewards).where(eq(userRewards.awardedById, userId)),
-    client.delete(userRewards).where(eq(userRewards.receiverId, userId)),
-    client.delete(userReview).where(eq(userReview.targetUserId, userId)),
-    client.delete(userNindo).where(eq(userNindo.userId, userId)),
+    client.delete(poll).where(eq(poll.createdByUserId, userId)),
+    client.delete(userPollVote).where(eq(userPollVote.userId, userId)),
+    client.delete(pollOption).where(eq(pollOption.targetUserId, userId)),
+    client.delete(pollOption).where(eq(pollOption.createdByUserId, userId)),
+  ]);
+
+  // Batch 4: Game progress & items
+  await Promise.all([
     client.delete(userItem).where(eq(userItem.userId, userId)),
     client.delete(userJutsu).where(eq(userJutsu.userId, userId)),
     client.delete(userSkill).where(eq(userSkill.userId, userId)),
+    client.delete(userAttribute).where(eq(userAttribute.userId, userId)),
+    client.delete(jutsuLoadout).where(eq(jutsuLoadout.userId, userId)),
+    client.delete(questHistory).where(eq(questHistory.userId, userId)),
+    client.delete(bloodlineRolls).where(eq(bloodlineRolls.userId, userId)),
+  ]);
+
+  // Batch 5: History & logs
+  await Promise.all([
+    client.delete(historicalAvatar).where(eq(historicalAvatar.userId, userId)),
+    client.delete(historicalIp).where(eq(historicalIp.userId, userId)),
+    client.delete(userActivityEvent).where(eq(userActivityEvent.userId, userId)),
+    client.delete(actionLog).where(eq(actionLog.userId, userId)),
+    client.delete(trainingLog).where(eq(trainingLog.userId, userId)),
+  ]);
+
+  // Batch 6: Reports & moderation
+  await Promise.all([
+    client.delete(reportLog).where(eq(reportLog.targetUserId, userId)),
+    client.delete(reportLog).where(eq(reportLog.staffUserId, userId)),
     client.delete(userReport).where(eq(userReport.reporterUserId, userId)),
     client.delete(userReport).where(eq(userReport.reportedUserId, userId)),
     client.delete(userReportComment).where(eq(userReportComment.userId, userId)),
+    client.delete(automatedModeration).where(eq(automatedModeration.userId, userId)),
+  ]);
+
+  // Batch 7: Staff & applications
+  await Promise.all([
+    client.delete(staffApplication).where(eq(staffApplication.applicantUserId, userId)),
+    client.delete(supportReview).where(eq(supportReview.userId, userId)),
+  ]);
+
+  // Batch 8: Financial & rewards
+  await Promise.all([
     client.delete(bankTransfers).where(eq(bankTransfers.senderId, userId)),
     client.delete(bankTransfers).where(eq(bankTransfers.receiverId, userId)),
-    client.delete(automatedModeration).where(eq(automatedModeration.userId, userId)),
-    client.delete(supportReview).where(eq(supportReview.userId, userId)),
+    client.delete(userRewards).where(eq(userRewards.awardedById, userId)),
+    client.delete(userRewards).where(eq(userRewards.receiverId, userId)),
+    client.delete(userVote).where(eq(userVote.userId, userId)),
+  ]);
+
+  // Batch 9: Reviews & social
+  await Promise.all([
+    client.delete(userReview).where(eq(userReview.authorUserId, userId)),
+    client.delete(userReview).where(eq(userReview.targetUserId, userId)),
+    client.delete(userNindo).where(eq(userNindo.userId, userId)),
+    client.delete(userLikes).where(eq(userLikes.userId, userId)),
+    client.delete(userRequest).where(eq(userRequest.senderId, userId)),
+    client.delete(userRequest).where(eq(userRequest.receiverId, userId)),
+  ]);
+
+  // Batch 10: Battle & war
+  await Promise.all([
+    client.delete(mpvpBattleUser).where(eq(mpvpBattleUser.userId, userId)),
     client
       .delete(kageDefendedChallenges)
       .where(eq(kageDefendedChallenges.userId, userId)),
     client
       .delete(kageDefendedChallenges)
       .where(eq(kageDefendedChallenges.kageId, userId)),
-    client.delete(questHistory).where(eq(questHistory.userId, userId)),
-    client.delete(userLikes).where(eq(userLikes.userId, userId)),
-    client.delete(staffApplication).where(eq(staffApplication.applicantUserId, userId)),
-    client.delete(conceptImage).where(eq(conceptImage.userId, userId)),
-    client.delete(userBadge).where(eq(userBadge.userId, userId)),
-    client.delete(userRequest).where(eq(userRequest.senderId, userId)),
-    client.delete(userRequest).where(eq(userRequest.receiverId, userId)),
-    client.delete(linkPromotion).where(eq(linkPromotion.userId, userId)),
-    client.delete(linkPromotion).where(eq(linkPromotion.reviewedBy, userId)),
-    client.delete(userVote).where(eq(userVote.userId, userId)),
-    client.delete(poll).where(eq(poll.createdByUserId, userId)),
-    client.delete(pollOption).where(eq(pollOption.targetUserId, userId)),
-    client.delete(pollOption).where(eq(pollOption.createdByUserId, userId)),
-    client.delete(userPollVote).where(eq(userPollVote.userId, userId)),
-    client.delete(userUpload).where(eq(userUpload.userId, userId)),
     client.delete(warKill).where(eq(warKill.killerId, userId)),
     client.delete(warKill).where(eq(warKill.victimId, userId)),
     client.delete(raidParticipation).where(eq(raidParticipation.userId, userId)),
     client.delete(userRaidBuff).where(eq(userRaidBuff.userId, userId)),
   ]);
+
+  // Batch 11: Misc
+  await Promise.all([
+    client.delete(damageSimulation).where(eq(damageSimulation.userId, userId)),
+    client.delete(conceptImage).where(eq(conceptImage.userId, userId)),
+    client.delete(userBadge).where(eq(userBadge.userId, userId)),
+    client.delete(linkPromotion).where(eq(linkPromotion.userId, userId)),
+    client.delete(linkPromotion).where(eq(linkPromotion.reviewedBy, userId)),
+    client.delete(userUpload).where(eq(userUpload.userId, userId)),
+  ]);
+
+  // Final batch: Delete main userData record (must be last)
+  await client.delete(userData).where(eq(userData.userId, userId));
 };

@@ -1,47 +1,50 @@
 "use client";
 
-import React, { useEffect, useCallback, useRef, useMemo, memo } from "react";
+import {
+  AlertCircle,
+  BarChart3,
+  Coins,
+  Crosshair,
+  Heart,
+  Home,
+  Info,
+  LogIn,
+  Play,
+  RefreshCw,
+  SkipForward,
+  Sparkles,
+  Sword,
+  Target,
+  Trophy,
+  X,
+  Zap,
+} from "lucide-react";
 import dynamic from "next/dynamic";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
+import Link from "next/link";
+import type React from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { api } from "@/app/_trpc/client";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useUserData } from "@/utils/UserContext";
-import Link from "next/link";
-import { useTowerDefense, useHudStoreValues } from "@/hooks/useTowerDefense";
-import { useLocalStorage } from "@/hooks/localstorage";
-import TowerDefenseUpgrades from "@/layout/TowerDefenseUpgrades";
-import { api } from "@/app/_trpc/client";
-import { ID_ANIMATION_HIT, ID_SFX_HIT } from "@/drizzle/constants";
 import type { TowerDefenseUpgradeCategory } from "@/drizzle/constants";
+import { ID_ANIMATION_HIT, ID_SFX_HIT } from "@/drizzle/constants";
+import { useLocalStorage } from "@/hooks/localstorage";
+import { useHudStoreValues, useTowerDefense } from "@/hooks/useTowerDefense";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import Loader from "@/layout/Loader";
 import type { TowerDefenseHandle } from "@/layout/TowerDefense";
-import {
-  Sword,
-  Play,
-  Trophy,
-  Heart,
-  Coins,
-  Target,
-  AlertCircle,
-  SkipForward,
-  Home,
-  Zap,
-  Crosshair,
-  BarChart3,
-  Sparkles,
-  RefreshCw,
-  X,
-  LogIn,
-  Info,
-} from "lucide-react";
+import TowerDefenseUpgrades from "@/layout/TowerDefenseUpgrades";
+import { getFirstOfNextMonth } from "@/utils/time";
+import { useUserData } from "@/utils/UserContext";
 
 // Dynamically import the ThreeJS component
 const TowerDefenseCanvas = dynamic(() => import("@/layout/TowerDefense"), {
@@ -54,8 +57,8 @@ const TowerDefenseCanvas = dynamic(() => import("@/layout/TowerDefense"), {
 });
 
 const GAME_NAME = "Tower Defense";
-const PAGE_TITLE = `${GAME_NAME} (Unstable Preview)`;
-const PAGE_SUBTITLE = "For experimentation with TNR tech, visuals & performance.";
+const PAGE_TITLE = `${GAME_NAME}`;
+const PAGE_SUBTITLE = "Survive as many waves as possible!";
 
 const TowerDefensePage: React.FC = () => {
   const { data: userData, isClerkLoaded } = useUserData();
@@ -172,6 +175,7 @@ const TowerDefensePage: React.FC = () => {
       <ContentBox
         title={PAGE_TITLE}
         subtitle={PAGE_SUBTITLE}
+        defaultBackHref="/minigames"
         topRightContent={
           <Link href="/manual/towerDefense/leaderboard">
             <Button size="sm">
@@ -190,7 +194,7 @@ const TowerDefensePage: React.FC = () => {
                 <p className="font-semibold text-blue-600 dark:text-blue-400">
                   Playing as Guest
                 </p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   You can play the game without logging in, but you won&apos;t be able
                   to earn or save permanent upgrade points. Log in to save your progress
                   and purchase permanent upgrades!
@@ -218,12 +222,12 @@ const TowerDefensePage: React.FC = () => {
             <CardContent className="space-y-4">
               {/* Existing Session Panel - only for logged in users */}
               {!isGuest && gameState.existingSession && (
-                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 space-y-3">
+                <div className="space-y-3 rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
                   <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
                     <AlertCircle className="h-4 w-4" />
                     <span className="font-semibold">Active Run Found</span>
                   </div>
-                  <div className="text-sm space-y-1">
+                  <div className="space-y-1 text-sm">
                     <p>
                       Wave: <strong>{gameState.existingSession.wave}</strong>
                     </p>
@@ -275,7 +279,7 @@ const TowerDefensePage: React.FC = () => {
                     {isStarting ? "Connecting..." : "Start New Run"}
                   </Button>
 
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-muted-foreground text-sm">
                     <p>Survive as many waves as possible!</p>
                     <p>Enemies get stronger each wave.</p>
                   </div>
@@ -304,7 +308,7 @@ const TowerDefensePage: React.FC = () => {
                         <Coins className="mr-1 h-4 w-4" />0
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                       <Link href="/login" className="text-blue-500 hover:underline">
                         Log in
                       </Link>{" "}
@@ -322,7 +326,7 @@ const TowerDefensePage: React.FC = () => {
                         {upgradesData?.points ?? 0}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                       Earn points by surviving waves. Use them to purchase permanent
                       upgrades!
                     </p>
@@ -331,6 +335,22 @@ const TowerDefensePage: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Monthly Reset Notice */}
+        <div className="col-span-2 mt-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+          <div className="flex items-center gap-3">
+            <Trophy className="h-5 w-5 text-amber-500" />
+            <div>
+              <p className="font-semibold text-amber-600 dark:text-amber-400">
+                Leaderboard resets monthly!
+              </p>
+              <p className="text-muted-foreground text-sm">
+                Next reset in:{" "}
+                <Countdown targetDate={getFirstOfNextMonth()} className="font-bold" />
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Upgrades Section */}
@@ -403,7 +423,7 @@ const TowerDefensePage: React.FC = () => {
         {gameState.mode === "wave-end" && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm">
             <div className="max-w-md rounded-xl border-2 border-green-500/50 bg-background/95 p-8 text-center shadow-2xl">
-              <h2 className="text-4xl font-bold text-green-500">
+              <h2 className="font-bold text-4xl text-green-500">
                 Wave {gameState.currentWave} Complete!
               </h2>
               <p className="mt-3 text-muted-foreground">
@@ -433,7 +453,7 @@ const TowerDefensePage: React.FC = () => {
         {gameState.mode === "game-over" && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 backdrop-blur-sm">
             <div className="max-w-md rounded-xl border-2 border-destructive/50 bg-background/95 p-8 text-center shadow-2xl">
-              <h2 className="text-4xl font-bold text-destructive">Game Over!</h2>
+              <h2 className="font-bold text-4xl text-destructive">Game Over!</h2>
               <div className="mt-6 space-y-3">
                 <p className="text-2xl">
                   Final Score:{" "}
@@ -447,12 +467,12 @@ const TowerDefensePage: React.FC = () => {
 
                 {/* Points Earned Section - Different for guest vs logged in */}
                 {isGuest ? (
-                  <div className="mt-4 rounded-lg p-4 bg-blue-500/10 border border-blue-500/30">
-                    <p className="text-lg font-semibold text-blue-500">
+                  <div className="mt-4 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
+                    <p className="font-semibold text-blue-500 text-lg">
                       <Info className="mr-2 inline h-5 w-5" />
                       Would have earned {Math.floor(gameState.score / 100)} points
                     </p>
-                    <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                    <div className="mt-2 space-y-1 text-muted-foreground text-xs">
                       <p>
                         <Link href="/login" className="text-blue-500 hover:underline">
                           Log in
@@ -463,18 +483,10 @@ const TowerDefensePage: React.FC = () => {
                   </div>
                 ) : (
                   <div
-                    className={`mt-4 rounded-lg p-4 ${
-                      (gameState.finalPointsEarned ?? 0) > 0
-                        ? "bg-primary/10 border border-primary/30"
-                        : "bg-muted/50 border border-muted"
-                    }`}
+                    className={`mt-4 rounded-lg p-4 ${(gameState.finalPointsEarned ?? 0) > 0 ? "border border-primary/30 bg-primary/10" : "border border-muted bg-muted/50"}`}
                   >
                     <p
-                      className={`text-lg font-semibold ${
-                        (gameState.finalPointsEarned ?? 0) > 0
-                          ? "text-primary"
-                          : "text-muted-foreground"
-                      }`}
+                      className={`font-semibold text-lg ${(gameState.finalPointsEarned ?? 0) > 0 ? "text-primary" : "text-muted-foreground"}`}
                     >
                       <Coins className="mr-2 inline h-5 w-5" />
                       {(gameState.finalPointsEarned ?? 0) > 0
@@ -483,7 +495,7 @@ const TowerDefensePage: React.FC = () => {
                     </p>
 
                     {/* Calculation explanation */}
-                    <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                    <div className="mt-2 space-y-1 text-muted-foreground text-xs">
                       <p className="font-medium">How points are calculated:</p>
                       <p>
                         {gameState.score} score ÷ 100 ={" "}

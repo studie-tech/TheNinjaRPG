@@ -1,27 +1,29 @@
-import { z } from "zod";
+import { asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
-import { eq, asc } from "drizzle-orm";
-import { badge, userBadge } from "@/drizzle/schema";
-import { actionLog } from "@/drizzle/schema";
-import { BadgeValidator } from "@/validators/badge";
-import { fetchUser } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
-import { callDiscordContent } from "@/libs/socials";
-import { calculateContentDiff } from "@/utils/diff";
+import { z } from "zod";
+import { baseServerResponse, errorResponse, serverError } from "@/api/trpc";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { setEmptyStringsToNulls } from "@/utils/typeutils";
+import { actionLog, badge, userBadge } from "@/drizzle/schema";
+import { callDiscordContent } from "@/libs/socials";
+import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { calculateContentDiff } from "@/utils/diff";
+import { canChangeContent } from "@/utils/permissions";
+import { setEmptyStringsToNulls } from "@/utils/typeutils";
+import { BadgeValidator } from "@/validators/badge";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
 export const badgeRouter = createTRPCRouter({
-  getAllNames: publicProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle.query.badge.findMany({
-      columns: { id: true, name: true, image: true },
-      orderBy: (table, { asc }) => [asc(table.name)],
-    });
-  }),
+  getAllNames: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all badge names and images" } })
+    .query(async ({ ctx }) => {
+      return await ctx.drizzle.query.badge.findMany({
+        columns: { id: true, name: true, image: true },
+        orderBy: (table, { asc }) => [asc(table.name)],
+      });
+    }),
   getAll: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all badges with pagination" } })
     .input(
       z
         .object({
@@ -46,6 +48,7 @@ export const badgeRouter = createTRPCRouter({
       };
     }),
   get: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get badge by ID" } })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await fetchBadge(ctx.drizzle, input.id);

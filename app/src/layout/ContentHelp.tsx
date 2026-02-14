@@ -1,7 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { HelpCircle, ExternalLink, Info } from "lucide-react";
+import { ExternalLink, HelpCircle, Info } from "lucide-react";
+import type React from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Sheet,
   SheetContent,
@@ -9,24 +14,22 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { findPredecessor } from "@/libs/objectives";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
 import type { ZodCombinedQuest } from "@/hooks/quest";
-import type { ZodItemType } from "@/validators/combat";
-import type { ZodJutsuType } from "@/validators/combat";
-import type { ZodSkillTreeType } from "@/validators/combat";
-import type { ZodBloodlineType } from "@/validators/combat";
-import type { DeepPartial } from "@/utils/typeutils";
-import type { AllObjectivesType } from "@/validators/objectives";
-import { api } from "@/app/_trpc/client";
-import type { ZodAllTags } from "@/validators/combat";
-import type { JutsuRelations } from "@/server/api/routers/jutsu";
+import { findPredecessor } from "@/libs/objectives";
 import type { AiRelations } from "@/server/api/routers/ai";
 import type { ItemRelations } from "@/server/api/routers/item";
+import type { JutsuRelations } from "@/server/api/routers/jutsu";
+import { canChangeContent } from "@/utils/permissions";
+import type { DeepPartial } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type {
+  ZodAllTags,
+  ZodBloodlineType,
+  ZodItemType,
+  ZodJutsuType,
+  ZodSkillTreeType,
+} from "@/validators/combat";
+import type { AllObjectivesType } from "@/validators/objectives";
 
 export interface QuestHelperProps {
   quest: DeepPartial<ZodCombinedQuest>;
@@ -94,9 +97,9 @@ export const QuestHelper: React.FC<QuestHelperProps> = (props) => {
           </SheetHeader>
 
           <div className="mt-6 space-y-4">
-            <div className="p-3 bg-gray-50 rounded-lg border">
-              <h3 className="font-medium text-gray-900 mb-2">Quest: {quest.name}</h3>
-              <p className="text-sm text-gray-600 capitalize">
+            <div className="rounded-lg border bg-gray-50 p-3">
+              <h3 className="mb-2 font-medium text-gray-900">Quest: {quest.name}</h3>
+              <p className="text-gray-600 text-sm capitalize">
                 Type: <span className="font-medium">{quest.questType}</span>
               </p>
             </div>
@@ -116,8 +119,8 @@ export const QuestHelper: React.FC<QuestHelperProps> = (props) => {
               quest.questType !== "battlepyramid" &&
               quest.questType !== "starter" &&
               quest.questType !== "raid" && (
-                <div className="p-3 bg-gray-50 rounded-lg border text-center">
-                  <p className="text-sm text-gray-600">
+                <div className="rounded-lg border bg-gray-50 p-3 text-center">
+                  <p className="text-gray-600 text-sm">
                     No specific tips available for this quest type yet.
                   </p>
                 </div>
@@ -176,9 +179,9 @@ export const ItemHelper: React.FC<ItemHelperProps> = (props) => {
           </SheetHeader>
 
           <div className="mt-6 space-y-4">
-            <div className="p-3 bg-gray-50 rounded-lg border">
-              <h3 className="font-medium text-gray-900 mb-2">Item: {item.name}</h3>
-              <p className="text-sm text-gray-600 capitalize">
+            <div className="rounded-lg border bg-gray-50 p-3">
+              <h3 className="mb-2 font-medium text-gray-900">Item: {item.name}</h3>
+              <p className="text-gray-600 text-sm capitalize">
                 Type: <span className="font-medium">{item.itemType}</span>
               </p>
             </div>
@@ -249,9 +252,9 @@ export const JutsuHelper: React.FC<JutsuHelperProps> = ({ jutsu }) => {
           </SheetHeader>
 
           <div className="mt-6 space-y-4">
-            <div className="p-3 bg-gray-50 rounded-lg border">
-              <h3 className="font-medium text-gray-900 mb-2">Jutsu: {jutsu.name}</h3>
-              <p className="text-sm text-gray-600 capitalize">
+            <div className="rounded-lg border bg-gray-50 p-3">
+              <h3 className="mb-2 font-medium text-gray-900">Jutsu: {jutsu.name}</h3>
+              <p className="text-gray-600 text-sm capitalize">
                 Rank: <span className="font-medium">{jutsu.jutsuRank}</span>
               </p>
             </div>
@@ -315,14 +318,14 @@ export const SkillTreeHelper: React.FC<SkillTreeHelperProps> = ({ skillTree }) =
           </SheetHeader>
 
           <div className="mt-6 space-y-4">
-            <div className="p-3 bg-gray-50 rounded-lg border">
-              <h3 className="font-medium text-gray-900 mb-2">
+            <div className="rounded-lg border bg-gray-50 p-3">
+              <h3 className="mb-2 font-medium text-gray-900">
                 SkillTree: {skillTree.name}
               </h3>
-              <p className="text-sm text-gray-600 capitalize">
+              <p className="text-gray-600 text-sm capitalize">
                 Tier: <span className="font-medium">{skillTree.tier ?? 1}</span>
               </p>
-              <p className="text-sm text-gray-600 capitalize">
+              <p className="text-gray-600 text-sm capitalize">
                 Target:{" "}
                 <span className="font-medium">{skillTree.target ?? "SELF"}</span>
               </p>
@@ -383,11 +386,11 @@ export const BloodlineHelper: React.FC<BloodlineHelperProps> = ({ bloodline }) =
           </SheetHeader>
 
           <div className="mt-6 space-y-4">
-            <div className="p-3 bg-gray-50 rounded-lg border">
-              <h3 className="font-medium text-gray-900 mb-2">
+            <div className="rounded-lg border bg-gray-50 p-3">
+              <h3 className="mb-2 font-medium text-gray-900">
                 Bloodline: {bloodline.name}
               </h3>
-              <p className="text-sm text-gray-600 capitalize">
+              <p className="text-gray-600 text-sm capitalize">
                 Rank: <span className="font-medium">{bloodline.rank}</span>
               </p>
             </div>
@@ -443,8 +446,8 @@ export const AiHelper: React.FC<AiHelperProps> = ({ ai }) => {
             </SheetTitle>
           </SheetHeader>
           <div className="mt-6 space-y-4">
-            <div className="p-3 bg-gray-50 rounded-lg border">
-              <h3 className="font-medium text-gray-900 mb-2">
+            <div className="rounded-lg border bg-gray-50 p-3">
+              <h3 className="mb-2 font-medium text-gray-900">
                 AI: {ai.username ?? ai.userId}
               </h3>
             </div>
@@ -476,13 +479,13 @@ const renderEffectsTips = (effects: ZodAllTags[]) => {
     tips.push(
       <div
         key="injectjutsus-power"
-        className="p-3 bg-blue-50 rounded-lg border border-blue-200"
+        className="rounded-lg border border-blue-200 bg-blue-50 p-3"
       >
-        <h4 className="font-medium text-blue-900 mb-2">Power Attribute</h4>
+        <h4 className="mb-2 font-medium text-blue-900">Power Attribute</h4>
         <p className="text-blue-800 text-sm">
-          The <code className="bg-blue-100 px-1 rounded">injectjutsus</code> effect uses
+          The <code className="rounded bg-blue-100 px-1">injectjutsus</code> effect uses
           the
-          <code className="bg-blue-100 px-1 rounded">power</code> attribute to determine
+          <code className="rounded bg-blue-100 px-1">power</code> attribute to determine
           the level of the injected jutsu.
         </p>
       </div>,
@@ -521,16 +524,16 @@ const renderEffectsGraphicsWarning = (effects: ZodAllTags[]) => {
   if (hasAnyEffectGraphics(effects)) return null;
 
   return (
-    <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-      <h4 className="font-medium text-red-900 mb-2">Missing Effect Graphics</h4>
+    <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+      <h4 className="mb-2 font-medium text-red-900">Missing Effect Graphics</h4>
       <p className="text-red-800 text-sm">
         No effect visuals configured. Consider adding
-        <code className="bg-red-100 px-1 rounded ml-1 mr-1">appearAnimation</code>,{" "}
-        <code className="bg-red-100 px-1 rounded mr-1">disappearAnimation</code>,{" "}
-        <code className="bg-red-100 px-1 rounded mr-1">staticAnimation</code>
-        or <code className="bg-red-100 px-1 rounded ml-1">staticAssetPath</code>
-        and optionally <code className="bg-red-100 px-1 rounded ml-1">appearSfx</code>/
-        <code className="bg-red-100 px-1 rounded ml-1">disappearSfx</code>
+        <code className="mr-1 ml-1 rounded bg-red-100 px-1">appearAnimation</code>,{" "}
+        <code className="mr-1 rounded bg-red-100 px-1">disappearAnimation</code>,{" "}
+        <code className="mr-1 rounded bg-red-100 px-1">staticAnimation</code>
+        or <code className="ml-1 rounded bg-red-100 px-1">staticAssetPath</code>
+        and optionally <code className="ml-1 rounded bg-red-100 px-1">appearSfx</code>/
+        <code className="ml-1 rounded bg-red-100 px-1">disappearSfx</code>
         to at least one effect to improve battle feedback.
       </p>
     </div>
@@ -567,9 +570,9 @@ const renderJutsuDescriptionWarnings = (jutsu: DeepPartial<ZodJutsuType>) => {
   if (warnings.length === 0) return null;
   return (
     <div className="space-y-3">
-      {warnings.map((w, idx) => (
-        <div key={idx} className="p-3 bg-red-50 rounded-lg border border-red-200">
-          <h4 className="font-medium text-red-900 mb-2">{w.title}</h4>
+      {warnings.map((w) => (
+        <div key={w.title} className="rounded-lg border border-red-200 bg-red-50 p-3">
+          <h4 className="mb-2 font-medium text-red-900">{w.title}</h4>
           <p className="text-red-800 text-sm">{w.msg}</p>
         </div>
       ))}
@@ -592,9 +595,9 @@ const renderItemDescriptionWarnings = (item: DeepPartial<ZodItemType>) => {
   if (warnings.length === 0) return null;
   return (
     <div className="space-y-3">
-      {warnings.map((w, idx) => (
-        <div key={idx} className="p-3 bg-red-50 rounded-lg border border-red-200">
-          <h4 className="font-medium text-red-900 mb-2">{w.title}</h4>
+      {warnings.map((w) => (
+        <div key={w.title} className="rounded-lg border border-red-200 bg-red-50 p-3">
+          <h4 className="mb-2 font-medium text-red-900">{w.title}</h4>
           <p className="text-red-800 text-sm">{w.msg}</p>
         </div>
       ))}
@@ -618,13 +621,13 @@ const renderSkillTreeWarnings = (skillTree: DeepPartial<ZodSkillTreeType>) => {
     warnings.push(
       <div
         key="tier-prerequisites"
-        className="p-3 bg-red-50 rounded-lg border border-red-200"
+        className="rounded-lg border border-red-200 bg-red-50 p-3"
       >
-        <h4 className="font-medium text-red-900 mb-2">Missing Prerequisites</h4>
+        <h4 className="mb-2 font-medium text-red-900">Missing Prerequisites</h4>
         <p className="text-red-800 text-sm">
-          This skill has tier <code className="bg-red-100 px-1 rounded">{tier}</code>{" "}
+          This skill has tier <code className="rounded bg-red-100 px-1">{tier}</code>{" "}
           but no prerequisite skills are defined. Consider adding required skills to{" "}
-          <code className="bg-red-100 px-1 rounded">requiredSkillIds</code> for proper
+          <code className="rounded bg-red-100 px-1">requiredSkillIds</code> for proper
           skill progression.
         </p>
       </div>,
@@ -660,38 +663,36 @@ const renderHuntingTips = (quest: DeepPartial<ZodCombinedQuest>) => {
       </Alert>
 
       <div className="space-y-3 text-sm">
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <h4 className="font-medium text-blue-900 mb-2">Availability</h4>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <h4 className="mb-2 font-medium text-blue-900">Availability</h4>
           <p className="text-blue-800">
             This quest will only be available to hunters with the appropriate hunting
             rank.
           </p>
         </div>
 
-        <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-          <h4 className="font-medium text-green-900 mb-2">Reward Configuration</h4>
+        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+          <h4 className="mb-2 font-medium text-green-900">Reward Configuration</h4>
           <p className="text-green-800">
             Toggle the{" "}
-            <code className="bg-green-100 px-1 rounded">reward_hunter_items</code>{" "}
+            <code className="rounded bg-green-100 px-1">reward_hunter_items</code>{" "}
             either on the quest or objective to reward random drops based on hunting
             rank.
             <br />
             <br />
             You can also set the{" "}
-            <code className="bg-green-100 px-1 rounded">
-              reward_hunter_items_ids
-            </code>{" "}
+            <code className="rounded bg-green-100 px-1">reward_hunter_items_ids</code>{" "}
             to reward randomly from a list of specific items. If{" "}
-            <code className="bg-green-100 px-1 rounded">reward_hunter_items_ids</code>{" "}
+            <code className="rounded bg-green-100 px-1">reward_hunter_items_ids</code>{" "}
             is not set, items will be selected from all hunter materials.
           </p>
         </div>
 
-        <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-          <h4 className="font-medium text-purple-900 mb-2">Location Encounters</h4>
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+          <h4 className="mb-2 font-medium text-purple-900">Location Encounters</h4>
           <p className="text-purple-800">
             Use the{" "}
-            <code className="bg-purple-100 px-1 rounded">
+            <code className="rounded bg-purple-100 px-1">
               win_encounter_at_location
             </code>{" "}
             objective to send off the user to win random encounters at specific
@@ -699,11 +700,11 @@ const renderHuntingTips = (quest: DeepPartial<ZodCombinedQuest>) => {
           </p>
         </div>
 
-        <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-          <h4 className="font-medium text-orange-900 mb-2">Combat Configuration</h4>
+        <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+          <h4 className="mb-2 font-medium text-orange-900">Combat Configuration</h4>
           <p className="text-orange-800">
             Add multiple attackers with random encounter chances. Set the{" "}
-            <code className="bg-orange-100 px-1 rounded">attackers_max_per_battle</code>{" "}
+            <code className="rounded bg-orange-100 px-1">attackers_max_per_battle</code>{" "}
             to limit how many can attack at a time.
           </p>
         </div>
@@ -730,49 +731,49 @@ const renderGatheringTips = (quest: DeepPartial<ZodCombinedQuest>) => {
       </Alert>
 
       <div className="space-y-3 text-sm">
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <h4 className="font-medium text-blue-900 mb-2">Objective Type</h4>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <h4 className="mb-2 font-medium text-blue-900">Objective Type</h4>
           <p className="text-blue-800">
-            Use the <code className="bg-blue-100 px-1 rounded">collect_item</code>{" "}
+            Use the <code className="rounded bg-blue-100 px-1">collect_item</code>{" "}
             objective to set up gathering requirements.
           </p>
         </div>
 
-        <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-          <h4 className="font-medium text-green-900 mb-2">Reward Configuration</h4>
+        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+          <h4 className="mb-2 font-medium text-green-900">Reward Configuration</h4>
           <p className="text-green-800">
             Toggle the{" "}
-            <code className="bg-green-100 px-1 rounded">reward_gathering_items</code>{" "}
+            <code className="rounded bg-green-100 px-1">reward_gathering_items</code>{" "}
             either on the quest or objective to reward random drops based on gathering
             rank.
             <br />
             <br />
             You can also set the{" "}
-            <code className="bg-green-100 px-1 rounded">
+            <code className="rounded bg-green-100 px-1">
               reward_gathering_items_ids
             </code>{" "}
             to reward randomly from a list of specific items. If{" "}
-            <code className="bg-green-100 px-1 rounded">
+            <code className="rounded bg-green-100 px-1">
               reward_gathering_items_ids
             </code>{" "}
             is not set, items will be selected from all gathering materials.
           </p>
         </div>
 
-        <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-          <h4 className="font-medium text-purple-900 mb-2">Random Drops</h4>
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+          <h4 className="mb-2 font-medium text-purple-900">Random Drops</h4>
           <p className="text-purple-800">
             Do not set{" "}
-            <code className="bg-purple-100 px-1 rounded">collectItemIds</code> if you
+            <code className="rounded bg-purple-100 px-1">collectItemIds</code> if you
             only want random drops from gathering activities.
           </p>
         </div>
 
-        <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-          <h4 className="font-medium text-orange-900 mb-2">Collection Time</h4>
+        <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+          <h4 className="mb-2 font-medium text-orange-900">Collection Time</h4>
           <p className="text-orange-800">
             Set the{" "}
-            <code className="bg-orange-100 px-1 rounded">collect_time_minutes</code> to
+            <code className="rounded bg-orange-100 px-1">collect_time_minutes</code> to
             configure how long each collection action takes.
           </p>
         </div>
@@ -819,34 +820,30 @@ const renderBattlePyramidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
       <div className="space-y-3 text-sm">
         {/* Warning for first objective not being dialog */}
         {firstObjective && firstObjective.task !== "dialog" && (
-          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-            <h4 className="font-medium text-red-900 mb-2">
-              ⚠️ First Objective Warning
-            </h4>
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <h4 className="mb-2 font-medium text-red-900">⚠️ First Objective Warning</h4>
             <p className="text-red-800">
               The first objective should be a{" "}
-              <code className="bg-red-100 px-1 rounded">dialog</code> task to provide
+              <code className="rounded bg-red-100 px-1">dialog</code> task to provide
               context and introduction to the pyramid challenge. Currently, the first
               objective is set to{" "}
-              <code className="bg-red-100 px-1 rounded">{firstObjective.task}</code>.
+              <code className="rounded bg-red-100 px-1">{firstObjective.task}</code>.
             </p>
           </div>
         )}
 
         {/* Warning for invalid objective types */}
         {invalidObjectives.length > 0 && (
-          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-            <h4 className="font-medium text-red-900 mb-2">
-              ⚠️ Invalid Objective Types
-            </h4>
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <h4 className="mb-2 font-medium text-red-900">⚠️ Invalid Objective Types</h4>
             <p className="text-red-800">
               Battle pyramid quests should only contain{" "}
-              <code className="bg-red-100 px-1 rounded">dialog</code>,
-              <code className="bg-red-100 px-1 rounded">start_battle</code>, or
-              <code className="bg-red-100 px-1 rounded">reset_quest</code> objectives.
+              <code className="rounded bg-red-100 px-1">dialog</code>,
+              <code className="rounded bg-red-100 px-1">start_battle</code>, or
+              <code className="rounded bg-red-100 px-1">reset_quest</code> objectives.
               Found invalid types:{" "}
               {invalidObjectives.map((obj) => (
-                <code key={obj.id} className="bg-red-100 px-1 rounded mx-1">
+                <code key={obj.id} className="mx-1 rounded bg-red-100 px-1">
                   {obj.task}
                 </code>
               ))}
@@ -856,24 +853,24 @@ const renderBattlePyramidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
 
         {/* Error for start_battle objectives without proper failObjectiveId */}
         {startBattleWithoutProperFail.length > 0 && (
-          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-            <h4 className="font-medium text-red-900 mb-2">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <h4 className="mb-2 font-medium text-red-900">
               🚨 Missing Failure Configuration
             </h4>
             <p className="text-red-800">
-              All <code className="bg-red-100 px-1 rounded">start_battle</code>{" "}
+              All <code className="rounded bg-red-100 px-1">start_battle</code>{" "}
               objectives must have a
-              <code className="bg-red-100 px-1 rounded">failObjectiveId</code> field
+              <code className="rounded bg-red-100 px-1">failObjectiveId</code> field
               pointing to the
-              <code className="bg-red-100 px-1 rounded">reset_quest</code> objective.
+              <code className="rounded bg-red-100 px-1">reset_quest</code> objective.
               {!resetQuestObjective && (
-                <span className="block mt-1">
+                <span className="mt-1 block">
                   <strong>Additionally, no reset_quest objective was found.</strong>
                 </span>
               )}
               Objectives missing proper failure configuration:{" "}
               {startBattleWithoutProperFail.map((obj) => (
-                <code key={obj.id} className="bg-red-100 px-1 rounded mx-1">
+                <code key={obj.id} className="mx-1 rounded bg-red-100 px-1">
                   {obj.id}
                 </code>
               ))}
@@ -883,12 +880,12 @@ const renderBattlePyramidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
 
         {/* Info for reset_quest objective without resetObjectiveId */}
         {resetQuestObjective && !resetQuestObjective.resetObjectiveId && (
-          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <h4 className="font-medium text-blue-900 mb-2">ℹ️ Quest Reset Behavior</h4>
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <h4 className="mb-2 font-medium text-blue-900">ℹ️ Quest Reset Behavior</h4>
             <p className="text-blue-800">
-              The <code className="bg-blue-100 px-1 rounded">reset_quest</code>{" "}
+              The <code className="rounded bg-blue-100 px-1">reset_quest</code>{" "}
               objective does not have a{" "}
-              <code className="bg-blue-100 px-1 rounded">resetObjectiveId</code> field.
+              <code className="rounded bg-blue-100 px-1">resetObjectiveId</code> field.
               This means when triggered, the entire quest will be reset to the
               beginning, allowing players to restart the full pyramid challenge.
             </p>
@@ -897,27 +894,27 @@ const renderBattlePyramidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
 
         {/* Warning for consecutiveObjectives */}
         {quest.consecutiveObjectives !== true && (
-          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-            <h4 className="font-medium text-red-900 mb-2">⚠️ Configuration Warning</h4>
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <h4 className="mb-2 font-medium text-red-900">⚠️ Configuration Warning</h4>
             <p className="text-red-800">
-              The <code className="bg-red-100 px-1 rounded">consecutiveObjectives</code>{" "}
+              The <code className="rounded bg-red-100 px-1">consecutiveObjectives</code>{" "}
               setting should be enabled (true) for battle pyramid quests to ensure
               proper progression through the pyramid levels.
             </p>
           </div>
         )}
 
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <h4 className="font-medium text-blue-900 mb-2">ℹ️ Objective Structure</h4>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <h4 className="mb-2 font-medium text-blue-900">ℹ️ Objective Structure</h4>
           <p className="text-blue-800">
             Battle pyramid quests work best with a series of{" "}
-            <code className="bg-blue-100 px-1 rounded">start_battle</code> objectives,
+            <code className="rounded bg-blue-100 px-1">start_battle</code> objectives,
             each representing a different level of the pyramid.
           </p>
         </div>
 
-        <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-          <h4 className="font-medium text-green-900 mb-2">Failure Handling</h4>
+        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+          <h4 className="mb-2 font-medium text-green-900">Failure Handling</h4>
           <p className="text-green-800">
             Configure all pyramid level objectives to point back to the first objective
             on failure (or to a given checkpoint). This ensures players restart from the
@@ -926,8 +923,8 @@ const renderBattlePyramidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
           </p>
         </div>
 
-        <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-          <h4 className="font-medium text-purple-900 mb-2">Progressive Difficulty</h4>
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+          <h4 className="mb-2 font-medium text-purple-900">Progressive Difficulty</h4>
           <p className="text-purple-800">
             Each subsequent objective should represent a more challenging battle,
             creating a progressive difficulty curve that defines the pyramid structure.
@@ -960,21 +957,21 @@ const renderStarterTips = (quest: DeepPartial<ZodCombinedQuest>) => {
       <div className="space-y-3 text-sm">
         {/* Warning for missing prerequisite */}
         {!hasPrerequisite && (
-          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-            <h4 className="font-medium text-red-900 mb-2">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <h4 className="mb-2 font-medium text-red-900">
               ⚠️ Missing Prerequisite Quest
             </h4>
             <p className="text-red-800">
               This starter quest does not have a prerequisite quest set. Consider
               linking starter quests together using the{" "}
-              <code className="bg-red-100 px-1 rounded">prerequisiteQuestId</code> field
+              <code className="rounded bg-red-100 px-1">prerequisiteQuestId</code> field
               to create a guided progression for new players.
             </p>
           </div>
         )}
 
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <h4 className="font-medium text-blue-900 mb-2">Quest Progression</h4>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <h4 className="mb-2 font-medium text-blue-900">Quest Progression</h4>
           <p className="text-blue-800">
             Starter quests should be linked together with prerequisites to create a
             logical learning progression. This prevents new players from being
@@ -982,20 +979,20 @@ const renderStarterTips = (quest: DeepPartial<ZodCombinedQuest>) => {
           </p>
         </div>
 
-        <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-          <h4 className="font-medium text-green-900 mb-2">Best Practices</h4>
+        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+          <h4 className="mb-2 font-medium text-green-900">Best Practices</h4>
           <p className="text-green-800">
             • Link each starter quest to the previous one using{" "}
-            <code className="bg-green-100 px-1 rounded">prerequisiteQuestId</code>
-            <br />
-            • Create a clear tutorial flow that introduces game mechanics gradually
+            <code className="rounded bg-green-100 px-1">prerequisiteQuestId</code>
+            <br />• Create a clear tutorial flow that introduces game mechanics
+            gradually
             <br />• Consider the difficulty curve and ensure each quest builds upon the
             last
           </p>
         </div>
 
-        <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-          <h4 className="font-medium text-purple-900 mb-2">New Player Experience</h4>
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+          <h4 className="mb-2 font-medium text-purple-900">New Player Experience</h4>
           <p className="text-purple-800">
             Well-structured starter quests with proper prerequisites, clear descriptions
             and guidelines create a smooth onboarding experience and help retain new
@@ -1045,31 +1042,31 @@ const renderRaidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
 
       <div className="space-y-3 text-sm">
         {/* Configuration checklist */}
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <h4 className="font-medium text-blue-900 mb-2">Configuration Checklist</h4>
-          <div className="text-blue-800 space-y-1">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <h4 className="mb-2 font-medium text-blue-900">Configuration Checklist</h4>
+          <div className="space-y-1 text-blue-800">
             <p className={hasValidObjectiveType ? "text-green-700" : "text-red-700"}>
               {hasValidObjectiveType ? "✓" : "✗"} Objective type:{" "}
-              <code className="bg-blue-100 px-1 rounded">open_raid</code> or{" "}
-              <code className="bg-blue-100 px-1 rounded">exclusive_raid</code>
+              <code className="rounded bg-blue-100 px-1">open_raid</code> or{" "}
+              <code className="rounded bg-blue-100 px-1">exclusive_raid</code>
             </p>
             <p className={hasBossAI ? "text-green-700" : "text-red-700"}>
               {hasBossAI ? "✓" : "✗"} Boss AI configured in{" "}
-              <code className="bg-blue-100 px-1 rounded">opponentAIs</code> (in
+              <code className="rounded bg-blue-100 px-1">opponentAIs</code> (in
               objective)
             </p>
             <p className={hasSector ? "text-green-700" : "text-red-700"}>
               {hasSector ? "✓" : "✗"} Sector number set via{" "}
-              <code className="bg-blue-100 px-1 rounded">sector</code> (in objective)
+              <code className="rounded bg-blue-100 px-1">sector</code> (in objective)
             </p>
             <p className={hasBossHealth ? "text-green-700" : "text-red-700"}>
               {hasBossHealth ? "✓" : "✗"} Boss max health via{" "}
-              <code className="bg-blue-100 px-1 rounded">raidBossMaxHealth</code> (quest
+              <code className="rounded bg-blue-100 px-1">raidBossMaxHealth</code> (quest
               field)
             </p>
             <p className={hasCurrentHealth ? "text-green-700" : "text-red-700"}>
               {hasCurrentHealth ? "✓" : "✗"} Boss current health via{" "}
-              <code className="bg-blue-100 px-1 rounded">raidBossCurrentHealth</code>{" "}
+              <code className="rounded bg-blue-100 px-1">raidBossCurrentHealth</code>{" "}
               (quest field)
             </p>
           </div>
@@ -1077,8 +1074,8 @@ const renderRaidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
 
         {/* Warning if objectives count is wrong */}
         {objectives.length !== 1 && (
-          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-            <h4 className="font-medium text-red-900 mb-2">⚠️ Objective Count Error</h4>
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <h4 className="mb-2 font-medium text-red-900">⚠️ Objective Count Error</h4>
             <p className="text-red-800">
               Raid quests must have exactly <strong>one</strong> objective. Currently
               there are {objectives.length} objectives.
@@ -1088,35 +1085,35 @@ const renderRaidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
 
         {/* Warning if wrong objective type */}
         {objectiveTask && !hasValidObjectiveType && (
-          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-            <h4 className="font-medium text-red-900 mb-2">⚠️ Invalid Objective Type</h4>
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <h4 className="mb-2 font-medium text-red-900">⚠️ Invalid Objective Type</h4>
             <p className="text-red-800">
               The objective type is{" "}
-              <code className="bg-red-100 px-1 rounded">{objectiveTask}</code>. Raid
+              <code className="rounded bg-red-100 px-1">{objectiveTask}</code>. Raid
               quests must use either{" "}
-              <code className="bg-red-100 px-1 rounded">open_raid</code> or{" "}
-              <code className="bg-red-100 px-1 rounded">exclusive_raid</code>.
+              <code className="rounded bg-red-100 px-1">open_raid</code> or{" "}
+              <code className="rounded bg-red-100 px-1">exclusive_raid</code>.
             </p>
           </div>
         )}
 
-        <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-          <h4 className="font-medium text-green-900 mb-2">Open Raids</h4>
+        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+          <h4 className="mb-2 font-medium text-green-900">Open Raids</h4>
           <p className="text-green-800">
             <strong>Availability:</strong> Open to all players regardless of village
             affiliation.
             <br />
             <br />
             <strong>Objective:</strong> Use{" "}
-            <code className="bg-green-100 px-1 rounded">open_raid</code> objective type.
+            <code className="rounded bg-green-100 px-1">open_raid</code> objective type.
             <br />
             <br />
             <strong>Sector:</strong> Takes place at a specific sector (visual/thematic).
           </p>
         </div>
 
-        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
-          <h4 className="font-medium text-amber-900 mb-2">Exclusive Raids</h4>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <h4 className="mb-2 font-medium text-amber-900">Exclusive Raids</h4>
           <p className="text-amber-800">
             <strong>Trigger:</strong> Spawns when a village/faction captures the
             specified sector.
@@ -1127,7 +1124,7 @@ const renderRaidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
             <br />
             <br />
             <strong>Win Condition:</strong> Defeat the boss before{" "}
-            <code className="bg-amber-100 px-1 rounded">raidEndsAt</code> →{" "}
+            <code className="rounded bg-amber-100 px-1">raidEndsAt</code> →{" "}
             <span className="font-semibold">Village keeps the sector shrine</span>
             <br />
             <br />
@@ -1138,39 +1135,37 @@ const renderRaidTips = (quest: DeepPartial<ZodCombinedQuest>) => {
             <br />
             <br />
             <strong>Objective:</strong> Use{" "}
-            <code className="bg-amber-100 px-1 rounded">exclusive_raid</code> task with
+            <code className="rounded bg-amber-100 px-1">exclusive_raid</code> task with
             the sector number and opponent AI configured.
           </p>
         </div>
 
-        <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-          <h4 className="font-medium text-purple-900 mb-2">Boss Configuration</h4>
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+          <h4 className="mb-2 font-medium text-purple-900">Boss Configuration</h4>
           <p className="text-purple-800">
             The boss AI is configured via the{" "}
-            <code className="bg-purple-100 px-1 rounded">opponentAIs</code> field in the
+            <code className="rounded bg-purple-100 px-1">opponentAIs</code> field in the
             objective. Select an AI that has an AI Profile configured.
             <br />
             <br />
             Boss HP is shared across all battles and is tracked via{" "}
-            <code className="bg-purple-100 px-1 rounded">
-              raidBossMaxHealth
-            </code> and{" "}
-            <code className="bg-purple-100 px-1 rounded">raidBossCurrentHealth</code> on
+            <code className="rounded bg-purple-100 px-1">raidBossMaxHealth</code> and{" "}
+            <code className="rounded bg-purple-100 px-1">raidBossCurrentHealth</code> on
             the quest itself.
           </p>
         </div>
 
-        <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-          <h4 className="font-medium text-orange-900 mb-2">Sector Requirement</h4>
+        <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+          <h4 className="mb-2 font-medium text-orange-900">Sector Requirement</h4>
           <p className="text-orange-800">
             Both open and exclusive raids require a{" "}
-            <code className="bg-orange-100 px-1 rounded">sector</code> in the objective.
+            <code className="rounded bg-orange-100 px-1">sector</code> in the objective.
             This determines where the raid takes place on the map.
           </p>
         </div>
 
-        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-          <h4 className="font-medium text-gray-900 mb-2">Damage Thresholds</h4>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <h4 className="mb-2 font-medium text-gray-900">Damage Thresholds</h4>
           <p className="text-gray-800">
             After creating the raid quest, you can configure damage threshold rewards
             through the database. Players who deal enough cumulative damage across
@@ -1227,8 +1222,8 @@ const renderItemTips = (item: DeepPartial<ZodItemType>) => {
 
   if (warnings.length === 0) {
     return (
-      <div className="p-3 bg-gray-50 rounded-lg border text-center">
-        <p className="text-sm text-gray-600">
+      <div className="rounded-lg border bg-gray-50 p-3 text-center">
+        <p className="text-gray-600 text-sm">
           No configuration warnings detected. Item settings look good!
         </p>
       </div>
@@ -1245,19 +1240,13 @@ const renderItemTips = (item: DeepPartial<ZodItemType>) => {
       </Alert>
 
       <div className="space-y-3 text-sm">
-        {warnings.map((warning, index) => (
+        {warnings.map((warning) => (
           <div
-            key={index}
-            className={`p-3 rounded-lg border ${
-              warning.color === "orange"
-                ? "bg-orange-50 border-orange-200"
-                : "bg-yellow-50 border-yellow-200"
-            }`}
+            key={warning.title}
+            className={`rounded-lg border p-3 ${warning.color === "orange" ? "border-orange-200 bg-orange-50" : "border-yellow-200 bg-yellow-50"}`}
           >
             <h4
-              className={`font-medium mb-2 ${
-                warning.color === "orange" ? "text-orange-900" : "text-yellow-900"
-              }`}
+              className={`mb-2 font-medium ${warning.color === "orange" ? "text-orange-900" : "text-yellow-900"}`}
             >
               {warning.title}
             </h4>
@@ -1283,17 +1272,17 @@ const renderItemTips = (item: DeepPartial<ZodItemType>) => {
 const renderJutsuInformation = () => {
   return (
     <>
-      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-        <h4 className="font-medium text-blue-900 mb-2">Injectable In Battle</h4>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+        <h4 className="mb-2 font-medium text-blue-900">Injectable In Battle</h4>
         <p className="text-blue-800 text-sm">
-          The <code className="bg-blue-100 px-1 rounded">injectableInBattle</code> field
+          The <code className="rounded bg-blue-100 px-1">injectableInBattle</code> field
           determines whether this jutsu can be injected by other effects.
         </p>
       </div>
-      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-        <h4 className="font-medium text-blue-900 mb-2">Pick a target</h4>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+        <h4 className="mb-2 font-medium text-blue-900">Pick a target</h4>
         <p className="text-blue-800 text-sm">
-          The <code className="bg-blue-100 px-1 rounded">target</code> field determines
+          The <code className="rounded bg-blue-100 px-1">target</code> field determines
           the target of this jutsu.
         </p>
       </div>
@@ -1302,7 +1291,7 @@ const renderJutsuInformation = () => {
 };
 
 const renderJutseRelations = (
-  jutsu: DeepPartial<ZodJutsuType>,
+  _jutsu: DeepPartial<ZodJutsuType>,
   relations?: JutsuRelations,
 ) => {
   if (!relations) return null;
@@ -1363,7 +1352,7 @@ const renderJutseRelations = (
 
     return (
       <div key={config.name}>
-        <h5 className="text-sm font-medium text-gray-700 mb-1">
+        <h5 className="mb-1 font-medium text-gray-700 text-sm">
           {config.name} ({config.data.length})
         </h5>
         <div className="space-y-1">
@@ -1395,7 +1384,7 @@ const renderJutseRelations = (
       <h4 className="font-medium text-gray-900">Jutsu Relations</h4>
 
       <div className="space-y-3 text-sm">
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
           <div className="flex items-center gap-2">
             <span>
               Total relations found:{" "}
@@ -1415,7 +1404,7 @@ const renderJutseRelations = (
               </PopoverContent>
             </Popover>
           </div>
-          <div className="mt-1 text-xs text-gray-700 space-y-0.5">
+          <div className="mt-1 space-y-0.5 text-gray-700 text-xs">
             {relationConfigs.map((config) =>
               config.data.length > 0 ? (
                 <p key={config.name}>
@@ -1439,14 +1428,14 @@ const renderAiRelations = (relations?: AiRelations) => {
     <div className="space-y-4">
       <h4 className="font-medium text-gray-900">AI Relations</h4>
       <div className="space-y-3 text-sm">
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
           <div className="flex items-center gap-2">
             <span>
               Quests including this AI:{" "}
               <span className="font-medium">{questsUsingAi.length}</span>
             </span>
           </div>
-          <div className="mt-1 text-xs text-gray-700 space-y-0.5">
+          <div className="mt-1 space-y-0.5 text-gray-700 text-xs">
             {questsUsingAi.map((q) => (
               <div key={q.id} className="flex items-center justify-between">
                 <span>{q.name}</span>
@@ -1482,12 +1471,12 @@ const renderItemRelations = (relations?: ItemRelations) => {
     <div className="space-y-4">
       <h4 className="font-medium text-gray-900">Item Relations</h4>
       <div className="space-y-3 text-sm">
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <div className="mt-1 text-xs text-gray-700 space-y-1">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <div className="mt-1 space-y-1 text-gray-700 text-xs">
             {sections.map((s) =>
               s.data && s.data.length > 0 ? (
                 <div key={s.name}>
-                  <h5 className="text-sm font-medium text-gray-700 mb-1">
+                  <h5 className="mb-1 font-medium text-gray-700 text-sm">
                     {s.name} ({s.data.length})
                   </h5>
                   <div className="space-y-1">

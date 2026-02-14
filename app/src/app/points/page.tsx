@@ -1,64 +1,20 @@
 "use client";
 
-import Image from "@/layout/Image";
-import Table from "@/layout/Table";
-import SliderField from "@/layout/SliderField";
-import Confirm2 from "@/layout/Confirm2";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import UserSearchSelect from "@/layout/UserSearchSelect";
-import NavTabs from "@/layout/NavTabs";
-import BanInfo from "@/layout/BanInfo";
-import { Button } from "@/components/ui/button";
-import { useForm, useWatch } from "react-hook-form";
-import { useState, useEffect, useRef } from "react";
-import {
-  PayPalScriptProvider,
-  PayPalButtons,
-  usePayPalScriptReducer,
-  DISPATCH_ACTION,
-} from "@paypal/react-paypal-js";
-import { api, onError } from "@/app/_trpc/client";
-import { useInfinitePagination } from "@/libs/pagination";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { reps2dollars, calcFedUgradeCost, fedStatusRepsCost } from "@/utils/paypal";
-import { showMutationToast } from "@/libs/toast";
-import { getSearchValidator } from "@/validators/register";
-import { FederalStatuses } from "@/drizzle/constants";
-import { buyRepsSchema } from "@/validators/points";
-import { searchPaypalTransactionSchema } from "@/validators/points";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { nanoid } from "nanoid";
-import { Check, ChevronsUp, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { sendGTMEvent } from "@next/third-parties/google";
-import { dynamicMonthlyRepCap } from "@/utils/paypal";
-import { FED_NORMAL_INVENTORY_SLOTS } from "@/drizzle/constants";
-import { FED_SILVER_INVENTORY_SLOTS } from "@/drizzle/constants";
-import { FED_GOLD_INVENTORY_SLOTS } from "@/drizzle/constants";
-import { FED_NORMAL_JUTSU_SLOTS } from "@/drizzle/constants";
-import { FED_SILVER_JUTSU_SLOTS } from "@/drizzle/constants";
-import { FED_GOLD_JUTSU_SLOTS } from "@/drizzle/constants";
-import { FED_NORMAL_BANK_INTEREST } from "@/drizzle/constants";
-import { FED_SILVER_BANK_INTEREST } from "@/drizzle/constants";
-import { FED_GOLD_BANK_INTEREST } from "@/drizzle/constants";
-import { IMG_REPSHOP_BRONZE } from "@/drizzle/constants";
-import { IMG_REPSHOP_SILVER } from "@/drizzle/constants";
-import { SKILL_TREE_RESET_FREE_GOLD } from "@/drizzle/constants";
-import { SKILL_TREE_RESET_FREE_NORMAL } from "@/drizzle/constants";
-import { SKILL_TREE_RESET_FREE_SILVER } from "@/drizzle/constants";
-import { IMG_REPSHOP_GOLD } from "@/drizzle/constants";
-import { FED_EVENT_ITEMS_NORMAL } from "@/drizzle/constants";
-import { FED_EVENT_ITEMS_SILVER } from "@/drizzle/constants";
-import { FED_EVENT_ITEMS_GOLD } from "@/drizzle/constants";
-import { FED_EVENT_ITEMS_DEFAULT } from "@/drizzle/constants";
-import { FED_NORMAL_JUTSU_LOADOUTS } from "@/drizzle/constants";
-import { FED_SILVER_JUTSU_LOADOUTS } from "@/drizzle/constants";
-import { FED_GOLD_JUTSU_LOADOUTS } from "@/drizzle/constants";
-import { FED_NORMAL_ITEM_LOADOUTS } from "@/drizzle/constants";
-import { FED_SILVER_ITEM_LOADOUTS } from "@/drizzle/constants";
-import { FED_GOLD_ITEM_LOADOUTS } from "@/drizzle/constants";
-import { PAYPAL_DISCOUNT_PERCENT } from "@/drizzle/constants";
+import {
+  DISPATCH_ACTION,
+  PayPalButtons,
+  PayPalScriptProvider,
+  usePayPalScriptReducer,
+} from "@paypal/react-paypal-js";
+import { Check, ChevronsUp, Search } from "lucide-react";
+import { nanoid } from "nanoid";
+import { useEffect, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api, onError } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -67,12 +23,62 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { Input } from "@/components/ui/input";
+import {
+  FED_EVENT_ITEMS_DEFAULT,
+  FED_EVENT_ITEMS_GOLD,
+  FED_EVENT_ITEMS_NORMAL,
+  FED_EVENT_ITEMS_SILVER,
+  FED_GOLD_BANK_INTEREST,
+  FED_GOLD_INVENTORY_SLOTS,
+  FED_GOLD_ITEM_LOADOUTS,
+  FED_GOLD_JUTSU_LOADOUTS,
+  FED_GOLD_JUTSU_SLOTS,
+  FED_ITEM_LOADOUTS_BASE,
+  FED_JUTSU_LOADOUTS_BASE,
+  FED_NORMAL_BANK_INTEREST,
+  FED_NORMAL_INVENTORY_SLOTS,
+  FED_NORMAL_ITEM_LOADOUTS,
+  FED_NORMAL_JUTSU_LOADOUTS,
+  FED_NORMAL_JUTSU_SLOTS,
+  FED_SILVER_BANK_INTEREST,
+  FED_SILVER_INVENTORY_SLOTS,
+  FED_SILVER_ITEM_LOADOUTS,
+  FED_SILVER_JUTSU_LOADOUTS,
+  FED_SILVER_JUTSU_SLOTS,
+  FederalStatuses,
+  IMG_AVATAR_DEFAULT,
+  IMG_REPSHOP_BRONZE,
+  IMG_REPSHOP_GOLD,
+  IMG_REPSHOP_SILVER,
+  PAYPAL_DISCOUNT_PERCENT,
+  SKILL_TREE_RESET_FREE_GOLD,
+  SKILL_TREE_RESET_FREE_NORMAL,
+  SKILL_TREE_RESET_FREE_SILVER,
+} from "@/drizzle/constants";
+import BanInfo from "@/layout/BanInfo";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import NavTabs from "@/layout/NavTabs";
+import SliderField from "@/layout/SliderField";
 import type { ColumnDefinitionType } from "@/layout/Table";
-import type { z } from "zod";
-import type { BuyRepsSchema } from "@/validators/points";
-import type { SearchPaypalTransactionSchema } from "@/validators/points";
+import Table from "@/layout/Table";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
+import {
+  calcFedUgradeCost,
+  dynamicMonthlyRepCap,
+  fedStatusRepsCost,
+  reps2dollars,
+} from "@/utils/paypal";
 import type { ArrayElement } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type { BuyRepsSchema, SearchPaypalTransactionSchema } from "@/validators/points";
+import { buyRepsSchema, searchPaypalTransactionSchema } from "@/validators/points";
+import { getSearchValidator } from "@/validators/register";
 
 const CURRENCY = "USD";
 const OPTIONS = {
@@ -164,7 +170,7 @@ const PaypalShopContent = ({
       <ContentBox
         title={activeTab}
         subtitle={`Monthly Reps [${purchasedReps ?? 0} / ${dynamicMonthlyRepCap(userData)}]`}
-        padding={activeTab === "Log" ? false : true}
+        padding={activeTab !== "Log"}
         topRightContent={
           <>
             <div className="grow"></div>
@@ -253,7 +259,7 @@ const ReputationStore = (props: { currency: string }) => {
   }, [watchedPoints, setAmount]);
 
   useEffect(() => {
-    if (userData && userData.username && watchedUsers.length === 0) {
+    if (userData?.username && watchedUsers.length === 0) {
       userSearchMethods.setValue("users", [userData]);
     }
   }, [userData, userSearchMethods, watchedUsers]);
@@ -269,7 +275,7 @@ const ReputationStore = (props: { currency: string }) => {
     <>
       <div className="text-center text-2xl">
         {PAYPAL_DISCOUNT_PERCENT > 0 && (
-          <p className="text-red-500 font-bold text-3xl">
+          <p className="font-bold text-3xl text-red-500">
             {PAYPAL_DISCOUNT_PERCENT}% Discount Applied!
           </p>
         )}
@@ -295,15 +301,15 @@ const ReputationStore = (props: { currency: string }) => {
           maxUsers={maxUsers}
         />
       )}
-      <div className="grid grid-cols-2 mt-3">
-        <div className="bg-slate-500 mx-2 mb-2 rounded-md p-2 font-bold text-center cursor-not-allowed">
+      <div className="mt-3 grid grid-cols-2">
+        <div className="mx-2 mb-2 cursor-not-allowed rounded-md bg-slate-500 p-2 text-center font-bold">
           Crypto, Coming Soon
         </div>
         {isResolved && userData && selectedUser && !isPending ? (
           <PayPalButtons
             style={{ layout: "horizontal", tagline: false }}
             forceReRender={[amount, watchedUsers, props.currency]}
-            createOrder={(data, actions) => {
+            createOrder={(_data, actions) => {
               return actions.order.create({
                 intent: "CAPTURE",
                 purchase_units: [
@@ -318,7 +324,7 @@ const ReputationStore = (props: { currency: string }) => {
                 ],
               });
             }}
-            onApprove={(data, actions) => {
+            onApprove={(_data, actions) => {
               invoiceIdRef.current = nanoid();
               if (actions.order) {
                 return actions.order.capture().then((details) => {
@@ -477,8 +483,8 @@ const PayPalSubscriptionButton = (props: {
         </li>
         <li>+{FED_NORMAL_JUTSU_SLOTS} Jutsu slot</li>
         <li>+{FED_NORMAL_BANK_INTEREST}% bank interest</li>
-        <li>{FED_NORMAL_JUTSU_LOADOUTS} jutsu loadouts</li>
-        <li>{FED_NORMAL_ITEM_LOADOUTS} item loadouts</li>
+        <li>{FED_JUTSU_LOADOUTS_BASE + FED_NORMAL_JUTSU_LOADOUTS} jutsu loadouts</li>
+        <li>{FED_ITEM_LOADOUTS_BASE + FED_NORMAL_ITEM_LOADOUTS} item loadouts</li>
         <li>+{SKILL_TREE_RESET_FREE_NORMAL} skill tree resets per month</li>
         <li>Custom avatar (512KB)</li>
       </ul>
@@ -496,8 +502,8 @@ const PayPalSubscriptionButton = (props: {
         </li>
         <li>+{FED_SILVER_JUTSU_SLOTS} Jutsu slots</li>
         <li>+{FED_SILVER_BANK_INTEREST}% bank interest</li>
-        <li>{FED_SILVER_JUTSU_LOADOUTS} jutsu loadouts</li>
-        <li>{FED_SILVER_ITEM_LOADOUTS} item loadouts</li>
+        <li>{FED_JUTSU_LOADOUTS_BASE + FED_SILVER_JUTSU_LOADOUTS} jutsu loadouts</li>
+        <li>{FED_ITEM_LOADOUTS_BASE + FED_SILVER_ITEM_LOADOUTS} item loadouts</li>
         <li>+{SKILL_TREE_RESET_FREE_SILVER} skill tree resets per month</li>
         <li>Custom avatar (1MB)</li>
       </ul>
@@ -513,8 +519,8 @@ const PayPalSubscriptionButton = (props: {
         <li>+{FED_EVENT_ITEMS_GOLD - FED_EVENT_ITEMS_DEFAULT} Event inventory space</li>
         <li>+{FED_GOLD_JUTSU_SLOTS} Jutsu slots</li>
         <li>+{FED_GOLD_BANK_INTEREST}% bank interest</li>
-        <li>{FED_GOLD_JUTSU_LOADOUTS} jutsu loadouts</li>
-        <li>{FED_GOLD_ITEM_LOADOUTS} item loadouts</li>
+        <li>{FED_JUTSU_LOADOUTS_BASE + FED_GOLD_JUTSU_LOADOUTS} jutsu loadouts</li>
+        <li>{FED_ITEM_LOADOUTS_BASE + FED_GOLD_ITEM_LOADOUTS} item loadouts</li>
         <li>+{SKILL_TREE_RESET_FREE_GOLD} skill tree resets per month</li>
         <li>Custom avatar (2MB)</li>
       </ul>
@@ -533,9 +539,7 @@ const PayPalSubscriptionButton = (props: {
 
   return (
     <div
-      className={`${
-        props.currentUserStatus === props.buttonStatus ? "bg-orange-200 rounded-lg" : ""
-      }`}
+      className={`${props.currentUserStatus === props.buttonStatus ? "rounded-lg bg-orange-200" : ""}`}
     >
       <div className="relative">
         <Image
@@ -552,7 +556,7 @@ const PayPalSubscriptionButton = (props: {
           <Confirm2
             title="Confirm Upgrade"
             button={
-              <ChevronsUp className="absolute top-0 right-0 h-8 w-8 rounded-full bg-blue-500 p-1 cursor-pointer hover:bg-green-500" />
+              <ChevronsUp className="absolute top-0 right-0 h-8 w-8 cursor-pointer rounded-full bg-blue-500 p-1 hover:bg-green-500" />
             }
             onAccept={(e) => {
               e.preventDefault();
@@ -573,12 +577,12 @@ const PayPalSubscriptionButton = (props: {
         {props.buttonStatus === "SILVER" && silverBenefits}
         {props.buttonStatus === "GOLD" && goldBenefits}
       </div>
-      <div className="bg-amber-200 text-black border-2 z-0 border-black p-2 rounded-lg text-center hover:cursor-pointer hover:bg-orange-200">
+      <div className="z-0 rounded-lg border-2 border-black bg-amber-200 p-2 text-center text-black hover:cursor-pointer hover:bg-orange-200">
         {isResolved ? (
           <PayPalButtons
             style={{ layout: "horizontal", label: "subscribe", tagline: false }}
             forceReRender={[props.userId]}
-            createSubscription={(data, actions) => {
+            createSubscription={(_data, actions) => {
               return actions.subscription.create({
                 plan_id: props.subscriptionPlan,
                 custom_id: `${props.buyerId}-${props.userId}`,
@@ -660,7 +664,7 @@ const PayPalSubscriptionButton = (props: {
         <Confirm2
           title="Confirm Upgrade"
           button={
-            <div className="bg-amber-200 text-black border-2 border-black p-2 mt-2 rounded-lg text-center hover:cursor-pointer hover:bg-orange-200">
+            <div className="mt-2 rounded-lg border-2 border-black bg-amber-200 p-2 text-center text-black hover:cursor-pointer hover:bg-orange-200">
               Or, buy with
               {props.buttonStatus === "NORMAL" && (
                 <h3 className="font-bold italic">
@@ -712,7 +716,7 @@ const FederalStore = () => {
   const selectedUser = watchedUsers?.[0];
 
   useEffect(() => {
-    if (userData && userData.username && watchedUsers.length === 0) {
+    if (userData?.username && watchedUsers.length === 0) {
       userSearchMethods.setValue("users", [userData]);
     }
   }, [userData, userSearchMethods, watchedUsers]);
@@ -743,7 +747,7 @@ const FederalStore = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
+      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
         <div>
           {selectedUser && userData ? (
             <PayPalSubscriptionButton
@@ -861,9 +865,7 @@ const SubscriptionsOverview = () => {
         />
       )}
     </ContentBox>
-  ) : (
-    <></>
-  );
+  ) : null;
 };
 
 /**
@@ -886,8 +888,7 @@ export const TransactionHistory: React.FC<{ userId: string }> = (props) => {
     },
   );
   const allTransactions = transactions?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .map((transaction) => {
       return {
         ...transaction,
@@ -974,7 +975,7 @@ const LookupTransaction = () => {
                 control={searchForm.control}
                 name="transactionDate"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col basis-1/2">
+                  <FormItem className="flex basis-1/2 flex-col">
                     <FormControl>
                       <Input
                         id="purchase-date"

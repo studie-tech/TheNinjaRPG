@@ -1,10 +1,10 @@
-import React from "react";
-import AvatarImage from "@/layout/Avatar";
 import Link from "next/link";
+import type React from "react";
+import type { FederalStatus, UserRank, UserRole } from "@/drizzle/constants";
+import AvatarImage from "@/layout/Avatar";
 import { showUserRank } from "@/libs/profile";
+import { cn } from "@/libs/shadui";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import type { UserRank, UserRole, FederalStatus } from "@/drizzle/constants";
-import { cn } from "src/libs/shadui";
 
 export interface PostProps {
   user?: {
@@ -133,49 +133,35 @@ const Post: React.FC<PostProps> = (props) => {
   const UsernameBlock = props.user && (
     <div className="basis-1/4">
       <div className={`${userColor} font-bold`}>{props.user.username}</div>
-      <div className="text-xs pt-1 pb-4">
-        <span className="bg-slate-300 p-1 m-1 rounded-md text-black">
+      <div className="pt-1 pb-4 text-xs">
+        <span className="m-1 rounded-md bg-slate-300 p-1 text-black">
           Lvl. {props.user.level}
         </span>
-        <span className="bg-slate-300 p-1 m-1 rounded-md text-black">
+        <span className="m-1 rounded-md bg-slate-300 p-1 text-black">
           {showUserRank(props.user)}
         </span>
         {props.user.customTitle && (
-          <span className="bg-gray-500 p-1 m-1 rounded-md text-white">
+          <span className="m-1 rounded-md bg-gray-500 p-1 text-white">
             {props.user.customTitle}
           </span>
         )}
-        {props.user.villageKageId && props.user.villageKageId === props.user.userId && (
-          <>
-            {props.user?.isOutlaw ? (
-              <span className="bg-slate-300 p-1 m-1 rounded-md text-black">Daimyo</span>
-            ) : (
-              <span className="bg-slate-300 p-1 m-1 rounded-md text-black">Kage</span>
-            )}
-          </>
-        )}
+        {props.user.villageKageId &&
+          props.user.villageKageId === props.user.userId &&
+          (props.user?.isOutlaw ? (
+            <span className="m-1 rounded-md bg-slate-300 p-1 text-black">Daimyo</span>
+          ) : (
+            <span className="m-1 rounded-md bg-slate-300 p-1 text-black">Kage</span>
+          ))}
         {props.user?.role !== "USER" && (
           <span
-            className={`${userRole} p-1 m-1 rounded-md ${
-              ["CODER", "MODERATOR", "JR_MODERATOR", "EVENT-ADMIN"].includes(
-                props.user.role,
-              )
-                ? "text-black"
-                : ""
-            }`}
+            className={`${userRole} m-1 rounded-md p-1 ${["CODER", "MODERATOR", "JR_MODERATOR", "EVENT-ADMIN"].includes(props.user.role) ? "text-black" : ""}`}
           >
             {capitalizeFirstLetter(props.user?.role)}
           </span>
         )}
         {props.user.villageName && props.user.villageHexColor && (
           <span
-            className={`p-1 m-1 rounded-md ${
-              ["glacier", "shine", "shroud"].includes(
-                props.user.villageName.toLowerCase(),
-              )
-                ? "text-black"
-                : "text-white"
-            }`}
+            className={`m-1 rounded-md p-1 ${["glacier", "shine", "shroud"].includes(props.user.villageName.toLowerCase()) ? "text-black" : "text-white"}`}
             style={{ backgroundColor: props.user.villageHexColor }}
           >
             {props.user.villageName}
@@ -188,21 +174,22 @@ const Post: React.FC<PostProps> = (props) => {
   const content = (
     <>
       <div className="grow basis-1/2">
-        <div className="flex flex-col h-full justify-center">
+        <div className="flex h-full flex-col justify-center">
           {props.title && (
-            <h3 className="text-2xl font-bold tracking-tight basis-1/5">
+            <h3 className="basis-1/5 font-bold text-2xl tracking-tight">
               {props.title}
             </h3>
           )}
           {UsernameBlock}
-          <div className="relative font-normal basis-3/4 ">{props.children}</div>
+          <div className="relative basis-3/4 font-normal">{props.children}</div>
         </div>
       </div>
-      {props.options && <div className="absolute right-3 top-3">{props.options}</div>}
+      {props.options && <div className="absolute top-3 right-3">{props.options}</div>}
     </>
   );
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: Mouse hover events are for visual feedback only
     <div
       className={cn(
         `relative mb-3 flex flex-row rounded-lg border ${color} px-1 py-3 shadow`,
@@ -227,7 +214,7 @@ const Post: React.FC<PostProps> = (props) => {
           {props.user.nRecruited && props.user.nRecruited > 0 ? (
             <Link
               href={`/username/${props.user.username}`}
-              className="font-bold hover:text-orange-500 text-xs"
+              className="font-bold text-xs hover:text-orange-500"
             >
               Recruits: {props.user.nRecruited}
             </Link>
@@ -235,7 +222,7 @@ const Post: React.FC<PostProps> = (props) => {
         </div>
       )}
       {props.href ? (
-        <Link className="hover:cursor-pointer w-full" href={props.href}>
+        <Link className="w-full hover:cursor-pointer" href={props.href}>
           {content}
         </Link>
       ) : (

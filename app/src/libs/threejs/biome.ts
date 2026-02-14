@@ -1,27 +1,26 @@
 import {
-  Vector3,
-  MeshBasicMaterial,
-  SpriteMaterial,
-  Sprite,
-  RepeatWrapping,
-  DoubleSide,
   AddOperation,
+  DoubleSide,
+  MeshBasicMaterial,
+  RepeatWrapping,
+  Sprite,
+  SpriteMaterial,
   Texture,
+  Vector3,
 } from "three";
+import type { CombatBiome, HEXTILE_TYPE } from "@/drizzle/constants";
 import {
-  IMG_BG_OCEAN,
-  IMG_BG_ICE,
-  IMG_BG_SNOW,
   ASSETS_LAYER,
+  COMBAT_BIOMES,
+  IMG_BG_ICE,
+  IMG_BG_OCEAN,
+  IMG_BG_SNOW,
 } from "@/drizzle/constants";
-import { loadTexture, createSpriteMaterial } from "@/libs/threejs/util";
 import { applyWindShader } from "@/libs/threejs/shaders";
-import { COMBAT_BIOMES } from "@/drizzle/constants";
-import { getBiomeFromGlobalTile } from "@/libs/travel";
-import type { HEXTILE_TYPE } from "@/drizzle/constants";
-import type { CombatBiome } from "@/drizzle/constants";
-import type { TerrainHex } from "../hexgrid";
 import type { GlobalTile } from "@/libs/threejs/types";
+import { createSpriteMaterial, loadTexture } from "@/libs/threejs/util";
+import { getBiomeFromGlobalTile } from "@/libs/travel";
+import type { TerrainHex } from "../hexgrid";
 
 /**
  * Map materials & colors
@@ -71,7 +70,10 @@ const createNoisedMaterials = (colors: readonly number[]) => {
     const size = 64;
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = size;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return new MeshBasicMaterial({ color });
+    }
     // Fill with solid color
     ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
     ctx.fillRect(0, 0, size, size);
@@ -80,15 +82,14 @@ const createNoisedMaterials = (colors: readonly number[]) => {
     const imageData = ctx.getImageData(0, 0, size, size);
     for (let i = 0; i < size * size * 4; i += 4) {
       const noise = Math.floor(Math.random() * 32) - 16; // -16 to +15
-      imageData.data[i] = Math.min(255, Math.max(0, imageData.data[i]! + noise));
-      imageData.data[i + 1] = Math.min(
-        255,
-        Math.max(0, imageData.data[i + 1]! + noise),
-      );
-      imageData.data[i + 2] = Math.min(
-        255,
-        Math.max(0, imageData.data[i + 2]! + noise),
-      );
+      const r = imageData.data[i];
+      const g = imageData.data[i + 1];
+      const b = imageData.data[i + 2];
+      if (r !== undefined) imageData.data[i] = Math.min(255, Math.max(0, r + noise));
+      if (g !== undefined)
+        imageData.data[i + 1] = Math.min(255, Math.max(0, g + noise));
+      if (b !== undefined)
+        imageData.data[i + 2] = Math.min(255, Math.max(0, b + noise));
       // alpha (i+3) remains unchanged (255)
     }
     ctx.putImageData(imageData, 0, 0);

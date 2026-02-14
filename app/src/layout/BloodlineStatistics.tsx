@@ -1,10 +1,11 @@
-import React, { useRef, useEffect, useState } from "react";
-import { api } from "@/app/_trpc/client";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BarChart2, Bug } from "lucide-react";
-import { Chart as ChartJS, registerables } from "chart.js";
 import type { ChartData, ChartOptions } from "chart.js";
+import { Chart as ChartJS, registerables } from "chart.js";
+import { BarChart2, Bug } from "lucide-react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 // Register all Chart.js components
 ChartJS.register(...registerables);
@@ -135,7 +136,7 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
           },
           tooltip: {
             callbacks: {
-              label: function (context) {
+              label: (context) => {
                 const index = context.dataIndex;
                 const item = chartData[index];
                 if (!item) return "";
@@ -155,9 +156,7 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
               text: "Percentage (%)",
             },
             ticks: {
-              callback: function (value) {
-                return value + "%";
-              },
+              callback: (value) => `${value}%`,
             },
           },
         },
@@ -185,7 +184,6 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
       }, 200); // Increased delay to ensure DOM is ready
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, data]);
 
   // Cleanup on unmount
@@ -207,15 +205,15 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         {trigger || (
-          <BarChart2 className="h-6 w-6 hover:text-orange-500 cursor-pointer" />
+          <BarChart2 className="h-6 w-6 cursor-pointer hover:text-orange-500" />
         )}
       </PopoverTrigger>
       <PopoverContent className="w-[350px] md:w-[450px]" align="end">
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold">Bloodline Roll Statistics</h3>
-              <p className="text-sm text-muted-foreground">
+              <h3 className="font-semibold text-lg">Bloodline Roll Statistics</h3>
+              <p className="text-muted-foreground text-sm">
                 Distribution of natural bloodline rolls by rank
               </p>
             </div>
@@ -230,11 +228,11 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
           </div>
 
           {isLoading ? (
-            <div className="flex justify-center items-center h-40">
+            <div className="flex h-40 items-center justify-center">
               <p>Loading statistics...</p>
             </div>
           ) : !data || totalRolls === 0 ? (
-            <div className="flex justify-center items-center h-40">
+            <div className="flex h-40 items-center justify-center">
               <p className="text-center text-gray-500">
                 No roll statistics available yet
               </p>
@@ -248,20 +246,20 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
                 </div>
 
                 {showDebug && (
-                  <div className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-40">
+                  <div className="mt-2 max-h-40 overflow-auto rounded bg-gray-100 p-2 text-xs">
                     <p className="font-semibold">Raw Data:</p>
                     <pre>{JSON.stringify(data, null, 2)}</pre>
-                    <p className="font-semibold mt-2">Processed Data:</p>
+                    <p className="mt-2 font-semibold">Processed Data:</p>
                     <pre>{JSON.stringify(chartData, null, 2)}</pre>
                   </div>
                 )}
               </div>
 
-              <div className="w-full aspect-square">
+              <div className="aspect-square w-full">
                 <canvas ref={chartRef} />
               </div>
 
-              <div className="text-xs text-gray-500 italic">
+              <div className="text-gray-500 text-xs italic">
                 Statistics based on all natural bloodline rolls in the game
               </div>
             </div>

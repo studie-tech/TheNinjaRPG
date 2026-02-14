@@ -1,10 +1,10 @@
 "use client";
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Gift } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { api } from "@/app/_trpc/client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRewardArray } from "@/libs/objectives";
 import { showRewardToast } from "@/libs/toast";
 
@@ -57,7 +57,7 @@ export function UnclaimedSeasonRewards() {
                 <span className="font-medium">
                   {reward.seasonName} – {reward.division}
                 </span>
-                <span className="text-xs text-muted-foreground">{rewardSummary}</span>
+                <span className="text-muted-foreground text-xs">{rewardSummary}</span>
               </div>
               {reward.claimed ? (
                 <Badge variant="secondary">Claimed</Badge>

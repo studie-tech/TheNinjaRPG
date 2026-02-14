@@ -1,26 +1,18 @@
 "use client";
 
-import { useState } from "react";
 import {
-  Merge,
-  CircleDollarSign,
-  Cookie,
   ArrowDownToLine,
-  Zap,
+  CircleDollarSign,
+  CircleFadingArrowUp,
+  Cookie,
+  Merge,
+  Shirt,
   Split,
   Wrench,
+  Zap,
 } from "lucide-react";
-import Image from "@/layout/Image";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import NavTabs from "@/layout/NavTabs";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import Modal2 from "@/layout/Modal2";
-import Confirm2 from "@/layout/Confirm2";
-import ContentImage from "@/layout/ContentImage";
-import DurabilityBar from "@/layout/DurabilityBar";
-import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
-import { nonCombatConsume } from "@/libs/item";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,17 +24,30 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { calcItemSellingPrice } from "@/libs/item";
-import { ActionSelector } from "@/layout/CombatActions";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast, showRewardToast } from "@/libs/toast";
-import { calcMaxItems, calcMaxEventItems, calcMaxMaterials } from "@/libs/item";
-import { CircleFadingArrowUp, Shirt } from "lucide-react";
 import { COST_EXTRA_ITEM_SLOT, IMG_EQUIP_SILHOUETTE } from "@/drizzle/constants";
-import type { UserWithRelations } from "@/routers/profile";
-import type { Item, UserItemWithRelations, UserItem, ItemSlot } from "@/drizzle/schema";
+import type { Item, ItemSlot, UserItem, UserItemWithRelations } from "@/drizzle/schema";
+import { ActionSelector } from "@/layout/CombatActions";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import ContentImage from "@/layout/ContentImage";
+import DurabilityBar from "@/layout/DurabilityBar";
+import Image from "@/layout/Image";
+import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import NavTabs from "@/layout/NavTabs";
+import {
+  calcItemSellingPrice,
+  calcMaxEventItems,
+  calcMaxItems,
+  calcMaxMaterials,
+  nonCombatConsume,
+} from "@/libs/item";
 import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
+import { showMutationToast, showRewardToast } from "@/libs/toast";
+import type { UserWithRelations } from "@/routers/profile";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function MyItems() {
   // State
@@ -191,13 +196,13 @@ export default function MyItems() {
         <div className="flex flex-col">
           <div className="flex flex-col sm:flex-row">
             <div className="w-full basis-1/2 p-3">
-              <h2 className="text-2xl font-bold text-foreground">Equipped</h2>
+              <h2 className="font-bold text-2xl text-foreground">Equipped</h2>
               <div className="relative">
                 <Character useritems={userItems} />
               </div>
             </div>
-            <div className="basis-1/2 p-3 bg-poppopover overflow-y-scroll max-h-full sm:max-h-[600px] border-t-2 sm:border-t-0 border-dashed sm:border-l-2">
-              <h2 className="text-2xl font-bold text-foreground">Backpack</h2>
+            <div className="max-h-full basis-1/2 overflow-y-scroll border-t-2 border-dashed bg-poppopover p-3 sm:max-h-[600px] sm:border-t-0 sm:border-l-2">
+              <h2 className="font-bold text-2xl text-foreground">Backpack</h2>
               <Backpack
                 userData={userData}
                 useritems={
@@ -212,7 +217,7 @@ export default function MyItems() {
           </div>
         </div>
       </ContentBox>
-      <div className="mt-1 w-full flex justify-between items-center">
+      <div className="mt-1 flex w-full items-center justify-between">
         <div>
           <ItemLoadoutSelector />
         </div>
@@ -250,7 +255,7 @@ export default function MyItems() {
                     </p>
                     {repairAllInfo.kitsToUse.length > 0 && (
                       <div>
-                        <p className="font-semibold mb-2">Repair kits to be used:</p>
+                        <p className="mb-2 font-semibold">Repair kits to be used:</p>
                         <div className="space-y-1">
                           {repairAllInfo.kitsToUse.map((kit) => (
                             <div
@@ -267,10 +272,10 @@ export default function MyItems() {
                   </>
                 ) : (
                   <div>
-                    <p className="text-red-600 font-semibold mb-2">
+                    <p className="mb-2 font-semibold text-red-600">
                       Not enough repair kits
                     </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       You have {itemsNeedingRepair.length} damaged item
                       {itemsNeedingRepair.length !== 1 ? "s" : ""} that need{" "}
                       {repairAllInfo.totalDurabilityNeeded} total durability, but you
@@ -339,15 +344,15 @@ function RepairItemSelectionModal({
     >
       <div className="space-y-4">
         <div>
-          <p className="text-sm text-muted-foreground mb-2">
+          <p className="mb-2 text-muted-foreground text-sm">
             Repairing: <strong>{targetItem.item.name}</strong>
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Durability: {targetItem.durability} / {targetItem.item.maxDurability}
           </p>
         </div>
         {repairItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             You don&apos;t have any repair items in your inventory.
           </p>
         ) : (
@@ -363,13 +368,11 @@ function RepairItemSelectionModal({
               );
               const actualRepair = newDurability - targetItem.durability;
               return (
-                <div
+                <button
+                  type="button"
                   key={repairItem.id}
-                  className={`border rounded-lg p-3 transition-colors ${
-                    isPending
-                      ? "opacity-50 cursor-not-allowed bg-slate-50"
-                      : "hover:bg-slate-100 cursor-pointer"
-                  }`}
+                  className={`w-full rounded-lg border p-3 text-left transition-colors ${isPending ? "cursor-not-allowed bg-slate-50 opacity-50" : "cursor-pointer hover:bg-slate-100"}`}
+                  disabled={isPending}
                   onClick={() => {
                     if (!isPending) {
                       onSelectRepairItem(repairItem.id, targetItem.id);
@@ -380,25 +383,25 @@ function RepairItemSelectionModal({
                     <ContentImage
                       image={repairItem.item.image}
                       alt={repairItem.item.name}
-                      className="w-12 h-12"
+                      className="h-12 w-12"
                     />
                     <div className="flex-1">
                       <h4 className="font-semibold">{repairItem.item.name}</h4>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Quantity: {repairItem.quantity}
                       </p>
                     </div>
                     <div className="text-right">
                       {isPending ? (
-                        <p className="text-sm font-medium text-muted-foreground">
+                        <p className="font-medium text-muted-foreground text-sm">
                           Repairing...
                         </p>
                       ) : (
                         <>
-                          <p className="text-sm font-medium text-green-600">
+                          <p className="font-medium text-green-600 text-sm">
                             +{actualRepair} Durability
                           </p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-muted-foreground text-xs">
                             {targetItem.durability} → {newDurability} /{" "}
                             {targetItem.item.maxDurability}
                           </p>
@@ -406,7 +409,7 @@ function RepairItemSelectionModal({
                       )}
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -574,7 +577,10 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     isEquipping ||
     isSplitting ||
     isUsingRepairItem;
-  const items = useritems?.map((useritem) => ({ ...useritem.item, ...useritem }));
+  const items = useritems?.map((useritem) => ({
+    ...useritem.item,
+    ...useritem,
+  }));
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
   const repairItems = (useritems || []).filter(
     (userItem: UserItemWithRelations) =>
@@ -588,7 +594,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     if (!useritem) return;
     const quantity = parseInt(quantityToKeep, 10);
     if (
-      isNaN(quantity) ||
+      Number.isNaN(quantity) ||
       quantity < 1 ||
       quantity >= useritem.quantity ||
       !useritem.item.canStack
@@ -601,14 +607,14 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   return (
     <>
       <ActionSelector
-        className="grid-cols-6 sm:grid-cols-4 md:grid-cols-4 pt-3"
+        className="grid-cols-6 pt-3 sm:grid-cols-4 md:grid-cols-4"
         items={items}
         counts={items}
         selectedId={useritem?.id}
         showBgColor={false}
         showLabels={false}
         onClick={(id) => {
-          if (id == useritem?.id) {
+          if (id === useritem?.id) {
             setUserItem(undefined);
             setIsOpen(false);
           } else {
@@ -739,11 +745,11 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                 placeholder={`1-${useritem.quantity - 1}`}
                 className="mt-2"
               />
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="mt-2 text-muted-foreground text-sm">
                 Current stack: {useritem.quantity} items
               </p>
-              {quantityToKeep && !isNaN(parseInt(quantityToKeep, 10)) && (
-                <p className="text-sm text-muted-foreground mt-1">
+              {quantityToKeep && !Number.isNaN(parseInt(quantityToKeep, 10)) && (
+                <p className="mt-1 text-muted-foreground text-sm">
                   New stack will have:{" "}
                   {useritem.quantity - parseInt(quantityToKeep, 10)} items
                 </p>
@@ -765,7 +771,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                 disabled={
                   isSplitting ||
                   !quantityToKeep ||
-                  isNaN(parseInt(quantityToKeep, 10)) ||
+                  Number.isNaN(parseInt(quantityToKeep, 10)) ||
                   parseInt(quantityToKeep, 10) < 1 ||
                   parseInt(quantityToKeep, 10) >= useritem.quantity
                 }
@@ -810,7 +816,10 @@ const Character: React.FC<CharacterProps> = (props) => {
   // The item on the current slot
 
   // Collapse UserItem and Item
-  const items = useritems?.map((useritem) => ({ ...useritem.item, ...useritem }));
+  const items = useritems?.map((useritem) => ({
+    ...useritem.item,
+    ...useritem,
+  }));
   const equipped = items?.find((item) => item.equipped === slot);
   const repairItems = (useritems || []).filter(
     (userItem: UserItemWithRelations) =>
@@ -946,7 +955,7 @@ const Character: React.FC<CharacterProps> = (props) => {
               showStatistic="item"
             />
             {!isEquipping && !isUsingRepairItem && (
-              <div className="flex flex-row gap-1 mt-2">
+              <div className="mt-2 flex flex-row gap-1">
                 <Button
                   variant="info"
                   onClick={() => {
@@ -1004,18 +1013,17 @@ interface EquipProps {
 }
 
 const Equip: React.FC<EquipProps> = (props) => {
-  const item = props.items?.find((item) => item.equipped == props.slot);
+  const item = props.items?.find((item) => item.equipped === props.slot);
   return (
-    <div
-      className={`absolute ${
-        props.pos
-      } flex w-1/5 md:w-1/4 lg:w-1/5 aspect-square shrink-0 grow-0 cursor-pointer flex-row items-center justify-center border-2 border-dashed border-slate-500 bg-slate-200 text-xl font-bold text-slate-950 ${
+    <button
+      type="button"
+      className={`absolute ${props.pos} flex aspect-square w-1/5 shrink-0 grow-0 cursor-pointer flex-row items-center justify-center border-2 border-slate-500 border-dashed bg-slate-200 font-bold text-slate-950 text-xl md:w-1/4 lg:w-1/5 ${
         item ? "" : "opacity-50"
-      } hover:border-black hover:bg-slate-400 rounded-xl`}
+      } rounded-xl hover:border-black hover:bg-slate-400`}
       onClick={() => props.act(props.slot)}
     >
       {item ? (
-        <div className="relative w-full h-full">
+        <div className="relative h-full w-full">
           <ContentImage
             image={item.image}
             hideBorder={true}
@@ -1036,7 +1044,7 @@ const Equip: React.FC<EquipProps> = (props) => {
               />
             )}
           {item.quantity > 1 && (
-            <div className="absolute bottom-0 right-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 text-black font-bold">
+            <div className="absolute right-0 bottom-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 font-bold text-black">
               {item.quantity}
             </div>
           )}
@@ -1044,6 +1052,6 @@ const Equip: React.FC<EquipProps> = (props) => {
       ) : (
         <p className="opacity-100">{props.txt}</p>
       )}
-    </div>
+    </button>
   );
 };

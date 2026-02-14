@@ -1,9 +1,12 @@
 import { sql } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
-import { userNindo, forumPost } from "@/drizzle/schema";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
 import { cookies } from "next/headers";
+import { forumPost, userNindo } from "@/drizzle/schema";
+import {
+  handleEndpointError,
+  lockWithDailyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
+import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "daily-link-cleaner";
 
@@ -18,7 +21,10 @@ export async function isUrlAccessible(url: string): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-    const response = await fetch(url, { method: "HEAD", signal: controller.signal });
+    const response = await fetch(url, {
+      method: "HEAD",
+      signal: controller.signal,
+    });
     clearTimeout(timeoutId);
     console.log(`URL check (HEAD): ${url} - Status: ${response.status}`);
     return true;
@@ -66,7 +72,7 @@ export async function GET() {
     await Promise.all([
       // Process nindos
       Promise.all(
-        nindos.map(async (nindo) => {
+        nindos.map(async (nindo: (typeof nindos)[number]) => {
           // Extract all URLs from the content
           const urls = [...nindo.content.matchAll(urlRegex)].map((match) => match[0]);
 
@@ -102,7 +108,7 @@ export async function GET() {
       ),
       // Process forum posts
       Promise.all(
-        posts.map(async (post) => {
+        posts.map(async (post: (typeof posts)[number]) => {
           // Extract all URLs from the content
           const urls = [...post.content.matchAll(urlRegex)].map((match) => match[0]);
 
@@ -142,6 +148,6 @@ export async function GET() {
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

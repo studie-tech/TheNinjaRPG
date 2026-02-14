@@ -1,16 +1,16 @@
 "use client";
 
-import Image from "@/layout/Image";
 import Link from "next/link";
 import {
-  IMG_MANUAL_TOWER_UPGRADES,
   IMG_MANUAL_TOWER_ENEMIES,
   IMG_MANUAL_TOWER_LEADERBOARD,
+  IMG_MANUAL_TOWER_UPGRADES,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
-import { useUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
+import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 export default function TowerDefenseManual() {
   const { data: userData } = useUserData();

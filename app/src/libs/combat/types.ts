@@ -1,39 +1,44 @@
-import type { AttackMethods, AttackTargets } from "@/drizzle/constants";
-import type { StatType, GeneralType, PoolType, ElementName } from "@/drizzle/constants";
-import type { publicState } from "@/libs/combat/constants";
-import type { StatNames, GenNames } from "@/libs/combat/constants";
+import type { Intersection, Object3D } from "three";
 import type {
-  Jutsu,
-  Item,
-  ItemSlot,
-  VillageAlliance,
-  Clan,
-  War,
-  VillageStructure,
-  Village,
-  GameSetting,
-  UserSkill,
-  SkillTree,
-  UserData,
+  AttackMethods,
+  AttackTargets,
+  BattleType,
+  CombatBiome,
+  ElementName,
+  GeneralType,
+  PoolType,
+  StatType,
+} from "@/drizzle/constants";
+import type {
   AiProfile,
   AnbuSquad,
   Bloodline,
   BloodlineReskin,
-  UserJutsu,
-  UserItem,
-  UserItemImbuement,
-  JutsuReskin,
-  UserQuest,
   Bounty,
   BountySignup,
+  Clan,
+  GameSetting,
+  Item,
+  ItemSlot,
+  Jutsu,
+  JutsuReskin,
   Quest,
+  SkillTree,
+  UserData,
+  UserItem,
+  UserItemImbuement,
+  UserJutsu,
+  UserQuest,
+  UserSkill,
+  Village,
+  VillageAlliance,
+  VillageStructure,
+  War,
 } from "@/drizzle/schema";
-import type { CombatBiome } from "@/drizzle/constants";
+import type { GenNames, publicState, StatNames } from "@/libs/combat/constants";
 import type { TerrainHex } from "@/libs/hexgrid";
-import type { BattleType } from "@/drizzle/constants";
-import type { QuestTrackerType } from "@/validators/objectives";
-import type { Intersection, Object3D } from "three";
 import type { ZodAllTags } from "@/validators/combat";
+import type { QuestTrackerType } from "@/validators/objectives";
 
 export type BattleWar = War & {
   warAllies: { villageId: string; supportVillageId: string }[];
@@ -178,6 +183,10 @@ export type CombatUserFields = {
     intelligence?: number;
     willpower?: number;
   };
+  // Internal tracking for pool adjustment deltas (set/cleared by applyPoolAdjustmentsToBase)
+  _prevHealthAdj?: number;
+  _prevChakraAdj?: number;
+  _prevStaminaAdj?: number;
 };
 
 /**
@@ -466,6 +475,8 @@ export type Consequence = {
   rawResidual?: number;
   /** Base damage value used for additive percentage modifier calculations (e.g., increaseDamageGiven) */
   baseDamageForModifiers?: number;
+  /** Base damage after Stage 1 (equipment/pre-battle) modifiers are applied */
+  baseDamageAfterStage1?: number;
   wound?: number;
   reflect?: number;
   recoil?: number;

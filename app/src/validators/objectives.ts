@@ -1,19 +1,19 @@
 import { z } from "zod";
-import { DateTimeRegExp } from "@/utils/regex";
 import {
+  GATHERING_RANKS,
+  HUNTING_RANKS,
   LetterRanks,
+  MEDNIN_RANKS,
   QuestTypes,
   RetryQuestDelays,
-  MEDNIN_RANKS,
-  HUNTING_RANKS,
-  GATHERING_RANKS,
 } from "@/drizzle/constants";
-import { AllTags } from "@/validators/combat";
+import { DateTimeRegExp } from "@/utils/regex";
 import { idsWithNumberField } from "@/validators/base";
+import { AllTags } from "@/validators/combat";
 import {
-  rewardFields,
   ObjectiveReward,
   type ObjectiveRewardType,
+  rewardFields,
 } from "@/validators/rewards";
 
 // Re-export idsWithNumberField so consumers can import from objectives
@@ -56,6 +56,7 @@ export const SimpleTasks = [
   "gathering_experience_gained",
   //"students_trained",
 ] as const;
+export type SimpleTask = (typeof SimpleTasks)[number];
 
 export const InstantTasks = [
   "fail_quest",
@@ -66,7 +67,7 @@ export const InstantTasks = [
 export type InstantTasksType = (typeof InstantTasks)[number];
 
 export const RaidTasks = ["open_raid", "exclusive_raid"] as const;
-export type RaidTasksType = (typeof RaidTasks)[number];
+export type RaidTask = (typeof RaidTasks)[number];
 
 export const LocationTasks = [
   "move_to_location",
@@ -89,30 +90,30 @@ export type AllObjectiveTask = (typeof allObjectiveTasks)[number];
 
 export const attackerFields = {
   attackers: idsWithNumberField,
-  attackers_scaled_to_user: z.coerce.boolean().default(false),
-  attackers_scale_gains: z.coerce.number().min(0).max(1).default(1),
-  attackers_max_per_battle: z.coerce.number().min(0).max(100).default(1),
+  attackers_scaled_to_user: z.coerce.boolean().prefault(false),
+  attackers_scale_gains: z.coerce.number().min(0).max(1).prefault(1),
+  attackers_max_per_battle: z.coerce.number().min(0).max(100).prefault(1),
 };
 
 // Shared fields for battle objectives (start_battle, raids, defeat_opponents)
 export const battleObjectiveFields = {
   failObjectiveId: z.string().optional(),
-  opponent_scaled_to_user: z.coerce.boolean().default(false),
-  completionOutcome: z.enum(["Win", "Lose", "Flee", "Draw", "Any"]).default("Win"),
-  failDescription: z.string().default("You failed to defeat the opponent"),
-  fleeDescription: z.string().default("You fled from the opponent"),
-  drawDescription: z.string().default("The battle ended in a draw"),
-  scaleGains: z.coerce.number().min(0).max(1).default(1),
-  keepOriginalPools: z.coerce.boolean().default(false),
+  opponent_scaled_to_user: z.coerce.boolean().prefault(false),
+  completionOutcome: z.enum(["Win", "Lose", "Flee", "Draw", "Any"]).prefault("Win"),
+  failDescription: z.string().prefault("You failed to defeat the opponent"),
+  fleeDescription: z.string().prefault("You fled from the opponent"),
+  drawDescription: z.string().prefault("The battle ended in a draw"),
+  scaleGains: z.coerce.number().min(0).max(1).prefault(1),
+  keepOriginalPools: z.coerce.boolean().prefault(false),
 };
 
 export const baseObjectiveFields = {
   id: z.string(),
-  description: z.string().default(""),
-  successDescription: z.string().default(""),
+  description: z.string().prefault(""),
+  successDescription: z.string().prefault(""),
   nextObjectiveId: z.string().optional(),
-  sceneBackground: z.string().default(""),
-  sceneCharacters: z.array(z.string()).default([]),
+  sceneBackground: z.string().prefault(""),
+  sceneCharacters: z.array(z.string()).prefault([]),
   // Default not set, but used for e.g. dialog objectives
   sector: z.coerce.number().optional(),
   longitude: z.coerce.number().optional(),
@@ -122,7 +123,7 @@ export const baseObjectiveFields = {
 export const SimpleObjective = z.object({
   ...baseObjectiveFields,
   task: z.enum(SimpleTasks),
-  value: z.coerce.number().min(0).default(3),
+  value: z.coerce.number().min(0).prefault(3),
   ...rewardFields,
   ...attackerFields,
 });
@@ -135,24 +136,24 @@ export const InstantWinLoseObjective = z.object({
 
 export const ResetQuestObjective = z.object({
   ...baseObjectiveFields,
-  task: z.literal("reset_quest").default("reset_quest"),
+  task: z.literal("reset_quest").prefault("reset_quest"),
   resetObjectiveId: z.string().optional(),
   ...rewardFields,
 });
 
 export const InstantNewQuestObjective = z.object({
   ...baseObjectiveFields,
-  task: z.literal("new_quest").default("new_quest"),
-  newQuestIds: z.array(z.string()).default([]),
+  task: z.literal("new_quest").prefault("new_quest"),
+  newQuestIds: z.array(z.string()).prefault([]),
   ...rewardFields,
 });
 
 export const InstantStartBattleObjective = z.object({
   ...baseObjectiveFields,
   ...battleObjectiveFields,
-  task: z.literal("start_battle").default("start_battle"),
+  task: z.literal("start_battle").prefault("start_battle"),
   opponentAIs: idsWithNumberField.refine((data) => data.length > 0, {
-    message: "At least one opponent AI is required",
+    error: "At least one opponent AI is required",
   }),
   ...rewardFields,
 });
@@ -171,18 +172,18 @@ export type LocationType = (typeof LOCATION_TYPES)[number];
 
 const complexObjectiveFields = {
   // Location type fields
-  sectorType: z.enum(SECTOR_TYPES).default("specific"),
-  locationType: z.enum(LOCATION_TYPES).default("specific"),
+  sectorType: z.enum(SECTOR_TYPES).prefault("specific"),
+  locationType: z.enum(LOCATION_TYPES).prefault("specific"),
   // Specific locations (also used once objective is instantiated from e.g. random, from_list, village, etc.)
-  sector: z.coerce.number().min(0).default(0),
-  longitude: z.coerce.number().min(0).default(0),
-  latitude: z.coerce.number().min(0).default(0),
+  sector: z.coerce.number().min(0).prefault(0),
+  longitude: z.coerce.number().min(0).prefault(0),
+  latitude: z.coerce.number().min(0).prefault(0),
   // Sector list
-  sectorList: z.array(z.string()).default([]),
+  sectorList: z.array(z.string()).prefault([]),
   // Generic fields
-  hideLocation: z.coerce.boolean().default(false),
-  completed: z.coerce.number().min(0).max(1).default(0),
-  image: z.string().default(""),
+  hideLocation: z.coerce.boolean().prefault(false),
+  completed: z.coerce.number().min(0).max(1).prefault(0),
+  image: z.string().prefault(""),
   ...rewardFields,
   ...attackerFields,
 };
@@ -194,8 +195,8 @@ export const DialogObjective = z.object({
   ...baseObjectiveFields,
   ...rewardFields,
   ...attackerFields,
-  task: z.literal("dialog").default("dialog"),
-  image: z.string().default(""),
+  task: z.literal("dialog").prefault("dialog"),
+  image: z.string().prefault(""),
   nextObjectiveId: z
     .array(
       z.object({
@@ -203,39 +204,39 @@ export const DialogObjective = z.object({
         nextObjectiveId: z.string().optional(),
       }),
     )
-    .default([]),
+    .prefault([]),
 });
 
 export const MoveToObjective = z.object({
   ...baseObjectiveFields,
   ...complexObjectiveFields,
-  task: z.literal("move_to_location").default("move_to_location"),
+  task: z.literal("move_to_location").prefault("move_to_location"),
 });
 
 export const EncountersAtLocation = z.object({
   ...baseObjectiveFields,
   ...complexObjectiveFields,
-  locationType: z.enum(LOCATION_TYPES).default("random"),
-  task: z.literal("win_encounter_at_location").default("win_encounter_at_location"),
+  locationType: z.enum(LOCATION_TYPES).prefault("random"),
+  task: z.literal("win_encounter_at_location").prefault("win_encounter_at_location"),
 });
 
 export const CollectItem = z.object({
   ...baseObjectiveFields,
-  task: z.literal("collect_item").default("collect_item"),
-  item_name: z.string().min(3).default("Secret scroll"),
-  collectItemIds: z.array(z.string()).default([]),
-  delete_on_complete: z.coerce.boolean().default(false),
-  collect_time_minutes: z.coerce.number().min(0).max(60).default(0),
+  task: z.literal("collect_item").prefault("collect_item"),
+  item_name: z.string().min(3).prefault("Secret scroll"),
+  collectItemIds: z.array(z.string()).prefault([]),
+  delete_on_complete: z.coerce.boolean().prefault(false),
+  collect_time_minutes: z.coerce.number().min(0).max(60).prefault(0),
   ...complexObjectiveFields,
 });
 export type CollectItemType = z.infer<typeof CollectItem>;
 
 export const DeliverItem = z.object({
   ...baseObjectiveFields,
-  task: z.literal("deliver_item").default("deliver_item"),
-  item_name: z.string().min(3).default("Secret scroll"),
-  deliverItemIds: z.array(z.string()).default([]),
-  delete_on_complete: z.coerce.boolean().default(true),
+  task: z.literal("deliver_item").prefault("deliver_item"),
+  item_name: z.string().min(3).prefault("Secret scroll"),
+  deliverItemIds: z.array(z.string()).prefault([]),
+  delete_on_complete: z.coerce.boolean().prefault(true),
   ...complexObjectiveFields,
 });
 export type DeliverItemType = z.infer<typeof DeliverItem>;
@@ -243,7 +244,7 @@ export type DeliverItemType = z.infer<typeof DeliverItem>;
 export const DefeatOpponents = z.object({
   ...baseObjectiveFields,
   ...battleObjectiveFields,
-  task: z.literal("defeat_opponents").default("defeat_opponents"),
+  task: z.literal("defeat_opponents").prefault("defeat_opponents"),
   opponentAIs: idsWithNumberField,
   ...complexObjectiveFields,
 });
@@ -252,15 +253,15 @@ export const RaidObjective = z.object({
   ...baseObjectiveFields,
   ...battleObjectiveFields,
   task: z.enum(["open_raid", "exclusive_raid"]),
-  image: z.string().default(""),
+  image: z.string().prefault(""),
   // Override sector from baseObjectiveFields to be required for raids
   sector: z.coerce.number().min(0),
   opponentAIs: idsWithNumberField.refine((data) => data.length > 0, {
-    message: "At least one raid boss AI is required",
+    error: "At least one raid boss AI is required",
   }),
   // Override default descriptions for raid context
-  failDescription: z.string().default("You failed to defeat the raid boss"),
-  fleeDescription: z.string().default("You fled from the raid boss"),
+  failDescription: z.string().prefault("You failed to defeat the raid boss"),
+  fleeDescription: z.string().prefault("You fled from the raid boss"),
   ...rewardFields,
 });
 export type RaidObjectiveType = z.infer<typeof RaidObjective>;
@@ -283,15 +284,15 @@ export type AllObjectivesType = z.infer<typeof AllObjectives>;
 
 export const ObjectiveTracker = z.object({
   id: z.string(),
-  done: z.boolean().default(false),
-  value: z.coerce.number().default(0),
-  collected: z.boolean().default(false),
+  done: z.boolean().prefault(false),
+  value: z.coerce.number().prefault(0),
+  collected: z.boolean().prefault(false),
   sector: z.coerce.number().min(0).optional(),
   longitude: z.coerce.number().min(0).optional(),
   latitude: z.coerce.number().min(0).optional(),
   selectedNextObjectiveId: z.string().optional(),
-  timestamp: z.string().datetime().optional(),
-  recentlyDied: z.boolean().default(false),
+  timestamp: z.iso.datetime().optional(),
+  recentlyDied: z.boolean().prefault(false),
 });
 export type ObjectiveTrackerType = z.infer<typeof ObjectiveTracker>;
 
@@ -304,14 +305,14 @@ export type QuestContentType = {
 
 export const QuestTracker = z.object({
   id: z.string(),
-  startAt: z.string().datetime().default(new Date().toISOString()),
-  goals: z.array(ObjectiveTracker).default([]),
+  startAt: z.iso.datetime().prefault(new Date().toISOString()),
+  goals: z.array(ObjectiveTracker).prefault([]),
 });
 export type QuestTrackerType = z.infer<typeof QuestTracker>;
 
 export const QuestValidatorRawSchema = z.object({
   name: z.string().min(1).max(191),
-  image: z.string().url().optional().nullish(),
+  image: z.url().optional().nullish(),
   description: z.string().min(1).max(5000).nullable(),
   successDescription: z.string().min(1).max(5000).nullable(),
   questRank: z.enum(LetterRanks).optional(),
@@ -320,8 +321,8 @@ export const QuestValidatorRawSchema = z.object({
   gatheringRank: z.enum(GATHERING_RANKS).optional().nullish(),
   requiredLevel: z.coerce.number().min(0).max(100).optional(),
   maxLevel: z.coerce.number().min(0).max(100).optional(),
-  maxAttempts: z.coerce.number().min(0).max(100).default(1),
-  maxCompletes: z.coerce.number().min(0).max(100).default(1),
+  maxAttempts: z.coerce.number().min(0).max(100).prefault(1),
+  maxCompletes: z.coerce.number().min(0).max(100).prefault(1),
   requiredVillage: z.string().min(0).max(30).optional().nullish(),
   requiredBloodlineId: z.string().min(0).max(191).optional().nullish(),
   prerequisiteQuestId: z.string().min(0).max(191).optional().nullish(),
@@ -330,8 +331,8 @@ export const QuestValidatorRawSchema = z.object({
   content: z.object({
     objectives: z.array(AllObjectives),
     reward: ObjectiveReward,
-    sceneBackground: z.string().default(""),
-    sceneCharacters: z.array(z.string()).default([]),
+    sceneBackground: z.string().prefault(""),
+    sceneCharacters: z.array(z.string()).prefault([]),
   }),
   hidden: z.coerce.boolean(),
   retryDelay: z.enum(RetryQuestDelays).optional(),
@@ -350,7 +351,7 @@ const questSuperRefine = (
   if (["daily"].includes(val.questType)) {
     if (val.content.objectives.length < 3 || val.content.objectives.length > 7) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "Daily quests must have between 3 and 7 objectives",
       });
     }
@@ -358,7 +359,7 @@ const questSuperRefine = (
   if (val.questType === "raid") {
     if (val.content.objectives.length !== 1) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "Raid quests must have exactly one objective",
       });
     }
@@ -366,7 +367,7 @@ const questSuperRefine = (
     const objectiveTask = objective?.task;
     if (objectiveTask && !["open_raid", "exclusive_raid"].includes(objectiveTask)) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "Raid quest objective must be 'open_raid' or 'exclusive_raid'",
       });
     }
@@ -375,7 +376,7 @@ const questSuperRefine = (
       ?.opponentAIs;
     if (!opponentAIs || opponentAIs.length === 0) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message:
           "Raid quest objective must have at least one boss AI (configure opponentAIs in the objective)",
         path: ["content", "objectives", 0, "opponentAIs"],
@@ -386,7 +387,7 @@ const questSuperRefine = (
     const sector = (objective as { sector?: number })?.sector;
     if (sector === null || sector === undefined) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "Raids require a sector number in the objective (sector field)",
         path: ["content", "objectives", 0, "sector"],
       });
@@ -395,14 +396,14 @@ const questSuperRefine = (
     // Validate raid-specific fields (persisted in quest table)
     if (!val.raidBossMaxHealth || val.raidBossMaxHealth < 1) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "Raid quests require a boss max health > 0",
         path: ["raidBossMaxHealth"],
       });
     }
     if (val.raidBossCurrentHealth === null || val.raidBossCurrentHealth === undefined) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "Raid quests require current boss health",
         path: ["raidBossCurrentHealth"],
       });
@@ -416,7 +417,7 @@ const questSuperRefine = (
       val.raidBossCurrentHealth > val.raidBossMaxHealth
     ) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "Raid boss current health cannot exceed max health",
         path: ["raidBossCurrentHealth"],
       });
@@ -432,17 +433,20 @@ export type ZodQuestType = z.infer<typeof QuestValidator>;
 // - Reward fields at top level (for easy form binding)
 // - Scene fields at top level (for easy form binding)
 // - The superRefine validations
-export const QuestFormRawSchema = QuestValidatorRawSchema.merge(ObjectiveReward).merge(
+export const QuestFormRawSchema = QuestValidatorRawSchema.extend(
+  ObjectiveReward.shape,
+).extend(
   z.object({
-    sceneBackground: z.string().default(""),
-    sceneCharacters: z.array(z.string()).default([]),
-  }),
+    sceneBackground: z.string().prefault(""),
+    sceneCharacters: z.array(z.string()).prefault([]),
+  }).shape,
 );
 export const QuestFormSchema = QuestFormRawSchema.superRefine(questSuperRefine);
-export type ZodQuestFormType = z.infer<typeof QuestFormSchema>;
+export type ZodQuestFormType = z.output<typeof QuestFormSchema>;
+export type ZodQuestFormInput = z.input<typeof QuestFormSchema>;
 
 export const getObjectiveSchema = (type: string) => {
-  if (SimpleTasks.includes(type as (typeof SimpleTasks)[number])) {
+  if (SimpleTasks.includes(type as SimpleTask)) {
     return SimpleObjective;
   } else if (["fail_quest", "win_quest"].includes(type)) {
     return InstantWinLoseObjective;
@@ -486,9 +490,9 @@ export const RaidDamageThresholdValidator = z.object({
   id: z.string().optional(), // Optional for creates
   questId: z.string(),
   damageRequired: z.coerce.number().min(1, "Damage must be at least 1"),
-  sortOrder: z.coerce.number().min(0).max(255).default(0),
+  sortOrder: z.coerce.number().min(0).max(255).prefault(0),
   rewards: ObjectiveReward,
-  effects: z.array(AllTags).default([]),
-  effectDurationMinutes: z.coerce.number().min(1).max(10080).default(60),
+  effects: z.array(AllTags).prefault([]),
+  effectDurationMinutes: z.coerce.number().min(1).max(10080).prefault(60),
 });
 export type RaidDamageThresholdType = z.infer<typeof RaidDamageThresholdValidator>;

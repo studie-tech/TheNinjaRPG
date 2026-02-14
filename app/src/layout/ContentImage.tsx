@@ -1,15 +1,16 @@
-import React, { useRef, useEffect } from "react";
-import NextImage from "@/layout/Image";
-import Loader from "@/layout/Loader";
-import { cn } from "src/libs/shadui";
+import type React from "react";
+import { useEffect, useRef } from "react";
 import {
-  ItemRarities,
-  IMG_RARITY_RARE,
-  IMG_RARITY_LEGENDARY,
-  IMG_RARITY_EPIC,
   IMG_RARITY_COMMON,
+  IMG_RARITY_EPIC,
+  IMG_RARITY_LEGENDARY,
+  IMG_RARITY_RARE,
+  ItemRarities,
 } from "@/drizzle/constants";
 import type { ItemRarity } from "@/drizzle/schema";
+import NextImage from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import { cn } from "@/libs/shadui";
 
 interface ContentImageProps {
   image?: string | null;
@@ -37,7 +38,7 @@ const ContentImage: React.FC<ContentImageProps> = (props) => {
       const spritesheet = new Image();
       const ctx = imgRef?.current?.getContext("2d");
       spritesheet.src = props.image;
-      spritesheet.onload = function () {
+      spritesheet.onload = () => {
         init();
       };
       function init() {
@@ -72,8 +73,10 @@ const ContentImage: React.FC<ContentImageProps> = (props) => {
   if (props.image) {
     if (props.speed && props.frames) {
       img = (
+        /* biome-ignore lint/a11y/useKeyWithClickEvents: Animation container - keyboard handled by parent component */
+        /* biome-ignore lint/a11y/noStaticElementInteractions: Click handler for animation selection */
         <div
-          className="flex flex-row items-center justify-center h-full"
+          className="flex h-full flex-row items-center justify-center"
           onClick={props.onClick}
         >
           <canvas
@@ -89,7 +92,7 @@ const ContentImage: React.FC<ContentImageProps> = (props) => {
       img = (
         <NextImage
           className={cn(
-            "w-full h-full aspect-square",
+            "aspect-square h-full w-full",
             props.roundFull ? "rounded-full" : "rounded-xl",
             props.className,
           )}
@@ -115,7 +118,7 @@ const ContentImage: React.FC<ContentImageProps> = (props) => {
         <div className={cn(tailwindSize)}>
           <NextImage
             className={cn(
-              "relative bottom-0 left-0 right-0 top-0",
+              "relative top-0 right-0 bottom-0 left-0",
               props.roundFull ? "rounded-full" : "rounded-xl",
               props.hideBorder ? "" : "border-2",
               props.className,
@@ -130,15 +133,15 @@ const ContentImage: React.FC<ContentImageProps> = (props) => {
         </div>
       )}
       {!props.image && (
-        <div className={`absolute left-1/2 -translate-x-1/2 bottom-0 right-0 top-0`}>
+        <div className={`absolute top-0 right-0 bottom-0 left-1/2 -translate-x-1/2`}>
           <Loader explanation="Creating..." />
         </div>
       )}
       {props.image && (
         <div
           className={cn(
-            drawBackground ? "absolute left-1/2 -translate-x-1/2 " : "relative left-0",
-            "bottom-0 right-0 top-0",
+            drawBackground ? "absolute left-1/2 -translate-x-1/2" : "relative left-0",
+            "top-0 right-0 bottom-0",
             props.roundFull ? "rounded-full" : "rounded-xl",
             props.hideBorder ? "" : "border-2",
             "aspect-square w-full",

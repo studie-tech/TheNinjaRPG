@@ -1,14 +1,19 @@
-import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { errorResponse, baseServerResponse } from "../trpc";
-import { fetchUser } from "@/routers/profile";
-import { eq, or, and, gte, sql, desc } from "drizzle-orm";
+import { and, desc, eq, gte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { userData, bankTransfers, dailyBankInterest } from "@/drizzle/schema";
+import { z } from "zod";
 import { RYO_CAP } from "@/drizzle/constants";
+import { bankTransfers, dailyBankInterest, userData } from "@/drizzle/schema";
+import { fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "../trpc";
 
 export const bankRouter = createTRPCRouter({
   toBank: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Deposit ryo from pocket to bank" } })
     .input(z.object({ amount: z.number().min(0) }))
     .output(
       baseServerResponse.extend({
@@ -48,6 +53,7 @@ export const bankRouter = createTRPCRouter({
       };
     }),
   toPocket: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Withdraw ryo from bank to pocket" } })
     .input(z.object({ amount: z.number().min(0) }))
     .output(
       baseServerResponse.extend({
@@ -87,6 +93,12 @@ export const bankRouter = createTRPCRouter({
       };
     }),
   transfer: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Transfer ryo from your bank to another user",
+      },
+    })
     .input(z.object({ amount: z.number().min(0), targetId: z.string() }))
     .output(
       baseServerResponse.extend({
@@ -135,14 +147,15 @@ export const bankRouter = createTRPCRouter({
       };
     }),
   getGraph: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get bank transfer graph data" } })
     .input(
       z
         .object({
-          minAmount: z.number().min(1).default(100),
-          dayLimit: z.number().min(1).max(365).default(30),
+          minAmount: z.number().min(1).prefault(100),
+          dayLimit: z.number().min(1).max(365).prefault(30),
         })
         .optional()
-        .default({}),
+        .prefault({}),
     )
     .query(async ({ ctx, input }) => {
       const { minAmount = 100, dayLimit = 30 } = input;
@@ -170,6 +183,9 @@ export const bankRouter = createTRPCRouter({
       return transfers;
     }),
   getTransfers: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get paginated bank transfer history" },
+    })
     .input(
       z.object({
         senderId: z.string().optional().nullish(),
@@ -200,31 +216,36 @@ export const bankRouter = createTRPCRouter({
         nextCursor: nextCursor,
       };
     }),
-  getPendingInterest: protectedProcedure.query(async ({ ctx }) => {
-    // Query
-    const pendingInterest = await ctx.drizzle.query.dailyBankInterest.findMany({
-      where: and(
-        eq(dailyBankInterest.userId, ctx.userId),
-        eq(dailyBankInterest.claimed, false),
-      ),
-      columns: {
-        id: true,
-        date: true,
-        amount: true,
-      },
-    });
-    // Derived
-    const totalPending = pendingInterest.reduce(
-      (sum, record) => sum + record.amount,
-      0,
-    );
-    // Return
-    return {
-      totalPending,
-      records: pendingInterest,
-    };
-  }),
+  getPendingInterest: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get pending daily bank interest" } })
+    .query(async ({ ctx }) => {
+      // Query
+      const pendingInterest = await ctx.drizzle.query.dailyBankInterest.findMany({
+        where: and(
+          eq(dailyBankInterest.userId, ctx.userId),
+          eq(dailyBankInterest.claimed, false),
+        ),
+        columns: {
+          id: true,
+          date: true,
+          amount: true,
+        },
+      });
+      // Derived
+      const totalPending = pendingInterest.reduce(
+        (sum, record) => sum + record.amount,
+        0,
+      );
+      // Return
+      return {
+        totalPending,
+        records: pendingInterest,
+      };
+    }),
   claimInterest: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Claim accumulated daily bank interest" },
+    })
     .output(
       baseServerResponse.extend({
         data: z.object({ bank: z.number(), claimedAmount: z.number() }).optional(),

@@ -1,40 +1,40 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import Countdown from "@/layout/Countdown";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import { showMutationToast, showRewardToast } from "@/libs/toast";
-import type { GenericObject } from "@/layout/ItemWithEffects";
+import {
+  Check,
+  CirclePlay,
+  Clock,
+  DoorOpen,
+  Gift,
+  History,
+  Loader2,
+  MapPin,
+  Skull,
+  Swords,
+  TimerOff,
+  Trophy,
+  Users,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import {
-  Swords,
-  Users,
-  Trophy,
-  Clock,
-  Gift,
-  Check,
-  MapPin,
-  DoorOpen,
-  CirclePlay,
-  Loader2,
-  History,
-  Skull,
-  TimerOff,
-} from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
-import { useRequiredUserData } from "@/utils/UserContext";
 import { Progress } from "@/components/ui/progress";
-import { calculatePercent } from "@/utils/math";
-import { secondsFromDate } from "@/utils/time";
-import { cn } from "src/libs/shadui";
-import AvatarImage from "@/layout/Avatar";
-import { getRewardArray } from "@/libs/objectives";
 import {
   RAID_BATTLE_LOBBY_SECONDS,
   RAID_BATTLE_MAX_USERS_PER_TEAM,
 } from "@/drizzle/constants";
+import AvatarImage from "@/layout/Avatar";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import type { GenericObject } from "@/layout/ItemWithEffects";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import { getRewardArray } from "@/libs/objectives";
+import { cn } from "@/libs/shadui";
+import { showMutationToast, showRewardToast } from "@/libs/toast";
+import { calculatePercent } from "@/utils/math";
+import { secondsFromDate } from "@/utils/time";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 interface RaidBrowserProps {
   title?: string;
@@ -177,6 +177,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   );
   const displayedRaids = viewMode === "active" ? availableRaids : completedRaids;
   const userQueue = userQueueData?.inQueue ? userQueueData.queue : null;
+  const userQueueIsClaiming = userQueueData?.isClaiming ?? false;
   const userBuffs = userBuffsData?.buffs ?? [];
   const raidDetails = raidDetailsData?.raid;
   const participation = raidDetailsData?.participation;
@@ -259,7 +260,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
         >
           <div className="p-3">
             {/* View Mode Tabs */}
-            <div className="flex gap-2 mb-4">
+            <div className="mb-4 flex gap-2">
               <Button
                 variant={viewMode === "active" ? "default" : "outline"}
                 size="sm"
@@ -280,7 +281,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
               </Button>
             </div>
 
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="mb-4 text-muted-foreground text-sm">
               {viewMode === "active"
                 ? "Raids are cooperative boss battles where multiple teams fight to deal damage to a shared boss. Damage-based rewards are available to participants."
                 : "View completed raids, check leaderboards, and claim any unclaimed rewards from raids you participated in."}
@@ -302,24 +303,16 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                     <button
                       type="button"
                       key={raid.id}
-                      className={`border rounded-lg p-4 w-full text-left cursor-pointer transition-colors ${
-                        selectedRaidId === raid.id
-                          ? "border-primary bg-primary/5"
-                          : "hover:border-primary/50"
-                      }`}
+                      className={`w-full cursor-pointer rounded-lg border p-4 text-left transition-colors ${selectedRaidId === raid.id ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}
                       onClick={() => handleRaidSelect(raid.id)}
                       aria-pressed={selectedRaidId === raid.id}
                     >
-                      <div className="flex justify-between items-start mb-2">
+                      <div className="mb-2 flex items-start justify-between">
                         <div className="flex flex-col gap-1">
                           <h3 className="font-medium">{raid.name}</h3>
-                          <div className="flex gap-2 flex-wrap">
+                          <div className="flex flex-wrap gap-2">
                             <span
-                              className={`text-xs px-2 py-0.5 rounded ${
-                                raid.raidType === "open"
-                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                                  : "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-                              }`}
+                              className={`rounded px-2 py-0.5 text-xs ${raid.raidType === "open" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"}`}
                             >
                               {raid.raidType === "open"
                                 ? "Open Raid"
@@ -327,11 +320,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                             </span>
                             {isCompleted && (
                               <span
-                                className={`text-xs px-2 py-0.5 rounded flex items-center gap-1 ${
-                                  completionStatus === "boss_defeated"
-                                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
-                                    : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                                }`}
+                                className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs ${completionStatus === "boss_defeated" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"}`}
                               >
                                 {completionStatus === "boss_defeated" ? (
                                   <>
@@ -352,22 +341,22 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                       </div>
 
                       <div className="space-y-2">
-                        <div className="flex justify-between text-sm text-muted-foreground">
+                        <div className="flex justify-between text-muted-foreground text-sm">
                           <span>Boss HP</span>
                           <span>{healthPercent.toFixed(1)}%</span>
                         </div>
                         <Progress value={healthPercent} className="h-2" />
                       </div>
 
-                      <div className="flex justify-between items-center mt-2">
+                      <div className="mt-2 flex items-center justify-between">
                         {raid.raidSector !== null && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1 text-muted-foreground text-xs">
                             <MapPin className="h-3 w-3" />
                             <span>Sector {raid.raidSector}</span>
                           </div>
                         )}
                         {raid.raidEndsAt && (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-muted-foreground text-xs">
                             {isCompleted ? (
                               <>
                                 Ended: {new Date(raid.raidEndsAt).toLocaleDateString()}
@@ -385,7 +374,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
                       {/* Show if user participated in completed raid */}
                       {isCompleted && raid.userParticipation && (
-                        <div className="mt-2 pt-2 border-t text-xs text-muted-foreground">
+                        <div className="mt-2 border-t pt-2 text-muted-foreground text-xs">
                           You dealt{" "}
                           <span className="font-medium text-foreground">
                             {raid.userParticipation.damageDealt.toLocaleString()}
@@ -398,7 +387,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                 })}
               </div>
             ) : (
-              <p className="text-center text-muted-foreground py-4">
+              <p className="py-4 text-center text-muted-foreground">
                 {viewMode === "active"
                   ? "No raids are currently available."
                   : "No completed raids found."}
@@ -419,11 +408,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
             {/* Completed Raid Banner */}
             {isViewingCompletedRaid && (
               <div
-                className={`p-3 rounded-lg flex items-center gap-2 ${
-                  (raidDetails.raidBossCurrentHealth ?? 0) <= 0
-                    ? "bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800"
-                    : "bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800"
-                }`}
+                className={`flex items-center gap-2 rounded-lg p-3 ${(raidDetails.raidBossCurrentHealth ?? 0) <= 0 ? "border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950" : "border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950"}`}
               >
                 {(raidDetails.raidBossCurrentHealth ?? 0) <= 0 ? (
                   <>
@@ -432,7 +417,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                       <p className="font-medium text-emerald-900 dark:text-emerald-100">
                         Raid Completed - Boss Defeated!
                       </p>
-                      <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                      <p className="text-emerald-700 text-sm dark:text-emerald-300">
                         The raid boss was successfully defeated. Claim your rewards
                         below!
                       </p>
@@ -445,7 +430,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                       <p className="font-medium text-red-900 dark:text-red-100">
                         Raid Ended - Time Expired
                       </p>
-                      <p className="text-sm text-red-700 dark:text-red-300">
+                      <p className="text-red-700 text-sm dark:text-red-300">
                         The raid timer ran out before the boss was defeated. You can
                         still claim any rewards you earned!
                       </p>
@@ -503,8 +488,8 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
             {/* Exclusive Raid Info - only show for active raids */}
             {raidDetails.raidType === "exclusive" && !isViewingCompletedRaid && (
-              <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 p-3 rounded-lg text-sm">
-                <p className="font-medium text-amber-900 dark:text-amber-100 mb-1">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950">
+                <p className="mb-1 font-medium text-amber-900 dark:text-amber-100">
                   Exclusive Raid Stakes
                 </p>
                 <p className="text-amber-800 dark:text-amber-200">
@@ -518,7 +503,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
             {/* User participation stats */}
             {participation && (
-              <div className="bg-muted p-3 rounded-lg">
+              <div className="rounded-lg bg-muted p-3">
                 <p className="text-sm">
                   <strong>Your stats:</strong>{" "}
                   {participation.damageDealt.toLocaleString()} damage dealt in{" "}
@@ -530,7 +515,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
             {/* Raid Teams Display - Shows all active teams (only for active raids) */}
             {!isViewingCompletedRaid &&
               (viewOnly ? (
-                <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3 rounded-lg">
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950">
                   <div className="flex items-center gap-2 text-blue-900 dark:text-blue-100">
                     <MapPin className="h-5 w-5" />
                     <p className="text-sm">
@@ -546,6 +531,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                   maxTeams={maxTeams}
                   userId={userData.userId}
                   userInQueue={userInSelectedRaidQueue}
+                  userTeamIsClaiming={userQueueIsClaiming}
                   onJoinTeam={handleJoinQueue}
                   onCreateTeam={() => handleJoinQueue()}
                   onLeave={handleLeaveQueue}
@@ -558,8 +544,8 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
             {/* Reward Thresholds */}
             {thresholds.length > 0 && (
-              <div className="border rounded-lg p-3">
-                <h4 className="font-medium mb-2 flex items-center gap-2">
+              <div className="rounded-lg border p-3">
+                <h4 className="mb-2 flex items-center gap-2 font-medium">
                   <Gift className="h-4 w-4" />
                   Damage Thresholds
                 </h4>
@@ -574,35 +560,27 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                     return (
                       <div
                         key={threshold.id}
-                        className={`text-sm p-3 rounded border ${
-                          hasMetThreshold && !alreadyClaimed
-                            ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                            : "border-transparent"
-                        }`}
+                        className={`rounded border p-3 text-sm ${hasMetThreshold && !alreadyClaimed ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20" : "border-transparent"}`}
                       >
-                        <div className="flex justify-between items-start">
+                        <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="mb-1 flex items-center gap-2">
                               <span
-                                className={`font-medium ${
-                                  hasMetThreshold
-                                    ? "text-green-600 dark:text-green-400"
-                                    : ""
-                                }`}
+                                className={`font-medium ${hasMetThreshold ? "text-green-600 dark:text-green-400" : ""}`}
                               >
                                 Tier {idx + 1}:{" "}
                                 {threshold.damageRequired.toLocaleString()} damage
                               </span>
                             </div>
                             {rewardList.length > 0 && (
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-muted-foreground text-xs">
                                 {rewardList.join(" • ")}
                               </p>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 ml-2">
+                          <div className="ml-2 flex items-center gap-2">
                             {alreadyClaimed ? (
-                              <span className="text-muted-foreground flex items-center gap-1">
+                              <span className="flex items-center gap-1 text-muted-foreground">
                                 <Check className="h-4 w-4" />
                                 Claimed
                               </span>
@@ -612,7 +590,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                                 onClick={() => handleClaimReward(threshold.id)}
                                 disabled={claimPending}
                               >
-                                <Gift className="h-3 w-3 mr-1" />
+                                <Gift className="mr-1 h-3 w-3" />
                                 {claimPending ? "Claiming..." : "Claim"}
                               </Button>
                             ) : (
@@ -635,8 +613,8 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
             {/* Leaderboard */}
             {leaderboard.length > 0 && (
-              <div className="border rounded-lg p-3">
-                <h4 className="font-medium mb-2 flex items-center gap-2">
+              <div className="rounded-lg border p-3">
+                <h4 className="mb-2 flex items-center gap-2 font-medium">
                   <Trophy className="h-4 w-4" />
                   Damage Leaderboard
                 </h4>
@@ -647,19 +625,19 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                     return (
                       <div
                         key={entry.id}
-                        className="flex items-center justify-between p-2 bg-muted/50 rounded"
+                        className="flex items-center justify-between rounded bg-muted/50 p-2"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="font-bold w-6">{entry.rank}</span>
+                          <span className="w-6 font-bold">{entry.rank}</span>
                           <AvatarImage
                             href={avatar}
                             alt={username}
                             size={24}
-                            className="w-6 h-6"
+                            className="h-6 w-6"
                           />
                           <span className="text-sm">{username}</span>
                         </div>
-                        <span className="text-sm font-medium">
+                        <span className="font-medium text-sm">
                           {entry.damageDealt.toLocaleString()}
                         </span>
                       </div>
@@ -717,6 +695,7 @@ interface RaidTeam {
   createdAt: Date;
   members: RaidTeamMember[];
   canJoin: boolean;
+  isClaiming?: boolean;
 }
 
 interface RaidTeamsDisplayProps {
@@ -724,6 +703,7 @@ interface RaidTeamsDisplayProps {
   maxTeams: number;
   userId: string;
   userInQueue: boolean;
+  userTeamIsClaiming: boolean;
   onJoinTeam: (teamId: string) => void;
   onCreateTeam: () => void;
   onLeave: () => void;
@@ -738,6 +718,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
   maxTeams,
   userId,
   userInQueue,
+  userTeamIsClaiming,
   onJoinTeam,
   onCreateTeam,
   onLeave,
@@ -753,7 +734,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-semibold">
+        <div className="flex items-center gap-2 font-semibold text-sm">
           <Users className="h-4 w-4 text-orange-500" />
           <span>
             Active Teams ({activeTeams.length}/{maxTeams})
@@ -761,7 +742,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
         </div>
         {canCreateNewTeam && (
           <Button size="sm" onClick={onCreateTeam} disabled={isJoining}>
-            <Swords className="h-4 w-4 mr-2" />
+            <Swords className="mr-2 h-4 w-4" />
             {isJoining ? "Creating..." : "Create Team"}
           </Button>
         )}
@@ -770,12 +751,12 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
       {/* Teams List */}
       {activeTeams.length === 0 ? (
         <div className="rounded-lg border bg-card p-4 text-center">
-          <p className="text-sm text-muted-foreground mb-3">
+          <p className="mb-3 text-muted-foreground text-sm">
             No active teams. Create a team to start fighting the raid boss!
           </p>
           {!userInQueue && (
             <Button onClick={onCreateTeam} disabled={isJoining}>
-              <Swords className="h-4 w-4 mr-2" />
+              <Swords className="mr-2 h-4 w-4" />
               {isJoining ? "Creating..." : "Create Team"}
             </Button>
           )}
@@ -803,19 +784,19 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
               >
                 {/* Team Header */}
                 <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
+                  <div className="flex items-center gap-2 font-semibold text-sm">
                     <span>
                       {isUserTeam ? "Your Team" : "Team"} ({team.members.length}/
                       {RAID_BATTLE_MAX_USERS_PER_TEAM})
                     </span>
                   </div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-muted-foreground text-sm">
                     <Countdown targetDate={startTime} timeDiff={0} onEndShow="Ready!" />
                   </div>
                 </div>
 
                 {/* Team Slots */}
-                <div className="flex flex-wrap gap-2 mb-4">
+                <div className="mb-4 flex flex-wrap gap-2">
                   {team.members.map((member) => (
                     <RaidUserSlot
                       key={member.visibleId}
@@ -824,9 +805,9 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                       isLeader={member.slot === 0}
                     />
                   ))}
-                  {Array.from({ length: emptySlots }).map((_, i) => (
+                  {Array.from({ length: emptySlots }).map((_, emptyIdx) => (
                     <RaidEmptySlot
-                      key={`empty-${i}`}
+                      key={`empty-slot-${team.id}-${emptyIdx}`}
                       canJoin={team.canJoin && !userInQueue}
                       onJoin={() => onJoinTeam(team.id)}
                       isJoining={isJoining}
@@ -837,6 +818,13 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                 {/* Action Buttons for user's team */}
                 {isUserTeam && (
                   <div className="flex flex-col items-center gap-2 border-t pt-3 sm:flex-row sm:justify-end">
+                    {/* Show claiming state message */}
+                    {userTeamIsClaiming && (
+                      <div className="mr-auto flex items-center gap-2 text-amber-600 text-sm dark:text-amber-400">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Starting battle...</span>
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
@@ -848,10 +836,10 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                         {isLeaving ? "Leaving..." : "Leave"}
                       </Button>
 
-                      {isUserLeader && (
+                      {isUserLeader && !userTeamIsClaiming && (
                         <Button size="sm" onClick={onStart} disabled={isStarting}>
                           {isStarting ? (
-                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                           ) : (
                             <CirclePlay className="mr-1 h-4 w-4" />
                           )}
@@ -878,9 +866,15 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                 )}
 
                 {/* Info for non-leaders */}
-                {isUserTeam && !isUserLeader && (
-                  <p className="mt-2 text-center text-xs text-muted-foreground">
+                {isUserTeam && !isUserLeader && !userTeamIsClaiming && (
+                  <p className="mt-2 text-center text-muted-foreground text-xs">
                     Waiting for team leader to start the battle
+                  </p>
+                )}
+                {isUserTeam && !isUserLeader && userTeamIsClaiming && (
+                  <p className="mt-2 text-center text-amber-600 text-xs dark:text-amber-400">
+                    Battle is being initialized... If this persists, you can leave and
+                    rejoin.
                   </p>
                 )}
               </div>
@@ -902,23 +896,23 @@ interface RaidUserSlotProps {
 
 const RaidUserSlot: React.FC<RaidUserSlotProps> = ({ username, avatar, isLeader }) => {
   return (
-    <div className="flex flex-col items-center gap-1 w-16">
-      <div className="relative w-12 h-12 flex-shrink-0">
+    <div className="flex w-16 flex-col items-center gap-1">
+      <div className="relative h-12 w-12 flex-shrink-0">
         <AvatarImage
           href={avatar}
           alt={username}
           size={48}
           hover_effect={true}
           priority
-          className="w-full h-full object-cover rounded-md"
+          className="h-full w-full rounded-md object-cover"
         />
         {isLeader && (
-          <div className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+          <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-white text-xs">
             ★
           </div>
         )}
       </div>
-      <span className="text-xs text-muted-foreground max-w-[60px] truncate">
+      <span className="max-w-[60px] truncate text-muted-foreground text-xs">
         {username}
       </span>
     </div>
@@ -939,11 +933,11 @@ const RaidEmptySlot: React.FC<RaidEmptySlotProps> = ({
   isJoining = false,
 }) => {
   return (
-    <div className="flex flex-col items-center gap-1 w-16">
+    <div className="flex w-16 flex-col items-center gap-1">
       <button
         type="button"
         className={cn(
-          "flex h-12 w-12 items-center justify-center rounded-md border-2 border-dashed border-gray-300 text-gray-400 text-sm flex-shrink-0 bg-transparent",
+          "flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-md border-2 border-gray-300 border-dashed bg-transparent text-gray-400 text-sm",
           canJoin &&
             !isJoining &&
             "cursor-pointer hover:border-orange-500 hover:bg-orange-50 hover:text-orange-500 dark:hover:bg-orange-950/30",
@@ -956,7 +950,7 @@ const RaidEmptySlot: React.FC<RaidEmptySlotProps> = ({
       >
         {isJoining ? <Loader2 className="h-4 w-4 animate-spin" /> : "?"}
       </button>
-      <span className="text-xs text-muted-foreground">
+      <span className="text-muted-foreground text-xs">
         {canJoin ? "Join" : "Empty"}
       </span>
     </div>

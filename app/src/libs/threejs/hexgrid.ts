@@ -1,10 +1,10 @@
 import {
-  BufferGeometry,
   BufferAttribute,
-  Mesh,
+  BufferGeometry,
   Line,
   type LineBasicMaterial,
   type Material,
+  Mesh,
 } from "three";
 import { HEX_ASPECT_RATIO, HEX_STACKING_DISPLACEMENT } from "@/drizzle/constants";
 import type { TerrainHex } from "../hexgrid";
@@ -57,14 +57,14 @@ export const calculateHexUVCoordinates = (
 
   // Ground UV coordinates
   const canonicalGroundCorners = [
-    { x: corners?.[0]?.x!, y: corners?.[0]?.y! - length },
-    { x: corners?.[1]?.x!, y: corners?.[1]?.y! - length },
-    { x: corners?.[1]?.x!, y: corners?.[1]?.y! },
-    { x: corners?.[0]?.x!, y: corners?.[0]?.y! },
-    { x: corners?.[5]?.x!, y: corners?.[5]?.y! },
-    { x: corners?.[4]?.x!, y: corners?.[4]?.y! },
-    { x: corners?.[4]?.x!, y: corners?.[4]?.y! - length },
-    { x: corners?.[5]?.x!, y: corners?.[5]?.y! - length },
+    { x: corners?.[0]?.x ?? 0, y: (corners?.[0]?.y ?? 0) - length },
+    { x: corners?.[1]?.x ?? 0, y: (corners?.[1]?.y ?? 0) - length },
+    { x: corners?.[1]?.x ?? 0, y: corners?.[1]?.y ?? 0 },
+    { x: corners?.[0]?.x ?? 0, y: corners?.[0]?.y ?? 0 },
+    { x: corners?.[5]?.x ?? 0, y: corners?.[5]?.y ?? 0 },
+    { x: corners?.[4]?.x ?? 0, y: corners?.[4]?.y ?? 0 },
+    { x: corners?.[4]?.x ?? 0, y: (corners?.[4]?.y ?? 0) - length },
+    { x: corners?.[5]?.x ?? 0, y: (corners?.[5]?.y ?? 0) - length },
   ];
   const minX = Math.min(...canonicalGroundCorners.map((c) => c.x));
   const maxX = Math.max(...canonicalGroundCorners.map((c) => c.x));
@@ -153,14 +153,14 @@ export const createGroundCorners = (
   const tileLength =
     length ?? Math.abs((corners?.[5]?.x || 0) - (corners?.[0]?.x || 0)) / 3;
   return [
-    { x: corners?.[0]?.x!, y: corners?.[0]?.y! - tileLength },
-    { x: corners?.[1]?.x!, y: corners?.[1]?.y! - tileLength },
-    { x: corners?.[1]?.x!, y: corners?.[1]?.y! + offsetLength },
-    { x: corners?.[0]?.x!, y: corners?.[0]?.y! + offsetLength },
-    { x: corners?.[5]?.x!, y: corners?.[5]?.y! + offsetLength },
-    { x: corners?.[4]?.x!, y: corners?.[4]?.y! + offsetLength },
-    { x: corners?.[4]?.x!, y: corners?.[4]?.y! - tileLength },
-    { x: corners?.[5]?.x!, y: corners?.[5]?.y! - tileLength },
+    { x: corners?.[0]?.x ?? 0, y: (corners?.[0]?.y ?? 0) - tileLength },
+    { x: corners?.[1]?.x ?? 0, y: (corners?.[1]?.y ?? 0) - tileLength },
+    { x: corners?.[1]?.x ?? 0, y: (corners?.[1]?.y ?? 0) + offsetLength },
+    { x: corners?.[0]?.x ?? 0, y: (corners?.[0]?.y ?? 0) + offsetLength },
+    { x: corners?.[5]?.x ?? 0, y: (corners?.[5]?.y ?? 0) + offsetLength },
+    { x: corners?.[4]?.x ?? 0, y: (corners?.[4]?.y ?? 0) + offsetLength },
+    { x: corners?.[4]?.x ?? 0, y: (corners?.[4]?.y ?? 0) - tileLength },
+    { x: corners?.[5]?.x ?? 0, y: (corners?.[5]?.y ?? 0) - tileLength },
   ] as const;
 };
 

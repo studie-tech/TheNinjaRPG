@@ -3,8 +3,8 @@
 // Texture-offset core logic inspired by Lee Stemkoski
 // https://github.com/stemkoski/stemkoski.github.io/blob/master/Three.js/Texture-Animation.html
 
-import { SpriteMaterial, Sprite, RepeatWrapping } from "three";
 import type { Texture } from "three";
+import { RepeatWrapping, Sprite, SpriteMaterial } from "three";
 
 /* ------------------------------------------------------------------ *
  *  Types & helpers

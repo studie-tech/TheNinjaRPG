@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from "react";
-import Loader from "./Loader";
-import ElementImage from "@/layout/ElementImage";
-import { api } from "@/app/_trpc/client";
-import { groupBy } from "@/utils/grouping";
-import { insertComponentsIntoText } from "@/utils/string";
-import { cn } from "src/libs/shadui";
-import { parseHtml } from "@/utils/parse";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { canViewFullBattleLog } from "@/utils/permissions";
-import { getUserFederalStatus } from "@/utils/paypal";
-import { BATTLE_LOG_FULL_LIMIT, BATTLE_LOG_DEFAULT_LIMIT } from "@/drizzle/constants";
-import type { CombatResult } from "@/libs/combat/types";
-import type { ActionEffect } from "@/libs/combat/types";
 import { ChevronsDown } from "lucide-react";
+import type React from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { BATTLE_LOG_DEFAULT_LIMIT, BATTLE_LOG_FULL_LIMIT } from "@/drizzle/constants";
+import ElementImage from "@/layout/ElementImage";
+import type { ActionEffect, CombatResult } from "@/libs/combat/types";
+import { cn } from "@/libs/shadui";
+import { groupBy } from "@/utils/grouping";
+import { parseHtml } from "@/utils/parse";
+import { getUserFederalStatus } from "@/utils/paypal";
+import { canViewFullBattleLog } from "@/utils/permissions";
+import { insertComponentsIntoText } from "@/utils/string";
+import { useRequiredUserData } from "@/utils/UserContext";
+import Loader from "./Loader";
 
 interface CombatHistoryProps {
   battleId: string;
@@ -38,7 +38,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
     {
       battleId: battleId,
       refreshKey: battleVersion ?? 0,
-      checkBattle: results ? true : false,
+      checkBattle: !!results,
       limit: canViewFull ? BATTLE_LOG_FULL_LIMIT : BATTLE_LOG_DEFAULT_LIMIT,
     },
     {
@@ -89,7 +89,8 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
     }
   }, [maxRound]);
 
-  sortedGroups?.forEach((entries, round) => {
+  sortedGroups?.forEach((entries, roundKey) => {
+    const round = roundKey; // round is a meaningful identifier (round number), not just an index
     const isOpen = openRounds.includes(round);
     const roundTime = entries[0]?.createdAt;
     const timeString = roundTime
@@ -101,9 +102,11 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
       : "";
 
     const roundHeader = (
-      <div
+      <button
+        type="button"
+        key={`header-${round}`}
         className={cn(
-          "flex items-center gap-2 py-1 px-1 rounded-md hover:bg-slate-200 cursor-pointer",
+          "flex w-full cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-slate-200",
           isOpen && "bg-slate-300",
         )}
         onClick={() => {
@@ -112,18 +115,18 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
           );
         }}
       >
-        <div className="w-2 h-2 rounded-full bg-gray-700" />
+        <div className="h-2 w-2 rounded-full bg-gray-700" />
         <ChevronsDown
           className={cn(
-            "h-4 w-4 transition-transform text-gray-700",
+            "h-4 w-4 text-gray-700 transition-transform",
             !isOpen && "-rotate-90",
           )}
         />
-        <span className="text-sm font-semibold text-gray-800">Round {round}</span>
+        <span className="font-semibold text-gray-800 text-sm">Round {round}</span>
         {timeString && (
-          <span className="text-xs text-gray-500 ml-auto">{timeString}</span>
+          <span className="ml-auto text-gray-500 text-xs">{timeString}</span>
         )}
-      </div>
+      </button>
     );
 
     const latestRoundBattleVersion = entries?.sort(
@@ -131,7 +134,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
     )?.[0]?.battleVersion;
 
     history.push(
-      <li key={`r-${round}`} className="pl-2 relative">
+      <li key={`r-${round}`} className="relative pl-2">
         {roundHeader}
         <div className="flex flex-col gap-1">
           {isOpen &&
@@ -146,9 +149,9 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
                 return (
                   <div
                     key={`v-${entry.battleVersion}`}
-                    className="text-sm font-normal text-gray-600 pl-4 py-1"
+                    className="py-1 pl-4 font-normal text-gray-600 text-sm"
                   >
-                    {isNewUser && !isLastEntry ? <hr className="mb-3 mt-0" /> : null}
+                    {isNewUser && !isLastEntry ? <hr className="mt-0 mb-3" /> : null}
                     {userData?.showBattleDescription ? (
                       <p>
                         #{entry.battleVersion}: {parseHtml(entry.description)}
@@ -156,7 +159,8 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
                     ) : (
                       ""
                     )}
-                    {effects?.map((effect, i) => {
+                    {effects?.map((effect, effectIdx) => {
+                      const effectKey = `${entry.battleVersion}-${effectIdx}`;
                       const color =
                         effect.color === "red"
                           ? "text-red-500"
@@ -177,57 +181,61 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
                                         : "text-black";
                       const text = insertComponentsIntoText(effect.txt, {
                         Highest: (
-                          <span key={`${round}-${i}-H`} className="text-stone-500">
+                          <span key={`${effectKey}-H`} className="text-stone-500">
                             Highest
                           </span>
                         ),
                         Taijutsu: (
-                          <span key={`${round}-${i}-T`} className="text-green-600">
+                          <span key={`${effectKey}-T`} className="text-green-600">
                             Taijutsu
                           </span>
                         ),
                         Bukijutsu: (
-                          <span key={`${round}-${i}-B`} className="text-red-600">
+                          <span key={`${effectKey}-B`} className="text-red-600">
                             Bukijutsu
                           </span>
                         ),
                         Ninjutsu: (
-                          <span key={`${round}-${i}-N`} className="text-blue-600">
+                          <span key={`${effectKey}-N`} className="text-blue-600">
                             Ninjutsu
                           </span>
                         ),
                         Genjutsu: (
-                          <span key={`${round}-${i}-G`} className="text-purple-600">
+                          <span key={`${effectKey}-G`} className="text-purple-600">
                             Genjutsu
                           </span>
                         ),
                         Strength: (
-                          <span key={`${round}-${i}-Str`} className="text-blue-800">
+                          <span key={`${effectKey}-Str`} className="text-blue-800">
                             Strength
                           </span>
                         ),
                         Intelligence: (
-                          <span key={`${round}-${i}-I`} className="text-teal-600">
+                          <span key={`${effectKey}-I`} className="text-teal-600">
                             Intelligence
                           </span>
                         ),
                         Willpower: (
-                          <span key={`${round}-${i}-W`} className="text-orange-600">
+                          <span key={`${effectKey}-W`} className="text-orange-600">
                             Willpower
                           </span>
                         ),
                         Speed: (
-                          <span key={`${round}-${i}-Spd`} className="text-cyan-600">
+                          <span key={`${effectKey}-Spd`} className="text-cyan-600">
                             Speed
                           </span>
                         ),
                       });
                       return (
-                        <div key={`combathistory-${i}`} className={cn(color)}>
+                        <div key={effectKey} className={cn(color)}>
                           - {text}{" "}
-                          <div className="pl-2 flex flex-row items-center gap-1">
-                            {effect.types?.map((t, ti) => (
-                              <ElementImage key={ti} element={t} className="w-5 h-5" />
+                          <div className="flex flex-row items-center gap-1 pl-2">
+                            {effect.types?.map((t, i) => (
+                              <ElementImage
+                                key={`${t}-${i}`}
+                                element={t}
+                                className="h-5 w-5"
+                              />
                             ))}
                           </div>
                         </div>
@@ -243,9 +251,9 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
 
   // Show component
   return (
-    <div className="relative flex flex-col rounded-lg border bg-slate-100 pt-2 overflow-auto">
+    <div className="relative flex flex-col overflow-auto rounded-lg border bg-slate-100 pt-2">
       {isFetching && (
-        <div className="absolute right-2 top-2">
+        <div className="absolute top-2 right-2">
           <Loader />
         </div>
       )}

@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import type React from "react";
 import LayoutCore4 from "@/components/layout/core4_default";
+
 // Used for landing page layout A/B test (disabled for now)
 // import { usePathname } from "next/navigation";
 // import { useUser } from "@clerk/nextjs";

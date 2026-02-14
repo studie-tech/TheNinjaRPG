@@ -1,8 +1,11 @@
-import { drizzleDB } from "@/server/db";
-import { anbuSquad } from "@/drizzle/schema";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { lockWithWeeklyTimer, handleEndpointError } from "@/libs/gamesettings";
 import { cookies } from "next/headers";
+import { anbuSquad } from "@/drizzle/schema";
+import {
+  handleEndpointError,
+  lockWithWeeklyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
+import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "weekly-pvp";
 
@@ -25,6 +28,6 @@ export async function GET() {
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

@@ -1,9 +1,9 @@
-import React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "src/libs/shadui";
+import type React from "react";
+import { cn } from "@/libs/shadui";
 
 const durabilityBarVariants = cva(
-  "absolute bg-gray-800 rounded-sm border border-gray-600",
+  "absolute rounded-sm border border-gray-600 bg-gray-800",
   {
     variants: {
       position: {

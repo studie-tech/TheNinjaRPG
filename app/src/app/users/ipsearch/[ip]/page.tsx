@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, use } from "react";
-import ContentBox from "@/layout/ContentBox";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import Loader from "@/layout/Loader";
 import { ExternalLink } from "lucide-react";
+import { use, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showUserRank } from "@/libs/profile";
-import { useUserData } from "@/utils/UserContext";
 import type { ArrayElement } from "@/utils/typeutils";
+import { useUserData } from "@/utils/UserContext";
 
 export default function PublicProfile(props: { params: Promise<{ ip: string }> }) {
   const params = use(props.params);
@@ -34,8 +34,7 @@ export default function PublicProfile(props: { params: Promise<{ ip: string }> }
     },
   );
   const allUsers = users?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .map((user) => ({
       ...user,
       info: (

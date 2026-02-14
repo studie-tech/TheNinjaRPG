@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
-import { drizzleDB } from "@/server/db";
 import { cookies } from "next/headers";
+import { drizzleDB } from "@/server/db";
 
 export async function GET() {
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)

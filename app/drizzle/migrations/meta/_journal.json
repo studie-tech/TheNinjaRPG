@@ -2332,6 +2332,41 @@
       "when": 1769744186566,
       "tag": "0332_cheerful_switch",
       "breakpoints": false
+    },
+    {
+      "idx": 333,
+      "version": "5",
+      "when": 1769929105966,
+      "tag": "0333_even_gorgon",
+      "breakpoints": false
+    },
+    {
+      "idx": 334,
+      "version": "5",
+      "when": 1769937169930,
+      "tag": "0334_sticky_sleeper",
+      "breakpoints": false
+    },
+    {
+      "idx": 335,
+      "version": "5",
+      "when": 1770100534127,
+      "tag": "0335_acoustic_iceman",
+      "breakpoints": false
+    },
+    {
+      "idx": 336,
+      "version": "5",
+      "when": 1770292239142,
+      "tag": "0336_windy_joystick",
+      "breakpoints": false
+    },
+    {
+      "idx": 337,
+      "version": "5",
+      "when": 1770400000000,
+      "tag": "0337_tower_defense_max_levels",
+      "breakpoints": false
     }
   ]
 }

@@ -1,40 +1,42 @@
 "use client";
 
-import { capUserStats } from "@/libs/profile";
-import React, { useState } from "react";
-import Image from "@/layout/Image";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { noCase } from "change-case";
+import type React from "react";
+import { useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormLabel,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import Confirm2 from "@/layout/Confirm2";
-import { Button } from "@/components/ui/button";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useLocalStorage } from "@/hooks/localstorage";
-import { useForm, useWatch } from "react-hook-form";
-import { showMutationToast } from "@/libs/toast";
-import { useTutorialStep } from "@/hooks/tutorial";
-import { round } from "@/utils/math";
-import { createStatSchema, type StatSchemaType } from "@/validators/combat";
-import type { UserWithRelations } from "@/routers/profile";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
-import SliderField from "@/layout/SliderField";
-import NavTabs from "@/layout/NavTabs";
-import ContentBox from "@/layout/ContentBox";
-import { noCase } from "change-case";
-import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
-  IMG_TRAIN_NIN_OFF,
-  IMG_TRAIN_GEN_OFF,
-  IMG_TRAIN_TAI_OFF,
   IMG_TRAIN_BUKI_OFF,
+  IMG_TRAIN_GEN_OFF,
+  IMG_TRAIN_NIN_OFF,
+  IMG_TRAIN_TAI_OFF,
 } from "@/drizzle/constants";
+import { useLocalStorage } from "@/hooks/localstorage";
+import { useTutorialStep } from "@/hooks/tutorial";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import NavTabs from "@/layout/NavTabs";
+import SliderField from "@/layout/SliderField";
+import { capUserStats } from "@/libs/profile";
+import { showMutationToast } from "@/libs/toast";
+import type { UserWithRelations } from "@/routers/profile";
+import { round } from "@/utils/math";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { createStatSchema, type StatSchemaType } from "@/validators/combat";
 
 interface StatDistributionProps {
   id?: string;
@@ -107,7 +109,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
   const content = (
     <>
       {!showWrapper && navTabs && (
-        <div className="flex justify-end mb-2">{navTabs}</div>
+        <div className="mb-2 flex justify-end">{navTabs}</div>
       )}
       {tab === "Simple" && !isRedistribution ? (
         <SimpleDistribution
@@ -160,7 +162,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   const { userData, availableStats, onAccept, isRedistribution } = props;
 
   // Create stat schema to get caps
-  const statSchema = createStatSchema(
+  const { schema: statSchema, maxValues } = createStatSchema(
     isRedistribution ? 10 : 0,
     isRedistribution ? 10 : 0,
     isRedistribution ? undefined : userData,
@@ -206,7 +208,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   // Check if any stat in the specialization is capped
   const isSpecializationDisabled = (option: (typeof specializationOptions)[number]) => {
     return option.stats.some((stat) => {
-      const maxValue = statSchema.shape[stat]._def.innerType._def.schema.maxValue;
+      const maxValue = maxValues[stat];
       const currentValue = defaultValues[stat] ?? 0;
       return maxValue !== undefined && maxValue !== null && currentValue >= maxValue;
     });
@@ -215,7 +217,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   // Get which stats are capped for display purposes
   const getCappedStats = (option: (typeof specializationOptions)[number]) => {
     return option.stats.filter((stat) => {
-      const maxValue = statSchema.shape[stat]._def.innerType._def.schema.maxValue;
+      const maxValue = maxValues[stat];
       const currentValue = defaultValues[stat] ?? 0;
       return maxValue !== undefined && maxValue !== null && currentValue >= maxValue;
     });
@@ -256,26 +258,22 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
             disabled={isDisabled}
             button={
               <div
-                className={`flex flex-col items-center ${
-                  isDisabled
-                    ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer hover:opacity-70"
-                }`}
+                className={`flex flex-col items-center ${isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:opacity-70"}`}
               >
                 <Image
                   src={option.image}
                   alt={option.name}
                   width={128}
                   height={128}
-                  className="rounded-lg w-full"
+                  className="w-full rounded-lg"
                   priority={true}
                 />
-                <p className="font-bold text-sm text-center mt-2">{option.name}</p>
-                <p className="text-xs text-center text-muted-foreground mt-1">
+                <p className="mt-2 text-center font-bold text-sm">{option.name}</p>
+                <p className="mt-1 text-center text-muted-foreground text-xs">
                   {option.description}
                 </p>
                 {isDisabled && (
-                  <p className="text-xs text-center text-red-500 mt-1 font-semibold">
+                  <p className="mt-1 text-center font-semibold text-red-500 text-xs">
                     Stats maxed
                   </p>
                 )}
@@ -288,7 +286,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
                 This will distribute {availableStats.toLocaleString()} stat points
                 across:
               </p>
-              <ul className="list-disc list-inside mb-2">
+              <ul className="mb-2 list-inside list-disc">
                 {option.stats.map((stat, index) => {
                   const isCapped = cappedStats.includes(stat);
                   const pointsPerStat = Math.floor(availableStats / 4);
@@ -296,8 +294,8 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
                   const points = pointsPerStat + (index < leftoverPoints ? 1 : 0);
                   return (
                     <li
-                      key={stat}
-                      className={`capitalize ${isCapped ? "text-red-500 font-semibold" : ""}`}
+                      key={`${stat}-${index}`}
+                      className={`capitalize ${isCapped ? "font-semibold text-red-500" : ""}`}
                     >
                       {capitalizeFirstLetter(noCase(stat))} (+{points})
                       {isCapped && " (currently maxed)"}
@@ -336,7 +334,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   if (userData) capUserStats(userData);
 
   // Stats Schema
-  const statSchema = createStatSchema(
+  const { schema: statSchema, maxValues } = createStatSchema(
     isRedistribution ? 10 : 0,
     isRedistribution ? 10 : 0,
     isRedistribution ? undefined : userData,
@@ -345,8 +343,8 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   const statNames = Object.keys(defaultValues) as (keyof typeof defaultValues)[];
 
   // Form setup
-  const form = useForm<StatSchemaType>({
-    defaultValues,
+  const form = useForm<z.input<typeof statSchema>, unknown, StatSchemaType>({
+    defaultValues: defaultValues as z.input<typeof statSchema>,
     mode: "all",
     resolver: zodResolver(statSchema),
   });
@@ -385,7 +383,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   // Show component
   return (
     <Form {...form}>
-      <div className="flex items-center justify-end gap-2 mb-4">
+      <div className="mb-4 flex items-center justify-end gap-2">
         <Label htmlFor="input-toggle" className="text-sm">
           Use input boxes
         </Label>
@@ -397,9 +395,8 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
       </div>
       <form className="grid grid-cols-2 gap-2" onSubmit={onSubmit}>
         {statNames.map((stat, i) => {
-          const maxValue = statSchema.shape[stat]._def.innerType._def.schema.maxValue;
-          const minValue =
-            statSchema.shape[stat]._def.innerType._def.schema.minValue ?? 0;
+          const maxValue = maxValues[stat];
+          const minValue = 0;
           const currentValue = Number(formValues[stat] ?? 0);
 
           // Calculate remaining points and dynamic max for this slider
@@ -410,7 +407,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
           if (maxValue && maxValue > 0) {
             return (
               <FormField
-                key={i}
+                key={`${stat}-${i}`}
                 control={form.control}
                 name={stat}
                 render={({ field, fieldState }) => (
@@ -430,7 +427,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                           min={minValue}
                           max={dynamicMax}
                           step={0.01}
-                          value={field.value ?? 0}
+                          value={(field.value as number) ?? 0}
                           onChange={(e) => {
                             const value = parseFloat(e.target.value) || 0;
                             const clampedValue = Math.max(
@@ -467,10 +464,10 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
             );
           } else {
             return (
-              <FormItem className="pt-1" key={i}>
+              <FormItem className="pt-1" key={`${stat}-${i}`}>
                 <FormLabel>{capitalizeFirstLetter(stat)}</FormLabel>
                 <FormControl>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-muted-foreground text-sm">
                     - Max for {capitalizeFirstLetter(userData.rank)}
                   </div>
                 </FormControl>
@@ -481,7 +478,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
         })}
         <Button
           id="create"
-          className="w-full col-span-2 my-1"
+          className="col-span-2 my-1 w-full"
           type="submit"
           disabled={isDisabled}
         >

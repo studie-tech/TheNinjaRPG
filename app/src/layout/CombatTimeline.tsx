@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useMemo, useState, useRef, useEffect } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Users,
-  User,
-  UserX,
   type LucideIcon,
+  User,
+  Users,
+  UserX,
 } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,16 +24,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { BattleAction } from "@/drizzle/schema";
+import { useLocalStorage } from "@/hooks/localstorage";
 import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects, { type GenericObject } from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import { getJutsu, getItem } from "@/libs/combat/util";
-import { useLocalStorage } from "@/hooks/localstorage";
-import { parseHtml } from "@/utils/parse";
 import { availableUserActions } from "@/libs/combat/actions";
 import type { ActionEffect, ReturnedBattle } from "@/libs/combat/types";
-import { cn } from "src/libs/shadui";
-import type { BattleAction } from "@/drizzle/schema";
+import { getItem, getJutsu } from "@/libs/combat/util";
+import { cn } from "@/libs/shadui";
+import { parseHtml } from "@/utils/parse";
 
 type UserFilter = "all" | "user" | "opponents";
 
@@ -215,20 +215,22 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-gray-700" />
           <Clock className="h-4 w-4 text-gray-700" />
-          <span className="text-sm font-semibold text-gray-800">Action Timeline</span>
+          <span className="font-semibold text-gray-800 text-sm">Action Timeline</span>
         </div>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: Mouse enter/leave for tooltip expansion is supplementary to button click */}
         <div
           ref={filterRef}
           className="relative flex rounded-md border bg-slate-200 p-0.5"
           onMouseEnter={() => setFilterExpanded(true)}
           onMouseLeave={() => setFilterExpanded(false)}
         >
-          {filterOptions.map(({ value, icon: Icon, label }) => {
+          {filterOptions.map(({ value, icon: Icon, label }, i) => {
             const isActive = userFilter === value;
             const isVisible = isActive || filterExpanded;
             return (
               <button
-                key={value}
+                type="button"
+                key={`${value}-${i}`}
                 onClick={() => {
                   if (!filterExpanded) {
                     setFilterExpanded(true);
@@ -238,7 +240,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                   }
                 }}
                 className={cn(
-                  "flex items-center gap-1 overflow-hidden rounded text-xs font-medium transition-all duration-200 ease-out",
+                  "flex items-center gap-1 overflow-hidden rounded font-medium text-xs transition-all duration-200 ease-out",
                   isVisible
                     ? "max-w-24 px-2 py-1 opacity-100"
                     : "max-w-0 px-0 py-1 opacity-0",
@@ -272,7 +274,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
           </Button>
 
           {resolvedEntries.length === 0 && (
-            <p className="relative z-10 mt-6 flex-1 text-center text-xs text-gray-600">
+            <p className="relative z-10 mt-6 flex-1 text-center text-gray-600 text-xs">
               No actions recorded yet.
             </p>
           )}
@@ -285,13 +287,14 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
               <React.Fragment key={entry.id}>
                 {idx > 0 && (
                   <div className="relative w-4 flex-none">
-                    <ChevronRight className="absolute left-0 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/70" />
+                    <ChevronRight className="absolute top-1/2 left-0 h-3 w-3 -translate-y-1/2 text-muted-foreground/70" />
                   </div>
                 )}
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
+                        type="button"
                         className={cn(
                           "group relative flex w-20 flex-none flex-col items-center rounded-lg px-1 py-1 text-xs transition",
                           "hover:bg-slate-200",
@@ -319,7 +322,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                                   <TooltipTrigger asChild>
                                     <div
                                       className={cn(
-                                        "absolute -bottom-1 -left-1 flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-bold shadow-sm",
+                                        "absolute -bottom-1 -left-1 flex h-6 w-6 items-center justify-center rounded-full border font-bold text-[10px] shadow-sm",
                                         isNewEffect
                                           ? "border-red-400 bg-red-100 text-red-700"
                                           : "border-green-500 bg-green-100 text-green-700",
@@ -337,7 +340,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                               </TooltipProvider>
                             )}
                             {/* User avatar - bottom right */}
-                            <div className="absolute -bottom-1 -right-1 rounded-full bg-slate-50 shadow-sm group-hover:border-gray-400">
+                            <div className="absolute -right-1 -bottom-1 rounded-full bg-slate-50 shadow-sm group-hover:border-gray-400">
                               {user?.avatar ? (
                                 <ContentImage
                                   image={user.avatar}
@@ -349,7 +352,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                               )}
                             </div>
                           </div>
-                          <div className="mt-4 text-[10px] font-medium text-gray-600">
+                          <div className="mt-4 font-medium text-[10px] text-gray-600">
                             <span className="inline-flex items-center gap-1 whitespace-nowrap">
                               <Clock className="h-3 w-3" />
                               <span>Round {entry.battleRound}</span>
@@ -374,10 +377,10 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
               <DialogHeader>
                 <DialogTitle className="flex flex-col gap-1">
                   <span>Action details</span>
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className="font-medium text-muted-foreground text-xs">
                     Round {selected.battleRound}
                   </span>
-                  <span className="text-sm font-normal text-muted-foreground">
+                  <span className="font-normal text-muted-foreground text-sm">
                     {parseHtml(selected.description ?? "")}
                   </span>
                 </DialogTitle>
@@ -399,13 +402,13 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                     />
                     {effects.length > 0 && (
                       <div className="space-y-2 rounded-md border p-3">
-                        <p className="text-sm font-semibold">Applied effects</p>
+                        <p className="font-semibold text-sm">Applied effects</p>
                         <div className="flex flex-wrap gap-2">
                           {effects.map((effect, i) => (
                             <span
                               key={`${effect.txt}-${i}`}
                               className={cn(
-                                "rounded-full px-2 py-1 text-[11px] font-medium",
+                                "rounded-full px-2 py-1 font-medium text-[11px]",
                                 effectColors[effect.color],
                               )}
                             >

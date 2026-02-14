@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
+import { Settings } from "lucide-react";
+import type React from "react";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,23 +12,23 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import Countdown from "@/layout/Countdown";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import OccupationGathering from "@/layout/OccupationGathering";
-import OccupationHunter from "@/layout/OccupationHunter";
-import OccupationCrafting from "@/layout/OccupationCrafting";
-import Image from "@/layout/Image";
-import { Settings } from "lucide-react";
 import type { OccupationType } from "@/drizzle/constants";
 import {
+  IMG_OCCUPATION_CRAFTING,
   IMG_OCCUPATION_GATHERING,
   IMG_OCCUPATION_HUNTER,
-  IMG_OCCUPATION_CRAFTING,
   OCCUPATION_CHANGE_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import OccupationCrafting from "@/layout/OccupationCrafting";
+import OccupationGathering from "@/layout/OccupationGathering";
+import OccupationHunter from "@/layout/OccupationHunter";
+import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 /**
  * Occupation data
@@ -147,14 +148,14 @@ export default function Occupations() {
           <div>
             {occupationInfo && (
               <div className="flex flex-col gap-0.5 sm:gap-1">
-                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed mt-0.5">
+                <p className="mt-0.5 text-muted-foreground text-sm leading-relaxed sm:text-base">
                   {occupationInfo.description}
                 </p>
               </div>
             )}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2">
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               {userData.occupationSignupAt && (
-                <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground">
+                <div className="flex items-center gap-1.5 text-muted-foreground text-xs sm:text-sm">
                   <span className="font-medium">Started:</span>
                   <span className="font-mono">
                     {userData.occupationSignupAt.toLocaleDateString()}
@@ -164,10 +165,10 @@ export default function Occupations() {
               {changeStatusData &&
                 !changeStatusData.canChange &&
                 !canChangeContent(userData?.role || "USER") && (
-                  <div className="flex items-center gap-1.5 text-xs sm:text-sm text-orange-600 font-medium">
+                  <div className="flex items-center gap-1.5 font-medium text-orange-600 text-xs sm:text-sm">
                     <span>You can change occupations in</span>
                     {userData.occupationSignupAt && (
-                      <span className="font-mono bg-popover rounded px-2 py-0.5">
+                      <span className="rounded bg-popover px-2 py-0.5 font-mono">
                         <Countdown
                           targetDate={
                             new Date(
@@ -238,13 +239,11 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
           const isDisabled = isChanging && isCurrentOccupation;
 
           return (
-            <div
+            <button
+              type="button"
               key={occupation.type}
-              className={`cursor-pointer rounded-lg border p-6 text-center transition-all hover:shadow-lg ${
-                selectedOccupation === occupation.type
-                  ? "border-primary bg-primary/5"
-                  : "border-border bg-card"
-              } ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
+              disabled={isDisabled}
+              className={`cursor-pointer rounded-lg border p-6 text-center transition-all hover:shadow-lg ${selectedOccupation === occupation.type ? "border-primary bg-primary/5" : "border-border bg-card"} ${isDisabled ? "cursor-not-allowed opacity-50" : ""}`}
               onClick={() => {
                 if (!isDisabled) {
                   onOccupationSelect(occupation.type);
@@ -260,16 +259,16 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
                   className="rounded-lg"
                 />
               </div>
-              <h3 className="mb-2 text-xl font-semibold">{occupation.name}</h3>
-              <p className="mb-4 text-sm text-muted-foreground">
+              <h3 className="mb-2 font-semibold text-xl">{occupation.name}</h3>
+              <p className="mb-4 text-muted-foreground text-sm">
                 {occupation.description}
               </p>
               {isCurrentOccupation && isChanging ? (
-                <Button disabled className="w-full">
+                <span className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm opacity-50">
                   Current Occupation
-                </Button>
+                </span>
               ) : selectedOccupation === occupation.type ? (
-                <Button disabled={isPending} className="w-full">
+                <span className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm">
                   {isPending
                     ? isChanging
                       ? "Changing..."
@@ -277,13 +276,13 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
                     : isChanging
                       ? "Confirm Change"
                       : "Confirm Selection"}
-                </Button>
+                </span>
               ) : (
-                <Button variant="outline" className="w-full">
+                <span className="inline-flex w-full items-center justify-center rounded-md border border-input bg-background px-4 py-2 font-medium text-sm hover:bg-accent hover:text-accent-foreground">
                   Select
-                </Button>
+                </span>
               )}
-            </div>
+            </button>
           );
         })}
       </div>

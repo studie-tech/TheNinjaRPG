@@ -158,7 +158,6 @@ export const useLocalStorage = <T>(
         window.removeEventListener("hashchange", handleHashChange);
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkUrlAnchor]);
 
   // Update the local storage when the value changes using safe utility

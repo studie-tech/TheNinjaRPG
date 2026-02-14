@@ -71,7 +71,9 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
                 height: "100%",
                 position: "relative",
               }}
+              aria-labelledby="error-icon-title"
             >
+              <title id="error-icon-title">Error</title>
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
               <line x1="12" y1="9" x2="12" y2="13" />
               <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -126,6 +128,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
             }}
           >
             <button
+              type="button"
               onClick={reset}
               style={{
                 display: "inline-flex",
@@ -141,8 +144,18 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
                 cursor: "pointer",
                 transition: "background 0.2s",
               }}
-              onMouseOver={(e) => (e.currentTarget.style.background = "#92400e")}
-              onMouseOut={(e) => (e.currentTarget.style.background = "#78350f")}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = "#92400e";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = "#78350f";
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.background = "#92400e";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.background = "#78350f";
+              }}
             >
               <svg
                 width="16"
@@ -153,13 +166,13 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                aria-hidden="true"
               >
                 <polyline points="23 4 23 10 17 10" />
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
               </svg>
               Try Again
             </button>
-            {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- Using <a> intentionally for hard navigation when root layout fails */}
             <a
               href="/"
               style={{
@@ -185,6 +198,14 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
                 e.currentTarget.style.background = "transparent";
                 e.currentTarget.style.borderColor = "#475569";
               }}
+              onFocus={(e) => {
+                e.currentTarget.style.background = "rgba(71, 85, 105, 0.3)";
+                e.currentTarget.style.borderColor = "#64748b";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.borderColor = "#475569";
+              }}
             >
               <svg
                 width="16"
@@ -195,6 +216,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                aria-hidden="true"
               >
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                 <polyline points="9 22 9 12 15 12 15 22" />

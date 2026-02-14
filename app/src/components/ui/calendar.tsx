@@ -1,9 +1,8 @@
-import * as React from "react";
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import * as React from "react";
 import { type DayButton, DayPicker, getDefaultClassNames } from "react-day-picker";
-
-import { cn } from "@/libs/shadui";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/libs/shadui";
 
 /* -------------------------------------------------------------------------- */
 /*                            Top-level components                            */
@@ -91,7 +90,7 @@ function CalendarDayButton({
         "data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground",
         "data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground",
         "data-[range-end=true]:rounded-md data-[range-middle=true]:rounded-none data-[range-start=true]:rounded-md",
-        "group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-ring/50 group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-[3px]",
+        "group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-ring/50",
         "[&>span]:text-base [&>span]:opacity-90",
         defaultClassNames.day,
         className,
@@ -124,7 +123,7 @@ function Calendar({
       showOutsideDays={showOutsideDays}
       captionLayout={captionLayout}
       className={cn(
-        "bg-background group/calendar p-4",
+        "group/calendar bg-background p-4",
         // Bigger calendar + consistent sizing even inside popovers
         "min-w-[22rem] sm:min-w-[24rem]",
         // Bigger cells
@@ -168,16 +167,16 @@ function Calendar({
         ),
 
         dropdowns: cn(
-          "flex h-[--cell-size] w-full items-center justify-center gap-2 text-base font-semibold",
+          "flex h-[--cell-size] w-full items-center justify-center gap-2 font-semibold text-base",
           defaultClassNames.dropdowns,
         ),
 
         dropdown_root: cn(
-          "has-focus:border-ring border-input shadow-xs has-focus:ring-ring/50 has-focus:ring-[3px] relative rounded-md border",
+          "relative rounded-md border border-input shadow-xs has-focus:border-ring has-focus:ring-[3px] has-focus:ring-ring/50",
           defaultClassNames.dropdown_root,
         ),
         dropdown: cn(
-          "bg-popover absolute inset-0 opacity-0",
+          "absolute inset-0 bg-popover opacity-0",
           defaultClassNames.dropdown,
         ),
 
@@ -185,7 +184,7 @@ function Calendar({
           "select-none font-semibold",
           captionLayout === "label"
             ? "text-base"
-            : "[&>svg]:text-muted-foreground flex h-9 items-center gap-1 rounded-md pl-2 pr-1 text-base [&>svg]:size-4",
+            : "flex h-9 items-center gap-1 rounded-md pr-1 pl-2 text-base [&>svg]:size-4 [&>svg]:text-muted-foreground",
           defaultClassNames.caption_label,
         ),
 
@@ -194,7 +193,7 @@ function Calendar({
         // Day-of-week row spacing
         weekdays: cn("flex gap-2", defaultClassNames.weekdays),
         weekday: cn(
-          "text-muted-foreground flex-1 select-none rounded-md text-sm font-medium",
+          "flex-1 select-none rounded-md font-medium text-muted-foreground text-sm",
           defaultClassNames.weekday,
         ),
 
@@ -206,7 +205,7 @@ function Calendar({
           defaultClassNames.week_number_header,
         ),
         week_number: cn(
-          "text-muted-foreground select-none text-sm",
+          "select-none text-muted-foreground text-sm",
           defaultClassNames.week_number,
         ),
 
@@ -215,12 +214,12 @@ function Calendar({
           defaultClassNames.day,
         ),
 
-        range_start: cn("bg-accent rounded-l-md", defaultClassNames.range_start),
+        range_start: cn("rounded-l-md bg-accent", defaultClassNames.range_start),
         range_middle: cn("rounded-none", defaultClassNames.range_middle),
-        range_end: cn("bg-accent rounded-r-md", defaultClassNames.range_end),
+        range_end: cn("rounded-r-md bg-accent", defaultClassNames.range_end),
 
         today: cn(
-          "bg-accent text-accent-foreground rounded-md data-[selected=true]:rounded-none",
+          "rounded-md bg-accent text-accent-foreground data-[selected=true]:rounded-none",
           defaultClassNames.today,
         ),
 

@@ -1,24 +1,10 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { api } from "@/app/_trpc/client";
-import ContentBox from "@/layout/ContentBox";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Mail, AlertCircle, Trash2 } from "lucide-react";
 import { format } from "date-fns";
-import { showMutationToast } from "@/libs/toast";
-import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
+import { AlertCircle, Mail, Trash2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { api } from "@/app/_trpc/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +16,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Suspense } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import { showMutationToast } from "@/libs/toast";
 
 // Helper function to format dates
 const formatDate = (date: Date | string): string => {
@@ -39,7 +39,7 @@ const formatDate = (date: Date | string): string => {
 
 export const EmailReminderSkeleton: React.FC = () => {
   return (
-    <Skeleton className="h-[400px] w-full items-start justify-center flex">
+    <Skeleton className="flex h-[400px] w-full items-start justify-center">
       <Loader explanation="Loading email reminder settings" />
     </Skeleton>
   );
@@ -149,20 +149,20 @@ const EmailReminderContent: React.FC = () => {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm font-medium">Email</p>
-                <p className="text-sm text-muted-foreground">{email}</p>
+                <p className="font-medium text-sm">Email</p>
+                <p className="text-muted-foreground text-sm">{email}</p>
               </div>
               <div>
-                <p className="text-sm font-medium">Created</p>
-                <p className="text-sm text-muted-foreground">{createdAt}</p>
+                <p className="font-medium text-sm">Created</p>
+                <p className="text-muted-foreground text-sm">{createdAt}</p>
               </div>
               <div>
-                <p className="text-sm font-medium">Latest Request</p>
-                <p className="text-sm text-muted-foreground">{latestRequest}</p>
+                <p className="font-medium text-sm">Latest Request</p>
+                <p className="text-muted-foreground text-sm">{latestRequest}</p>
               </div>
               <div>
-                <p className="text-sm font-medium">Status</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="font-medium text-sm">Status</p>
+                <p className="text-muted-foreground text-sm">
                   {isDisabled ? "Disabled" : "Enabled"}
                 </p>
               </div>
@@ -181,8 +181,8 @@ const EmailReminderContent: React.FC = () => {
               </Label>
             </div>
           </CardContent>
-          <CardFooter className="flex justify-between items-center">
-            <p className="text-xs text-muted-foreground">
+          <CardFooter className="flex items-center justify-between">
+            <p className="text-muted-foreground text-xs">
               This link is unique to your email address. Do not share it with others.
             </p>
 

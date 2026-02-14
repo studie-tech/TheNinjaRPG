@@ -1,24 +1,17 @@
 "use client";
 
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { getRewardPreview } from "@/libs/objectives";
 import {
-  Check,
-  Lock,
-  Gift,
-  ShoppingCart,
-  Calendar,
   AlertTriangle,
-  RotateCcw,
   ArrowRight,
+  Calendar,
+  Check,
+  Gift,
+  Lock,
+  RotateCcw,
+  ShoppingCart,
 } from "lucide-react";
-import { cn } from "src/libs/shadui";
-import Loader from "@/layout/Loader";
+import Image from "next/image";
+import { api } from "@/app/_trpc/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,8 +23,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import Confirm2 from "@/layout/Confirm2";
+import Loader from "@/layout/Loader";
+import { getRewardPreview } from "@/libs/objectives";
+import { cn } from "@/libs/shadui";
+import { showMutationToast } from "@/libs/toast";
 
 export function ActivityStreakPanel() {
   const utils = api.useUtils();
@@ -110,7 +110,7 @@ export function ActivityStreakPanel() {
               </span>
               <div className="flex items-center gap-2">
                 <Badge variant="default">Daily</Badge>
-                <span className="text-sm font-normal text-muted-foreground">
+                <span className="font-normal text-muted-foreground text-sm">
                   Day 0/{userStreaks.activeRecurringConfig.totalDays}
                 </span>
               </div>
@@ -118,10 +118,10 @@ export function ActivityStreakPanel() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Claim button for day 1 */}
-            <div className="flex items-center justify-between p-3 mt-3 bg-primary/10 rounded-lg">
+            <div className="mt-3 flex items-center justify-between rounded-lg bg-primary/10 p-3">
               <div>
                 <p className="font-medium">Day 1 rewards available!</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   {getRewardPreview(
                     userStreaks.activeRecurringConfig.rewards.find(
                       (r) => r.dayNumber === 1,
@@ -130,12 +130,16 @@ export function ActivityStreakPanel() {
                 </p>
               </div>
               <Button
-                onClick={() =>
-                  claimStreak.mutate({
-                    configId: userStreaks.activeRecurringConfig!.id,
-                  })
+                onClick={() => {
+                  if (userStreaks.activeRecurringConfig?.id) {
+                    claimStreak.mutate({
+                      configId: userStreaks.activeRecurringConfig.id,
+                    });
+                  }
+                }}
+                disabled={
+                  claimStreak.isPending || !userStreaks.activeRecurringConfig?.id
                 }
-                disabled={claimStreak.isPending}
               >
                 {claimStreak.isPending ? "Claiming..." : "Claim"}
               </Button>
@@ -146,17 +150,17 @@ export function ActivityStreakPanel() {
               {Array.from(
                 { length: userStreaks.activeRecurringConfig.totalDays },
                 (_, i) => i + 1,
-              ).map((day) => {
+              ).map((day, i) => {
                 const isNext = day === 1;
                 const isFuture = day > 1;
-                const reward = userStreaks.activeRecurringConfig!.rewards.find(
+                const reward = userStreaks.activeRecurringConfig?.rewards.find(
                   (r) => r.dayNumber === day,
                 );
                 const rewardPreview = getRewardPreview(reward?.rewards ?? null);
 
                 return (
                   <DayCell
-                    key={day}
+                    key={`${day}-${i}`}
                     day={day}
                     isClaimed={false}
                     isNext={isNext}
@@ -169,17 +173,17 @@ export function ActivityStreakPanel() {
             </div>
 
             {/* Legend */}
-            <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            <div className="flex flex-wrap gap-4 text-muted-foreground text-xs">
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-green-500/20 border border-green-500" />
+                <div className="h-3 w-3 rounded border border-green-500 bg-green-500/20" />
                 <span>Claimed</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-primary/20 border border-primary" />
+                <div className="h-3 w-3 rounded border border-primary bg-primary/20" />
                 <span>Available</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-muted/50 border border-muted-foreground/20" />
+                <div className="h-3 w-3 rounded border border-muted-foreground/20 bg-muted/50" />
                 <span>Upcoming</span>
               </div>
             </div>
@@ -203,7 +207,7 @@ export function ActivityStreakPanel() {
                 >
                   {streak.streakType === "RECURRING" ? "Daily" : "Event"}
                 </Badge>
-                <span className="text-sm font-normal text-muted-foreground">
+                <span className="font-normal text-muted-foreground text-sm">
                   Day {streak.currentDay}/{streak.totalDays}
                 </span>
               </div>
@@ -212,15 +216,15 @@ export function ActivityStreakPanel() {
           <CardContent className="space-y-4">
             {/* Catchup panel - shown when user is behind and needs to catch up */}
             {streak.needsCatchUp && (
-              <div className="p-4 bg-orange-500/10 rounded-lg mt-2 space-y-3">
+              <div className="mt-2 space-y-3 rounded-lg bg-orange-500/10 p-4">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
                   <div className="flex-1">
                     <p className="font-medium text-orange-700 dark:text-orange-400">
                       {streak.daysToGo ?? 1} day{(streak.daysToGo ?? 1) > 1 ? "s" : ""}{" "}
                       behind!
                     </p>
-                    <p className="text-sm text-orange-600 dark:text-orange-500 mt-1">
+                    <p className="mt-1 text-orange-600 text-sm dark:text-orange-500">
                       Pay {COST_STREAK_CATCHUP_DAY} rep per day to catch up, or reset
                       your streak.
                     </p>
@@ -228,7 +232,7 @@ export function ActivityStreakPanel() {
                 </div>
 
                 {/* Catchup progress info */}
-                <div className="flex items-center justify-between text-sm bg-background/50 p-2 rounded">
+                <div className="flex items-center justify-between rounded bg-background/50 p-2 text-sm">
                   <span>
                     Current: Day {streak.currentDay} → Target: Day{" "}
                     {streak.theoreticalMaxDay ?? streak.totalDays}
@@ -240,7 +244,7 @@ export function ActivityStreakPanel() {
                 </div>
 
                 {/* Next reward preview */}
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground text-sm">
                   <span className="font-medium">
                     Day {streak.nextDayNumber} rewards:{" "}
                   </span>
@@ -257,7 +261,7 @@ export function ActivityStreakPanel() {
                         disabled={claimStreak.isPending}
                         className="flex-1"
                       >
-                        <RotateCcw className="h-4 w-4 mr-2" />
+                        <RotateCcw className="mr-2 h-4 w-4" />
                         Reset to Day 1
                       </Button>
                     }
@@ -286,7 +290,7 @@ export function ActivityStreakPanel() {
                       })
                     }
                   >
-                    <ArrowRight className="h-4 w-4 mr-2" />
+                    <ArrowRight className="mr-2 h-4 w-4" />
                     {claimStreak.isPending
                       ? "Claiming..."
                       : `Claim Day ${streak.nextDayNumber} (${COST_STREAK_CATCHUP_DAY} rep)`}
@@ -297,12 +301,12 @@ export function ActivityStreakPanel() {
 
             {/* Normal claim button (when streak is not broken) */}
             {streak.canClaimToday && !streak.needsCatchUp && (
-              <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg">
+              <div className="flex items-center justify-between rounded-lg bg-primary/10 p-3">
                 <div>
                   <p className="font-medium">
                     Day {streak.nextDayNumber} rewards available!
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     {getRewardPreview(streak.nextRewards) || "Claim your daily reward"}
                   </p>
                 </div>
@@ -317,7 +321,7 @@ export function ActivityStreakPanel() {
 
             {/* Show "all caught up" only when user is caught up and has claimed today */}
             {streak.alreadyClaimedToday && !streak.needsCatchUp && (
-              <div className="p-3 bg-green-500/10 rounded-lg">
+              <div className="rounded-lg bg-green-500/10 p-3">
                 <p className="font-medium text-green-700 dark:text-green-400">
                   Today&apos;s streak claimed! Come back tomorrow.
                 </p>
@@ -326,55 +330,57 @@ export function ActivityStreakPanel() {
 
             {/* Progress grid */}
             <div className="grid grid-cols-7 gap-2">
-              {Array.from({ length: streak.totalDays }, (_, i) => i + 1).map((day) => {
-                const isClaimed = day <= streak.currentDay;
-                const isNext =
-                  day === streak.nextDayNumber &&
-                  (streak.canClaimToday || streak.needsCatchUp);
-                // A day is "to catch up" if it's between currentDay and theoreticalMaxDay
-                const isMissed =
-                  streak.needsCatchUp &&
-                  streak.theoreticalMaxDay !== undefined &&
-                  day > streak.currentDay &&
-                  day <= streak.theoreticalMaxDay;
-                const isFuture =
-                  day > (streak.theoreticalMaxDay ?? streak.nextDayNumber);
-                const reward = streak.allRewards.find((r) => r.dayNumber === day);
-                const rewardPreview = getRewardPreview(reward?.rewards ?? null);
+              {Array.from({ length: streak.totalDays }, (_, i) => i + 1).map(
+                (day, i) => {
+                  const isClaimed = day <= streak.currentDay;
+                  const isNext =
+                    day === streak.nextDayNumber &&
+                    (streak.canClaimToday || streak.needsCatchUp);
+                  // A day is "to catch up" if it's between currentDay and theoreticalMaxDay
+                  const isMissed =
+                    streak.needsCatchUp &&
+                    streak.theoreticalMaxDay !== undefined &&
+                    day > streak.currentDay &&
+                    day <= streak.theoreticalMaxDay;
+                  const isFuture =
+                    day > (streak.theoreticalMaxDay ?? streak.nextDayNumber);
+                  const reward = streak.allRewards.find((r) => r.dayNumber === day);
+                  const rewardPreview = getRewardPreview(reward?.rewards ?? null);
 
-                return (
-                  <DayCell
-                    key={day}
-                    day={day}
-                    isClaimed={isClaimed}
-                    isNext={isNext}
-                    isMissed={isMissed && !isNext}
-                    isFuture={isFuture && !isMissed}
-                    rewardImage={reward?.image}
-                    rewardPreview={rewardPreview}
-                  />
-                );
-              })}
+                  return (
+                    <DayCell
+                      key={`${day}-${i}`}
+                      day={day}
+                      isClaimed={isClaimed}
+                      isNext={isNext}
+                      isMissed={isMissed && !isNext}
+                      isFuture={isFuture && !isMissed}
+                      rewardImage={reward?.image}
+                      rewardPreview={rewardPreview}
+                    />
+                  );
+                },
+              )}
             </div>
 
             {/* Legend */}
-            <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            <div className="flex flex-wrap gap-4 text-muted-foreground text-xs">
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-green-500/20 border border-green-500" />
+                <div className="h-3 w-3 rounded border border-green-500 bg-green-500/20" />
                 <span>Claimed</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-primary/20 border border-primary" />
+                <div className="h-3 w-3 rounded border border-primary bg-primary/20" />
                 <span>Available</span>
               </div>
               {streak.needsCatchUp && (
                 <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-orange-500/20 border border-orange-500" />
+                  <div className="h-3 w-3 rounded border border-orange-500 bg-orange-500/20" />
                   <span>To Catch Up</span>
                 </div>
               )}
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-muted/50 border border-muted-foreground/20" />
+                <div className="h-3 w-3 rounded border border-muted-foreground/20 bg-muted/50" />
                 <span>Upcoming</span>
               </div>
             </div>
@@ -403,7 +409,7 @@ export function ActivityStreakPanel() {
               return (
                 <div
                   key={pass.id}
-                  className="relative flex items-center justify-between p-4 border rounded-lg overflow-hidden"
+                  className="relative flex items-center justify-between overflow-hidden rounded-lg border p-4"
                 >
                   {/* Pass image as background */}
                   {pass.image && (
@@ -418,10 +424,10 @@ export function ActivityStreakPanel() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-4 flex-1 z-10">
+                  <div className="z-10 flex flex-1 items-center gap-4">
                     {/* Thumbnail */}
                     {pass.image && (
-                      <div className="relative h-16 w-16 flex-shrink-0 rounded-lg overflow-hidden border">
+                      <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border">
                         <Image
                           src={pass.image}
                           alt={pass.name}
@@ -437,12 +443,12 @@ export function ActivityStreakPanel() {
                         <Badge variant="secondary">{pass.totalDays} days</Badge>
                       </div>
                       {pass.description && (
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="mt-1 text-muted-foreground text-sm">
                           {pass.description}
                         </p>
                       )}
                       {(pass.startDate || pass.endDate) && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
+                        <div className="mt-2 flex items-center gap-1 text-muted-foreground text-xs">
                           <Calendar className="h-3 w-3" />
                           {pass.startDate && (
                             <span>
@@ -456,7 +462,7 @@ export function ActivityStreakPanel() {
                           )}
                         </div>
                       )}
-                      <p className="text-sm font-medium mt-2">Cost: {costText}</p>
+                      <p className="mt-2 font-medium text-sm">Cost: {costText}</p>
                     </div>
                   </div>
 
@@ -478,9 +484,7 @@ export function ActivityStreakPanel() {
                           This event pass costs <strong>{costText}</strong>.
                           <br />
                           <br />
-                          You will be able to claim daily rewards for {
-                            pass.totalDays
-                          }{" "}
+                          You will be able to claim daily rewards for {pass.totalDays}{" "}
                           days.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
@@ -513,7 +517,7 @@ const ConfigBanner: React.FC<{ image: string | null; name: string }> = ({
 }) => {
   if (!image) return null;
   return (
-    <div className="absolute top-0 left-0 right-0 h-28 overflow-hidden rounded-t-lg">
+    <div className="absolute top-0 right-0 left-0 h-28 overflow-hidden rounded-t-lg">
       <Image
         src={image}
         alt={name}
@@ -539,11 +543,11 @@ const DayCell: React.FC<{
   return (
     <div
       className={cn(
-        "relative aspect-square rounded-lg border flex flex-col items-center justify-center p-1 transition-all overflow-hidden",
-        isClaimed && "bg-green-500/20 border-green-500",
-        isNext && "bg-primary/20 border-primary ring-2 ring-primary",
-        isMissed && "bg-orange-500/20 border-orange-500",
-        !isClaimed && !isNext && !isMissed && "bg-muted/50 border-muted-foreground/20",
+        "relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-lg border p-1 transition-all",
+        isClaimed && "border-green-500 bg-green-500/20",
+        isNext && "border-primary bg-primary/20 ring-2 ring-primary",
+        isMissed && "border-orange-500 bg-orange-500/20",
+        !isClaimed && !isNext && !isMissed && "border-muted-foreground/20 bg-muted/50",
       )}
       title={isMissed ? `Day ${day} (missed)` : rewardPreview || `Day ${day}`}
     >
@@ -576,8 +580,8 @@ const DayCell: React.FC<{
       {/* Day number and icon */}
       <span
         className={cn(
-          "text-xs font-bold z-10",
-          rewardImage && "drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] text-white",
+          "z-10 font-bold text-xs",
+          rewardImage && "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]",
           isMissed && !rewardImage && "text-orange-600",
         )}
       >
@@ -586,7 +590,7 @@ const DayCell: React.FC<{
       {isClaimed && (
         <Check
           className={cn(
-            "h-3 w-3 z-10",
+            "z-10 h-3 w-3",
             rewardImage
               ? "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
               : "text-green-600",
@@ -596,7 +600,7 @@ const DayCell: React.FC<{
       {isNext && (
         <Gift
           className={cn(
-            "h-3 w-3 z-10",
+            "z-10 h-3 w-3",
             rewardImage
               ? "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
               : "text-primary",
@@ -606,7 +610,7 @@ const DayCell: React.FC<{
       {isMissed && (
         <AlertTriangle
           className={cn(
-            "h-3 w-3 z-10",
+            "z-10 h-3 w-3",
             rewardImage
               ? "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
               : "text-orange-500",
@@ -614,7 +618,7 @@ const DayCell: React.FC<{
         />
       )}
       {isFuture && !rewardImage && !isMissed && (
-        <Lock className="h-3 w-3 text-muted-foreground/50 z-10" />
+        <Lock className="z-10 h-3 w-3 text-muted-foreground/50" />
       )}
     </div>
   );

@@ -1,23 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import React from "react";
-import Link from "next/link";
-import Image from "@/layout/Image";
-import { useRouter } from "next/navigation";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
+import { sendGTMEvent } from "@next/third-parties/google";
+import { ArrowRight, MonitorPlay } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import type { CarouselApi } from "@/components/ui/carousel";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
-  FormLabel,
   FormDescription,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -25,32 +35,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowRight } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
-import { MonitorPlay } from "lucide-react";
-import { useUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { registrationSchema } from "@/validators/register";
-import { attributes } from "@/validators/register";
-import { colors, skin_colors } from "@/validators/register";
-import { genders } from "@/validators/register";
-import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
-
-import { sendGTMEvent } from "@next/third-parties/google";
-import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
-import { CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
-import { ActionSelector } from "@/layout/CombatActions";
 import {
   IMG_REGISTRATIN_STEP1,
   IMG_REGISTRATIN_STEP2,
   IMG_REGISTRATIN_STEP8,
   IMG_REGISTRATIN_STEP9,
 } from "@/drizzle/constants";
-import type { CarouselApi } from "@/components/ui/carousel";
-import type { RegistrationSchema } from "@/validators/register";
+import { safeLocalStorageGetItem } from "@/hooks/localstorage";
+import { ActionSelector } from "@/layout/CombatActions";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { useUserData } from "@/utils/UserContext";
+import {
+  attributes,
+  colors,
+  genders,
+  registrationSchema,
+  skin_colors,
+} from "@/validators/register";
 
 /**
  * Wrapper component that handles the loading state and authenticated user redirect.
@@ -89,13 +93,14 @@ const getRandomizedFormValues = () => {
   const [attr1, attr2, attr3] = shuffledAttributes.slice(0, 3);
 
   return {
-    attribute_1: attr1!,
-    attribute_2: attr2!,
-    attribute_3: attr3!,
-    hair_color: colors[Math.floor(Math.random() * colors.length)]!,
-    eye_color: colors[Math.floor(Math.random() * colors.length)]!,
-    skin_color: skin_colors[Math.floor(Math.random() * skin_colors.length)]!,
-    gender: genders[Math.floor(Math.random() * genders.length)]!,
+    attribute_1: attr1 ?? attributes[0],
+    attribute_2: attr2 ?? attributes[1],
+    attribute_3: attr3 ?? attributes[2],
+    hair_color: colors[Math.floor(Math.random() * colors.length)] ?? colors[0],
+    eye_color: colors[Math.floor(Math.random() * colors.length)] ?? colors[0],
+    skin_color:
+      skin_colors[Math.floor(Math.random() * skin_colors.length)] ?? skin_colors[0],
+    gender: genders[Math.floor(Math.random() * genders.length)] ?? genders[0],
   };
 };
 
@@ -126,8 +131,7 @@ const RegisterForm: React.FC = () => {
 
   const allBloodlines = React.useMemo(() => {
     return bloodlines?.pages
-      .map((page) => page.data)
-      .flat()
+      .flatMap((page) => page.data)
       .map((bloodline) => ({
         ...bloodline,
         type: "bloodline" as const,
@@ -155,7 +159,7 @@ const RegisterForm: React.FC = () => {
   const [initialFormValues] = useState(() => getRandomizedFormValues());
 
   // Form handling
-  const form = useForm<RegistrationSchema>({
+  const form = useForm({
     mode: "all",
     reValidateMode: "onChange",
     criteriaMode: "all",
@@ -312,8 +316,8 @@ const RegisterForm: React.FC = () => {
   // Options used for select fields
   const option_colors = React.useMemo(
     () =>
-      colors.map((color, index) => (
-        <SelectItem key={index} value={color}>
+      colors.map((color, i) => (
+        <SelectItem key={`${color}-${i}`} value={color}>
           {color}
         </SelectItem>
       )),
@@ -321,8 +325,8 @@ const RegisterForm: React.FC = () => {
   );
   const option_skins = React.useMemo(
     () =>
-      skin_colors.map((color, index) => (
-        <SelectItem key={index} value={color}>
+      skin_colors.map((color, i) => (
+        <SelectItem key={`${color}-${i}`} value={color}>
           {color}
         </SelectItem>
       )),
@@ -342,8 +346,8 @@ const RegisterForm: React.FC = () => {
               <Carousel setApi={setCApi}>
                 <CarouselContent>
                   <CarouselItem className="flex flex-col gap-4">
-                    <div className="w-full flex justify-center">
-                      <div className="relative w-full aspect-[491/89]">
+                    <div className="flex w-full justify-center">
+                      <div className="relative aspect-[491/89] w-full">
                         <Image
                           alt="step1"
                           src={IMG_REGISTRATIN_STEP1}
@@ -353,7 +357,7 @@ const RegisterForm: React.FC = () => {
                         />
                       </div>
                     </div>
-                    <div className="flex flex-wrap w-full gap-4 items-center px-10">
+                    <div className="flex w-full flex-wrap items-center gap-4 px-10">
                       <FormField
                         control={form.control}
                         name="username"
@@ -380,7 +384,7 @@ const RegisterForm: React.FC = () => {
                         control={form.control}
                         name="gender"
                         render={({ field }) => (
-                          <div className="flex flex-row items-center w-full">
+                          <div className="flex w-full flex-row items-center">
                             <FormItem className="w-full">
                               <FormLabel>Select gender</FormLabel>
                               <Select
@@ -388,13 +392,13 @@ const RegisterForm: React.FC = () => {
                                 value={field.value ?? ""}
                               >
                                 <FormControl>
-                                  <SelectTrigger className="h-14 text-3xl ">
+                                  <SelectTrigger className="h-14 text-3xl">
                                     <SelectValue placeholder={`None`} />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {genders.map((gender, index) => (
-                                    <SelectItem key={index} value={gender}>
+                                  {genders.map((gender, i) => (
+                                    <SelectItem key={`${gender}-${i}`} value={gender}>
                                       {gender}
                                     </SelectItem>
                                   ))}
@@ -412,9 +416,9 @@ const RegisterForm: React.FC = () => {
                       />
                     </div>
                   </CarouselItem>
-                  <CarouselItem className="flex flex-col gap-4 relative">
-                    <div className="w-full flex justify-center">
-                      <div className="relative w-full aspect-[491/89]">
+                  <CarouselItem className="relative flex flex-col gap-4">
+                    <div className="flex w-full justify-center">
+                      <div className="relative aspect-[491/89] w-full">
                         <Image
                           alt="step2"
                           src={IMG_REGISTRATIN_STEP2}
@@ -425,7 +429,7 @@ const RegisterForm: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 w-full gap-4 items-center px-3">
+                    <div className="grid w-full grid-cols-3 items-center gap-4 px-3">
                       <FormField
                         control={form.control}
                         name="hair_color"
@@ -437,7 +441,7 @@ const RegisterForm: React.FC = () => {
                               value={field.value ?? ""}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-14 text-xl ">
+                                <SelectTrigger className="h-14 text-xl">
                                   <SelectValue placeholder={`None`} />
                                 </SelectTrigger>
                               </FormControl>
@@ -463,7 +467,7 @@ const RegisterForm: React.FC = () => {
                               value={field.value ?? ""}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-14 text-xl ">
+                                <SelectTrigger className="h-14 text-xl">
                                   <SelectValue placeholder={`None`} />
                                 </SelectTrigger>
                               </FormControl>
@@ -489,7 +493,7 @@ const RegisterForm: React.FC = () => {
                               value={field.value ?? ""}
                             >
                               <FormControl>
-                                <SelectTrigger className="h-14 text-xl ">
+                                <SelectTrigger className="h-14 text-xl">
                                   <SelectValue placeholder={`None`} />
                                 </SelectTrigger>
                               </FormControl>
@@ -505,7 +509,7 @@ const RegisterForm: React.FC = () => {
                         )}
                       />
                     </div>
-                    <div className="grid grid-cols-3 w-full gap-4 items-center px-3">
+                    <div className="grid w-full grid-cols-3 items-center gap-4 px-3">
                       <FormField
                         control={form.control}
                         name="attribute_1"
@@ -524,8 +528,11 @@ const RegisterForm: React.FC = () => {
                               <SelectContent>
                                 {attributes
                                   .filter((e) => ![watchAttr2, watchAttr3].includes(e))
-                                  .map((attribute, index) => (
-                                    <SelectItem key={index} value={attribute}>
+                                  .map((attribute, i) => (
+                                    <SelectItem
+                                      key={`${attribute}-${i}`}
+                                      value={attribute}
+                                    >
                                       {attribute}
                                     </SelectItem>
                                   ))}
@@ -558,8 +565,11 @@ const RegisterForm: React.FC = () => {
                               <SelectContent>
                                 {attributes
                                   .filter((e) => ![watchAttr1, watchAttr3].includes(e))
-                                  .map((attribute, index) => (
-                                    <SelectItem key={index} value={attribute}>
+                                  .map((attribute, i) => (
+                                    <SelectItem
+                                      key={`${attribute}-${i}`}
+                                      value={attribute}
+                                    >
                                       {attribute}
                                     </SelectItem>
                                   ))}
@@ -592,8 +602,11 @@ const RegisterForm: React.FC = () => {
                               <SelectContent>
                                 {attributes
                                   .filter((e) => ![watchAttr1, watchAttr2].includes(e))
-                                  .map((attribute, index) => (
-                                    <SelectItem key={index} value={attribute}>
+                                  .map((attribute, i) => (
+                                    <SelectItem
+                                      key={`${attribute}-${i}`}
+                                      value={attribute}
+                                    >
                                       {attribute}
                                     </SelectItem>
                                   ))}
@@ -611,8 +624,8 @@ const RegisterForm: React.FC = () => {
                     </div>
                   </CarouselItem>
                   <CarouselItem className="flex flex-col gap-4">
-                    <div className="w-full flex justify-center">
-                      <div className="relative w-full aspect-[491/89]">
+                    <div className="flex w-full justify-center">
+                      <div className="relative aspect-[491/89] w-full">
                         <Image
                           alt="step3"
                           src={IMG_REGISTRATIN_STEP8}
@@ -622,8 +635,8 @@ const RegisterForm: React.FC = () => {
                         />
                       </div>
                     </div>
-                    <div className="px-10 flex flex-col gap-4">
-                      <div className="text-lg font-semibold">
+                    <div className="flex flex-col gap-4 px-10">
+                      <div className="font-semibold text-lg">
                         Pick a starting bloodline
                       </div>
                       <FormField
@@ -646,7 +659,7 @@ const RegisterForm: React.FC = () => {
                                     gridClassNameOverwrite="grid grid-cols-4"
                                   />
                                 ) : (
-                                  <div className="text-center py-4">
+                                  <div className="py-4 text-center">
                                     Loading bloodlines...
                                   </div>
                                 )}
@@ -659,8 +672,8 @@ const RegisterForm: React.FC = () => {
                     </div>
                   </CarouselItem>
                   <CarouselItem className="flex flex-col items-center gap-4">
-                    <div className="w-full flex justify-center">
-                      <div className="relative w-full aspect-[491/89]">
+                    <div className="flex w-full justify-center">
+                      <div className="relative aspect-[491/89] w-full">
                         <Image
                           alt="step4"
                           src={IMG_REGISTRATIN_STEP9}
@@ -685,7 +698,7 @@ const RegisterForm: React.FC = () => {
                             <div className="space-y-1 leading-none">
                               <FormLabel>
                                 <Link
-                                  className="hover:opacity-70 text-base sm:text-lg"
+                                  className="text-base hover:opacity-70 sm:text-lg"
                                   href="https://app.termly.io/document/terms-of-service/71d95c2f-d6eb-4e3c-b480-9f0b9bb87830"
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -712,7 +725,7 @@ const RegisterForm: React.FC = () => {
                             <div className="space-y-1 leading-none">
                               <FormLabel>
                                 <Link
-                                  className="hover:opacity-70 text-base sm:text-lg"
+                                  className="text-base hover:opacity-70 sm:text-lg"
                                   href="https://app.termly.io/document/privacy-policy/9fea0bba-1061-47c0-8f28-0f724f06cc0e"
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -771,17 +784,17 @@ const RegisterForm: React.FC = () => {
                   <Button
                     type="button"
                     onClick={() => cApi?.scrollNext()}
-                    className="shadow-md bg-green-700 hover:bg-green-800"
+                    className="bg-green-700 shadow-md hover:bg-green-800"
                   >
                     Next
-                    <ArrowRight className="h-5 w-5 ml-2" />
+                    <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </div>
               )}
             </form>
           </Form>
 
-          <p className="text-center text-lg italic opacity-30 font-bold m-2">
+          <p className="m-2 text-center font-bold text-lg italic opacity-30">
             Step {current} / {count}
           </p>
         </>

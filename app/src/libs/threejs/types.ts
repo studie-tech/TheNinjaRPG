@@ -1,6 +1,4 @@
-import type { AllianceState } from "@/drizzle/constants";
-import type { UserRank } from "@/drizzle/constants";
-import type { UserStatus } from "@/drizzle/constants";
+import type { AllianceState, UserRank, UserStatus } from "@/drizzle/constants";
 
 type NonEmptyArray<T> = T[] & { 0: T };
 

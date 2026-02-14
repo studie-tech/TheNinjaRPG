@@ -1,18 +1,19 @@
-import React, { useEffect, useRef } from "react";
 import { Chart as ChartJS } from "chart.js/auto";
-import ContentBox from "@/layout/ContentBox";
-import BattleLengthFiltering, {
-  useFiltering,
-  getFilter,
-} from "@/layout/BattleLengthFiltering";
+import { Trash2 } from "lucide-react";
+import type React from "react";
+import { useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
-import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import BattleLengthFiltering, {
+  getFilter,
+  useFiltering,
+} from "@/layout/BattleLengthFiltering";
 import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 interface BattleLengthHistogramProps {
   title?: string;
@@ -67,7 +68,9 @@ export const BattleLengthHistogram: React.FC<BattleLengthHistogramProps> = ({
 
       // Get all unique round values for labels
       const allRounds = new Set<number>();
-      battleLengthData.forEach((item) => allRounds.add(item.rounds));
+      battleLengthData.forEach((item) => {
+        allRounds.add(item.rounds);
+      });
       const sortedRounds = Array.from(allRounds).sort((a, b) => a - b);
 
       // Create datasets for each battle type
@@ -95,7 +98,7 @@ export const BattleLengthHistogram: React.FC<BattleLengthHistogramProps> = ({
           return {
             label: battleType,
             data: data,
-            backgroundColor: colors[index % colors.length] + "80", // Add transparency
+            backgroundColor: `${colors[index % colors.length]}80`, // Add transparency
             borderColor: colors[index % colors.length],
             borderWidth: 1,
             // Remove stacking - let bars be grouped side by side
@@ -197,11 +200,11 @@ export const BattleLengthHistogram: React.FC<BattleLengthHistogramProps> = ({
       padding={false}
     >
       {battleLengthData && battleLengthData.length > 0 ? (
-        <div className="relative w-full h-96">
+        <div className="relative h-96 w-full">
           <canvas ref={chartRef} id="battleLengthHistogram"></canvas>
         </div>
       ) : (
-        <p className="text-gray-500 text-center py-8">
+        <p className="py-8 text-center text-gray-500">
           No battle length data available.
         </p>
       )}

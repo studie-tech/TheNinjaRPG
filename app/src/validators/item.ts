@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { statFilters } from "@/libs/train";
 import {
-  ItemTypes,
+  AttackMethods,
+  AttackTargets,
+  BattleUsageTypes,
   ItemRarities,
   ItemSlotTypes,
-  AttackTargets,
-  AttackMethods,
-  BattleUsageTypes,
+  ItemTypes,
 } from "@/drizzle/constants";
+import { statFilters } from "@/libs/train";
 
 export const itemFilteringSchema = z.object({
   limit: z.number().min(1).max(500),
@@ -16,9 +16,9 @@ export const itemFilteringSchema = z.object({
   itemRarity: z.enum(ItemRarities).optional(),
   effect: z.array(z.string()).optional(),
   stat: z.enum(statFilters).optional(),
-  minCost: z.number().default(0),
-  minRepsCost: z.number().default(0),
-  minSeichiSilverCost: z.number().default(0),
+  minCost: z.number().prefault(0),
+  minRepsCost: z.number().prefault(0),
+  minSeichiSilverCost: z.number().prefault(0),
   maxSeichiSilverCost: z.number().optional(),
   onlyInShop: z.boolean().optional(),
   eventItems: z.boolean().optional(),

@@ -1,23 +1,34 @@
-import { z } from "zod";
+import { and, desc, eq, gte, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { eq, ne, or, gte, and, sql, desc } from "drizzle-orm";
-import { paypalTransaction, paypalSubscription } from "@/drizzle/schema";
-import { userData } from "@/drizzle/schema";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { baseServerResponse, errorResponse } from "../trpc";
-import { dollars2reps, calcFedUgradeCost } from "@/utils/paypal";
-import { plan2FedStatus, fedStatusRepsCost } from "@/utils/paypal";
-import { serverError } from "../trpc";
-import { fetchUser } from "./profile";
-import { recruitmentRewards } from "@/drizzle/schema";
-import { FederalStatuses } from "@/drizzle/constants";
-import { canSeeSecretData } from "@/utils/permissions";
-import { searchPaypalTransactionSchema } from "@/validators/points";
-import { addDays, secondsFromNow } from "@/utils/time";
+import { z } from "zod";
 import type { TransactionType } from "@/drizzle/constants";
+import { FederalStatuses } from "@/drizzle/constants";
 import type { FederalStatus } from "@/drizzle/schema";
-import type { DrizzleClient } from "../../db";
+import {
+  paypalSubscription,
+  paypalTransaction,
+  recruitmentRewards,
+  userData,
+} from "@/drizzle/schema";
+import {
+  calcFedUgradeCost,
+  dollars2reps,
+  fedStatusRepsCost,
+  plan2FedStatus,
+} from "@/utils/paypal";
+import { canSeeSecretData } from "@/utils/permissions";
+import { addDays, secondsFromNow } from "@/utils/time";
 import type { JsonData } from "@/utils/typeutils";
+import { searchPaypalTransactionSchema } from "@/validators/points";
+import type { DrizzleClient } from "../../db";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  serverError,
+} from "../trpc";
+import { fetchUser } from "./profile";
 
 type PaypalAmount = {
   currency_code?: string;
@@ -535,7 +546,7 @@ export const getPaypalTransactions = async (
   return await fetch(`${path}&fields=all`, {
     method: "GET",
     headers: {
-      Authorization: "Bearer " + token,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
   })
@@ -656,7 +667,7 @@ export const getPaypalSubscription = async (subscriptionId: string, token: strin
     {
       method: "GET",
       headers: {
-        Authorization: "Bearer " + token,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     },
@@ -679,7 +690,7 @@ export const cancelPaypalSubscription = async (
     {
       method: "POST",
       headers: {
-        Authorization: "Bearer " + token,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ reason: "Canceleted through site" }),
@@ -694,11 +705,7 @@ export const getPaypalAccessToken = async () => {
   return await fetch(`${process.env.NEXT_PUBLIC_PAYPAL_URL}/v1/oauth2/token`, {
     method: "POST",
     headers: {
-      Authorization:
-        "Basic " +
-        btoa(
-          `${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`,
-        ),
+      Authorization: `Basic ${btoa(`${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`)}`,
     },
     body: new URLSearchParams({
       grant_type: "client_credentials",
@@ -719,7 +726,7 @@ export const getPaypalOrder = async (input: { orderId: string; token: string }) 
     {
       method: "GET",
       headers: {
-        Authorization: "Bearer " + input.token,
+        Authorization: `Bearer ${input.token}`,
         "Content-Type": "application/json",
       },
     },

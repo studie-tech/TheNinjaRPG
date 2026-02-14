@@ -1,33 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { z } from "zod";
-import BanInfo from "@/layout/BanInfo";
-import Image from "@/layout/Image";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import UserSearchSelect from "@/layout/UserSearchSelect";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import { useInfinitePagination } from "@/libs/pagination";
-import { getSearchValidator } from "@/validators/register";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import {
-  Coins,
-  Landmark,
-  ChevronsUp,
-  ChevronsRight,
-  ChevronsLeft,
-  Gift,
-} from "lucide-react";
-import { useRequireInVillage } from "@/utils/UserContext";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronsUp,
+  Coins,
+  Gift,
+  Landmark,
+  Waypoints,
+} from "lucide-react";
+import { useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { getStrucBoost, calcBankInterest } from "@/utils/village";
-import GraphBankLedger from "@/layout/GraphBankLedger";
-import { Waypoints } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -43,8 +30,26 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { IMG_BUILDING_BANK } from "@/drizzle/constants";
+import BanInfo from "@/layout/BanInfo";
+import ContentBox from "@/layout/ContentBox";
+import GraphBankLedger from "@/layout/GraphBankLedger";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
 import type { ArrayElement } from "@/utils/typeutils";
+import { useRequireInVillage } from "@/utils/UserContext";
+import { calcBankInterest, getStrucBoost } from "@/utils/village";
+import {
+  createMoneyTransferSchema,
+  type MoneyTransferSchema,
+  type MoneyTransferSchemaInput,
+} from "@/validators/bank";
+import { getSearchValidator } from "@/validators/register";
 
 export default function Bank() {
   // State
@@ -66,23 +71,19 @@ export default function Bank() {
     });
 
   // Schemas
-  const fromPocketSchema = z.object({
-    amount: z.coerce.number().int().positive().max(money),
-  });
-  const fromBankSchema = z.object({
-    amount: z.coerce.number().int().positive().max(bank),
-  });
+  const fromPocketSchema = createMoneyTransferSchema(money);
+  const fromBankSchema = createMoneyTransferSchema(bank);
 
   // Forms
-  const toBankForm = useForm<z.infer<typeof fromPocketSchema>>({
+  const toBankForm = useForm<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>({
     defaultValues: { amount: 0 },
     resolver: zodResolver(fromPocketSchema),
   });
-  const toPocketForm = useForm<z.infer<typeof fromBankSchema>>({
+  const toPocketForm = useForm<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>({
     defaultValues: { amount: 0 },
     resolver: zodResolver(fromBankSchema),
   });
-  const toUserForm = useForm<z.infer<typeof fromBankSchema>>({
+  const toUserForm = useForm<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>({
     defaultValues: { amount: 0 },
     resolver: zodResolver(fromBankSchema),
   });
@@ -193,8 +194,7 @@ export default function Bank() {
     },
   );
   const allTransfers = ledger?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .map((entry) => ({
       ...entry,
       sender: entry.sender?.username ?? "Unknown",
@@ -251,7 +251,7 @@ export default function Bank() {
           className="w-full"
           priority={true}
         />
-        <div className="grid grid-cols-2 text-center my-4">
+        <div className="my-4 grid grid-cols-2 text-center">
           <div className="flex flex-col items-center">
             <Coins className="h-20 w-20" />
             <p className="text-lg">{money.toLocaleString()} ryo</p>
@@ -263,12 +263,13 @@ export default function Bank() {
                     control={toBankForm.control}
                     name="amount"
                     render={({ field }) => (
-                      <FormItem className="w-full flex flex-col">
+                      <FormItem className="flex w-full flex-col">
                         <FormControl>
                           <Input
                             id="amount"
                             placeholder="Transfer to bank"
                             {...field}
+                            value={field.value as number}
                           />
                         </FormControl>
                         <FormMessage />
@@ -293,12 +294,13 @@ export default function Bank() {
                     control={toPocketForm.control}
                     name="amount"
                     render={({ field }) => (
-                      <FormItem className="w-full flex flex-col">
+                      <FormItem className="flex w-full flex-col">
                         <FormControl>
                           <Input
                             id="amount"
                             placeholder="Transfer to pocket"
                             {...field}
+                            value={field.value as number}
                           />
                         </FormControl>
                         <FormMessage />
@@ -321,12 +323,12 @@ export default function Bank() {
           initialBreak={true}
           padding={false}
         >
-          <div className="w-full flex flex-col items-center p-4">
-            <Gift className="h-16 w-16 mb-2" />
-            <p className="text-lg mb-2">
+          <div className="flex w-full flex-col items-center p-4">
+            <Gift className="mb-2 h-16 w-16" />
+            <p className="mb-2 text-lg">
               You have {pendingInterest.totalPending} ryo in unclaimed interest!
             </p>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="mb-4 text-muted-foreground text-sm">
               From {pendingInterest.records.length} day(s) of bank interest
             </p>
             <Button
@@ -334,7 +336,7 @@ export default function Bank() {
               className="w-full"
               animation="pulse"
             >
-              <Gift className="h-5 w-5 mr-2" />
+              <Gift className="mr-2 h-5 w-5" />
               Claim Interest
             </Button>
           </div>
@@ -357,14 +359,19 @@ export default function Bank() {
             maxUsers={maxUsers}
           />
           <Form {...toUserForm}>
-            <form onSubmit={onTransfer} className="relative px-1 mr-1 mt-2">
+            <form onSubmit={onTransfer} className="relative mt-2 mr-1 px-1">
               <FormField
                 control={toUserForm.control}
                 name="amount"
                 render={({ field }) => (
-                  <FormItem className="w-full flex flex-col">
+                  <FormItem className="flex w-full flex-col">
                     <FormControl>
-                      <Input id="amount" placeholder="Amount to transfer" {...field} />
+                      <Input
+                        id="amount"
+                        placeholder="Amount to transfer"
+                        {...field}
+                        value={field.value as number}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -389,7 +396,7 @@ export default function Bank() {
                 <Waypoints className="h-5 w-5" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="min-w-[99%] min-h-[99%]">
+            <DialogContent className="min-h-[99%] min-w-[99%]">
               <DialogHeader>
                 <DialogTitle>Bank Ledger</DialogTitle>
                 <DialogDescription asChild>
@@ -400,7 +407,7 @@ export default function Bank() {
           </Dialog>
         }
       >
-        <div className="w-full flex flex-col gap-2 px-2 py-2">
+        <div className="flex w-full flex-col gap-2 px-2 py-2">
           <UserSearchSelect
             useFormMethods={userSearchMethodsFrom}
             label="Search sender"
@@ -421,7 +428,7 @@ export default function Bank() {
           />
         </div>
         <Table data={allTransfers} columns={columns} setLastElement={setLastElement} />
-        <p className="p-2 italic text-xs">
+        <p className="p-2 text-xs italic">
           Note: All transactions in Seichi are on a public blockchain ledger. This means
           that all transactions are public and can be viewed by anyone.{" "}
         </p>

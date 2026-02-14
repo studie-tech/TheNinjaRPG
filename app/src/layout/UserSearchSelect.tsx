@@ -1,7 +1,9 @@
-import React from "react";
-import { useState, useEffect } from "react";
-import AvatarImage from "./Avatar";
-import { Input } from "@/components/ui/input";
+import { X } from "lucide-react";
+import type React from "react";
+import { useEffect, useState } from "react";
+import type { UseFormReturn } from "react-hook-form";
+import { useWatch } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
 import {
   Form,
   FormControl,
@@ -9,12 +11,10 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import { X } from "lucide-react";
-import { getUnique } from "@/utils/grouping";
-import { api } from "@/app/_trpc/client";
+import { Input } from "@/components/ui/input";
 import type { FederalStatus, UserRank } from "@/drizzle/schema";
-import type { UseFormReturn } from "react-hook-form";
-import { useWatch } from "react-hook-form";
+import { getUnique } from "@/utils/grouping";
+import AvatarImage from "./Avatar";
 
 type SelectedUser = {
   username: string;
@@ -83,7 +83,7 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
   const selectedVisual = filteredUsers.map((user) => (
     <span
       key={user.userId}
-      className="inline-flex items-center rounded-lg border border-amber-900 bg-gray-100 px-2 text-sm font-medium text-gray-800"
+      className="inline-flex items-center rounded-lg border border-amber-900 bg-gray-100 px-2 font-medium text-gray-800 text-sm"
     >
       <div className="m-1 w-8">
         <AvatarImage
@@ -112,14 +112,14 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
   ));
 
   return (
-    <div className="flex flex-col w-full items-center">
-      <div className="flex flex-row gap-1 w-full items-center">
+    <div className="flex w-full flex-col items-center">
+      <div className="flex w-full flex-row items-center gap-1">
         <Form {...form}>
           <FormField
             control={form.control}
             name="username"
             render={({ field }) => (
-              <FormItem className="w-full flex flex-col">
+              <FormItem className="flex w-full flex-col">
                 <FormControl>
                   <Input
                     id="username"
@@ -135,13 +135,14 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
         {props.inline && selectedVisual}
       </div>
       {!props.inline && (
-        <div className="flex flex-row mt-1 ml-1 w-full">{selectedVisual}</div>
+        <div className="mt-1 ml-1 flex w-full flex-row">{selectedVisual}</div>
       )}
       {searchResults && watchUsername && (
         <div className="mt-1 w-full rounded-lg border-2 border-slate-500 bg-slate-100">
           {searchResults?.map((user) => (
-            <div
-              className="flex flex-row items-center p-2.5 hover:bg-slate-200"
+            <button
+              type="button"
+              className="flex w-full flex-row items-center p-2.5 text-left hover:bg-slate-200"
               key={user.userId}
               onClick={(e) => {
                 e.preventDefault();
@@ -168,7 +169,7 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
                   Lvl. {user.level} {user.rank}
                 </p>
               </div>
-            </div>
+            </button>
           ))}
           {searchResults.length === 0 && <div className="p-2.5">No users found</div>}
         </div>

@@ -1,19 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { FilePlus, HelpCircle, Skull, User } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
-import { FilePlus, HelpCircle, User, Skull } from "lucide-react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { TowerDefenseCharacterDb } from "@/drizzle/schema";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import Image from "@/layout/Image";
-import Link from "next/link";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { TowerDefenseCharacterDb } from "@/drizzle/schema";
 
 export default function ManualTowerDefenseCharacters() {
   const { data: userData } = useUserData();
@@ -78,7 +78,7 @@ export default function ManualTowerDefenseCharacters() {
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as "enemies" | "players")}
         >
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4 flex items-center justify-between">
             <TabsList>
               <TabsTrigger value="enemies" className="flex items-center gap-2">
                 <Skull className="h-4 w-4" />
@@ -107,7 +107,7 @@ export default function ManualTowerDefenseCharacters() {
               <p className="text-muted-foreground">No enemies configured yet.</p>
             )}
             {!isLoading && enemies.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {enemies.map((character) => (
                   <CharacterCard
                     key={character.id}
@@ -127,7 +127,7 @@ export default function ManualTowerDefenseCharacters() {
               </p>
             )}
             {!isLoading && players.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {players.map((character) => (
                   <CharacterCard
                     key={character.id}
@@ -162,7 +162,7 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
   const southRotationImage = character.assetConfig?.rotations?.south;
 
   return (
-    <div className="border rounded-lg p-4 bg-card">
+    <div className="rounded-lg border bg-card p-4">
       <div className="flex items-start gap-3">
         {southRotationImage ? (
           <Image
@@ -173,13 +173,13 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
             className="rounded"
           />
         ) : (
-          <div className="w-16 h-16 bg-muted rounded flex items-center justify-center text-muted-foreground">
+          <div className="flex h-16 w-16 items-center justify-center rounded bg-muted text-muted-foreground">
             <HelpCircle className="h-8 w-8" />
           </div>
         )}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold truncate">{character.name}</h3>
+            <h3 className="truncate font-semibold">{character.name}</h3>
             {character.isPlayer ? (
               <User className="h-4 w-4 text-blue-500" />
             ) : (
@@ -209,7 +209,7 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
         </div>
       )}
 
-      <div className="mt-2 text-xs text-muted-foreground">
+      <div className="mt-2 text-muted-foreground text-xs">
         Assets: {character.assetConfig ? "✓ Configured" : "✗ Not configured"}
       </div>
 

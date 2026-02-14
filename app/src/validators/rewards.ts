@@ -1,37 +1,59 @@
 import { z } from "zod";
-import { UserRanks, STARTER_VILLAGES } from "@/drizzle/constants";
+import { STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
 import { idsWithNumberField } from "@/validators/base";
 
 export const rewardFields = {
-  reward_hunter_items: z.boolean().default(false),
-  reward_hunter_items_ids: z.array(z.string()).default([]),
-  reward_gathering_items: z.boolean().default(false),
-  reward_gathering_items_ids: z.array(z.string()).default([]),
-  reward_seichi_silver: z.coerce.number().default(0),
-  reward_money: z.coerce.number().default(0),
-  reward_clanpoints: z.coerce.number().default(0),
-  reward_anbupoints: z.coerce.number().default(0),
-  reward_exp: z.coerce.number().default(0),
-  reward_tokens: z.coerce.number().default(0),
-  reward_prestige: z.coerce.number().default(0),
-  reward_reputation: z.coerce.number().default(0),
-  reward_skillpoints: z.coerce.number().default(0),
-  reward_rank: z.enum(UserRanks).default("NONE"),
-  reward_village_membership: z.enum(STARTER_VILLAGES).default("NONE"),
+  reward_hunter_items: z.boolean().prefault(false),
+  reward_hunter_items_ids: z.array(z.string()).prefault([]),
+  reward_gathering_items: z.boolean().prefault(false),
+  reward_gathering_items_ids: z.array(z.string()).prefault([]),
+  reward_seichi_silver: z.coerce.number().prefault(0),
+  reward_money: z.coerce.number().prefault(0),
+  reward_clanpoints: z.coerce.number().prefault(0),
+  reward_anbupoints: z.coerce.number().prefault(0),
+  reward_exp: z.coerce.number().prefault(0),
+  reward_tokens: z.coerce.number().prefault(0),
+  reward_prestige: z.coerce.number().prefault(0),
+  reward_reputation: z.coerce.number().prefault(0),
+  reward_skillpoints: z.coerce.number().prefault(0),
+  reward_rank: z.enum(UserRanks).prefault("NONE"),
+  reward_village_membership: z.enum(STARTER_VILLAGES).prefault("NONE"),
   reward_items: idsWithNumberField,
-  reward_jutsus: z.array(z.string()).default([]),
-  reward_bloodlines: z.array(z.string()).default([]),
-  reward_badges: z.array(z.string()).default([]),
-  reward_medical_experience: z.coerce.number().default(0),
-  reward_hunting_experience: z.coerce.number().default(0),
-  reward_crafting_experience: z.coerce.number().default(0),
-  reward_gathering_experience: z.coerce.number().default(0),
-  reward_war_damage: z.coerce.number().default(0), // Damage to enemy war health
-  reward_war_healing: z.coerce.number().default(0), // Heal own war health
+  reward_jutsus: z.array(z.string()).prefault([]),
+  reward_bloodlines: z.array(z.string()).prefault([]),
+  reward_badges: z.array(z.string()).prefault([]),
+  reward_medical_experience: z.coerce.number().prefault(0),
+  reward_hunting_experience: z.coerce.number().prefault(0),
+  reward_crafting_experience: z.coerce.number().prefault(0),
+  reward_gathering_experience: z.coerce.number().prefault(0),
+  reward_war_damage: z.coerce.number().prefault(0), // Damage to enemy war health
+  reward_war_healing: z.coerce.number().prefault(0), // Heal own war health
 };
 
 export const ObjectiveReward = z.object(rewardFields);
 export type ObjectiveRewardType = z.infer<typeof ObjectiveReward>;
+export type ObjectiveRewardInputType = z.input<typeof ObjectiveReward>;
+
+/**
+ * Schema for post-processed rewards where item/jutsu/bloodline/badge IDs
+ * have been resolved to names (simple string arrays).
+ * Used as output schema for API responses that return processed rewards.
+ *
+ * This is the SINGLE SOURCE OF TRUTH for post-processed reward types.
+ * The postProcessRewards function in quest.ts uses this type as its return type
+ * to ensure type safety if the function implementation changes.
+ */
+export const PostProcessedRewardSchema = z.object({
+  ...rewardFields,
+  // Override fields that get resolved to names after processing
+  reward_items: z.array(z.string()).prefault([]),
+  reward_jutsus: z.array(z.string()).prefault([]),
+  reward_bloodlines: z.array(z.string()).prefault([]),
+  reward_badges: z.array(z.string()).prefault([]),
+});
+
+/** Type for post-processed rewards - single source of truth */
+export type PostProcessedRewards = z.infer<typeof PostProcessedRewardSchema>;
 
 export const hasReward = (reward: ObjectiveRewardType) => {
   const parsedReward = ObjectiveReward.parse(reward);

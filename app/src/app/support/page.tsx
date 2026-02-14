@@ -1,30 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { AlertCircle, Plus, Tag, Users } from "lucide-react";
 import Link from "next/link";
-import ContentBox from "@/layout/ContentBox";
-import { parseHtml } from "@/utils/parse";
-import Post from "@/layout/Post";
-import Loader from "@/layout/Loader";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Plus, AlertCircle, Tag, Users } from "lucide-react";
-import { api } from "@/app/_trpc/client";
-import { useInfinitePagination } from "@/libs/pagination";
-import { useRequiredUserData } from "@/utils/UserContext";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Post from "@/layout/Post";
 import SupportTicketFiltering, {
-  useFiltering as useSupportTicketFiltering,
   getFilter as getSupportTicketFilter,
+  useFiltering as useSupportTicketFiltering,
 } from "@/layout/SupportTicketFiltering";
-import {
-  getStatusColor,
-  getPriorityColor,
-  getCategoryColor,
-  formatTimeAgo,
-} from "@/libs/support";
 import { getStatusIcon } from "@/libs/menus";
+import { useInfinitePagination } from "@/libs/pagination";
+import {
+  formatTimeAgo,
+  getCategoryColor,
+  getPriorityColor,
+  getStatusColor,
+} from "@/libs/support";
+import { parseHtml } from "@/utils/parse";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function SupportPage() {
   // State
@@ -56,10 +56,8 @@ export default function SupportPage() {
     );
 
   const allTickets =
-    data?.pages
-      .map((page) => page.data)
-      .flat()
-      .filter((ticket) => ticket?.createdBy) || [];
+    data?.pages.flatMap((page) => page.data).filter((ticket) => ticket?.createdBy) ||
+    [];
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Query for statistics (staff only)
@@ -81,7 +79,7 @@ export default function SupportPage() {
             <SupportTicketFiltering state={filterState} />
             <Link href="/support/create">
               <Button>
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="mr-2 h-4 w-4" />
                 New
               </Button>
             </Link>
@@ -90,51 +88,51 @@ export default function SupportPage() {
       >
         {/* Statistics Cards (Staff Only) */}
         {isStaff && statistics && (
-          <div className="grid grid-cols-2 gap-2 mb-6">
+          <div className="mb-6 grid grid-cols-2 gap-2">
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Total</CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Total</CardTitle>
               </CardHeader>
               <CardContent className="pb-0">
-                <div className="text-xl font-bold ">{statistics.totalTickets}</div>
+                <div className="font-bold text-xl">{statistics.totalTickets}</div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Open </CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Open </CardTitle>
               </CardHeader>
               <CardContent className="py-1">
-                <div className="text-xl font-bold  text-orange-600">
+                <div className="font-bold text-orange-600 text-xl">
                   {statistics.openTickets}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Resolved</CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Resolved</CardTitle>
               </CardHeader>
               <CardContent className="py-1">
-                <div className="text-xl font-bold  text-green-600">
+                <div className="font-bold text-green-600 text-xl">
                   {statistics.resolvedTickets}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Assigned to Me</CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Assigned to Me</CardTitle>
               </CardHeader>
               <CardContent className="py-1">
-                <div className="text-xl font-bold  text-blue-600">
+                <div className="font-bold text-blue-600 text-xl">
                   {statistics.assignedToCurrentUser}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Avg. Response</CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Avg. Response</CardTitle>
               </CardHeader>
               <CardContent className="py-1">
-                <div className="text-xl font-bold ">
+                <div className="font-bold text-xl">
                   ~{statistics.averageResponseTime}mins
                 </div>
               </CardContent>
@@ -149,8 +147,8 @@ export default function SupportPage() {
           ) : (
             <>
               {allTickets.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <AlertCircle className="mx-auto h-12 w-12 mb-4" />
+                <div className="py-8 text-center text-gray-500">
+                  <AlertCircle className="mx-auto mb-4 h-12 w-12" />
                   <p>No tickets found</p>
                 </div>
               )}
@@ -171,7 +169,7 @@ export default function SupportPage() {
                         href={`/support/${ticket.id}`}
                       >
                         <div className="flex flex-col gap-2">
-                          <div className="flex items-center gap-2 text-sm text-foreground-muted">
+                          <div className="flex items-center gap-2 text-foreground-muted text-sm">
                             <span>by {ticket.createdBy.username}</span>
                             <Separator orientation="vertical" className="h-4" />
                             <span>{formatTimeAgo(ticket.createdAt)}</span>
@@ -183,7 +181,7 @@ export default function SupportPage() {
                             )}
                           </div>
 
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex flex-wrap items-center gap-2">
                             <Badge className={getStatusColor(ticket.status)}>
                               {getStatusIcon(ticket.status)}
                               <span className="ml-1">
@@ -198,22 +196,22 @@ export default function SupportPage() {
                             </Badge>
                             {ticket.isPublic && (
                               <Badge variant="outline">
-                                <Users className="h-3 w-3 mr-1" />
+                                <Users className="mr-1 h-3 w-3" />
                                 Public
                               </Badge>
                             )}
                           </div>
 
-                          <div className="text-sm text-foreground line-clamp-3 border p-2 rounded-md">
+                          <div className="line-clamp-3 rounded-md border p-2 text-foreground text-sm">
                             {parseHtml(ticket.description)}
                           </div>
 
                           {ticket.tags && ticket.tags.length > 0 && (
-                            <div className="flex items-center gap-1 flex-wrap">
+                            <div className="flex flex-wrap items-center gap-1">
                               <Tag className="h-3 w-3 text-foreground" />
-                              {ticket.tags.map((tag, index) => (
+                              {ticket.tags.map((tag, i) => (
                                 <Badge
-                                  key={index}
+                                  key={`${tag}-${i}`}
                                   variant="secondary"
                                   className="text-xs"
                                 >

@@ -12,14 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { objectKeys } from "@/utils/typeutils";
 import { getTagSchema } from "@/validators/combat";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
+import { nanoid } from "nanoid";
+import type { FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { getObjectiveSchema } from "@/validators/objectives";
-import { ObjectiveReward } from "@/validators/rewards";
 import { Button } from "@/components/ui/button";
-import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
-import { X, Plus } from "lucide-react";
-import { SimpleTasks } from "@/validators/objectives";
 import {
   Command,
   CommandEmpty,
@@ -28,7 +25,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -37,29 +33,39 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { nanoid } from "nanoid";
-import { cn } from "src/libs/shadui";
-import { InstantTasks, RaidTasks } from "@/validators/objectives";
-import { useUserData } from "@/utils/UserContext";
-import { canAwardReputation } from "@/utils/permissions";
-import type { Quest } from "@/drizzle/schema";
-import type { DeepPartial } from "@/utils/typeutils";
-import type { Path, PathValue } from "react-hook-form";
-import type { AllObjectivesType } from "@/validators/objectives";
-import type { ObjectiveRewardType } from "@/validators/rewards";
-import type { ZodAllTags } from "@/validators/combat";
-import type { FieldValues } from "react-hook-form";
-import type { UseFormReturn } from "react-hook-form";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
-import Table from "@/layout/Table";
-import type { ColumnDefinitionType } from "@/layout/Table";
-import type { ZodItemType, ZodJutsuType, ZodBloodlineType } from "@/validators/combat";
-import Modal2 from "@/layout/Modal2";
+import type { Quest } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
-import ContentImage from "@/layout/ContentImage";
 import ContentAudioSelector from "@/layout/ContentAudioSelector";
+import ContentImage from "@/layout/ContentImage";
+import Modal2 from "@/layout/Modal2";
+import type { ColumnDefinitionType } from "@/layout/Table";
+import Table from "@/layout/Table";
+import { cn } from "@/libs/shadui";
+import { showMutationToast } from "@/libs/toast";
+import { canAwardReputation } from "@/utils/permissions";
+import type { DeepPartial } from "@/utils/typeutils";
+import { useUserData } from "@/utils/UserContext";
 import { UploadButton } from "@/utils/uploadthing";
+import type {
+  ZodAllTags,
+  ZodBloodlineType,
+  ZodItemType,
+  ZodJutsuType,
+} from "@/validators/combat";
+import type { AllObjectivesType } from "@/validators/objectives";
+import {
+  getObjectiveSchema,
+  InstantTasks,
+  type RaidTask,
+  RaidTasks,
+  type SimpleTask,
+  SimpleTasks,
+} from "@/validators/objectives";
+import type { ObjectiveRewardType } from "@/validators/rewards";
+import { ObjectiveReward } from "@/validators/rewards";
 
 export type FormDbValue = { id: string; name: string };
 export type FormEntry<K> = {
@@ -127,7 +133,7 @@ interface EditContentProps<T, K, S extends FieldValues> {
  * @returns React.ReactNode
  */
 export const EditContent = <
-  T extends z.AnyZodObject,
+  T extends z.ZodObject<any>,
   K extends Path<S>,
   S extends z.infer<T>,
 >(
@@ -172,7 +178,7 @@ export const EditContent = <
     },
   );
   const allPickerAssets = useMemo(
-    () => (assetPages?.pages.map((p) => p.data).flat() || []).filter((a) => !a.hidden),
+    () => (assetPages?.pages.flatMap((p) => p.data) || []).filter((a) => !a.hidden),
     [assetPages],
   );
   const pickerTags =
@@ -245,7 +251,6 @@ export const EditContent = <
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Mutations
@@ -319,7 +324,7 @@ export const EditContent = <
       <form
         onSubmit={props.onAccept}
         className={
-          formClassName ?? "grid grid-cols-1 md:grid-cols-2 items-center gap-1"
+          formClassName ?? "grid grid-cols-1 items-center gap-1 md:grid-cols-2"
         }
       >
         {/* Asset Picker Dialog */}
@@ -335,7 +340,7 @@ export const EditContent = <
             isOpen={assetPickerOpen}
             setIsOpen={setAssetPickerOpen}
             isValid={false}
-            className="w-[800px] max-w-[99%] max-h-[99%]"
+            className="max-h-[99%] w-[800px] max-w-[99%]"
           >
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
@@ -346,12 +351,7 @@ export const EditContent = <
                   <button
                     type="button"
                     key={t}
-                    className={
-                      "px-2 py-1 rounded border text-xs " +
-                      (assetTokens.includes(String(t))
-                        ? "bg-foreground text-background border-foreground"
-                        : "bg-background border-muted-foreground/30")
-                    }
+                    className={`rounded border px-2 py-1 text-xs ${assetTokens.includes(String(t)) ? "border-foreground bg-foreground text-background" : "border-muted-foreground/30 bg-background"}`}
                     onClick={(e) => {
                       e.preventDefault();
                       setAssetTokens((prev) =>
@@ -367,7 +367,7 @@ export const EditContent = <
               </div>
 
               {assetPickerType === "SFX" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-96 overflow-auto">
+                <div className="grid max-h-96 grid-cols-2 gap-3 overflow-auto md:grid-cols-3">
                   {(allPickerAssets || [])
                     .filter((a) => a.type === "SFX")
                     .map((a) => {
@@ -378,11 +378,12 @@ export const EditContent = <
                         <div
                           key={a.id}
                           className={cn(
-                            "border rounded p-2 space-y-2",
+                            "space-y-2 rounded border p-2",
                             selected ? "border-green-500 bg-green-50" : "",
                           )}
                         >
                           <Label>{a.name}</Label>
+                          {/* biome-ignore lint/a11y/useMediaCaption: Audio asset preview - no captions for music/sfx */}
                           <audio src={a.url ?? undefined} controls className="w-full" />
                           <Button
                             type="button"
@@ -473,11 +474,11 @@ export const EditContent = <
 
             // Options for select & multi-select
             let options: OptionType[] = [];
-            if (formEntry.type === "str_array") {
-              options.push(...formEntry.values?.map((v) => ({ label: v, value: v })));
+            if (formEntry.type === "str_array" && formEntry.values) {
+              options.push(...formEntry.values.map((v) => ({ label: v, value: v })));
             } else if (formEntry.type === "db_values" && formEntry.values) {
               options.push(
-                ...formEntry.values?.map((v) => ({ label: v.name, value: v.id })),
+                ...formEntry.values.map((v) => ({ label: v.name, value: v.id })),
               );
             }
             options = options.map((o) => ({
@@ -525,35 +526,35 @@ export const EditContent = <
                     ["avatar", "avatar3d"].includes(type) ? "row-span-5" : "",
                     formEntry.doubleWidth ? "md:col-span-2" : "",
                     props.fixedWidths
-                      ? `grow-0 shrink-0 px-2 pt-3 h-32 ${props.fixedWidths}`
+                      ? `h-32 shrink-0 grow-0 px-2 pt-3 ${props.fixedWidths}`
                       : "",
                     // Rewards drawn in green
                     formEntry.category === "reward"
-                      ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 border rounded-lg"
+                      ? "rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
                       : "",
                     // Oppoenents drawn in red
                     formEntry.category === "opponent"
-                      ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 border rounded-lg"
+                      ? "rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20"
                       : "",
                     // Attackers drawn in red
                     formEntry.category === "attackers"
-                      ? "bg-pink-100 dark:bg-pink-900/20 border-pink-200 dark:border-pink-800 border rounded-lg"
+                      ? "rounded-lg border border-pink-200 bg-pink-100 dark:border-pink-800 dark:bg-pink-900/20"
                       : "",
                     // Raid things in orange
                     formEntry.category === "raid"
-                      ? "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 border rounded-lg"
+                      ? "rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20"
                       : "",
                     // Location things in blue
                     formEntry.category === "location"
-                      ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 border rounded-lg"
+                      ? "rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20"
                       : "",
                     // Graph things in purple
                     formEntry.category === "graph"
-                      ? "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 border rounded-lg"
+                      ? "rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-900/20"
                       : "",
                     // Description things in yellow
                     formEntry.category === "scene"
-                      ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 border rounded-lg text-black dark:text-white"
+                      ? "rounded-lg border border-yellow-200 bg-yellow-50 text-black dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-white"
                       : "",
                   )}
                 >
@@ -574,6 +575,13 @@ export const EditContent = <
                                 isDirty={fieldState.isDirty}
                                 readOnly={formEntry.readonly}
                                 {...field}
+                                value={
+                                  field.value as
+                                    | string
+                                    | number
+                                    | readonly string[]
+                                    | undefined
+                                }
                               />
                             </FormControl>
                             <FormMessage />
@@ -638,7 +646,7 @@ export const EditContent = <
                             </FormLabel>
                             <FormControl>
                               <Switch
-                                checked={field.value}
+                                checked={field.value as boolean | undefined}
                                 isDirty={fieldState.isDirty}
                                 onCheckedChange={field.onChange}
                               />
@@ -734,7 +742,7 @@ export const EditContent = <
                                   );
                                 } else {
                                   // If multi-select, add to current selection
-                                  const currentValues = field.value ? field.value : [];
+                                  const currentValues = (field.value ?? []) as string[];
                                   field.onChange([
                                     ...currentValues,
                                     newItemInput.trim(),
@@ -753,7 +761,7 @@ export const EditContent = <
 
                                 {"multiple" in formEntry && formEntry.multiple ? (
                                   <MultiSelect
-                                    selected={field.value ? field.value : []}
+                                    selected={(field.value ?? []) as string[]}
                                     isDirty={fieldState.isDirty}
                                     options={dynamicOptions}
                                     onChange={field.onChange}
@@ -825,7 +833,7 @@ export const EditContent = <
                                             ))}
                                           </CommandGroup>
                                           {canAddNew && (
-                                            <div className="p-2 border-t">
+                                            <div className="border-t p-2">
                                               <div className="flex items-center space-x-2">
                                                 <Input
                                                   placeholder="Add new option..."
@@ -866,7 +874,7 @@ export const EditContent = <
                       </div>
                       {formEntry.resetButton && (
                         <Button
-                          className="w-8 p-0 ml-1"
+                          className="ml-1 w-8 p-0"
                           type="button"
                           variant="ghost"
                           onClick={(e) => {
@@ -881,7 +889,7 @@ export const EditContent = <
                         </Button>
                       )}
                       {"current" in formEntry && formEntry.current && (
-                        <div className="w-12 ml-1 h-12 overflow-y-auto">
+                        <div className="ml-1 h-12 w-12 overflow-y-auto">
                           <Image
                             src={formEntry.current}
                             alt={id}
@@ -921,7 +929,7 @@ export const EditContent = <
                               (o) => o.value === field.value,
                             );
                             return (
-                              <div className="flex flex-row items-start gap-3 w-full">
+                              <div className="flex w-full flex-row items-start gap-3">
                                 <FormItem className="flex-1">
                                   <FormLabel>{label}</FormLabel>
                                   <div className="flex items-center gap-2">
@@ -929,7 +937,7 @@ export const EditContent = <
                                       type="button"
                                       variant="outline"
                                       className={cn(
-                                        "justify-between w-full",
+                                        "w-full justify-between",
                                         field.value ? "" : "text-muted-foreground",
                                       )}
                                       onClick={handleOpen}
@@ -980,6 +988,7 @@ export const EditContent = <
                                         (a) => a.id === (field.value as string),
                                       );
                                       return sfx?.url ? (
+                                        // biome-ignore lint/a11y/useMediaCaption: SFX assets don't have caption content
                                         <audio
                                           src={sfx.url}
                                           controls
@@ -1075,15 +1084,16 @@ export const EditContent = <
                             <FormLabel>
                               {formEntry.label ? formEntry.label : id}
                             </FormLabel>
-                            <div className="flex flex-col gap-2 items-left w-full">
+                            <div className="items-left flex w-full flex-col gap-2">
                               {audioUrl ? (
+                                // biome-ignore lint/a11y/useMediaCaption: SFX/audio assets don't have caption content
                                 <audio className="w-full" src={audioUrl} controls />
                               ) : (
-                                <div className="text-sm text-muted-foreground ">
+                                <div className="text-muted-foreground text-sm">
                                   No audio set currently
                                 </div>
                               )}
-                              <div className="flex items-center gap-2 justify-center w-full">
+                              <div className="flex w-full items-center justify-center gap-2">
                                 <ContentAudioSelector
                                   relationId={props.relationId ?? nanoid()}
                                   value={audioUrl}
@@ -1161,20 +1171,23 @@ export const EditContent = <
                           <FormItem className="flex flex-col gap-2">
                             <FormLabel>{formEntry.label ?? id}</FormLabel>
                             <div className="flex flex-col gap-2">
-                              {dialogOptions.map((opt, idx) => {
+                              {dialogOptions.map((opt, optionIdx) => {
                                 const option: {
                                   text: string;
                                   nextObjectiveId: string;
                                 } = opt;
                                 return (
-                                  <div key={idx} className="flex gap-2 items-center">
+                                  <div
+                                    key={`dialog-option-${option.nextObjectiveId}-${optionIdx}`}
+                                    className="flex items-center gap-2"
+                                  >
                                     <Input
                                       className="flex-1"
                                       placeholder="Dialog text..."
                                       value={option.text}
                                       onChange={(e) => {
                                         const updated = [...dialogOptions];
-                                        updated[idx] = {
+                                        updated[optionIdx] = {
                                           ...option,
                                           text: e.target.value,
                                         };
@@ -1213,7 +1226,7 @@ export const EditContent = <
                                                   keywords={[oid]}
                                                   onSelect={() => {
                                                     const updated = [...dialogOptions];
-                                                    updated[idx] = {
+                                                    updated[optionIdx] = {
                                                       ...option,
                                                       nextObjectiveId: oid,
                                                     };
@@ -1242,7 +1255,7 @@ export const EditContent = <
                                       className="p-1"
                                       onClick={() => {
                                         const updated = dialogOptions.filter(
-                                          (_, i) => i !== idx,
+                                          (_, filterIdx) => filterIdx !== optionIdx,
                                         );
                                         field.onChange(updated);
                                       }}
@@ -1255,7 +1268,7 @@ export const EditContent = <
                               <Button
                                 type="button"
                                 variant="secondary"
-                                className="w-full mt-2"
+                                className="mt-2 w-full"
                                 onClick={() => {
                                   field.onChange([
                                     ...dialogOptions,
@@ -1266,7 +1279,7 @@ export const EditContent = <
                                   ]);
                                 }}
                               >
-                                <Plus className="h-4 w-4 mr-1" /> Add Dialog Option
+                                <Plus className="mr-1 h-4 w-4" /> Add Dialog Option
                               </Button>
                             </div>
                             <FormMessage />
@@ -1296,8 +1309,11 @@ export const EditContent = <
                           <FormItem className="flex flex-col py-4">
                             <FormLabel>{formEntry.label ?? id}</FormLabel>
                             <div className="flex flex-col gap-2">
-                              {valueArr.map((entry, idx) => (
-                                <div key={idx} className="flex gap-2 items-center">
+                              {valueArr.map((entry, entryIdx) => (
+                                <div
+                                  key={`db-value-${entry.ids.join("-") || entryIdx}-${entry.number}`}
+                                  className="flex items-center gap-2"
+                                >
                                   {/* Dropdown for db_value */}
                                   <Popover>
                                     <PopoverTrigger asChild>
@@ -1334,7 +1350,7 @@ export const EditContent = <
                                                         (id) => id !== option.value,
                                                       )
                                                     : [...entry.ids, option.value];
-                                                  updated[idx] = {
+                                                  updated[entryIdx] = {
                                                     ...entry,
                                                     ids: ids,
                                                   };
@@ -1369,7 +1385,7 @@ export const EditContent = <
                                       value={entry.number}
                                       onChange={(e) => {
                                         const updated = [...valueArr];
-                                        updated[idx] = {
+                                        updated[entryIdx] = {
                                           ...entry,
                                           number: Number(e.target.value),
                                         };
@@ -1377,7 +1393,7 @@ export const EditContent = <
                                       }}
                                     />
                                     {isRewardItems && (
-                                      <span className="text-xs text-muted-foreground">
+                                      <span className="text-muted-foreground text-xs">
                                         %
                                       </span>
                                     )}
@@ -1395,14 +1411,14 @@ export const EditContent = <
                                         value={entry.quantity ?? 1}
                                         onChange={(e) => {
                                           const updated = [...valueArr];
-                                          updated[idx] = {
+                                          updated[entryIdx] = {
                                             ...entry,
                                             quantity: Number(e.target.value),
                                           };
                                           field.onChange(updated);
                                         }}
                                       />
-                                      <span className="text-xs text-muted-foreground">
+                                      <span className="text-muted-foreground text-xs">
                                         qty
                                       </span>
                                     </div>
@@ -1414,7 +1430,7 @@ export const EditContent = <
                                     className="p-1"
                                     onClick={() => {
                                       const updated = valueArr.filter(
-                                        (_, i) => i !== idx,
+                                        (_, i) => i !== entryIdx,
                                       );
                                       field.onChange(updated);
                                     }}
@@ -1437,7 +1453,7 @@ export const EditContent = <
                                 }}
                                 disabled={options.length === 0}
                               >
-                                <Plus className="h-4 w-4 mr-1" /> Add Entry
+                                <Plus className="mr-1 h-4 w-4" /> Add Entry
                               </Button>
                             </div>
                             <FormMessage />
@@ -1451,7 +1467,7 @@ export const EditContent = <
             );
           })}
         {showSubmit && props.onAccept && (
-          <div className="col-span-2 items-center mt-3">
+          <div className="col-span-2 mt-3 items-center">
             <Button
               id="create"
               className="w-full"
@@ -1546,7 +1562,8 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   });
 
   // Form for handling the specific tag
-  const form = useForm<typeof tag>({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const form = useForm<any>({
     defaultValues: shownTag,
     values: shownTag,
     resolver: zodResolver(tagSchema),
@@ -1582,7 +1599,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         const parsedTag = tagSchema.safeParse({ type: watchType });
         const shownTag = parsedTag.success ? parsedTag.data : tag;
         // For all typed keys in shownTag, if the key exists in curTag, keep the value, except for type
-        objectKeys(shownTag).map((key) => {
+        objectKeys(shownTag).forEach((key) => {
           if (!["type", "calculation", "direction"].includes(key) && key in curTag) {
             // @ts-expect-error - we know this is a key of the object
             shownTag[key] = curTag[key];
@@ -1593,13 +1610,11 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       }
       setEffects(newEffects);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tag, watchType, idx, effects]);
 
   // Trigger re-validation after type changes
   useEffect(() => {
     void form.trigger(undefined, { shouldFocus: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tag.type]);
 
   // Automatically update the effects whenever new data
@@ -1622,7 +1637,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchAll]);
 
   // Attributes on this tag, each of which we should show a form field for
@@ -1630,13 +1644,13 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   const attributes = Object.keys(tagSchema.shape) as Attribute[];
 
   /** Unwrap zod types to get inner-most type */
-  const getInner = (type: z.ZodTypeAny): z.ZodTypeAny => {
+  const getInner = (type: z.ZodType): z.ZodType => {
     if (
       type instanceof z.ZodDefault ||
       type instanceof z.ZodOptional ||
       type instanceof z.ZodNullable
     ) {
-      return getInner(type._def.innerType as z.ZodTypeAny);
+      return getInner(type.unwrap() as z.ZodType);
     }
     return type;
   };
@@ -1854,23 +1868,19 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           readonly: isReputationField && !hasReputationPermission,
         };
       } else if (innerType instanceof z.ZodEnum) {
+        const enumValues = innerType.options as string[];
         return {
           id: value,
           type: "str_array",
-          values: innerType._def.values as string[],
-        };
-      } else if (innerType instanceof z.ZodNativeEnum) {
-        return {
-          id: value,
-          type: "str_array",
-          values: Object.keys(innerType._def.values as Record<string, string>),
+          values: enumValues,
         };
       } else if (
         innerType instanceof z.ZodArray &&
-        innerType._def.type instanceof z.ZodEnum
+        innerType.element instanceof z.ZodEnum
       ) {
-        const values = innerType._def.type._def.values as string[];
-        return { id: value, type: "str_array", values: values, multiple: true };
+        const enumValues = (innerType.element as unknown as { options: string[] })
+          .options;
+        return { id: value, type: "str_array", values: enumValues, multiple: true };
       } else if (innerType instanceof z.ZodBoolean) {
         return { id: value, label: value, type: "boolean" };
       } else {
@@ -1972,7 +1982,8 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   });
 
   // Form for handling the specific tag
-  const form = useForm<AllObjectivesType>({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const form = useForm<any>({
     defaultValues: shownTag,
     values: shownTag,
     resolver: zodResolver(objectiveSchema),
@@ -1998,13 +2009,11 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
       }
       setObjectives(newObjectives);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [objective, watchTask, idx, objectives]);
 
   // Trigger re-validation after type changes
   useEffect(() => {
     void form.trigger(undefined, { shouldFocus: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [objective.task]);
 
   // Automatically update the effects whenever dirty
@@ -2028,7 +2037,6 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchAll]);
 
   // Attributes on this tag, each of which we should show a form field for
@@ -2036,13 +2044,13 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   const attributes = Object.keys(objectiveSchema.shape) as Attribute[];
 
   /** Unwrap zod types to get inner-most type */
-  const getInner = (type: z.ZodTypeAny): z.ZodTypeAny => {
+  const getInner = (type: z.ZodType): z.ZodType => {
     if (
       type instanceof z.ZodDefault ||
       type instanceof z.ZodOptional ||
       type instanceof z.ZodNullable
     ) {
-      return getInner(type._def.innerType as z.ZodTypeAny);
+      return getInner(type.unwrap() as z.ZodType);
     }
     return type;
   };
@@ -2058,7 +2066,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     )
     .filter((value) => {
       return (
-        !(SimpleTasks as unknown as string[]).includes(watchTask) ||
+        !SimpleTasks.includes(watchTask as SimpleTask) ||
         !["latitude", "longitude", "sector"].includes(value)
       );
     })
@@ -2112,7 +2120,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     .filter((value) => {
       // Hide longitude/latitude for raid tasks - these are set via shrine placement
       return (
-        !(RaidTasks as unknown as string[]).includes(watchTask) ||
+        !RaidTasks.includes(watchTask as RaidTask) ||
         !["longitude", "latitude"].includes(value)
       );
     })
@@ -2272,21 +2280,14 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         return {
           id: value,
           type: "str_array",
-          values: innerType._def.values as string[],
+          values: innerType.options as string[],
           label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else if (innerType instanceof z.ZodNativeEnum) {
-        return {
-          id: value,
-          type: "str_array",
-          label: FORM_LABEL_MAP[value] ?? value,
-          values: Object.keys(innerType._def.values as Record<string, string>),
         };
       } else if (
         innerType instanceof z.ZodArray &&
-        innerType._def.type instanceof z.ZodEnum
+        innerType.element instanceof z.ZodEnum
       ) {
-        const values = innerType._def.type._def.values as string[];
+        const values = (innerType.element as unknown as { options: string[] }).options;
         return {
           id: value,
           type: "str_array",
@@ -2296,7 +2297,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         };
       } else if (
         innerType instanceof z.ZodArray &&
-        innerType._def.type instanceof z.ZodString
+        innerType.element instanceof z.ZodString
       ) {
         return {
           id: value,
@@ -2371,7 +2372,8 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
   const { data: bloodlineData } = api.bloodline.getAllNames.useQuery();
 
   // Form for handling the reward
-  const form = useForm<ObjectiveRewardType>({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const form = useForm<any>({
     defaultValues: shownReward,
     values: shownReward,
     resolver: zodResolver(ObjectiveReward),
@@ -2393,7 +2395,6 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
         form.reset(watchAll);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchAll]);
 
   // Attributes on this reward schema
@@ -2401,13 +2402,13 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
   const attributes = Object.keys(ObjectiveReward.shape) as Attribute[];
 
   /** Unwrap zod types to get inner-most type */
-  const getInner = (type: z.ZodTypeAny): z.ZodTypeAny => {
+  const getInner = (type: z.ZodType): z.ZodType => {
     if (
       type instanceof z.ZodDefault ||
       type instanceof z.ZodOptional ||
       type instanceof z.ZodNullable
     ) {
-      return getInner(type._def.innerType as z.ZodTypeAny);
+      return getInner(type.unwrap() as z.ZodType);
     }
     return type;
   };
@@ -2480,7 +2481,7 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
         return {
           id: value,
           type: "str_array" as const,
-          values: innerType._def.values as string[],
+          values: innerType.options as string[],
           label: FORM_LABEL_MAP[value] ?? value,
         };
       } else {
@@ -2564,18 +2565,18 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
 }) => {
   const { effect, field, onChange } = opts;
   const schema = getTagSchema(effect.type);
-  const fieldSchema = (schema.shape as Record<string, z.ZodTypeAny>)[field] as
-    | z.ZodTypeAny
+  const fieldSchema = (schema.shape as Record<string, z.ZodType>)[field] as
+    | z.ZodType
     | undefined;
   if (!fieldSchema) return <div className="text-muted-foreground">N/A</div>;
-  const inner = ((): z.ZodTypeAny => {
-    let t: z.ZodTypeAny = fieldSchema;
+  const inner = ((): z.ZodType => {
+    let t: z.ZodType = fieldSchema;
     while (
       t instanceof z.ZodDefault ||
       t instanceof z.ZodOptional ||
       t instanceof z.ZodNullable
     ) {
-      t = (t as { _def: { innerType: z.ZodTypeAny } })._def.innerType;
+      t = t.unwrap() as z.ZodType;
     }
     return t;
   })();
@@ -2680,15 +2681,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     return <Switch checked={boolVal} onCheckedChange={(v) => onChange(v)} />;
   }
   if (inner instanceof z.ZodEnum) {
-    const values = inner._def.values as string[];
-    const options = values.map((v) => ({ label: v, value: v }));
-    const raw = eff[field];
-    const cur = typeof raw === "string" ? raw : "";
-    const handle = (v: string) => onChange(v);
-    return <SingleSelectSimple value={cur} onChange={handle} options={options} />;
-  }
-  if (inner instanceof z.ZodNativeEnum) {
-    const values = Object.keys(inner._def.values as Record<string, string>);
+    const values = inner.options as string[];
     const options = values.map((v) => ({ label: v, value: v }));
     const raw = eff[field];
     const cur = typeof raw === "string" ? raw : "";
@@ -2696,18 +2689,18 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     return <SingleSelectSimple value={cur} onChange={handle} options={options} />;
   }
   if (inner instanceof z.ZodArray) {
-    const innerArray: z.ZodTypeAny = (inner as z.ZodArray<z.ZodTypeAny>)._def.type;
-    let t: z.ZodTypeAny = innerArray;
+    const innerArray: z.ZodType = (inner as z.ZodArray<z.ZodType>).element;
+    let t: z.ZodType = innerArray;
     while (
       t instanceof z.ZodDefault ||
       t instanceof z.ZodOptional ||
       t instanceof z.ZodNullable
     ) {
-      t = (t as { _def: { innerType: z.ZodTypeAny } })._def.innerType;
+      t = t.unwrap() as z.ZodType;
     }
     if (t instanceof z.ZodEnum) {
-      const values = (t._def.values as string[]) || [];
-      const options = values.map((v) => ({ label: v, value: v }));
+      const values = (t as unknown as { options: string[] }).options || [];
+      const options = values.map((v) => ({ label: String(v), value: String(v) }));
       const selected = Array.isArray(eff[field])
         ? (eff[field] as unknown[]).filter((x): x is string => typeof x === "string")
         : [];
@@ -2884,7 +2877,6 @@ export const MassEffectEditor = <
       });
     });
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, selectedFields, modified, options]);
 
   // Mutations
@@ -2955,7 +2947,9 @@ export const EffectFieldSelector: React.FC<{
     const all = getTagSchema("damage").shape as Record<string, unknown>;
     Object.keys(all)
       .filter((k) => !["type", "timeTracker"].includes(k))
-      .forEach((k) => fields.add(k));
+      .forEach((k) => {
+        fields.add(k);
+      });
     return Array.from(fields)
       .sort((a, b) => a.localeCompare(b))
       .map((f) => ({ label: f, value: f }));

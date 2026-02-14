@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
-import { eq, and, lt, sql, inArray } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
-import { village, clan } from "@/drizzle/schema";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
-import { TOWN_MONTHLY_MAINTENANCE } from "@/drizzle/constants";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { TOWN_MONTHLY_MAINTENANCE } from "@/drizzle/constants";
+import { clan, village } from "@/drizzle/schema";
+import {
+  handleEndpointError,
+  lockWithDailyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
+import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "daily-hideout-downgrade";
 
@@ -31,11 +34,12 @@ export async function GET() {
       );
 
     // Split into those who have the points and those who do now
+    type TownJoinResult = (typeof townsDueForMaintainance)[number];
     const hasFactionPoints = townsDueForMaintainance.filter(
-      (v) => v.Clan && v.Clan.points >= TOWN_MONTHLY_MAINTENANCE,
+      (v: TownJoinResult) => v.Clan && v.Clan.points >= TOWN_MONTHLY_MAINTENANCE,
     );
     const missingFactionPoints = townsDueForMaintainance.filter(
-      (v) => v.Clan && v.Clan.points < TOWN_MONTHLY_MAINTENANCE,
+      (v: TownJoinResult) => v.Clan && v.Clan.points < TOWN_MONTHLY_MAINTENANCE,
     );
 
     // Mutation
@@ -44,11 +48,13 @@ export async function GET() {
         ? [
             drizzleDB
               .update(clan)
-              .set({ points: sql`${clan.points} - ${TOWN_MONTHLY_MAINTENANCE}` })
+              .set({
+                points: sql`${clan.points} - ${TOWN_MONTHLY_MAINTENANCE}`,
+              })
               .where(
                 inArray(
                   clan.id,
-                  hasFactionPoints.map((v) => v.Clan.id),
+                  hasFactionPoints.map((v: TownJoinResult) => v.Clan.id),
                 ),
               ),
           ]
@@ -61,7 +67,7 @@ export async function GET() {
               .where(
                 inArray(
                   clan.id,
-                  missingFactionPoints.map((v) => v.Clan.id),
+                  missingFactionPoints.map((v: TownJoinResult) => v.Clan.id),
                 ),
               ),
             drizzleDB
@@ -70,7 +76,7 @@ export async function GET() {
               .where(
                 inArray(
                   village.id,
-                  missingFactionPoints.map((v) => v.Village.id),
+                  missingFactionPoints.map((v: TownJoinResult) => v.Village.id),
                 ),
               ),
           ]
@@ -84,6 +90,6 @@ export async function GET() {
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

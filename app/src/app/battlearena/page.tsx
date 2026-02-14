@@ -1,38 +1,15 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { useLocalStorage } from "@/hooks/localstorage";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import UserSearchSelect from "@/layout/UserSearchSelect";
-import BanInfo from "@/layout/BanInfo";
-import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
-import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { sendGTMEvent } from "@next/third-parties/google";
+import { Sun, Swords } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getSearchValidator } from "@/validators/register";
-import { useRouter } from "next/navigation";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { useRequireInVillage } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import ContentBox from "@/layout/ContentBox";
-import UserRequestSystem from "@/layout/UserRequestSystem";
-import Loader from "@/layout/Loader";
-import { sendGTMEvent } from "@next/third-parties/google";
-import { Swords } from "lucide-react";
-import { RankedArenaMain, RankedLoadoutSelector } from "@/layout/PvpRank";
-import { BATTLE_ARENA_DAILY_LIMIT } from "@/drizzle/constants";
-import { createStatSchema } from "@/validators/combat";
-import QuestPicker from "@/layout/QuestPicker";
 import {
   Form,
   FormControl,
@@ -42,14 +19,33 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useTutorialStep } from "@/hooks/tutorial";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { BATTLE_ARENA_DAILY_LIMIT, TUTORIAL_ARENA_DUMMY_ID } from "@/drizzle/constants";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { useSleepToggle } from "@/hooks/sleep";
-import { Sun } from "lucide-react";
-import type { z } from "zod";
+import { useTutorialStep } from "@/hooks/tutorial";
+import BanInfo from "@/layout/BanInfo";
+import ContentBox from "@/layout/ContentBox";
+import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import type { GenericObject } from "@/layout/ItemWithEffects";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
+import Loader from "@/layout/Loader";
+import { RankedArenaMain, RankedLoadoutSelector } from "@/layout/PvpRank";
+import QuestPicker from "@/layout/QuestPicker";
+import UserRequestSystem from "@/layout/UserRequestSystem";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { showMutationToast } from "@/libs/toast";
+import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { StatSchemaType } from "@/validators/combat";
-import { TUTORIAL_ARENA_DUMMY_ID } from "@/drizzle/constants";
-import { useState } from "react";
+import { createStatSchema } from "@/validators/combat";
+import { getSearchValidator } from "@/validators/register";
 
 export default function Arena() {
   // Tab selection
@@ -86,7 +82,6 @@ export default function Arena() {
       setTab("Arena");
       setAiId(TUTORIAL_ARENA_DUMMY_ID);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, aiId, tab]);
 
   // Guards
@@ -123,7 +118,7 @@ export default function Arena() {
         defaultBackHref="/village"
         padding={tab === "Arena"}
         topRightContent={
-          <div className="flex flex-row gap-4 items-center">
+          <div className="flex flex-row items-center gap-4">
             {(tab === "Sparring" || tab === "Training" || tab === "Arena") && (
               <div className="flex flex-row gap-2">
                 <JutsuLoadoutSelector size="small" label="Jutsu" />
@@ -138,8 +133,8 @@ export default function Arena() {
                 <SelectValue placeholder="Select arena type" />
               </SelectTrigger>
               <SelectContent>
-                {availableTabs.map((option) => (
-                  <SelectItem key={option} value={option}>
+                {availableTabs.map((option, i) => (
+                  <SelectItem key={`${option}-${i}`} value={option}>
                     {option}
                   </SelectItem>
                 ))}
@@ -227,7 +222,6 @@ const SelectAI: React.FC<SelectAIProps> = (props) => {
         setAiId(selectedAI.userId);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData, sortedAis, aiId]);
 
   // Loaders
@@ -244,49 +238,47 @@ const SelectAI: React.FC<SelectAIProps> = (props) => {
     >
       <div className="flex flex-col items-center">
         {canDoArena && (
-          <>
-            <div className="rounded-2xl mt-3 w-full">
-              <div className="mb-1">
-                <Select
-                  onValueChange={(e) => setAiId(e)}
-                  defaultValue={aiId}
-                  value={aiId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={`None`} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {aiData
-                      ?.filter((ai) => !ai.isSummon && ai.inArena)
-                      .map((ai) => (
-                        <SelectItem key={ai.userId} value={ai.userId}>
-                          {ai.username} (lvl {ai.level})
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {ai && (
-                <ItemWithEffects
-                  item={
-                    {
-                      id: ai.userId,
-                      name: ai.username,
-                      image: ai.avatar,
-                      description: "",
-                      rarity: "COMMON",
-                      href: `/userid/${ai.userId}`,
-                      attacks: ai.jutsus?.map((jutsu) =>
-                        "jutsu" in jutsu ? jutsu.jutsu?.name : "Unknown",
-                      ),
-                      ...ai,
-                    } as GenericObject
-                  }
-                  showStatistic="ai"
-                />
-              )}
+          <div className="mt-3 w-full rounded-2xl">
+            <div className="mb-1">
+              <Select
+                onValueChange={(e) => setAiId(e)}
+                defaultValue={aiId}
+                value={aiId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={`None`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {aiData
+                    ?.filter((ai) => !ai.isSummon && ai.inArena)
+                    .map((ai) => (
+                      <SelectItem key={ai.userId} value={ai.userId}>
+                        {ai.username} (lvl {ai.level})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
-          </>
+            {ai && (
+              <ItemWithEffects
+                item={
+                  {
+                    id: ai.userId,
+                    name: ai.username,
+                    image: ai.avatar,
+                    description: "",
+                    rarity: "COMMON",
+                    href: `/userid/${ai.userId}`,
+                    attacks: ai.jutsus?.map((jutsu) =>
+                      "jutsu" in jutsu ? jutsu.jutsu?.name : "Unknown",
+                    ),
+                    ...ai,
+                  } as GenericObject
+                }
+                showStatistic="ai"
+              />
+            )}
+          </div>
         )}
       </div>
     </ContentBox>
@@ -344,7 +336,7 @@ const ChallengeAI: React.FC<ChallengeAIProps> = (props) => {
       The arena is a fairly basic circular and raw battleground, where you can train &
       test your skills as a ninja. Opponents are various creatures or ninja deemed to be
       at your level.
-      {!canDoArena && <h1 className="pb-3 pt-5 italic text-7xl">Wait till tomorrow</h1>}
+      {!canDoArena && <h1 className="pt-5 pb-3 text-7xl italic">Wait till tomorrow</h1>}
       {isAsleep && canDoArena && (
         <div className="p-3">
           {isTogglingSleep ? (
@@ -357,7 +349,7 @@ const ChallengeAI: React.FC<ChallengeAIProps> = (props) => {
               className="text-2xl italic"
               onClick={() => toggleSleep()}
             >
-              <Sun className="h-10 w-10 mr-4" />
+              <Sun className="mr-4 h-10 w-10" />
               Wake up!
             </Button>
           )}
@@ -370,17 +362,17 @@ const ChallengeAI: React.FC<ChallengeAIProps> = (props) => {
             size="xl"
             decoration="gold"
             animation="pulse"
-            className="italic text-2xl"
+            className="text-2xl italic"
             onClick={() => aiId && attack({ aiId })}
           >
-            <Swords className="h-10 w-10 mr-4" />
+            <Swords className="mr-4 h-10 w-10" />
             Enter arena
           </Button>
         </div>
       )}
       {isAttacking && (
         <div className="min-h-64">
-          <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
+          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
             <div className="m-auto text-white">
               <p className="text-5xl">Entering the Arena</p>
               <Loader />
@@ -401,6 +393,7 @@ const ChallengeUser: React.FC = () => {
   const userSearchSchema = getSearchValidator({ max: maxUsers });
   const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
     resolver: zodResolver(userSearchSchema),
+    defaultValues: { username: "", users: [] },
   });
   const targetUser = useWatch({
     control: userSearchMethods.control,
@@ -439,7 +432,7 @@ const ChallengeUser: React.FC = () => {
         You can directly challenge ninja from across the continent to spar against you
         with no consequence to your alliances or village.
       </p>
-      <div className="p-2 mb-5">
+      <div className="mb-5 p-2">
         <UserSearchSelect
           useFormMethods={userSearchMethods}
           selectedUsers={[]}
@@ -448,7 +441,7 @@ const ChallengeUser: React.FC = () => {
           showAi={false}
           maxUsers={maxUsers}
         />
-        <div className="flex items-center space-x-2 mt-2 mb-2">
+        <div className="mt-2 mb-2 flex items-center space-x-2">
           <Checkbox
             id="useRankedRules"
             checked={useRankedRules}
@@ -458,7 +451,7 @@ const ChallengeUser: React.FC = () => {
             Use ranked rules (ranked loadouts, level 100 stats, no LP rewards)
           </label>
         </div>
-        <div className="flex items-center space-x-2 mt-2 mb-2">
+        <div className="mt-2 mb-2 flex items-center space-x-2">
           <Checkbox
             id="spectatable"
             checked={spectatable}
@@ -473,10 +466,14 @@ const ChallengeUser: React.FC = () => {
             id="challenge"
             className="mt-2 w-full"
             onClick={() =>
-              create({ targetId: targetUser.userId, useRankedRules, spectatable })
+              create({
+                targetId: targetUser.userId,
+                useRankedRules,
+                spectatable,
+              })
             }
           >
-            <Swords className="h-5 w-5 mr-2" />
+            <Swords className="mr-2 h-5 w-5" />
             Challenge Now!
           </Button>
         )}
@@ -601,13 +598,13 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
     });
 
   // Stats Schema
-  const statSchema = createStatSchema(10, 10, undefined);
+  const { schema: statSchema, maxValues } = createStatSchema(10, 10, undefined);
   const defaultValues = statSchema.parse(statDistribution ?? {});
   const statNames = Object.keys(defaultValues) as (keyof typeof defaultValues)[];
 
   // Form setup
-  const form = useForm<StatSchemaType>({
-    defaultValues,
+  const form = useForm<z.input<typeof statSchema>, unknown, StatSchemaType>({
+    defaultValues: defaultValues as z.input<typeof statSchema>,
     mode: "all",
     resolver: zodResolver(statSchema),
   });
@@ -632,8 +629,7 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
           {statNames
             .filter((x) => !x.includes("Offence"))
             .map((stat, i) => {
-              const maxValue =
-                statSchema.shape[stat]._def.innerType._def.schema.maxValue;
+              const maxValue = maxValues[stat];
               if (maxValue && maxValue > 0) {
                 return (
                   <FormField
@@ -644,7 +640,12 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
                       <FormItem className="pt-1">
                         <FormLabel>{stat}</FormLabel>
                         <FormControl>
-                          <Input type="number" placeholder={stat} {...field} />
+                          <Input
+                            type="number"
+                            placeholder={stat}
+                            {...field}
+                            value={field.value as number}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -673,10 +674,10 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
                   size="xl"
                   decoration="gold"
                   animation="pulse"
-                  className="italic text-2xl w-full"
+                  className="w-full text-2xl italic"
                   onClick={() => toggleSleep()}
                 >
-                  <Sun className="h-10 w-10 mr-4" />
+                  <Sun className="mr-4 h-10 w-10" />
                   Wake up!
                 </Button>
               )}
@@ -687,15 +688,15 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
                 size="xl"
                 decoration="gold"
                 animation="pulse"
-                className="italic text-2xl w-full"
+                className="w-full text-2xl italic"
               >
-                <Swords className="h-10 w-10 mr-4" />
+                <Swords className="mr-4 h-10 w-10" />
                 Enter arena
               </Button>
             </div>
           ) : (
             <div className="min-h-64">
-              <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
+              <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
                 <div className="m-auto text-white">
                   <p className="text-5xl">Entering the Training</p>
                   <Loader />

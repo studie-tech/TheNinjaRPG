@@ -7,7 +7,7 @@ export const insertComponentsIntoText = (
   const splitRegex = new RegExp(/(\w*)/g);
   const parts = str.split(splitRegex);
   return parts.map((part) => {
-    if (replacements.hasOwnProperty(part)) {
+    if (Object.hasOwn(replacements, part)) {
       return replacements[part];
     }
     return part;

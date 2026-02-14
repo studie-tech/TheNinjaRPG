@@ -1,23 +1,38 @@
+import { and, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { eq, sql, gt, and, isNotNull, desc } from "drizzle-orm";
-import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
-import { baseServerResponse, errorResponse } from "@/api/trpc";
-import { getAvatarPrompt, fastTxt2imgReplicate } from "@/libs/replicate";
-import { createThumbnail } from "@/libs/replicate";
-import { fetchUser } from "@/routers/profile";
-import { userData, historicalAvatar } from "@/drizzle/schema";
-import { canChangeContent } from "@/utils/permissions";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/api/trpc";
 import { ContentTypes } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
+import { historicalAvatar, userData } from "@/drizzle/schema";
+import {
+  createThumbnail,
+  fastTxt2imgReplicate,
+  getAvatarPrompt,
+} from "@/libs/replicate";
+import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { canChangeContent } from "@/utils/permissions";
 
 export const avatarRouter = createTRPCRouter({
   createAvatar: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Generate a new AI avatar" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
-      // Fetch
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Fetch user directly with a query that returns null if not found
+      // This handles the case where the user was just created and the record
+      // may not be immediately available due to database replication lag
+      const user = await ctx.drizzle.query.userData.findFirst({
+        where: eq(userData.userId, ctx.userId),
+      });
       // Guard
+      if (!user) {
+        return errorResponse("User not found. Please try again in a moment.");
+      }
       if (user.reputationPoints < 1) {
         return errorResponse("Not enough reputation points");
       }
@@ -57,6 +72,7 @@ export const avatarRouter = createTRPCRouter({
       }
     }),
   getHistoricalAvatars: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user's historical avatars" } })
     .input(
       z.object({
         relationId: z.string().nullish(),
@@ -78,7 +94,7 @@ export const avatarRouter = createTRPCRouter({
         limit: limit + 1,
         orderBy: [desc(historicalAvatar.id)],
       });
-      let nextCursor: typeof cursor | undefined = undefined;
+      let nextCursor: typeof cursor | undefined;
       if (avatars.length > limit) {
         const nextItem = avatars.pop();
         nextCursor = nextItem?.id;
@@ -89,6 +105,7 @@ export const avatarRouter = createTRPCRouter({
       };
     }),
   updateAvatar: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Set active avatar from history" } })
     .input(z.object({ avatar: z.number(), type: z.enum(ContentTypes) }))
     .output(baseServerResponse.extend({ url: z.string().nullish() }))
     .mutation(async ({ ctx, input }) => {
@@ -126,6 +143,7 @@ export const avatarRouter = createTRPCRouter({
       return { success: true, message: "Avatar updated", url: avatar.avatar };
     }),
   deleteAvatar: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Delete an avatar from history" } })
     .input(z.object({ avatar: z.number() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

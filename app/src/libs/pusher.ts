@@ -1,6 +1,6 @@
-import crypto from "crypto";
-import { env } from "@/env/server.mjs";
+import crypto from "node:crypto";
 import type { UserStatus } from "@/drizzle/constants";
+import { env } from "@/env/server.mjs";
 
 // declare Pusher class with async send method
 // Taken from https://github.com/pusher/pusher-http-node/issues/173
@@ -9,13 +9,11 @@ export class Pusher {
   private app_id: string;
   private key: string;
   private secret: string;
-  private cluster: string;
 
-  constructor(app_id: string, key: string, secret: string, cluster: string) {
+  constructor(app_id: string, key: string, secret: string, _cluster: string) {
     this.app_id = app_id;
     this.key = key;
     this.secret = secret;
-    this.cluster = cluster;
   }
 
   /**
@@ -53,7 +51,7 @@ export class Pusher {
     return crypto.createHash("md5").update(str).digest("hex");
   }
 
-  private async _createSignature(timestamp: number, body: string, md5: string) {
+  private async _createSignature(timestamp: number, _body: string, md5: string) {
     const stringToSign = `POST\n/apps/${this.app_id}/events\nauth_key=${this.key}&auth_timestamp=${timestamp}&auth_version=1.0&body_md5=${md5}`;
     const encoder = new TextEncoder();
     const encodedData = encoder.encode(stringToSign);

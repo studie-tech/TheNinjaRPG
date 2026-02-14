@@ -1,22 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import BloodFiltering, { useFiltering, getFilter } from "@/layout/BloodlineFiltering";
-import { Button } from "@/components/ui/button";
 import {
-  FilePlus,
   ChartCandlestick,
   ChartPie,
+  FilePlus,
   ListChecks,
   Palette,
 } from "lucide-react";
-import { useInfinitePagination } from "@/libs/pagination";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import BloodFiltering, { getFilter, useFiltering } from "@/layout/BloodlineFiltering";
+import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
@@ -46,7 +46,7 @@ export default function ManualBloodlines() {
       placeholderData: (previousData) => previousData,
     },
   );
-  const allBloodlines = bloodlines?.pages.map((page) => page.data).flat();
+  const allBloodlines = bloodlines?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Mutations
@@ -111,7 +111,7 @@ export default function ManualBloodlines() {
         subtitle="All bloodlines"
         initialBreak={true}
         topRightContent={
-          <div className="flex flex-row gap-1 items-center">
+          <div className="flex flex-row items-center gap-1">
             {userData && canChangeContent(userData.role) && (
               <>
                 <Button id="create-bloodline" onClick={() => create()}>

@@ -1,13 +1,13 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import ItemFiltering, { useFiltering, getFilter } from "@/layout/ItemFiltering";
+import { Hammer } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
-import { Hammer } from "lucide-react";
 import type { Item } from "@/drizzle/schema";
+import ContentBox from "@/layout/ContentBox";
+import ItemFiltering, { getFilter, useFiltering } from "@/layout/ItemFiltering";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
 
 export default function CraftingRecipes() {
   // State
@@ -83,7 +83,7 @@ export default function CraftingRecipes() {
       >
         {isFetching && <Loader explanation="Loading crafting recipes" />}
         {!isFetching && filteredItems && filteredItems.length === 0 && (
-          <p className="text-center text-muted-foreground py-8">
+          <p className="py-8 text-center text-muted-foreground">
             No crafting recipes found matching your filters.
           </p>
         )}
@@ -92,14 +92,14 @@ export default function CraftingRecipes() {
             <div key={item.id} className="mb-4">
               <ItemWithEffects item={item as Item} />
               {item.craftingRequirements && item.craftingRequirements.length > 0 && (
-                <div className="mt-2 ml-4 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2 mb-2">
+                <div className="mt-2 ml-4 rounded-lg border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-800">
+                  <div className="mb-2 flex items-center gap-2">
                     <Hammer className="h-4 w-4" />
                     <span className="font-semibold text-sm">Required Materials:</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {item.craftingRequirements.map((req, index) => (
-                      <Badge key={index} variant="outline" className="text-sm">
+                    {item.craftingRequirements.map((req) => (
+                      <Badge key={req.id} variant="outline" className="text-sm">
                         {req.quantity}x {req.requirementItem?.name || "Unknown Item"}
                       </Badge>
                     ))}

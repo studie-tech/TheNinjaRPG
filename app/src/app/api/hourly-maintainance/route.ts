@@ -1,18 +1,20 @@
+import { and, count, eq, gte, lt, sql } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { and, eq, lt, sql } from "drizzle-orm";
-import { count, gte } from "drizzle-orm";
+import {
+  type BountyContribution,
+  bounty,
+  bountyContribution,
+  bountySignup,
+  userData,
+} from "@/drizzle/schema";
+import {
+  handleEndpointError,
+  lockWithHourlyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
-import { updateGameSetting } from "@/libs/gamesettings";
-import {
-  bounty,
-  bountySignup,
-  bountyContribution,
-  userData,
-  type BountyContribution,
-} from "@/drizzle/schema";
-import { lockWithHourlyTimer, handleEndpointError } from "@/libs/gamesettings";
-import { cookies } from "next/headers";
 
 const ENDPOINT_NAME = "hourly-maintainance";
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
@@ -40,7 +42,7 @@ export async function GET() {
       activeCount: activeCount,
     });
   } catch (error) {
-    return handleEndpointError(error);
+    return await handleEndpointError(error);
   }
 }
 
@@ -64,7 +66,7 @@ const bountyExpire = async () => {
 
   // Process all expired bounties in parallel
   await Promise.all(
-    expiredBounties.map(async (expiredBounty) => {
+    expiredBounties.map(async (expiredBounty: (typeof expiredBounties)[number]) => {
       // Get all contributions for this bounty
       const contributions = await drizzleDB.query.bountyContribution.findMany({
         where: eq(bountyContribution.bountyId, expiredBounty.id),

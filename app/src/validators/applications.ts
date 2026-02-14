@@ -13,7 +13,7 @@ export type CreateApplicationSchema = z.infer<typeof createApplicationSchema>;
 // Infinite filtering for applications list
 export const listApplicationsInfiniteSchema = z.object({
   cursor: z.number().nullish(),
-  limit: z.number().min(1).max(100).default(30),
+  limit: z.number().min(1).max(100).prefault(30),
   onlyMine: z.boolean().optional(),
   username: z.string().optional(),
   targetRole: z.enum(StaffApplicationTargetRoles).optional(),

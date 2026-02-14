@@ -1,21 +1,20 @@
 "use client";
 
-import * as React from "react";
-import { use } from "react";
 import type * as LabelPrimitive from "@radix-ui/react-label";
 import { Slot } from "@radix-ui/react-slot";
+import * as React from "react";
+import { use } from "react";
 import {
   Controller,
-  FormProvider,
-  useFormContext,
-  useFormState,
   type ControllerProps,
   type FieldPath,
   type FieldValues,
+  FormProvider,
+  useFormContext,
+  useFormState,
 } from "react-hook-form";
-
-import { cn } from "src/libs/shadui";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/libs/shadui";
 
 const Form = FormProvider;
 

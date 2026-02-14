@@ -1,23 +1,23 @@
-import { useUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
 import {
-  ContentFiltering,
-  useContentFiltering,
-  buildFilter,
-  defineFilteringSchema,
-} from "@/layout/ContentFiltering";
-import {
-  ElementNames,
-  UserRanks,
-  StatTypes,
   AttackMethods,
   AttackTargets,
-  JutsuTypes,
   BattleUsageTypes,
+  ElementNames,
+  JutsuTypes,
+  StatTypes,
+  UserRanks,
 } from "@/drizzle/constants";
-import { statFilters, rarities } from "@/libs/train";
-import { effectFilters } from "@/validators/combat";
+import {
+  buildFilter,
+  ContentFiltering,
+  defineFilteringSchema,
+  useContentFiltering,
+} from "@/layout/ContentFiltering";
+import { rarities, statFilters } from "@/libs/train";
+import { canChangeContent } from "@/utils/permissions";
 import { formatBattleUsageType } from "@/utils/string";
+import { useUserData } from "@/utils/UserContext";
+import { effectFilters } from "@/validators/combat";
 
 // Single-source schema
 const makeJutsuFilteringSchema = () =>

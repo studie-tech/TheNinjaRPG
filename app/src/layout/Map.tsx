@@ -1,11 +1,13 @@
+import * as TWEEN from "@tweenjs/tween.js";
+import alea from "alea";
 import { useEffect, useRef, useState } from "react";
 import {
   BufferAttribute,
   BufferGeometry,
   Group,
+  LinearFilter,
   LineBasicMaterial,
   LineSegments,
-  LinearFilter,
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
@@ -14,34 +16,29 @@ import {
   Vector2,
   Vector3,
 } from "three";
+import { api } from "@/app/_trpc/client";
 import {
-  IMG_MAP_WAR_ICON,
-  IMG_MAP_QUEST_ICON,
   IMG_BADGE_MOVE_TO_LOCATION,
+  IMG_MAP_QUEST_ICON,
+  IMG_MAP_WAR_ICON,
   MAP_RESERVED_SECTORS,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
 } from "@/drizzle/constants";
-import { createUserAvatarSprite } from "@/libs/threejs/globe";
-import WebGlError from "@/layout/WebGLError";
-import alea from "alea";
-import * as TWEEN from "@tweenjs/tween.js";
-import { createTexture, loadTexture } from "@/libs/threejs/util";
-import { useTutorialStep } from "@/hooks/tutorial";
-import { cleanUp, setupScene } from "@/libs/threejs/util";
-import {
-  groundColors,
-  oceanColors,
-  dessertColors,
-  iceColors,
-} from "@/libs/threejs/biome";
-import { TrackballControls } from "@/libs/threejs/TrackBallControls";
-import { useUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
 import type { Village } from "@/drizzle/schema";
-import type { GlobalTile } from "@/libs/threejs/types";
-import type { GlobalMapData } from "@/libs/threejs/types";
-import type { GlobalPoint } from "@/libs/threejs/types";
+import { useTutorialStep } from "@/hooks/tutorial";
+import WebGlError from "@/layout/WebGLError";
 import type { HexagonalFaceMesh } from "@/libs/hexgrid";
+import {
+  dessertColors,
+  groundColors,
+  iceColors,
+  oceanColors,
+} from "@/libs/threejs/biome";
+import { createUserAvatarSprite } from "@/libs/threejs/globe";
+import { TrackballControls } from "@/libs/threejs/TrackBallControls";
+import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/types";
+import { cleanUp, createTexture, loadTexture, setupScene } from "@/libs/threejs/util";
+import { useUserData } from "@/utils/UserContext";
 
 interface MapProps {
   highlights?: Village[];
@@ -62,7 +59,7 @@ interface MapProps {
   onTileHover?: (sector: number | null, tile: GlobalTile | null) => void;
 }
 
-const Map: React.FC<MapProps> = (props) => {
+const GlobalMap: React.FC<MapProps> = (props) => {
   const { data: userData } = useUserData();
   const [webglError, setWebglError] = useState<boolean>(false);
   const [hoverSector, setHoverSector] = useState<number | null>(null);
@@ -119,7 +116,7 @@ const Map: React.FC<MapProps> = (props) => {
       if (props.intersection) {
         sceneRef.addEventListener("mousemove", onDocumentMouseMove, false);
       }
-      let intersected: HexagonalFaceMesh | undefined = undefined;
+      let intersected: HexagonalFaceMesh | undefined;
 
       const WIDTH = sceneRef.getBoundingClientRect().width;
       const HEIGHT = WIDTH;
@@ -539,7 +536,11 @@ const Map: React.FC<MapProps> = (props) => {
                   : highlight.type === "focus"
                     ? focusTweenColor
                     : questTweenColor;
-              (mesh as HexagonalFaceMesh).material.color.setRGB(color.r, color.g, color.b);
+              (mesh as HexagonalFaceMesh).material.color.setRGB(
+                color.r,
+                color.g,
+                color.b,
+              );
             }
           });
         }
@@ -549,7 +550,7 @@ const Map: React.FC<MapProps> = (props) => {
           const intersects = raycaster.intersectObjects(group_tiles.children);
           if (intersects.length > 0) {
             // if the closest object intersected is not the currently stored intersection object
-            if (intersects[0] && intersects[0].object != intersected) {
+            if (intersects[0] && intersects[0].object !== intersected) {
               // restore previous intersection object (if it exists) to its original color
               if (intersected) {
                 intersected.material.color.setHex(intersected.currentHex);
@@ -655,7 +656,6 @@ const Map: React.FC<MapProps> = (props) => {
         cleanUp(scene, renderer);
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     props.highlights,
     props.usersHighlighted,
@@ -669,23 +669,23 @@ const Map: React.FC<MapProps> = (props) => {
     <>
       <div ref={mountRef} id={"tutorial-global-map"}></div>
       {webglError && <WebGlError />}
-      <div className="absolute left-0 top-0 m-5">
+      <div className="absolute top-0 left-0 m-5">
         <ul>
           {hoverSector && (
             <li className="flex flex-row items-center">
-              <span className="text-2xl mr-1 animate-pulse text-orange-500">⬢</span>{" "}
+              <span className="mr-1 animate-pulse text-2xl text-orange-500">⬢</span>{" "}
               Quest
             </li>
           )}
           {props.focusSector !== undefined && props.focusSector !== null && (
             <li className="flex flex-row items-center">
-              <span className="text-2xl mr-1 animate-pulse text-purple-500">⬢</span>{" "}
+              <span className="mr-1 animate-pulse text-2xl text-purple-500">⬢</span>{" "}
               {props.focusSectorLabel || "Target"}
             </li>
           )}
         </ul>
       </div>
-      <div className="absolute right-0 top-0 m-5">
+      <div className="absolute top-0 right-0 m-5">
         <ul>
           {hoverSector && (
             <>
@@ -699,4 +699,4 @@ const Map: React.FC<MapProps> = (props) => {
   );
 };
 
-export default Map;
+export default GlobalMap;

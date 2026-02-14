@@ -1,29 +1,14 @@
 "use client";
 
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Eye, Plus, Trophy, Users, X } from "lucide-react";
+import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
-import Loader from "@/layout/Loader";
-import Image from "@/layout/Image";
-import Table from "@/layout/Table";
-import UserSearchSelect from "@/layout/UserSearchSelect";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { IMG_BUILDING_MISSIONHALL } from "@/drizzle/constants";
-import { showMutationToast } from "@/libs/toast";
-import { createBountySchema } from "@/validators/bounty";
-import { getSearchValidator } from "@/validators/register";
-import { showUserRank } from "@/libs/profile";
-import { Eye, Trophy, Users, X, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -31,8 +16,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { canSeeHiddenBountyInfo } from "@/utils/permissions";
-import type { ColumnDefinitionType } from "@/layout/Table";
 import {
   Form,
   FormControl,
@@ -41,11 +24,28 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import type { z } from "zod";
-import type { UserWithRelations } from "@/routers/profile";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { IMG_BUILDING_MISSIONHALL } from "@/drizzle/constants";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import type { ColumnDefinitionType } from "@/layout/Table";
+import Table from "@/layout/Table";
+import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
-import type { ReactElement } from "react";
+import { showUserRank } from "@/libs/profile";
+import { showMutationToast } from "@/libs/toast";
+import type { UserWithRelations } from "@/routers/profile";
+import { canSeeHiddenBountyInfo } from "@/utils/permissions";
+import { useRequiredUserData } from "@/utils/UserContext";
+import { createBountySchema } from "@/validators/bounty";
+import { getSearchValidator } from "@/validators/register";
 
 type CreateBountyFormData = z.infer<typeof createBountySchema>;
 type UserSearchFormData = z.infer<ReturnType<typeof getSearchValidator>>;
@@ -66,7 +66,11 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const isStaff = canSeeHiddenBountyInfo(userData.role);
 
-  const form = useForm<CreateBountyFormData>({
+  const form = useForm<
+    z.input<typeof createBountySchema>,
+    unknown,
+    z.output<typeof createBountySchema>
+  >({
     resolver: zodResolver(createBountySchema),
     defaultValues: {
       targetUserId: "",
@@ -246,7 +250,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
         className="w-full"
         priority={true}
       />
-      <p className="text-center font-bold px-3 pt-2">
+      <p className="px-3 pt-2 text-center font-bold">
         Bounties are a way to earn Ryo by killing other players, or put targets on
         players you want taken down a notch.
       </p>
@@ -254,7 +258,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
       <div className="p-3">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-end">
+            <div className="grid grid-cols-1 items-end gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2">
                 <FormLabel>Target User</FormLabel>
                 <UserSearchSelect
@@ -277,7 +281,10 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                         type="number"
                         placeholder="Enter ryo amount"
                         {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                        value={field.value as number}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value, 10) || 0)
+                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -299,7 +306,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
       </div>
 
       {isStaff && (
-        <div className="flex justify-end items-center gap-2 p-2">
+        <div className="flex items-center justify-end gap-2 p-2">
           <Select
             value={bountyStatus}
             onValueChange={(
@@ -375,7 +382,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                       <div>
                         <label
                           htmlFor="amount"
-                          className="block text-sm font-medium mb-2"
+                          className="mb-2 block font-medium text-sm"
                         >
                           Amount (Ryo)
                         </label>
@@ -385,7 +392,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                           placeholder="Enter amount"
                           value={addMoneyAmount}
                           onChange={(e) =>
-                            setAddMoneyAmount(parseInt(e.target.value) || 0)
+                            setAddMoneyAmount(parseInt(e.target.value, 10) || 0)
                           }
                           min="1"
                         />
@@ -431,10 +438,10 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
           ) : undefined,
           huntingInfo: b.huntingUsers ? (
             <div className="space-y-1">
-              {b.huntingUsers?.map((hunter, idx) => (
-                <div key={idx} className="text-sm">
+              {b.huntingUsers?.map((hunter) => (
+                <div key={hunter?.username} className="text-sm">
                   <p className="font-medium">{hunter?.username ?? "Unknown User"}</p>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-gray-600 text-xs">
                     Lvl. {hunter?.level ?? "Unknown"}{" "}
                     {showUserRank({
                       rank: hunter?.rank ?? "NONE",
@@ -444,7 +451,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 </div>
               ))}
               {b.huntingUsers.length === 0 && (
-                <p className="text-sm text-gray-500">No hunters yet</p>
+                <p className="text-gray-500 text-sm">No hunters yet</p>
               )}
             </div>
           ) : undefined,
@@ -466,7 +473,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                   onClick={() => removeAllTrackers({ bountyId: b.id })}
                   disabled={isRemovingTrackers}
                 >
-                  <Users className="h-4 w-4 mr-2" />
+                  <Users className="mr-2 h-4 w-4" />
                   Remove All Trackers ({b.huntersCount})
                 </Button>,
               );
@@ -485,7 +492,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                   onClick={() => retractBounty({ bountyId: b.id })}
                   disabled={isRetracting}
                 >
-                  <X className="h-4 w-4 mr-2" />
+                  <X className="mr-2 h-4 w-4" />
                   Retract
                 </Button>,
               );
@@ -499,7 +506,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                   onClick={() => collectBounty({ bountyId: b.id })}
                   disabled={isCollecting}
                 >
-                  <Trophy className="h-4 w-4 mr-2" />
+                  <Trophy className="mr-2 h-4 w-4" />
                   Collect
                 </Button>,
               );
@@ -520,7 +527,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                   }
                   disabled={isSigningup}
                 >
-                  <Eye className="h-4 w-4 mr-2" />
+                  <Eye className="mr-2 h-4 w-4" />
                   Track
                 </Button>,
               );
@@ -535,7 +542,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                   onClick={() => stopTracking({ bountyId: b.id })}
                   disabled={isStoppingTracking}
                 >
-                  <Eye className="h-4 w-4 mr-2" />
+                  <Eye className="mr-2 h-4 w-4" />
                   Stop Tracking
                 </Button>,
               );
@@ -544,7 +551,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
             if (b.status === "CLAIMED" && b.collectedAt) {
               return (
                 <Badge className="p-2" variant="outline">
-                  <Trophy className="h-4 w-4 mr-2" />
+                  <Trophy className="mr-2 h-4 w-4" />
                   Collected by{" "}
                   {b.claimedByUserId === userData?.userId
                     ? "You"

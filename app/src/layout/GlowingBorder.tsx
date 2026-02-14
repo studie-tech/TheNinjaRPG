@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { cn } from "src/libs/shadui";
+import type React from "react";
+import { cn } from "@/libs/shadui";
 
 interface GlowingBorderProps {
   children: React.ReactNode;
@@ -33,7 +33,7 @@ const GlowingBorder: React.FC<GlowingBorderProps> = ({
   }
 
   return (
-    <div className={cn("relative bg-red-500 w-fit m-4", className)}>
+    <div className={cn("relative m-4 w-fit bg-red-500", className)}>
       <div
         className={cn("absolute rounded-2xl", borderClass)}
         style={{

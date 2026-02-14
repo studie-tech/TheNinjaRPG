@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { EditContent } from "@/layout/EditContent";
+import { use, useEffect } from "react";
+import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
-import {
-  useTowerDefenseUpgradeEditForm,
-  updateTowerDefenseUpgradeSchema,
-} from "@/hooks/towerDefenseUpgrade";
-import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { getUpgradeIcon, getUpgradeColor } from "@/libs/towerDefense/upgrades";
 import type { TowerDefenseUpgrade } from "@/drizzle/schema";
+import {
+  type UpdateTowerDefenseUpgrade,
+  updateTowerDefenseUpgradeSchema,
+  useTowerDefenseUpgradeEditForm,
+} from "@/hooks/towerDefenseUpgrade";
+import ContentBox from "@/layout/ContentBox";
+import { EditContent } from "@/layout/EditContent";
+import Loader from "@/layout/Loader";
+import { getUpgradeColor, getUpgradeIcon } from "@/libs/towerDefense/upgrades";
+import { canChangeContent } from "@/utils/permissions";
+import { setNullsToEmptyStrings } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function TowerDefenseUpgradeEdit(props: {
   params: Promise<{ upgradeid: string }>;
@@ -64,15 +66,15 @@ const SingleEditUpgrade: React.FC<SingleEditUpgradeProps> = ({ upgrade, refetch 
       defaultBackHref="/manual/towerDefense/upgrades"
     >
       {/* Upgrade Icon Display */}
-      <div className="flex items-center gap-3 mb-6 p-4 bg-muted/50 rounded-lg">
+      <div className="mb-6 flex items-center gap-3 rounded-lg bg-muted/50 p-4">
         <div
-          className={`rounded-lg p-3 bg-background ${getUpgradeColor(upgrade.upgradeType)}`}
+          className={`rounded-lg bg-background p-3 ${getUpgradeColor(upgrade.upgradeType)}`}
         >
           {getUpgradeIcon(upgrade.upgradeType, "h-8 w-8")}
         </div>
         <div>
-          <p className="text-sm text-muted-foreground">Upgrade Icon</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-sm">Upgrade Icon</p>
+          <p className="text-muted-foreground text-xs">
             Icon is determined by the upgrade type
           </p>
         </div>
@@ -80,7 +82,7 @@ const SingleEditUpgrade: React.FC<SingleEditUpgradeProps> = ({ upgrade, refetch 
 
       <EditContent
         schema={updateTowerDefenseUpgradeSchema}
-        form={form}
+        form={form as unknown as UseFormReturn<UpdateTowerDefenseUpgrade, unknown>}
         formData={formData}
         showSubmit={true}
         buttonTxt="Save to Database"

@@ -1,24 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  type LinkPromotionInput,
-  linkPromotionSchema,
-} from "@/validators/linkPromotion";
-import AvatarImage from "@/layout/Avatar";
-import ContentBox from "@/layout/ContentBox";
-import NavTabs from "@/layout/NavTabs";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import Loader from "@/layout/Loader";
-import { ClipboardCopy } from "lucide-react";
-import { useInfinitePagination } from "@/libs/pagination";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { showMutationToast } from "@/libs/toast";
+  CheckCircle2,
+  ClipboardCopy,
+  ExternalLink,
+  Loader2,
+  Trophy,
+} from "lucide-react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Form,
   FormControl,
@@ -26,13 +19,25 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ACTIVE_VOTING_SITES } from "@/drizzle/constants";
-import { getVotingLink } from "@/libs/voting";
-import { CheckCircle2, ExternalLink, Loader2, Trophy } from "lucide-react";
+import AvatarImage from "@/layout/Avatar";
 import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import NavTabs from "@/layout/NavTabs";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
+import { getVotingLink } from "@/libs/voting";
 import { canReviewLinkPromotions } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
+import {
+  type LinkPromotionInput,
+  linkPromotionSchema,
+} from "@/validators/linkPromotion";
 
 export default function Recruit() {
   // State
@@ -90,7 +95,7 @@ export default function Recruit() {
   const allVotesCompleted = completedVotes === totalVotes;
 
   // Process data
-  const allUsers = users?.pages.map((page) => page.data).flat() ?? [];
+  const allUsers = users?.pages.flatMap((page) => page.data) ?? [];
   type User = ArrayElement<typeof allUsers>;
 
   const recruitedColumns: ColumnDefinitionType<User, keyof User>[] = [
@@ -121,7 +126,7 @@ export default function Recruit() {
                 <Button
                   key={site}
                   variant={hasVoted ? "default" : "outline"}
-                  className="h-12 flex items-center justify-between gap-2"
+                  className="flex h-12 items-center justify-between gap-2"
                   onClick={() => {
                     if (userData?.votes) {
                       window.open(getVotingLink(site, userData.votes), "_blank");
@@ -150,7 +155,7 @@ export default function Recruit() {
           </div>
 
           <Button
-            className="w-full h-12 flex items-center justify-center gap-2"
+            className="flex h-12 w-full items-center justify-center gap-2"
             disabled={!allVotesCompleted || isPending || userData?.votes?.claimed}
             onClick={() => claimVotes()}
             decoration="gold"
@@ -229,7 +234,7 @@ const RecruitLinkTab: React.FC = () => {
         versions of the game will still be active in final release)
       </p>
       <ul className="py-2">
-        <li className="py-2 px-2">
+        <li className="px-2 py-2">
           <strong>Money</strong>
           <br />
           Each time a recruited user levels up, you will receive money in your bank
@@ -237,23 +242,22 @@ const RecruitLinkTab: React.FC = () => {
           a person you recruited achieved level 50, you get {(1250000).toLocaleString()}{" "}
           ryo.
         </li>
-        <li className="py-2 px-2">
+        <li className="px-2 py-2">
           <strong>Reputation Points</strong>
           <br />
           Every time a recruited user buys reputation points, you will also receive an
           amount of reputation points equal to 10% of what they bought.
         </li>
-        <li className="py-2 px-2">
+        <li className="px-2 py-2">
           <strong>Village Prestige</strong>
           <br />
           Every time a recruited user earns village prestige from quests, you will
           receive 10% of the prestige they earn.
         </li>
       </ul>
-      <div
-        className={`w-full bg-card rounded-lg p-4 italic hover:bg-popover text-card-foreground flex flex-row items-center border ${
-          !copied ? "cursor-copy" : "cursor-no-drop"
-        }`}
+      <button
+        type="button"
+        className={`flex w-full flex-row items-center rounded-lg border bg-card p-4 text-card-foreground italic hover:bg-popover ${!copied ? "cursor-copy" : "cursor-no-drop"}`}
         onClick={async () => {
           await navigator.clipboard.writeText(recruitUrl);
           setCopied(true);
@@ -261,7 +265,7 @@ const RecruitLinkTab: React.FC = () => {
       >
         <p className="grow">{recruitUrl}</p>
         <ClipboardCopy className="h-8 w-8" />
-      </div>
+      </button>
     </div>
   );
 };
@@ -312,7 +316,7 @@ const RecruitGuideTab: React.FC = () => {
       staleTime: 1000 * 60 * 5,
     },
   );
-  const rawPromotions = promotions?.pages.map((page) => page.data).flat() ?? [];
+  const rawPromotions = promotions?.pages.flatMap((page) => page.data) ?? [];
   const allPromotions = rawPromotions.map((promotion) => ({
     ...promotion,
     reviewed: promotion.reviewed
@@ -347,7 +351,7 @@ const RecruitGuideTab: React.FC = () => {
         >
           <Form {...linkForm}>
             <form className="space-y-4">
-              <p className="text-sm text-muted-foreground mb-4">URL: {promotion.url}</p>
+              <p className="mb-4 text-muted-foreground text-sm">URL: {promotion.url}</p>
               <FormField
                 control={linkForm.control}
                 name="url"
@@ -389,9 +393,9 @@ const RecruitGuideTab: React.FC = () => {
         below evaluation criteria), and will award <b>a random S-rank bloodline</b> to
         the user who post the best promotion link. Our review system evaluates multiple
         factors to determine the reward amount:
-        <div className="bg-card p-4 rounded-lg space-y-1">
+        <div className="space-y-1 rounded-lg bg-card p-4">
           <h3 className="font-semibold">Evaluation Criteria:</h3>
-          <ul className="list-disc pl-6 space-y-1">
+          <ul className="list-disc space-y-1 pl-6">
             <li>
               Website reputation and visibility (high-profile gaming sites receive
               better rewards)
@@ -404,9 +408,9 @@ const RecruitGuideTab: React.FC = () => {
             <li>Overall presentation and context of your promotion</li>
           </ul>
         </div>
-        <div className="bg-card p-4 rounded-lg space-y-1">
+        <div className="space-y-1 rounded-lg bg-card p-4">
           <h3 className="font-semibold">Recommended Promotion Strategies:</h3>
-          <ul className="list-disc pl-6 space-y-1">
+          <ul className="list-disc space-y-1 pl-6">
             <li>Write detailed blog posts or reviews about your game experience</li>
             <li>
               Share on popular gaming forums (Reddit, GameFAQs, MMORPG.com, medium.com,
@@ -427,7 +431,7 @@ const RecruitGuideTab: React.FC = () => {
         <Form {...linkForm}>
           <form
             onSubmit={linkForm.handleSubmit((data) => submitPromotion.mutate(data))}
-            className="flex flex-row gap-2 mt-4"
+            className="mt-4 flex flex-row gap-2"
           >
             <FormField
               control={linkForm.control}

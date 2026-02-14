@@ -1,21 +1,22 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { parseHtml } from "@/utils/parse";
-import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
-import { api } from "@/app/_trpc/client";
-import { secondsFromDate } from "@/utils/time";
-import { showMutationToast } from "@/libs/toast";
-import { canAccessStructure } from "@/utils/village";
-import { atom } from "jotai";
-import { usePusherHandler } from "@/layout/PusherHandler";
 import * as Sentry from "@sentry/nextjs";
+import { atom } from "jotai";
+import { useRouter } from "next/navigation";
 import type Pusher from "pusher-js";
-import type { NavBarDropdownLink } from "@/libs/menus";
+import type React from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
-import type { ReturnedBattle } from "@/libs/combat/types";
+import { api } from "@/app/_trpc/client";
 import type { StructureRoute } from "@/drizzle/constants";
+import { usePusherHandler } from "@/layout/PusherHandler";
+import type { ReturnedBattle } from "@/libs/combat/types";
+import type { NavBarDropdownLink } from "@/libs/menus";
+import { showMutationToast } from "@/libs/toast";
+import { parseHtml } from "@/utils/parse";
+import { secondsFromDate } from "@/utils/time";
+import { canAccessStructure } from "@/utils/village";
 
 /**
  * Atom for storing combat action¨
@@ -80,7 +81,7 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
   const utils = api.useUtils();
 
   // Get user data
-  const { data: data, status: userStatus } = api.profile.getUser.useQuery(undefined, {
+  const { data, status: userStatus } = api.profile.getUser.useQuery(undefined, {
     enabled: !!userId && isSignedIn && isLoaded,
     retry: false,
     refetchInterval: 300000,
@@ -124,14 +125,13 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
       // e.g. in the battle system
       setTimeDiff(discrepancy);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.serverTime]);
 
   // Show user notifications in toast
   useEffect(() => {
     data?.notifications
       .filter((n) => n.color === "toast")
-      .map((n) => {
+      .forEach((n) => {
         showMutationToast({
           success: true,
           message: <div>{parseHtml(n.name)}</div>,
@@ -193,7 +193,6 @@ export const useRequiredUserData = () => {
     if (isLoaded && (!isSignedIn || (data === undefined && status !== "pending"))) {
       router.push("/");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, data, isLoaded, isSignedIn]);
 
   // Return state

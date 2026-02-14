@@ -1,14 +1,14 @@
 import {
-  NearestFilter,
   LinearFilter,
+  NearestFilter,
   Sprite,
   SpriteMaterial,
   type Texture,
 } from "three";
 import type {
-  SpriteDirection,
-  CharacterAssetConfig as DbCharacterAssetConfig,
   CharacterAnimationState,
+  CharacterAssetConfig as DbCharacterAssetConfig,
+  SpriteDirection,
 } from "@/validators/towerDefense";
 
 /**
@@ -527,7 +527,9 @@ export class FrameAnimator {
     // Load static rotation textures
     const directions = Object.keys(rotations) as SpriteDirection[];
     for (const direction of directions) {
-      const path = resolvePath(rotations[direction]!);
+      const rotPath = rotations[direction];
+      if (!rotPath) continue;
+      const path = resolvePath(rotPath);
       const texture = this.textureLoader(path);
       texture.generateMipmaps = false;
       texture.minFilter = LinearFilter;

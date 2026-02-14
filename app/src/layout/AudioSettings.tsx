@@ -1,26 +1,26 @@
 "use client";
 
-import { useEffect, useState, createContext, use, type ReactNode } from "react";
 import { Volume2, VolumeX } from "lucide-react";
+import { createContext, type ReactNode, use, useEffect, useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
-import { UncontrolledSliderField } from "@/layout/SliderField";
-import { useAudio } from "@/hooks/useAudio";
-import { useIframeMute } from "@/hooks/useIframeMute";
 import {
-  useLocalStorage,
+  MUSIC_CURRENT_THEME,
+  MUSIC_SHINE_THEME,
+  MUSIC_SYNDICATE_THEME,
+  MUSIC_TSUKIMORI_THEME,
+  MUSIC_WELCOME_TO_SEICHI,
+} from "@/drizzle/constants";
+import {
   safeLocalStorageGetItem,
   safeLocalStorageSetItem,
+  useLocalStorage,
 } from "@/hooks/localstorage";
-import { api } from "@/app/_trpc/client";
+import { useAudio } from "@/hooks/useAudio";
+import { useIframeMute } from "@/hooks/useIframeMute";
+import { UncontrolledSliderField } from "@/layout/SliderField";
 import { showMutationToast } from "@/libs/toast";
-import {
-  MUSIC_WELCOME_TO_SEICHI,
-  MUSIC_SHINE_THEME,
-  MUSIC_TSUKIMORI_THEME,
-  MUSIC_CURRENT_THEME,
-  MUSIC_SYNDICATE_THEME,
-} from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 
 interface GameSettingsProps {
@@ -97,7 +97,6 @@ export const GlobalAudioProvider: React.FC<{
     } else {
       void setAudioEnabled(getInitialMusicState());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isClient, userData]);
 
   const contextValue: AudioContextValue = {
@@ -169,7 +168,6 @@ const useGameSettings = (userData?: UserWithRelations | null) => {
     } else {
       setSfxOn(getInitialSfxState());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isClient, userData]);
 
   // Update preferences mutation
@@ -222,11 +220,11 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
   return (
     <div className="space-y-4 p-4">
       <div>
-        <p className="font-medium mb-3">Music</p>
+        <p className="mb-3 font-medium">Music</p>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm">Background soundtrack</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               {audioEnabled ? "Playing" : "Paused"}
             </p>
           </div>
@@ -257,7 +255,7 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
             <p className="text-sm">Nindo Audio</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               Embedded iframe audio control
             </p>
           </div>
@@ -272,11 +270,11 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
       </div>
 
       <div>
-        <p className="font-medium mb-3">Sound effects</p>
+        <p className="mb-3 font-medium">Sound effects</p>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm">Combat SFX</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               {sfxOn ? "Enabled" : "Disabled"}
             </p>
           </div>
@@ -307,7 +305,7 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
         <div className="space-y-2">
           <div>
             <p className="text-sm">SFX Volume</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               Current volume: {Math.round(sfxVolume * 100)}%
             </p>
           </div>
@@ -334,11 +332,11 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
       )}
 
       <div>
-        <p className="font-medium mb-3">Display</p>
+        <p className="mb-3 font-medium">Display</p>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm">Lighter Layout</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               {lightLayout ? "Enabled" : "Disabled"}
             </p>
           </div>
@@ -351,7 +349,7 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
       </div>
 
       {requiresInteraction && audioEnabled && (
-        <p className="text-xs text-muted-foreground italic">
+        <p className="text-muted-foreground text-xs italic">
           Audio requires interaction on this browser; click anywhere to start
         </p>
       )}
@@ -385,13 +383,14 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
     <Popover>
       <PopoverTrigger asChild>
         <button
+          type="button"
           aria-label="Audio settings"
-          className="rounded-full mx-1 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80"
+          className="mx-1 rounded-full bg-blue-100 bg-opacity-80 text-slate-700 hover:bg-blue-300 hover:text-black"
         >
           {audioEnabled ? (
-            <Volume2 className="h-6 w-6 xl:h-7 xl:w-7 p-1" suppressHydrationWarning />
+            <Volume2 className="h-6 w-6 p-1 xl:h-7 xl:w-7" suppressHydrationWarning />
           ) : (
-            <VolumeX className="h-6 w-6 xl:h-7 xl:w-7 p-1" suppressHydrationWarning />
+            <VolumeX className="h-6 w-6 p-1 xl:h-7 xl:w-7" suppressHydrationWarning />
           )}
         </button>
       </PopoverTrigger>
@@ -400,7 +399,7 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
           <p className="font-medium">Music</p>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">Background soundtrack</p>
+              <p className="text-muted-foreground text-xs">Background soundtrack</p>
             </div>
             <Switch
               checked={!!audioEnabled}
@@ -425,7 +424,7 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
           </div>
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
-              <p className="text-xs text-muted-foreground">Nindo Audio</p>
+              <p className="text-muted-foreground text-xs">Nindo Audio</p>
             </div>
             <Switch
               checked={!isIframesMuted}
@@ -438,7 +437,7 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
           <p className="font-medium">Sound effects</p>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">Combat SFX</p>
+              <p className="text-muted-foreground text-xs">Combat SFX</p>
             </div>
             <Switch
               checked={!!sfxOn}
@@ -464,7 +463,7 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
           {sfxOn && (
             <div className="space-y-2">
               <div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   SFX Volume ({Math.round(sfxVolume * 100)}%)
                 </p>
               </div>
@@ -492,7 +491,7 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
           <p className="font-medium">Display</p>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">Lighter Layout</p>
+              <p className="text-muted-foreground text-xs">Lighter Layout</p>
             </div>
             <Switch
               checked={!!lightLayout}

@@ -1,11 +1,12 @@
-import React, { useEffect, useRef } from "react";
 import { Chart as ChartJS } from "chart.js/auto";
+import type React from "react";
+import { useEffect, useRef } from "react";
+import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
 import RankedRankDistributionFiltering, {
-  useFiltering,
   getFilter,
+  useFiltering,
 } from "@/layout/RankedRankDistributionFiltering";
-import { api } from "@/app/_trpc/client";
 
 interface RankedRankDistributionHistogramProps {
   title?: string;
@@ -88,7 +89,7 @@ export const RankedRankDistributionHistogram: React.FC<
               label: "Players",
               data: rankDistributionData.map((item) => item.count),
               backgroundColor: rankDistributionData.map(
-                (_, index) => colors[index % colors.length] + "80", // Add transparency
+                (_, index) => `${colors[index % colors.length]}80`, // Add transparency
               ),
               borderColor: rankDistributionData.map(
                 (_, index) => colors[index % colors.length],
@@ -118,11 +119,11 @@ export const RankedRankDistributionHistogram: React.FC<
       padding={false}
     >
       {rankDistributionData && rankDistributionData.length > 0 ? (
-        <div className="relative w-full h-96">
+        <div className="relative h-96 w-full">
           <canvas ref={chartRef} id="rankedRankDistributionHistogram"></canvas>
         </div>
       ) : (
-        <p className="text-gray-500 text-center py-8">
+        <p className="py-8 text-center text-gray-500">
           No ranked rank distribution data available.
         </p>
       )}

@@ -1,21 +1,23 @@
+import fetchRetry from "fetch-retry";
 import {
+  BufferGeometry,
+  CanvasTexture,
   Group,
+  LinearFilter,
   LineBasicMaterial,
   LineSegments,
-  LinearFilter,
   Sprite,
   SpriteMaterial,
   Vector3,
-  BufferGeometry,
-  CanvasTexture,
 } from "three";
-import fetchRetry from "fetch-retry";
-import { IMG_MAP_HEXASPHERE } from "@/drizzle/constants";
-import { IMG_AVATAR_DEFAULT, IMG_SECTOR_USER_SPRITE_MASK } from "@/drizzle/constants";
-import { loadTexture } from "@/libs/threejs/util";
+import {
+  IMG_AVATAR_DEFAULT,
+  IMG_MAP_HEXASPHERE,
+  IMG_SECTOR_USER_SPRITE_MASK,
+} from "@/drizzle/constants";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
-import type { GlobalPoint } from "@/libs/threejs/types";
-import type { GlobalMapData } from "@/libs/threejs/types";
+import type { GlobalMapData, GlobalPoint } from "@/libs/threejs/types";
+import { loadTexture } from "@/libs/threejs/util";
 
 const MAP_CACHE_KEY = "hexasphere_map_cache";
 const MAP_CACHE_VERSION = "v1"; // Increment to invalidate cache when map data changes
@@ -44,8 +46,8 @@ export const fetchMap = async () => {
   const fetch = fetchRetry(global.fetch);
   const response = await fetch(IMG_MAP_HEXASPHERE, {
     retries: 3,
-    retryDelay: function (attempt) {
-      return Math.pow(2, attempt) * 1000; // 1000, 2000, 4000
+    retryDelay: (attempt) => {
+      return 2 ** attempt * 1000; // 1000, 2000, 4000
     },
   });
   const hexasphere = await response.json().then((data) => data as GlobalMapData);

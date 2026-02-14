@@ -1,48 +1,51 @@
-import { z } from "zod";
+import { and, desc, eq, gte, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { eq, or, and, ne, sql, gte, isNull, desc } from "drizzle-orm";
+import { z } from "zod";
 import {
+  KAGE_CHALLENGE_ACCEPT_PRESTIGE,
+  KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS,
+  KAGE_CHALLENGE_OPEN_FOR_SECONDS,
+  KAGE_CHALLENGE_REJECT_COST,
+  KAGE_CHALLENGE_SECS,
+  KAGE_DEFAULT_PRESTIGE,
+  KAGE_DELAY_SECS,
+  KAGE_MAX_DAILIES,
+  KAGE_MAX_WEEKLY_PRESTIGE_SEND,
+  KAGE_PRESTIGE_REQUIREMENT,
+  KAGE_REQUESTS_SHOW_SECONDS,
+  KAGE_UNACCEPTED_CHALLENGE_COST,
+} from "@/drizzle/constants";
+import {
+  actionLog,
   clan,
+  kageDefendedChallenges,
   userData,
   village,
   villageStructure,
-  kageDefendedChallenges,
-  actionLog,
 } from "@/drizzle/schema";
-import { canTakeKage } from "@/utils/permissions";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { errorResponse, baseServerResponse } from "@/server/api/trpc";
-import { initiateBattle } from "@/routers/combat";
-import { fetchVillage } from "@/routers/village";
-import { fetchUser, fetchUpdatedUser, updateNindo } from "@/routers/profile";
-import { canChallengeKage, canBeElder, calculateDailyLockedTime } from "@/utils/kage";
-import { calcStructureUpgrade } from "@/utils/village";
-import {
-  KAGE_MAX_DAILIES,
-  KAGE_MAX_ELDERS,
-  KAGE_DELAY_SECS,
-  KAGE_PRESTIGE_REQUIREMENT,
-  KAGE_DEFAULT_PRESTIGE,
-  KAGE_CHALLENGE_SECS,
-  KAGE_REQUESTS_SHOW_SECONDS,
-  KAGE_CHALLENGE_ACCEPT_PRESTIGE,
-  KAGE_CHALLENGE_OPEN_FOR_SECONDS,
-  KAGE_MAX_WEEKLY_PRESTIGE_SEND,
-  KAGE_UNACCEPTED_CHALLENGE_COST,
-  KAGE_CHALLENGE_REJECT_COST,
-  KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS,
-} from "@/drizzle/constants";
-import {
-  fetchRequests,
-  fetchRequest,
-  updateRequestState,
-  insertRequest,
-} from "@/routers/sparring";
 import { getServerPusher } from "@/libs/pusher";
-import type { DrizzleClient } from "@/server/db";
-import { secondsFromDate, secondsPassed } from "@/utils/time";
 import { fetchClan } from "@/routers/clan";
+import { initiateBattle } from "@/routers/combat";
+import { fetchUpdatedUser, fetchUser, updateNindo } from "@/routers/profile";
+import {
+  fetchRequest,
+  fetchRequests,
+  insertRequest,
+  updateRequestState,
+} from "@/routers/sparring";
+import { fetchVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
+import { calculateDailyLockedTime, canChallengeKage } from "@/utils/kage";
+import { canTakeKage } from "@/utils/permissions";
+import { secondsFromDate, secondsPassed } from "@/utils/time";
+import { calcStructureUpgrade } from "@/utils/village";
 
 const pusher = getServerPusher();
 
@@ -50,21 +53,31 @@ export const kageRouter = createTRPCRouter({
   /**
    * Get the daily locked time for the current user
    */
-  getDailyLockedTime: protectedProcedure.query(async ({ ctx }) => {
-    const dailyLockedTimeSeconds = await calculateDailyLockedTime(
-      ctx.drizzle,
-      ctx.userId,
-    );
-    return { dailyLockedTimeSeconds };
-  }),
+  getDailyLockedTime: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get kage daily locked time" } })
+    .query(async ({ ctx }) => {
+      const dailyLockedTimeSeconds = await calculateDailyLockedTime(
+        ctx.drizzle,
+        ctx.userId,
+      );
+      return { dailyLockedTimeSeconds };
+    }),
 
   /**
    * Kage challenge & request challenge system
    */
-  getUserChallenges: protectedProcedure.query(async ({ ctx }) => {
-    return fetchRequests(ctx.drizzle, ["KAGE"], KAGE_REQUESTS_SHOW_SECONDS, ctx.userId);
-  }),
+  getUserChallenges: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user's kage challenges" } })
+    .query(async ({ ctx }) => {
+      return fetchRequests(
+        ctx.drizzle,
+        ["KAGE"],
+        KAGE_REQUESTS_SHOW_SECONDS,
+        ctx.userId,
+      );
+    }),
   createChallenge: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Challenge the kage for position" } })
     .input(z.object({ kageId: z.string(), villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -86,7 +99,7 @@ export const kageRouter = createTRPCRouter({
         fetchRequests(ctx.drizzle, ["KAGE"], KAGE_CHALLENGE_SECS, ctx.userId),
         fetchVillage(ctx.drizzle, input.villageId),
         ctx.drizzle
-          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .select({ count: sql`count(*)`.mapWith(Number) })
           .from(kageDefendedChallenges)
           .where(
             and(
@@ -156,6 +169,7 @@ export const kageRouter = createTRPCRouter({
       return { success: true, message: "Challenge created" };
     }),
   acceptChallenge: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Accept a kage challenge" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -212,6 +226,7 @@ export const kageRouter = createTRPCRouter({
       return result;
     }),
   rejectChallenge: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Reject a kage challenge" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -251,6 +266,7 @@ export const kageRouter = createTRPCRouter({
       return { success: true, message: "Challenge rejected" };
     }),
   cancelChallenge: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Cancel a kage challenge" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -320,6 +336,7 @@ export const kageRouter = createTRPCRouter({
    * Misc other kage features
    */
   resignKage: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Resign from kage position" } })
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -347,6 +364,7 @@ export const kageRouter = createTRPCRouter({
     }),
 
   sendKagePrestige: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Send prestige to the kage as elder" } })
     .input(z.object({ kageId: z.string(), amount: z.number() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -463,6 +481,7 @@ export const kageRouter = createTRPCRouter({
       return { success: true, message: "You have taken the kage position" };
     }),
   upsertNotice: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Update village notice as kage" } })
     .input(z.object({ content: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -487,66 +506,13 @@ export const kageRouter = createTRPCRouter({
       return updateNindo(ctx.drizzle, village.id, input.content, "kageOrder");
     }),
   getElders: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get village elders" } })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
       return await fetchElders(ctx.drizzle, input.villageId);
     }),
-  toggleElder: protectedProcedure
-    .input(z.object({ userId: z.string(), villageId: z.string().nullish() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const villageId = input.villageId ?? "syndicate";
-      const [kage, prospect, village, elders] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
-        fetchVillage(ctx.drizzle, villageId),
-        fetchElders(ctx.drizzle, villageId),
-      ]);
-      // Derived
-      const isHideoutOrTown = ["HIDEOUT", "TOWN"].includes(village?.type ?? "");
-      const lockout = isHideoutOrTown ? 0 : KAGE_DELAY_SECS;
-      const newRank = prospect.rank === "ELDER" ? "JONIN" : "ELDER";
-      // Guards
-      if (!kage) return errorResponse("User not found");
-      if (!prospect) return errorResponse("Target not found");
-      if (!village) return errorResponse("Village not found");
-      // Allow elder removal after 3 days
-      if (newRank !== "ELDER") {
-        const threeDaysAgo = new Date(Date.now() - KAGE_DELAY_SECS * 1000);
-        if (village.leaderUpdatedAt > threeDaysAgo) {
-          return errorResponse("Cannot remove elder until 3 days after becoming kage");
-        }
-      }
-      if (prospect.anbuId) return errorResponse("Cannot promote ANBU to elder");
-      if (prospect.isAi) return errorResponse("Do not touch the AI");
-      if (kage.villageId !== village.id) return errorResponse("Wrong village");
-      if (village.kageId !== kage.userId) return errorResponse("Not kage");
-      if (village.type !== "VILLAGE") return errorResponse("Only for village");
-      if (prospect.villageId !== village.id) return errorResponse("Not in village");
-      // Only enforce max when PROMOTING to ELDER
-      if (newRank === "ELDER" && elders.length >= KAGE_MAX_ELDERS) {
-        return errorResponse(`Already have ${KAGE_MAX_ELDERS} elders`);
-      }
-      if (secondsFromDate(lockout, village.leaderUpdatedAt) > new Date()) {
-        return errorResponse(
-          `Must have been kage for ${Math.floor(lockout / (24 * 60 * 60))} days`,
-        );
-      }
-      if (prospect.rank !== "ELDER" && !canBeElder(prospect)) {
-        return errorResponse("Must be in village for 100 days to be elder");
-      }
-      // Mutate
-      await ctx.drizzle
-        .update(userData)
-        .set({ rank: newRank })
-        .where(eq(userData.userId, prospect.userId));
-      return {
-        success: true,
-        message: `User rank updated to ${newRank.toLowerCase()}`,
-      };
-    }),
   upgradeStructure: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Upgrade village structure as kage" } })
     .input(
       z.object({
         structureId: z.string(),
@@ -617,6 +583,7 @@ export const kageRouter = createTRPCRouter({
       return { success: true, message: "Structure upgraded" };
     }),
   toggleOpenForChallenges: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Toggle kage challenge availability" } })
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -655,8 +622,9 @@ export const kageRouter = createTRPCRouter({
         return errorResponse("Cannot toggle while there are pending challenges");
       }
 
-      if (lastToggle.length > 0) {
-        const secondsSinceLastToggle = secondsPassed(lastToggle[0]!.createdAt);
+      const lastToggleEntry = lastToggle[0];
+      if (lastToggleEntry?.createdAt) {
+        const secondsSinceLastToggle = secondsPassed(lastToggleEntry.createdAt);
         if (secondsSinceLastToggle < KAGE_CHALLENGE_OPEN_FOR_SECONDS) {
           return errorResponse(
             `Please wait ${Math.floor(KAGE_CHALLENGE_OPEN_FOR_SECONDS - secondsSinceLastToggle)} seconds before toggling`,

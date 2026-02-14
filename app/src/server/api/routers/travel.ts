@@ -1,46 +1,48 @@
-import { z } from "zod";
+import type { inferRouterOutputs } from "@trpc/server";
+import { and, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { eq, gte, and, or, isNull, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
+import * as map from "@/data/hexasphere.json";
 import {
-  createTRPCRouter,
-  protectedProcedure,
-  ratelimitMiddleware,
-  hasUserMiddleware,
-} from "../trpc";
-import { serverError, baseServerResponse, errorResponse } from "../trpc";
-import { calcGlobalTravelTime } from "@/libs/travel";
-import { calcIsInVillage } from "@/libs/travel";
-import { isAtEdge, maxDistance } from "@/libs/travel";
-import {
-  SECTOR_HEIGHT,
-  SECTOR_WIDTH,
-  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
-} from "@/drizzle/constants";
-import { secondsFromNow } from "@/utils/time";
-import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
-import { userData, clan, village, actionLog, war } from "@/drizzle/schema";
-import { fetchUser } from "@/routers/profile";
-import { initiateBattle } from "@/routers/combat";
-import { calcLevel } from "@/libs/profile";
-import { fetchSectorVillage } from "@/routers/village";
-import { findRelationship } from "@/utils/alliance";
-import { getStrucBoost } from "@/utils/village";
-import { groupBy } from "@/utils/grouping";
-import {
-  ROBBING_SUCCESS_CHANCE,
-  ROBBING_STOLLEN_AMOUNT,
-  ROBBING_VILLAGE_PRESTIGE_GAIN,
-  ROBBING_IMMUNITY_DURATION,
   ANBU_STEALTH_BASE_CHANCE_PERC,
   ANBU_STEALTH_CHANGE_PER_LEVEL,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  ROBBING_IMMUNITY_DURATION,
+  ROBBING_STOLLEN_AMOUNT,
+  ROBBING_SUCCESS_CHANCE,
+  ROBBING_VILLAGE_PRESTIGE_GAIN,
+  SECTOR_HEIGHT,
+  SECTOR_WIDTH,
+  UserStatuses,
 } from "@/drizzle/constants";
+import { actionLog, clan, userData, village, war } from "@/drizzle/schema";
+import { calcLevel } from "@/libs/profile";
+import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
-import { breakStealth } from "@/routers/stealth";
-import { fetchSector } from "@/routers/village";
-import * as map from "@/data/hexasphere.json";
-import { UserStatuses } from "@/drizzle/constants";
-import type { inferRouterOutputs } from "@trpc/server";
 import type { GlobalMapData } from "@/libs/threejs/types";
+import {
+  calcGlobalTravelTime,
+  calcIsInVillage,
+  isAtEdge,
+  maxDistance,
+} from "@/libs/travel";
+import { initiateBattle } from "@/routers/combat";
+import { fetchUser } from "@/routers/profile";
+import { breakStealth } from "@/routers/stealth";
+import { fetchSector, fetchSectorVillage } from "@/routers/village";
+import { findRelationship } from "@/utils/alliance";
+import { groupBy } from "@/utils/grouping";
+import { secondsFromNow } from "@/utils/time";
+import { getStrucBoost } from "@/utils/village";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  hasUserMiddleware,
+  protectedProcedure,
+  ratelimitMiddleware,
+  serverError,
+} from "../trpc";
 
 // const redis = Redis.fromEnv();
 
@@ -49,21 +51,20 @@ const pusher = getServerPusher();
 export const travelRouter = createTRPCRouter({
   // Rob another player
   robPlayer: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Rob another player for ryo" } })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(
       z.object({
         longitude: z
-          .number()
           .int()
           .min(0)
           .max(SECTOR_WIDTH - 1),
         latitude: z
-          .number()
           .int()
           .min(0)
           .max(SECTOR_HEIGHT - 1),
-        sector: z.number().int(),
+        sector: z.int(),
         userId: z.string(),
       }),
     )
@@ -185,7 +186,10 @@ export const travelRouter = createTRPCRouter({
             ? [
                 ctx.drizzle
                   .update(clan)
-                  .set({ points: sql`${clan.points} + 1` })
+                  .set({
+                    points: sql`${clan.points} + 1`,
+                    activityPoints: sql`${clan.activityPoints} + 1`,
+                  })
                   .where(eq(clan.id, user.clanId)),
               ]
             : []),
@@ -259,7 +263,10 @@ export const travelRouter = createTRPCRouter({
     }),
   // Get users within a given sector
   getSectorData: protectedProcedure
-    .input(z.object({ sector: z.number().int() })) // Note: this is not actively used, but is there for reloading the sector data
+    .meta({
+      mcp: { enabled: true, description: "Get users and data within current sector" },
+    })
+    .input(z.object({ sector: z.int() })) // Note: this is not actively used, but is there for reloading the sector data
     .query(async ({ ctx }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
 
@@ -368,13 +375,19 @@ export const travelRouter = createTRPCRouter({
     }),
   // Get village & alliance information for a given sector
   getVillageInSector: protectedProcedure
-    .input(z.object({ sector: z.number().int(), isOutlaw: z.boolean().default(false) }))
+    .meta({
+      mcp: { enabled: true, description: "Get village and alliance info for sector" },
+    })
+    .input(z.object({ sector: z.int(), isOutlaw: z.boolean().prefault(false) }))
     .query(async ({ input, ctx }) => {
       return await fetchSectorVillage(ctx.drizzle, input.sector, input.isOutlaw);
     }),
   // Initiate travel on the globe
   startGlobalMove: protectedProcedure
-    .input(z.object({ sector: z.number().int() }))
+    .meta({
+      mcp: { enabled: true, description: "Start global travel to another sector" },
+    })
+    .input(z.object({ sector: z.int() }))
     .output(
       baseServerResponse.extend({
         data: z
@@ -435,6 +448,7 @@ export const travelRouter = createTRPCRouter({
     }),
   // Finish travel on the globe
   finishGlobalMove: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Complete global travel" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -457,50 +471,51 @@ export const travelRouter = createTRPCRouter({
       return { success: true, message: "OK" };
     }),
   // Get all sector ownership
-  getAllSectors: protectedProcedure.query(async ({ ctx }) => {
-    const allSectors = await ctx.drizzle.query.sector.findMany({
-      columns: {
-        sector: true,
-        villageId: true,
-      },
-    });
-    const groupedSectors = groupBy(allSectors, "villageId");
-    const converted = [...groupedSectors.keys()].map((key) => {
-      const sectors = groupedSectors.get(key) || [];
-      return {
-        villageId: key,
-        sectors: sectors.map((s) => s.sector),
-      };
-    });
-    return converted;
-  }),
+  getAllSectors: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get all sector ownership info" } })
+    .query(async ({ ctx }) => {
+      const allSectors = await ctx.drizzle.query.sector.findMany({
+        columns: {
+          sector: true,
+          villageId: true,
+        },
+      });
+      const groupedSectors = groupBy(allSectors, "villageId");
+      const converted = [...groupedSectors.keys()].map((key) => {
+        const sectors = groupedSectors.get(key) || [];
+        return {
+          villageId: key,
+          sectors: sectors.map((s) => s.sector),
+        };
+      });
+      return converted;
+    }),
   // Move user to new local location
   moveInSector: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Move user within current sector" } })
     .input(
       z.object({
-        curLongitude: z.number().int(),
-        curLatitude: z.number().int(),
+        curLongitude: z.int(),
+        curLatitude: z.int(),
         longitude: z
-          .number()
           .int()
           .min(0)
           .max(SECTOR_WIDTH - 1),
         latitude: z
-          .number()
           .int()
           .min(0)
           .max(SECTOR_HEIGHT - 1),
-        sector: z.number().int(),
+        sector: z.int(),
         villageId: z.string().nullish(),
         battleId: z.string().nullish(),
-        level: z.number().int(),
-        avatar: z.string().url(),
-        avatarLight: z.string().url(),
+        level: z.int(),
+        avatar: z.url(),
+        avatarLight: z.url(),
         username: z.string(),
       }),
     )
     .output(
-      baseServerResponse.merge(
+      baseServerResponse.extend(
         z.object({
           data: z
             .object({
@@ -516,7 +531,7 @@ export const travelRouter = createTRPCRouter({
               villageId: z.string().nullish(),
             })
             .optional(),
-        }),
+        }).shape,
       ),
     )
     .mutation(async ({ input, ctx }) => {

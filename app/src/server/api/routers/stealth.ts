@@ -1,42 +1,49 @@
-import { eq, and, sql, isNull, inArray } from "drizzle-orm";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { serverError, baseServerResponse, errorResponse } from "../trpc";
-import { userData } from "@/drizzle/schema";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { userData, villageAlliance } from "@/drizzle/schema";
+import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { secondsFromNow } from "@/utils/time";
-import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  serverError,
+} from "../trpc";
 
 const pusher = getServerPusher();
+
+import type { CovertTrainingType } from "@/drizzle/constants";
 import {
-  calcStealthDuration,
+  STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
+  STEALTH_SENSORY_CAP,
+  STEALTH_TRAIN_GAIN_PER_MINUTE,
+} from "@/drizzle/constants";
+import {
+  calcCovertTrainingGain,
   calcSensoryCooldown,
+  calcStealthDuration,
+  getRemainingSensoryCooldown,
+  getRemainingStealthCooldown,
   isSensoryReady,
   isStealthCooldownExpired,
   isStealthExpired,
-  getRemainingStealthCooldown,
-  getRemainingSensoryCooldown,
   rollSensoryDetection,
   rollStealthKeep,
-  calcCovertTrainingGain,
 } from "@/libs/stealth";
 import {
-  STEALTH_SENSORY_CAP,
-  STEALTH_TRAIN_GAIN_PER_MINUTE,
-  STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
-} from "@/drizzle/constants";
-import {
-  useSensoryInputSchema,
-  trainInputSchema,
   activateStealthDataSchema,
-  useSensoryDataSchema,
   startTrainDataSchema,
   stopTrainDataSchema,
+  trainInputSchema,
+  useSensoryDataSchema,
+  useSensoryInputSchema,
 } from "@/validators/stealth";
-import type { CovertTrainingType } from "@/drizzle/constants";
 
 export const stealthRouter = createTRPCRouter({
   // Activate stealth mode
   activateStealth: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Activate stealth mode" } })
     .output(
       baseServerResponse.extend({
         data: activateStealthDataSchema.optional(),
@@ -113,6 +120,7 @@ export const stealthRouter = createTRPCRouter({
 
   // Deactivate stealth mode
   deactivateStealth: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Deactivate stealth mode" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
@@ -160,6 +168,7 @@ export const stealthRouter = createTRPCRouter({
 
   // Use sensory to scan for stealthed enemies in the sector
   useSensory: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Scan for stealthed users in sector" } })
     .input(useSensoryInputSchema)
     .output(
       baseServerResponse.extend({
@@ -168,7 +177,7 @@ export const stealthRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query (parallel)
-      const [{ user }, stealthedUsers] = await Promise.all([
+      const [{ user }, stealthedUsers, alliances] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -194,6 +203,7 @@ export const stealthRouter = createTRPCRouter({
             status: true,
           },
         }),
+        ctx.drizzle.select().from(villageAlliance),
       ]);
 
       // Guard
@@ -208,9 +218,22 @@ export const stealthRouter = createTRPCRouter({
         );
       }
 
-      // Derived
+      // Derived - get all allied village IDs (same village + formal allies)
+      const alliedVillageIds = alliances
+        .filter(
+          (a) => a.villageIdA === user.villageId || a.villageIdB === user.villageId,
+        )
+        .filter((a) => a.status === "ALLY")
+        .flatMap((a) => [a.villageIdA, a.villageIdB]);
+      const alliedSet = new Set(
+        user.villageId ? [user.villageId, ...alliedVillageIds] : [],
+      );
+
+      // Filter out allied users, then roll for detection
       const detectedUsers: (typeof stealthedUsers)[number][] = [];
       for (const stealthedUser of stealthedUsers) {
+        // Skip allied users - sensory doesn't reveal allies
+        if (stealthedUser.villageId && alliedSet.has(stealthedUser.villageId)) continue;
         if (rollSensoryDetection(user.sensory)) {
           detectedUsers.push(stealthedUser);
         }
@@ -279,6 +302,8 @@ export const stealthRouter = createTRPCRouter({
             username: u.username,
             longitude: u.longitude,
             latitude: u.latitude,
+            villageId: u.villageId,
+            level: u.level,
           })),
           lastSensoryAt,
         },
@@ -287,6 +312,7 @@ export const stealthRouter = createTRPCRouter({
 
   // Start covert training (stealth or sensory)
   trainCovert: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Start stealth or sensory training" } })
     .input(trainInputSchema)
     .output(
       baseServerResponse.extend({
@@ -358,6 +384,9 @@ export const stealthRouter = createTRPCRouter({
 
   // Stop covert training and collect rewards
   stopCovertTraining: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Stop covert training and collect rewards" },
+    })
     .output(
       baseServerResponse.extend({
         data: stopTrainDataSchema.optional(),
@@ -427,6 +456,7 @@ export const stealthRouter = createTRPCRouter({
 
   // Cancel covert training without rewards
   cancelCovertTraining: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Cancel covert training" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Mutation (with guard in WHERE clause)

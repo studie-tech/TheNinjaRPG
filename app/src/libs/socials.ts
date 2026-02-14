@@ -1,7 +1,7 @@
+import crypto from "node:crypto";
 import { NodeHtmlMarkdown } from "node-html-markdown";
-import crypto from "crypto";
-import type { TicketType } from "@/validators/misc";
 import type { UserData } from "@/drizzle/schema";
+import type { TicketType } from "@/validators/misc";
 
 export const callDiscordContent = async (
   username: string,
@@ -20,7 +20,7 @@ export const callDiscordContent = async (
 };
 
 export const callDiscordNews = async (
-  username: string,
+  _username: string,
   title: string,
   content: string,
   image_url?: string | null,
@@ -181,7 +181,7 @@ const generateOAuth1Signature = (
 ) => {
   const sortedParams = Object.keys(params)
     .sort()
-    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(params[key]!)}`)
+    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(params[key] ?? "")}`)
     .join("&");
 
   const signatureBaseString = [
@@ -223,7 +223,7 @@ export const callTwitterNews = async (title: string, content: string) => {
   const maxContentLength = 280 - title.length - suffix.length - 5; // 5 for "\n\n" and buffer
   const truncatedContent =
     plainContent.length > maxContentLength
-      ? plainContent.substring(0, maxContentLength - 3) + "..."
+      ? `${plainContent.substring(0, maxContentLength - 3)}...`
       : plainContent;
   const tweetText = `${title}\n\n${truncatedContent}${suffix}`;
 
@@ -255,7 +255,7 @@ export const callTwitterNews = async (title: string, content: string) => {
       .sort()
       .map(
         (key) =>
-          `${encodeURIComponent(key)}="${encodeURIComponent(oauthParams[key]!)}"`,
+          `${encodeURIComponent(key)}="${encodeURIComponent(oauthParams[key] ?? "")}"`,
       )
       .join(", ");
 

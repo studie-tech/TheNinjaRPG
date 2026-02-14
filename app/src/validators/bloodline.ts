@@ -1,7 +1,6 @@
 import { z } from "zod";
+import { LetterRanks, StatTypes } from "@/drizzle/constants";
 import { statFilters } from "@/libs/train";
-import { LetterRanks } from "@/drizzle/constants";
-import { StatTypes } from "@/drizzle/constants";
 
 export const bloodlineFilteringSchema = z.object({
   name: z.string().min(0).max(256).optional(),

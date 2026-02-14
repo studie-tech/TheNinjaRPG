@@ -1,5 +1,5 @@
-import React from "react";
 import Link from "next/link";
+import type React from "react";
 
 const Footer: React.FC = () => {
   return (

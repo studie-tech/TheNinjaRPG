@@ -1,13 +1,13 @@
-import type { UserData } from "@/drizzle/schema";
 import type {
-  SupportTicketPriority,
-  SupportTicketCategory,
-  SupportTicketStatus,
-  UserRole,
-  UserRank,
   FederalStatus,
+  SupportTicketCategory,
+  SupportTicketPriority,
+  SupportTicketStatus,
+  UserRank,
+  UserRole,
 } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT, SUPPORT_TICKET_COLORS } from "@/drizzle/constants";
+import type { UserData } from "@/drizzle/schema";
 
 /**
  * Annonymize user information

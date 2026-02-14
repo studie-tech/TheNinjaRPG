@@ -1,21 +1,21 @@
-import React from "react";
-import { Activity } from "lucide-react";
-import { RefreshCw } from "lucide-react";
+import { Activity, RefreshCw } from "lucide-react";
+import type React from "react";
 
 const WebGlError: React.FC = () => {
   return (
-    <div className="w-full min-h-96 flex flex-col items-center justify-center">
-      <Activity className="w-40 h-40 p-3 m-3 bg-popover rounded-full animate-pulse" />
+    <div className="flex min-h-96 w-full flex-col items-center justify-center">
+      <Activity className="m-3 h-40 w-40 animate-pulse rounded-full bg-popover p-3" />
       <p>Error loading WebGL2 renderer.</p>
-      <p className="text-red-500 font-bold">
+      <p className="font-bold text-red-500">
         Please update your browser to play this game!
       </p>
-      <p
-        className="hover:text-orange-500 hover:cursor-pointer animate-pulse"
+      <button
+        type="button"
+        className="animate-pulse hover:cursor-pointer hover:text-orange-500"
         onClick={() => location.reload()}
       >
-        Refresh <RefreshCw className="w-5 h-5 inline" />
-      </p>
+        Refresh <RefreshCw className="inline h-5 w-5" />
+      </button>
     </div>
   );
 };

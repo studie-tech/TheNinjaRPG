@@ -1,16 +1,18 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
 import { useRouter } from "next/navigation";
+import { use, useEffect } from "react";
+import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { useEffect, use } from "react";
-import { EditContent } from "@/layout/EditContent";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
-import { useAssetEditForm } from "@/hooks/asset";
-import { gameAssetValidator } from "@/validators/asset";
 import type { GameAsset } from "@/drizzle/schema";
+import { useAssetEditForm } from "@/hooks/asset";
+import ContentBox from "@/layout/ContentBox";
+import { EditContent } from "@/layout/EditContent";
+import Loader from "@/layout/Loader";
+import { canChangeContent } from "@/utils/permissions";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type { ZodGameAssetType } from "@/validators/asset";
+import { gameAssetValidator } from "@/validators/asset";
 
 export default function AssetEdit(props: { params: Promise<{ assetid: string }> }) {
   const params = use(props.params);
@@ -29,7 +31,6 @@ export default function AssetEdit(props: { params: Promise<{ assetid: string }> 
     if (userData && !canChangeContent(userData.role)) {
       router.push("/profile");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData]);
 
   // Prevent unauthorized access
@@ -64,7 +65,7 @@ const SingleEditAsset: React.FC<SingleEditAssetProps> = (props) => {
       {asset && (
         <EditContent
           schema={gameAssetValidator}
-          form={form}
+          form={form as unknown as UseFormReturn<ZodGameAssetType, unknown>}
           formData={formData}
           showSubmit={true}
           buttonTxt="Save to Database"

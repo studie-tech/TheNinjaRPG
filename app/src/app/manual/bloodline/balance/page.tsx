@@ -1,31 +1,31 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
-import { useLocalStorage } from "@/hooks/localstorage";
-
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { BarChart3, InfoIcon, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
+import type React from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { useLocalStorage } from "@/hooks/localstorage";
 import BloodlineBalanceFiltering, {
-  useFiltering,
   getFilter,
+  useFiltering,
 } from "@/layout/BloodlineBalanceFiltering";
 import BloodlineFiltering, {
-  useFiltering as useBloodlineFiltering,
   getFilter as getBloodlineFilter,
+  useFiltering as useBloodlineFiltering,
 } from "@/layout/BloodlineFiltering";
-import Link from "next/link";
-import NavTabs from "@/layout/NavTabs";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import { BarChart3, Trash2, InfoIcon, Pencil } from "lucide-react";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import NavTabs from "@/layout/NavTabs";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { showMutationToast } from "@/libs/toast";
+import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
-import Confirm2 from "@/layout/Confirm2";
-import Modal2 from "@/layout/Modal2";
-import { showMutationToast } from "@/libs/toast";
 
 export default function ManualBloodlineBalance() {
   // State
@@ -78,14 +78,13 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
     if (state.effect.length === 0) {
       state.setEffect(["increasedamagegiven"]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Can edit bloodline
   const canEdit = canChangeContent(userData?.role ?? "USER");
 
   const tableData = data
-    ?.map((bloodline) => {
+    ?.flatMap((bloodline) => {
       return bloodline.effects.map((effect) => {
         return {
           name: bloodline.name,
@@ -118,7 +117,6 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
         };
       });
     })
-    .flat()
     .sort((a, b) => b.power - a.power);
 
   // Table columns
@@ -129,7 +127,11 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
   >[] = [
     { key: "name", header: "Bloodline", type: "string" },
     { key: "links", header: "Links", type: "jsx" },
-    { key: "statClassification", header: "Classification", type: "capitalized" },
+    {
+      key: "statClassification",
+      header: "Classification",
+      type: "capitalized",
+    },
     { key: "effect", header: "Effect", type: "string" },
     { key: "rank", header: "Rank", type: "capitalized" },
     { key: "power", header: "Power", type: "number" },

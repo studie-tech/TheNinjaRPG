@@ -1,5 +1,5 @@
-import React, { useRef } from "react";
-import { useEffect, useState } from "react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
 
 interface CountdownProps {

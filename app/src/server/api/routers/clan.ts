@@ -1,54 +1,94 @@
-import { z } from "zod";
+import type { inferRouterOutputs } from "@trpc/server";
+import {
+  and,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  isNull,
+  like,
+  or,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { eq, sql, and, or, gte, like, isNull, inArray } from "drizzle-orm";
-import { getTableColumns } from "drizzle-orm";
-import { villageStructure, conversation, sector } from "@/drizzle/schema";
-import { war, warAlly, warKill } from "@/drizzle/schema";
-import { clan, mpvpBattleQueue, mpvpBattleUser, actionLog } from "@/drizzle/schema";
-import { userData, userRequest, historicalAvatar, village } from "@/drizzle/schema";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { errorResponse, baseServerResponse } from "@/server/api/trpc";
-import { fetchVillage, fetchVillages, fetchStructures } from "@/routers/village";
-import { fetchUser, updateNindo } from "@/routers/profile";
-import { getServerPusher } from "@/libs/pusher";
-import { clanCreateSchema, checkCoLeader, checkAssassin } from "@/validators/clan";
-import { hasRequiredRank } from "@/libs/train";
-import { canEditClans } from "@/utils/permissions";
+import { z } from "zod";
+import {
+  ASSASSIN_MAX_PER_FACTION,
+  CLAN_ASSASSIN_SLOTS,
+  CLAN_BOOST_CONFIG,
+  CLAN_BOOST_MAX_LEVEL,
+  CLAN_BOOST_PERCENT_PER_LEVEL,
+  CLAN_COLOR_CHANGE_REP_COST,
+  CLAN_CREATE_PRESTIGE_REQUIREMENT,
+  CLAN_CREATE_RYO_COST,
+  CLAN_LOBBY_SECONDS,
+  CLAN_MAX_MEMBERS,
+  CLAN_RANK_REQUIREMENT,
+  CLANS_PER_STRUCTURE_LEVEL,
+  ELDER_NOMINATION_CUTOFF_DAY,
+  ELDER_NOMINATION_DEADLINE_DAY,
+  FACTION_MIN_MEMBERS_FOR_TOWN,
+  FACTION_MIN_POINTS_FOR_TOWN,
+  HIDEOUT_COST,
+  HIDEOUT_TOWN_UPGRADE,
+  IMG_AVATAR_DEFAULT,
+  IMG_VILLAGE_FACTION,
+  KAGE_MAX_ELDERS,
+  TOWN_REESTABLISH_COST,
+  VILLAGE_SYNDICATE_ID,
+} from "@/drizzle/constants";
+import type { UserData } from "@/drizzle/schema";
+import {
+  actionLog,
+  clan,
+  conversation,
+  historicalAvatar,
+  mpvpBattleQueue,
+  mpvpBattleUser,
+  sector,
+  userData,
+  userRequest,
+  village,
+  villageStructure,
+  war,
+  warAlly,
+  warKill,
+} from "@/drizzle/schema";
 import { checkIfSectorIsAvailable } from "@/libs/clan";
+import { getServerPusher } from "@/libs/pusher";
+import { hasRequiredRank } from "@/libs/train";
+import { initiateBattle } from "@/routers/combat";
+import { fetchUser, updateNindo } from "@/routers/profile";
 import {
   fetchRequest,
   fetchRequests,
   insertRequest,
   updateRequestState,
 } from "@/routers/sparring";
-import { initiateBattle } from "@/routers/combat";
-import { CLAN_LOBBY_SECONDS, CLAN_RANK_REQUIREMENT } from "@/drizzle/constants";
-import { CLAN_CREATE_RYO_COST, CLANS_PER_STRUCTURE_LEVEL } from "@/drizzle/constants";
-import { CLAN_MAX_REGEN_BOOST, CLAN_REGEN_BOOST_COST } from "@/drizzle/constants";
-import { CLAN_CREATE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
-import { CLAN_MAX_MEMBERS } from "@/drizzle/constants";
-import { CLAN_MAX_TRAINING_BOOST, CLAN_TRAINING_BOOST_COST } from "@/drizzle/constants";
-import { CLAN_MAX_RYO_BOOST, CLAN_RYO_BOOST_COST } from "@/drizzle/constants";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { HIDEOUT_COST, HIDEOUT_TOWN_UPGRADE } from "@/drizzle/constants";
-import { TOWN_REESTABLISH_COST } from "@/drizzle/constants";
-import { FACTION_MIN_POINTS_FOR_TOWN } from "@/drizzle/constants";
-import { ASSASSIN_MAX_PER_FACTION } from "@/drizzle/constants";
-import { CLAN_ASSASSIN_SLOTS } from "@/drizzle/constants";
-import { FACTION_MIN_MEMBERS_FOR_TOWN } from "@/drizzle/constants";
-import { IMG_VILLAGE_FACTION } from "@/drizzle/constants";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { CLAN_COLOR_CHANGE_REP_COST } from "@/drizzle/constants";
-import type { inferRouterOutputs } from "@trpc/server";
+import { fetchStructures, fetchVillage, fetchVillages } from "@/routers/village";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import type { UserData } from "@/drizzle/schema";
+import { canEditClans } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import { getEffectiveStructureLevel } from "@/utils/village";
+import {
+  checkAssassin,
+  checkCoLeader,
+  clanBoostTypeSchema,
+  clanCreateSchema,
+} from "@/validators/clan";
 
 const pusher = getServerPusher();
 
 export const clanRouter = createTRPCRouter({
   purchaseHideout: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Purchase faction hideout" } })
     .input(z.object({ clanId: z.string(), sector: z.number() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -142,6 +182,7 @@ export const clanRouter = createTRPCRouter({
       return errorResponse("Hideout creation is currently disabled");
     }),
   upgradeHideoutToTown: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Upgrade hideout to town" } })
     .input(z.object({ clanId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -215,6 +256,9 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: "Hideout upgraded to town successfully" };
     }),
   clanDonate: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Donate reputation to faction treasury" },
+    })
     .input(
       z.object({
         reputationPoints: z.number().min(0),
@@ -291,6 +335,7 @@ export const clanRouter = createTRPCRouter({
       }
     }),
   get: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get clan/faction details" } })
     .input(z.object({ clanId: z.string() }))
     .query(async ({ ctx, input }) => {
       // Query
@@ -309,6 +354,7 @@ export const clanRouter = createTRPCRouter({
       return null;
     }),
   getAll: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get all clans/factions in village" } })
     .input(z.object({ villageId: z.string(), isOutlaw: z.boolean() }))
     .query(async ({ ctx, input }) => {
       // Fetch
@@ -320,15 +366,20 @@ export const clanRouter = createTRPCRouter({
       if (user.villageId === input.villageId) return fetchedClans;
       return null;
     }),
-  getAllNames: protectedProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle.query.clan.findMany({
-      columns: { id: true, name: true, image: true },
-    });
-  }),
-  getRequests: protectedProcedure.query(async ({ ctx }) => {
-    return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, ctx.userId);
-  }),
+  getAllNames: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get all clan/faction names" } })
+    .query(async ({ ctx }) => {
+      return await ctx.drizzle.query.clan.findMany({
+        columns: { id: true, name: true, image: true },
+      });
+    }),
+  getRequests: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get pending clan join requests" } })
+    .query(async ({ ctx }) => {
+      return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, ctx.userId);
+    }),
   searchClans: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Search clans/factions by name" } })
     .input(z.object({ name: z.string().trim() }))
     .query(async ({ ctx, input }) => {
       return ctx.drizzle.query.clan.findMany({
@@ -343,6 +394,7 @@ export const clanRouter = createTRPCRouter({
       });
     }),
   createRequest: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Request to join clan/faction" } })
     .input(z.object({ clanId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -384,6 +436,7 @@ export const clanRouter = createTRPCRouter({
       };
     }),
   rejectRequest: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Reject clan join request" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -398,6 +451,7 @@ export const clanRouter = createTRPCRouter({
       return await updateRequestState(ctx.drizzle, input.id, "REJECTED", "CLAN");
     }),
   cancelRequest: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Cancel your clan join request" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -411,6 +465,7 @@ export const clanRouter = createTRPCRouter({
       return await updateRequestState(ctx.drizzle, input.id, "CANCELLED", "CLAN");
     }),
   acceptRequest: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Accept clan join request" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -470,6 +525,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: "Request accepted" };
     }),
   createClan: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Create new clan/faction" } })
     .input(clanCreateSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -540,6 +596,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: `${groupLabel} created` };
     }),
   editClan: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Edit clan/faction name and image" } })
     .input(z.object({ clanId: z.string(), name: z.string(), image: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -576,6 +633,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: `${groupLabel} updated` };
     }),
   editClanColor: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Change faction color" } })
     .input(z.object({ clanId: z.string(), color: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -644,6 +702,7 @@ export const clanRouter = createTRPCRouter({
       };
     }),
   promoteMember: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Promote clan member to leadership" } })
     .input(z.object({ clanId: z.string(), memberId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -746,6 +805,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: "Member promoted" };
     }),
   demoteMember: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Demote clan member from leadership" } })
     .input(z.object({ clanId: z.string(), memberId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -792,6 +852,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: "Member demoted" };
     }),
   kickMember: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Kick member from clan" } })
     .input(z.object({ clanId: z.string(), memberId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -836,6 +897,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: "Member kicked" };
     }),
   leaveClan: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Leave current clan/faction" } })
     .input(z.object({ clanId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -863,6 +925,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: `User left ${groupLabel}` };
     }),
   upsertNotice: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Update clan notice/order" } })
     .input(z.object({ content: z.string(), clanId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -891,6 +954,9 @@ export const clanRouter = createTRPCRouter({
       );
     }),
   fightLeader: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Challenge clan leader for leadership" },
+    })
     .input(z.object({ clanId: z.string(), villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -927,12 +993,13 @@ export const clanRouter = createTRPCRouter({
       );
     }),
   toBank: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Deposit ryo to clan bank" } })
     .input(z.object({ amount: z.number().min(0), clanId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, fetchedClan] = await Promise.all([
-        await fetchUser(ctx.drizzle, ctx.userId),
-        await fetchClan(ctx.drizzle, input.clanId),
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchClan(ctx.drizzle, input.clanId),
       ]);
       if (user.money < input.amount) return errorResponse("Not enough money in pocket");
       if (user.isBanned) return errorResponse("You are banned");
@@ -951,10 +1018,12 @@ export const clanRouter = createTRPCRouter({
         .where(eq(clan.id, input.clanId));
       return { success: true, message: `Successfully deposited ${input.amount} ryo` };
     }),
-  purchaseTrainingBoost: protectedProcedure
-    .input(z.object({ clanId: z.string() }))
+  purchaseBoost: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Purchase clan stat boost" } })
+    .input(z.object({ clanId: z.string(), boostType: clanBoostTypeSchema }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      const config = CLAN_BOOST_CONFIG[input.boostType];
       // Query
       const [user, clanData] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -965,115 +1034,124 @@ export const clanRouter = createTRPCRouter({
       const isLeader = clanData?.leaderId === user.userId;
       const isCoLeader = checkCoLeader(ctx.userId, clanData);
       const leaderLike = isLeader || isCoLeader;
+      // Convert stored percentage to actual level (e.g., 10% -> level 5)
+      const currentBoost = clanData?.[input.boostType] ?? 0;
+      const currentLevel = currentBoost / CLAN_BOOST_PERCENT_PER_LEVEL;
+      const cost = config.baseCost + currentLevel * config.perLevelCost;
       // Guard
       if (!user) return errorResponse("User not found");
       if (!clanData) return errorResponse(`${groupLabel} not found`);
-      if (user.clanId !== clanData.id) return errorResponse(`Not in the ${groupLabel}`);
-      if (!leaderLike) return errorResponse(`Not in ${groupLabel} leadership`);
-      if (clanData.points < CLAN_TRAINING_BOOST_COST) {
-        return errorResponse(`Not enough ${groupLabel} points`);
+      if (config.factionOnly && !user.isOutlaw) {
+        return errorResponse("Only available for factions");
       }
-      if (clanData.trainingBoost >= CLAN_MAX_TRAINING_BOOST) {
-        return errorResponse("Max training boost reached");
+      if (user.clanId !== clanData.id) {
+        return errorResponse(`Not in the ${groupLabel}`);
       }
-      // Mutate
+      if (!leaderLike) {
+        return errorResponse(`Not in ${groupLabel} leadership`);
+      }
+      if (clanData.bank < cost) {
+        return errorResponse(`Not enough Ryo in ${groupLabel} bank`);
+      }
+      if (currentLevel >= CLAN_BOOST_MAX_LEVEL) {
+        return errorResponse(`Max ${config.label.toLowerCase()} reached`);
+      }
+      // Mutate - deduct from clan bank (Ryo) and increment boost
       const result = await ctx.drizzle
         .update(clan)
         .set({
-          trainingBoost: sql`${clan.trainingBoost} + 1`,
-          points: sql`${clan.points} - ${CLAN_TRAINING_BOOST_COST}`,
+          [input.boostType]: sql`${clan[input.boostType]} + ${CLAN_BOOST_PERCENT_PER_LEVEL}`,
+          bank: sql`${clan.bank} - ${cost}`,
         })
-        .where(
-          and(eq(clan.id, clanData.id), gte(clan.points, CLAN_TRAINING_BOOST_COST)),
+        .where(and(eq(clan.id, clanData.id), gte(clan.bank, cost)));
+      if (result.rowsAffected === 0) {
+        return errorResponse(`Not enough Ryo in ${groupLabel} bank`);
+      }
+      return { success: true, message: `${config.label} purchased` };
+    }),
+  nominateElder: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Nominate clan member for village elder" },
+    })
+    .input(z.object({ clanId: z.string(), nomineeId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, clanData, nominee] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchClan(ctx.drizzle, input.clanId),
+        fetchUser(ctx.drizzle, input.nomineeId),
+      ]);
+      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      // Derived
+      const isLeader = clanData?.leaderId === user.userId;
+      const isCoLeader = checkCoLeader(ctx.userId, clanData);
+      const leaderLike = isLeader || isCoLeader;
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (!clanData) return errorResponse(`${groupLabel} not found`);
+      if (!nominee) return errorResponse("Nominee not found");
+      if (user.clanId !== clanData.id) return errorResponse(`Not in the ${groupLabel}`);
+      if (!leaderLike) return errorResponse(`Not in ${groupLabel} leadership`);
+      if (nominee.clanId !== clanData.id) {
+        return errorResponse(`Nominee must be a ${groupLabel} member`);
+      }
+      if (!hasRequiredRank(nominee.rank, "JONIN")) {
+        return errorResponse("Nominee must be at least Jonin rank");
+      }
+      if (nominee.villageId !== clanData.villageId) {
+        return errorResponse("Nominee must be in the same village");
+      }
+      if (nominee.anbuId) {
+        return errorResponse("ANBU members cannot be nominated as elders");
+      }
+      // Date validation - only allow nominations between 25th and 28th (UTC)
+      const now = new Date();
+      const dayOfMonth = now.getUTCDate();
+      if (
+        dayOfMonth < ELDER_NOMINATION_CUTOFF_DAY ||
+        dayOfMonth > ELDER_NOMINATION_DEADLINE_DAY
+      ) {
+        return errorResponse(
+          `Elder nominations are only open from the ${ELDER_NOMINATION_CUTOFF_DAY}th to the ${ELDER_NOMINATION_DEADLINE_DAY}th of each month`,
         );
-      if (result.rowsAffected === 0) {
-        return { success: false, message: `Not enough ${groupLabel} points` };
       }
-      return { success: true, message: "Training boost purchased" };
-    }),
-  purchaseRyoBoost: protectedProcedure
-    .input(z.object({ clanId: z.string() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Query
-      const [user, clanData] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchClan(ctx.drizzle, input.clanId),
-      ]);
-      // Derived
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
-      const isLeader = clanData?.leaderId === user.userId;
-      const isCoLeader = checkCoLeader(ctx.userId, clanData);
-      const leaderLike = isLeader || isCoLeader;
-      // Guard
-      if (!user) return errorResponse("User not found");
-      if (!clanData) return errorResponse(`${groupLabel} not found`);
-      if (user.clanId !== clanData.id) return errorResponse(`Not in the ${groupLabel}`);
-      if (!leaderLike) return errorResponse(`Not in ${groupLabel} leadership`);
-      if (clanData.points < CLAN_RYO_BOOST_COST) {
-        return errorResponse(`Not enough ${groupLabel} points`);
-      }
-      if (clanData.ryoBoost >= CLAN_MAX_RYO_BOOST) {
-        return errorResponse("Max ryo boost reached");
+      // Eligibility validation - clan must be in top 3 by activity (cutoff snapshot or live fallback)
+      const currentMonth = now.getUTCMonth() + 1;
+      const currentYear = now.getUTCFullYear();
+      const hasCutoffSnapshot =
+        clanData.elderCutoffMonth === currentMonth &&
+        clanData.elderCutoffYear === currentYear;
+      if (!hasCutoffSnapshot) {
+        // Fallback: calculate live eligibility if cutoff snapshot is missing
+        const liveRankings = await ctx.drizzle.query.clan.findMany({
+          where: eq(clan.villageId, clanData.villageId),
+          orderBy: [desc(clan.activityPoints), desc(clan.points)],
+          limit: KAGE_MAX_ELDERS,
+          columns: { id: true },
+        });
+        const isInTop3 = liveRankings.some((c) => c.id === clanData.id);
+        if (!isInTop3) {
+          return errorResponse(
+            "Your clan is not eligible for elder nomination this month (not in top 3 by activity points)",
+          );
+        }
       }
       // Mutate
-      const result = await ctx.drizzle
+      await ctx.drizzle
         .update(clan)
-        .set({
-          ryoBoost: sql`${clan.ryoBoost} + 1`,
-          points: sql`${clan.points} - ${CLAN_RYO_BOOST_COST}`,
-        })
-        .where(and(eq(clan.id, clanData.id), gte(clan.points, CLAN_RYO_BOOST_COST)));
-      if (result.rowsAffected === 0) {
-        return { success: false, message: `Not enough ${groupLabel} points` };
-      }
-      return { success: true, message: "Ryo boost purchased" };
-    }),
-  purchaseRegenBoost: protectedProcedure
-    .input(z.object({ clanId: z.string() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Query
-      const [user, clanData] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchClan(ctx.drizzle, input.clanId),
-      ]);
-      // Derived
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
-      const isLeader = clanData?.leaderId === user.userId;
-      const isCoLeader = checkCoLeader(ctx.userId, clanData);
-      const leaderLike = isLeader || isCoLeader;
-      // Guard
-      if (!user) return errorResponse("User not found");
-      if (!clanData) return errorResponse(`${groupLabel} not found`);
-      if (!user.isOutlaw) return errorResponse("Only available for factions");
-      if (user.clanId !== clanData.id) return errorResponse(`Not in the ${groupLabel}`);
-      if (!leaderLike) return errorResponse(`Not in ${groupLabel} leadership`);
-      if (clanData.points < CLAN_REGEN_BOOST_COST) {
-        return errorResponse(`Not enough ${groupLabel} points`);
-      }
-      if (clanData.regenBoost >= CLAN_MAX_REGEN_BOOST) {
-        return errorResponse("Max regen boost reached");
-      }
-      // Mutate
-      const result = await ctx.drizzle
-        .update(clan)
-        .set({
-          regenBoost: sql`${clan.regenBoost} + 1`,
-          points: sql`${clan.points} - ${CLAN_REGEN_BOOST_COST}`,
-        })
-        .where(and(eq(clan.id, clanData.id), gte(clan.points, CLAN_REGEN_BOOST_COST)));
-      if (result.rowsAffected === 0) {
-        return errorResponse(`Not enough ${groupLabel} points`);
-      }
-      return { success: true, message: "Regen boost purchased" };
+        .set({ elderNomineeId: input.nomineeId })
+        .where(eq(clan.id, clanData.id));
+      return { success: true, message: `${nominee.username} nominated as elder` };
     }),
   getClanBattles: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get clan battle history" } })
     .input(z.object({ clanId: z.string() }))
     .query(async ({ ctx, input }) => {
       return await fetchClanBattles(ctx.drizzle, input.clanId);
     }),
   challengeClan: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Challenge another clan to battle" } })
     .input(z.object({ challengerClanId: z.string(), targetClanId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -1082,7 +1160,7 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.challengerClanId),
         fetchClan(ctx.drizzle, input.targetClanId),
-        fetchActiveUserClanBattles(ctx.drizzle, ctx.userId),
+        fetchActiveUserMpvpBattles(ctx.drizzle, ctx.userId),
       ]);
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
       // Derived
@@ -1138,6 +1216,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: `${groupLabel} challenge initiated` };
     }),
   joinClanBattle: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Join ongoing clan battle queue" } })
     .input(z.object({ clanBattleId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -1145,7 +1224,7 @@ export const clanRouter = createTRPCRouter({
       const [user, clanBattleData, queries] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClanBattle(ctx.drizzle, input.clanBattleId),
-        fetchActiveUserClanBattles(ctx.drizzle, ctx.userId),
+        fetchActiveUserMpvpBattles(ctx.drizzle, ctx.userId),
       ]);
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
       // Guards
@@ -1205,6 +1284,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: `Joined ${groupLabel} battle` };
     }),
   leaveClanBattle: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Leave clan battle queue" } })
     .input(z.object({ clanBattleId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -1232,6 +1312,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: `Left ${groupLabel} battle` };
     }),
   kickFromClanBattle: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Kick member from clan battle queue" } })
     .input(
       z.object({ clanBattleId: z.string(), targetId: z.string(), clanId: z.string() }),
     )
@@ -1275,6 +1356,7 @@ export const clanRouter = createTRPCRouter({
       return { success: true, message: `Kicked from ${groupLabel} battle` };
     }),
   initiateClanBattle: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Start clan battle combat" } })
     .input(z.object({ clanBattleId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -1534,6 +1616,8 @@ export const removeFromClan = async (
               coLeader3: coLeadersToRemove.includes(clanData.coLeader3)
                 ? null
                 : clanData.coLeader3,
+              elderNomineeId:
+                clanData.elderNomineeId === userId ? null : clanData.elderNomineeId,
             })
             .where(eq(clan.id, clanData.id)),
           client
@@ -1663,7 +1747,7 @@ export const fetchClanBattles = async (client: DrizzleClient, clanId: string) =>
  * @param userId - The ID of the user.
  * @returns - A promise that resolves to an array of clan battle queue items.
  */
-export const fetchActiveUserClanBattles = async (
+export const fetchActiveUserMpvpBattles = async (
   client: DrizzleClient,
   userId: string,
 ) => {
@@ -1678,9 +1762,6 @@ export const fetchActiveUserClanBattles = async (
       ),
     )
     .where(eq(mpvpBattleUser.userId, userId));
-  return await client.query.mpvpBattleUser.findMany({
-    where: eq(mpvpBattleUser.userId, userId),
-  });
 };
 
 /**
@@ -1779,9 +1860,19 @@ export const fetchClan = async (client: DrizzleClient, clanId: string) => {
           avatar: true,
           pvpActivity: true,
           isOutlaw: true,
+          anbuId: true,
         },
       },
       leaderOrder: true,
+      elderNominee: {
+        columns: {
+          userId: true,
+          username: true,
+          level: true,
+          rank: true,
+          avatar: true,
+        },
+      },
     },
     where: eq(clan.id, clanId),
   });

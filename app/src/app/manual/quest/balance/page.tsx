@@ -1,18 +1,19 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import type { TooltipItem } from "chart.js/auto";
+import { Chart as ChartJS } from "chart.js/auto";
+import type React from "react";
+import { useEffect, useRef } from "react";
+import { api } from "@/app/_trpc/client";
+import { LetterRanks } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import QuestRewardBalanceFiltering, {
-  useFiltering,
   getFilter,
+  useFiltering,
 } from "@/layout/QuestRewardBalanceFiltering";
-import { api } from "@/app/_trpc/client";
-import { Chart as ChartJS } from "chart.js/auto";
-import type { TooltipItem } from "chart.js/auto";
-import { LetterRanks } from "@/drizzle/constants";
 
 export default function ManualQuestBalance() {
   const availableTabs = ["Rewards"] as const;

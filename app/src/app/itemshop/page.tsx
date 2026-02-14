@@ -1,8 +1,8 @@
 "use client";
 
-import Shop from "@/layout/Shop";
-import Loader from "@/layout/Loader";
 import BanInfo from "@/layout/BanInfo";
+import Loader from "@/layout/Loader";
+import Shop from "@/layout/Shop";
 import { useRequireInVillage } from "@/utils/UserContext";
 
 export default function ItemShop() {

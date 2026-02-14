@@ -1,48 +1,47 @@
 "use client";
 
-import { useState } from "react";
-import { use } from "react";
-import Link from "next/link";
-import ContentBox from "@/layout/ContentBox";
-import Post from "@/layout/Post";
-import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SiGithub } from "@icons-pack/react-simple-icons";
 import {
-  Edit,
-  Clock,
   AlertCircle,
+  Check,
+  Clock,
+  Copy,
+  Edit,
+  ExternalLink,
+  Plus,
   Tag,
   Users,
-  Plus,
-  Check,
-  Copy,
-  ExternalLink,
 } from "lucide-react";
-import { showMutationToast } from "@/libs/toast";
-import { api } from "@/app/_trpc/client";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { canEditCannedResponses, canEscalateToGithub } from "@/utils/permissions";
+import Link from "next/link";
+import { use, useState } from "react";
 import { toast } from "sonner";
+import { api } from "@/app/_trpc/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import {
   SUPPORT_TICKET_STATUS_TRANSITIONS,
-  SupportTicketPriorities,
   SupportTicketCategories,
+  SupportTicketPriorities,
 } from "@/drizzle/constants";
+import CannedResponsesManagement from "@/layout/CannedResponsesManagement";
+import ContentBox from "@/layout/ContentBox";
+import Conversation from "@/layout/Conversation";
+import Loader from "@/layout/Loader";
+import Post from "@/layout/Post";
 import { getStatusIcon } from "@/libs/menus";
 import {
-  getStatusColor,
-  getPriorityColor,
-  getCategoryColor,
   formatTimeAgo,
+  getCategoryColor,
+  getPriorityColor,
+  getStatusColor,
 } from "@/libs/support";
-import Conversation from "@/layout/Conversation";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
-import CannedResponsesManagement from "@/layout/CannedResponsesManagement";
+import { showMutationToast } from "@/libs/toast";
+import { canEditCannedResponses, canEscalateToGithub } from "@/utils/permissions";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function TicketDetail(props: { params: Promise<{ ticketId: string }> }) {
   // State
@@ -176,7 +175,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <Button className="flex items-center gap-1 ">
+                  <Button className="flex items-center gap-1">
                     <ExternalLink className="h-3 w-3" />
                     GitHub Issue
                   </Button>
@@ -200,7 +199,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                       }}
                       disabled={escalateToGithub.isPending}
                     >
-                      <SiGithub className="text-black mr-2" size={10} />
+                      <SiGithub className="mr-2 text-black" size={10} />
                       {escalateToGithub.isPending
                         ? "Escalating..."
                         : "Escalate to GitHub"}
@@ -212,7 +211,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
         >
           <div className="space-y-4">
             {/* Ticket Metadata */}
-            <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="flex items-center gap-2 text-gray-600 text-sm">
               <span>Created {formatTimeAgo(ticket.createdAt)}</span>
               {ticket.assignedTo && (
                 <>
@@ -223,7 +222,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
             </div>
 
             {/* Status, Priority, Category & Public Badges with inline controls */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Status */}
               <Popover open={statusOpen} onOpenChange={setStatusOpen}>
                 <PopoverTrigger asChild disabled={!canUpdateTicket}>
@@ -234,9 +233,10 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                   </Badge>
                 </PopoverTrigger>
                 {canUpdateTicket && (
-                  <PopoverContent className="w-56 p-2 space-y-1">
+                  <PopoverContent className="w-56 space-y-1 p-2">
                     {availableStatusTransitions.map((status) => (
                       <button
+                        type="button"
                         key={status}
                         onClick={() => {
                           updateTicket.mutate({
@@ -245,9 +245,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                           });
                           setStatusOpen(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${
-                          status === ticket.status ? "font-semibold" : ""
-                        }`}
+                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${status === ticket.status ? "font-semibold" : ""}`}
                       >
                         <span className="flex items-center gap-2 whitespace-nowrap">
                           {getStatusIcon(status)} {status.replace("_", " ")}
@@ -270,9 +268,10 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                   </Badge>
                 </PopoverTrigger>
                 {canUpdateTicket && (
-                  <PopoverContent className="w-40 p-2 space-y-1">
+                  <PopoverContent className="w-40 space-y-1 p-2">
                     {SupportTicketPriorities.map((p) => (
                       <button
+                        type="button"
                         key={p}
                         onClick={() => {
                           updateTicket.mutate({
@@ -281,9 +280,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                           });
                           setPriorityOpen(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${
-                          p === ticket.priority ? "font-semibold" : ""
-                        }`}
+                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${p === ticket.priority ? "font-semibold" : ""}`}
                       >
                         <span>{p}</span>
                         {p === ticket.priority && (
@@ -304,9 +301,10 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                   </Badge>
                 </PopoverTrigger>
                 {canUpdateTicket && (
-                  <PopoverContent className="w-56 p-2 space-y-1">
+                  <PopoverContent className="w-56 space-y-1 p-2">
                     {SupportTicketCategories.map((c) => (
                       <button
+                        type="button"
                         key={c}
                         onClick={() => {
                           updateTicket.mutate({
@@ -315,9 +313,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                           });
                           setCategoryOpen(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${
-                          c === ticket.category ? "font-semibold" : ""
-                        }`}
+                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${c === ticket.category ? "font-semibold" : ""}`}
                       >
                         <span>{c.replace("_", " ")}</span>
                         {c === ticket.category && (
@@ -333,14 +329,15 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
               <Popover open={assignOpen} onOpenChange={setAssignOpen}>
                 <PopoverTrigger asChild disabled={!isStaff}>
                   <Badge variant="secondary" role="button">
-                    <Users className="h-3 w-3 mr-1" />
+                    <Users className="mr-1 h-3 w-3" />
                     {ticket.assignedTo ? ticket.assignedTo.username : "Unassigned"}
                     {isStaff && <Edit className="ml-1 h-3 w-3" />}
                   </Badge>
                 </PopoverTrigger>
                 {isStaff && (
-                  <PopoverContent className="w-56 p-2 space-y-1">
+                  <PopoverContent className="w-56 space-y-1 p-2">
                     <button
+                      type="button"
                       onClick={() => {
                         updateTicket.mutate({
                           ticketId: params.ticketId,
@@ -348,15 +345,14 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                         });
                         setAssignOpen(false);
                       }}
-                      className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${
-                        !ticket.assignedTo ? "font-semibold" : ""
-                      }`}
+                      className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${!ticket.assignedTo ? "font-semibold" : ""}`}
                     >
                       <span>Unassigned</span>
                       {!ticket.assignedTo && <Check className="h-4 w-4 opacity-70" />}
                     </button>
                     {availableStaff.map((staff) => (
                       <button
+                        type="button"
                         key={staff.userId}
                         onClick={() => {
                           updateTicket.mutate({
@@ -365,11 +361,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                           });
                           setAssignOpen(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${
-                          ticket.assignedToUserId === staff.userId
-                            ? "font-semibold"
-                            : ""
-                        }`}
+                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${ticket.assignedToUserId === staff.userId ? "font-semibold" : ""}`}
                       >
                         <span>{staff.username}</span>
                         {ticket.assignedToUserId === staff.userId && (
@@ -394,17 +386,17 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                 }
                 className={`${canUpdateTicket ? "cursor-pointer hover:bg-muted" : ""}`}
               >
-                <Users className="h-3 w-3 mr-1" />
+                <Users className="mr-1 h-3 w-3" />
                 {ticket.isPublic ? "Public" : "Private"}
               </Badge>
               {/* End Public */}
             </div>
 
             {/* Tags with add functionality */}
-            <div className="flex items-center gap-1 flex-wrap">
+            <div className="flex flex-wrap items-center gap-1">
               <Tag className="h-3 w-3 text-gray-500" />
-              {ticket.tags.map((tag, index) => (
-                <Badge key={index} variant="secondary" className="text-xs">
+              {ticket.tags.map((tag, i) => (
+                <Badge key={`${tag}-${i}`} variant="secondary" className="text-xs">
                   {tag}
                 </Badge>
               ))}
@@ -474,7 +466,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
               size="sm"
               onClick={() => setIsManagementOpen(true)}
             >
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="mr-2 h-4 w-4" />
               Manage
             </Button>
           }
@@ -483,11 +475,11 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
             {cannedResponses?.map((response) => (
               <div
                 key={response.id}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                className="flex items-center justify-between rounded-lg bg-gray-50 p-3"
               >
                 <div className="flex-1">
                   <h4 className="font-medium text-sm">{response.title}</h4>
-                  <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                  <p className="mt-1 line-clamp-2 text-gray-600 text-xs">
                     {response.description}
                   </p>
                 </div>
@@ -504,7 +496,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
               </div>
             ))}
             {cannedResponses?.length === 0 && (
-              <div className="text-center py-4 text-gray-500 text-sm">
+              <div className="py-4 text-center text-gray-500 text-sm">
                 No canned responses yet.{" "}
                 <Button
                   variant="link"
@@ -526,10 +518,10 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
             {ticket.activities.map((activity) => (
               <div
                 key={activity.id}
-                className="flex items-center gap-2 text-sm text-gray-600"
+                className="flex items-center gap-2 text-gray-600 text-sm"
               >
                 <Clock className="h-3 w-3" />
-                <span>{activity.author.username}</span>
+                <span>{activity.author?.username ?? "Deleted User"}</span>
                 <span>{activity.action.toLowerCase().replace("_", " ")}</span>
                 {activity.oldValue && activity.newValue && (
                   <span>

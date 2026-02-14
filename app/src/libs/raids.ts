@@ -1,6 +1,6 @@
 import type { Quest } from "@/drizzle/schema";
-import { RaidObjective } from "@/validators/objectives";
 import type { RaidObjectiveType } from "@/validators/objectives";
+import { RaidObjective } from "@/validators/objectives";
 
 /**
  * Helper to extract raid objective data from a quest.

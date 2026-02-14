@@ -1,17 +1,18 @@
 "use client";
 
-import React, { Suspense, useState, useEffect, useRef } from "react";
-import AvatarImage from "@/layout/Avatar";
-import { Canvas } from "@react-three/fiber";
 import {
-  useGLTF,
+  Gltf,
+  Html,
   OrbitControls,
   Stage,
+  useGLTF,
   useProgress,
-  Html,
-  Gltf,
 } from "@react-three/drei";
-import { cn } from "src/libs/shadui";
+import { Canvas } from "@react-three/fiber";
+import type React from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import AvatarImage from "@/layout/Avatar";
+import { cn } from "@/libs/shadui";
 
 interface Model3dProps {
   modelUrl?: string | null;
@@ -81,7 +82,7 @@ const Model3d: React.FC<Model3dProps> = (props) => {
 
   // Base styling for both 3D and 2D views
   const baseClassName = cn(
-    "relative m-auto w-5/6 aspect-square rounded-2xl border-2 border-black",
+    "relative m-auto aspect-square w-5/6 rounded-2xl border-2 border-black",
     hover_effect && "hover:border-amber-500 hover:opacity-80",
     className,
   );
@@ -93,7 +94,7 @@ const Model3d: React.FC<Model3dProps> = (props) => {
         <div
           className={cn(
             baseClassName,
-            "bg-linear-to-r from-slate-500 to-slate-400 background-animate opacity-20",
+            "background-animate bg-linear-to-r from-slate-500 to-slate-400 opacity-20",
           )}
         ></div>
       );
@@ -130,7 +131,7 @@ function Loader() {
   const { progress } = useProgress();
   return (
     <Html center>
-      <div className="text-amber-500 font-bold">{progress.toFixed(0)}%</div>
+      <div className="font-bold text-amber-500">{progress.toFixed(0)}%</div>
     </Html>
   );
 }

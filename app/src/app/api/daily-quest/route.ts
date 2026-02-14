@@ -1,13 +1,16 @@
-import { eq, or, isNotNull, isNull, and, sql, gte, lte, inArray } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
-import { quest, questHistory, userData } from "@/drizzle/schema";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { availableQuestLetterRanks } from "@/libs/train";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
-import { upsertQuestEntries } from "@/routers/quests";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import type { UserRank } from "@/drizzle/constants";
+import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { quest, questHistory, userData } from "@/drizzle/schema";
+import {
+  handleEndpointError,
+  lockWithDailyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
+import { availableQuestLetterRanks } from "@/libs/train";
+import { upsertQuestEntries } from "@/routers/quests";
+import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "daily-quest";
 
@@ -78,7 +81,9 @@ export async function GET() {
     // For each user rank+village+level combo, get a random daily quest
     for (const config of userRankPerVillageLevel) {
       const { rank, villageId, level } = config;
-      const village = villages?.find((v) => v.id === villageId);
+      const village = villages?.find(
+        (v: (typeof villages)[number]) => v.id === villageId,
+      );
       const questRanks = availableQuestLetterRanks(rank);
       if (village && questRanks.length > 0) {
         const requiredVillage =
@@ -109,7 +114,9 @@ export async function GET() {
 
     // Do upsertions for each quest
     for (const m of memory) {
-      const newDaily = dailies.find((q) => q.id === m.questId);
+      const newDaily = dailies.find(
+        (q: (typeof dailies)[number]) => q.id === m.questId,
+      );
       if (newDaily) {
         await upsertQuestEntries(
           drizzleDB,
@@ -142,7 +149,9 @@ export async function GET() {
       );
 
     if (usersWithActiveTierQuests.length > 0) {
-      const userIdsWithTierQuests = usersWithActiveTierQuests.map((u) => u.userId);
+      const userIdsWithTierQuests = usersWithActiveTierQuests.map(
+        (u: (typeof usersWithActiveTierQuests)[number]) => u.userId,
+      );
       await drizzleDB
         .update(userData)
         .set({ tutorialOn: true })
@@ -158,6 +167,6 @@ export async function GET() {
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

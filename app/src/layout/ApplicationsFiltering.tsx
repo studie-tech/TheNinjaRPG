@@ -1,18 +1,18 @@
 "use client";
 
-import { useUserData } from "@/utils/UserContext";
-import { canViewAllApplications } from "@/utils/permissions";
-import {
-  ContentFiltering,
-  useContentFiltering,
-  buildFilter,
-  defineFilteringSchema,
-  toOptions,
-} from "@/layout/ContentFiltering";
 import {
   StaffApplicationStates,
   StaffApplicationTargetRoles,
 } from "@/drizzle/constants";
+import {
+  buildFilter,
+  ContentFiltering,
+  defineFilteringSchema,
+  toOptions,
+  useContentFiltering,
+} from "@/layout/ContentFiltering";
+import { canViewAllApplications } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 interface ApplicationsFilteringProps {
   state: ApplicationsFilteringState;

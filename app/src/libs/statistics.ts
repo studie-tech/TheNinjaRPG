@@ -27,8 +27,8 @@ export const logGamma = (z: number): number => {
     return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * z)) - logGamma(1 - z);
   }
   z -= 1;
-  let acc = p[0]!;
-  for (let i = 1; i < p.length; i++) acc += p[i]! / (z + i);
+  let acc = p[0] ?? 0;
+  for (let i = 1; i < p.length; i++) acc += (p[i] ?? 0) / (z + i);
   const t = z + p.length - 0.5;
   return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(acc);
 };
@@ -79,7 +79,7 @@ export const sampleGamma = (shape: number): number => {
   if (shape <= 0) return 0;
   if (shape < 1) {
     const u = randomUniform();
-    return sampleGamma(shape + 1) * Math.pow(u, 1 / shape);
+    return sampleGamma(shape + 1) * u ** (1 / shape);
   }
   const d = shape - 1 / 3;
   const c = 1 / Math.sqrt(9 * d);
@@ -119,9 +119,10 @@ export const quantile = (arr: number[], q: number): number => {
   const pos = (sorted.length - 1) * q;
   const base = Math.floor(pos);
   const rest = pos - base;
-  const baseVal = sorted[base]!;
-  if (sorted[base + 1] !== undefined)
-    return baseVal + rest * (sorted[base + 1]! - baseVal);
+  const baseVal = sorted[base];
+  if (baseVal === undefined) return NaN;
+  const nextVal = sorted[base + 1];
+  if (nextVal !== undefined) return baseVal + rest * (nextVal - baseVal);
   return baseVal;
 };
 
@@ -160,15 +161,15 @@ export const kde = (
   if (samples.length === 0) return grid.map(() => 0);
   const sd = stddev(samples) || 1e-3;
   const h =
-    bandwidth ??
-    Math.max(0.005, Math.min(0.1, 1.06 * sd * Math.pow(samples.length, -1 / 5)));
+    bandwidth ?? Math.max(0.005, Math.min(0.1, 1.06 * sd * samples.length ** (-1 / 5)));
   const invH = 1 / h;
   const invSqrt2Pi = 1 / Math.sqrt(2 * Math.PI);
   const n = samples.length;
   return grid.map((xi) => {
     let sum = 0;
     for (let i = 0; i < n; i++) {
-      const s = samples[i]!;
+      const s = samples[i];
+      if (s === undefined) continue;
       const z = (xi - s) * invH;
       sum += Math.exp(-0.5 * z * z) * invH * invSqrt2Pi;
     }

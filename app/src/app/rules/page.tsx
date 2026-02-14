@@ -18,15 +18,15 @@ export default function GameRules() {
         </p>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">1. Code of Conduct</h2>
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;1.1 Respect and Decorum</h3>
+        <h2 className="font-bold text-lg">1. Code of Conduct</h2>
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;1.1 Respect and Decorum</h3>
         <p className="my-2">
           &nbsp;&nbsp;To maintain a welcoming environment, all users are required to
           treat others with respect and dignity. When encountering negative behavior
           users are strongly encouraged to use the blacklist feature in addition to
           reporting an offense. The following behaviors are strictly prohibited:
         </p>
-        <ul className="pl-5 list-disc">
+        <ul className="list-disc pl-5">
           <li>
             <b>Harassment:</b> Targeted insults, threats, or abuse directed at another
             player or staff member.
@@ -55,10 +55,10 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">
+        <h2 className="font-bold text-lg">
           2. Avatar, Account Name, and Title Guidelines
         </h2>
-        <ul className="pl-5 list-disc">
+        <ul className="list-disc pl-5">
           <li>
             <b>Prohibited Content:</b> Avatars, account names, and titles depicting
             politically offensive (for example but not limited to: mocking or demeaning
@@ -88,8 +88,8 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">3. External Links</h2>
-        <ul className="pl-5 list-disc">
+        <h2 className="font-bold text-lg">3. External Links</h2>
+        <ul className="list-disc pl-5">
           <li>
             <b>Prohibited Platforms:</b> Links to sites associated with drugs,
             pornography, hate speech, or harmful content are forbidden.
@@ -101,8 +101,8 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">4. Punishment System</h2>
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;4.1 Overview</h3>
+        <h2 className="font-bold text-lg">4. Punishment System</h2>
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;4.1 Overview</h3>
         <p className="my-2">
           &nbsp;&nbsp;Strikes do not reset and remain permanently attached to a user’s
           record. Moderators typically issue one official warning before applying a
@@ -112,8 +112,8 @@ export default function GameRules() {
           taken.
         </p>
 
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;4.2 Strike Levels</h3>
-        <ul className="pl-5 list-disc">
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;4.2 Strike Levels</h3>
+        <ul className="list-disc pl-5">
           <li>
             <b>Strike 1:</b> 24-hour Silence.
           </li>
@@ -133,10 +133,10 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="text-md font-bold pt-3">
+        <h3 className="pt-3 font-bold text-md">
           &nbsp;&nbsp;4.3 Special Punishment Rules
         </h3>
-        <ul className="pl-5 list-disc">
+        <ul className="list-disc pl-5">
           <li>
             <b>Minimum Duration:</b> Silences under 24 hours are not considered strikes.
           </li>
@@ -161,9 +161,9 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">5. Reporting and Appeals</h2>
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;5.1 Reporting Violations</h3>
-        <ul className="pl-5 list-disc">
+        <h2 className="font-bold text-lg">5. Reporting and Appeals</h2>
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;5.1 Reporting Violations</h3>
+        <ul className="list-disc pl-5">
           <li>Users should report rule violations via the in-game reporting system.</li>
           <li>
             Reports must include relevant evidence. Abuse of the system may result in
@@ -178,8 +178,8 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;5.2 Appeals Process</h3>
-        <ul className="pl-5 list-disc">
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;5.2 Appeals Process</h3>
+        <ul className="list-disc pl-5">
           <li>
             Users may appeal disciplinary actions by contacting the issuing Moderator or
             Head Moderator.
@@ -195,9 +195,9 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">6. Staff Roles and Responsibilities</h2>
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;6.1 Roles</h3>
-        <ul className="pl-5 list-disc">
+        <h2 className="font-bold text-lg">6. Staff Roles and Responsibilities</h2>
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;6.1 Roles</h3>
+        <ul className="list-disc pl-5">
           <li>
             <b>Jr. Moderators:</b> Moderators in training. May issue warnings and
             silences.
@@ -234,19 +234,19 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;6.2 Responsibilities</h3>
-        <ul className="pl-5 list-disc">
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;6.2 Responsibilities</h3>
+        <ul className="list-disc pl-5">
           <li>
             <b>Transparency:</b> All disciplinary actions must be logged and justified.
           </li>
         </ul>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">7. Fair Play Guidelines</h2>
-        <h3 className="text-md font-bold pt-3">
+        <h2 className="font-bold text-lg">7. Fair Play Guidelines</h2>
+        <h3 className="pt-3 font-bold text-md">
           &nbsp;&nbsp;7.1 Cheating and Exploits
         </h3>
-        <ul className="pl-5 list-disc">
+        <ul className="list-disc pl-5">
           <li>
             Exploiting mechanics or using unauthorized third-party tools is prohibited.
           </li>
@@ -256,10 +256,10 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="text-md font-bold pt-3">
+        <h3 className="pt-3 font-bold text-md">
           &nbsp;&nbsp;7.2 Account Sharing and Multiple Accounts
         </h3>
-        <ul className="pl-5 list-disc">
+        <ul className="list-disc pl-5">
           <li>Players are restricted to two accounts.</li>
           <li>
             Accounts must be used by a single individual. Shared or multiple accounts on
@@ -282,16 +282,16 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="text-md font-bold pt-3">
+        <h3 className="pt-3 font-bold text-md">
           &nbsp;&nbsp;7.3 Selling or Transferring Accounts
         </h3>
-        <ul className="pl-5 list-disc">
+        <ul className="list-disc pl-5">
           <li>Strictly prohibited and may result in permanent bans.</li>
         </ul>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">8. General Community Standards</h2>
-        <ul className="pl-5 list-disc">
+        <h2 className="font-bold text-lg">8. General Community Standards</h2>
+        <ul className="list-disc pl-5">
           <li>
             <b>Respect for Staff:</b> Harassment of staff is treated the same as
             harassment of players.
@@ -304,8 +304,8 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">9. Official Events</h2>
-        <ul className="pl-5 list-disc">
+        <h2 className="font-bold text-lg">9. Official Events</h2>
+        <ul className="list-disc pl-5">
           <li>
             Official events and media are announced in-game and on official channels.
             Unofficial events are not TNR’s responsibility.
@@ -317,27 +317,27 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">10. Additional Guidelines</h2>
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;10.1 Impersonation</h3>
-        <ul className="pl-5 list-disc">
+        <h2 className="font-bold text-lg">10. Additional Guidelines</h2>
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;10.1 Impersonation</h3>
+        <ul className="list-disc pl-5">
           <li>
             Impersonating accounts, staff, or players (including past users) is
             prohibited and may result in permanent bans.
           </li>
         </ul>
 
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;10.2 Language Policy</h3>
-        <ul className="pl-5 list-disc">
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;10.2 Language Policy</h3>
+        <ul className="list-disc pl-5">
           <li>
             TNR is an English-only game. Short phrases in other languages are allowed,
             but persistent use is not permitted to ensure moderation efficiency.
           </li>
         </ul>
 
-        <h3 className="text-md font-bold pt-3">
+        <h3 className="pt-3 font-bold text-md">
           &nbsp;&nbsp;10.3 Criticism of Moderator Decisions
         </h3>
-        <ul className="pl-5 list-disc">
+        <ul className="list-disc pl-5">
           <li>
             Publicly criticizing moderation decisions or making unfounded assumptions
             about punishments is prohibited. Moderators often have access to additional
@@ -345,10 +345,10 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="text-md font-bold pt-3">
+        <h3 className="pt-3 font-bold text-md">
           &nbsp;&nbsp;10.4 Selling Reputation Points
         </h3>
-        <ul className="pl-5 list-disc">
+        <ul className="list-disc pl-5">
           <li>
             The selling and the advertisement of selling reputation points for real
             currency is prohibited. Players wishing to buy reputation points may only
@@ -358,21 +358,21 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">11. Disclaimer of Warranties</h2>
+        <h2 className="font-bold text-lg">11. Disclaimer of Warranties</h2>
         <p className="my-2">
           TNR is provided on an &quot;as-is&quot; basis. Players use the platform at
           their own risk
         </p>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">12. Modification of Terms</h2>
+        <h2 className="font-bold text-lg">12. Modification of Terms</h2>
         <p className="my-2">
           TNR reserves the right to modify these rules at any time. Announcements will
           be made in-game and on official platforms.
         </p>
         <hr className="my-2" />
 
-        <h2 className="text-lg font-bold">13. Discord</h2>
+        <h2 className="font-bold text-lg">13. Discord</h2>
         <p className="my-2">
           Discord is used as an official means of communication for TNR and the TNR
           community. Bug and moderation tickets can be submitted there as an official
@@ -382,7 +382,7 @@ export default function GameRules() {
           in addition to in-game.
         </p>
 
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;13.1 Rules</h3>
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;13.1 Rules</h3>
         <p className="my-2">
           &nbsp;&nbsp;The TNR discord generally follows rules of the TNR website, but
           may have additional rules in place in a separate rule channel. It also follows
@@ -394,7 +394,7 @@ export default function GameRules() {
           may be removed, as discord is considered non essential for gameplay.
         </p>
 
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;13.2 External Discords</h3>
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;13.2 External Discords</h3>
         <p className="my-2">
           &nbsp;&nbsp;Any discord besides the main TNR server is considered unofficial,
           regardless of whether it is run by a staff member or player, and is not
@@ -407,7 +407,7 @@ export default function GameRules() {
           within these servers, they are encouraged to leave them.
         </p>
 
-        <h3 className="text-md font-bold pt-3">&nbsp;&nbsp;13.2.1 Staff</h3>
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;13.2.1 Staff</h3>
         <p className="my-2">
           &nbsp;&nbsp;Staff may create, moderate, or participate in external discords.
           While action in these discords are not considered official staff actions,

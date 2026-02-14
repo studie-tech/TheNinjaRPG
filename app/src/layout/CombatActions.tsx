@@ -1,23 +1,23 @@
-import React, { useEffect, useRef } from "react";
-import ContentImage from "./ContentImage";
-import DurabilityBar from "@/layout/DurabilityBar";
-import { useUserData } from "@/utils/UserContext";
-import { Info, HelpCircle, Star, Palette, Zap } from "lucide-react";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import ElementImage from "@/layout/ElementImage";
-import { canChangeContent } from "@/utils/permissions";
+import { HelpCircle, Info, Palette, Star, Zap } from "lucide-react";
+import type React from "react";
+import { useEffect, useRef } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "src/libs/shadui";
-import { type ItemRarity } from "@/drizzle/schema";
-import type { Item, Jutsu, Bloodline } from "@/drizzle/schema";
-import type { ZodAllTags } from "@/validators/combat";
 import type { GameAssetType } from "@/drizzle/constants";
+import type { Bloodline, Item, ItemRarity, Jutsu } from "@/drizzle/schema";
+import DurabilityBar from "@/layout/DurabilityBar";
+import ElementImage from "@/layout/ElementImage";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import { cn } from "@/libs/shadui";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
+import type { ZodAllTags } from "@/validators/combat";
+import ContentImage from "./ContentImage";
 
 interface ActionItemProps {
   id: string;
@@ -160,7 +160,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
           return (
             <div
               id={`tutorial-combat-action-${item.id}`}
-              key={i}
+              key={item.id}
               ref={i === filtered.length - 1 ? props.setLastElement : null}
               className="relative flex items-start justify-center"
             >
@@ -248,7 +248,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   return (
     <div
       className={cn(
-        "relative text-center flex flex-col items-center justify-start rounded-md",
+        "relative flex flex-col items-center justify-start rounded-md text-center",
         insufficientAP ? "cursor-not-allowed" : "cursor-pointer",
         props.isGreyed ? "hover:opacity-80" : insufficientAP ? "" : "hover:opacity-90",
         props.className,
@@ -256,8 +256,11 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
     >
       <div className="relative w-full">
         {item.assetType === "SFX" && item.url ? (
+          // biome-ignore lint/a11y/useKeyWithClickEvents: Container click is supplementary - audio controls are the primary interaction
+          // biome-ignore lint/a11y/noStaticElementInteractions: Click handler supplements audio controls
           <div className={cn(settings.aspectRatioClass)} onClick={handleClick}>
-            <div className="relative w-full aspect-square rounded-xl border-2 bg-slate-100 flex items-center justify-center">
+            <div className="relative flex aspect-square w-full items-center justify-center rounded-xl border-2 bg-slate-100">
+              {/* biome-ignore lint/a11y/useMediaCaption: Audio assets are sound effects without caption content */}
               <audio
                 src={item.url}
                 controls
@@ -283,7 +286,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
         )}
         {/* Count overlay - bottom right corner */}
         {props.count !== undefined && (settings.labelSingles || props.count > 1) && (
-          <div className="absolute bottom-0 right-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 text-black text-base font-bold">
+          <div className="absolute right-0 bottom-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 font-bold text-base text-black">
             {props.count}
           </div>
         )}
@@ -293,7 +296,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger>
-                  <Info className="h-7 w-7 cursor-pointer hover:text-orange-500 fill-red-600 text-white" />
+                  <Info className="h-7 w-7 cursor-pointer fill-red-600 text-white hover:text-orange-500" />
                 </TooltipTrigger>
                 <TooltipContent>{warning}</TooltipContent>
               </Tooltip>
@@ -302,11 +305,11 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
         )}
         {/* Warning icon - top right corner */}
         {isReskinned && (
-          <div className="absolute bottom-0 right-1/2 translate-x-1/2">
+          <div className="absolute right-1/2 bottom-0 translate-x-1/2">
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger>
-                  <Palette className="h-7 w-7 cursor-pointer hover:text-orange-500  text-white" />
+                  <Palette className="h-7 w-7 cursor-pointer text-white hover:text-orange-500" />
                 </TooltipTrigger>
                 <TooltipContent>Reskinned</TooltipContent>
               </Tooltip>
@@ -317,7 +320,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
         {cooldownPerc > 0 && (
           <>
             <div
-              className="absolute top-0 right-0 left-0 bottom-0 opacity-90 hover:cursor-not-allowed"
+              className="absolute top-0 right-0 bottom-0 left-0 opacity-90 hover:cursor-not-allowed"
               style={{
                 background: `conic-gradient(#ededed ${cooldownPerc}%, rgba(0, 0, 0, 0.1) 0deg)`,
               }}
@@ -326,7 +329,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
               settings.currentRound &&
               lastUsedRound &&
               cooldown - (settings.currentRound - lastUsedRound) > 0 && (
-                <div className="absolute bottom-0 left-0 right-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-slate-400 bg-slate-300 text-black text-base font-bold z-10">
+                <div className="absolute right-0 bottom-0 left-0 z-10 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-slate-400 bg-slate-300 font-bold text-base text-black">
                   {cooldown - (settings.currentRound - lastUsedRound)}
                 </div>
               )}
@@ -337,7 +340,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
           <TooltipProvider delayDuration={50}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="absolute top-0 right-0 left-0 bottom-0 bg-slate-800/70 flex items-center justify-center cursor-not-allowed rounded-md">
+                <div className="absolute top-0 right-0 bottom-0 left-0 flex cursor-not-allowed items-center justify-center rounded-md bg-slate-800/70">
                   <Zap className="h-8 w-8 text-red-500" />
                 </div>
               </TooltipTrigger>
@@ -368,7 +371,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
                   {item.effects && item.effects.length > 0 && (
                     <div className="flex flex-col gap-1">
                       {item.effects.map((e, idx) => (
-                        <span key={idx}>
+                        <span key={e.type}>
                           Effect {idx + 1}: {e.type}
                         </span>
                       ))}
@@ -382,7 +385,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
         {/* Elements overlay - top left */}
         {elements.map((element, i) => (
           <div
-            key={i}
+            key={`${element}-${i}`}
             className={`absolute top-[-5px]`}
             style={{ left: `${i * 10}px` }}
           >

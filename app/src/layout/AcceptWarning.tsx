@@ -1,19 +1,20 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import type React from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import DisplayUserReport from "@/layout/UserReport";
-import { Button } from "@/components/ui/button";
-import { useUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
 import { cn } from "@/libs/shadui";
+import { showMutationToast } from "@/libs/toast";
+import { useUserData } from "@/utils/UserContext";
 
 const AcceptWarning: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -66,7 +67,7 @@ const AcceptWarning: React.FC = () => {
       {isModalOpen && (
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent
-            className={cn("max-w-4xl", "overflow-y-scroll max-h-screen")}
+            className={cn("max-w-4xl", "max-h-screen overflow-y-scroll")}
             onEscapeKeyDown={handleDialogClose}
             onInteractOutside={handleDialogClose}
           >
@@ -86,7 +87,7 @@ const AcceptWarning: React.FC = () => {
                     setIsModalOpen(false);
                   }
                 }}
-                className="rounded-lg z-30 bg-orange-600 text-white hover:bg-orange-700"
+                className="z-30 rounded-lg bg-orange-600 text-white hover:bg-orange-700"
                 disabled={acceptWarning.isPending}
               >
                 {acceptWarning.isPending ? "Accepting..." : "Accept Warning"}

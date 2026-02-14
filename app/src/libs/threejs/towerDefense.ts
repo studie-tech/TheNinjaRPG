@@ -1,69 +1,69 @@
+import alea from "alea";
+import { Grid, Orientation, rectangle, ring } from "honeycomb-grid";
+import { createNoise2D } from "simplex-noise";
+import type { BufferGeometry } from "three";
 import {
+  DoubleSide,
+  EdgesGeometry,
+  Float32BufferAttribute,
   Group,
+  InstancedMesh,
+  Line,
   LineBasicMaterial,
+  LineLoop,
+  LineSegments,
   Mesh,
-  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  Object3D,
   Sprite,
   SpriteMaterial,
-  EdgesGeometry,
-  Line,
-  LineSegments,
-  DoubleSide,
   BufferGeometry as ThreeBufferGeometry,
-  LineLoop,
-  Float32BufferAttribute,
-  InstancedMesh,
-  Object3D,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
 } from "three";
-import type { BufferGeometry } from "three";
-import alea from "alea";
-import { createNoise2D } from "simplex-noise";
-import { Grid, rectangle, Orientation, ring } from "honeycomb-grid";
-import { defineHex } from "../hexgrid";
+import type { CombatBiome } from "@/drizzle/constants";
 import {
-  createShadowTexture,
-  drawStatusBar,
-  updateStatusBar,
-  profiler,
-} from "@/libs/threejs/util";
+  ASSETS_LAYER,
+  DIRT_LAYER,
+  HEX_ASPECT_RATIO,
+  STATUS_LAYER,
+  TD_RANGE_VISUAL_FACTOR,
+  TILES_LAYER,
+  USER_LAYER,
+} from "@/drizzle/constants";
 import { getTileInfo } from "@/libs/threejs/biome";
-import { applyWaveShader, applyWindShader } from "@/libs/threejs/shaders";
 import {
-  getHexPoints,
+  type AnimationState,
+  type CharacterAssetConfig,
+  type FrameAnimator,
+  HEAVY_ENEMY_ASSET_CONFIG,
+  LIGHT_ENEMY_ASSET_CONFIG,
+  PLAYER_ASSET_CONFIG,
+} from "@/libs/threejs/FrameAnimator";
+import {
   calculateHexUVCoordinates,
   calculateTileOffset,
   createGroundCorners,
-  createTileGeometry,
-  createGroundGeometry,
   createGroundEdges,
+  createGroundGeometry,
+  createTileGeometry,
+  getHexPoints,
   mergeBufferGeometries,
 } from "@/libs/threejs/hexgrid";
+import { applyWaveShader, applyWindShader } from "@/libs/threejs/shaders";
 import {
-  HEX_ASPECT_RATIO,
-  TILES_LAYER,
-  DIRT_LAYER,
-  ASSETS_LAYER,
-  USER_LAYER,
-  STATUS_LAYER,
-  TD_RANGE_VISUAL_FACTOR,
-} from "@/drizzle/constants";
-import type { CombatBiome } from "@/drizzle/constants";
+  createShadowTexture,
+  drawStatusBar,
+  profiler,
+  updateStatusBar,
+} from "@/libs/threejs/util";
 import { directionToSpriteDirection } from "@/libs/towerDefense/game";
-import {
-  PLAYER_ASSET_CONFIG,
-  LIGHT_ENEMY_ASSET_CONFIG,
-  HEAVY_ENEMY_ASSET_CONFIG,
-  type FrameAnimator,
-  type AnimationState,
-  type CharacterAssetConfig,
-} from "@/libs/threejs/FrameAnimator";
-import type { CharacterAssetConfig as DbCharacterAssetConfig } from "@/validators/towerDefense";
-import type { TerrainHex } from "../hexgrid";
 import type {
-  TowerDefenseEnemy,
-  HexPosition,
+  CharacterAssetConfig as DbCharacterAssetConfig,
   EnemyDirection,
+  HexPosition,
+  TowerDefenseEnemy,
 } from "@/validators/towerDefense";
+import type { TerrainHex } from "../hexgrid";
+import { defineHex } from "../hexgrid";
 
 /**
  * Helper to convert SpriteMaterial to MeshBasicMaterial for InstancedMesh.
@@ -341,7 +341,7 @@ export const drawTowerDefenseBackground = (info: {
           });
         }
 
-        assetInstancesByMaterial.get(matId)!.instances.push({
+        assetInstancesByMaterial.get(matId)?.instances.push({
           position: { x: sprite.position.x, y: sprite.position.y, z: ASSETS_LAYER },
           scale: sprite.scale.x, // Use uniform scale for simplicity
           rotation: (sprite.userData.rotation as number) || 0,
@@ -389,7 +389,7 @@ export const drawTowerDefenseBackground = (info: {
         });
       }
 
-      oceanInstancesByVariant.get(variantIndex)!.instances.push({
+      oceanInstancesByVariant.get(variantIndex)?.instances.push({
         x: tile.x,
         y: tile.y,
       });
@@ -400,7 +400,7 @@ export const drawTowerDefenseBackground = (info: {
         geometriesByMaterial.set(materialId, []);
         materialByGroupId.set(materialId, material);
       }
-      geometriesByMaterial.get(materialId)!.push(geometry);
+      geometriesByMaterial.get(materialId)?.push(geometry);
     }
 
     // Collect tile edge geometry for merging
@@ -1142,9 +1142,10 @@ const ensureInstancedMeshCapacity = (
       enemyInstancedMeshes.hpBack.frustumCulled = false;
       group_enemies.add(enemyInstancedMeshes.hpBack);
 
+      if (!enemyInstancedMeshes.hpCurrMaterial) return;
       enemyInstancedMeshes.hpCurr = new InstancedMesh(
         QUAD_GEOMETRY,
-        enemyInstancedMeshes.hpCurrMaterial!,
+        enemyInstancedMeshes.hpCurrMaterial,
         targetCapacity,
       );
       enemyInstancedMeshes.hpCurr.userData.type = "enemies_merged";
@@ -1253,14 +1254,14 @@ export const updateEnemyHealthBars = (info: {
     const hpBack = enemyGroup.getObjectByName("hp_background") as Sprite | undefined;
     const hpCurr = enemyGroup.getObjectByName("hp_current") as Sprite | undefined;
 
-    if (hpBack && hpBack.visible && enemyInstancedMeshes.hpBack) {
+    if (hpBack?.visible && enemyInstancedMeshes.hpBack) {
       _dummyMover.position.copy(hpBack.position).applyMatrix4(enemyGroup.matrix);
       _dummyMover.scale.copy(hpBack.scale);
       _dummyMover.updateMatrix();
       enemyInstancedMeshes.hpBack.setMatrixAt(hpIdx, _dummyMover.matrix);
       hpBack.visible = false;
 
-      if (hpCurr && hpCurr.visible && enemyInstancedMeshes.hpCurr) {
+      if (hpCurr?.visible && enemyInstancedMeshes.hpCurr) {
         _dummyMover.position.copy(hpCurr.position).applyMatrix4(enemyGroup.matrix);
         _dummyMover.scale.copy(hpCurr.scale);
         _dummyMover.updateMatrix();

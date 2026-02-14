@@ -1,29 +1,29 @@
-import OpenAI from "openai";
-import { fetchAttributes } from "../server/api/routers/profile";
-import sharp from "sharp";
-import { UTApi, UTFile } from "uploadthing/server";
-import { env } from "@/env/server.mjs";
-import { tmpdir } from "os";
-import path from "path";
-import Replicate from "replicate";
-import type { DrizzleClient } from "@/server/db";
-import type { UserData, UserRank } from "@/drizzle/schema";
-import { nanoid } from "nanoid";
+import fs from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import {
-  resample,
-  prune,
   dedup,
+  meshopt,
+  prune,
+  resample,
   textureCompress,
   weld,
-  meshopt,
 } from "@gltf-transform/functions";
 import { MeshoptEncoder } from "meshoptimizer";
-import fs from "fs";
+import { nanoid } from "nanoid";
+import OpenAI from "openai";
 import type { FileOutput } from "replicate";
+import Replicate from "replicate";
+import sharp from "sharp";
+import { UTApi, UTFile } from "uploadthing/server";
 import type { IMG_ORIENTATION } from "@/drizzle/constants";
+import type { UserData, UserRank } from "@/drizzle/schema";
+import { env } from "@/env/server.mjs";
+import type { DrizzleClient } from "@/server/db";
 import type { GenerateAudioInput } from "@/validators/audio";
+import { fetchAttributes } from "../server/api/routers/profile";
 
 // Singleton Replicate instance to avoid connection pool exhaustion
 let replicateInstance: Replicate | null = null;
@@ -140,10 +140,7 @@ export const getAvatarPrompt = async (client: DrizzleClient, user: UserData) => 
         }
     }
   };
-  return `${getPhenotype(
-    user.rank,
-    user.gender,
-  )}, ${attributes}, fully clothed, wearing clothes, dressed, anime, rossdraws portrait, stanley artgerm lau, wlop, looking into camera, interesting background, sfw`;
+  return `${getPhenotype(user.rank, user.gender)}, ${attributes}, fully clothed, wearing clothes, dressed, anime, rossdraws portrait, stanley artgerm lau, wlop, looking into camera, interesting background, sfw`;
 };
 
 /**
@@ -411,7 +408,8 @@ export const uploadImageFromOpenAI = async (config: {
   const utapi = new UTApi();
   const resizedImages = await Promise.all(
     img.data.map(async (data, i) => {
-      const blob = Buffer.from(data.b64_json!, "base64");
+      if (!data.b64_json) throw new Error("No b64_json data");
+      const blob = Buffer.from(data.b64_json, "base64");
       const resultBuffer = await sharp(blob)
         .resize({ width, height, fit: "inside" })
         .webp({ quality: 70 })
@@ -442,8 +440,7 @@ export const createThumbnail = async (url?: string | null) => {
     const response = await utapi.uploadFiles(thumbnail);
     const imageUrl = response.data?.ufsUrl;
     return imageUrl ?? url;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (error) {
+  } catch (_error) {
     return url;
   }
 };
@@ -607,12 +604,14 @@ export const getVideoGenerationStatus = async (predictionId: string) => {
     // Clean up old cache entries periodically
     if (videoStatusCache.size > 100) {
       const keysToDelete: string[] = [];
-      videoStatusCache.forEach((value, key) => {
+      for (const [key, value] of videoStatusCache) {
         if (now - value.timestamp > CACHE_TTL_MS * 10) {
           keysToDelete.push(key);
         }
-      });
-      keysToDelete.forEach((key) => videoStatusCache.delete(key));
+      }
+      for (const key of keysToDelete) {
+        videoStatusCache.delete(key);
+      }
     }
 
     return prediction;

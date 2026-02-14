@@ -1,28 +1,28 @@
 "use client";
 
+import { CircleArrowUp, Info, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import Image from "@/layout/Image";
-import StatusBar from "@/layout/StatusBar";
-import Confirm2 from "@/layout/Confirm2";
+import { api } from "@/app/_trpc/client";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { CircleArrowUp } from "lucide-react";
-import { Info } from "lucide-react";
-import { RefreshCw } from "lucide-react";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { calcStructureUpgrade, getEffectiveStructureLevel } from "@/utils/village";
 import { CLANS_PER_STRUCTURE_LEVEL } from "@/drizzle/constants";
-import { calcBankInterest } from "@/utils/village";
-import { cn } from "src/libs/shadui";
+import type { Village, VillageStructure } from "@/drizzle/schema";
+import Confirm2 from "@/layout/Confirm2";
+import Image from "@/layout/Image";
+import StatusBar from "@/layout/StatusBar";
+import { cn } from "@/libs/shadui";
+import { showMutationToast } from "@/libs/toast";
 import { canAdministrateWars } from "@/utils/permissions";
-import type { Village } from "@/drizzle/schema";
-import type { VillageStructure } from "@/drizzle/schema";
+import { useRequiredUserData } from "@/utils/UserContext";
+import {
+  calcBankInterest,
+  calcStructureUpgrade,
+  getEffectiveStructureLevel,
+} from "@/utils/village";
 
 interface BuildingProps {
   structure: VillageStructure;
@@ -57,7 +57,7 @@ const Building: React.FC<BuildingProps> = (props) => {
         <TooltipProvider delayDuration={50}>
           <Tooltip>
             <TooltipTrigger>
-              <Info className="w-4 h-4" />
+              <Info className="h-4 w-4" />
             </TooltipTrigger>
             <TooltipContent>{StructureRewardEntries(structure)}</TooltipContent>
           </Tooltip>
@@ -77,7 +77,7 @@ const Building: React.FC<BuildingProps> = (props) => {
   );
   // Render
   return (
-    <div className={`flex flex-col items-center justify-center text-center relative`}>
+    <div className={`relative flex flex-col items-center justify-center text-center`}>
       {showBar && (
         <div className="w-2/3">
           <StatusBar
@@ -134,7 +134,7 @@ const RestoreStructureButton = ({ structureId }: { structureId: string }) => {
       button={
         <RefreshCw
           className={cn(
-            "h-4 w-4 hover:text-orange-500 hover:cursor-pointer",
+            "h-4 w-4 hover:cursor-pointer hover:text-orange-500",
             isPending && "animate-spin",
           )}
         />
@@ -193,7 +193,7 @@ const UpgradeButton = ({
           button={
             <CircleArrowUp
               className={cn(
-                "h-4 w-4 hover:text-orange-500 hover:cursor-pointer",
+                "h-4 w-4 hover:cursor-pointer hover:text-orange-500",
                 isPurchasing && "animate-spin",
               )}
             />
@@ -303,5 +303,5 @@ export const StructureRewardEntries = (structure: VillageStructure) => {
     }
   }
   if (msgs.length === 0) msgs.push("No rewards for this structure");
-  return msgs.map((e, i) => <p key={i}>{e}</p>);
+  return msgs.map((e) => <p key={`building-reward-${e}`}>{e}</p>);
 };

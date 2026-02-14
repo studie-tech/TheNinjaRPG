@@ -1,13 +1,17 @@
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
-import { eq, and, isNotNull, desc } from "drizzle-orm";
-import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
-import { baseServerResponse, errorResponse } from "@/api/trpc";
-import { canChangeContent } from "@/utils/permissions";
-import { generateAndUploadAudio } from "@/libs/replicate";
-import { generateAudioSchema } from "@/validators/audio";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/api/trpc";
 import { historicalSoundEffect, userData } from "@/drizzle/schema";
-import type { GenerateAudioInput } from "@/validators/audio";
+import { generateAndUploadAudio } from "@/libs/replicate";
 import type { DrizzleClient } from "@/server/db";
+import { canChangeContent } from "@/utils/permissions";
+import type { GenerateAudioInput } from "@/validators/audio";
+import { generateAudioSchema } from "@/validators/audio";
 
 export const audioRouter = createTRPCRouter({
   generate: protectedProcedure
@@ -58,7 +62,7 @@ export const audioRouter = createTRPCRouter({
         .offset(cursor ? cursor : 0)
         .limit(limit + 1);
 
-      let nextCursor: typeof cursor | undefined = undefined;
+      let nextCursor: typeof cursor | undefined;
       if (rows.length > limit) {
         const nextItem = rows.pop();
         nextCursor = nextItem?.id;

@@ -1,10 +1,10 @@
-import { useRef, useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { showMutationToast } from "@/libs/toast";
 
 interface Pagination {
   fetchNextPage: () => Promise<any>;
   hasNextPage: boolean | undefined;
-  lastElement: HTMLDivElement | null;
+  lastElement: HTMLElement | null;
 }
 
 export const useInfinitePagination = ({

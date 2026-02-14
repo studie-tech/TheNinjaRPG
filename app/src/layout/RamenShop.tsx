@@ -1,23 +1,23 @@
 "use client";
 
-import Image from "@/layout/Image";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import BanInfo from "@/layout/BanInfo";
 import { api } from "@/app/_trpc/client";
-import { getRamenHealPercentage, calcRamenCost } from "@/utils/ramen";
+import {
+  IMG_RAMEN_LARGE,
+  IMG_RAMEN_MEDIUM,
+  IMG_RAMEN_SMALL,
+  IMG_RAMEN_WELCOME,
+} from "@/drizzle/constants";
+import BanInfo from "@/layout/BanInfo";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
+import type { UserWithRelations } from "@/routers/profile";
+import type { RamenOption } from "@/utils/ramen";
+import { calcRamenCost, getRamenHealPercentage } from "@/utils/ramen";
+import { useAwake } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
-import { useAwake } from "@/utils/routing";
-import {
-  IMG_RAMEN_WELCOME,
-  IMG_RAMEN_SMALL,
-  IMG_RAMEN_MEDIUM,
-  IMG_RAMEN_LARGE,
-} from "@/drizzle/constants";
-import type { RamenOption } from "@/utils/ramen";
-import type { UserWithRelations } from "@/routers/profile";
 
 interface RamenShopProps {
   initialBreak?: boolean;
@@ -66,7 +66,7 @@ const RamenShop: React.FC<RamenShopProps> = (props) => {
       )}
       {isPending && <Loader explanation="Purchasing food" />}
       <div
-        className={`grid grid-cols-3 text-center font-bold italic p-3 ${isPending ? "hidden" : ""}`}
+        className={`grid grid-cols-3 p-3 text-center font-bold italic ${isPending ? "hidden" : ""}`}
       >
         <MenuEntry
           title="Small Bowl"
@@ -140,17 +140,17 @@ const MenuEntry: React.FC<MenuEntryProps> = (props) => {
   };
 
   return (
-    <div className="hover:cursor-pointer" onClick={onClick}>
+    <button type="button" className="text-left hover:cursor-pointer" onClick={onClick}>
       <Image
         alt={title}
         src={image}
         width={256}
         height={256}
-        className={`hover:opacity-30 ${!canAfford || noDiff ? "grayscale opacity-50 cursor-not-allowed" : ""}`}
+        className={`hover:opacity-30 ${!canAfford || noDiff ? "cursor-not-allowed opacity-50 grayscale" : ""}`}
       />
       <p>{title}</p>
       <p className="text-green-700">+{healPerc.toFixed()}% SP/CP</p>
       <p className="text-red-700">-{cost.toFixed(2)} ryo</p>
-    </div>
+    </button>
   );
 };

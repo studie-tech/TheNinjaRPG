@@ -1,73 +1,85 @@
-import { z } from "zod";
+import { and, desc, eq, gte, like, lte, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { eq, sql, gte, lte, and, like, desc, or, ne } from "drizzle-orm";
+import { z } from "zod";
 import {
-  item,
-  userItem,
-  userItemImbuement,
-  userData,
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/api/trpc";
+import type { ItemSlot } from "@/drizzle/constants";
+import {
+  ANBU_ITEMSHOP_DISCOUNT_PERC,
+  IMG_AVATAR_DEFAULT,
+  ItemSlots,
+  ItemTypes,
+  MAX_EXTRA_RESKIN_SLOTS,
+  MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
+  TUTORIAL_ITEM_ID,
+} from "@/drizzle/constants";
+import type { ItemLoadout, UserData, UserItemWithRelations } from "@/drizzle/schema";
+import {
   actionLog,
   bloodlineRolls,
   craftingRequirement,
+  item,
   itemLoadout,
-  userSkill,
   quest,
+  userData,
+  userItem,
+  userItemImbuement,
+  userSkill,
 } from "@/drizzle/schema";
-import { ItemTypes, ItemSlots } from "@/drizzle/constants";
-import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
-import { fetchStructures } from "@/routers/village";
-import { fetchItemBloodlineRolls } from "@/routers/bloodline";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/api/trpc";
-import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
-import { ItemValidator } from "@/validators/combat";
-import { canChangeContent, canAwardReputation } from "@/utils/permissions";
-import { callDiscordContent } from "@/libs/socials";
-import { getStrucBoost } from "@/utils/village";
-import { calcItemSellingPrice, calcItemRepairCost } from "@/libs/item";
-import {
-  ANBU_ITEMSHOP_DISCOUNT_PERC,
-  MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
-  TUTORIAL_ITEM_ID,
-  MAX_EXTRA_RESKIN_SLOTS,
-} from "@/drizzle/constants";
-import { nonCombatConsume } from "@/libs/item";
-import { getRandomElement } from "@/utils/array";
-import { calcMaxItems, calcMaxEventItems, calcMaxMaterials } from "@/libs/item";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { calculateContentDiff } from "@/utils/diff";
-import { fetchUserSkills } from "@/routers/skillTree";
-import { HealTag, NonCombatGainSkill } from "@/validators/combat";
-import { itemFilteringSchema } from "@/validators/item";
 import { filterRollableBloodlines } from "@/libs/bloodline";
-import { fetchBloodlines } from "@/routers/bloodline";
-import { setEmptyStringsToNulls } from "@/utils/typeutils";
-import { fedItemLoadouts } from "@/utils/paypal";
-import type { UserItemWithRelations, UserData } from "@/drizzle/schema";
-import type { ItemSlot } from "@/drizzle/constants";
-import type { ZodAllTags } from "@/validators/combat";
+import {
+  calcItemRepairCost,
+  calcItemSellingPrice,
+  calcMaxEventItems,
+  calcMaxItems,
+  calcMaxMaterials,
+  nonCombatConsume,
+} from "@/libs/item";
+import { collapseRewards, postProcessRewards } from "@/libs/quest";
+import { callDiscordContent } from "@/libs/socials";
+import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
+import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import { fetchUserSkills } from "@/routers/skillTree";
+import { fetchStructures } from "@/routers/village";
 import type { DrizzleClient } from "@/server/db";
-import type { ItemLoadout } from "@/drizzle/schema";
-import type { ItemFilteringSchema } from "@/validators/item";
+import { getRandomElement } from "@/utils/array";
+import { calculateContentDiff } from "@/utils/diff";
+import { fedItemLoadouts } from "@/utils/paypal";
+import { canAwardReputation, canChangeContent } from "@/utils/permissions";
 import type { QueryCondition } from "@/utils/typeutils";
-import { postProcessRewards, type PostProcessedRewards } from "@/libs/quest";
-import { updateRewards } from "./quests";
-import { collapseRewards } from "@/libs/quest";
+import { setEmptyStringsToNulls } from "@/utils/typeutils";
+import { getStrucBoost } from "@/utils/village";
+import type { ZodAllTags } from "@/validators/combat";
+import { HealTag, ItemValidator, NonCombatGainSkill } from "@/validators/combat";
+import type { ItemFilteringSchema } from "@/validators/item";
+import { itemFilteringSchema } from "@/validators/item";
+import type { PostProcessedRewards } from "@/validators/rewards";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
+import { updateRewards } from "./quests";
 
 export const itemRouter = createTRPCRouter({
-  getAllNames: publicProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle.query.item.findMany({
-      columns: {
-        id: true,
-        name: true,
-        image: true,
-        canBeHunted: true,
-        canBeGathered: true,
-      },
-      orderBy: (table, { asc }) => [asc(table.name)],
-    });
-  }),
+  getAllNames: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all item names and images" } })
+    .query(async ({ ctx }) => {
+      return await ctx.drizzle.query.item.findMany({
+        columns: {
+          id: true,
+          name: true,
+          image: true,
+          canBeHunted: true,
+          canBeGathered: true,
+        },
+        orderBy: (table, { asc }) => [asc(table.name)],
+      });
+    }),
   get: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get a specific item by ID" } })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await fetchItem(ctx.drizzle, input.id);
@@ -77,6 +89,9 @@ export const itemRouter = createTRPCRouter({
       return result as Omit<typeof result, "effects"> & { effects: ZodAllTags[] };
     }),
   getItemWithCraftingRequirements: publicProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get item with crafting requirements" },
+    })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await fetchItemWithCraftingRequirements(ctx.drizzle, input.id);
@@ -86,6 +101,7 @@ export const itemRouter = createTRPCRouter({
       return result;
     }),
   getUserItem: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get a specific user item" } })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await fetchUserItem(ctx.drizzle, ctx.userId, input.id);
@@ -339,16 +355,14 @@ export const itemRouter = createTRPCRouter({
         ...(newRequirements && newRequirements?.length > 0
           ? [
               ctx.drizzle.insert(craftingRequirement).values(
-                newRequirements
-                  .map((req) =>
-                    req.ids?.map((id) => ({
-                      id: nanoid(),
-                      craftItemId: input.id,
-                      requirementItemId: id,
-                      quantity: req.number,
-                    })),
-                  )
-                  .flat(),
+                newRequirements.flatMap((req) =>
+                  req.ids?.map((id) => ({
+                    id: nanoid(),
+                    craftItemId: input.id,
+                    requirementItemId: id,
+                    quantity: req.number,
+                  })),
+                ),
               ),
             ]
           : []),
@@ -359,6 +373,7 @@ export const itemRouter = createTRPCRouter({
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
   getAll: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get paginated items with filters" } })
     .input(
       itemFilteringSchema.extend({
         cursor: z.number().nullish(),
@@ -390,23 +405,30 @@ export const itemRouter = createTRPCRouter({
     }),
 
   // Get counts of user items grouped by item ID
-  getUserItemCounts: protectedProcedure.query(async ({ ctx }) => {
-    const counts = await ctx.drizzle
-      .select({
-        count: sql<number>`count(${userItem.id})`,
-        itemId: userItem.itemId,
-        quantity: sql<number>`sum(${userItem.quantity})`,
-      })
-      .from(userItem)
-      .where(eq(userItem.userId, ctx.userId))
-      .groupBy(userItem.itemId);
-    return counts.map((c) => ({ id: c.itemId, quantity: c.quantity ?? 0 }));
-  }),
+  getUserItemCounts: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user item counts by item ID" } })
+    .query(async ({ ctx }) => {
+      const counts = await ctx.drizzle
+        .select({
+          count: sql<number>`count(${userItem.id})`,
+          itemId: userItem.itemId,
+          quantity: sql<number>`sum(${userItem.quantity})`,
+        })
+        .from(userItem)
+        .where(eq(userItem.userId, ctx.userId))
+        .groupBy(userItem.itemId);
+      return counts.map((c) => ({ id: c.itemId, quantity: c.quantity ?? 0 }));
+    }),
   // Get user items
-  getUserItems: protectedProcedure.query(async ({ ctx }) => {
-    return await fetchUserItems(ctx.drizzle, ctx.userId);
-  }),
+  getUserItems: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get all user items" } })
+    .query(async ({ ctx }) => {
+      return await fetchUserItems(ctx.drizzle, ctx.userId);
+    }),
   getItemRelations: publicProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get item relations and dependencies" },
+    })
     .input(z.object({ itemId: z.string() }))
     .query(async ({ ctx, input }) => {
       const results = await getItemRelations(ctx.drizzle, input.itemId);
@@ -414,6 +436,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Merge item stacks
   mergeStacks: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Merge item stacks together" } })
     .input(z.object({ itemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -485,10 +508,11 @@ export const itemRouter = createTRPCRouter({
     }),
   // Split item stack
   splitStack: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Split an item stack" } })
     .input(
       z.object({
         userItemId: z.string(),
-        quantityToKeep: z.number().int().min(1),
+        quantityToKeep: z.int().min(1),
       }),
     )
     .output(baseServerResponse)
@@ -505,6 +529,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Drop user item
   sellUserItem: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Sell or drop a user item" } })
     .input(z.object({ userItemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -577,6 +602,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Use user item
   toggleEquip: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Toggle item equip status" } })
     .input(z.object({ userItemId: z.string(), slot: z.enum(ItemSlots).optional() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -621,6 +647,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Consume item
   consume: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Consume a consumable item" } })
     .input(z.object({ userItemId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -777,7 +804,7 @@ export const itemRouter = createTRPCRouter({
           const poolsAffects = parsedEffect.poolsAffected || ["Health"];
           poolsAffects.forEach((pool) => {
             switch (pool) {
-              case "Health":
+              case "Health": {
                 const oldHp = updates.curHealth;
                 updates.curHealth = Math.min(
                   user.curHealth +
@@ -788,7 +815,8 @@ export const itemRouter = createTRPCRouter({
                 );
                 messages.push(`You healed ${Math.ceil(updates.curHealth - oldHp)} HP`);
                 break;
-              case "Chakra":
+              }
+              case "Chakra": {
                 const oldCp = updates.curChakra;
                 updates.curChakra = Math.min(
                   user.curChakra +
@@ -799,7 +827,8 @@ export const itemRouter = createTRPCRouter({
                 );
                 messages.push(`You healed ${Math.ceil(updates.curChakra - oldCp)} CP`);
                 break;
-              case "Stamina":
+              }
+              case "Stamina": {
                 const oldSp = updates.curStamina;
                 updates.curStamina = Math.min(
                   user.curStamina +
@@ -810,6 +839,7 @@ export const itemRouter = createTRPCRouter({
                 );
                 messages.push(`You healed ${Math.ceil(updates.curStamina - oldSp)} SP`);
                 break;
+              }
             }
           });
         }
@@ -864,6 +894,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Repair user item
   repair: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Repair an item with ryo" } })
     .input(z.object({ userItemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -909,66 +940,70 @@ export const itemRouter = createTRPCRouter({
       };
     }),
   // Repair all user items
-  repairAll: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
-    // Query
-    const [user, useritems] = await Promise.all([
-      fetchUser(ctx.drizzle, ctx.userId),
-      fetchUserItems(ctx.drizzle, ctx.userId),
-    ]);
-    // Guard
-    if (!user) return errorResponse("User not found");
-    if (user.occupation !== "CRAFTING") {
-      return errorResponse("You must have the Crafting occupation to repair items");
-    }
-    if (user.status !== "AWAKE") {
-      return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
-    }
-    // Filter items that need repair
-    const itemsNeedingRepair = useritems.filter(
-      (useritem) =>
-        useritem.durability < useritem.item.maxDurability &&
-        useritem.item.maxDurability > 0,
-    );
-    if (itemsNeedingRepair.length === 0) {
-      return errorResponse("No items need repair");
-    }
-    // Calculate total repair cost
-    const totalRepairCost = itemsNeedingRepair.reduce(
-      (total, useritem) => total + calcItemRepairCost(useritem),
-      0,
-    );
-    if (user.money < totalRepairCost) {
-      return errorResponse(
-        `Insufficient funds. Total repair cost is ${totalRepairCost} ryo, but you only have ${user.money} ryo`,
+  repairAll: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Repair all items with ryo" } })
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Query
+      const [user, useritems] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+      ]);
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (user.occupation !== "CRAFTING") {
+        return errorResponse("You must have the Crafting occupation to repair items");
+      }
+      if (user.status !== "AWAKE") {
+        return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
+      }
+      // Filter items that need repair
+      const itemsNeedingRepair = useritems.filter(
+        (useritem) =>
+          useritem.durability < useritem.item.maxDurability &&
+          useritem.item.maxDurability > 0,
       );
-    }
-    // Mutate - repair all items and update money
-    // Update money with conditional guard to prevent race conditions
-    const moneyUpdateResult = await ctx.drizzle
-      .update(userData)
-      .set({ money: sql`${userData.money} - ${totalRepairCost}` })
-      .where(
-        and(eq(userData.userId, ctx.userId), gte(userData.money, totalRepairCost)),
+      if (itemsNeedingRepair.length === 0) {
+        return errorResponse("No items need repair");
+      }
+      // Calculate total repair cost
+      const totalRepairCost = itemsNeedingRepair.reduce(
+        (total, useritem) => total + calcItemRepairCost(useritem),
+        0,
       );
-    if (moneyUpdateResult.rowsAffected !== 1) {
-      return errorResponse("Insufficient funds for this repair");
-    }
-    // Update item durabilities
-    await Promise.all(
-      itemsNeedingRepair.map((useritem) =>
-        ctx.drizzle
-          .update(userItem)
-          .set({ durability: useritem.item.maxDurability })
-          .where(eq(userItem.id, useritem.id)),
-      ),
-    );
-    return {
-      success: true,
-      message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} for ${totalRepairCost.toLocaleString()} ryo`,
-    };
-  }),
+      if (user.money < totalRepairCost) {
+        return errorResponse(
+          `Insufficient funds. Total repair cost is ${totalRepairCost} ryo, but you only have ${user.money} ryo`,
+        );
+      }
+      // Mutate - repair all items and update money
+      // Update money with conditional guard to prevent race conditions
+      const moneyUpdateResult = await ctx.drizzle
+        .update(userData)
+        .set({ money: sql`${userData.money} - ${totalRepairCost}` })
+        .where(
+          and(eq(userData.userId, ctx.userId), gte(userData.money, totalRepairCost)),
+        );
+      if (moneyUpdateResult.rowsAffected !== 1) {
+        return errorResponse("Insufficient funds for this repair");
+      }
+      // Update item durabilities
+      await Promise.all(
+        itemsNeedingRepair.map((useritem) =>
+          ctx.drizzle
+            .update(userItem)
+            .set({ durability: useritem.item.maxDurability })
+            .where(eq(userItem.id, useritem.id)),
+        ),
+      );
+      return {
+        success: true,
+        message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} for ${totalRepairCost.toLocaleString()} ryo`,
+      };
+    }),
   // Use repair item on another item
   useRepairItem: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Use repair kit on an item" } })
     .input(z.object({ repairItemId: z.string(), targetItemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -1050,6 +1085,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Use repair items to repair all items
   useRepairAll: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Use repair kits to fix all items" } })
     .output(
       baseServerResponse.extend({
         kitsUsed: z
@@ -1136,7 +1172,7 @@ export const itemRouter = createTRPCRouter({
         if (!kitsByPower.has(kit.repairAmount)) {
           kitsByPower.set(kit.repairAmount, []);
         }
-        kitsByPower.get(kit.repairAmount)!.push({
+        kitsByPower.get(kit.repairAmount)?.push({
           kitId: kit.userItem.id,
           available,
           power: kit.repairAmount,
@@ -1151,7 +1187,8 @@ export const itemRouter = createTRPCRouter({
       for (const power of sortedPowers) {
         if (remainingDurability <= 0) break;
 
-        const kitsWithThisPower = kitsByPower.get(power)!;
+        const kitsWithThisPower = kitsByPower.get(power);
+        if (!kitsWithThisPower) continue;
         const totalAvailable = kitsWithThisPower.reduce(
           (sum, k) => sum + k.available,
           0,
@@ -1250,6 +1287,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Buy user item
   buy: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Buy an item from shop" } })
     .input(
       z.object({
         itemId: z.string(),
@@ -1292,7 +1330,7 @@ export const itemRouter = createTRPCRouter({
       // Guard
       if (user.villageId !== input.villageId) return errorResponse("Wrong village");
       if (!info) return errorResponse("Item not found");
-      if (input.stack > 1 && !item.canStack) return errorResponse("Item cannot stack");
+      if (input.stack > 1 && !info.canStack) return errorResponse("Item cannot stack");
       if (input.stack > 1 && input.stack > info.stackSize)
         return errorResponse("You can not buy a stack with this many items");
       if (!info.inShop) return errorResponse("Item is not for sale");
@@ -1367,6 +1405,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Auto-equip optimal items based on cost
   autoEquipOptimal: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Auto-equip best items by cost" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Fetch user items
@@ -1428,30 +1467,33 @@ export const itemRouter = createTRPCRouter({
         message: `Equipped ${nEquipped} item${nEquipped === 1 ? "" : "s"}`,
       };
     }),
-  getItemLoadouts: protectedProcedure.query(async ({ ctx }) => {
-    // Query
-    const [loadouts, user] = await Promise.all([
-      fetchItemLoadouts(ctx.drizzle, ctx.userId),
-      fetchUser(ctx.drizzle, ctx.userId),
-    ]);
-    // Derived
-    const maxLoadouts = fedItemLoadouts(user);
-    // Create missing loadouts if needed
-    if (loadouts.length < maxLoadouts) {
-      for (let i = loadouts.length; i < maxLoadouts; i++) {
-        const loadout = {
-          id: nanoid(),
-          userId: ctx.userId,
-          itemData: [],
-          createdAt: new Date(),
-        };
-        await ctx.drizzle.insert(itemLoadout).values(loadout);
-        loadouts.push(loadout);
+  getItemLoadouts: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user's item loadouts" } })
+    .query(async ({ ctx }) => {
+      // Query
+      const [loadouts, user] = await Promise.all([
+        fetchItemLoadouts(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, ctx.userId),
+      ]);
+      // Derived
+      const maxLoadouts = fedItemLoadouts(user);
+      // Create missing loadouts if needed
+      if (loadouts.length < maxLoadouts) {
+        for (let i = loadouts.length; i < maxLoadouts; i++) {
+          const loadout = {
+            id: nanoid(),
+            userId: ctx.userId,
+            itemData: [],
+            createdAt: new Date(),
+          };
+          await ctx.drizzle.insert(itemLoadout).values(loadout);
+          loadouts.push(loadout);
+        }
       }
-    }
-    return maxLoadouts < loadouts.length ? loadouts.slice(0, maxLoadouts) : loadouts;
-  }),
+      return maxLoadouts < loadouts.length ? loadouts.slice(0, maxLoadouts) : loadouts;
+    }),
   selectItemLoadout: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Select an item loadout" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

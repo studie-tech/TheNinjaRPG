@@ -1,5 +1,5 @@
-import * as React from "react";
-import { cn } from "src/libs/shadui";
+import type * as React from "react";
+import { cn } from "@/libs/shadui";
 
 export interface ToastActionProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -23,7 +23,7 @@ export const ToastAction = ({
   <button
     ref={ref}
     className={cn(
-      "inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium transition-colors hover:bg-secondary focus:outline-none focus:ring-1 focus:ring-ring disabled:pointer-events-none disabled:opacity-50 ml-auto",
+      "ml-auto inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 font-medium text-sm transition-colors hover:bg-secondary focus:outline-none focus:ring-1 focus:ring-ring disabled:pointer-events-none disabled:opacity-50",
       className,
     )}
     aria-label={altText}

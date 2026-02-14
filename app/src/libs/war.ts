@@ -1,32 +1,39 @@
-import { drizzleDB } from "@/server/db";
-import { war, village, villageStructure, userRequest } from "@/drizzle/schema";
-import { userData, notification, gameSetting, sector } from "@/drizzle/schema";
-import { mpvpBattleQueue } from "@/drizzle/schema";
-import { eq, and, or, ne, isNull } from "drizzle-orm";
-import { sql, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import type { WarState, WarType } from "@/drizzle/constants";
 import {
+  SHRINE_HP_BY_LEVEL,
+  TERR_BOT_ID,
+  WAR_DEFEAT_STRUCTURE_PENALTY_DAYS,
+  WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
+  WAR_LOSING_COOLDOWN_DAYS,
+  WAR_SECTOR_LOSS_TOWNHALL_DAMAGE,
+  WAR_VICTORY_BOOSTED_STRUCTURES,
+  WAR_VICTORY_STRUCTURE_BOOST_DAYS,
+  WAR_VICTORY_STRUCTURE_BOOST_LEVELS,
   WAR_VICTORY_TOKEN_BONUS,
   WAR_WINNING_BOOST_DAYS,
   WAR_WINNING_BOOST_REGEN_PERC,
   WAR_WINNING_BOOST_TRAINING_PERC,
-  SHRINE_HP_BY_LEVEL,
-  WAR_LOSING_COOLDOWN_DAYS,
   WAR_WINNING_COOLDOWN_DAYS,
-  WAR_VICTORY_STRUCTURE_BOOST_LEVELS,
-  WAR_VICTORY_STRUCTURE_BOOST_DAYS,
-  WAR_VICTORY_BOOSTED_STRUCTURES,
-  WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
-  WAR_DEFEAT_STRUCTURE_PENALTY_DAYS,
-  WAR_SECTOR_LOSS_TOWNHALL_DAMAGE,
 } from "@/drizzle/constants";
-import { getUnique } from "@/utils/grouping";
-import type { WarState, WarType } from "@/drizzle/constants";
-import { TERR_BOT_ID } from "@/drizzle/constants";
-import { findRelationship } from "@/utils/alliance";
-import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import type { Village, VillageAlliance } from "@/drizzle/schema";
+import {
+  gameSetting,
+  mpvpBattleQueue,
+  notification,
+  sector,
+  userData,
+  userRequest,
+  village,
+  villageStructure,
+  war,
+} from "@/drizzle/schema";
 import type { BattleWar } from "@/libs/combat/types";
-import { secondsFromNow, secondsFromDate, DAY_S } from "@/utils/time";
+import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
+import { drizzleDB } from "@/server/db";
+import { findRelationship } from "@/utils/alliance";
+import { getUnique } from "@/utils/grouping";
+import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 
 /**
  * Convenience method which checks target wars, and sees if the user village ID is in the war.
@@ -255,8 +262,8 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
 
   // Run all mutations in parallel
   await Promise.all([
-      // General updates
-      drizzleDB
+    // General updates
+    drizzleDB
       .update(war)
       .set({ status, endedAt })
       .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
@@ -563,4 +570,3 @@ export const isVillageInvolvedInAnyWar = (
     return war.warAllies.some((ally) => ally.villageId === villageId);
   });
 };
-

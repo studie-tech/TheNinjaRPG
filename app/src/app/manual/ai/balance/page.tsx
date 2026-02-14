@@ -1,29 +1,30 @@
 "use client";
 
-import React, { useEffect } from "react";
+import { BarChart3, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
+import type React from "react";
+import { useEffect } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { groupBy } from "@/utils/grouping";
+import AiBalanceFiltering, {
+  getFilter,
+  useFiltering,
+} from "@/layout/AiBalanceFiltering";
+import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import { api } from "@/app/_trpc/client";
-import AiBalanceFiltering, {
-  useFiltering,
-  getFilter,
-} from "@/layout/AiBalanceFiltering";
-import UserFiltering, {
-  useFiltering as useUserFiltering,
-  getFilter as getUserFilter,
-} from "@/layout/UserFiltering";
-import Link from "next/link";
 import NavTabs from "@/layout/NavTabs";
-import { BarChart3, Trash2, Pencil } from "lucide-react";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import UserFiltering, {
+  getFilter as getUserFilter,
+  useFiltering as useUserFiltering,
+} from "@/layout/UserFiltering";
+import { showMutationToast } from "@/libs/toast";
+import { groupBy } from "@/utils/grouping";
+import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
-import Confirm2 from "@/layout/Confirm2";
-import { showMutationToast } from "@/libs/toast";
 
 export default function ManualAIsBalance() {
   // State
@@ -252,26 +253,24 @@ const AiEffectsBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) =
   ];
 
   return (
-    <>
-      <ContentBox
-        title="AI Effects Balance"
-        subtitle="Effect-based power analysis"
-        defaultBackHref="/manual/ai"
-        padding={false}
-        topRightContent={
-          <div className="flex items-center gap-2">
-            {navTabs}
-            <UserFiltering state={filterState} aiToggles={true} />
-          </div>
-        }
-      >
-        <p className="p-3">
-          Here we analyze AI power based on their jutsu and item effects, helping to
-          identify imbalances in effect distribution and power scaling.
-        </p>
-        {isPending && <Loader explanation="Loading data" />}
-        {!isPending && tableData && <Table data={tableData} columns={columns} />}
-      </ContentBox>
-    </>
+    <ContentBox
+      title="AI Effects Balance"
+      subtitle="Effect-based power analysis"
+      defaultBackHref="/manual/ai"
+      padding={false}
+      topRightContent={
+        <div className="flex items-center gap-2">
+          {navTabs}
+          <UserFiltering state={filterState} aiToggles={true} />
+        </div>
+      }
+    >
+      <p className="p-3">
+        Here we analyze AI power based on their jutsu and item effects, helping to
+        identify imbalances in effect distribution and power scaling.
+      </p>
+      {isPending && <Loader explanation="Loading data" />}
+      {!isPending && tableData && <Table data={tableData} columns={columns} />}
+    </ContentBox>
   );
 };

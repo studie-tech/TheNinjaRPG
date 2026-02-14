@@ -1,15 +1,21 @@
-import { calculateContentDiff } from "@/utils/diff";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { BloodlineValidator } from "@/validators/combat";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
-import { LetterRanks } from "@/drizzle/constants";
-import { StatTypes } from "@/drizzle/constants";
-import { BloodlineDifficultyRatings } from "@/drizzle/constants";
+import {
+  BloodlineDifficultyRatings,
+  LetterRanks,
+  StatTypes,
+} from "@/drizzle/constants";
 import type { Bloodline } from "@/drizzle/schema";
-import type { ZodAllTags, ZodBloodlineType } from "@/validators/combat";
 import type { FormEntry } from "@/layout/EditContent";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { calculateContentDiff } from "@/utils/diff";
+import type {
+  ZodAllTags,
+  ZodBloodlineInput,
+  ZodBloodlineType,
+} from "@/validators/combat";
+import { BloodlineValidator } from "@/validators/combat";
 
 /**
  * Hook used when creating frontend forms for editing bloodlines
@@ -20,11 +26,11 @@ export const useBloodlineEditForm = (data: Bloodline, refetch: () => void) => {
   const bloodline = { ...data, effects: data.effects };
 
   // Form handling
-  const form = useForm<ZodBloodlineType>({
+  const form = useForm<ZodBloodlineInput, unknown, ZodBloodlineType>({
     mode: "all",
     criteriaMode: "all",
-    values: bloodline as ZodBloodlineType,
-    defaultValues: bloodline as ZodBloodlineType,
+    values: bloodline as ZodBloodlineInput,
+    defaultValues: bloodline as ZodBloodlineInput,
     resolver: zodResolver(BloodlineValidator),
   });
 

@@ -1,17 +1,16 @@
-import { secondsPassed, secondsFromNow } from "@/utils/time";
-import { ANBU_HOSPITAL_DISCOUNT_PERC } from "@/drizzle/constants";
+import type { MEDNIN_RANK, PoolType } from "@/drizzle/constants";
 import {
-  MEDNIN_REQUIRED_EXP,
-  MEDNIN_MIN_RANK,
+  ANBU_HOSPITAL_DISCOUNT_PERC,
+  MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT,
   MEDNIN_EXP_CAP,
   MEDNIN_EXP_PER_IMPROVEMENT,
-  MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT,
   MEDNIN_MIN_CHAKRA_FACTOR,
+  MEDNIN_MIN_RANK,
+  MEDNIN_REQUIRED_EXP,
 } from "@/drizzle/constants";
-import { hasRequiredRank } from "@/libs/train";
-import type { MEDNIN_RANK } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
-import type { PoolType } from "@/drizzle/constants";
+import { hasRequiredRank } from "@/libs/train";
+import { secondsFromNow, secondsPassed } from "@/utils/time";
 
 /**
  * Calculates the cost of healing for a user.

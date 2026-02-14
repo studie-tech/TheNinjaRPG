@@ -29,7 +29,7 @@ All make commands should be run from the root directory `/`, not from `/app`.
 
 - `make build` - Build the Next.js application. Only run if explicitly asked.
 - `make test` - Run unit tests with vitest
-- `make lint` - Run ESLint on the codebase
+- `make lint` - Run biome on the codebase
 - `make typecheck` - Run typechecking on the codebase
 
 **Database Management:**

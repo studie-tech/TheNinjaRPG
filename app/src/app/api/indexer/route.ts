@@ -1,10 +1,10 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, sql, notInArray } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
-import { userReport } from "@/drizzle/schema";
-import { updateGameSetting, checkGameTimer } from "@/libs/gamesettings";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
+import { and, asc, eq, notInArray, sql } from "drizzle-orm";
+import { userReport } from "@/drizzle/schema";
+import { checkGameTimer, updateGameSetting } from "@/libs/gamesettings";
 import { generateModerationDecision } from "@/libs/moderator";
+import { drizzleDB } from "@/server/db";
 
 // TODO: Update this to perform vector based indexing once the feature is stable in planetscale + MySQL local
 export async function GET() {

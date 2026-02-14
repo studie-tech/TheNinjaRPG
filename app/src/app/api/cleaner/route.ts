@@ -1,21 +1,45 @@
 import { TRPCError } from "@trpc/server";
-import { and, lte, sql, eq, lt, isNull, isNotNull } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
-import { forumPost, forumThread, questHistory, userAttribute } from "@/drizzle/schema";
-import { bankTransfers, bloodlineRolls, conceptImage } from "@/drizzle/schema";
-import { userData, battle, userJutsu, jutsu } from "@/drizzle/schema";
-import { userItem, mpvpBattleQueue, mpvpBattleUser } from "@/drizzle/schema";
-import { trainingLog, village, captcha, userRequest } from "@/drizzle/schema";
-import { battleHistory, battleAction, historicalAvatar, clan } from "@/drizzle/schema";
-import { conversation, user2conversation, conversationComment } from "@/drizzle/schema";
-import { rankedPvpQueue, warKill, dataBattleAction } from "@/drizzle/schema";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
+import { and, eq, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
+import {
+  automatedModeration,
+  bankTransfers,
+  battle,
+  battleAction,
+  battleHistory,
+  bloodlineRolls,
+  captcha,
+  clan,
+  conceptImage,
+  conversation,
+  conversationComment,
+  dailyBankInterest,
+  dataBattleAction,
+  forumPost,
+  forumThread,
+  historicalAvatar,
+  historicalIp,
+  jutsu,
+  mpvpBattleQueue,
+  mpvpBattleUser,
+  paypalSubscription,
+  questHistory,
+  rankedPvpQueue,
+  trainingLog,
+  user2conversation,
+  userActivityEvent,
+  userAttribute,
+  userData,
+  userItem,
+  userJutsu,
+  userRequest,
+  village,
+  warKill,
+} from "@/drizzle/schema";
+import { checkGameTimer, updateGameSetting } from "@/libs/gamesettings";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
+import { drizzleDB } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
-import { updateGameSetting, checkGameTimer } from "@/libs/gamesettings";
-import { automatedModeration, dailyBankInterest } from "@/drizzle/schema";
-import { paypalSubscription } from "@/drizzle/schema";
-import { historicalIp, userActivityEvent } from "@/drizzle/schema";
 
 export async function GET() {
   // Check timer

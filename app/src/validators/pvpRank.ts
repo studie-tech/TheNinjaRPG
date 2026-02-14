@@ -4,6 +4,7 @@ import { rewardFields } from "./rewards";
 // Possible rewards are the same as for objectives, so that we can re-use code
 export const rewardSchema = z.object(rewardFields);
 export type RankedSeasonReward = z.infer<typeof rewardSchema>;
+export type RankedSeasonRewardInput = z.input<typeof rewardSchema>;
 
 export const divisionRewardSchema = z.object({
   division: z.string(),
@@ -17,9 +18,10 @@ export const rankedSeasonSchema = z.object({
   startDate: z.date(),
   endDate: z.date(),
   rewards: z.array(divisionRewardSchema),
-  paused: z.boolean().default(false),
+  paused: z.boolean().prefault(false),
 });
 export type RankedSeason = z.infer<typeof rankedSeasonSchema>;
+export type RankedSeasonInput = z.input<typeof rankedSeasonSchema>;
 
 export const rankedLoadoutSchema = z.object({
   jutsuIds: z.array(z.string()),

@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api } from "@/app/_trpc/client";
-import Pusher from "pusher-js";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
-import { showMutationToast } from "@/libs/toast";
+import { usePathname, useRouter } from "next/navigation";
+import Pusher from "pusher-js";
+import { useEffect, useState } from "react";
+import type { UserWithRelations } from "@/api/routers/profile";
+import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
 import { env } from "@/env/client.mjs";
-import type { UserWithRelations } from "@/api/routers/profile";
+import { showMutationToast } from "@/libs/toast";
 
 // Events sent to the user from websockets
 export type UserEvent = {
@@ -171,7 +171,6 @@ export const usePusherHandler = (
         pusher.disconnect();
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, clanId, villageId, router, utils]);
 
   return pusher;

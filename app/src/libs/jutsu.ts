@@ -1,8 +1,10 @@
-import { JUTSU_TRANSFER_FREE_AMOUNT } from "@/drizzle/constants";
-import { JUTSU_TRANSFER_FREE_NORMAL } from "@/drizzle/constants";
-import { JUTSU_TRANSFER_FREE_SILVER } from "@/drizzle/constants";
-import { JUTSU_TRANSFER_FREE_GOLD } from "@/drizzle/constants";
 import type { FederalStatus } from "@/drizzle/constants";
+import {
+  JUTSU_TRANSFER_FREE_AMOUNT,
+  JUTSU_TRANSFER_FREE_GOLD,
+  JUTSU_TRANSFER_FREE_NORMAL,
+  JUTSU_TRANSFER_FREE_SILVER,
+} from "@/drizzle/constants";
 import type { UserJutsuWithRelations } from "@/drizzle/schema";
 
 /**

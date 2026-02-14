@@ -1,39 +1,41 @@
-import React from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Eye, Medal, ShieldBan, Swords, Trophy, UserRoundPlus } from "lucide-react";
 import Link from "next/link";
-import ContentBox from "@/layout/ContentBox";
+import { useRouter } from "next/navigation";
+import type React from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import Confirm2 from "@/layout/Confirm2";
-import AvatarImage from "@/layout/Avatar";
-import Countdown from "@/layout/Countdown";
-import Loader from "@/layout/Loader";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
-  FormLabel,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { useRouter } from "next/navigation";
-import { UserRoundPlus, Swords, Medal, ShieldBan, Eye } from "lucide-react";
-import { groupBy } from "@/utils/grouping";
-import { UploadButton } from "@/utils/uploadthing";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { showMutationToast } from "@/libs/toast";
-import { Trophy } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Reward } from "@/layout/Objective";
-import { useUserData } from "@/utils/UserContext";
-import { tournamentCreateSchema } from "@/validators/tournament";
-import { TOURNAMENT_ROUND_SECONDS, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { secondsFromDate } from "@/utils/time";
-import type { TournamentMatch } from "@/drizzle/schema";
-import type { ObjectiveRewardType } from "@/validators/rewards";
-import type { TournamentCreateSchema } from "@/validators/tournament";
 import type { TournamentType } from "@/drizzle/constants";
+import { IMG_AVATAR_DEFAULT, TOURNAMENT_ROUND_SECONDS } from "@/drizzle/constants";
+import type { TournamentMatch } from "@/drizzle/schema";
+import AvatarImage from "@/layout/Avatar";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import Loader from "@/layout/Loader";
+import { Reward } from "@/layout/Objective";
+import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import { groupBy } from "@/utils/grouping";
+import { secondsFromDate } from "@/utils/time";
+import { useUserData } from "@/utils/UserContext";
+import { UploadButton } from "@/utils/uploadthing";
+import type { ObjectiveRewardType } from "@/validators/rewards";
+import {
+  type TournamentCreateSchema,
+  type TournamentCreateSchemaInput,
+  tournamentCreateSchema,
+} from "@/validators/tournament";
 
 interface TournamentProps {
   userData: NonNullable<UserWithRelations>;
@@ -90,7 +92,11 @@ const Tournament: React.FC<TournamentProps> = (props) => {
     });
 
   // Form
-  const createForm = useForm<TournamentCreateSchema>({
+  const createForm = useForm<
+    TournamentCreateSchemaInput,
+    unknown,
+    TournamentCreateSchema
+  >({
     resolver: zodResolver(tournamentCreateSchema),
     defaultValues: {
       id: tournamentId,
@@ -158,7 +164,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
               }}
             >
               <Form {...createForm}>
-                <form className="space-y-2 grid grid-cols-2" onSubmit={onSubmit}>
+                <form className="grid grid-cols-2 space-y-2" onSubmit={onSubmit}>
                   <div>
                     <FormLabel>Tournament Image</FormLabel>
                     <AvatarImage
@@ -273,46 +279,46 @@ const Tournament: React.FC<TournamentProps> = (props) => {
       )}
       {data && (
         <div
-          className={`mt-5 w-full h-full items-center flex flex-row overflow-x-auto`}
+          className={`mt-5 flex h-full w-full flex-row items-center overflow-x-auto`}
         >
           {rounds.length === 0 && <p>Nobody joined the tournament yet!</p>}
-          {rounds.map((round, i) => {
+          {rounds.map((round, roundIndex) => {
             const seeds = matches.get(round) || [];
             return (
-              <div key={`round-${round}`} className="w-60 shrink-0 ">
-                <p className="font-bold text-center">{`Round ${round}`}</p>
+              <div key={`round-${round}`} className="w-60 shrink-0">
+                <p className="text-center font-bold">{`Round ${round}`}</p>
                 <div className="flex flex-col">
-                  {seeds.map((seed, j) => {
+                  {seeds.map((seed, seedIndex) => {
                     // DETERMINE NUMBER OF EMPTY BLOCKS TO ADD TO MAKE THE GRID SQUARE
-                    let emptyBlocks = 2 ** i - 1;
+                    let emptyBlocks = 2 ** roundIndex - 1;
                     const newBlocks = 1 + emptyBlocks;
-                    const isLastRound = i === rounds.length - 1;
-                    const prevBlocks = j * newBlocks;
+                    const isLastRound = roundIndex === rounds.length - 1;
+                    const prevBlocks = seedIndex * newBlocks;
                     if (prevBlocks + newBlocks >= initialSeeds) {
                       emptyBlocks = initialSeeds - prevBlocks - 1;
                     }
                     emptyBlocks = emptyBlocks < 0 ? 0 : emptyBlocks;
                     // DETERMINE IF BORDER ON EMPTY BLOCK
-                    const isTopBlock = j % 2 === 0;
-                    const isBottomBlock = j % 2 === 1;
-                    const isLastBlock = j === seeds.length - 1;
+                    const isTopBlock = seedIndex % 2 === 0;
+                    const isBottomBlock = seedIndex % 2 === 1;
+                    const isLastBlock = seedIndex === seeds.length - 1;
 
                     return (
-                      <div key={`seed-${j}`}>
-                        <div className="flex flex-col h-32">
-                          <div className="flex flex-row basis-5/6 items-center">
+                      <div key={seed.id}>
+                        <div className="flex h-32 flex-col">
+                          <div className="flex basis-5/6 flex-row items-center">
                             {/* HORIZONTAL INCOMING LINES */}
-                            {i !== 0 && (
+                            {roundIndex !== 0 && (
                               <div className="basis-1/6">
-                                <div className="border-t-2 border-black"></div>
+                                <div className="border-black border-t-2"></div>
                               </div>
                             )}
                             {/* INFORMATION FOR MATCH */}
-                            <div className="bg-slate-500 rounded-md p-2 w-full flex flex-row items-center">
+                            <div className="flex w-full flex-row items-center rounded-md bg-slate-500 p-2">
                               <div className="grow">
                                 <UserMatch seed={seed} user={seed.user1} />
-                                <div className="py-2 border-black">
-                                  <hr className="h-px bg-slate-300 border-0" />
+                                <div className="border-black py-2">
+                                  <hr className="h-px border-0 bg-slate-300" />
                                 </div>
                                 <UserMatch seed={seed} user={seed.user2} />
                               </div>
@@ -324,7 +330,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                                   userData.userId,
                                 ) && (
                                   <Swords
-                                    className="grow h-8 w-8 text-slate-300 hover:cursor-pointer hover:text-orange-200"
+                                    className="h-8 w-8 grow text-slate-300 hover:cursor-pointer hover:text-orange-200"
                                     onClick={() =>
                                       joinMatch({ matchId: seed.id, tournamentId })
                                     }
@@ -340,12 +346,12 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                               )}
                             </div>
                             {/* VERTICAL & HORIZONTAL OUTGOING LINES */}
-                            {i !== rounds.length - 1 && (
-                              <div className="basis-1/6 h-full flex flex-col jutsify-center">
+                            {roundIndex !== rounds.length - 1 && (
+                              <div className="jutsify-center flex h-full basis-1/6 flex-col">
                                 <div
                                   className={`basis-1/2 ${isBottomBlock ? "border-r-2" : ""} border-black`}
                                 ></div>
-                                <div className="border-t-2 border-black"></div>
+                                <div className="border-black border-t-2"></div>
                                 <div
                                   className={`basis-1/2 ${isTopBlock && !isLastBlock ? "border-r-2" : ""} border-black`}
                                 ></div>
@@ -353,15 +359,15 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                             )}
                           </div>
                           <p
-                            className={`text-center italic text-sm ${isTopBlock && !isLastBlock && !isLastRound ? "border-r-2" : ""} border-black`}
+                            className={`text-center text-sm italic ${isTopBlock && !isLastBlock && !isLastRound ? "border-r-2" : ""} border-black`}
                           >
                             {seed.createdAt.toLocaleString()}
                           </p>
                         </div>
-                        {[...Array(emptyBlocks).keys()].map((k) => (
+                        {[...Array(emptyBlocks).keys()].map((emptyIdx) => (
                           <div
-                            key={`empty-${k}`}
-                            className={`h-32 ${isTopBlock && !isLastBlock && !isLastRound ? "border-r-2 border-black" : ""}`}
+                            key={`empty-${seed.id}-${emptyIdx}`}
+                            className={`h-32 ${isTopBlock && !isLastBlock && !isLastRound ? "border-black border-r-2" : ""}`}
                           ></div>
                         ))}
                       </div>
@@ -389,7 +395,7 @@ const UserMatch: React.FC<UserMatchProps> = (props) => {
   return (
     <div className="flex flex-row items-center">
       {user && (
-        <div className="w-10 mr-2 text-center">
+        <div className="mr-2 w-10 text-center">
           <AvatarImage
             href={user.avatar}
             alt={user.userId}

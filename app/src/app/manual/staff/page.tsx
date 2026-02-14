@@ -1,15 +1,12 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
-import AvatarImage from "@/layout/Avatar";
-import { Skeleton } from "@/components/ui/skeleton";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { FileUser, Info, List } from "lucide-react";
 import Link from "next/link";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Info } from "lucide-react";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { useUserData } from "@/utils/UserContext";
-import Confirm2 from "@/layout/Confirm2";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -17,16 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FileUser, List } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { createApplicationSchema } from "@/validators/applications";
-import type { CreateApplicationSchema } from "@/validators/applications";
 import type { StaffApplicationTargetRole } from "@/drizzle/constants";
 import { StaffApplicationTargetRoles } from "@/drizzle/constants";
+import AvatarImage from "@/layout/Avatar";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { cn } from "src/libs/shadui";
+import { useUserData } from "@/utils/UserContext";
+import type { CreateApplicationSchema } from "@/validators/applications";
+import { createApplicationSchema } from "@/validators/applications";
 
 export default function Staff() {
   // User Data
@@ -67,7 +66,7 @@ export default function Staff() {
             {pending && (
               <Link href={`/manual/staff/applications/${pending.id}`}>
                 <Button>
-                  <FileUser className="w-5 h-5 mr-2" />
+                  <FileUser className="mr-2 h-5 w-5" />
                   Your Application
                 </Button>
               </Link>
@@ -75,7 +74,7 @@ export default function Staff() {
             {isStaff && (
               <Link href={`/manual/staff/applications`}>
                 <Button variant={pending ? "default" : "outline"}>
-                  <List className="w-5 h-5 mr-2" />
+                  <List className="mr-2 h-5 w-5" />
                   Applications
                 </Button>
               </Link>
@@ -86,14 +85,14 @@ export default function Staff() {
                 proceed_label="Submit Application"
                 button={
                   <Button>
-                    <FileUser className="w-5 h-5 mr-2" />
+                    <FileUser className="mr-2 h-5 w-5" />
                     Apply
                   </Button>
                 }
                 isValid={form.formState.isValid}
                 onAccept={form.handleSubmit((values) => createApp.mutate(values))}
               >
-                <div className="space-y-3 w-[80vw] max-w-[520px]">
+                <div className="w-[80vw] max-w-[520px] space-y-3">
                   <div>
                     <div className="mb-1 font-semibold">Target Role</div>
                     <Select
@@ -108,8 +107,8 @@ export default function Staff() {
                         <SelectValue placeholder="Select role" />
                       </SelectTrigger>
                       <SelectContent>
-                        {StaffApplicationTargetRoles.map((r) => (
-                          <SelectItem key={r} value={r}>
+                        {StaffApplicationTargetRoles.map((r, i) => (
+                          <SelectItem key={`${r}-${i}`} value={r}>
                             {r.replace("_", " ")}
                           </SelectItem>
                         ))}
@@ -130,6 +129,20 @@ export default function Staff() {
                       }
                       rows={6}
                     />
+                    <div className="mt-1 flex justify-between text-sm">
+                      <span className="text-destructive">
+                        {form.formState.errors.motivation?.message}
+                      </span>
+                      <span
+                        className={
+                          form.watch("motivation").length < 10
+                            ? "text-muted-foreground"
+                            : "text-green-600"
+                        }
+                      >
+                        {form.watch("motivation").length}/10 min
+                      </span>
+                    </div>
                   </div>
                 </div>
               </Confirm2>
@@ -140,7 +153,7 @@ export default function Staff() {
         <div className="flex flex-col gap-2">
           {/* Row 1: Coders */}
           <div className="grid grid-cols-3 gap-2">
-            <div className="bg-slate-300 p-1 rounded-lg font-bold relative">
+            <div className="relative rounded-lg bg-slate-300 p-1 font-bold">
               Code Admin & Owner
               <UserList
                 users={users.filter((user) => user.role === "CODING-ADMIN")}
@@ -154,7 +167,7 @@ export default function Staff() {
                 game’s core codebase.
               </Information>
             </div>
-            <div className="bg-pink-300 p-1 rounded-lg font-bold col-span-2">
+            <div className="col-span-2 rounded-lg bg-pink-300 p-1 font-bold">
               Coders
               <UserList
                 users={users.filter((user) => user.role === "CODER")}
@@ -163,10 +176,10 @@ export default function Staff() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-3 text-center gap-2 text-black">
+          <div className="grid grid-cols-3 gap-2 text-center text-black">
             {/* Column 1: Moderators */}
             <div className="flex flex-col gap-2">
-              <div className="bg-red-500 p-1 rounded-lg font-bold relative">
+              <div className="relative rounded-lg bg-red-500 p-1 font-bold">
                 Moderator Admin
                 <UserList
                   users={users.filter((user) => user.role === "MODERATOR-ADMIN")}
@@ -182,14 +195,14 @@ export default function Staff() {
                   positive, safe community experience.
                 </Information>
               </div>
-              <div className="bg-emerald-500 p-1 rounded-lg font-bold">
+              <div className="rounded-lg bg-emerald-500 p-1 font-bold">
                 Head Moderator
                 <UserList
                   users={users.filter((user) => user.role === "HEAD_MODERATOR")}
                   expectedLength={1}
                 />
               </div>
-              <div className="bg-green-800 p-1 rounded-lg font-bold text-white">
+              <div className="rounded-lg bg-green-800 p-1 font-bold text-white">
                 Moderators
                 <UserList
                   users={users.filter((user) => user.role === "MODERATOR")}
@@ -200,7 +213,7 @@ export default function Staff() {
 
             {/* Column 2: Content */}
             <div className="flex flex-col gap-2">
-              <div className="bg-purple-500 p-1 rounded-lg font-bold relative">
+              <div className="relative rounded-lg bg-purple-500 p-1 font-bold">
                 Content Admin
                 <UserList
                   users={users.filter((user) => user.role === "CONTENT-ADMIN")}
@@ -214,7 +227,7 @@ export default function Staff() {
                   jutsus, bloodlines, events etc.
                 </Information>
               </div>
-              <div className="bg-purple-400 p-1 rounded-lg font-bold">
+              <div className="rounded-lg bg-purple-400 p-1 font-bold">
                 Content
                 <UserList
                   users={users.filter((user) => user.role === "CONTENT")}
@@ -225,7 +238,7 @@ export default function Staff() {
 
             {/* Column 3: Event */}
             <div className="flex flex-col gap-2">
-              <div className="bg-rose-300 p-1 rounded-lg font-bold relative">
+              <div className="relative rounded-lg bg-rose-300 p-1 font-bold">
                 Event Admin
                 <UserList
                   users={users.filter((user) => user.role === "EVENT-ADMIN")}
@@ -239,7 +252,7 @@ export default function Staff() {
                   jutsus, bloodlines, events etc.
                 </Information>
               </div>
-              <div className="bg-orange-600 p-1 rounded-lg font-bold">
+              <div className="rounded-lg bg-orange-600 p-1 font-bold">
                 Event
                 <UserList
                   users={users.filter((user) => user.role === "EVENT")}
@@ -319,8 +332,11 @@ const UserList: React.FC<UserListProps> = (props) => {
             : "flex flex-row justify-center",
         )}
       >
-        {Array.from({ length: expectedLength }).map((_, i) => (
-          <Skeleton key={i} className="m-2 aspect-square rounded-xl basis-1/2" />
+        {Array.from(
+          { length: expectedLength },
+          (_, idx) => `staff-skeleton-${idx}`,
+        ).map((key) => (
+          <Skeleton key={key} className="m-2 aspect-square basis-1/2 rounded-xl" />
         ))}
       </div>
     );
@@ -337,7 +353,7 @@ const UserList: React.FC<UserListProps> = (props) => {
     >
       {users.map((user, i) => (
         <Link
-          className="text-center relative basis-1/2"
+          className="relative basis-1/2 text-center"
           key={`${user.role}-${i}`}
           href={`/username/${user.username}`}
         >
@@ -369,7 +385,7 @@ const Information: React.FC<InformationProps> = (props) => {
       <PopoverTrigger asChild>
         <Info
           className={cn(
-            "w-6 h-6 absolute right-1 bottom-1 hover:cursor-pointer",
+            "absolute right-1 bottom-1 h-6 w-6 hover:cursor-pointer",
             props.hoverEffect,
           )}
         />

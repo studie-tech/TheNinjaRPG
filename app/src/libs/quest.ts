@@ -1,12 +1,9 @@
-import { ObjectiveReward } from "@/validators/rewards";
-import { getQuestCounterFieldName } from "@/validators/user";
-import { ObjectiveTracker, QuestTracker } from "@/validators/objectives";
-import { secondsPassed } from "@/utils/time";
-import { isQuestObjectiveAvailable } from "@/libs/objectives";
-import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
-import { calcMedninRank } from "@/libs/hospital";
 import {
-  IMG_MISSION_S,
+  ADDITIONAL_MISSION_REWARD_MULTIPLIER,
+  type GATHERING_RANK,
+  GATHERING_RANKS,
+  type HUNTING_RANK,
+  HUNTING_RANKS,
   IMG_MISSION_A,
   IMG_MISSION_B,
   IMG_MISSION_C,
@@ -14,33 +11,43 @@ import {
   IMG_MISSION_E,
   IMG_MISSION_M,
   IMG_MISSION_PVP,
-  VILLAGE_SYNDICATE_ID,
-  ADDITIONAL_MISSION_REWARD_MULTIPLIER,
-  MEDNIN_RANKS,
-  type MEDNIN_RANK,
-  type HUNTING_RANK,
-  type GATHERING_RANK,
+  IMG_MISSION_S,
   type LetterRank,
-  type QuestType,
   MAP_TOTAL_SECTORS,
-  SENSEI_STUDENT_MISSION_EXP_BOOST_PERC,
-  SENSEI_MAX_STUDENT_LEVEL,
-  HUNTING_RANKS,
-  GATHERING_RANKS,
+  type MEDNIN_RANK,
+  MEDNIN_RANKS,
+  type QuestType,
   QuestTypesWithMaxAttempts,
+  SECTOR_HEIGHT,
+  SECTOR_WIDTH,
+  SENSEI_MAX_STUDENT_LEVEL,
+  SENSEI_STUDENT_MISSION_EXP_BOOST_PERC,
+  VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
-import { getShrineBoost } from "@/utils/village";
-import { SECTOR_HEIGHT, SECTOR_WIDTH } from "@/drizzle/constants";
-import { getUnique } from "@/utils/grouping";
-import { isQuestComplete, findCompletedPredecessor } from "@/libs/objectives";
-import type { UserWithRelations } from "@/routers/profile";
-import type { AllObjectivesType, AllObjectiveTask } from "@/validators/objectives";
-import type { ObjectiveRewardType } from "@/validators/rewards";
-import { getHuntingRank } from "@/libs/hunting";
+import type { GameSetting, Quest, UserData, UserItem } from "@/drizzle/schema";
 import { getGatheringRank } from "@/libs/gathering";
-import type { Quest, UserData, UserItem, GameSetting } from "@/drizzle/schema";
-import type { QuestTrackerType } from "@/validators/objectives";
+import { calcMedninRank } from "@/libs/hospital";
+import { getHuntingRank } from "@/libs/hunting";
+import {
+  findCompletedPredecessor,
+  isQuestComplete,
+  isQuestObjectiveAvailable,
+} from "@/libs/objectives";
+import type { UserWithRelations } from "@/routers/profile";
+import { getUnique } from "@/utils/grouping";
+import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { secondsPassed } from "@/utils/time";
+import { getShrineBoost } from "@/utils/village";
+import type {
+  AllObjectivesType,
+  AllObjectiveTask,
+  QuestTrackerType,
+} from "@/validators/objectives";
+import { ObjectiveTracker, QuestTracker } from "@/validators/objectives";
+import type { ObjectiveRewardType } from "@/validators/rewards";
+import { ObjectiveReward, type PostProcessedRewards } from "@/validators/rewards";
+import { getQuestCounterFieldName } from "@/validators/user";
 
 /**
  * Get currently active quests for a user
@@ -132,10 +139,13 @@ export const getReward = (
     const sectors = user.village?.sectors?.length || 0;
     const errandsBoost = getShrineBoost(sectors, "Errands", user.village);
     const missionBoost = getShrineBoost(sectors, "Mission", user.village);
+    // Get clan mission reward boost (percentage as decimal)
+    // Only apply for real clans, not outlaw factions/towns
+    const clanMissionBoost = user.isOutlaw ? 0 : (user.clan?.missionRewardBoost ?? 0) / 100;
     let boostFactor = 1;
     if (userQuest?.quest.questType) {
       if (["mission", "crime", "medical"].includes(userQuest.quest.questType)) {
-        boostFactor = 1 + missionBoost;
+        boostFactor = 1 + missionBoost + clanMissionBoost;
       } else if (userQuest.quest.questType === "errand") {
         boostFactor = 1 + errandsBoost;
       }
@@ -252,6 +262,27 @@ export const getReward = (
       rawRewards.reward_seichi_silver * factor,
     );
 
+    // Apply clan experience boosts (percentages stored in clan object)
+    // Only apply for real clans, not outlaw factions/towns
+    const clanHunterExpBoost = user.isOutlaw ? 0 : (user.clan?.hunterExpBoost ?? 0) / 100;
+    const clanGathererExpBoost = user.isOutlaw ? 0 : (user.clan?.gathererExpBoost ?? 0) / 100;
+    const clanCraftingExpBoost = user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100;
+    if (clanHunterExpBoost > 0 && rawRewards.reward_hunting_experience > 0) {
+      rawRewards.reward_hunting_experience = Math.floor(
+        rawRewards.reward_hunting_experience * (1 + clanHunterExpBoost),
+      );
+    }
+    if (clanGathererExpBoost > 0 && rawRewards.reward_gathering_experience > 0) {
+      rawRewards.reward_gathering_experience = Math.floor(
+        rawRewards.reward_gathering_experience * (1 + clanGathererExpBoost),
+      );
+    }
+    if (clanCraftingExpBoost > 0 && rawRewards.reward_crafting_experience > 0) {
+      rawRewards.reward_crafting_experience = Math.floor(
+        rawRewards.reward_crafting_experience * (1 + clanCraftingExpBoost),
+      );
+    }
+
     // Chunin mission experience bonus (≤ level 40)
     if (
       !!user.senseiId &&
@@ -326,9 +357,15 @@ export type GetRewardResult = ReturnType<typeof getReward>["rewards"];
 /**
  * Post-process rewards to ensure that the rewards are valid
  * @param rewards - Rewards to post-process
- * @returns Post-processed rewards
+ * @returns Post-processed rewards with item IDs as flat string array
+ *
+ * NOTE: Return type is explicitly annotated with PostProcessedRewards from
+ * @/validators/rewards to ensure type safety. If this function's return value
+ * changes, TypeScript will error, alerting us to update the schema.
  */
-export const postProcessRewards = (rewards: ObjectiveRewardType) => {
+export const postProcessRewards = (
+  rewards: ObjectiveRewardType,
+): PostProcessedRewards => {
   // Defensive check: ensure reward_items is an array (handles malformed DB data)
   const rewardItems = Array.isArray(rewards?.reward_items) ? rewards.reward_items : [];
   return {
@@ -348,7 +385,6 @@ export const postProcessRewards = (rewards: ObjectiveRewardType) => {
       }),
   };
 };
-export type PostProcessedRewards = ReturnType<typeof postProcessRewards>;
 
 /**
  * Collapse multiple rewards into a single reward
@@ -951,6 +987,7 @@ export const getNewTrackers = (
         });
         return questTracker;
       }
+      return undefined;
     })
     .filter((q): q is QuestTrackerType => !!q);
 
@@ -1092,11 +1129,11 @@ export const controlShownQuestLocationInformation = (
       if ("sector" in status) {
         objective.sector = status.sector;
       }
-      if ("longitude" in status) {
-        objective.longitude = status.longitude!;
+      if ("longitude" in status && status.longitude !== undefined) {
+        objective.longitude = status.longitude;
       }
-      if ("latitude" in status) {
-        objective.latitude = status.latitude!;
+      if ("latitude" in status && status.latitude !== undefined) {
+        objective.latitude = status.latitude;
       }
     }
 
@@ -1378,7 +1415,10 @@ export const verifyQuestObjectiveFlow = (
     if (startingIds.length > 1) {
       throw new Error(`Multiple starting objectives found: ${startingIds.join(", ")}`);
     }
-    const startId = startingIds[0]!;
+    const startId = startingIds[0];
+    if (!startId) {
+      throw new Error("No starting objective found");
+    }
 
     // ------------------------------------------------------------------
     // 4. DFS to detect cycles & ensure reachability

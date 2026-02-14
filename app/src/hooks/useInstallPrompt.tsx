@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, use, useState, useEffect, type ReactNode } from "react";
+import { createContext, type ReactNode, use, useEffect, useState } from "react";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -66,7 +66,7 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
           );
           if (
             dismissedLongTime &&
-            Date.now() - parseInt(dismissedLongTime) < 60 * 24 * 60 * 60 * 1000
+            Date.now() - parseInt(dismissedLongTime, 10) < 60 * 24 * 60 * 60 * 1000
           ) {
             return; // Don't show for 60 days after long-term dismissal
           }
@@ -75,7 +75,7 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
           const dismissedTime = safeLocalStorageGetItem("pwa-install-dismissed");
           if (
             dismissedTime &&
-            Date.now() - parseInt(dismissedTime) < 7 * 24 * 60 * 60 * 1000
+            Date.now() - parseInt(dismissedTime, 10) < 7 * 24 * 60 * 60 * 1000
           ) {
             return; // Don't show for 7 days after dismissal
           }

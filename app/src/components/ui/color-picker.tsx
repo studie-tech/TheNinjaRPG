@@ -1,13 +1,13 @@
 "use client";
 
-import * as React from "react";
+import type * as React from "react";
 import { useMemo, useState } from "react";
 import { HexColorPicker } from "react-colorful";
-import { cn } from "src/libs/shadui";
 import type { ButtonProps } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/libs/shadui";
 
 interface ColorPickerProps {
   value: string;

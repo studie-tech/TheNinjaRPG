@@ -1,23 +1,23 @@
-import { MultisessionAppSupport } from "@clerk/nextjs/internal";
 import { ClerkProvider } from "@clerk/nextjs";
+import { MultisessionAppSupport } from "@clerk/nextjs/internal";
 import { GoogleTagManager } from "@next/third-parties/google";
-import { UserContextProvider } from "@/utils/UserContext";
-import { Toaster } from "@/components/ui/toaster";
-import { env } from "@/env/client.mjs";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
-import { extractRouterConfig } from "uploadthing/server";
-import { ourFileRouter } from "@/app/api/uploadthing/core";
-import TrpcClientProvider from "@/app/_trpc/Provider";
-import AcceptWarning from "@/layout/AcceptWarning";
-import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
-import { IMG_LOGO_FULL } from "@/drizzle/constants";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import type { Metadata, Viewport } from "next";
+import { extractRouterConfig } from "uploadthing/server";
+import TrpcClientProvider from "@/app/_trpc/Provider";
+import { ourFileRouter } from "@/app/api/uploadthing/core";
+import InstallPrompt from "@/components/pwa/InstallPrompt";
 import PWAManager from "@/components/pwa/PWAManager";
 import ParticleProvider from "@/components/ui/particles";
-import InstallPrompt from "@/components/pwa/InstallPrompt";
-import LayoutSwitcher from "@/layout/LayoutSwitcher";
+import { Toaster } from "@/components/ui/toaster";
+import { IMG_LOGO_FULL } from "@/drizzle/constants";
+import { env } from "@/env/client.mjs";
 import { InstallPromptProvider } from "@/hooks/useInstallPrompt";
-import type { Viewport, Metadata } from "next";
+import AcceptWarning from "@/layout/AcceptWarning";
+import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
+import LayoutSwitcher from "@/layout/LayoutSwitcher";
+import { UserContextProvider } from "@/utils/UserContext";
 
 import "../styles/globals.css";
 import "sonner/dist/styles.css";
@@ -91,7 +91,10 @@ export const metadata: Metadata = {
     "theninja-rpg",
   ],
   authors: [
-    { name: "Mathias F. Gruber", url: "https://github.com/studie-tech/TheNinjaRPG" },
+    {
+      name: "Mathias F. Gruber",
+      url: "https://github.com/studie-tech/TheNinjaRPG",
+    },
   ],
   creator: "Mathias F. Gruber",
   publisher: "Studie-Tech ApS",

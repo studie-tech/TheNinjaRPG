@@ -1,21 +1,21 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useUserData, userBattleAtom, combatActionIdAtom } from "@/utils/UserContext";
-import { usePathname, useRouter } from "next/navigation";
 import { useAtomValue } from "jotai";
-import { COMBAT_SECONDS } from "@/libs/combat/constants";
-import { getDistanceToClosestEnemy } from "@/libs/combat/util";
-import { availableUserActions } from "@/libs/combat/actions";
 import { MapPin } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import {
-  TUTORIAL_JUTSU_ID,
-  TUTORIAL_ITEM_ID,
-  TUTORIAL_STARTER_QUEST_ID,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
+  TUTORIAL_ITEM_ID,
+  TUTORIAL_JUTSU_ID,
+  TUTORIAL_STARTER_QUEST_ID,
   TUTORIAL_STEPS_COUNT,
 } from "@/drizzle/constants";
+import { availableUserActions } from "@/libs/combat/actions";
+import { COMBAT_SECONDS } from "@/libs/combat/constants";
+import { getDistanceToClosestEnemy } from "@/libs/combat/util";
+import { combatActionIdAtom, userBattleAtom, useUserData } from "@/utils/UserContext";
 
 export interface TutorialStepConfig {
   id: string;
@@ -333,7 +333,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
         You need to track down a sad puppy which has gone missing. Careful, it may be
         aggressive, so we may have to fight it before we can bring it back to the
         village. Approach the target which is marked with a{" "}
-        <MapPin className="inline-block text-red-500 w-5 h-5" /> in the sector, and
+        <MapPin className="inline-block h-5 w-5 text-red-500" /> in the sector, and
         overpower it.
       </div>
     ),
@@ -353,7 +353,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description: (
       <div>
         Good job on capturing the puppy. Let&apos;s go back to the{" "}
-        <span className="font-bold bg-[#81007f] text-white rounded-md p-1 shadow-sm">
+        <span className="rounded-md bg-[#81007f] p-1 font-bold text-white shadow-sm">
           Horizon
         </span>{" "}
         village and the academy. With what I&apos;ve seen, I think you&apos;ll become a
@@ -580,9 +580,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
 // Warn if TUTORIAL_STEPS_COUNT in constants.ts is out of sync
 if (TUTORIAL_STEPS.length !== TUTORIAL_STEPS_COUNT) {
   console.warn(
-    `⚠️ TUTORIAL_STEPS_COUNT mismatch! ` +
-      `constants.ts has ${TUTORIAL_STEPS_COUNT}, but TUTORIAL_STEPS has ${TUTORIAL_STEPS.length} steps. ` +
-      `Please update TUTORIAL_STEPS_COUNT in @/drizzle/constants.ts to ${TUTORIAL_STEPS.length}.`,
+    `⚠️ TUTORIAL_STEPS_COUNT mismatch! constants.ts has ${TUTORIAL_STEPS_COUNT}, but TUTORIAL_STEPS has ${TUTORIAL_STEPS.length} steps. Please update TUTORIAL_STEPS_COUNT in @/drizzle/constants.ts to ${TUTORIAL_STEPS.length}.`,
   );
 }
 

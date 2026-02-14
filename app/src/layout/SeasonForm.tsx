@@ -1,9 +1,20 @@
 "use client";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { z } from "zod";
+import { format } from "date-fns";
+import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import type { UseFormReturn } from "react-hook-form";
+import { useForm } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
@@ -13,11 +24,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { format } from "date-fns";
-import { Plus, Trash2 } from "lucide-react";
-import { RANKED_DIVISIONS } from "@/drizzle/constants";
 import {
   Select,
   SelectContent,
@@ -25,24 +31,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { api } from "@/app/_trpc/client";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { showMutationToast } from "@/libs/toast";
-import { rankedSeasonSchema, rewardSchema } from "@/validators/pvpRank";
-import { STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
-import { getRewardArray } from "@/libs/objectives";
+import { Textarea } from "@/components/ui/textarea";
+import { RANKED_DIVISIONS, STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
 import { EditContent, type FormEntry } from "@/layout/EditContent";
-import { useUserData } from "@/utils/UserContext";
+import { getRewardArray } from "@/libs/objectives";
+import { showMutationToast } from "@/libs/toast";
 import { canAwardReputation } from "@/utils/permissions";
-import type { UseFormReturn } from "react-hook-form";
+import { useUserData } from "@/utils/UserContext";
+import {
+  type RankedSeason,
+  type RankedSeasonInput,
+  type RankedSeasonReward,
+  type RankedSeasonRewardInput,
+  rankedSeasonSchema,
+  rewardSchema,
+} from "@/validators/pvpRank";
 
-type FormValues = z.infer<typeof rankedSeasonSchema>;
+type FormValues = RankedSeason;
+type FormValuesInput = RankedSeasonInput;
 
 interface SeasonFormProps {
   initialData?: FormValues;
@@ -70,7 +76,7 @@ export default function SeasonForm({
   const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
   const { data: badges } = api.badge.getAll.useQuery(undefined);
 
-  const form = useForm<FormValues>({
+  const form = useForm<FormValuesInput, unknown, FormValues>({
     resolver: zodResolver(rankedSeasonSchema),
     defaultValues: initialData || {
       name: "",
@@ -136,7 +142,7 @@ export default function SeasonForm({
 
   // Build formData for reward edit dialog
   const buildRewardFormData = () => {
-    const data: FormEntry<keyof z.infer<typeof rewardSchema>>[] = [
+    const data: FormEntry<keyof RankedSeasonReward>[] = [
       { id: "reward_money", type: "number" },
       { id: "reward_seichi_silver", type: "number" },
       { id: "reward_clanpoints", type: "number" },
@@ -289,7 +295,7 @@ export default function SeasonForm({
               </FormControl>
               <div className="space-y-1 leading-none">
                 <FormLabel>Pause Season</FormLabel>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   When paused, players cannot queue for ranked battles in this season.
                 </p>
               </div>
@@ -299,7 +305,7 @@ export default function SeasonForm({
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium">Division Rewards</h3>
+            <h3 className="font-medium text-lg">Division Rewards</h3>
             <Button
               type="button"
               variant="outline"
@@ -312,7 +318,7 @@ export default function SeasonForm({
           </div>
 
           {form.watch("rewards").map((division, divisionIndex) => (
-            <Card key={divisionIndex}>
+            <Card key={`division-${division.division}-${divisionIndex}`}>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>Division {divisionIndex + 1}</span>
@@ -353,9 +359,9 @@ export default function SeasonForm({
                 />
 
                 {/* Rewards summary and edit button */}
-                <div className="flex items-center justify-between border rounded-md p-3">
-                  <span className="text-sm text-muted-foreground">
-                    {getRewardArray(division.rewards).join(" • ")}
+                <div className="flex items-center justify-between rounded-md border p-3">
+                  <span className="text-muted-foreground text-sm">
+                    {getRewardArray(division.rewards as RankedSeasonReward).join(" • ")}
                   </span>
                   <Button
                     type="button"
@@ -394,8 +400,8 @@ interface RewardDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   divisionIndex: number;
-  parentForm: UseFormReturn<FormValues>;
-  buildRewardFormData: () => FormEntry<keyof z.infer<typeof rewardSchema>>[];
+  parentForm: UseFormReturn<FormValuesInput, unknown, FormValues>;
+  buildRewardFormData: () => FormEntry<keyof RankedSeasonReward>[];
 }
 
 const RewardDialog: React.FC<RewardDialogProps> = ({
@@ -406,7 +412,7 @@ const RewardDialog: React.FC<RewardDialogProps> = ({
   buildRewardFormData,
 }) => {
   const parentReward = parentForm.watch(`rewards.${divisionIndex}.rewards`);
-  const rewardForm = useForm<z.infer<typeof rewardSchema>>({
+  const rewardForm = useForm<RankedSeasonRewardInput, unknown, RankedSeasonReward>({
     resolver: zodResolver(rewardSchema),
     values: parentReward ?? rewardSchema.parse({}),
     defaultValues: parentReward ?? rewardSchema.parse({}),
@@ -429,13 +435,13 @@ const RewardDialog: React.FC<RewardDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl overflow-y-auto max-h-screen">
+      <DialogContent className="max-h-screen max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Rewards</DialogTitle>
         </DialogHeader>
         <EditContent
           schema={rewardSchema}
-          form={rewardForm}
+          form={rewardForm as UseFormReturn<RankedSeasonReward, unknown>}
           formData={buildRewardFormData()}
           showSubmit={true}
           buttonTxt="Save Rewards"

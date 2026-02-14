@@ -1,18 +1,17 @@
-import React, { useEffect, useState, useRef } from "react";
-import EmojiPicker from "@/layout/EmojiPicker";
-import { SendHorizontal, PartyPopper } from "lucide-react";
-import { Controller } from "react-hook-form";
-import { Textarea } from "@/components/ui/textarea";
-import { useController, useWatch } from "react-hook-form";
-import type { Control } from "react-hook-form";
-import UserSearchSelect from "./UserSearchSelect";
-import { useForm } from "react-hook-form";
-import type { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getSearchValidator } from "@/validators/register";
+import { PartyPopper, SendHorizontal } from "lucide-react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import type { Control } from "react-hook-form";
+import { Controller, useController, useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { Textarea } from "@/components/ui/textarea";
+import EmojiPicker from "@/layout/EmojiPicker";
 import { showMutationToast } from "@/libs/toast";
-import { useUploadThing } from "@/utils/uploadthing";
 import { resizeImage } from "@/utils/image";
+import { useUploadThing } from "@/utils/uploadthing";
+import { getSearchValidator } from "@/validators/register";
+import UserSearchSelect from "./UserSearchSelect";
 
 interface RichInputProps {
   id: string;
@@ -158,7 +157,6 @@ const RichInput: React.FC<RichInputProps> = (props) => {
         document.removeEventListener("keydown", onDocumentKeyDown);
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMentions]);
 
   // Handler for clicks outside emoji selector
@@ -221,7 +219,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
         // Replace the @mention query with the selected username
         const before = currentValue.substring(0, cursorPosition.start);
         const after = currentValue.substring(cursorPosition.end);
-        const newValue = before + "@" + lastSelectedUser.username + " " + after;
+        const newValue = `${before}@${lastSelectedUser.username} ${after}`;
 
         field.onChange(newValue);
 
@@ -241,12 +239,11 @@ const RichInput: React.FC<RichInputProps> = (props) => {
         return () => clearTimeout(timeoutId);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUsers]);
 
   return (
     <div className={`${props.disabled ? "opacity-50" : ""}`}>
-      <label htmlFor={props.id} className="mb-2 block text-sm font-medium">
+      <label htmlFor={props.id} className="mb-2 block font-medium text-sm">
         {props.label}
       </label>
       <div className="relative">
@@ -275,7 +272,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
         />
 
         <div
-          className="z-50 absolute top-0 left-[50%] translate-x-[-50%]"
+          className="absolute top-0 left-[50%] z-50 translate-x-[-50%]"
           ref={emojiRef}
         >
           {emojiOpen && (
@@ -290,14 +287,14 @@ const RichInput: React.FC<RichInputProps> = (props) => {
           )}
         </div>
 
-        <div className="flex flex-row items-center absolute top-[50%] translate-y-[-50%] right-5">
+        <div className="absolute top-[50%] right-5 flex translate-y-[-50%] flex-row items-center">
           <PartyPopper
-            className="h-8 w-8 text-gray-400 hover:cursor-pointer hover:text-gray-600 opacity-50"
+            className="h-8 w-8 text-gray-400 opacity-50 hover:cursor-pointer hover:text-gray-600"
             onClick={() => setEmojiOpen(!emojiOpen)}
           />
           {props.onSubmit && (
             <SendHorizontal
-              className="h-8 w-8 text-gray-400 hover:cursor-pointer hover:text-gray-600 opacity-50"
+              className="h-8 w-8 text-gray-400 opacity-50 hover:cursor-pointer hover:text-gray-600"
               onClick={(e) => {
                 if (props.onSubmit) {
                   props.onSubmit(e);
@@ -308,7 +305,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
         </div>
 
         {showMentions && props.enableMentions && (
-          <div className="absolute left-0 right-0 mt-1 z-50">
+          <div className="absolute right-0 left-0 z-50 mt-1">
             <UserSearchSelect
               useFormMethods={mentionForm}
               showYourself={true}
@@ -320,7 +317,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
         )}
       </div>
 
-      {props.error && <div className="text-xs italic text-red-500"> {props.error}</div>}
+      {props.error && <div className="text-red-500 text-xs italic"> {props.error}</div>}
     </div>
   );
 };

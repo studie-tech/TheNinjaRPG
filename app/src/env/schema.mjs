@@ -9,12 +9,12 @@ export const serverSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   PUSHER_APP_ID: z.string().optional(),
   PUSHER_APP_SECRET: z.string().optional(),
-  DATABASE_URL: z.string().url().optional(),
-  DEV_DATABASE_URL: z.string().url().optional(),
+  DATABASE_URL: z.url().optional(),
+  DEV_DATABASE_URL: z.url().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]),
-  DISCORD_CONTENT_UPDATES: z.string().url().optional(),
-  DISCORD_NEWS_UPDATES: z.string().url().optional(),
-  DISCORD_TICKETS: z.string().url().optional(),
+  DISCORD_CONTENT_UPDATES: z.url().optional(),
+  DISCORD_NEWS_UPDATES: z.url().optional(),
+  DISCORD_TICKETS: z.url().optional(),
   FACEBOOK_PAGE_ID: z.string().optional(),
   FACEBOOK_PAGE_ACCESS_TOKEN: z.string().optional(),
   INSTAGRAM_BUSINESS_ACCOUNT_ID: z.string().optional(),
@@ -76,12 +76,14 @@ export const serverEnv = {
 export const clientSchema = z.object({
   NEXT_PUBLIC_PUSHER_APP_KEY: z.string(),
   NEXT_PUBLIC_PUSHER_APP_CLUSTER: z.string(),
-  NEXT_PUBLIC_BASE_URL: z.string().url(),
+  NEXT_PUBLIC_BASE_URL: z.url(),
   NEXT_PUBLIC_MEASUREMENT_ID: z.string().optional(),
   NEXT_PUBLIC_NODE_ENV: z.enum(["development", "test", "production"]),
   // SpacetimeDB for Tower Defense
   NEXT_PUBLIC_SPACETIMEDB_HOST: z.string().optional(),
   NEXT_PUBLIC_SPACETIMEDB_MODULE: z.string().optional(),
+  // MCP Server (disabled by default, enable for MCP-enabled deployments)
+  NEXT_PUBLIC_MCP_ENABLED: z.enum(["true", "false"]).optional().prefault("false"),
 });
 
 /**
@@ -99,4 +101,7 @@ export const clientEnv = {
   // SpacetimeDB for Tower Defense
   NEXT_PUBLIC_SPACETIMEDB_HOST: process.env.NEXT_PUBLIC_SPACETIMEDB_HOST,
   NEXT_PUBLIC_SPACETIMEDB_MODULE: process.env.NEXT_PUBLIC_SPACETIMEDB_MODULE,
+  // MCP Server
+  NEXT_PUBLIC_MCP_ENABLED:
+    /** @type {"true" | "false" | undefined} */ (process.env.NEXT_PUBLIC_MCP_ENABLED),
 };

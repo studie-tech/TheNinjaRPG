@@ -1,5 +1,5 @@
-import dns from "dns";
-import { promisify } from "util";
+import dns from "node:dns";
+import { promisify } from "node:util";
 
 const lookup = promisify(dns.lookup);
 

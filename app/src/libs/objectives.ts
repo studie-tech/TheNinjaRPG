@@ -1,45 +1,44 @@
+import type { ElementDefinition } from "cytoscape";
 import {
-  IMG_BADGE_PVPKILLS,
-  IMG_BADGE_ARENAKILLS,
-  IMG_BADGE_MINUTES_PASSED,
-  IMG_BADGE_ERRANDS_TOTAL,
-  IMG_BADGE_D_MISSION_TOTAL,
-  IMG_BADGE_C_MISSION_TOTAL,
-  IMG_BADGE_B_MISSION_TOTAL,
-  IMG_BADGE_A_MISSION_TOTAL,
-  IMG_BADGE_D_CRIME_TOTAL,
-  IMG_BADGE_C_CRIME_TOTAL,
-  IMG_BADGE_B_CRIME_TOTAL,
   IMG_BADGE_A_CRIME_TOTAL,
-  IMG_BADGE_MINUTES_TRAINING,
-  IMG_BADGE_JUTSUS_MASTERED,
-  IMG_BADGE_STATS_TRAINED,
+  IMG_BADGE_A_MISSION_TOTAL,
+  IMG_BADGE_ARENAKILLS,
+  IMG_BADGE_B_CRIME_TOTAL,
+  IMG_BADGE_B_MISSION_TOTAL,
+  IMG_BADGE_C_CRIME_TOTAL,
+  IMG_BADGE_C_MISSION_TOTAL,
+  IMG_BADGE_COLLECT_ITEM,
+  IMG_BADGE_CRAFTING_EXPERIENCE,
+  IMG_BADGE_D_CRIME_TOTAL,
+  IMG_BADGE_D_MISSION_TOTAL,
   IMG_BADGE_DAYS_IN_VILLAGE,
-  IMG_BADGE_REPUTATION_POINTS,
-  IMG_BADGE_USER_LEVEL,
-  IMG_BADGE_MEDICAL_EXPERIENCE,
+  IMG_BADGE_DEFEAT_OPPONENTS,
+  IMG_BADGE_DIALOG,
+  IMG_BADGE_ERRANDS_TOTAL,
+  IMG_BADGE_EXCLUSIVE_RAID,
+  IMG_BADGE_FAIL_QUEST,
   IMG_BADGE_GATHERING_EXPERIENCE,
   IMG_BADGE_HUNTING_EXPERIENCE,
-  IMG_BADGE_CRAFTING_EXPERIENCE,
+  IMG_BADGE_JUTSUS_MASTERED,
+  IMG_BADGE_MEDICAL_EXPERIENCE,
+  IMG_BADGE_MINUTES_PASSED,
+  IMG_BADGE_MINUTES_TRAINING,
   IMG_BADGE_MOVE_TO_LOCATION,
-  IMG_BADGE_COLLECT_ITEM,
-  IMG_BADGE_DEFEAT_OPPONENTS,
-  IMG_BADGE_RANDOM_ENCOUNTER_WINS,
-  IMG_BADGE_DIALOG,
-  IMG_BADGE_FAIL_QUEST,
-  IMG_BADGE_RESET_QUEST,
-  IMG_BADGE_WIN_QUEST,
   IMG_BADGE_NEW_QUEST,
-  IMG_BADGE_START_BATTLE,
   IMG_BADGE_OPEN_RAID,
-  IMG_BADGE_EXCLUSIVE_RAID,
+  IMG_BADGE_PVPKILLS,
+  IMG_BADGE_RANDOM_ENCOUNTER_WINS,
+  IMG_BADGE_REPUTATION_POINTS,
+  IMG_BADGE_RESET_QUEST,
+  IMG_BADGE_START_BATTLE,
+  IMG_BADGE_STATS_TRAINED,
+  IMG_BADGE_USER_LEVEL,
+  IMG_BADGE_WIN_QUEST,
 } from "@/drizzle/constants";
-import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 import type { Quest } from "@/drizzle/schema";
-import type { AllObjectivesType } from "@/validators/objectives";
-import type { QuestTrackerType } from "@/validators/objectives";
-import type { ElementDefinition } from "cytoscape";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
+import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
+import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 
 export const getObjectiveImage = (objective: AllObjectivesType) => {
   switch (objective.task) {
@@ -281,7 +280,9 @@ export const isQuestObjectiveAvailable = (
 
   // Build a map of id -> objective
   const idToObjective = new Map<string, AllObjectivesType>();
-  objectives.forEach((obj) => idToObjective.set(obj.id, obj));
+  objectives.forEach((obj) => {
+    idToObjective.set(obj.id, obj);
+  });
 
   // Find the starting objective (no predecessor)
   const startingObjective = objectives.find(

@@ -1,11 +1,11 @@
-import React, { useState } from "react";
-import AvatarImage from "@/layout/Avatar";
-import Loader from "@/layout/Loader";
-import RichInput from "@/layout/RichInput";
-import { Sparkles, Edit } from "lucide-react";
-import { UploadButton } from "@/utils/uploadthing";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Edit, Sparkles } from "lucide-react";
+import type React from "react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
+import { HistoricalAiAvatar } from "@/app/profile/edit/page";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -13,15 +13,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { HistoricalAiAvatar } from "@/app/profile/edit/page";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import AvatarImage from "@/layout/Avatar";
+import Loader from "@/layout/Loader";
+import RichInput from "@/layout/RichInput";
+import { showMutationToast } from "@/libs/toast";
+import { UploadButton } from "@/utils/uploadthing";
+import { type PromptFormSchema, promptFormSchema } from "@/validators/ai";
 
 interface ContentImageSelectorProps {
   label: string;
@@ -35,14 +36,6 @@ interface ContentImageSelectorProps {
   maxDim: number;
 }
 
-const promptFormSchema = z.object({
-  systemPrompt: z.string(),
-  userPrompt: z.string(),
-  editPrompt: z.string(),
-});
-
-type PromptFormData = z.infer<typeof promptFormSchema>;
-
 const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
   // Destructure props
   const utils = api.useUtils();
@@ -54,7 +47,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form for the prompt inputs
-  const promptForm = useForm<PromptFormData>({
+  const promptForm = useForm<PromptFormSchema>({
     resolver: zodResolver(promptFormSchema),
     defaultValues: {
       systemPrompt: getPrePrompts(),
@@ -76,7 +69,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
     },
   );
 
-  const handleGenerateImage = (data: PromptFormData) => {
+  const handleGenerateImage = (data: PromptFormSchema) => {
     if (!data.userPrompt) {
       showMutationToast({ success: false, message: "No user prompt" });
       return;
@@ -93,7 +86,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
     }
   };
 
-  const handleEditImage = (data: PromptFormData) => {
+  const handleEditImage = (data: PromptFormSchema) => {
     if (!imageUrl) {
       showMutationToast({ success: false, message: "No image to edit" });
       return;
@@ -121,7 +114,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogTrigger asChild>
-          <div className="relative cursor-pointer group">
+          <div className="group relative cursor-pointer">
             <AvatarImage
               href={imageUrl ?? IMG_AVATAR_DEFAULT}
               alt={`${id}-avatar`}
@@ -131,9 +124,9 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
               priority
             />
             {allowImageUpload && (
-              <div className="absolute inset-0 bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center rounded-lg pointer-events-none">
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-opacity-0 transition-all duration-200 group-hover:bg-opacity-50">
                 <Edit
-                  className="text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                  className="text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                   size={24}
                 />
               </div>
@@ -142,14 +135,14 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
         </DialogTrigger>
 
         {allowImageUpload && (
-          <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
+          <DialogContent className="max-h-[90vh] max-w-6xl overflow-hidden">
             <DialogHeader>
               <DialogTitle>Edit {label}</DialogTitle>
             </DialogHeader>
 
-            <div className="flex flex-col md:flex-row gap-6 h-full">
+            <div className="flex h-full flex-col gap-6 md:flex-row">
               {/* Left side - Image */}
-              <div className="flex-shrink-0 flex flex-col items-center">
+              <div className="flex flex-shrink-0 flex-col items-center">
                 <AvatarImage
                   href={imageUrl ?? IMG_AVATAR_DEFAULT}
                   alt={`${id}-avatar`}
@@ -160,7 +153,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                 />
 
                 {/* Upload button */}
-                <div className="flex flex-row gap-2 mt-4">
+                <div className="mt-4 flex flex-row gap-2">
                   <UploadButton
                     endpoint="imageUploader"
                     onClientUploadComplete={(res) => {
@@ -178,8 +171,8 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
               </div>
 
               {/* Right side - Text inputs */}
-              <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-                <Tabs defaultValue="create" className="flex-1 flex flex-col">
+              <div className="flex flex-1 flex-col gap-4 overflow-hidden">
+                <Tabs defaultValue="create" className="flex flex-1 flex-col">
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="create">Create new</TabsTrigger>
                     <TabsTrigger value="edit">Edit current</TabsTrigger>
@@ -187,9 +180,9 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
 
                   <TabsContent
                     value="create"
-                    className="flex-1 flex flex-col gap-4 mt-4"
+                    className="mt-4 flex flex-1 flex-col gap-4"
                   >
-                    <div className="flex-1 min-h-0">
+                    <div className="min-h-0 flex-1">
                       <RichInput
                         id="systemPrompt"
                         label="System Prompt (AI Instructions)"
@@ -200,7 +193,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                       />
                     </div>
 
-                    <div className="flex-1 min-h-0">
+                    <div className="min-h-0 flex-1">
                       <RichInput
                         id="userPrompt"
                         label="User Prompt (Content Description)"
@@ -212,9 +205,9 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                     </div>
 
                     {/* Generate AI button for create */}
-                    <div className="flex justify-center mt-4">
+                    <div className="mt-4 flex justify-center">
                       <Button
-                        className="h-12 px-8 bg-green-600 hover:bg-green-700 w-full"
+                        className="h-12 w-full bg-green-600 px-8 hover:bg-green-700"
                         onClick={() => {
                           const formData = promptForm.getValues();
                           handleGenerateImage(formData);
@@ -231,8 +224,8 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="edit" className="flex-1 flex flex-col gap-4 mt-4">
-                    <div className="flex-1 min-h-0">
+                  <TabsContent value="edit" className="mt-4 flex flex-1 flex-col gap-4">
+                    <div className="min-h-0 flex-1">
                       <RichInput
                         id="editPrompt"
                         label="Edit Instructions"
@@ -244,9 +237,9 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                     </div>
 
                     {/* Generate AI button for edit */}
-                    <div className="flex justify-center mt-4">
+                    <div className="mt-4 flex justify-center">
                       <Button
-                        className="h-12 px-8 bg-green-600 hover:bg-green-700 w-full"
+                        className="h-12 w-full bg-green-600 px-8 hover:bg-green-700"
                         onClick={() => {
                           const formData = promptForm.getValues();
                           handleEditImage(formData);

@@ -1,44 +1,50 @@
-import { z } from "zod";
+import { and, asc, desc, eq, gte, inArray, like, lte, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { eq, and, or, desc, asc, like, sql, inArray, gte, lte } from "drizzle-orm";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { errorResponse, baseServerResponse } from "@/server/api/trpc";
+import { z } from "zod";
+import type {
+  SupportTicketActivityAction,
+  SupportTicketCategory,
+  SupportTicketPriority,
+} from "@/drizzle/constants";
+import { GITHUB_API_ENDPOINT } from "@/drizzle/constants";
+import type { UserData } from "@/drizzle/schema";
 import {
-  supportTicket,
-  supportTicketActivity,
+  cannedResponse,
   conversation,
   conversationComment,
-  cannedResponse,
+  supportTicket,
+  supportTicketActivity,
 } from "@/drizzle/schema";
+import { anonymizeStaffInfo } from "@/libs/support";
+import { createConvo } from "@/server/api/routers/comments";
+import { fetchUser } from "@/server/api/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
+import { reduceByKey } from "@/utils/grouping";
+import {
+  canAssignSupportTicket,
+  canDeleteSupportTicket,
+  canEditCannedResponses,
+  canEditSupportTicket,
+  canEscalateToGithub,
+  canTransitionStatus,
+  canViewStaffOnlyComments,
+  canViewSupportStatistics,
+  canViewSupportTicket,
+} from "@/utils/permissions";
 import {
   createSupportTicketSchema,
-  updateSupportTicketSchema,
-  supportTicketFilterSchema,
-  supportTicketMetricsSchema,
   escalateToGithubSchema,
   type SupportTicketFilteringSchema,
+  supportTicketFilterSchema,
+  supportTicketMetricsSchema,
+  updateSupportTicketSchema,
 } from "@/validators/support";
-import type { SupportTicketActivityAction } from "@/drizzle/constants";
-import { anonymizeStaffInfo } from "@/libs/support";
-import {
-  canViewSupportTicket,
-  canEditSupportTicket,
-  canDeleteSupportTicket,
-  canAssignSupportTicket,
-  canViewStaffOnlyComments,
-  canTransitionStatus,
-  canViewSupportStatistics,
-  canEditCannedResponses,
-  canEscalateToGithub,
-} from "@/utils/permissions";
-import { GITHUB_API_ENDPOINT } from "@/drizzle/constants";
-import { createConvo } from "@/server/api/routers/comments";
-import { reduceByKey } from "@/utils/grouping";
-import { fetchUser } from "@/server/api/routers/profile";
-import type { SupportTicketCategory } from "@/drizzle/constants";
-import type { SupportTicketPriority } from "@/drizzle/constants";
-import type { UserData } from "@/drizzle/schema";
-import type { DrizzleClient } from "@/server/db";
 
 export const supportRouter = createTRPCRouter({
   // Get all support tickets with filtering
@@ -151,7 +157,7 @@ export const supportRouter = createTRPCRouter({
 
   // Update a support ticket
   updateTicket: protectedProcedure
-    .input(z.object({ ticketId: z.string() }).merge(updateSupportTicketSchema))
+    .input(z.object({ ticketId: z.string() }).extend(updateSupportTicketSchema.shape))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Destructure
@@ -1032,6 +1038,7 @@ export const sanitizeSupportTicketForPublic = (
         (activity) =>
           !["ASSIGNED", "UNASSIGNED", "TAGGED", "UNTAGGED"].includes(activity.action),
       )
+      .filter((activity) => activity.author !== null)
       .map((activity) => ({
         ...activity,
         author: anonymizeStaffInfo(activity.author, viewer),

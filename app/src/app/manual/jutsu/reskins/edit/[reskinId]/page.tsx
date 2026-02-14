@@ -1,22 +1,21 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { use } from "react";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
+import React, { use } from "react";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import ContentBox from "@/layout/ContentBox";
+import { EditContent, type FormEntry } from "@/layout/EditContent";
+import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canModerateReskin } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import React from "react";
-import { EditContent, type FormEntry } from "@/layout/EditContent";
 import {
-  jutsuReskinUpdateSchema,
   type JutsuReskinUpdateSchema,
+  jutsuReskinUpdateSchema,
 } from "@/validators/jutsu";
 
 export default function ReskinEdit(props: { params: Promise<{ reskinId: string }> }) {
@@ -102,7 +101,12 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
       type: "richinput",
       label: "Custom Battle Text",
     },
-    { id: "reason", type: "richinput", label: "Reason for update", doubleWidth: true },
+    {
+      id: "reason",
+      type: "richinput",
+      label: "Reason for update",
+      doubleWidth: true,
+    },
   ];
 
   const onAccept = async () => {
@@ -112,37 +116,35 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
   };
 
   return (
-    <>
-      <ContentBox
-        title="Edit Jutsu Reskin"
-        subtitle="Modify reskin information"
-        defaultBackHref="/manual/jutsu/reskins"
-      >
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="original-jutsu">Original Jutsu</Label>
-            <Input
-              id="original-jutsu"
-              value={reskin && !("success" in reskin) ? reskin.jutsu.name : ""}
-              disabled
-              className="mt-1"
-            />
-          </div>
-
-          <EditContent
-            schema={jutsuReskinUpdateSchema}
-            form={form}
-            formData={formData}
-            showSubmit={true}
-            buttonTxt="Save Changes"
-            allowImageUpload={true}
-            relationId={reskinData?.id || reskinId}
-            type="jutsu_reskin"
-            onAccept={onAccept}
-            submitDisabled={!form.formState.isValid || isUpdating}
+    <ContentBox
+      title="Edit Jutsu Reskin"
+      subtitle="Modify reskin information"
+      defaultBackHref="/manual/jutsu/reskins"
+    >
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="original-jutsu">Original Jutsu</Label>
+          <Input
+            id="original-jutsu"
+            value={reskin && !("success" in reskin) ? reskin.jutsu.name : ""}
+            disabled
+            className="mt-1"
           />
         </div>
-      </ContentBox>
-    </>
+
+        <EditContent
+          schema={jutsuReskinUpdateSchema}
+          form={form}
+          formData={formData}
+          showSubmit={true}
+          buttonTxt="Save Changes"
+          allowImageUpload={true}
+          relationId={reskinData?.id || reskinId}
+          type="jutsu_reskin"
+          onAccept={onAccept}
+          submitDisabled={!form.formState.isValid || isUpdating}
+        />
+      </div>
+    </ContentBox>
   );
 }

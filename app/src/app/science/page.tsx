@@ -1,15 +1,15 @@
 "use client";
 
-import Loader from "@/layout/Loader";
-import Image from "@/layout/Image";
-import { Button } from "@/components/ui/button";
-import ContentBox from "@/layout/ContentBox";
-import { RollBloodline, CurrentBloodline, PurchaseBloodline } from "@/layout/Bloodline";
-import { BloodlineStatistics } from "@/layout/BloodlineStatistics";
-import { useRequireInVillage } from "@/utils/UserContext";
-import { IMG_BUILDING_SCIENCEBUILDING } from "@/drizzle/constants";
-import { api } from "@/app/_trpc/client";
 import { BarChart2 } from "lucide-react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { IMG_BUILDING_SCIENCEBUILDING } from "@/drizzle/constants";
+import { CurrentBloodline, PurchaseBloodline, RollBloodline } from "@/layout/Bloodline";
+import { BloodlineStatistics } from "@/layout/BloodlineStatistics";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import { useRequireInVillage } from "@/utils/UserContext";
 
 export default function Science() {
   // Settings
@@ -43,7 +43,7 @@ export default function Science() {
           <BloodlineStatistics
             trigger={
               <Button id="filter-bloodline">
-                <BarChart2 className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
+                <BarChart2 className="h-6 w-6 hover:text-orange-500 sm:mr-2" />
                 <p className="hidden sm:block">Roll Statistics</p>
               </Button>
             }

@@ -18,6 +18,8 @@ export const attributes = [
   "Full Beard",
   "Stubble",
 ] as const;
+export type Attribute = (typeof attributes)[number];
+
 export const colors = [
   "Blonde",
   "Black",
@@ -27,15 +29,18 @@ export const colors = [
   "White",
   "Gray",
 ] as const;
+export type Color = (typeof colors)[number];
+
 export const skin_colors = ["Light", "Dark", "Olive", "Alibino"] as const;
+export type SkinColor = (typeof skin_colors)[number];
 export const genders = ["Male", "Female", "Other"] as const;
 export type Gender = (typeof genders)[number];
 
 export const usernameSchema = z
   .string()
   .trim()
-  .regex(new RegExp("^[a-zA-Z0-9_]+$"), {
-    message: "Alphanumeric, no spaces",
+  .regex(/^[a-zA-Z0-9_]+$/, {
+    error: "Alphanumeric, no spaces",
   })
   .min(2)
   .max(12);
@@ -44,17 +49,15 @@ export const utmSourceSchema = z
   .string()
   .trim()
   .max(64, "UTM source too long")
-  .regex(/^[a-zA-Z0-9_\-\.]+$/, {
-    message:
+  .regex(/^[a-zA-Z0-9_\-.]+$/, {
+    error:
       "UTM source can only contain letters, numbers, dashes, underscores, and dots",
   })
-  .optional()
   .nullish()
-  .default("")
   .catch(() => "");
 
 export const registrationSchema = z
-  .object({
+  .strictObject({
     username: usernameSchema,
     gender: z.enum(genders),
     hair_color: z.enum(colors),
@@ -66,36 +69,34 @@ export const registrationSchema = z
     read_tos: z.literal(true),
     read_privacy: z.literal(true),
     read_earlyaccess: z.literal(true),
-    recruiter_userid: z.string().optional().nullish(),
+    recruiter_userid: z.string().nullish(),
     utm_source: utmSourceSchema,
     bloodlineId: z.string().min(1, "Bloodline selection is required"),
-    musicOn: z.boolean().optional().default(true),
-    sfxOn: z.boolean().optional().default(true),
+    musicOn: z.boolean().optional(),
+    sfxOn: z.boolean().optional(),
   })
-  .strict()
-  .required()
   .refine(
     (data) =>
       data.attribute_1 !== data.attribute_2 && data.attribute_1 !== data.attribute_3,
     {
-      message: "Attributes can only be chosen once",
       path: ["attribute_1"],
+      error: "Attributes can only be chosen once",
     },
   )
   .refine(
     (data) =>
       data.attribute_2 !== data.attribute_1 && data.attribute_2 !== data.attribute_3,
     {
-      message: "Attributes can only be chosen once",
       path: ["attribute_2"],
+      error: "Attributes can only be chosen once",
     },
   )
   .refine(
     (data) =>
       data.attribute_3 !== data.attribute_1 && data.attribute_3 !== data.attribute_2,
     {
-      message: "Attributes can only be chosen once",
       path: ["attribute_3"],
+      error: "Attributes can only be chosen once",
     },
   );
 export type RegistrationSchema = z.infer<typeof registrationSchema>;
@@ -113,7 +114,7 @@ export const getSearchValidator = (props: { max: number }) => {
         z.object({
           userId: z.string(),
           username: usernameSchema,
-          avatar: z.string().url().optional().nullish(),
+          avatar: z.url().optional().nullish(),
           rank: z.enum(UserRanks),
           level: z.number(),
           federalStatus: z.enum(FederalStatuses),

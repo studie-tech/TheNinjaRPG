@@ -1,6 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { BellOff, Gift, X } from "lucide-react";
+import type React from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -8,14 +12,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { useUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { cn } from "@/libs/shadui";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { getDateKey } from "@/utils/time";
-import { Gift, X, BellOff } from "lucide-react";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
+import { cn } from "@/libs/shadui";
+import { getDateKey } from "@/utils/time";
+import { useUserData } from "@/utils/UserContext";
 
 /** Get today's date as a string for localStorage key */
 const getTodayKey = () => {
@@ -77,7 +78,7 @@ const ActivityStreakPopup: React.FC = () => {
     <>
       {isModalOpen && (
         <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleClose()}>
-          <DialogContent className={cn("max-w-2xl", "overflow-y-auto max-h-[90vh]")}>
+          <DialogContent className={cn("max-w-2xl", "max-h-[90vh] overflow-y-auto")}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Gift className="h-5 w-5 text-primary" />
@@ -90,13 +91,13 @@ const ActivityStreakPopup: React.FC = () => {
 
             <ActivityStreakPanel />
 
-            <div className="flex justify-between pt-2 gap-2">
+            <div className="flex justify-between gap-2 pt-2">
               <Button variant="ghost" size="sm" onClick={handleDismissForToday}>
-                <BellOff className="h-4 w-4 mr-2" />
+                <BellOff className="mr-2 h-4 w-4" />
                 Dismiss for today
               </Button>
               <Button variant="outline" onClick={handleClose}>
-                <X className="h-4 w-4 mr-2" />
+                <X className="mr-2 h-4 w-4" />
                 Close
               </Button>
             </div>

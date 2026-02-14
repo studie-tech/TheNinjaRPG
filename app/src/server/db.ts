@@ -1,22 +1,24 @@
-import { drizzle } from "drizzle-orm/planetscale-serverless";
 import { Client } from "@planetscale/database";
+import {
+  drizzle as createDrizzle,
+  type PlanetScaleDatabase,
+} from "drizzle-orm/planetscale-serverless";
 import { env } from "@/env/server.mjs";
 import * as schema from "../../drizzle/schema";
-import type { PlanetScaleDatabase } from "drizzle-orm/planetscale-serverless";
 
 export type DrizzleClient = PlanetScaleDatabase<typeof schema>;
 
 declare global {
-  var drizzle: DrizzleClient | undefined;
+  var drizzleClient: DrizzleClient | undefined;
 }
 
 export const drizzleDB =
-  global.drizzle ??
-  drizzle(
+  global.drizzleClient ??
+  createDrizzle(
     new Client({ url: process.env.DATABASE_URL }),
     { schema }, // ,  logger: true
   );
 
 if (env.NODE_ENV !== "production") {
-  global.drizzle = drizzleDB;
+  global.drizzleClient = drizzleDB;
 }

@@ -29,4 +29,4 @@
 
 - We use [gitmoji](https://github.com/carloscuesta/gitmoji) for commits, to make things a bit more 🔥
 
-- It is expected that code complies with the ESlint and prettier settings in this repo.
+- It is expected that code complies with the biome linting and formatting settings in this repo.

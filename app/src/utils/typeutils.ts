@@ -63,7 +63,9 @@ export type DeepPartial<T> = {
 /**
  * A promise that returns a database query result or void
  */
-export type DatabasePromiseReturn = ExecutedQuery<any[] | Record<string, any>> | void;
+export type DatabasePromiseReturn =
+  | ExecutedQuery<any[] | Record<string, any>>
+  | undefined;
 
 /**
  * A condition for a database query

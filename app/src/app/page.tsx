@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
-import { useUserData } from "@/utils/UserContext";
 import { useRouter } from "next/navigation";
-import Loader from "@/layout/Loader";
-import Welcome from "@/layout/Welcome";
+import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
+import Loader from "@/layout/Loader";
+import Welcome from "@/layout/Welcome";
+import { useUserData } from "@/utils/UserContext";
 
 export default function Index() {
   // Fetch data
@@ -36,7 +36,6 @@ export default function Index() {
     if (userData && userId) {
       void router.push("/profile");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, userData, userId, userStatus]);
 
   // Guard

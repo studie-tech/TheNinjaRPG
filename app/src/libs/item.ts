@@ -1,27 +1,27 @@
-import { getUserFederalStatus } from "@/utils/paypal";
-import { FED_NORMAL_INVENTORY_SLOTS } from "@/drizzle/constants";
-import { FED_SILVER_INVENTORY_SLOTS } from "@/drizzle/constants";
-import { FED_GOLD_INVENTORY_SLOTS } from "@/drizzle/constants";
-import { FED_EVENT_ITEMS_NORMAL } from "@/drizzle/constants";
-import { FED_EVENT_ITEMS_SILVER } from "@/drizzle/constants";
-import { FED_EVENT_ITEMS_GOLD } from "@/drizzle/constants";
-import { FED_EVENT_ITEMS_DEFAULT } from "@/drizzle/constants";
-import { MATERIALS_BASE_SLOTS } from "@/drizzle/constants";
-import { FED_MATERIALS_NORMAL_SLOTS } from "@/drizzle/constants";
-import { FED_MATERIALS_SILVER_SLOTS } from "@/drizzle/constants";
-import { FED_MATERIALS_GOLD_SLOTS } from "@/drizzle/constants";
-import { getStrucBoost } from "@/utils/village";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
-  MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
   DURABILITY_POINT_PRICE_PERCENT,
+  FED_EVENT_ITEMS_DEFAULT,
+  FED_EVENT_ITEMS_GOLD,
+  FED_EVENT_ITEMS_NORMAL,
+  FED_EVENT_ITEMS_SILVER,
+  FED_GOLD_INVENTORY_SLOTS,
+  FED_MATERIALS_GOLD_SLOTS,
+  FED_MATERIALS_NORMAL_SLOTS,
+  FED_MATERIALS_SILVER_SLOTS,
+  FED_NORMAL_INVENTORY_SLOTS,
+  FED_SILVER_INVENTORY_SLOTS,
+  MATERIALS_BASE_SLOTS,
+  MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
 } from "@/drizzle/constants";
 import type {
   Item,
-  UserItemWithItem,
   UserData,
+  UserItemWithItem,
   VillageStructure,
 } from "@/drizzle/schema";
+import { getUserFederalStatus } from "@/utils/paypal";
+import { getStrucBoost } from "@/utils/village";
 
 /**
  * Checks if an item is consumable outside of combat.
@@ -105,7 +105,7 @@ export const calcMaxMaterials = (user: UserData) => {
  * @param homeStorage - The storage capacity of the home.
  * @returns The maximum number of materials that can be stored in house.
  */
-export const calcMaxHouseMaterials = (user: UserData, homeStorage: number) => {
+export const calcMaxHouseMaterials = (_user: UserData, homeStorage: number) => {
   return Math.max(0, homeStorage - 10);
 };
 

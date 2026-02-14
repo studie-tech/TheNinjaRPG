@@ -18,6 +18,7 @@ Sentry.init({
   // Which errors to ignore from frontend
   ignoreErrors: [
     "window.ethereum",
+    "Cannot redefine property: walletRouter", // Cryptocurrency wallet extension error - occurs when wallet extensions (MetaMask, Coinbase Wallet, etc.) conflict or reinitialize
     "ClerkJS: Token refresh failed",
     "Converting circular structure to JSON",
     "Uncaught NetworkError: Failed to execute 'importScripts' on 'WorkerGlobalScope'",
@@ -25,6 +26,7 @@ Sentry.init({
     "Java bridge method invocation error",
     "Java object is gone", // Android WebView JavaScript-Java bridge error - occurs when password managers/autofill services scan for forms and the native component is garbage collected
     "Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.",
+    "The object can not be found here.", // Safari's version of the above removeChild error (DOMException code 8) - DOM modified externally during React reconciliation
     "Failed to execute 'insertBefore' on 'Node': The node before which the new node is to be inserted is not a child of this node.", // DOM modified externally (browser extensions, third-party scripts)
     "GME Provider is disconnected or locked", // timeout error
     "Connection closed", // timeout error
@@ -55,14 +57,23 @@ Sentry.init({
     "Can not send postrobot", // PayPal SDK postrobot error - alternate format
     "Cannot set properties of undefined (setting 'iframeReady')", // Usercentrics (uc.js) consent management error - third-party script timing issue
     "Failed to fetch", // Network errors during navigation - occurs when user navigates away while fetch is in-flight (common on mobile)
+    "network error", // Chrome/Android network error - occurs when fetch fails due to network issues on mobile devices
     /^Load failed/, // iOS Safari network error - occurs when device goes to sleep, network changes, or CDN requests fail (may include domain suffix)
     "Clerk: Failed to load Clerk", // Clerk script load failure - typically on very old browsers (Android 5.x, Chrome 95) that don't support modern JS
     "failed to load script", // Clerk's underlying script loading error (cause of the above) - network issues on mobile devices
     "Illegal invocation", // Third-party script error (Facebook in-app browser or Cookiebot)
     "Can't find variable: EmptyRanges", // Browser extension error (CodeMirror-based extensions)
+    "Can't find variable: DarkReader", // DarkReader browser extension error - dark mode extension may fail to initialize
     "postMessage is not a function", // Clerk internal error - occurs in clerk.browser.js with Web Workers
     "module factory is not available", // Turbopack runtime error - occurs when browser caches stale JS chunks after deployment
     "Cannot assign to read only property 'then' of object", // Turbopack Promise assignment error - occurs when browser extensions freeze Promise objects or stale caches cause conflicts
+    "Failed to connect to MetaMask", // MetaMask extension error - occurs when extension is disabled/uninstalled but inpage.js still runs
+    "No extension found with id:", // Browser extension not found error - occurs when any extension (MetaMask, etc.) is disabled after page load
+    "ResizeObserver loop limit exceeded", // Benign browser warning from ResizeObserver specification - occurs when Radix UI components (Popover, Select) trigger layout changes during positioning
+    "ResizeObserver loop completed with undelivered notifications", // Alternative format of the same benign ResizeObserver warning (used by some browsers)
+    "undefined is not an object (evaluating 'window.webkit.messageHandlers')", // iOS WebKit bridge error - third-party scripts attempting to use iOS native bridge APIs that aren't available in web browser context
+    "TransformStream is not defined", // Older browser compatibility error (Firefox Mobile <102, some Android browsers) - AI chat feature uses @ai-sdk/react which requires TransformStream for SSE parsing. Users see fallback UX (chat unavailable).
+    /No ack for postMessage .* in \d+ms/, // Third-party SDK postMessage timeout - occurs when Clerk or similar services fail to receive acknowledgment for cross-origin frame communication (THENINJARPG-2FV)
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -99,6 +110,21 @@ Sentry.init({
     }
     if (isClerkSyntaxError(event)) {
       return null; // Drop Clerk script parsing errors (network truncation)
+    }
+    if (isWalletExtensionError(event)) {
+      return null; // Drop cryptocurrency wallet extension errors (MetaMask, etc.)
+    }
+    if (isThirdPartyStackOverflowError(event)) {
+      return null; // Drop third-party stack overflow errors (tracking scripts)
+    }
+    if (isServerActionSsoCallbackError(event)) {
+      return null; // Drop server action errors on SSO callback page (transient network issues)
+    }
+    if (isWebKitMessageHandlersError(event)) {
+      return null; // Drop iOS WebKit bridge errors from third-party scripts
+    }
+    if (isSpacetimeDBWebSocketConnectingError(event)) {
+      return null; // Drop SpacetimeDB WebSocket timing errors (transient)
     }
     return event;
   },
@@ -180,7 +206,7 @@ function isLocalStorageAccessError(err: unknown): boolean {
 function isNetworkFetchError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message ?? "";
-  return msg.startsWith("Load failed") || msg === "Failed to fetch";
+  return msg.startsWith("Load failed") || msg === "Failed to fetch" || msg === "network error";
 }
 
 /**
@@ -260,9 +286,14 @@ function isGoogleTranslateError(event: Sentry.ErrorEvent): boolean {
  * Check if an error is a PayPal SDK cleanup error that should be filtered.
  * These occur when users navigate away while PayPal buttons are initializing,
  * or when users close the PayPal popup before the transaction completes.
+ *
+ * THENINJARPG-278: Also filters stack overflow errors from PayPal SDK's zoid library,
+ * which can occur during component cleanup when the internal promise handlers
+ * (dispatch/resolve/reject) enter infinite recursion.
  */
 function isPayPalSdkError(event: Sentry.ErrorEvent): boolean {
   const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
   // Check message for PayPal-related error patterns
@@ -294,6 +325,17 @@ function isPayPalSdkError(event: Sentry.ErrorEvent): boolean {
     return true;
   }
 
+  // THENINJARPG-278: Filter PayPal SDK stack overflow errors
+  // These occur when zoid's internal promise handlers (dispatch/resolve) enter infinite
+  // recursion during component cleanup. This is an internal SDK bug we cannot fix.
+  // UX note: Users don't see this error - it occurs during navigation/cleanup.
+  const isStackOverflow =
+    errorType === "RangeError" && message.includes("Maximum call stack size exceeded");
+
+  if (isStackOverflow && isFromPayPalSdk) {
+    return true;
+  }
+
   return false;
 }
 
@@ -315,7 +357,23 @@ function isThirdPartyInjectedError(event: Sentry.ErrorEvent): boolean {
       frame.abs_path?.includes("cc.js"),
   );
 
-  return isInjectedScript && message.includes("Illegal invocation");
+  // Filter Illegal invocation errors from any injected script
+  if (isInjectedScript && message.includes("Illegal invocation")) {
+    return true;
+  }
+
+  // Filter Cookiebot-specific errors (cc.js) when manipulating DOM elements
+  // THENINJARPG-23Y: sortBannerButtons tries to set innerHTML on null element
+  const isCookiebotScript = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("cc.js") || frame.abs_path?.includes("cc.js"),
+  );
+
+  if (isCookiebotScript && message.includes("Cannot set properties of null")) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -359,12 +417,15 @@ function isDataCloneError(event: Sentry.ErrorEvent): boolean {
 }
 
 /**
- * Check if an error is a Replicate API gateway error that should be filtered.
- * These occur when Replicate's API returns 502/503/504 errors during image generation.
- * These are transient third-party infrastructure issues we cannot fix.
+ * Check if an error is a Replicate API error that should be filtered.
+ * This includes:
+ * - Gateway errors (502/503/504) - transient infrastructure issues
+ * - Safety filter errors (E005) - expected when users try to generate sensitive content
  *
  * UX note: These errors are still displayed to users via the global tRPC error handler
  * in Provider.tsx which shows a toast notification. This filter only suppresses Sentry logging.
+ *
+ * THENINJARPG-2D1: Added safety filter error filtering for Replicate's content moderation.
  */
 const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -375,12 +436,21 @@ const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
   const isReplicateDomain =
     /(?:^|[/:])api\.replicate\.com(?:[/:$?]|$)/.test(message);
 
-  return (
+  const isGatewayError =
     isReplicateDomain &&
     (message.includes("502 Bad Gateway") ||
       message.includes("503 Service") ||
-      message.includes("504 Gateway"))
-  );
+      message.includes("504 Gateway"));
+
+  // Match Replicate safety filter errors (E005) - these occur when content moderation
+  // flags the input or output as sensitive. This is expected user behavior, not a bug.
+  // Error format: "Prediction failed: The input or output was flagged as sensitive. Please try again with different inputs. (E005)"
+  const isSafetyFilterError =
+    message.includes("Prediction failed") &&
+    message.includes("flagged as sensitive") &&
+    message.includes("E005");
+
+  return isGatewayError || isSafetyFilterError;
 };
 
 /**
@@ -411,11 +481,14 @@ const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
   // Also check for "Failed to fetch" as a related network error
   const isFailedToFetch = message === "Failed to fetch";
 
+  // Check for Chrome/Android "network error" message
+  const isNetworkError = message === "network error";
+
   // These errors typically have no stack trace and are TypeError
   const isNetworkErrorShape =
     !hasStackTrace && (errorType === "TypeError" || errorType === "");
 
-  return (isLoadFailed || isFailedToFetch) && isNetworkErrorShape;
+  return (isLoadFailed || isFailedToFetch || isNetworkError) && isNetworkErrorShape;
 };
 
 /**
@@ -523,6 +596,179 @@ const isClerkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
       frame.abs_path?.includes("@clerk/clerk-js") ||
       frame.abs_path?.includes("clerk.browser"),
   );
+};
+
+/**
+ * Check if an error is from a cryptocurrency wallet browser extension.
+ * These occur when users have MetaMask or similar wallet extensions installed,
+ * and the extension's injected script encounters an error independently of our app.
+ *
+ * UX note: These errors are not actionable - they originate from third-party
+ * browser extensions we don't control. Users don't see these errors as they
+ * occur in the extension's isolated context. The application has no Web3/
+ * cryptocurrency functionality.
+ */
+const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Check for wallet-specific error patterns
+  const isWalletErrorMessage =
+    message.includes("Failed to connect to MetaMask") ||
+    message.includes("No extension found with id:");
+
+  if (isWalletErrorMessage) {
+    return true;
+  }
+
+  // Check if error originates from wallet extension's injected script
+  // - inpage.js is the common name for wallet extension content scripts
+  // - app:///scripts/ is the URL scheme for browser extension injected scripts
+  const isFromWalletScript = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("inpage.js") ||
+      frame.filename?.startsWith("app:///scripts/") ||
+      frame.abs_path?.includes("inpage.js") ||
+      frame.abs_path?.startsWith("app:///scripts/"),
+  );
+
+  return isFromWalletScript;
+};
+
+/**
+ * Check if an error is a Next.js server action reducer error on the SSO callback page.
+ * These occur when network issues (transient CDN errors, mobile network changes) cause
+ * server action responses to fail during the SSO authentication flow on UC Browser and mobile devices.
+ *
+ * UX note: Users experience a temporary error during SSO callback, but can retry or
+ * manually navigate to complete authentication. This is a transient infrastructure issue
+ * that doesn't indicate a bug in our code.
+ *
+ * THENINJARPG-1NM: Filter server action errors specifically on the SSO callback URL.
+ */
+const isServerActionSsoCallbackError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const url = event.request?.url ?? "";
+
+  // Must be the specific Next.js server action error message
+  if (!message.includes("An unexpected response was received from the server")) {
+    return false;
+  }
+
+  // Must be on the SSO callback URL path
+  // Matches: https://www.theninja-rpg.com/signup/sso-callback or similar paths
+  const isSsoCallbackUrl =
+    url.includes("/signup/sso-callback") || url.includes("/signin/sso-callback");
+
+  return isSsoCallbackUrl;
+};
+
+/**
+ * Check if an error is a "Maximum call stack size exceeded" RangeError from third-party scripts.
+ * These occur when third-party tracking scripts (TikTok Pixel, Google Analytics, Facebook Pixel, etc.)
+ * cause infinite recursion due to buggy event handlers or circular observer patterns.
+ *
+ * UX note: These errors are not visible to users and do not affect application functionality.
+ * They occur in isolated third-party script contexts and are caught by the global error handler.
+ * Since we have no control over third-party script code, filtering is the appropriate action.
+ *
+ * THENINJARPG-1XW: Filter stack overflow errors from third-party tracking scripts.
+ */
+const isThirdPartyStackOverflowError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must be a RangeError with "Maximum call stack size exceeded" message
+  if (errorType !== "RangeError") return false;
+  if (!message.includes("Maximum call stack size exceeded")) return false;
+
+  // Third-party cross-origin scripts produce errors with no useful stack trace
+  // (empty frames or only anonymous frames due to CORS restrictions)
+  if (stackFrames.length === 0) return true;
+
+  // Check if all frames are anonymous/unidentifiable (third-party pattern)
+  const hasNoMeaningfulStackTrace = stackFrames.every((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+    const func = frame.function ?? "";
+
+    // No identifiable source file
+    if (!filename && !absPath) return true;
+
+    // Anonymous script markers
+    if (filename === "<anonymous>" || absPath === "<anonymous>") return true;
+
+    // Check for the "undefined:? in ?" pattern (function is "?" with no filename)
+    if (func === "?" && !filename && !absPath) return true;
+
+    return false;
+  });
+
+  return hasNoMeaningfulStackTrace;
+};
+
+/**
+ * Check if an error is an iOS WebKit messageHandlers error.
+ * These occur when third-party scripts attempt to access the iOS WKWebView
+ * JavaScript-to-native bridge API on devices where it's not available.
+ *
+ * UX note: These errors are not visible to users and do not affect application
+ * functionality. They occur in third-party script contexts (analytics, tracking,
+ * consent management, Sentry SDK) that probe for native app features.
+ *
+ * THENINJARPG-2FP: Filter iOS WebKit bridge errors from third-party scripts.
+ */
+const isWebKitMessageHandlersError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+
+  // Check for webkit.messageHandlers access errors (various browser error formats)
+  return (
+    message.includes("window.webkit.messageHandlers") ||
+    message.includes("webkit.messageHandlers")
+  );
+};
+
+/**
+ * Check if an error is a SpacetimeDB WebSocket "Still in CONNECTING state" error.
+ * These occur when the SpacetimeDB SDK tries to send a message on a WebSocket that
+ * hasn't fully transitioned to the OPEN state yet. This is a race condition in the
+ * SDK's internal connection handling that can occur on slower networks or mobile devices.
+ *
+ * UX note: These errors are transient and handled gracefully:
+ * - The useTowerDefense hook shows a "Connecting..." state during connection
+ * - Connection errors trigger a mode change back to "lobby" with an error message
+ * - Users can retry by clicking the "Start Game" button again
+ * - The SpacetimeDB client has waitForWebSocketReady() checks for critical operations
+ *
+ * We cannot fix this in the SpacetimeDB SDK itself as it's a third-party library.
+ * The error originates from the SDK's websocket_decompress_adapter.ts send() method.
+ *
+ * THENINJARPG-2CN: Filter SpacetimeDB WebSocket timing errors from Sentry.
+ */
+const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must be an InvalidStateError with the specific WebSocket CONNECTING message
+  if (errorType !== "InvalidStateError" && errorType !== "DOMException") return false;
+  if (!message.includes("Still in CONNECTING state")) return false;
+
+  // Additional check: verify it's from SpacetimeDB SDK (websocket_decompress_adapter or db_connection_impl)
+  const isFromSpacetimeDB = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("spacetimedb") ||
+      frame.filename?.includes("websocket_decompress_adapter") ||
+      frame.filename?.includes("db_connection_impl") ||
+      frame.abs_path?.includes("spacetimedb") ||
+      frame.abs_path?.includes("websocket_decompress_adapter") ||
+      frame.abs_path?.includes("db_connection_impl"),
+  );
+
+  // If we can verify it's from SpacetimeDB, filter it
+  // If stack trace is empty/anonymized (production builds), still filter based on message
+  return isFromSpacetimeDB || stackFrames.length === 0;
 };
 
 function ensureBrowserErrorHandler() {

@@ -1,16 +1,20 @@
-import { FED_NORMAL_REPS_COST } from "@/drizzle/constants";
-import { FED_SILVER_REPS_COST } from "@/drizzle/constants";
-import { FED_GOLD_REPS_COST } from "@/drizzle/constants";
-import { FED_NORMAL_JUTSU_LOADOUTS } from "@/drizzle/constants";
-import { FED_SILVER_JUTSU_LOADOUTS } from "@/drizzle/constants";
-import { FED_GOLD_JUTSU_LOADOUTS } from "@/drizzle/constants";
-import { FED_NORMAL_ITEM_LOADOUTS } from "@/drizzle/constants";
-import { FED_SILVER_ITEM_LOADOUTS } from "@/drizzle/constants";
-import { FED_GOLD_ITEM_LOADOUTS } from "@/drizzle/constants";
-import { PAYPAL_DISCOUNT_PERCENT } from "@/drizzle/constants";
-import { MAX_REPS_PER_MONTH, MAX_REPS_EXTRA_PER_MONTH } from "@/drizzle/constants";
-import type { FederalStatus } from "@/drizzle/schema";
-import type { UserData } from "@/drizzle/schema";
+import {
+  FED_GOLD_ITEM_LOADOUTS,
+  FED_GOLD_JUTSU_LOADOUTS,
+  FED_GOLD_REPS_COST,
+  FED_ITEM_LOADOUTS_BASE,
+  FED_JUTSU_LOADOUTS_BASE,
+  FED_NORMAL_ITEM_LOADOUTS,
+  FED_NORMAL_JUTSU_LOADOUTS,
+  FED_NORMAL_REPS_COST,
+  FED_SILVER_ITEM_LOADOUTS,
+  FED_SILVER_JUTSU_LOADOUTS,
+  FED_SILVER_REPS_COST,
+  MAX_REPS_EXTRA_PER_MONTH,
+  MAX_REPS_PER_MONTH,
+  PAYPAL_DISCOUNT_PERCENT,
+} from "@/drizzle/constants";
+import type { FederalStatus, UserData } from "@/drizzle/schema";
 
 export const getUserFederalStatus = (
   user: Pick<UserData, "staffAccount" | "federalStatus">,
@@ -25,7 +29,7 @@ export const getUserFederalStatus = (
 export const fedJutsuLoadouts = (
   user?: Pick<UserData, "staffAccount" | "federalStatus">,
 ) => {
-  const base = 0;
+  const base = FED_JUTSU_LOADOUTS_BASE;
   if (!user) return base;
   const status = getUserFederalStatus(user);
   switch (status) {
@@ -42,7 +46,7 @@ export const fedJutsuLoadouts = (
 export const fedItemLoadouts = (
   user?: Pick<UserData, "staffAccount" | "federalStatus">,
 ) => {
-  const base = 0;
+  const base = FED_ITEM_LOADOUTS_BASE;
   if (!user) return base;
   const status = getUserFederalStatus(user);
   switch (status) {
@@ -74,14 +78,14 @@ export const dynamicMonthlyRepCap = (user?: UserData): number => {
 
 export const reps2dollars = (reps: number) => {
   const discount = (100 - PAYPAL_DISCOUNT_PERCENT) / 100;
-  const base = Math.pow(reps, 1 / 1.305);
+  const base = reps ** (1 / 1.305);
   return Math.ceil(base * discount * 10) / 10;
 };
 
 export const dollars2reps = (dollars: number) => {
   const discountFactor = (100 - PAYPAL_DISCOUNT_PERCENT) / 100;
   const s = dollars / discountFactor;
-  const reps = Math.floor(Math.pow(s, 1.305));
+  const reps = Math.floor(s ** 1.305);
   return reps;
 };
 

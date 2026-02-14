@@ -1,6 +1,18 @@
 "use client";
-import React, { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type React from "react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
@@ -10,22 +22,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { cn } from "src/libs/shadui";
-import { api } from "@/app/_trpc/client";
+import { Textarea } from "@/components/ui/textarea";
 import Loader from "@/layout/Loader";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { generateAudioSchema, type GenerateAudioInput } from "@/validators/audio";
+import { generateAudioSchema } from "@/validators/audio";
 
 interface ContentAudioSelectorProps {
   relationId: string;
@@ -37,7 +39,11 @@ const ContentAudioSelector: React.FC<ContentAudioSelectorProps> = (props) => {
   const { relationId, value, onChange } = props;
   const utils = api.useUtils();
   const [isOpen, setIsOpen] = useState(false);
-  const form = useForm<GenerateAudioInput>({
+  const form = useForm<
+    z.input<typeof generateAudioSchema>,
+    unknown,
+    z.output<typeof generateAudioSchema>
+  >({
     resolver: zodResolver(generateAudioSchema),
     defaultValues: {
       relationId,
@@ -76,11 +82,11 @@ const ContentAudioSelector: React.FC<ContentAudioSelectorProps> = (props) => {
     <div className="flex flex-col justify-start">
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
-          <div className="flex flex-col gap-1 items-center">
-            <Button variant="outline" className="w-full justify-between h-10">
+          <div className="flex flex-col items-center gap-1">
+            <Button variant="outline" className="h-10 w-full justify-between">
               Pick / Generate Sound
             </Button>
-            <Label className="text-xs text-muted-foreground">Current Sound</Label>
+            <Label className="text-muted-foreground text-xs">Current Sound</Label>
           </div>
         </DialogTrigger>
         <DialogContent className="max-w-4xl">
@@ -144,7 +150,7 @@ const ContentAudioSelector: React.FC<ContentAudioSelectorProps> = (props) => {
                               max={5}
                               step={1}
                               className="w-28"
-                              value={field.value}
+                              value={field.value as number}
                               onChange={(e) =>
                                 field.onChange(
                                   Number.isFinite(e.currentTarget.valueAsNumber)
@@ -154,7 +160,7 @@ const ContentAudioSelector: React.FC<ContentAudioSelectorProps> = (props) => {
                               }
                             />
                           </FormControl>
-                          <span className="text-sm text-muted-foreground">seconds</span>
+                          <span className="text-muted-foreground text-sm">seconds</span>
                         </div>
                         <FormMessage />
                       </FormItem>
@@ -168,25 +174,26 @@ const ContentAudioSelector: React.FC<ContentAudioSelectorProps> = (props) => {
             </div>
 
             <div className="space-y-2">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-96 overflow-auto">
+              <div className="grid max-h-96 grid-cols-2 gap-3 overflow-auto md:grid-cols-3">
                 {items.map((s) => {
                   const selected = value && s.url && value === s.url;
                   return (
                     <div
                       key={s.id}
                       className={cn(
-                        "border rounded p-2 space-y-2",
+                        "space-y-2 rounded border p-2",
                         selected ? "border-green-500 bg-green-50" : "",
                       )}
                     >
+                      {/* biome-ignore lint/a11y/useMediaCaption: Audio selector for content - no captions needed for music/sfx */}
                       <audio src={s.url ?? undefined} controls className="w-full" />
                       {s.prompt ? (
-                        <div className="text-xs text-muted-foreground break-words">
+                        <div className="break-words text-muted-foreground text-xs">
                           {s.prompt}
                         </div>
                       ) : null}
                       {s.negativePrompt ? (
-                        <div className="text-[10px] text-muted-foreground break-words">
+                        <div className="break-words text-[10px] text-muted-foreground">
                           − {s.negativePrompt}
                         </div>
                       ) : null}

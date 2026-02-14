@@ -1,10 +1,13 @@
-import { NextResponse } from "next/server";
-import { and, lt, inArray, gt } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
-import { userReport, userData } from "@/drizzle/schema";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
+import { and, gt, inArray, lt } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { userData, userReport } from "@/drizzle/schema";
+import {
+  handleEndpointError,
+  lockWithDailyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
+import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "daily-reports";
 
@@ -205,6 +208,6 @@ export async function GET() {
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

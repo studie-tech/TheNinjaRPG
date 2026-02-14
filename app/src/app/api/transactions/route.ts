@@ -1,15 +1,17 @@
-import { nanoid } from "nanoid";
-import { drizzleDB } from "@/server/db";
-import { getPaypalAccessToken } from "@/server/api/routers/paypal";
-import { syncTransactions } from "@/server/api/routers/paypal";
-import { getPaypalTransactions } from "@/server/api/routers/paypal";
-import { cookies } from "next/headers";
-import { dollars2reps } from "@/utils/paypal";
-import { eq, gt, and, isNull, isNotNull } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { updateReps } from "@/routers/paypal";
+import { nanoid } from "nanoid";
+import { cookies } from "next/headers";
 import { paypalTransaction, userData } from "@/drizzle/schema";
-import { lockWithGameTimer, handleEndpointError } from "@/libs/gamesettings";
+import { handleEndpointError, lockWithGameTimer } from "@/libs/gamesettings";
+import { updateReps } from "@/routers/paypal";
+import {
+  getPaypalAccessToken,
+  getPaypalTransactions,
+  syncTransactions,
+} from "@/server/api/routers/paypal";
+import { drizzleDB } from "@/server/db";
+import { dollars2reps } from "@/utils/paypal";
 
 export async function GET() {
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
@@ -90,6 +92,6 @@ export async function GET() {
     // Return information
     return Response.json(`OK. ${msgs.join(", ")}`);
   } catch (cause) {
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

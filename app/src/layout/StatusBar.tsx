@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import type React from "react";
+import { useEffect, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -6,8 +7,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { REGEN_SECONDS } from "@/drizzle/constants";
-import { secondsPassed } from "@/utils/time";
 import type { UserStatus } from "@/drizzle/schema";
+import { secondsPassed } from "@/utils/time";
 
 interface StatusBarProps {
   title: string;
@@ -128,7 +129,7 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
               <div
                 className={`h-full w-3/6 ${color}`}
                 style={{
-                  width: state.width.toString() + "%",
+                  width: `${state.width.toString()}%`,
                 }}
               ></div>
             </div>

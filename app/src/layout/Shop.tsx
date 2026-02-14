@@ -1,27 +1,27 @@
 import { useState } from "react";
-import Image from "@/layout/Image";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import {
-  ItemShopFiltering,
-  useShopFiltering,
-  getShopFilter,
-} from "@/layout/ItemShopFiltering";
-import { ActionSelector } from "@/layout/CombatActions";
-import { UncontrolledSliderField } from "@/layout/SliderField";
-import { useAwake } from "@/utils/routing";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { getStrucBoost } from "@/utils/village";
-import { useTutorialStep } from "@/hooks/tutorial";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
 } from "@/drizzle/constants";
-import type { ItemType, Item } from "@/drizzle/schema";
+import type { Item, ItemType } from "@/drizzle/schema";
+import { useTutorialStep } from "@/hooks/tutorial";
+import { ActionSelector } from "@/layout/CombatActions";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import {
+  getShopFilter,
+  ItemShopFiltering,
+  useShopFiltering,
+} from "@/layout/ItemShopFiltering";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import { UncontrolledSliderField } from "@/layout/SliderField";
+import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import { useAwake } from "@/utils/routing";
+import { getStrucBoost } from "@/utils/village";
 
 interface ShopProps {
   userData: NonNullable<UserWithRelations>;
@@ -72,8 +72,7 @@ const Shop: React.FC<ShopProps> = (props) => {
     },
   );
   const allItems = items?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .filter(
       (item) =>
         !item.expireFromStoreAt || new Date(item.expireFromStoreAt) > new Date(),
@@ -149,8 +148,8 @@ const Shop: React.FC<ShopProps> = (props) => {
       : []),
   ];
   // Simple cost string for the purchase button
-  const costString = "Buy for " + costs.join(", ");
-  const missingString = "Need " + missing.join(", ");
+  const costString = `Buy for ${costs.join(", ")}`;
+  const missingString = `Need ${missing.join(", ")}`;
 
   // Show loaders
   if (!isAwake) return <Loader explanation="Redirecting because not awake" />;
@@ -192,7 +191,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                 selectedId={item?.id}
                 labelSingles={true}
                 onClick={(id) => {
-                  if (id == item?.id) {
+                  if (id === item?.id) {
                     setItem(undefined);
                     setIsOpen(false);
                   } else {
@@ -230,9 +229,9 @@ const Shop: React.FC<ShopProps> = (props) => {
                       : "bg-red-600 text-white hover:bg-red-700"
                   }
                 >
-                  <div className="pb-3 grid grid-cols-2 gap-2">
-                    <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3">
-                      <h4 className="font-semibold text-sm mb-2">Your Currency</h4>
+                  <div className="grid grid-cols-2 gap-2 pb-3">
+                    <div className="rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
+                      <h4 className="mb-2 font-semibold text-sm">Your Currency</h4>
                       <div className="grid grid-cols-1 gap-1 text-sm">
                         <div className="flex justify-between">
                           <span>Ryo:</span>
@@ -257,14 +256,14 @@ const Shop: React.FC<ShopProps> = (props) => {
                       </div>
                     </div>
                     {discounts.length > 0 && (
-                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                        <h4 className="font-semibold text-sm mb-2 text-green-800 dark:text-green-200">
+                      <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
+                        <h4 className="mb-2 font-semibold text-green-800 text-sm dark:text-green-200">
                           Active Discounts ({totalDiscount}% total)
                         </h4>
                         <div className="space-y-1 text-sm">
-                          {discounts.map((discount, index) => (
+                          {discounts.map((discount) => (
                             <div
-                              key={index}
+                              key={discount.label}
                               className="flex justify-between text-green-700 dark:text-green-300"
                             >
                               <span className="capitalize">{discount.label}:</span>

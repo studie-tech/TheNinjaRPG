@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import type { ChartData, ChartOptions } from "chart.js";
 import { Chart as ChartJS, registerables } from "chart.js";
 import { WordCloudController, WordElement } from "chartjs-chart-wordcloud";
-import type { ChartData, ChartOptions } from "chart.js";
+import React, { useEffect, useRef } from "react";
 
 // Register Chart.js components and word cloud elements
 ChartJS.register(...registerables, WordCloudController, WordElement);
@@ -240,7 +240,6 @@ const WordCloud: React.FC<WordCloudProps> = (props) => {
       labels: words.map((word) => word.text),
       data: words.map((word) => word.value),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.text]);
 
   // Function to create or update the chart
@@ -278,9 +277,7 @@ const WordCloud: React.FC<WordCloudProps> = (props) => {
           },
           tooltip: {
             callbacks: {
-              label: function (context) {
-                return `${context.label}: ${String(context.raw)}`;
-              },
+              label: (context) => `${context.label}: ${String(context.raw)}`,
             },
           },
         },
@@ -308,7 +305,6 @@ const WordCloud: React.FC<WordCloudProps> = (props) => {
       }, 100);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [processedData]);
 
   // Cleanup on unmount

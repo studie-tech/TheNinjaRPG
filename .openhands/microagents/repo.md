@@ -23,7 +23,8 @@ This project is **TheNinja-RPG**, a browser-based RPG game built with Next.js 15
 
 - `make build` - Build the Next.js application
 - `make test` - Run unit tests with vitest
-- `make lint` - Run ESLint on the codebase
+- `make lint` - Run biome linting on the codebase
+- `make format` - Run biome formatting on the codebase
 - `make install` - Install dependencies with bun
 - `make makemigrations` - Generate database migration files (after updating schema.ts)
 - `make bun add [package]` - Add new package dependency

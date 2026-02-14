@@ -1,58 +1,102 @@
-import { dmgConfig as config } from "./constants";
-import { VisualTag } from "@/validators/combat";
-import { findUser, findBarrier, getItem } from "./util";
-import { collapseConsequences, sortEffects } from "./util";
-import { calcApplyRatio } from "./util";
-import { calcEffectRoundInfo, isEffectActive } from "./util";
 import { nanoid } from "nanoid";
-import { clone, move, heal, damageBarrier, damageUser, calcDmgModifier } from "./tags";
-import {
-  absorb,
-  reflect,
-  wound,
-  recoil,
-  afterburn,
-  lifesteal,
-  drain,
-  shield,
-  immunity,
-  poison,
-  finalStand,
-  increaseRange,
-  increaseCooldown,
-  decreaseCooldown,
-} from "./tags";
-import { increaseStats, decreaseStats, copy, mirror } from "./tags";
-import { increaseDamageGiven, decreaseDamageGiven } from "./tags";
-import { increaseDamageTaken, decreaseDamageTaken } from "./tags";
-import { increaseHealGiven, decreaseHealGiven } from "./tags";
-import { increasepoolcost, decreasepoolcost } from "./tags";
-import { flee, fleePrevent } from "./tags";
-import { stun, stunPrevent, onehitkill, onehitkillPrevent, movePrevent } from "./tags";
-import { seal, sealPrevent, sealCheck, rob, robPrevent, stealth } from "./tags";
-import {
-  clear,
-  cleanse,
-  summon,
-  summonPrevent,
-  buffPrevent,
-  weakness,
-  timeCompression,
-  timeDilation,
-  redirection,
-} from "./tags";
-import { cleansePrevent, clearPrevent, healPrevent, debuffPrevent } from "./tags";
-import { updateStatUsage, injectjutsus, elementalseal } from "./tags";
 import {
   BATTLE_TAG_STACKING,
-  ID_ANIMATION_SMOKE,
   DURABILITY_USABILITY_THR,
+  ID_ANIMATION_SMOKE,
   NO_DURABILITY_LOSS_COMBATS,
+  POST_DAMAGE_MODIFIER_TYPES,
 } from "@/drizzle/constants";
-import type { BattleUserState } from "./types";
-import type { GroundEffect, UserEffect, ActionEffect, BattleEffect } from "./types";
-import type { CompleteBattle, Consequence, CombatAction } from "./types";
 import type { ShieldTagType } from "@/validators/combat";
+import { VisualTag } from "@/validators/combat";
+import { dmgConfig as config, damageModifierTypes } from "./constants";
+import {
+  absorb,
+  afterburn,
+  buffPrevent,
+  calcDmgModifier,
+  cleanse,
+  cleansePrevent,
+  clear,
+  clearPrevent,
+  clone,
+  copy,
+  damageBarrier,
+  damageUser,
+  debuffPrevent,
+  decreaseCooldown,
+  decreaseDamageGiven,
+  decreaseDamageTaken,
+  decreaseHealGiven,
+  decreaseMaxPools,
+  decreasepoolcost,
+  decreaseStats,
+  drain,
+  elementalseal,
+  finalStand,
+  flee,
+  fleePrevent,
+  heal,
+  healPrevent,
+  immunity,
+  increaseCooldown,
+  increaseDamageGiven,
+  increaseDamageTaken,
+  increaseHealGiven,
+  increaseMaxPools,
+  increasepoolcost,
+  increaseRange,
+  increaseStats,
+  injectjutsus,
+  lifesteal,
+  mirror,
+  move,
+  movePrevent,
+  onehitkill,
+  onehitkillPrevent,
+  poison,
+  recoil,
+  redirection,
+  reflect,
+  rob,
+  robPrevent,
+  seal,
+  sealCheck,
+  sealPrevent,
+  shield,
+  stealth,
+  stun,
+  stunPrevent,
+  summon,
+  summonPrevent,
+  timeCompression,
+  timeDilation,
+  updateStatUsage,
+  weakness,
+  wound,
+} from "./tags";
+import type {
+  ActionEffect,
+  BattleEffect,
+  BattleUserState,
+  CombatAction,
+  CompleteBattle,
+  Consequence,
+  GroundEffect,
+  UserEffect,
+} from "./types";
+import {
+  applyPoolAdjustmentsToBase,
+  calcApplyRatio,
+  calcEffectRoundInfo,
+  collapseConsequences,
+  findBarrier,
+  findUser,
+  getEffectStage,
+  getItem,
+  isEffectActive,
+  sortEffects,
+} from "./util";
+
 /**
  * Minimal user type for checkFriendlyFire
  */
@@ -60,11 +104,14 @@ type FriendlyFireUser = {
   userId: string;
   isSummon?: boolean;
   controllerId: string;
-  villageId: string | null;
+  direction: "left" | "right";
 };
 
 /**
- * Check whether to apply given effect to a user, based on friendly fire settings
+ * Check whether to apply given effect to a user, based on friendly fire settings.
+ * Uses the 'direction' property to determine teams - users on the same side (left/right)
+ * are allies, users on opposite sides are enemies. This works for all battle types
+ * because direction is set based on userIds (attackers=left) vs targetIds (defenders=right).
  */
 export const checkFriendlyFire = (
   effect: BattleEffect,
@@ -75,46 +122,24 @@ export const checkFriendlyFire = (
   const creator = usersState.find((u) => u.userId === effect.creatorId);
   if (!creator) return false;
 
-  // For summoned units, always check if they belong to the creator
+  // For summoned units, check if they belong to the creator (same team)
   if (target.isSummon) {
     const isFriendly = target.controllerId === creator.userId;
     return effect.friendlyFire === "FRIENDLY" ? isFriendly : !isFriendly;
   }
 
-  // Get unique village IDs from real (non-summoned) users
-  const uniqueVillages = new Set(
-    usersState.filter((u) => !u.isSummon).map((u) => u.villageId),
-  );
-
-  // If all real users are from the same village, treat them as enemies
-  const isIntraVillageBattle = uniqueVillages.size === 1;
-
-  // In same-village battles, everyone except summons is an enemy
-  if (isIntraVillageBattle) {
-    if (!effect.friendlyFire || effect.friendlyFire === "ALL") {
-      return true; // Allow all
-    }
-    if (effect.friendlyFire === "FRIENDLY") {
-      return false; // Block friendly-only effects in intra-village battles
-    }
-    if (effect.friendlyFire === "ENEMIES") {
-      return effect.creatorId !== target.userId; // Only allow targeting others, not self
-    }
-    return false;
-  }
-
-  // In multi-village battles, players from same village are allies
-  const isFriendly = creator.villageId === target.villageId;
+  // Determine if target is friendly based on direction (same side = allies)
+  const isFriendly = creator.direction === target.direction;
 
   // Check if effect should be applied based on friendly fire settings
   if (!effect.friendlyFire || effect.friendlyFire === "ALL") {
     return true; // Allow all
   }
   if (effect.friendlyFire === "FRIENDLY") {
-    return isFriendly; // Only apply to friends (same village)
+    return isFriendly; // Only apply to friends (same direction/team)
   }
   if (effect.friendlyFire === "ENEMIES") {
-    return !isFriendly; // Only apply to enemies (different village)
+    return !isFriendly; // Only apply to enemies (different direction/team)
   }
   return false;
 };
@@ -178,7 +203,7 @@ export const applyEffects = (
     const { startRound, curRound } = calcEffectRoundInfo(e, battle);
     e.castThisRound = startRound === curRound;
     // Process special effects
-    let info: ActionEffect | undefined = undefined;
+    let info: ActionEffect | undefined;
     if (e.type === "move") {
       move(e, usersEffects, newUsersState, newGroundEffects);
     } else {
@@ -290,24 +315,151 @@ export const applyEffects = (
       );
     });
 
-  // Apply all other user effects to their target users
-  usersEffects
+  // Separate non-damage-modifier effects from damage modifier effects
+  // Note: pierce is explicitly excluded here to maintain the sortEffects ordering
+  // where damage modifiers run BEFORE pierce (pierce bypasses damage reduction)
+  // Note: POST_DAMAGE_MODIFIER_TYPES (wound, afterburn, reflect, recoil, lifesteal, absorb)
+  // are excluded here because they must read post-mitigated damage values
+  // Note: increaseheal/decreaseheal are excluded because they modify lifesteal_hp/absorb_hp
+  // which are set by post-damage modifiers
+  const nonDamageModifierEffects = usersEffects
     .filter((e) => e.type !== "mirror" && e.type !== "copy")
-    .sort(sortEffects)
-    .forEach((effect) => {
-      applySingleEffect(
-        consequences,
-        newUsersState,
-        newUsersEffects,
-        newGroundEffects,
-        actionEffects,
-        appliedEffects,
-        battle,
-        actorId,
-        effect,
-        action,
-      );
-    });
+    .filter((e) => !damageModifierTypes.includes(e.type))
+    .filter((e) => !POST_DAMAGE_MODIFIER_TYPES.includes(e.type))
+    .filter((e) => e.type !== "pierce")
+    .filter((e) => e.type !== "increaseheal" && e.type !== "decreaseheal");
+
+  // Separate pierce effects (must run AFTER damage modifiers, BEFORE post-damage modifiers)
+  const pierceEffects = usersEffects.filter((e) => e.type === "pierce");
+
+  // Separate post-damage-modifier effects (wound, afterburn, reflect, recoil, lifesteal, absorb)
+  // These depend on post-mitigated damage values, so they must run after pierce
+  const postDamageModifierEffects = usersEffects.filter((e) =>
+    POST_DAMAGE_MODIFIER_TYPES.includes(e.type),
+  );
+
+  // Separate heal adjustment effects (increaseheal/decreaseheal)
+  // These modify lifesteal_hp/absorb_hp so they must run AFTER post-damage modifiers set those values
+  const healAdjustmentEffects = usersEffects.filter(
+    (e) => e.type === "increaseheal" || e.type === "decreaseheal",
+  );
+
+  // Separate damage modifier effects by stage
+  const stage1DamageModifiers = usersEffects
+    .filter((e) => damageModifierTypes.includes(e.type))
+    .filter((e) => getEffectStage(e) === 1);
+
+  const stage2DamageModifiers = usersEffects
+    .filter((e) => damageModifierTypes.includes(e.type))
+    .filter((e) => getEffectStage(e) === 2);
+
+  // Apply non-damage-modifier effects first (maintains existing ordering)
+  nonDamageModifierEffects.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Apply Stage 1 damage modifiers (equipment/pre-battle effects)
+  stage1DamageModifiers.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Capture baseDamageAfterStage1 for all consequences with damage
+  // This becomes the base for Stage 2 percentage calculations
+  consequences.forEach((consequence) => {
+    if (consequence.damage !== undefined) {
+      consequence.baseDamageAfterStage1 = consequence.damage;
+    }
+  });
+
+  // Apply Stage 2 damage modifiers (in-battle effects)
+  stage2DamageModifiers.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Apply pierce effects AFTER damage modifiers but BEFORE post-damage modifiers
+  // Pierce adds damage that should be included in post-damage calculations (lifesteal, etc.)
+  pierceEffects.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Apply post-damage-modifier effects (wound, afterburn, reflect, recoil, lifesteal, absorb)
+  // These read consequence.damage to calculate their effect, so they must run after pierce
+  // to include pierce damage in their calculations
+  postDamageModifierEffects.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Apply heal adjustment effects (increaseheal/decreaseheal) AFTER post-damage modifiers
+  // These modify lifesteal_hp/absorb_hp values that are set by lifesteal/absorb effects
+  healAdjustmentEffects.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
 
   // Apply consequences to users
   Array.from(consequences.values())
@@ -366,12 +518,14 @@ export const applyEffects = (
         }
 
         // Apply final stand if active
-        const finalStandEffect = usersEffects.find(
-          (e) =>
-            e.type === "finalstand" &&
-            e.targetId === target.userId &&
-            (e.fromType === "bloodline" ? ((e.rounds = 1), true) : (e.rounds ?? 0) > 0),
-        );
+        const finalStandEffect = usersEffects.find((e) => {
+          if (e.type !== "finalstand" || e.targetId !== target.userId) return false;
+          if (e.fromType === "bloodline") {
+            e.rounds = 1;
+            return true;
+          }
+          return (e.rounds ?? 0) > 0;
+        });
         if (finalStandEffect && target.curHealth - remainingDamage < 1) {
           const preventedDamage = remainingDamage - (target.curHealth - 1);
           remainingDamage = target.curHealth - 1;
@@ -563,9 +717,7 @@ export const applyEffects = (
           target.curHealth += absorbAmount;
           target.curHealth = Math.min(target.maxHealth, target.curHealth);
           actionEffects.push({
-            txt: `${target.username} absorbs ${absorbAmount.toFixed(
-              2,
-            )} damage and converts it to health`,
+            txt: `${target.username} absorbs ${absorbAmount.toFixed(2)} damage and converts it to health`,
             color: "green",
           });
         }
@@ -573,9 +725,7 @@ export const applyEffects = (
           target.curStamina += c.absorb_sp;
           target.curStamina = Math.min(target.maxHealth, target.curStamina);
           actionEffects.push({
-            txt: `${target.username} absorbs ${c.absorb_sp.toFixed(
-              2,
-            )} damage and converts it to stamina`,
+            txt: `${target.username} absorbs ${c.absorb_sp.toFixed(2)} damage and converts it to stamina`,
             color: "green",
           });
         }
@@ -583,9 +733,7 @@ export const applyEffects = (
           target.curChakra += c.absorb_cp;
           target.curChakra = Math.min(target.maxHealth, target.curChakra);
           actionEffects.push({
-            txt: `${target.username} absorbs ${c.absorb_cp.toFixed(
-              2,
-            )} damage and converts it to chakra`,
+            txt: `${target.username} absorbs ${c.absorb_cp.toFixed(2)} damage and converts it to chakra`,
             color: "green",
           });
         }
@@ -647,6 +795,26 @@ export const applyEffects = (
       }
     });
 
+  // Apply pool adjustments to base values for all users with pool effects
+  newUsersState.forEach((user) => {
+    const hasPoolEffects = newUsersEffects.some(
+      (e) =>
+        e.targetId === user.userId &&
+        (e.type === "increasemaxpools" || e.type === "decreasemaxpools") &&
+        isEffectActive(e),
+    );
+    // Check if we have tracking fields from a previous adjustment
+    const hadPoolEffects =
+      user._prevHealthAdj !== undefined ||
+      user._prevChakraAdj !== undefined ||
+      user._prevStaminaAdj !== undefined;
+
+    // Call if we have pool effects now OR had them last round (to apply delta on expiration)
+    if (hasPoolEffects || hadPoolEffects) {
+      applyPoolAdjustmentsToBase(user, newUsersEffects);
+    }
+  });
+
   return {
     newBattle: {
       ...battle,
@@ -697,9 +865,9 @@ export const applySingleEffect = (
     (e) => e.type === "seal" && !e.isNew && isEffectActive(e),
   );
   // Bookkeeping
-  let longitude: number | undefined = undefined;
-  let latitude: number | undefined = undefined;
-  let info: ActionEffect | undefined = undefined;
+  let longitude: number | undefined;
+  let latitude: number | undefined;
+  let info: ActionEffect | undefined;
   // Get user now and next
   const curUser = usersState.find((u) => u.userId === effect.creatorId);
   const newUser = newUsersState.find((u) => u.userId === effect.creatorId);
@@ -801,6 +969,10 @@ export const applySingleEffect = (
           info = absorb(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "increasestat") {
           info = increaseStats(effect, newUsersEffects, curTarget);
+        } else if (effect.type === "increasemaxpools") {
+          info = increaseMaxPools(effect, newUsersEffects, newTarget);
+        } else if (effect.type === "decreasemaxpools") {
+          info = decreaseMaxPools(effect, newUsersEffects, newTarget);
         } else if (effect.type === "increasecooldown") {
           info = increaseCooldown(effect, usersEffects, curTarget);
         } else if (effect.type === "decreasecooldown") {
@@ -911,7 +1083,6 @@ export const applySingleEffect = (
     );
   }
 
-  // Process round reduction & tag removal
   if ((isEffectActive(effect) && !effect.fromGround) || effect.type === "visual") {
     effect.isNew = false;
     newUsersEffects.push(effect);

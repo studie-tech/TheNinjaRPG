@@ -1,4 +1,4 @@
-import type { SpriteMaterial, MeshBasicMaterial } from "three";
+import type { MeshBasicMaterial, SpriteMaterial } from "three";
 
 // Wind effect parameters
 export const WIND_CONFIG = {

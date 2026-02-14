@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useEffect } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type React from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { mutateContentSchema } from "@/validators/comments";
-import { api } from "@/app/_trpc/client";
 import type { MutateContentSchema } from "@/validators/comments";
+import { mutateContentSchema } from "@/validators/comments";
 
 interface NindoChangeProps {
   userId: string;

@@ -1,15 +1,15 @@
-import { z } from "zod";
+import { desc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { z } from "zod";
+import { linkPromotion, userData } from "@/drizzle/schema";
+import { fetchUser } from "@/routers/profile";
+import { baseServerResponse, errorResponse } from "@/server/api/trpc";
+import { canReviewLinkPromotions } from "@/utils/permissions";
 import {
-  linkPromotionSchema,
   linkPromotionReviewSchema,
+  linkPromotionSchema,
 } from "@/validators/linkPromotion";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { eq, desc, sql } from "drizzle-orm";
-import { canReviewLinkPromotions } from "@/utils/permissions";
-import { fetchUser } from "@/routers/profile";
-import { linkPromotion, userData } from "@/drizzle/schema";
-import { errorResponse, baseServerResponse } from "@/server/api/trpc";
 
 export const linkPromotionRouter = createTRPCRouter({
   getLinkPromotions: protectedProcedure

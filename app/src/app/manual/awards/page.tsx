@@ -1,15 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import AvatarImage from "@/layout/Avatar";
+import AwardsFiltering, { getFilter, useFiltering } from "@/layout/AwardsFiltering";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import AvatarImage from "@/layout/Avatar";
 import { useInfinitePagination } from "@/libs/pagination";
-import Link from "next/link";
 import type { ArrayElement } from "@/utils/typeutils";
-import AwardsFiltering, { useFiltering, getFilter } from "@/layout/AwardsFiltering";
 
 export default function AwardsManual() {
   // State for infinite scroll
@@ -37,8 +37,7 @@ export default function AwardsManual() {
 
   // Process awards data
   const allAwards = data?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .filter((award) => award.receiver && award.awardedBy)
     .map((award) => ({
       ...award,

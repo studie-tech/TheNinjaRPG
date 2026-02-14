@@ -1,28 +1,29 @@
-import { SpriteMaterial, Sprite, type Texture, type Group } from "three";
-import {
-  createTexture,
-  loadTexture,
-  showAnimation,
-  profiler,
-} from "@/libs/threejs/util";
+import { type Group, Sprite, SpriteMaterial, type Texture } from "three";
 import {
   EFFECTS_LAYER,
   STATUS_LAYER,
-  TD_DAMAGE_NUMBER_POOL_SIZE,
   TD_DAMAGE_NUMBER_LIFETIME,
+  TD_DAMAGE_NUMBER_POOL_SIZE,
   TD_DAMAGE_NUMBER_RISE_SPEED_FACTOR,
   TD_SHURIKEN_IMAGE_URL,
 } from "@/drizzle/constants";
+import {
+  createTexture,
+  loadTexture,
+  profiler,
+  showAnimation,
+} from "@/libs/threejs/util";
 import { calculateHexDistance } from "@/libs/towerDefense/game";
 
 // Projectiles should render above users/enemies (STATUS_LAYER is in front)
 const PROJECTILE_LAYER = STATUS_LAYER - 0.5;
+
 import type { Grid } from "honeycomb-grid";
-import type { TerrainHex } from "../hexgrid";
 import type {
-  TowerDefenseProjectile,
   TowerDefenseEnemy,
+  TowerDefenseProjectile,
 } from "@/validators/towerDefense";
+import type { TerrainHex } from "../hexgrid";
 
 // COST OPTIMIZATION: Projectile speed for client-side interpolation
 // Must match the server-side PROJECTILE_SPEED in lib.rs (5.0 tiles/sec)
@@ -30,8 +31,9 @@ const PROJECTILE_SPEED = 5.0;
 
 // Extended projectile type that includes clientSpawnTime for client-side interpolation
 type ProjectileWithClientSpawn = TowerDefenseProjectile & { clientSpawnTime?: number };
-import type { SpriteMixer } from "@/libs/threejs/SpriteMixer";
+
 import type { GameAsset } from "@/drizzle/schema";
+import type { SpriteMixer } from "@/libs/threejs/SpriteMixer";
 
 // Cache for projectile textures
 const projectileTextureCache = new Map<string, Texture>();
@@ -406,7 +408,7 @@ export const spawnDamageNumber = (info: {
 
       // Rise and fade
       sprite.position.y += riseSpeed * deltaTime;
-      sprite.material.opacity = 1 - Math.pow(age / TD_DAMAGE_NUMBER_LIFETIME, 2); // Accelerate fade-out
+      sprite.material.opacity = 1 - (age / TD_DAMAGE_NUMBER_LIFETIME) ** 2; // Accelerate fade-out
       sprite.updateMatrix();
 
       return true; // Keep updating

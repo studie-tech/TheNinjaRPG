@@ -1,12 +1,13 @@
 import {
+  type Camera,
   EventDispatcher,
+  type Matrix4,
   MOUSE,
   Quaternion,
   Spherical,
   TOUCH,
   Vector2,
   Vector3,
-  type Camera,
 } from "three";
 
 /**
@@ -450,7 +451,7 @@ export class OrbitControls extends EventDispatcher<OrbitControlsEventMap> {
   }
 
   private getZoomScale(): number {
-    return Math.pow(0.95, this.zoomSpeed);
+    return 0.95 ** this.zoomSpeed;
   }
 
   // --- Rotate --------------------------------------------------------------
@@ -467,7 +468,7 @@ export class OrbitControls extends EventDispatcher<OrbitControlsEventMap> {
 
   private panLeft = (() => {
     const v = new Vector3();
-    return (distance: number, objectMatrix: THREE.Matrix4): void => {
+    return (distance: number, objectMatrix: Matrix4): void => {
       v.setFromMatrixColumn(objectMatrix, 0); // X column
       v.multiplyScalar(-distance);
       this.panOffset.add(v);
@@ -476,7 +477,7 @@ export class OrbitControls extends EventDispatcher<OrbitControlsEventMap> {
 
   private panUp = (() => {
     const v = new Vector3();
-    return (distance: number, objectMatrix: THREE.Matrix4): void => {
+    return (distance: number, objectMatrix: Matrix4): void => {
       if (this.screenSpacePanning) {
         v.setFromMatrixColumn(objectMatrix, 1); // Y column
       } else {
@@ -957,10 +958,7 @@ export class OrbitControls extends EventDispatcher<OrbitControlsEventMap> {
       const dy = event.pageY - position.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
       this.dollyEnd.set(0, distance);
-      this.dollyDelta.set(
-        0,
-        Math.pow(this.dollyEnd.y / this.dollyStart.y, this.zoomSpeed),
-      );
+      this.dollyDelta.set(0, (this.dollyEnd.y / this.dollyStart.y) ** this.zoomSpeed);
       this.dollyOut(this.dollyDelta.y);
       this.dollyStart.copy(this.dollyEnd);
     }

@@ -1,30 +1,35 @@
-import { z } from "zod";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { and, desc, eq, sql, inArray } from "drizzle-orm";
-import { poll, pollOption, userPollVote, actionLog } from "@/drizzle/schema";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { baseServerResponse, errorResponse } from "../trpc";
+import { z } from "zod";
+import type { Poll, PollOption } from "@/drizzle/schema";
+import { actionLog, poll, pollOption, userPollVote } from "@/drizzle/schema";
 import { fetchUser } from "@/routers/profile";
+import type { DrizzleClient } from "@/server/db";
 import {
   canAddNonCustomPollOptions,
-  canCreatePolls,
-  canEditPolls,
   canClosePolls,
+  canCreatePolls,
   canDeletePollOptions,
+  canEditPolls,
   canInteractWithPolls,
 } from "@/utils/permissions";
 import {
-  createPollSchema,
-  updatePollSchema,
-  votePollSchema,
   addPollOptionSchema,
+  closePollSchema,
+  createPollSchema,
+  deletePollOptionSchema,
   getPollsSchema,
   retractVoteSchema,
-  closePollSchema,
-  deletePollOptionSchema,
+  updatePollSchema,
+  votePollSchema,
 } from "@/validators/poll";
-import type { DrizzleClient } from "@/server/db";
-import type { Poll, PollOption } from "@/drizzle/schema";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+} from "../trpc";
 
 export const pollRouter = createTRPCRouter({
   // Create a new poll
@@ -598,7 +603,7 @@ async function getVoteCountsForPolls(client: DrizzleClient, pollIds: string[]) {
     if (!optionVoteMap.has(pollId)) {
       optionVoteMap.set(pollId, new Map<string, number>());
     }
-    optionVoteMap.get(pollId)!.set(optionId, count);
+    optionVoteMap.get(pollId)?.set(optionId, count);
   });
 
   const totalVoteMap = new Map<string, number>();

@@ -1,21 +1,20 @@
 "use client";
 
-import { useState, use } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { parseHtml } from "@/utils/parse";
+import { use, useState } from "react";
+import { useForm } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
+import NotFoundPage from "@/app/[...not-found]/page";
+import { CommentOnForum } from "@/layout/Comment";
+import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Pagination from "@/layout/Pagination";
-import ContentBox from "@/layout/ContentBox";
 import RichInput from "@/layout/RichInput";
-import NotFoundPage from "@/app/[...not-found]/page";
-import { showMutationToast } from "@/libs/toast";
 import { forumText } from "@/layout/seoTexts";
-import { CommentOnForum } from "@/layout/Comment";
+import { showMutationToast } from "@/libs/toast";
+import { parseHtml } from "@/utils/parse";
 import { useUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { mutateCommentSchema } from "@/validators/comments";
-import { type MutateCommentSchema } from "@/validators/comments";
+import { type MutateCommentSchema, mutateCommentSchema } from "@/validators/comments";
 
 export default function Thread(props: { params: Promise<{ threadid: string }> }) {
   const params = use(props.params);
@@ -80,7 +79,7 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
       {!userData && (
         <ContentBox
           title="Public Forum"
-          defaultBackHref={thread ? "/forum/" + thread.boardId : "/forum"}
+          defaultBackHref={thread ? `/forum/${thread.boardId}` : "/forum"}
         >
           {forumText}
         </ContentBox>
@@ -89,8 +88,8 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
       {thread && (
         <ContentBox
           title="Forum"
-          defaultBackHref={userData ? "/forum/" + thread.boardId : undefined}
-          initialBreak={userData ? false : true}
+          defaultBackHref={userData ? `/forum/${thread.boardId}` : undefined}
+          initialBreak={!userData}
           subtitle={thread.title}
         >
           {allComments?.map((comment, i) => {
@@ -112,7 +111,7 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
             !thread.isLocked &&
             !userData.isBanned &&
             !userData.isSilenced && (
-              <div className="mb-3 relative">
+              <div className="relative mb-3">
                 <RichInput
                   id="comment"
                   height="200"
@@ -123,7 +122,7 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
                   error={errors.comment?.message}
                   onSubmit={handleSubmitComment}
                 />
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-row-reverse">
+                <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 transform flex-row-reverse">
                   {isPending && <Loader />}
                 </div>
               </div>

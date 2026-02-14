@@ -1,12 +1,15 @@
-import { drizzleDB } from "@/server/db";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
-import { emailReminder } from "@/drizzle/schema";
-import { cookies } from "next/headers";
-import { env } from "@/env/server.mjs";
-import { secondsFromNow, MONTH_S } from "@/utils/time";
-import { nanoid } from "nanoid";
 import { sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { cookies } from "next/headers";
+import { emailReminder } from "@/drizzle/schema";
+import { env } from "@/env/server.mjs";
+import {
+  handleEndpointError,
+  lockWithDailyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
+import { drizzleDB } from "@/server/db";
+import { MONTH_S, secondsFromNow } from "@/utils/time";
 
 const ENDPOINT_NAME = "daily-emails-sync";
 const CLERK_API_ENDPOINT = "https://api.clerk.com/v1";
@@ -76,7 +79,9 @@ export async function GET() {
     const reminders = await drizzleDB.query.emailReminder.findMany({
       columns: { userId: true },
     });
-    const userIds = reminders.map((reminder) => reminder.userId);
+    const userIds = reminders.map(
+      (reminder: (typeof reminders)[number]) => reminder.userId,
+    );
 
     // Fetch all users from Clerk API iteratively
     const allClerkUsers: ClerkUser[] = [];
@@ -162,6 +167,6 @@ export async function GET() {
     return Response.json(`OK - Fetched ${allClerkUsers.length} users`);
   } catch (cause) {
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

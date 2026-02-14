@@ -1,16 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { ChartCandlestick, ChartPie, FilePlus, ListChecks } from "lucide-react";
 import Link from "next/link";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
-import { FilePlus, ChartCandlestick, ChartPie, ListChecks } from "lucide-react";
-import { useInfinitePagination } from "@/libs/pagination";
-import ItemFiltering, { useFiltering, getFilter } from "@/layout/ItemFiltering";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import ContentBox from "@/layout/ContentBox";
+import ItemFiltering, { getFilter, useFiltering } from "@/layout/ItemFiltering";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
@@ -42,7 +42,7 @@ export default function ManualItems() {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
     },
   );
-  const allItems = items?.pages.map((page) => page.data).flat();
+  const allItems = items?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Mutations
@@ -100,7 +100,7 @@ export default function ManualItems() {
         initialBreak={true}
         subtitle="All known items"
         topRightContent={
-          <div className="sm:flex sm:flex-row items-center">
+          <div className="items-center sm:flex sm:flex-row">
             {userData && canChangeContent(userData.role) && (
               <div className="flex flex-row gap-2">
                 <Button

@@ -1,20 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
-import { Button } from "@/components/ui/button";
-import { api } from "@/app/_trpc/client";
 import { FilePlus, Trash2 } from "lucide-react";
-import { useUserData } from "@/utils/UserContext";
-import { showMutationToast } from "@/libs/toast";
-import { canChangeContent } from "@/utils/permissions";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getRewardArray } from "@/libs/objectives";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,9 +15,22 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import { getRewardArray } from "@/libs/objectives";
+import { showMutationToast } from "@/libs/toast";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
-type ConfigWithRewards = ActivityStreakConfig & { rewards: ActivityStreakReward[] };
+type ConfigWithRewards = ActivityStreakConfig & {
+  rewards: ActivityStreakReward[];
+};
 
 export default function ActivityStreakListPage() {
   const { data: userData } = useUserData();
@@ -132,7 +134,7 @@ export default function ActivityStreakListPage() {
               {configs.map((config) => (
                 <Card
                   key={config.id}
-                  className="cursor-pointer hover:bg-accent transition-colors"
+                  className="cursor-pointer transition-colors hover:bg-accent"
                   onClick={() => {
                     setSelectedConfig(config);
                     setIsOpen(true);
@@ -156,7 +158,7 @@ export default function ActivityStreakListPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-muted-foreground line-clamp-2">
+                    <p className="line-clamp-2 text-muted-foreground text-sm">
                       {config.description || "No description"}
                     </p>
                     <div className="mt-2 text-sm">
@@ -195,7 +197,7 @@ export default function ActivityStreakListPage() {
           {!isPending && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">{selectedConfig.name}</h2>
+                <h2 className="font-bold text-xl">{selectedConfig.name}</h2>
                 <div className="flex gap-2">
                   <Badge
                     variant={
@@ -218,15 +220,15 @@ export default function ActivityStreakListPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium">Total Days</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="font-medium text-sm">Total Days</h3>
+                  <p className="text-muted-foreground text-sm">
                     {selectedConfig.totalDays} days
                   </p>
                 </div>
                 {selectedConfig.streakType === "EVENT_PASS" && (
                   <div>
-                    <h3 className="text-sm font-medium">Cost</h3>
-                    <p className="text-sm text-muted-foreground">
+                    <h3 className="font-medium text-sm">Cost</h3>
+                    <p className="text-muted-foreground text-sm">
                       {selectedConfig.ryoCost > 0 && `${selectedConfig.ryoCost} ryo `}
                       {selectedConfig.repsCost > 0 &&
                         `${selectedConfig.repsCost} reps `}
@@ -244,15 +246,15 @@ export default function ActivityStreakListPage() {
               {selectedConfig.startDate && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <h3 className="text-sm font-medium">Start Date</h3>
-                    <p className="text-sm text-muted-foreground">
+                    <h3 className="font-medium text-sm">Start Date</h3>
+                    <p className="text-muted-foreground text-sm">
                       {new Date(selectedConfig.startDate).toLocaleDateString()}
                     </p>
                   </div>
                   {selectedConfig.endDate && (
                     <div>
-                      <h3 className="text-sm font-medium">End Date</h3>
-                      <p className="text-sm text-muted-foreground">
+                      <h3 className="font-medium text-sm">End Date</h3>
+                      <p className="text-muted-foreground text-sm">
                         {new Date(selectedConfig.endDate).toLocaleDateString()}
                       </p>
                     </div>
@@ -261,8 +263,8 @@ export default function ActivityStreakListPage() {
               )}
 
               <div>
-                <h3 className="text-sm font-medium mb-2">Day Rewards</h3>
-                <div className="space-y-1 max-h-48 overflow-y-auto">
+                <h3 className="mb-2 font-medium text-sm">Day Rewards</h3>
+                <div className="max-h-48 space-y-1 overflow-y-auto">
                   {selectedConfig.rewards
                     .sort((a, b) => a.dayNumber - b.dayNumber)
                     .map((reward) => {
@@ -273,14 +275,14 @@ export default function ActivityStreakListPage() {
                           className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2"
                         >
                           <span className="font-medium">Day {reward.dayNumber}</span>
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-muted-foreground text-sm">
                             {rewardSummary || "No rewards"}
                           </span>
                         </div>
                       );
                     })}
                   {selectedConfig.rewards.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       No rewards configured
                     </p>
                   )}
@@ -288,7 +290,7 @@ export default function ActivityStreakListPage() {
               </div>
 
               {canChangeContent(userData.role) && (
-                <div className="flex gap-2 pt-4 border-t">
+                <div className="flex gap-2 border-t pt-4">
                   <Button
                     onClick={() =>
                       router.push(`/manual/activityStreak/edit/${selectedConfig.id}`)
@@ -307,7 +309,8 @@ export default function ActivityStreakListPage() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Delete Configuration</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Are you sure you want to delete &quot;{selectedConfig.name}
+                          Are you sure you want to delete &quot;
+                          {selectedConfig.name}
                           &quot;? This will also delete all user progress for this
                           configuration. This action cannot be undone.
                         </AlertDialogDescription>

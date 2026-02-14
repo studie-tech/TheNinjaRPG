@@ -1,13 +1,12 @@
-import { toast } from "@/components/ui/use-toast";
-
-import { ToastAction } from "@/components/ui/toast";
 import { CheckCircle, XOctagon } from "lucide-react";
 import type { FieldErrors } from "react-hook-form";
-import type { ToastActionElement } from "src/components/ui/toast";
-import type { PostProcessedRewards } from "@/libs/quest";
+import type { ToastActionElement } from "@/components/ui/toast";
+import { ToastAction } from "@/components/ui/toast";
+import { toast } from "@/components/ui/use-toast";
 import type { Quest } from "@/drizzle/schema";
-import { parseHtml } from "@/utils/parse";
 import Image from "@/layout/Image";
+import { parseHtml } from "@/utils/parse";
+import type { PostProcessedRewards } from "@/validators/rewards";
 
 /**
  * Trigger a confetti animation
@@ -85,10 +84,10 @@ export const showMutationToast = (data: {
         action: data.action ?? (
           <ToastAction
             altText="OK"
-            className="bg-green-600 h-5 md:h-10"
+            className="h-5 bg-green-600 md:h-10"
             onClick={() => toast.dismiss()}
           >
-            <CheckCircle className="h-4 w-4 md:h-6 md:w-6 text-white my-4" />
+            <CheckCircle className="my-4 h-4 w-4 text-white md:h-6 md:w-6" />
           </ToastAction>
         ),
       });
@@ -100,10 +99,10 @@ export const showMutationToast = (data: {
         action: data.action ?? (
           <ToastAction
             altText="OK"
-            className="bg-red-600 h-5 md:h-10"
+            className="h-5 bg-red-600 md:h-10"
             onClick={() => toast.dismiss()}
           >
-            <XOctagon className="h-4 w-4 md:h-6 md:w-6 text-white my-4" />
+            <XOctagon className="my-4 h-4 w-4 text-white md:h-6 md:w-6" />
           </ToastAction>
         ),
       });
@@ -167,16 +166,18 @@ export const showRewardToast = (
   rewards: PostProcessedRewards,
   title: string,
   resolved?: boolean,
-  quest?: Quest,
+  quest?: Pick<Quest, "successDescription">,
   badges?: { id: string; name: string; image: string }[],
 ) => {
   const message = (
     <div className="flex flex-col gap-2">
       {notifications.length > 0 && (
         <div className="flex flex-col gap-2">
-          {notifications.map((description, i) => (
-            <div key={`objective-success-${i}`}>
-              <b>Objective {i + 1}:</b>
+          {notifications.map((description, notificationIndex) => (
+            <div
+              key={`objective-success-${notificationIndex}-${description.slice(0, 20)}`}
+            >
+              <b>Objective {notificationIndex + 1}:</b>
               <br />
               <i>{parseHtml(description)}</i>
             </div>
@@ -191,7 +192,7 @@ export const showRewardToast = (
         </div>
       )}
       <div className="flex flex-row items-center">
-        <div className="flex flex-col basis-2/3">
+        <div className="flex basis-2/3 flex-col">
           {rewards.reward_money > 0 && (
             <span className="whitespace-nowrap">
               <b>Money:</b> {rewards.reward_money} ryo
@@ -289,10 +290,10 @@ export const showRewardToast = (
             </span>
           )}
         </div>
-        <div className="basis-1/3 flex flex-col">
-          {badges?.map((badge, i) => (
+        <div className="flex basis-1/3 flex-col">
+          {badges?.map((badge) => (
             <Image
-              key={i}
+              key={badge.id}
               src={badge.image}
               width={128}
               height={128}

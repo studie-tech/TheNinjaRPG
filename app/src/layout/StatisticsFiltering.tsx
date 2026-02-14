@@ -1,14 +1,14 @@
 "use client";
 
-import React from "react";
+import type React from "react";
+import { BattleTypes } from "@/drizzle/constants";
 import {
-  ContentFiltering,
-  useContentFiltering,
   buildFilter,
+  ContentFiltering,
   defineFilteringSchema,
   toOptions,
+  useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { BattleTypes } from "@/drizzle/constants";
 
 interface StatisticsFilteringProps {
   state: StatisticsFilteringState;

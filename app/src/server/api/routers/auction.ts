@@ -1,27 +1,29 @@
+import { and, desc, eq, gte, inArray, isNull, like, lt, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { eq, sql, gte, and, desc, isNull, like, inArray, or, lt } from "drizzle-orm";
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { fetchUser } from "./profile";
 import {
+  actionLog,
+  auctionBid,
+  auctionListing,
+  item,
   userData,
   userItem,
-  item,
-  actionLog,
-  auctionListing,
-  auctionBid,
 } from "@/drizzle/schema";
-import { errorResponse } from "../trpc";
+import type { DrizzleClient } from "@/server/db";
 import {
   createAuctionListingSchema,
   getAuctionListingsSchema,
 } from "@/validators/auction";
-import type { DrizzleClient } from "@/server/db";
+import { createTRPCRouter, errorResponse, protectedProcedure } from "../trpc";
 import { splitItemStack } from "./item";
+import { fetchUser } from "./profile";
 
 export const auctionRouter = createTRPCRouter({
   // Get single auction listing with all bids
   getAuctionListing: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get auction listing details and bids" },
+    })
     .input(z.object({ auctionId: z.string() }))
     .query(async ({ ctx, input }) => {
       const { auctionId } = input;
@@ -73,6 +75,7 @@ export const auctionRouter = createTRPCRouter({
 
   // Get auction listings with pagination and filters
   getAuctionListings: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get paginated auction listings" } })
     .input(getAuctionListingsSchema)
     .query(async ({ ctx, input }) => {
       const {
@@ -166,6 +169,9 @@ export const auctionRouter = createTRPCRouter({
 
   // Create new auction listing
   createAuctionListing: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Create new auction listing for item" },
+    })
     .input(createAuctionListingSchema)
     .mutation(async ({ ctx, input }) => {
       const {
@@ -325,6 +331,7 @@ export const auctionRouter = createTRPCRouter({
 
   // Place bid on auction
   placeBid: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Place bid on auction listing" } })
     .input(
       z.object({
         auctionId: z.string(),
@@ -492,6 +499,7 @@ export const auctionRouter = createTRPCRouter({
 
   // Complete auction (transfer userItem to winner)
   completeAuction: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Complete expired auction" } })
     .input(z.object({ auctionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { auctionId } = input;
@@ -524,6 +532,7 @@ export const auctionRouter = createTRPCRouter({
 
   // Cancel auction (only by seller)
   cancelAuction: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Cancel your auction listing" } })
     .input(z.object({ auctionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { auctionId } = input;

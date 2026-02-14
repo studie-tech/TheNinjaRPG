@@ -1,36 +1,35 @@
 import { z } from "zod";
 
 export const sortOptions = ["Most Recent", "Most Liked"] as const;
+export type SortOption = (typeof sortOptions)[number];
+
 export const timeFrame = ["Week", "Month", "Year", "All Time"] as const;
+export type TimeFrame = (typeof timeFrame)[number];
 export const mediaTypes = ["image", "video"] as const;
 
 export const conceptArtPromptSchema = z.object({
-  prompt: z.string().min(0).default(""),
+  prompt: z.string().min(0).prefault(""),
   seed: z
-    .number()
     .int()
     .min(0)
     .max(4294967295)
-    .default(() => Math.floor(Math.random() * 1000000)),
+    .prefault(() => Math.floor(Math.random() * 1000000)),
 });
 export type ConceptPromptType = z.infer<typeof conceptArtPromptSchema>;
 
 export const conceptVideoPromptSchema = z.object({
   prompt: z.string().min(1, "Prompt is required"),
-  negative_prompt: z.string().optional().default(""),
+  negative_prompt: z.string().optional().prefault(""),
   seed: z
-    .number()
     .int()
     .min(0)
     .max(4294967295)
-    .default(() => Math.floor(Math.random() * 1000000)),
+    .prefault(() => Math.floor(Math.random() * 1000000)),
   start_image: z
-    .string()
     .url()
     .optional()
     .or(z.literal("").transform(() => undefined)),
   last_image: z
-    .string()
     .url()
     .optional()
     .or(z.literal("").transform(() => undefined)),
@@ -38,9 +37,9 @@ export const conceptVideoPromptSchema = z.object({
 export type ConceptVideoPromptType = z.infer<typeof conceptVideoPromptSchema>;
 
 export const conceptArtFilterSchema = z.object({
-  only_own: z.boolean().default(false),
-  sort: z.enum(sortOptions).default("Most Recent"),
-  time_frame: z.enum(timeFrame).default("Week"),
+  only_own: z.boolean().prefault(false),
+  sort: z.enum(sortOptions).prefault("Most Recent"),
+  time_frame: z.enum(timeFrame).prefault("Week"),
 });
 export type ConceptFilterType = z.infer<typeof conceptArtFilterSchema>;
 

@@ -1,12 +1,12 @@
+import { api } from "@/app/_trpc/client";
+import { BanStates } from "@/drizzle/constants";
 import {
-  ContentFiltering,
-  useContentFiltering,
   buildFilter,
+  ContentFiltering,
   defineFilteringSchema,
   toOptions,
+  useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { BanStates } from "@/drizzle/constants";
-import { api } from "@/app/_trpc/client";
 
 interface ReportFilteringProps {
   state: ReportFilteringState;

@@ -1,8 +1,8 @@
-import { eq, and } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
+import { and, eq } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { userVote } from "@/drizzle/schema";
 import { handleEndpointError } from "@/libs/gamesettings";
-import { cookies } from "next/headers";
+import { drizzleDB } from "@/server/db";
 
 export async function POST(request: Request) {
   await cookies();
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     await handleVote(secret, siteId);
     return Response.json(`OK: ${secret} ${siteId}`);
   } catch (cause) {
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }
 
@@ -45,9 +45,11 @@ export async function GET(request: Request) {
   try {
     // For getting search params
     const { searchParams } = new URL(request.url);
-    const incentive = (searchParams.get("incentive") ||
+    const incentive =
+      searchParams.get("incentive") ||
       searchParams.get("param") ||
-      searchParams.get("userid"))!;
+      searchParams.get("userid") ||
+      "";
     let [secret, siteId] = incentive?.split("-") ?? [];
 
     // Sometimes the secret and siteid are in the url
@@ -63,7 +65,7 @@ export async function GET(request: Request) {
     await handleVote(secret, siteId);
     return Response.json(`OK: ${secret} ${siteId}`);
   } catch (cause) {
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }
 

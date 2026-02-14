@@ -1,28 +1,32 @@
+import { and, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { eq, sql, gt, and, isNull, isNotNull } from "drizzle-orm";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { serverError, baseServerResponse, errorResponse } from "../trpc";
+import {
+  MAX_DAILY_TRAININGS,
+  TrainingSpeeds,
+  UserStatNames,
+} from "@/drizzle/constants";
 import { trainingLog, userData } from "@/drizzle/schema";
-import { getNewTrackers } from "@/libs/quest";
-import { energyPerSecond } from "@/libs/train";
-import { trainingMultiplier } from "@/libs/train";
-import { trainEfficiency } from "@/libs/train";
-import { calcIsInVillage } from "@/libs/travel";
-import { UserStatNames } from "@/drizzle/constants";
-import { TrainingSpeeds } from "@/drizzle/constants";
-import { getGameSettingBoost } from "@/libs/gamesettings";
 import { showTrainingCapcha } from "@/libs/captcha";
-import { getStrucBoost } from "@/utils/village";
+import { getGameSettingBoost } from "@/libs/gamesettings";
+import { getNewTrackers } from "@/libs/quest";
+import { energyPerSecond, trainEfficiency, trainingMultiplier } from "@/libs/train";
+import { calcIsInVillage } from "@/libs/travel";
 import { validateCaptcha } from "@/routers/misc";
 import { fetchUpdatedUser } from "@/routers/profile";
+import { getShrineBoost, getStrucBoost } from "@/utils/village";
 import { QuestTracker } from "@/validators/objectives";
-
-import { MAX_DAILY_TRAININGS } from "@/drizzle/constants";
-import { getShrineBoost } from "@/utils/village";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  serverError,
+} from "../trpc";
 
 export const trainRouter = createTRPCRouter({
   // Start training of a specific attribute
   startTraining: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Start training a specific stat" } })
     .input(z.object({ stat: z.enum(UserStatNames) }))
     .output(
       baseServerResponse.extend({
@@ -79,6 +83,9 @@ export const trainRouter = createTRPCRouter({
     }),
   // Stop training
   stopTraining: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Stop training and collect stat gains" },
+    })
     .input(z.object({ guess: z.string().optional(), villageId: z.string().nullable() }))
     .output(
       baseServerResponse.extend({
@@ -120,7 +127,8 @@ export const trainRouter = createTRPCRouter({
       const gameFactor = trainSetting?.value ?? 1;
       const warFactor = (100 + (warSetting?.value ?? 0)) / 100;
       const boost = getStrucBoost("trainBoostPerLvl", user.village?.structures) / 100;
-      const clanBoost = (user?.clan?.trainingBoost ?? 0) / 100;
+      // Only apply clan boost for real clans (not outlaw factions/towns)
+      const clanBoost = user?.isOutlaw ? 0 : (user?.clan?.trainingBoost ?? 0) / 100;
       const factor = gameFactor * (1 + boost + clanBoost + shrineBoost) * warFactor;
       const seconds = (Date.now() - user.trainingStartedAt.getTime()) / 1000;
       const minutes = seconds / 60;
@@ -233,6 +241,7 @@ export const trainRouter = createTRPCRouter({
     }),
   // Update user training speed
   updateTrainingSpeed: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Update training speed interval" } })
     .input(z.object({ speed: z.enum(TrainingSpeeds) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -260,6 +269,12 @@ export const trainRouter = createTRPCRouter({
       }
     }),
   getTrainingLog: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Get user training history from last 24 hours",
+      },
+    })
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.drizzle.query.trainingLog.findMany({

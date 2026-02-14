@@ -1,29 +1,32 @@
-import { drizzleDB } from "@/server/db";
+import { and, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { cookies } from "next/headers";
 import {
-  war,
-  village,
-  villageStructure,
-  quest,
-  questHistory,
-  userData,
-} from "@/drizzle/schema";
-import { eq, lt, and, isNotNull, isNull, inArray } from "drizzle-orm";
-import {
-  WAR_TOKEN_REDUCTION_INTERVAL_HOURS,
+  WAR_DAILY_HEALTH_DRAIN,
   WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
   WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5,
   WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8,
-  WAR_DAILY_HEALTH_DRAIN,
   WAR_MAX_DURATION_DAYS,
+  WAR_TOKEN_REDUCTION_INTERVAL_HOURS,
 } from "@/drizzle/constants";
-import { sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
+import {
+  quest,
+  questHistory,
+  userData,
+  village,
+  villageStructure,
+  war,
+} from "@/drizzle/schema";
+import {
+  getGameSetting,
+  handleEndpointError,
+  lockWithHourlyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
+import { availableQuestLetterRanks } from "@/libs/train";
 import { handleWarEnd } from "@/libs/war";
 import { fetchActiveWars } from "@/server/api/routers/war";
-import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
-import { lockWithHourlyTimer, handleEndpointError } from "@/libs/gamesettings";
-import { availableQuestLetterRanks } from "@/libs/train";
-import { cookies } from "next/headers";
+import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "hourly-war";
 const DAILY_DECAY_TIMER = "daily-war-decay";
@@ -218,7 +221,7 @@ export async function GET() {
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }
 

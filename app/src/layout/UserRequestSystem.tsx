@@ -1,11 +1,11 @@
-import React from "react";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import Loader from "@/layout/Loader";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { Check, Trash2, X } from "lucide-react";
+import type React from "react";
 import { Button } from "@/components/ui/button";
-import { Check, X, Trash2 } from "lucide-react";
-import type { UserRequestState, UserRank } from "@/drizzle/constants";
+import type { UserRank, UserRequestState } from "@/drizzle/constants";
 import type { UserRequest } from "@/drizzle/schema";
+import Loader from "@/layout/Loader";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
 import type { ArrayElement } from "@/utils/typeutils";
 
 type RequestUser = {
@@ -91,7 +91,7 @@ const ChallengeActionsBox: React.FC<ChallengeActionsBoxProps> = (props) => {
           id="cancel"
           onClick={() => onCancel({ id: challenge.id })}
         >
-          <Trash2 className="h-5 w-5 mr-2" />
+          <Trash2 className="mr-2 h-5 w-5" />
           Cancel
         </Button>
       );
@@ -99,11 +99,11 @@ const ChallengeActionsBox: React.FC<ChallengeActionsBoxProps> = (props) => {
       return (
         <div className="grid grid-cols-2 gap-1">
           <Button id="accept" onClick={() => onAccept({ id: challenge.id })}>
-            <Check className="h-5 w-5 mr-2" />
+            <Check className="mr-2 h-5 w-5" />
             Accept
           </Button>
           <Button id="reject" onClick={() => onReject({ id: challenge.id })}>
-            <X className="h-5 w-5 mr-2" />
+            <X className="mr-2 h-5 w-5" />
             Reject
           </Button>
         </div>
@@ -117,25 +117,25 @@ const ChallengeStatusBox: React.FC<{ status: UserRequestState }> = ({ status }) 
   switch (status) {
     case "PENDING":
       return (
-        <div className="bg-amber-300 p-2 rounded-md border-2 border-amber-400 text-amber-600 font-bold">
+        <div className="rounded-md border-2 border-amber-400 bg-amber-300 p-2 font-bold text-amber-600">
           Pending
         </div>
       );
     case "ACCEPTED":
       return (
-        <div className="bg-green-300 p-2 rounded-md border-2 border-green-400 text-green-600 font-bold">
+        <div className="rounded-md border-2 border-green-400 bg-green-300 p-2 font-bold text-green-600">
           Accepted
         </div>
       );
     case "REJECTED":
       return (
-        <div className="bg-red-300 p-2 rounded-md border-2 border-red-400 text-red-600 font-bold">
+        <div className="rounded-md border-2 border-red-400 bg-red-300 p-2 font-bold text-red-600">
           Rejected
         </div>
       );
     case "CANCELLED":
       return (
-        <div className="bg-slate-300 p-2 rounded-md border-2 border-slate-400 text-slate-600 font-bold">
+        <div className="rounded-md border-2 border-slate-400 bg-slate-300 p-2 font-bold text-slate-600">
           Cancelled
         </div>
       );
@@ -150,10 +150,10 @@ const ChallengeInfo: React.FC<{ request: UserRequest }> = ({ request }) => {
       <p>{request.createdAt.toLocaleTimeString()}</p>
       {request.type === "WAR_ALLY" && <p>Token Amount: {request.value}</p>}
       {request.type === "SPAR" && request.useRankedRules && (
-        <p className="text-blue-600 font-semibold">Uses Ranked Rules</p>
+        <p className="font-semibold text-blue-600">Uses Ranked Rules</p>
       )}
       {request.type === "SPAR" && request.spectatable && (
-        <p className="text-green-600 font-semibold">Allows Spectating</p>
+        <p className="font-semibold text-green-600">Allows Spectating</p>
       )}
     </div>
   );

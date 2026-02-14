@@ -1,38 +1,41 @@
-import React, { useState, useEffect } from "react";
-import Post from "./Post";
-import Image from "@/layout/Image";
-import NavTabs from "@/layout/NavTabs";
-import Loader from "@/layout/Loader";
-import ContentBox from "@/layout/ContentBox";
-import Confirm2 from "@/layout/Confirm2";
-import Accordion from "@/layout/Accordion";
-import { Button } from "@/components/ui/button";
-import { Sparkles, X, Loader2 } from "lucide-react";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import { Objective, Reward, EventTimer } from "@/layout/Objective";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { Loader2, Sparkles, X } from "lucide-react";
+import type React from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast, showRewardToast } from "@/libs/toast";
-import { useInfinitePagination } from "@/libs/pagination";
-import { parseHtml } from "@/utils/parse";
-import { useTutorialStep } from "@/hooks/tutorial";
-import { isQuestObjectiveAvailable } from "@/libs/objectives";
-import { isQuestComplete } from "@/libs/objectives";
+import { Button } from "@/components/ui/button";
 import {
-  IMG_AVATAR_DEFAULT,
-  MISSIONS_PER_DAY,
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
+  IMG_AVATAR_DEFAULT,
   IMG_SCENE_BACKGROUND,
   IMG_URL_ASSISTANT,
   IMG_URL_ASSISTANT_2,
+  MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
-import { useAbVariant } from "@/hooks/useAbVariant";
-import { getActiveObjective } from "@/libs/objectives";
-import { cn } from "src/libs/shadui";
-import type { QuestTrackerType } from "@/validators/objectives";
 import type { UserQuest } from "@/drizzle/schema";
+import { useTutorialStep } from "@/hooks/tutorial";
+import { useAbVariant } from "@/hooks/useAbVariant";
+import Accordion from "@/layout/Accordion";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import NavTabs from "@/layout/NavTabs";
+import { EventTimer, Objective, Reward } from "@/layout/Objective";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import {
+  getActiveObjective,
+  isQuestComplete,
+  isQuestObjectiveAvailable,
+} from "@/libs/objectives";
+import { useInfinitePagination } from "@/libs/pagination";
+import { cn } from "@/libs/shadui";
+import { showMutationToast, showRewardToast } from "@/libs/toast";
+import { parseHtml } from "@/utils/parse";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
 import type { ArrayElement } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type { QuestTrackerType } from "@/validators/objectives";
+import Post from "./Post";
 
 const tabs = ["Active", "History", "Battles", "Achievements"] as const;
 type tabType = (typeof tabs)[number];
@@ -91,19 +94,19 @@ const LogbookAchievements: React.FC = () => {
       {userData?.userQuests
         ?.filter((uq) => ["tier", "achievement"].includes(uq.quest.questType))
         .filter((uq) => uq.completed === 0)
-        ?.map((uq, i) => {
+        ?.map((uq) => {
           const tracker = userData?.questData?.find((q) => q.id === uq.questId);
 
           return (
             tracker && (
               <Accordion
-                key={i}
+                key={uq.questId}
                 title={uq.quest.name}
                 selectedTitle={activeElement}
                 titlePrefix={`${capitalizeFirstLetter(uq.quest.questType)}: `}
                 onClick={setActiveElement}
               >
-                <LogbookEntry key={i} userQuest={uq} tracker={tracker} hideTitle />
+                <LogbookEntry userQuest={uq} tracker={tracker} hideTitle />
               </Accordion>
             )
           );
@@ -132,29 +135,28 @@ const LogbookActive: React.FC = () => {
         setActiveElement(firstUserQuest.quest.name);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quests]);
 
   return (
     <div className="">
-      {quests?.map((uq, i) => {
+      {quests?.map((uq) => {
         const tracker = userData?.questData?.find((q) => q.id === uq.questId);
         return (
           tracker && (
             <Accordion
-              key={i}
+              key={uq.questId}
               title={uq.quest.name}
               selectedTitle={activeElement}
               titlePrefix={`${capitalizeFirstLetter(uq.quest.questType)}: `}
               onClick={setActiveElement}
             >
-              <LogbookEntry key={i} userQuest={uq} tracker={tracker} hideTitle />
+              <LogbookEntry userQuest={uq} tracker={tracker} hideTitle />
             </Accordion>
           )
         );
       })}
       {quests?.length === 0 && (
-        <div className="text-muted-foreground p-3">No active quests</div>
+        <div className="p-3 text-muted-foreground">No active quests</div>
       )}
     </div>
   );
@@ -233,8 +235,7 @@ const LogbookHistory: React.FC = () => {
     },
   );
   const allHistory = history?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .filter((e) => e.quest)
     .map((e) => {
       return {
@@ -386,7 +387,6 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     if (check && allDone && userData?.status === "AWAKE") {
       void checkRewards({ questId: quest.id });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData, userQuest, quest, allDone]);
 
   return (
@@ -394,7 +394,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
       className={`${tierOrDaily ? "" : "col-span-2"} ${showScene ? "px-0 py-0" : "px-3"}`}
       options={
         <div className="ml-3">
-          <div className="mt-2 flex flex-row items-center ">
+          <div className="mt-2 flex flex-row items-center">
             {quest.questType !== "starter" &&
               [
                 "mission",
@@ -413,7 +413,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                 <Confirm2
                   title="Confirm deleting quest"
                   button={
-                    <X className="ml-2 h-8 w-8 hover:text-orange-500 cursor-pointer bg-popover border-2 rounded-full p-1" />
+                    <X className="ml-2 h-8 w-8 cursor-pointer rounded-full border-2 bg-popover p-1 hover:text-orange-500" />
                   }
                   onAccept={(e) => {
                     e.preventDefault();
@@ -428,7 +428,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
         </div>
       }
     >
-      <div className="flex flex-col h-full gap-3" id={`logbook-entry-${quest.id}`}>
+      <div className="flex h-full flex-col gap-3" id={`logbook-entry-${quest.id}`}>
         {!hideTitle && (
           <div className={cn(showScene ? "px-3 pt-3" : "")}>
             <div className={"font-bold text-xl"}>
@@ -453,16 +453,16 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
           </>
         )}
         {showScene && (
-          <div className="relative w-full aspect-3/2 overflow-hidden">
+          <div className="relative aspect-3/2 w-full overflow-hidden">
             <Image
               src={background}
               alt="SceneBackground"
-              className="w-full relative aspect-3/2"
+              className="relative aspect-3/2 w-full"
               width={512}
               height={341}
             />
             {characters.map((character, i) => (
-              <div key={i} className="absolute bottom-0 w-2/5">
+              <div key={`${character}-${i}`} className="absolute bottom-0 w-2/5">
                 <Image
                   src={character}
                   alt="Character"
@@ -473,9 +473,9 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
               </div>
             ))}
             {/* Bottom dialog area */}
-            <div className="absolute inset-x-0 bottom-0 flex flex-col items-center pointer-events-none max-h-1/3">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex max-h-1/3 flex-col items-center">
               {/* Shown text */}
-              <div className="bg-poppopover w-full max-w-[calc(100%-2rem)] max-h-32 min-h-10 p-2 rounded-lg overflow-y-auto border-2 mb-2 pointer-events-auto">
+              <div className="pointer-events-auto mb-2 max-h-32 min-h-10 w-full max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border-2 bg-poppopover p-2">
                 {parseHtml(shownText || "")}
               </div>
             </div>
@@ -484,12 +484,13 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
         {/* Dialog options */}
         {activeObjective?.task === "dialog" && (
           <div className="w-full">
-            <h2 className="text-lg font-bold pl-2">Dialog Options</h2>
-            <div className="flex flex-wrap gap-1 w-full px-2 pb-1 pointer-events-auto">
+            <h2 className="pl-2 font-bold text-lg">Dialog Options</h2>
+            <div className="pointer-events-auto flex w-full flex-wrap gap-1 px-2 pb-1">
               {activeObjective.nextObjectiveId.map((entry) => (
                 <div key={entry.nextObjectiveId} className="flex justify-end">
-                  <div
-                    className="bg-popover px-2 py-1 border-2 rounded-lg hover:bg-poppopover cursor-pointer text-xs sm:text-sm break-words max-w-full text-right shadow-lg"
+                  <button
+                    type="button"
+                    className="max-w-full cursor-pointer break-words rounded-lg border-2 bg-popover px-2 py-1 text-right text-xs shadow-lg hover:bg-poppopover sm:text-sm"
                     onClick={() =>
                       !isCheckingRewards &&
                       checkRewards({
@@ -503,7 +504,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                     ) : (
                       entry.text
                     )}
-                  </div>
+                  </button>
                 </div>
               ))}
             </div>
@@ -532,7 +533,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                   objective={objective}
                   tracker={tracker}
                   checkRewards={() => checkRewards({ questId: quest.id })}
-                  key={i}
+                  key={objective.id}
                   titlePrefix={
                     quest.consecutiveObjectives ? "Objective: " : `${i + 1}. `
                   }
@@ -545,13 +546,13 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
         )}
 
         {allDone && userData?.status === "AWAKE" && (
-          <div className={cn("grow w-full", showScene ? "p-3" : "")}>
+          <div className={cn("w-full grow", showScene ? "p-3" : "")}>
             <Button
               id="return"
               onClick={() => checkRewards({ questId: quest.id })}
               className="w-full"
             >
-              <Sparkles className="h-5 w-5 mr-2" />
+              <Sparkles className="mr-2 h-5 w-5" />
               Collect Reward
             </Button>
           </div>

@@ -1,54 +1,29 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useLocalStorage } from "@/hooks/localstorage";
-import { useRouter } from "next/navigation";
-import { z } from "zod";
-import dynamic from "next/dynamic";
-import Loader from "@/layout/Loader";
-import ContentBox from "@/layout/ContentBox";
-import NavTabs from "@/layout/NavTabs";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import Modal2 from "@/layout/Modal2";
-import Countdown from "@/layout/Countdown";
-import Confirm2 from "@/layout/Confirm2";
-import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
-import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
-import AutoAttackModal from "@/layout/AutoAttackModal";
-import { useTutorialStep } from "@/hooks/tutorial";
-import { useLiveCountdown } from "@/hooks/useLiveCountdown";
-import { getStealthStatus } from "@/libs/stealth";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  STEALTH_SENSORY_CAP,
-  STEALTH_TRAIN_GAIN_PER_MINUTE,
-} from "@/drizzle/constants";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useAwake } from "@/utils/routing";
-import {
-  UserRoundSearch,
-  Search,
+  Cookie,
   Eye,
   EyeOff,
+  Ghost,
   GitMerge,
+  HousePlus,
+  Locate,
   MapPinned,
-  Cookie,
+  Radar,
+  Search,
+  Swords,
+  UserRoundSearch,
   Zap,
   ZapOff,
-  Ghost,
-  Radar,
-  Swords,
-  Locate,
 } from "lucide-react";
-import { HousePlus } from "lucide-react";
-import { api } from "@/app/_trpc/client";
-import { ActionSelector } from "@/layout/CombatActions";
-import { isAtEdge, findNearestEdge } from "@/libs/travel";
-import { calcGlobalTravelTime } from "@/libs/travel";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { showMutationToast, showRewardToast } from "@/libs/toast";
-import { hasRequiredRank } from "@/libs/train";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -56,24 +31,58 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { nonCombatConsume } from "@/libs/item";
-import { useMap } from "@/hooks/map";
-import { Input } from "@/components/ui/input";
-import { HIDEOUT_COST } from "@/drizzle/constants";
-import { VILLAGE_REDUCED_GAINS_DAYS } from "@/drizzle/constants";
-import { VILLAGE_LEAVE_REQUIRED_RANK } from "@/drizzle/constants";
-import type { GlobalTile, SectorPoint } from "@/libs/threejs/types";
-import { Button } from "@/components/ui/button";
+import {
+  HIDEOUT_COST,
+  STEALTH_SENSORY_CAP,
+  STEALTH_TRAIN_GAIN_PER_MINUTE,
+  VILLAGE_LEAVE_REQUIRED_RANK,
+  VILLAGE_REDUCED_GAINS_DAYS,
+} from "@/drizzle/constants";
 import type { UserItemWithItem } from "@/drizzle/schema";
+import { useLocalStorage } from "@/hooks/localstorage";
+import { useMap } from "@/hooks/map";
+import { useTutorialStep } from "@/hooks/tutorial";
+import { useLiveCountdown } from "@/hooks/useLiveCountdown";
+import AutoAttackModal from "@/layout/AutoAttackModal";
+import { ActionSelector } from "@/layout/CombatActions";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
+import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
+import Modal2 from "@/layout/Modal2";
+import NavTabs from "@/layout/NavTabs";
+import { nonCombatConsume } from "@/libs/item";
+import { getStealthStatus } from "@/libs/stealth";
+import type { GlobalTile, SectorPoint } from "@/libs/threejs/types";
+import { showMutationToast, showRewardToast } from "@/libs/toast";
+import { hasRequiredRank } from "@/libs/train";
+import { calcGlobalTravelTime, findNearestEdge, isAtEdge } from "@/libs/travel";
+import { findVillageUserRelationship } from "@/utils/alliance";
+import { useAwake } from "@/utils/routing";
+import { useRequiredUserData } from "@/utils/UserContext";
+import {
+  type FindSectorSchema,
+  type FindSectorSchemaInput,
+  findSectorSchema,
+  type QuickTravelSchema,
+  type QuickTravelSchemaInput,
+  quickTravelSchema,
+} from "@/validators/travel";
 
-const Map = dynamic(() => import("@/layout/Map"), { ssr: false });
+const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
 
 export default function Travel() {
@@ -90,11 +99,22 @@ export default function Travel() {
     "autoAttackMode",
     false,
   );
+  const [sensoryAllyAttack, setSensoryAllyAttack] = useLocalStorage<boolean>(
+    "friendlyAttackSensory",
+    false,
+  );
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showSorrounding, setShowSorrounding] = useState<boolean>(false);
   const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
   const [revealedPlayers, setRevealedPlayers] = useState<
-    { userId: string; username: string; longitude: number; latitude: number }[]
+    {
+      userId: string;
+      username: string;
+      longitude: number;
+      latitude: number;
+      villageId: string | null;
+      level: number;
+    }[]
   >([]);
   const [showRevealedPlayersModal, setShowRevealedPlayersModal] =
     useState<boolean>(false);
@@ -167,35 +187,33 @@ export default function Travel() {
   const globalLink = `Global`;
 
   // Quick travel form
-  const quickTravelSchema = z.object({
-    sector: z.coerce.number().int().min(0).max(492),
-  });
-  const quickTravelForm = useForm<z.infer<typeof quickTravelSchema>>({
+  const quickTravelForm = useForm<QuickTravelSchemaInput, unknown, QuickTravelSchema>({
     mode: "all",
     resolver: zodResolver(quickTravelSchema),
+    defaultValues: { sector: undefined },
   });
   const quickTravelSector = useWatch({
     control: quickTravelForm.control,
     name: "sector",
-  });
+  }) as number | undefined;
 
   // Find sector form
-  const findSectorSchema = z.object({
-    sector: z.coerce.number().int().min(0).max(492),
-  });
-  const findSectorForm = useForm<z.infer<typeof findSectorSchema>>({
+  const findSectorForm = useForm<FindSectorSchemaInput, unknown, FindSectorSchema>({
     mode: "all",
     resolver: zodResolver(findSectorSchema),
   });
   const findSectorValue = useWatch({
     control: findSectorForm.control,
     name: "sector",
-  });
+  }) as number | undefined;
 
   useEffect(() => {
     if (userData && globe) {
       setCurrentPosition({ x: userData.longitude, y: userData.latitude });
-      setCurrentTile(globe.tiles[userData.sector]!);
+      const tile = globe.tiles[userData.sector];
+      if (tile) {
+        setCurrentTile(tile);
+      }
     }
   }, [userData, currentSector, globe]);
 
@@ -204,14 +222,12 @@ export default function Travel() {
     if (activeTab === "" && sectorLink) {
       setActiveTab(sectorLink);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectorLink]);
 
   useEffect(() => {
     if (userData?.status === "BATTLE") {
       void router.push(`/combat`);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData?.status]);
 
   useAwake(userData);
@@ -229,7 +245,10 @@ export default function Travel() {
           setShowModal(false);
           setActiveTab(globalLink);
           if (globe) {
-            setCurrentTile(globe.tiles[result.data.sector]!);
+            const tile = globe.tiles[result.data.sector];
+            if (tile) {
+              setCurrentTile(tile);
+            }
           }
         }
       },
@@ -404,7 +423,6 @@ export default function Travel() {
     ) {
       initiateGlobalMoveStart(targetSector);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPosition]);
 
   // Attack revealed stealthed player after moving to their position
@@ -425,7 +443,6 @@ export default function Travel() {
       });
       setPendingAttackTarget(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPosition, pendingAttackTarget]);
 
   // Memoized Map component to prevent re-renders during countdown updates
@@ -433,7 +450,7 @@ export default function Travel() {
     return (
       villages &&
       globe && (
-        <Map
+        <GlobalMap
           intersection={true}
           highlights={villages}
           usersHighlighted={trackedBounties}
@@ -470,7 +487,6 @@ export default function Travel() {
         />
       )
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     currentTile,
     currentSector,
@@ -514,24 +530,21 @@ export default function Travel() {
         subtitle={subtitle}
         padding={false}
         topRightContent={
-          <div className="flex flex-row items-center cursor-pointer">
-            {activeTab === sectorLink && (
+          <div className="flex cursor-pointer flex-row items-center">
+            {!isGlobal && activeTab !== "" && (
               <>
-                {userData?.anbuId && (
-                  <>
-                    {autoAttackMode ? (
-                      <Zap
-                        className={`h-7 w-7 mr-2 text-red-500`}
-                        onClick={() => setAutoAttackMode(false)}
-                      />
-                    ) : (
-                      <ZapOff
-                        className={`h-7 w-7 mr-2 hover:text-red-500`}
-                        onClick={() => setShowAutoAttackModal(true)}
-                      />
-                    )}
-                  </>
-                )}
+                {userData?.anbuId &&
+                  (autoAttackMode ? (
+                    <Zap
+                      className={`mr-2 h-7 w-7 text-red-500`}
+                      onClick={() => setAutoAttackMode(false)}
+                    />
+                  ) : (
+                    <ZapOff
+                      className={`mr-2 h-7 w-7 hover:text-red-500`}
+                      onClick={() => setShowAutoAttackModal(true)}
+                    />
+                  ))}
                 {/* Stealth Toggle */}
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
@@ -546,13 +559,7 @@ export default function Travel() {
                       }}
                     >
                       <Ghost
-                        className={`h-7 w-7 mr-2 ${
-                          stealthStatus?.isCurrentlyStealthed
-                            ? "text-purple-500"
-                            : stealthCooldown > 0
-                              ? "text-gray-400 cursor-not-allowed"
-                              : "hover:text-purple-500"
-                        }`}
+                        className={`mr-2 h-7 w-7 ${stealthStatus?.isCurrentlyStealthed ? "text-purple-500" : stealthCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-purple-500"}`}
                       />
                     </TooltipTrigger>
                     <TooltipContent>
@@ -578,11 +585,7 @@ export default function Travel() {
                       }}
                     >
                       <Radar
-                        className={`h-7 w-7 mr-2 ${
-                          sensoryCooldown > 0
-                            ? "text-gray-400 cursor-not-allowed"
-                            : "hover:text-blue-500"
-                        }`}
+                        className={`mr-2 h-7 w-7 ${sensoryCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-blue-500"}`}
                       />
                     </TooltipTrigger>
                     <TooltipContent>
@@ -594,17 +597,17 @@ export default function Travel() {
                 </TooltipProvider>
                 {showActive ? (
                   <Eye
-                    className={`h-7 w-7 mr-2 text-orange-500`}
+                    className={`mr-2 h-7 w-7 text-orange-500`}
                     onClick={() => setShowActive(false)}
                   />
                 ) : (
                   <EyeOff
-                    className={`h-7 w-7  mr-2`}
+                    className={`mr-2 h-7 w-7`}
                     onClick={() => setShowActive(true)}
                   />
                 )}
                 <UserRoundSearch
-                  className={`h-7 w-7 mr-2 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
+                  className={`mr-2 h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
                   onClick={() => setShowSorrounding((prev) => !prev)}
                 />
               </>
@@ -614,12 +617,12 @@ export default function Travel() {
                 <Popover>
                   <PopoverTrigger>
                     <Locate
-                      className={`h-7 w-7 mr-2 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
+                      className={`mr-2 h-7 w-7 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
                     />
                   </PopoverTrigger>
                   <PopoverContent>
                     <p className="py-2 font-semibold">Find Sector</p>
-                    <p className="pb-2 text-sm text-muted-foreground">
+                    <p className="pb-2 text-muted-foreground text-sm">
                       Enter a sector ID to locate it on the map.
                     </p>
                     <Form {...findSectorForm}>
@@ -640,6 +643,7 @@ export default function Travel() {
                                   placeholder="Sector ID (0-492)"
                                   type="number"
                                   {...field}
+                                  value={field.value as number}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -672,11 +676,11 @@ export default function Travel() {
                 </Popover>
                 <Popover>
                   <PopoverTrigger>
-                    <Search className={`h-7 w-7 mr-2 hover:text-orange-500`} />
+                    <Search className={`mr-2 h-7 w-7 hover:text-orange-500`} />
                   </PopoverTrigger>
                   <PopoverContent>
                     <p className="py-2 font-semibold">Quick Travel</p>
-                    <p className="pb-2 text-sm text-muted-foreground">
+                    <p className="pb-2 text-muted-foreground text-sm">
                       Enter a sector ID to travel there directly.
                     </p>
                     <Form {...quickTravelForm}>
@@ -698,6 +702,7 @@ export default function Travel() {
                                   placeholder="Sector ID (0-492)"
                                   type="number"
                                   {...field}
+                                  value={field.value as number}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -723,7 +728,7 @@ export default function Travel() {
                   <Tooltip>
                     <TooltipTrigger onClick={() => setShowOwnership(!showOwnership)}>
                       <MapPinned
-                        className={`h-7 w-7 mr-2 ${showOwnership ? "text-orange-500" : ""}`}
+                        className={`mr-2 h-7 w-7 ${showOwnership ? "text-orange-500" : ""}`}
                       />
                     </TooltipTrigger>
                     <TooltipContent>Show sector ownerships and factions</TooltipContent>
@@ -735,7 +740,7 @@ export default function Travel() {
               <Confirm2
                 title={`Join Village [${sectorVillage.name}]`}
                 proceed_label="Submit"
-                button={<GitMerge className={`h-7 w-7 mx-1 hover:text-orange-500`} />}
+                button={<GitMerge className={`mx-1 h-7 w-7 hover:text-orange-500`} />}
                 onAccept={() => joinVillage({ villageId: sectorVillage.id })}
               >
                 Do you confirm that you wish to join {sectorVillage.name}? Please be
@@ -747,7 +752,7 @@ export default function Travel() {
               <Confirm2
                 title="Purchase Hideout"
                 proceed_label={canAffordHideout ? "Submit" : "Not enough ryo"}
-                button={<HousePlus className={`h-7 w-7 mx-1 hover:text-orange-500`} />}
+                button={<HousePlus className={`mx-1 h-7 w-7 hover:text-orange-500`} />}
                 onAccept={() => {
                   if (canAffordHideout) {
                     purchaseHideout({
@@ -816,9 +821,9 @@ export default function Travel() {
           </Modal2>
         )}
         {userData?.travelFinishAt && (
-          <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
+          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
             <div className="m-auto text-center text-white">
-              <p className="p-5  text-3xl">Traveling to Sector {userData?.sector}</p>
+              <p className="p-5 text-3xl">Traveling to Sector {userData?.sector}</p>
               <p className="text-5xl">
                 Time Left:{" "}
                 <Countdown
@@ -833,14 +838,14 @@ export default function Travel() {
           </div>
         )}
       </ContentBox>
-      <div className="flex flex-row p-1 justify-between items-center">
+      <div className="flex flex-row items-center justify-between p-1">
         <div className="flex gap-2">
           {showSector && <JutsuLoadoutSelector size="small" label="Jutsu" />}
           {showSector && <ItemLoadoutSelector size="small" label="Items" />}
         </div>
         {showSector && userData?.anbuId && autoAttackMode && (
-          <div className="text-red-500 text-sm font-semibold flex items-center">
-            <Zap className="h-4 w-4 mr-1" />
+          <div className="flex items-center font-semibold text-red-500 text-sm">
+            <Zap className="mr-1 h-4 w-4" />
             Auto-Attack: Scanning for enemies to hunt...
           </div>
         )}
@@ -856,7 +861,7 @@ export default function Travel() {
             showBgColor={false}
             showLabels={false}
             onClick={(id) => {
-              if (id == useritem?.id) {
+              if (id === useritem?.id) {
                 setUserItem(undefined);
                 setIsOpen(false);
               } else {
@@ -915,27 +920,47 @@ export default function Travel() {
           isValid={false}
         >
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               Your sensory ability detected the following stealthed players:
             </p>
             {revealedPlayers.map((player) => {
               const sameHex =
                 player.latitude === userData?.latitude &&
                 player.longitude === userData?.longitude;
+
+              // Look up village data
+              const village = villageData?.find((v) => v.id === player.villageId);
+              const villageName =
+                village?.name ?? (player.villageId ? "Unknown" : "Outlaw");
+              const villageColor = village?.hexColor ?? "gray";
+
+              // Check ally status
+              const relationship =
+                userData?.village &&
+                findVillageUserRelationship(userData.village, player.villageId);
+              const isAlly =
+                player.villageId === userData?.villageId ||
+                relationship?.status === "ALLY";
+              const showAttack = sensoryAllyAttack || !isAlly;
+
               return (
                 <div
                   key={player.userId}
-                  className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                  className="flex items-center justify-between rounded-lg bg-muted p-3"
                 >
                   <div>
                     <p className="font-semibold">{player.username}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
+                      Lvl. {player.level} -{" "}
+                      <span style={{ color: villageColor }}>{villageName}</span>
+                    </p>
+                    <p className="text-muted-foreground text-sm">
                       Position: ({player.longitude}, {player.latitude})
                       {sameHex && " - Same hex as you!"}
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    {sameHex && userData ? (
+                    {showAttack && sameHex && userData ? (
                       <Button
                         variant="destructive"
                         size="sm"
@@ -949,10 +974,10 @@ export default function Travel() {
                         }
                         disabled={isAttackingRevealed}
                       >
-                        <Swords className="h-4 w-4 mr-1" />
+                        <Swords className="mr-1 h-4 w-4" />
                         Attack
                       </Button>
-                    ) : (
+                    ) : showAttack && !sameHex ? (
                       <Button
                         variant="destructive"
                         size="sm"
@@ -971,14 +996,25 @@ export default function Travel() {
                         }}
                         disabled={isAttackingRevealed || !!pendingAttackTarget}
                       >
-                        <Swords className="h-4 w-4 mr-1" />
+                        <Swords className="mr-1 h-4 w-4" />
                         Attack
                       </Button>
-                    )}
+                    ) : !showAttack ? (
+                      <span className="text-muted-foreground text-sm italic">Ally</span>
+                    ) : null}
                   </div>
                 </div>
               );
             })}
+            {/* Ally attack toggle */}
+            <div className="flex flex-row items-center pt-3">
+              <Checkbox
+                className="m-1 mr-3"
+                checked={sensoryAllyAttack}
+                onCheckedChange={() => setSensoryAllyAttack(!sensoryAllyAttack)}
+              />
+              <Label>Attack button on allies</Label>
+            </div>
           </div>
         </Modal2>
       )}

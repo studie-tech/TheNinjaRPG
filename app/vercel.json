@@ -79,6 +79,14 @@
     {
       "path": "/api/auction-expire",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/monthly-elder-rotation",
+      "schedule": "0 0 25,28 * *"
+    },
+    {
+      "path": "/api/monthly-tower-defense-reset",
+      "schedule": "0 0 1 * *"
     }
   ],
   "functions": {

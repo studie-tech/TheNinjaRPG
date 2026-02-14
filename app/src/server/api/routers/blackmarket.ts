@@ -1,38 +1,48 @@
-import { z } from "zod";
-import { nanoid } from "nanoid";
-import { eq, sql, gte, gt, and, asc, desc, isNull, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { fetchUser } from "./profile";
-import { round } from "@/utils/math";
-import { userData, ryoTrade, actionLog } from "@/drizzle/schema";
-import { secondsFromDate } from "@/utils/time";
-import { statSchema } from "@/validators/combat";
-import { COST_RESET_STATS } from "@/drizzle/constants";
-import { RYO_FOR_REP_DAYS_FROZEN } from "@/drizzle/constants";
-import { COST_CUSTOM_TITLE } from "@/drizzle/constants";
-import { COST_EXTRA_ITEM_SLOT } from "@/drizzle/constants";
-import { COST_CHANGE_GENDER } from "@/drizzle/constants";
-import { COST_EXTRA_JUTSU_SLOT } from "@/drizzle/constants";
-import { MAX_EXTRA_JUTSU_SLOTS } from "@/drizzle/constants";
-import { COST_REROLL_ELEMENT } from "@/drizzle/constants";
-import { RYO_FOR_REP_MAX_LISTINGS } from "@/drizzle/constants";
-import { RYO_FOR_REP_MIN_REPS } from "@/drizzle/constants";
-import { BasicElementName, ElementNames } from "@/drizzle/constants";
-import { RYO_CAP } from "@/drizzle/constants";
-import { getRandomElement } from "@/utils/array";
-import { genders } from "@/validators/register";
-import { baseServerResponse, errorResponse } from "../trpc";
-import { canRollPrimaryElement, canRollSecondaryElement } from "@/utils/permissions";
+import { nanoid } from "nanoid";
+import { z } from "zod";
+import type { ElementName } from "@/drizzle/constants";
+import {
+  BasicElementName,
+  COST_CHANGE_GENDER,
+  COST_CUSTOM_TITLE,
+  COST_EXTRA_ITEM_SLOT,
+  COST_EXTRA_JUTSU_SLOT,
+  COST_REROLL_ELEMENT,
+  COST_RESET_STATS,
+  ElementNames,
+  MAX_EXTRA_JUTSU_SLOTS,
+  RYO_CAP,
+  RYO_FOR_REP_DAYS_FROZEN,
+  RYO_FOR_REP_MAX_LISTINGS,
+  RYO_FOR_REP_MIN_REPS,
+} from "@/drizzle/constants";
+import { actionLog, ryoTrade, userData } from "@/drizzle/schema";
 import { filterValidElementsTypeguard } from "@/libs/train";
 import type { DrizzleClient } from "@/server/db";
-import type { ElementName } from "@/drizzle/constants";
+import { getRandomElement } from "@/utils/array";
+import { round } from "@/utils/math";
+import {
+  canChangeContent,
+  canRollPrimaryElement,
+  canRollSecondaryElement,
+} from "@/utils/permissions";
+import { secondsFromDate } from "@/utils/time";
 import type { DatabasePromiseReturn } from "@/utils/typeutils";
-
-import { canChangeContent } from "@/utils/permissions";
+import { statSchema } from "@/validators/combat";
+import { genders } from "@/validators/register";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "../trpc";
+import { fetchUser } from "./profile";
 
 export const blackMarketRouter = createTRPCRouter({
   getRyoOffers: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get ryo trade offers" } })
     .input(
       z.object({
         cursor: z.number().nullish(),
@@ -85,28 +95,31 @@ export const blackMarketRouter = createTRPCRouter({
       const nextCursor = results.length < limit ? null : currentCursor + 1;
       return { data: results, nextCursor };
     }),
-  getGraph: protectedProcedure.query(async ({ ctx }) => {
-    const sender = alias(userData, "sender");
-    const receiver = alias(userData, "receiver");
-    const transfers = await ctx.drizzle
-      .select({
-        senderId: sender.userId,
-        receiverId: receiver.userId,
-        senderUsername: sender.username,
-        receiverUsername: receiver.username,
-        senderAvatar: sender.avatar,
-        receiverAvatar: receiver.avatar,
-        totalReps: sql<number>`SUM(${ryoTrade.repsForSale})`,
-        totalRyo: sql<number>`SUM(${ryoTrade.requestedRyo})`,
-      })
-      .from(ryoTrade)
-      .innerJoin(sender, eq(ryoTrade.creatorUserId, sender.userId))
-      .innerJoin(receiver, eq(ryoTrade.purchaserUserId, receiver.userId))
-      .where(isNotNull(ryoTrade.purchaserUserId))
-      .groupBy(ryoTrade.creatorUserId, ryoTrade.purchaserUserId);
-    return transfers;
-  }),
+  getGraph: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get ryo trade graph data" } })
+    .query(async ({ ctx }) => {
+      const sender = alias(userData, "sender");
+      const receiver = alias(userData, "receiver");
+      const transfers = await ctx.drizzle
+        .select({
+          senderId: sender.userId,
+          receiverId: receiver.userId,
+          senderUsername: sender.username,
+          receiverUsername: receiver.username,
+          senderAvatar: sender.avatar,
+          receiverAvatar: receiver.avatar,
+          totalReps: sql<number>`SUM(${ryoTrade.repsForSale})`,
+          totalRyo: sql<number>`SUM(${ryoTrade.requestedRyo})`,
+        })
+        .from(ryoTrade)
+        .innerJoin(sender, eq(ryoTrade.creatorUserId, sender.userId))
+        .innerJoin(receiver, eq(ryoTrade.purchaserUserId, receiver.userId))
+        .where(isNotNull(ryoTrade.purchaserUserId))
+        .groupBy(ryoTrade.creatorUserId, ryoTrade.purchaserUserId);
+      return transfers;
+    }),
   createOffer: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Create a ryo trade offer" } })
     .input(
       z.object({
         reps: z.coerce.number().int().min(1),
@@ -163,6 +176,7 @@ export const blackMarketRouter = createTRPCRouter({
       return { success: true, message: "Offer created" };
     }),
   delistOffer: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Remove a ryo trade offer" } })
     .input(z.object({ offerId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -195,6 +209,7 @@ export const blackMarketRouter = createTRPCRouter({
       return { success: true, message: "Offer delisted" };
     }),
   takeOffer: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Purchase a ryo trade offer" } })
     .input(z.object({ offerId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch the offer, user, and seller data simultaneously
@@ -340,6 +355,7 @@ export const blackMarketRouter = createTRPCRouter({
     }),
   // Update custom title
   updateCustomTitle: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Update user's custom title" } })
     .input(z.object({ title: z.string().min(1).max(15) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -377,6 +393,7 @@ export const blackMarketRouter = createTRPCRouter({
       }
     }),
   changeUserGender: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Change user's gender" } })
     .input(z.object({ gender: z.enum(genders) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -402,6 +419,7 @@ export const blackMarketRouter = createTRPCRouter({
       }
     }),
   buyItemSlot: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Purchase an extra item slot" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Fetch
@@ -434,6 +452,7 @@ export const blackMarketRouter = createTRPCRouter({
       }
     }),
   buyJutsuSlot: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Purchase an extra jutsu slot" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Fetch
@@ -469,6 +488,9 @@ export const blackMarketRouter = createTRPCRouter({
       }
     }),
   rerollElement: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Reroll primary or secondary element" },
+    })
     .input(z.object({ elementType: z.enum(["primary", "secondary"]) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -569,6 +591,7 @@ export const blackMarketRouter = createTRPCRouter({
     }),
   // Update stats
   updateStats: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Redistribute user stats" } })
     .input(statSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -737,13 +760,13 @@ export const getRolledElements = async (client: DrizzleClient, userId: string) =
  * @param {string} elementType - The type of element rolled (primary or secondary).
  * @param {string} element - The name of the element rolled.
  */
-const addElementRoll = async (
+const addElementRoll = (
   client: DrizzleClient,
   userId: string,
   elementType: "primary" | "secondary",
   element: ElementName,
 ) => {
-  await client.insert(actionLog).values({
+  return client.insert(actionLog).values({
     id: nanoid(),
     userId: userId,
     tableName: "elementRoll",

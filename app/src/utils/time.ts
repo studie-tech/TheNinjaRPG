@@ -40,7 +40,7 @@ export const getTimeOfLastReset = () => {
  * @returns The number of seconds passed since the given date
  */
 export const secondsPassed = (date: Date, timeDiff?: number, floor = true) => {
-  let now = new Date().getTime();
+  let now = Date.now();
   if (timeDiff) now = now - timeDiff;
   const parsedDate = date instanceof Date ? date : new Date(date);
   const rawPassedValue = (now - parsedDate.getTime()) / 1000;
@@ -275,4 +275,23 @@ export const formatSecondsToTimeDisplay = (totalSeconds: number): string => {
     return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
   }
   return `${totalSeconds}s`;
+};
+
+/**
+ * Get the first day of the next month at midnight UTC
+ * Used for monthly reset countdowns
+ */
+export const getFirstOfNextMonth = (): Date => {
+  const now = new Date();
+  return new Date(
+    Date.UTC(
+      now.getUTCMonth() === 11 ? now.getUTCFullYear() + 1 : now.getUTCFullYear(),
+      now.getUTCMonth() === 11 ? 0 : now.getUTCMonth() + 1,
+      1,
+      0,
+      0,
+      0,
+      0,
+    ),
+  );
 };

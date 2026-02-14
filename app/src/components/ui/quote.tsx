@@ -1,8 +1,8 @@
-import * as React from "react";
-import { renderToString } from "react-dom/server";
-import { cn } from "src/libs/shadui";
-import { parseHtml } from "@/utils/parse";
 import { X } from "lucide-react";
+import type * as React from "react";
+import { renderToString } from "react-dom/server";
+import { cn } from "@/libs/shadui";
+import { parseHtml } from "@/utils/parse";
 
 interface QuoteProps extends React.HTMLAttributes<HTMLQuoteElement> {
   author?: string;
@@ -30,18 +30,18 @@ const Quote = ({
     <blockquote
       ref={ref}
       className={cn(
-        "my-4 rounded-lg border-l-4 border-primary bg-accent p-4 shadow-md mr-2 relative",
+        "relative my-4 mr-2 rounded-lg border-primary border-l-4 bg-accent p-4 shadow-md",
         className,
       )}
       {...props}
     >
       {author && (
-        <div className="mb-2 text-sm font-semibold text-muted-foreground">
+        <div className="mb-2 font-semibold text-muted-foreground text-sm">
           Quoted from {author}
           {date && ` on ${date}`}
         </div>
       )}
-      <div className="italic text-foreground">{parseHtml(content || "")}</div>
+      <div className="text-foreground italic">{parseHtml(content || "")}</div>
       {onRemove && (
         <button
           type="button"
@@ -50,7 +50,7 @@ const Quote = ({
             e.stopPropagation();
             onRemove();
           }}
-          className="absolute top-2 right-2 p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
+          className="absolute top-2 right-2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Remove quote"
         >
           <X className="h-4 w-4" />

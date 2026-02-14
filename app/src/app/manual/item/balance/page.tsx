@@ -1,31 +1,32 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
-import { useLocalStorage } from "@/hooks/localstorage";
-import { groupBy } from "@/utils/grouping";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { BarChart3, InfoIcon, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
+import type React from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { useLocalStorage } from "@/hooks/localstorage";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
 import ItemBalanceFiltering, {
-  useFiltering,
   getFilter,
+  useFiltering,
 } from "@/layout/ItemBalanceFiltering";
 import ItemFiltering, {
-  useFiltering as useItemFiltering,
   getFilter as getItemFilter,
+  useFiltering as useItemFiltering,
 } from "@/layout/ItemFiltering";
-import Link from "next/link";
-import NavTabs from "@/layout/NavTabs";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import { BarChart3, Trash2, InfoIcon, Pencil } from "lucide-react";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import NavTabs from "@/layout/NavTabs";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { showMutationToast } from "@/libs/toast";
+import { groupBy } from "@/utils/grouping";
+import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
-import Confirm2 from "@/layout/Confirm2";
-import Modal2 from "@/layout/Modal2";
-import { showMutationToast } from "@/libs/toast";
 
 export default function ManualItemsBalance() {
   // State
@@ -78,7 +79,7 @@ const ItemEffectsBalance: React.FC<ItemEffectsBalanceProps> = (props) => {
 
   // Process data for table
   const tableData = data
-    ?.map((item) => {
+    ?.flatMap((item) => {
       return item.effects.map((effect) => {
         return {
           name: item.name,
@@ -111,7 +112,6 @@ const ItemEffectsBalance: React.FC<ItemEffectsBalanceProps> = (props) => {
         };
       });
     })
-    .flat()
     .sort((a, b) => b.power - a.power);
 
   // Table columns
@@ -131,7 +131,6 @@ const ItemEffectsBalance: React.FC<ItemEffectsBalanceProps> = (props) => {
   useEffect(() => {
     state.setOnlyInShop(undefined);
     state.setEffect(["damage"]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -238,7 +237,7 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
 
         const itemId = itemNameToId.get(name);
         const nameWithIcon = itemId ? (
-          <div className="flex items-center gap-2">
+          <div key={itemId} className="flex items-center gap-2">
             <span>{name}</span>
             <Link href={`/manual/item/statistics/${itemId}`}>
               <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />

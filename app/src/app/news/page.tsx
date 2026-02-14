@@ -1,10 +1,10 @@
-import FancyForumThreads from "@/layout/FancyForumThreads";
 import { currentUser } from "@clerk/nextjs/server";
+import { IMG_BUILDING_NEWS } from "@/drizzle/constants";
+import FancyForumThreads from "@/layout/FancyForumThreads";
 import { getInfiniteThreads, readNews } from "@/routers/forum";
-import { canCreateNews } from "@/utils/permissions";
 import { fetchUser } from "@/routers/profile";
 import { drizzleDB } from "@/server/db";
-import { IMG_BUILDING_NEWS } from "@/drizzle/constants";
+import { canCreateNews } from "@/utils/permissions";
 
 // Force dynamic rendering to avoid static generation errors with headers
 export const dynamic = "force-dynamic";

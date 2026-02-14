@@ -1,23 +1,23 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Info, Star, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Star, Info, Zap } from "lucide-react";
-import { useRequiredUserData } from "@/utils/UserContext";
 import {
+  GATHERING_ITEM_DROP_CHANCES,
   GATHERING_RANKS,
   GATHERING_REQUIRED_EXP,
-  GATHERING_ITEM_DROP_CHANCES,
 } from "@/drizzle/constants";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import ContentBox from "@/layout/ContentBox";
+import QuestPicker from "@/layout/QuestPicker";
 import {
   getGatheringRank,
-  getNextRankExperience,
   getGatheringRankProgress,
+  getNextRankExperience,
 } from "@/libs/gathering";
-import QuestPicker from "@/layout/QuestPicker";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function OccupationGathering() {
   // State
@@ -74,17 +74,17 @@ export default function OccupationGathering() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground text-sm">
                   Your current drop chances for {gatheringRank}:
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                   {Object.entries(GATHERING_ITEM_DROP_CHANCES[gatheringRank]).map(
-                    ([rarity, chance]) => (
-                      <div key={rarity} className="text-center">
+                    ([rarity, chance], i) => (
+                      <div key={`${rarity}-${i}`} className="text-center">
                         <Badge variant="outline" className="mb-2 capitalize">
                           {rarity.toLowerCase()}
                         </Badge>
-                        <div className="text-lg font-bold">{chance}%</div>
+                        <div className="font-bold text-lg">{chance}%</div>
                       </div>
                     ),
                   )}
@@ -104,19 +104,22 @@ export default function OccupationGathering() {
             <CardContent>
               <div className="space-y-4">
                 <div>
-                  <h4 className="font-medium mb-2">Gathering Ranks & Requirements</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    {GATHERING_RANKS.map((rank) => (
-                      <div key={rank}>
+                  <h4 className="mb-2 font-medium">Gathering Ranks & Requirements</h4>
+                  <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+                    {GATHERING_RANKS.map((rank, i) => (
+                      <div key={`${rank}-${i}`}>
                         <Badge variant="outline" className="mb-2">
                           {rank} ({GATHERING_REQUIRED_EXP[rank].toLocaleString()}+ exp)
                         </Badge>
-                        <div className="space-y-1 text-muted-foreground ml-2">
+                        <div className="ml-2 space-y-1 text-muted-foreground">
                           <div>Drop Chances:</div>
                           <ul className="space-y-1">
                             {Object.entries(GATHERING_ITEM_DROP_CHANCES[rank]).map(
-                              ([rarity, chance]) => (
-                                <li key={rarity} className="flex justify-between">
+                              ([rarity, chance], i) => (
+                                <li
+                                  key={`${rarity}-${i}`}
+                                  className="flex justify-between"
+                                >
                                   <span>
                                     • {capitalizeFirstLetter(rarity.toLowerCase())}:
                                   </span>
@@ -132,8 +135,8 @@ export default function OccupationGathering() {
                 </div>
 
                 <div>
-                  <h4 className="font-medium mb-2">How Gathering Works</h4>
-                  <ul className="space-y-1 text-sm text-muted-foreground">
+                  <h4 className="mb-2 font-medium">How Gathering Works</h4>
+                  <ul className="space-y-1 text-muted-foreground text-sm">
                     <li>
                       • Complete gathering quests to gain experience and materials
                     </li>

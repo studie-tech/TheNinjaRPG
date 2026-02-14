@@ -1,35 +1,35 @@
 "use client";
 
-import Image from "@/layout/Image";
 import Link from "next/link";
 import {
-  IMG_MANUAL_COMBAT,
-  IMG_MANUAL_TRAVEL,
-  IMG_MANUAL_BLOODLINE,
-  IMG_MANUAL_JUTSU,
-  IMG_MANUAL_ITEM,
-  IMG_MANUAL_CRAFTING_RECIPES,
+  IMG_MANUAL_ACTIVITY_STREAK,
   IMG_MANUAL_AI,
-  IMG_MANUAL_QUEST,
-  IMG_MANUAL_LOGS,
-  IMG_MANUAL_DAM_CALCS,
-  IMG_MANUAL_BADGE,
   IMG_MANUAL_ASSET,
-  IMG_MANUAL_OPINION,
-  IMG_MANUAL_RECRUITMENT,
   IMG_MANUAL_AWARDS,
-  IMG_MANUAL_POLLS,
-  IMG_MANUAL_RANKED,
-  IMG_MANUAL_SKILLTREE,
-  IMG_MANUAL_BALANCE,
   IMG_MANUAL_BACKUP,
+  IMG_MANUAL_BADGE,
+  IMG_MANUAL_BALANCE,
+  IMG_MANUAL_BLOODLINE,
+  IMG_MANUAL_COMBAT,
+  IMG_MANUAL_CRAFTING_RECIPES,
+  IMG_MANUAL_DAM_CALCS,
+  IMG_MANUAL_ITEM,
+  IMG_MANUAL_JUTSU,
+  IMG_MANUAL_LOGS,
+  IMG_MANUAL_OPINION,
+  IMG_MANUAL_POLLS,
+  IMG_MANUAL_QUEST,
+  IMG_MANUAL_RANKED,
+  IMG_MANUAL_RECRUITMENT,
+  IMG_MANUAL_SKILLTREE,
   IMG_MANUAL_STAFF,
   IMG_MANUAL_TOWER_UPGRADES,
-  IMG_MANUAL_ACTIVITY_STREAK,
+  IMG_MANUAL_TRAVEL,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
-import { useUserData } from "@/utils/UserContext";
+import Image from "@/layout/Image";
 import { canControlBackups, canViewRecruitmentAnalytics } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 export default function ManualMain() {
   const { data: userData } = useUserData();

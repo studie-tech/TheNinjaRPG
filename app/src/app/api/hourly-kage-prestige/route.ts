@@ -1,17 +1,20 @@
+import { and, eq, sql } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { eq, and, sql } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
-import { village, userData } from "@/drizzle/schema";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { lockWithHourlyTimer, handleEndpointError } from "@/libs/gamesettings";
 import {
   KAGE_CHALLENGE_LOSE_PRESTIGE_MIN,
   KAGE_CHALLENGE_LOSE_PRESTIGE_PERCENTAGE,
   KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS,
 } from "@/drizzle/constants";
-import { cookies } from "next/headers";
-import { calculateDailyLockedTime } from "@/utils/kage";
+import { userData, village } from "@/drizzle/schema";
+import {
+  handleEndpointError,
+  lockWithHourlyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
 import { fetchActiveWars } from "@/server/api/routers/war";
+import { drizzleDB } from "@/server/db";
+import { calculateDailyLockedTime } from "@/utils/kage";
 
 const ENDPOINT_NAME = "hourly-kage-prestige";
 
@@ -40,14 +43,18 @@ export async function GET() {
       fetchActiveWars(drizzleDB),
     ]);
 
-    const kageIds = kages.map((k) => k.userId);
+    type KageType = (typeof kages)[number];
+    const kageIds = kages.map((k: KageType) => k.userId);
 
     if (kageIds.length > 0) {
       // Calculate daily locked time for all kages in bulk
       const lockedTimeRecord = await calculateDailyLockedTime(drizzleDB, kageIds);
 
       // Fetch all active wars to check for war status
-      const activeVillageWars = activeWars.filter((w) => w.type === "VILLAGE_WAR");
+      type WarType = (typeof activeWars)[number];
+      const activeVillageWars = activeWars.filter(
+        (w: WarType) => w.type === "VILLAGE_WAR",
+      );
 
       const updatePromises: Promise<unknown>[] = [];
       const maxDailySeconds = KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS * 60 * 60;
@@ -58,7 +65,7 @@ export async function GET() {
 
         // Check if this village is involved in an active village war
         const isVillageAtWar = activeVillageWars.some(
-          (w) =>
+          (w: WarType) =>
             w.attackerVillageId === kage.villageId ||
             w.defenderVillageId === kage.villageId,
         );
@@ -105,6 +112,6 @@ export async function GET() {
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

@@ -1,16 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
+import { MessagesSquare, SquarePen } from "lucide-react";
 import Link from "next/link";
-import Image from "@/layout/Image";
-import { parseHtml } from "@/utils/parse";
-import { Button } from "@/components/ui/button";
-import { SquarePen, MessagesSquare } from "lucide-react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
 import { useInfinitePagination } from "@/libs/pagination";
 import type { InfiniteThreads } from "@/routers/forum";
+import { parseHtml } from "@/utils/parse";
 
 interface FancyForumThreadsProps {
   board_name: string;
@@ -38,7 +38,7 @@ const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
       refetchOnReconnect: false,
     },
   );
-  const allThreads = threads?.pages.map((page) => page.threads).flat();
+  const allThreads = threads?.pages.flatMap((page) => page.threads);
   const board = threads?.pages[0]?.board;
 
   useInfinitePagination({
@@ -83,24 +83,24 @@ const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
           const post = thread.posts[0];
           return (
             <div
-              key={i}
+              key={thread.id}
               ref={i === allThreads.length - 1 ? setLastElement : null}
-              className={`border-2 rounded-md p-3 m-2 bg-popover`}
+              className={`m-2 rounded-md border-2 bg-popover p-3`}
             >
               <div>
                 <h2 className="font-bold">{thread.title}</h2>
-                <p className="italic font-bold  pb-1" suppressHydrationWarning>
+                <p className="pb-1 font-bold italic" suppressHydrationWarning>
                   By {thread.user.username} on {thread.createdAt.toLocaleDateString()}
                 </p>
               </div>
               {post && parseHtml(post.content)}
               {board && (
-                <p className="pt-3 hover:text-orange-500 hover:cursor-pointer">
+                <p className="pt-3 hover:cursor-pointer hover:text-orange-500">
                   <Link
                     href={`/forum/${board.id}/${thread.id}`}
                     className="flex flex-row items-center justify-end"
                   >
-                    <MessagesSquare className="w-5 h-5 mr-1" />
+                    <MessagesSquare className="mr-1 h-5 w-5" />
                     {thread.nPosts} Comments
                   </Link>
                 </p>

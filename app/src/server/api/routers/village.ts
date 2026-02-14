@@ -1,55 +1,81 @@
-import { z } from "zod";
-import { nanoid } from "nanoid";
+import {
+  and,
+  count,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { getTableColumns } from "drizzle-orm";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/api/trpc";
-import { baseServerResponse, serverError, errorResponse } from "@/api/trpc";
-import { village, villageStructure, userData, notification } from "@/drizzle/schema";
-import { villageAlliance, kageDefendedChallenges, war, sector } from "@/drizzle/schema";
-import { eq, sql, gte, and, or, inArray, ne, count } from "drizzle-orm";
-import { ramenOptions } from "@/utils/ramen";
-import { getRamenHealPercentage, calcRamenCost } from "@/utils/ramen";
-import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
-import { fetchRequests } from "@/routers/sparring";
-import { insertRequest, updateRequestState } from "@/routers/sparring";
-import { createConvo } from "@/routers/comments";
-import { canAccessStructure } from "@/utils/village";
-import { getStrucBoost } from "@/utils/village";
-import { isKage } from "@/utils/kage";
-import { findRelationship } from "@/utils/alliance";
-import { canAlly, canEnemy, canSurrender } from "@/utils/alliance";
-import { COST_SWAP_VILLAGE, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { ALLIANCEHALL_LONG, ALLIANCEHALL_LAT } from "@/drizzle/constants";
-import { KAGE_WAR_DECLARE_COST } from "@/drizzle/constants";
-import { UserRequestTypes } from "@/drizzle/constants";
-import { WAR_FUNDS_COST } from "@/drizzle/constants";
-import { deleteRequests } from "@/routers/sensei";
-import { hasRequiredRank } from "@/libs/train";
-import { canAdministrateWars } from "@/utils/permissions";
-import { canSwapVillage } from "@/utils/permissions";
-import { VILLAGE_LEAVE_REQUIRED_RANK } from "@/drizzle/constants";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { ALLIANCE_VILLAGE_TYPES } from "@/drizzle/constants";
-import { actionLog } from "@/drizzle/schema";
-import type { DrizzleClient } from "@/server/db";
+import { nanoid } from "nanoid";
+import { z } from "zod";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/api/trpc";
 import type { AllianceState, AllianceVillageType } from "@/drizzle/constants";
+import {
+  ALLIANCE_VILLAGE_TYPES,
+  ALLIANCEHALL_LAT,
+  ALLIANCEHALL_LONG,
+  COST_SWAP_VILLAGE,
+  IMG_AVATAR_DEFAULT,
+  KAGE_WAR_DECLARE_COST,
+  UserRequestTypes,
+  VILLAGE_LEAVE_REQUIRED_RANK,
+  VILLAGE_SYNDICATE_ID,
+  WAR_FUNDS_COST,
+} from "@/drizzle/constants";
 import type { VillageAlliance } from "@/drizzle/schema";
+import {
+  actionLog,
+  kageDefendedChallenges,
+  notification,
+  sector,
+  userData,
+  village,
+  villageAlliance,
+  villageStructure,
+  war,
+} from "@/drizzle/schema";
+import { hasRequiredRank } from "@/libs/train";
+import { createConvo } from "@/routers/comments";
+import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import { deleteRequests } from "@/routers/sensei";
+import { fetchRequests, insertRequest, updateRequestState } from "@/routers/sparring";
+import type { DrizzleClient } from "@/server/db";
+import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/alliance";
+import { isKage } from "@/utils/kage";
+import { canAdministrateWars, canSwapVillage } from "@/utils/permissions";
+import { calcRamenCost, getRamenHealPercentage, ramenOptions } from "@/utils/ramen";
+import { canAccessStructure, getStrucBoost } from "@/utils/village";
 
 const availRequests = ["SURRENDER", "ALLIANCE"];
 
 export const villageRouter = createTRPCRouter({
   // Get all village names
-  getAllNames: publicProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle.query.village.findMany({
-      columns: { id: true, name: true },
-      where: inArray(village.type, ["VILLAGE", "OUTLAW", "SAFEZONE"]),
-      orderBy: (table, { asc }) => [asc(table.name)],
-    });
-  }),
+  getAllNames: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all village names and IDs" } })
+    .query(async ({ ctx }) => {
+      return await ctx.drizzle.query.village.findMany({
+        columns: { id: true, name: true },
+        where: inArray(village.type, ["VILLAGE", "OUTLAW", "SAFEZONE"]),
+        orderBy: (table, { asc }) => [asc(table.name)],
+      });
+    }),
   // Get all villages
-  getAll: publicProcedure.query(async ({ ctx }) => {
-    return await fetchVillages(ctx.drizzle);
-  }),
+  getAll: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all villages with kage info" } })
+    .query(async ({ ctx }) => {
+      return await fetchVillages(ctx.drizzle);
+    }),
   // Restore village structure points
   restoreStructurePoints: protectedProcedure
     .input(z.object({ structureId: z.string() }))
@@ -79,6 +105,7 @@ export const villageRouter = createTRPCRouter({
     }),
   // Get a specific village & its structures∂
   get: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get village details and structures" } })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       // Fetch in parallel
@@ -109,6 +136,7 @@ export const villageRouter = createTRPCRouter({
     }),
   // Get sector ownership
   getSectorOwnerships: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get sector ownership and war data" } })
     .input(z.object({ onlyOwnWar: z.boolean() }))
     .query(async ({ ctx, input }) => {
       const [user, sectors, colors, sectorWars] = await Promise.all([
@@ -154,6 +182,7 @@ export const villageRouter = createTRPCRouter({
     }),
   // Buying food in ramen shop
   buyFood: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Buy food at ramen shop to heal" } })
     .input(z.object({ ramen: z.enum(ramenOptions), villageId: z.string().nullish() }))
     .output(
       baseServerResponse.extend({
@@ -224,6 +253,9 @@ export const villageRouter = createTRPCRouter({
       }
     }),
   leaveVillage: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Leave current village to become outlaw" },
+    })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Queries
@@ -264,6 +296,7 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "You have left the village" };
     }),
   joinVillage: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Join a village as an outlaw" } })
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -351,7 +384,7 @@ export const villageRouter = createTRPCRouter({
           .set({
             villageId: village.id,
             reputationPoints: user.reputationPoints - cost,
-            isOutlaw: village.type === "OUTLAW" ? true : false,
+            isOutlaw: village.type === "OUTLAW",
             sector: village.sector,
             longitude: ALLIANCEHALL_LONG,
             latitude: ALLIANCEHALL_LAT,
@@ -376,20 +409,28 @@ export const villageRouter = createTRPCRouter({
 
       return { success: true, message: "You have swapped villages" };
     }),
-  getAlliances: publicProcedure.query(async ({ ctx }) => {
-    const [villages, relationships, requests] = await Promise.all([
-      fetchVillages(ctx.drizzle),
-      fetchAlliances(ctx.drizzle),
-      fetchRequests(ctx.drizzle, ["ALLIANCE", "SURRENDER"], 3600 * 48),
-    ]);
-    return { villages, relationships, requests };
-  }),
+  getAlliances: publicProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get all village alliances and requests" },
+    })
+    .query(async ({ ctx }) => {
+      const [villages, relationships, requests] = await Promise.all([
+        fetchVillages(ctx.drizzle),
+        fetchAlliances(ctx.drizzle),
+        fetchRequests(ctx.drizzle, ["ALLIANCE", "SURRENDER"], 3600 * 48),
+      ]);
+      return { villages, relationships, requests };
+    }),
   getVillageStructures: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get structures for a village" } })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
       return await fetchStructures(ctx.drizzle, input.villageId);
     }),
   createRequest: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Create alliance or surrender request" },
+    })
     .input(z.object({ targetId: z.string(), type: z.enum(UserRequestTypes) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -463,6 +504,9 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "Alliance request sent" };
     }),
   acceptRequest: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Accept alliance or surrender request" },
+    })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -507,6 +551,9 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "Alliance request accepted" };
     }),
   rejectRequest: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Reject alliance or surrender request" },
+    })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -525,6 +572,9 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "Alliance request rejected" };
     }),
   cancelRequest: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Cancel alliance or surrender request" },
+    })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -543,6 +593,7 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "Alliance request rejected" };
     }),
   leaveAlliance: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Leave an alliance as kage" } })
     .input(z.object({ allianceId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -564,7 +615,8 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "You have left the alliance" };
     }),
   releaseSector: protectedProcedure
-    .input(z.object({ sector: z.number().int() }))
+    .meta({ mcp: { enabled: true, description: "Release sector ownership as kage" } })
+    .input(z.object({ sector: z.int() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
@@ -604,6 +656,7 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "You have released the sector" };
     }),
   declareEnemy: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Declare another village as enemy" } })
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

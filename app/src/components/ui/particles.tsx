@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Particles, { initParticlesEngine } from "@tsparticles/react";
-import { useLocalStorage } from "@/hooks/localstorage";
 import { loadSlim } from "@tsparticles/slim";
+import { useEffect, useState } from "react";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 const ParticleProvider = () => {

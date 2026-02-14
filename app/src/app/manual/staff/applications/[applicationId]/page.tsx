@@ -1,18 +1,18 @@
 "use client";
 
+import { ThumbsDown, ThumbsUp } from "lucide-react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api } from "@/app/_trpc/client";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import Conversation from "@/layout/Conversation";
-import { Button } from "@/components/ui/button";
-import { useUserData } from "@/utils/UserContext";
-import AvatarImage from "@/layout/Avatar";
-import Link from "next/link";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
-import { showMutationToast } from "@/libs/toast";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import AvatarImage from "@/layout/Avatar";
+import ContentBox from "@/layout/ContentBox";
+import Conversation from "@/layout/Conversation";
+import Loader from "@/layout/Loader";
+import { showMutationToast } from "@/libs/toast";
 import { canApproveApplications, getApprovalGroup } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 export default function ApplicationDetailPage() {
   // State
@@ -81,7 +81,7 @@ export default function ApplicationDetailPage() {
                   {app.applicant?.username || app.applicantUserId}
                 </Link>
               </div>
-              <div className="text-sm text-muted-foreground">
+              <div className="text-muted-foreground text-sm">
                 Lvl. {app.applicant?.level || 0} {app.applicant?.rank || "STUDENT"}
                 {" • "}
                 {app.applicant?.village?.name || "Syndicate"}
@@ -96,7 +96,7 @@ export default function ApplicationDetailPage() {
           </div>
           {isStaff && (
             <div className="pt-1">
-              <div className="font-semibold mb-1">Approvals</div>
+              <div className="mb-1 font-semibold">Approvals</div>
               <div className="flex flex-wrap gap-2">
                 <ApprovalBadge app={app} group="EVENT-ADMIN" label="Event" />
                 <ApprovalBadge app={app} group="CODING-ADMIN" label="Coding" />
@@ -150,7 +150,7 @@ const ApproveButton: React.FC<{ applicationId: string }> = ({ applicationId }) =
   });
   return (
     <Button disabled={isPending} onClick={() => mutate({ id: applicationId })}>
-      <ThumbsUp className="w-5 h-5 mr-2" />
+      <ThumbsUp className="mr-2 h-5 w-5" />
       Approve
     </Button>
   );
@@ -173,7 +173,7 @@ const RejectButton: React.FC<{ applicationId: string }> = ({ applicationId }) =>
       disabled={isPending}
       onClick={() => mutate({ id: applicationId })}
     >
-      <ThumbsDown className="w-5 h-5 mr-2" />
+      <ThumbsDown className="mr-2 h-5 w-5" />
       Reject
     </Button>
   );

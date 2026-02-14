@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { SignUp } from "@clerk/nextjs";
+import { useEffect, useState } from "react";
 import ContentBox from "@/layout/ContentBox";
 import WebGlError from "@/layout/WebGLError";
-import { SignUp } from "@clerk/nextjs";
 
 export default function SignupUser() {
   const [webglError, setWebglError] = useState<boolean>(false);

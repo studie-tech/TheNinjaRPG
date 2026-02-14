@@ -1,15 +1,16 @@
-import { eq, ne, and, or, sql, lt, gt } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
-import { userData, dailyBankInterest } from "@/drizzle/schema";
-import { lockWithDailyTimer, updateGameSetting } from "@/libs/gamesettings";
-import { getStrucBoost } from "@/utils/village";
-import { calcBankInterest } from "@/utils/village";
-import { RYO_CAP } from "@/drizzle/constants";
-import { FED_NORMAL_BANK_INTEREST } from "@/drizzle/constants";
-import { FED_SILVER_BANK_INTEREST } from "@/drizzle/constants";
-import { FED_GOLD_BANK_INTEREST } from "@/drizzle/constants";
-import { cookies } from "next/headers";
+import { and, eq, gt, lt, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { cookies } from "next/headers";
+import {
+  FED_GOLD_BANK_INTEREST,
+  FED_NORMAL_BANK_INTEREST,
+  FED_SILVER_BANK_INTEREST,
+  RYO_CAP,
+} from "@/drizzle/constants";
+import { dailyBankInterest, userData } from "@/drizzle/schema";
+import { lockWithDailyTimer, updateGameSetting } from "@/libs/gamesettings";
+import { drizzleDB } from "@/server/db";
+import { calcBankInterest, getStrucBoost } from "@/utils/village";
 
 const ENDPOINT_NAME = "daily-bank";
 
@@ -25,7 +26,7 @@ export async function GET() {
 
   try {
     // Get today's date
-    const today = new Date().toISOString().split("T")[0]!;
+    const today = new Date().toISOString().split("T")[0] ?? "";
 
     // Query all villages with their structures
     const villages = await drizzleDB.query.village.findMany({
@@ -33,7 +34,7 @@ export async function GET() {
     });
 
     // Process each village
-    const promises = villages.map(async (village) => {
+    const promises = villages.map(async (village: (typeof villages)[number]) => {
       // Calculations
       const boost = getStrucBoost("bankInterestPerLvl", village.structures);
       const baseFactor = calcBankInterest(boost) / 100;
@@ -92,16 +93,18 @@ export async function GET() {
           );
 
         // Create interest records for each user
-        const interestRecords = usersWithBank.map((user) => {
-          const interestAmount = Math.floor(Math.min(user.bank * c.factor, 1000000));
-          return {
-            id: nanoid(),
-            userId: user.userId,
-            amount: interestAmount,
-            date: today,
-            interestPercent: Math.floor(c.factor * 100),
-          };
-        });
+        const interestRecords = usersWithBank.map(
+          (user: (typeof usersWithBank)[number]) => {
+            const interestAmount = Math.floor(Math.min(user.bank * c.factor, 1000000));
+            return {
+              id: nanoid(),
+              userId: user.userId,
+              amount: interestAmount,
+              date: today,
+              interestPercent: Math.floor(c.factor * 100),
+            };
+          },
+        );
 
         // Insert interest records (upsert to handle duplicates)
         if (interestRecords.length > 0) {
@@ -120,7 +123,10 @@ export async function GET() {
       });
 
       const results = await Promise.all(typePromises);
-      const totalProcessed = results.reduce((sum, count) => sum + count, 0);
+      const totalProcessed = results.reduce(
+        (sum: number, count: number) => sum + count,
+        0,
+      );
 
       return `${village.name}: ${totalProcessed} users processed`;
     });

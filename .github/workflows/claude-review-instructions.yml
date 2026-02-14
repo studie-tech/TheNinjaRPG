@@ -16,12 +16,17 @@ jobs:
           script: |
             const body = `## 🤖 AI Assistants Available
 
-            **Need a code review or implementation plan?** Copy and paste this:
+            **Need to scope out a bigger feature and align properly?** Copy and paste this:
+
+            \`\`\`
+            @claude please review this issue and create your overall understanding of how this would fit into the codebase. Be sure to highlight main flow changes, UI components, UX flows, etc. Investigate it thoroughly with respect to the codebase. Be sure to 1. Highlight any uncertainties and request follow-up information as needed. 2. Highlight any potential concerns and request user input on them. 3. highlight any game mechanics / components which may need adaption / integration with this new feature . Do not start implementing, and do not go deep on implementation details - right now the most important thing is alignment with the user request, so as anything which may still need alignment.
+            \`\`\`
+
+            **Need a code review or implementation plan for a fix?** Copy and paste this:
 
             \`\`\`
             @claude please review this issue and create an implementation plan. Investigate it thoroughly with respect to the codebase. Highlight any uncertainties and request follow-up information as needed. Do not start implementing!
             \`\`\`
-
             ---
 
             **Other AI assistants you can mention:**

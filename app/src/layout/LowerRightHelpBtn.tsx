@@ -1,18 +1,19 @@
 "use client";
 
-import React, { useEffect, useCallback, useMemo, useState } from "react";
+import { AlertCircle } from "lucide-react";
 import Link from "next/link";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { type TicketType, TicketTypes } from "@/validators/misc";
 import ChatBox from "@/layout/ChatBox";
-import { useUserData } from "@/utils/UserContext";
 import { GameSettingsPanel } from "@/layout/GameSettings";
-import { Button } from "@/components/ui/button";
-import { api } from "@/app/_trpc/client";
-import { cn } from "src/libs/shadui";
-import { AlertCircle } from "lucide-react";
+import { cn } from "@/libs/shadui";
+import { useUserData } from "@/utils/UserContext";
+import { type TicketType, TicketTypes } from "@/validators/misc";
 
 interface LowerRightHelpProps {
   className?: string;
@@ -120,7 +121,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
         <div className={cn("relative", props.className)}>
           {props.children}
           {showTutorialNotification && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[1.25rem] h-5 flex items-center justify-center animate-pulse">
+            <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] animate-pulse items-center justify-center rounded-full bg-red-500 text-white text-xs">
               !
             </span>
           )}
@@ -129,7 +130,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
       <PopoverContent className="m-2 min-w-96 max-w-96">
         {!userData ? (
           <div>
-            <p className="font-bold text-lg mb-2">Audio Settings</p>
+            <p className="mb-2 font-bold text-lg">Audio Settings</p>
             <div className="max-h-[400px] overflow-y-auto">
               <GameSettingsPanel userData={userData} updateUser={updateUser} />
             </div>
@@ -147,7 +148,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
                 the{" "}
                 <Link
                   href="/tavern"
-                  className="font-bold hover:text-orange-700 text-orange-500"
+                  className="font-bold text-orange-500 hover:text-orange-700"
                 >
                   tavern
                 </Link>
@@ -157,7 +158,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
                 2. Questions related to moderation decisions, please comment on the{" "}
                 <Link
                   href="/reports"
-                  className="font-bold hover:text-orange-700 text-orange-500"
+                  className="font-bold text-orange-500 hover:text-orange-700"
                 >
                   report
                 </Link>{" "}
@@ -167,7 +168,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
                 3. Maybe you can find the answer you are looking for on our{" "}
                 <Link
                   href="https://the-ninja-rpg.fandom.com/wiki/Getting_Started"
-                  className="font-bold hover:text-orange-700 text-orange-500"
+                  className="font-bold text-orange-500 hover:text-orange-700"
                 >
                   community manual
                 </Link>
@@ -177,7 +178,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
                 4. Alternatively, you may create a ticket in the{" "}
                 <Link
                   href={"/support"}
-                  className="font-bold hover:text-orange-700 text-orange-500"
+                  className="font-bold text-orange-500 hover:text-orange-700"
                 >
                   support
                 </Link>{" "}
@@ -185,7 +186,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
               </p>
             </TabsContent>
             <TabsContent value="ai_support" className="w-full">
-              <p className="font-bold text-lg mb-2">Get AI Help</p>
+              <p className="mb-2 font-bold text-lg">Get AI Help</p>
               <div className="h-[400px]">
                 <ChatBox
                   aiProps={{
@@ -205,37 +206,37 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
             </TabsContent>
 
             <TabsContent value="audio_settings" className="w-full">
-              <p className="font-bold text-lg mb-2">Game Settings</p>
+              <p className="mb-2 font-bold text-lg">Game Settings</p>
               <div className="max-h-[400px] overflow-y-auto">
                 <GameSettingsPanel userData={userData} updateUser={updateUser} />
               </div>
             </TabsContent>
 
             <TabsContent value="tutorial_settings" className="w-full">
-              <p className="font-bold text-lg mb-2">Tutorial Settings</p>
+              <p className="mb-2 font-bold text-lg">Tutorial Settings</p>
               <div className="space-y-4">
                 <p className="text-sm">
                   The tutorial helps new players learn the game mechanics. You can
                   enable or disable it at any time.
                 </p>
                 {showTutorialNotification && (
-                  <div className="flex items-start gap-3 p-4 border border-orange-500 rounded-lg bg-orange-500/10">
-                    <AlertCircle className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-3 rounded-lg border border-orange-500 bg-orange-500/10 p-4">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-orange-500" />
                     <div className="space-y-1">
                       <p className="font-semibold text-orange-500">
                         You have active quests!
                       </p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Enable the tutorial to get guidance on your current starter or
                         tier quests. The tutorial assistant will help you complete them.
                       </p>
                     </div>
                   </div>
                 )}
-                <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex items-center justify-between rounded-lg border p-4">
                   <div>
                     <p className="font-semibold">Tutorial Mode</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       {userData?.tutorialOn
                         ? "Currently enabled"
                         : "Currently disabled"}
@@ -258,14 +259,14 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
               </div>
             </TabsContent>
 
-            <TabsList className="text-center mt-2 grid grid-cols-4">
+            <TabsList className="mt-2 grid grid-cols-4 text-center">
               <TabsTrigger value="ai_support">AI</TabsTrigger>
               <TabsTrigger value="human_support">Human</TabsTrigger>
               <TabsTrigger value="audio_settings">Settings</TabsTrigger>
               <TabsTrigger value="tutorial_settings" className="relative">
                 Tutorial
                 {showTutorialNotification && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[1.25rem] h-5 flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs">
                     !
                   </span>
                 )}

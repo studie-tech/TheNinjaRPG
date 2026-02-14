@@ -1,17 +1,16 @@
-import React, { useMemo, useRef, useCallback, useEffect } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import Cytoscape from "cytoscape";
+import edgehandles from "cytoscape-edgehandles";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import CytoscapeComponent from "react-cytoscapejs";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { getSearchValidator } from "@/validators/register";
-import Cytoscape from "cytoscape";
-import CytoscapeComponent from "react-cytoscapejs";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import edgehandles from "cytoscape-edgehandles";
-import type { z } from "zod";
+import { getSearchValidator } from "@/validators/register";
 
 // Register edgehandles extension once globally
-// eslint-disable-next-line react-hooks/rules-of-hooks
 Cytoscape.use(edgehandles);
 
 interface GraphUsersGenericProps {
@@ -51,7 +50,6 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
         // before destroying the instance. This prevents the "Cannot read properties
         // of undefined (reading 'emit')" error on mobile devices.
         // Intentionally fire-and-forget since this is cleanup code
-        // eslint-disable-next-line @eslint-react/web-api/no-leaked-timeout
         setTimeout(() => {
           try {
             cyRefInstance.destroy();
@@ -77,7 +75,7 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
   const userSearchSchema = getSearchValidator({ max: 10 });
   const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
     resolver: zodResolver(userSearchSchema),
-    defaultValues: { users: [] },
+    defaultValues: { username: "", users: [] },
   });
   const highlights = useWatch({
     control: userSearchMethods.control,
@@ -121,7 +119,7 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
   // Memo
   const graph = useMemo(() => {
     return (
-      <div className="w-full h-full">
+      <div className="h-full w-full">
         <CytoscapeComponent
           elements={elements}
           cy={setCytoscape}
@@ -144,67 +142,68 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
             minTemp: 1.0,
           }}
           style={{ width: "100%", height: "100%" }}
-          stylesheet={[
-            {
-              selector: "node[name]",
-              style: {
-                content: "data(name)",
-                color: color,
-              },
-            },
-            {
-              selector: "edge",
-              style: {
-                "curve-style": "bezier",
-                "target-arrow-shape": "triangle",
-                color: color,
-              },
-            },
-            {
-              selector: "edge[label]",
-              style: {
-                label: "data(label)",
-                width: 3,
-                "edge-text-rotation": "autorotate",
-                "font-size": 8,
-                color: color,
-              },
-            },
-            {
-              selector: "node[label]",
-              style: {
-                label: "data(label)",
-                "font-size": 8,
-                color: color,
-              } as any,
-            },
-            ...props.nodes.map((node) => {
-              const highlighted = highlights.includes(node.id);
-              return {
-                selector: `#${node.id}`,
+          stylesheet={
+            [
+              {
+                selector: "node[name]",
                 style: {
-                  backgroundImage: node.img || IMG_AVATAR_DEFAULT,
-                  backgroundWidth: "100%",
-                  backgroundHeight: "100%",
-                  shape: "ellipse",
-                  width: highlighted ? 60 : 30,
-                  height: highlighted ? 60 : 30,
-                  borderWidth: highlighted ? 5 : 1,
-                  borderColor: highlighted ? "red" : color,
+                  content: "data(name)",
+                  color: color,
                 },
-              };
-            }),
-          ]}
+              },
+              {
+                selector: "edge",
+                style: {
+                  "curve-style": "bezier",
+                  "target-arrow-shape": "triangle",
+                  color: color,
+                },
+              },
+              {
+                selector: "edge[label]",
+                style: {
+                  label: "data(label)",
+                  width: 3,
+                  "edge-text-rotation": "autorotate",
+                  "font-size": 8,
+                  color: color,
+                },
+              },
+              {
+                selector: "node[label]",
+                style: {
+                  label: "data(label)",
+                  "font-size": 8,
+                  color: color,
+                },
+              },
+              ...props.nodes.map((node) => {
+                const highlighted = highlights.includes(node.id);
+                return {
+                  selector: `#${node.id}`,
+                  style: {
+                    backgroundImage: node.img || IMG_AVATAR_DEFAULT,
+                    backgroundWidth: "100%",
+                    backgroundHeight: "100%",
+                    shape: "ellipse",
+                    width: highlighted ? 60 : 30,
+                    height: highlighted ? 60 : 30,
+                    borderWidth: highlighted ? 5 : 1,
+                    borderColor: highlighted ? "red" : color,
+                  },
+                };
+              }),
+            ] as Cytoscape.StylesheetStyle[]
+          }
         />
       </div>
     );
-    // eslint-disable-next-line
   }, [joinedHighlights]);
 
   // Render
   return (
-    <div className="w-full h-full relative">
-      <div className="absolute top-0 w-full z-50">
+    <div className="relative h-full w-full">
+      <div className="absolute top-0 z-50 w-full">
         <UserSearchSelect
           useFormMethods={userSearchMethods}
           label="Users to highlight"

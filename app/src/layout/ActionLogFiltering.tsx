@@ -1,13 +1,13 @@
-import { useUserData } from "@/utils/UserContext";
-import { canSeeSecretData } from "@/utils/permissions";
+import type { LogType } from "@/drizzle/constants";
+import { LOG_TYPES } from "@/drizzle/constants";
 import {
   ContentFiltering,
-  useContentFiltering,
   defineFilteringSchema,
   toOptions,
+  useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { LOG_TYPES } from "@/drizzle/constants";
-import type { LogType } from "@/drizzle/constants";
+import { canSeeSecretData } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 interface ActionLogFilteringProps {
   state: ActionLogFilteringState;

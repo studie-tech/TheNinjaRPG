@@ -1,37 +1,37 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import Confirm2 from "@/layout/Confirm2";
-import BanInfo from "@/layout/BanInfo";
-import UserSearchSelect from "@/layout/UserSearchSelect";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { UsersRound, Zap, ZapOff } from "lucide-react";
+import { useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
-  FormLabel,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import AvatarImage from "@/layout/Avatar";
 import { Input } from "@/components/ui/input";
-import { useForm, useWatch } from "react-hook-form";
-import { useState } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { anbuCreateSchema } from "@/validators/anbu";
-import { UsersRound, Zap, ZapOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useRequireInVillage } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { getSearchValidator } from "@/validators/register";
 import AutoAttackModal from "@/layout/AutoAttackModal";
-import type { z } from "zod";
-import type { AnbuCreateSchema } from "@/validators/anbu";
+import AvatarImage from "@/layout/Avatar";
+import BanInfo from "@/layout/BanInfo";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { showMutationToast } from "@/libs/toast";
 import type { ArrayElement } from "@/utils/typeutils";
+import { useRequireInVillage } from "@/utils/UserContext";
 import { getEffectiveStructureLevel } from "@/utils/village";
+import type { AnbuCreateSchema } from "@/validators/anbu";
+import { anbuCreateSchema } from "@/validators/anbu";
+import { getSearchValidator } from "@/validators/register";
 
 export default function ANBU() {
   // Utils
@@ -162,29 +162,26 @@ export default function ANBU() {
         padding={false}
         topRightContent={
           <>
-            {userData?.anbuId && (
-              <>
-                {autoAttackMode ? (
-                  <Button
-                    className="mr-2 text-red-500"
-                    aria-label="Disable auto attack"
-                    hoverText="Auto Attack"
-                    onClick={() => setAutoAttackMode(false)}
-                  >
-                    <Zap className="h-7 w-7" />
-                  </Button>
-                ) : (
-                  <Button
-                    className="mr-2 hover:text-red-500"
-                    aria-label="Configure auto attack"
-                    hoverText="Auto Attack"
-                    onClick={() => setShowAutoAttackModal(true)}
-                  >
-                    <ZapOff className="h-7 w-7" />
-                  </Button>
-                )}
-              </>
-            )}
+            {userData?.anbuId &&
+              (autoAttackMode ? (
+                <Button
+                  className="mr-2 text-red-500"
+                  aria-label="Disable auto attack"
+                  hoverText="Auto Attack"
+                  onClick={() => setAutoAttackMode(false)}
+                >
+                  <Zap className="h-7 w-7" />
+                </Button>
+              ) : (
+                <Button
+                  className="mr-2 hover:text-red-500"
+                  aria-label="Configure auto attack"
+                  hoverText="Auto Attack"
+                  onClick={() => setShowAutoAttackModal(true)}
+                >
+                  <ZapOff className="h-7 w-7" />
+                </Button>
+              ))}
             {canCreateMore && (isKage || isElder) && (
               <Confirm2
                 title="Create a new squad"

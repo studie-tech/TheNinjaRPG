@@ -1,8 +1,7 @@
-import React from "react";
-import ContentBox from "@/layout/ContentBox";
+import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
 import Link from "next/link";
-import { SiGithub, SiDiscord } from "@icons-pack/react-simple-icons";
 import { DISCORD_INVITE_URL } from "@/drizzle/constants";
+import ContentBox from "@/layout/ContentBox";
 
 export default function BugReport() {
   const link_t3 = (
@@ -102,7 +101,7 @@ export default function BugReport() {
         </div>
         <Link
           href="https://github.com/MathiasGruber/TNR-Core3"
-          className="italic text-xs font-bold"
+          className="font-bold text-xs italic"
         >
           - Link to old Core3 Code
         </Link>

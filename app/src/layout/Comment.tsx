@@ -1,33 +1,33 @@
-import React, { useState, useEffect, useRef } from "react";
-import EmojiPicker from "@/layout/EmojiPicker";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { SquarePen, Trash2, Flag, BarChart2 } from "lucide-react";
-import { Quote, SmilePlus } from "lucide-react";
-import Post, { type PostProps } from "./Post";
-import RichInput from "./RichInput";
-import Confirm2 from "@/layout/Confirm2";
-import ReportUser from "@/layout/Report";
-import { cn } from "src/libs/shadui";
-import { canDeleteComment } from "@/utils/permissions";
-import { mutateCommentSchema } from "@/validators/comments";
+import { BarChart2, Flag, Quote, SmilePlus, SquarePen, Trash2 } from "lucide-react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { useUserData } from "@/utils/UserContext";
-import { showMutationToast } from "@/libs/toast";
-import type { systems } from "@/validators/reports";
-import type { ConversationComment } from "@/drizzle/schema";
-import type { ForumPost } from "@/drizzle/schema";
-import type { UserReportComment } from "@/drizzle/schema";
-import type { MutateCommentSchema } from "@/validators/comments";
-import type { DeleteCommentSchema } from "@/validators/comments";
-import { canSeeSecretData } from "@/utils/permissions";
-import { ModerationSummary } from "@/layout/ModerationSummary";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type {
+  ConversationComment,
+  ForumPost,
+  UserReportComment,
+} from "@/drizzle/schema";
+import Confirm2 from "@/layout/Confirm2";
+import EmojiPicker from "@/layout/EmojiPicker";
+import { ModerationSummary } from "@/layout/ModerationSummary";
+import ReportUser from "@/layout/Report";
+import { cn } from "@/libs/shadui";
+import { showMutationToast } from "@/libs/toast";
+import { canDeleteComment, canSeeSecretData } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
+import type { DeleteCommentSchema, MutateCommentSchema } from "@/validators/comments";
+import { mutateCommentSchema } from "@/validators/comments";
+import type { systems } from "@/validators/reports";
+import Post, { type PostProps } from "./Post";
+import RichInput from "./RichInput";
 
 /**
  * Component for handling comments on user reports
@@ -183,26 +183,27 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
       reactions.push(
         <Tooltip key={`${props.comment.id}-${reaction}`} delayDuration={300}>
           <TooltipTrigger asChild>
-            <div
-              className="border-2 bg-popover rounded-md px-1 hover:bg-poppopover/80 cursor-pointer text-lg pt-1 px-1"
+            <button
+              type="button"
+              className="cursor-pointer rounded-md border-2 bg-popover px-1 px-1 pt-1 text-lg hover:bg-poppopover/80"
               onClick={() => {
                 props.toggleReaction?.(reaction);
               }}
             >
               {reaction} {users.length}
-            </div>
+            </button>
           </TooltipTrigger>
           <TooltipContent
             side="top"
-            className="bg-poppopover text-poppopover-foreground border p-2 shadow-md rounded-md w-auto max-w-[250px]"
+            className="w-auto max-w-[250px] rounded-md border bg-poppopover p-2 text-poppopover-foreground shadow-md"
           >
-            <div className="font-semibold mb-1 text-center border-b pb-1">
+            <div className="mb-1 border-b pb-1 text-center font-semibold">
               {users.length} {users.length === 1 ? "user" : "users"} reacted with{" "}
               {reaction}
             </div>
             <div className="max-h-40 overflow-y-auto">
-              {users.map((username) => (
-                <div key={username} className="py-0.5 px-2 text-sm">
+              {users.map((username, i) => (
+                <div key={`${username}-${i}`} className="px-2 py-0.5 text-sm">
                   {username}
                 </div>
               ))}
@@ -234,10 +235,10 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
             {props.toggleReaction && (
               <>
                 <SmilePlus
-                  className="h-6 w-6 hover:text-orange-500 cursor-pointer"
+                  className="h-6 w-6 cursor-pointer hover:text-orange-500"
                   onClick={() => setEmojiOpen(!emojiOpen)}
                 />
-                <div className="z-50 absolute top-0 right-2" ref={emojiRef}>
+                <div className="absolute top-0 right-2 z-50" ref={emojiRef}>
                   {emojiOpen && (
                     <EmojiPicker
                       perLine={12}
@@ -279,7 +280,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
               <ModerationSummary
                 userId={props.user.userId}
                 trigger={
-                  <BarChart2 className="h-6 w-6 hover:text-orange-500 cursor-pointer" />
+                  <BarChart2 className="h-6 w-6 cursor-pointer hover:text-orange-500" />
                 }
               />
             )}
@@ -302,8 +303,8 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
       ) : (
         <>
           <div className="mb-6">{props.children}</div>
-          <div className="absolute bottom-0 right-2 flex flex-row items-end gap-1">
-            <p className="italic text-xs text-gray-600 pr-2">
+          <div className="absolute right-2 bottom-0 flex flex-row items-end gap-1">
+            <p className="pr-2 text-gray-600 text-xs italic">
               @{props.comment.createdAt.toLocaleString()}
             </p>
             {props.user && props.system && !props.comment?.isReported && (

@@ -3,11 +3,8 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
-import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
 Sentry.init({
-  integrations: [nodeProfilingIntegration()],
-
   dsn: "https://c35c54f99b73b4a3b8a7e60936bc2967@o4507797256601600.ingest.de.sentry.io/4507797262958672",
 
   // Adjust this value in production, or use tracesSampler for greater control
@@ -28,10 +25,6 @@ Sentry.init({
 
   // Set the environment
   environment: process.env.NODE_ENV,
-
-  // Profiling
-  profileSessionSampleRate: 1,
-  profileLifecycle: "manual",
 
   // Uncomment the line below to enable Spotlight (https://spotlightjs.com)
   // spotlight: process.env.NODE_ENV === 'development',

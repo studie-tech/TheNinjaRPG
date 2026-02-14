@@ -32,7 +32,7 @@ export const isInArray = <T, A extends T>(
  * @param arr
  * @returns
  */
-export const getMostCommonElement = <T extends string>(arr: T[]): T | undefined => {
+export const getMostCommonElement = <T extends string>(arr: T[]) => {
   const counts: Record<T, number> = {} as Record<T, number>;
 
   for (const item of arr) {
@@ -40,7 +40,7 @@ export const getMostCommonElement = <T extends string>(arr: T[]): T | undefined 
   }
 
   let maxCount = 0;
-  let mostCommon: T | undefined = undefined;
+  let mostCommon: T | undefined;
 
   for (const item of arr) {
     if (counts[item] > maxCount) {

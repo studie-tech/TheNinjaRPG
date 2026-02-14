@@ -1,25 +1,25 @@
 /**
  * Shared utilities for Tower Defense upgrade UI components
  */
-import React from "react";
+
 import {
-  Sword,
-  Zap,
-  Target,
-  Heart,
-  Sparkles,
-  ArrowUp,
-  Crosshair,
-  Shield,
-  ShieldPlus,
-  HeartPulse,
-  Droplets,
   ArrowLeftRight,
+  ArrowUp,
   CircleDollarSign,
   Coins,
-  TrendingUp,
+  Crosshair,
+  Droplets,
   Ghost,
+  Heart,
+  HeartPulse,
+  Shield,
+  ShieldPlus,
+  Sparkles,
+  Sword,
+  Target,
+  TrendingUp,
   Wand2,
+  Zap,
 } from "lucide-react";
 import { TowerDefenseUpgradeCategories } from "@/drizzle/constants";
 import type { TowerDefenseUpgrade } from "@/drizzle/schema";

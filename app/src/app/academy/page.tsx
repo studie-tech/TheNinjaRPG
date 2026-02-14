@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import QuestPicker from "@/layout/QuestPicker";
+import { IMG_BUILDING_ACADEMY } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
-import { IMG_BUILDING_ACADEMY } from "@/drizzle/constants";
+import QuestPicker from "@/layout/QuestPicker";
 
 export default function Academy() {
   // State
@@ -34,7 +34,7 @@ export default function Academy() {
         questType="starter"
         title={activeElement === "" ? "Lessons" : "Academy"}
         subtitle="Learning the ropes"
-        initialBreak={activeElement === "" ? true : false}
+        initialBreak={activeElement === ""}
         activeQuestId={activeElement}
         setActiveQuestId={setActiveElement}
         defaultBackHref={activeElement === "" ? undefined : "/village"}

@@ -7,6 +7,21 @@
  * The pieces you will need to use are documented accordingly near the end
  */
 
+import { auth } from "@clerk/nextjs/server";
+import * as Sentry from "@sentry/node";
+import { initTRPC, TRPCError } from "@trpc/server";
+import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+import { eq, sql } from "drizzle-orm";
+import type { ReadonlyHeaders } from "next/dist/server/web/spec-extension/adapters/headers";
+import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
+import type { NextRequest } from "next/server";
+import superjson from "superjson";
+import { ZodError, z } from "zod";
+import { userData } from "@/drizzle/schema";
+import type { McpMeta } from "@/libs/mcp";
+
 /**
  * 1. CONTEXT
  *
@@ -17,20 +32,6 @@
  *
  */
 import { drizzleDB } from "@/server/db";
-import * as Sentry from "@sentry/node";
-import { initTRPC, TRPCError } from "@trpc/server";
-import { auth } from "@clerk/nextjs/server";
-import { z } from "zod";
-import { ZodError } from "zod";
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
-import { eq, sql } from "drizzle-orm";
-import { userData } from "@/drizzle/schema";
-import superjson from "superjson";
-import type { NextRequest } from "next/server";
-import type { ReadonlyHeaders } from "next/dist/server/web/spec-extension/adapters/headers";
-import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
-import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 
 /**
  * This is the actual context you will use in your router. It will be used to process every request
@@ -68,32 +69,35 @@ export const createAppTRPCContext = async (opts: {
  * This is where the tRPC API is initialized, connecting the context and transformer.
  */
 
-const t = initTRPC.context<typeof createAppTRPCContext>().create({
-  transformer: superjson,
-  errorFormatter({ shape, error }) {
-    // If a database error, extract & format error message better
-    if (error?.cause?.cause) {
-      const cause = error.cause.cause as { name?: string; body: unknown };
-      if (cause?.name === "DatabaseError" && cause?.body) {
-        const message = JSON.stringify(cause.body);
-        // Remove everything after (including) "sqlstate" from the error message
-        const cleanMessage =
-          typeof message === "string"
-            ? message.replace(/\s*\(sqlstate.*$/i, "")
-            : message;
-        shape.message = cleanMessage;
+const t = initTRPC
+  .context<typeof createAppTRPCContext>()
+  .meta<McpMeta>()
+  .create({
+    transformer: superjson,
+    errorFormatter({ shape, error }) {
+      // If a database error, extract & format error message better
+      if (error?.cause?.cause) {
+        const cause = error.cause.cause as { name?: string; body: unknown };
+        if (cause?.name === "DatabaseError" && cause?.body) {
+          const message = JSON.stringify(cause.body);
+          // Remove everything after (including) "sqlstate" from the error message
+          const cleanMessage =
+            typeof message === "string"
+              ? message.replace(/\s*\(sqlstate.*$/i, "")
+              : message;
+          shape.message = cleanMessage;
+        }
       }
-    }
 
-    return {
-      ...shape,
-      data: {
-        ...shape.data,
-        zodError: error.cause instanceof ZodError ? error.cause.flatten() : null,
-      },
-    };
-  },
-});
+      return {
+        ...shape,
+        data: {
+          ...shape.data,
+          zodError: error.cause instanceof ZodError ? error.cause.issues : null,
+        },
+      };
+    },
+  });
 
 /**
  * 3. ROUTER & PROCEDURE (THE IMPORTANT BIT)
@@ -204,5 +208,5 @@ export const baseServerResponse = z.object({
 export type BaseServerResponse = z.infer<typeof baseServerResponse>;
 
 export const errorResponse = (msg: string) => {
-  return { success: false, message: msg };
+  return { success: false as const, message: msg };
 };

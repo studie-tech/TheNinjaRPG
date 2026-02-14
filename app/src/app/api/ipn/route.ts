@@ -1,10 +1,10 @@
+import { TRPCError } from "@trpc/server";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { nanoid } from "nanoid";
 import { headers } from "next/headers";
-import { TRPCError } from "@trpc/server";
-import { drizzleDB } from "@/server/db";
 import { paypalWebhookMessage } from "@/drizzle/schema";
-import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { getPaypalAccessToken } from "@/routers/paypal";
+import { drizzleDB } from "@/server/db";
 
 type IBody = {
   event_type: string;
@@ -34,7 +34,10 @@ export async function GET(req: Request) {
     webhook_id: "1EV68140AN4888416",
     webhook_event: body,
   };
-  const verified = await verifyWebhookEvent({ body: verification, token: token });
+  const verified = await verifyWebhookEvent({
+    body: verification,
+    token: token,
+  });
   if (verified.verification_status !== "SUCCESS") {
     console.error(verified);
     return Response.json("Error with verification of event", { status: 500 });
@@ -45,14 +48,6 @@ export async function GET(req: Request) {
     switch (body.event_type) {
       case "PAYMENT.SALE.COMPLETED":
         break;
-      case "BILLING.SUBSCRIPTION.SUSPENDED":
-      case "BILLING.SUBSCRIPTION.RE-ACTIVATED":
-      case "BILLING.SUBSCRIPTION.PAYMENT.FAILED":
-      case "BILLING.SUBSCRIPTION.EXPIRED":
-      case "BILLING.SUBSCRIPTION.CREATED":
-      case "BILLING.SUBSCRIPTION.CANCELLED":
-      case "BILLING.SUBSCRIPTION.ACTIVATED":
-      case "BILLING.SUBSCRIPTION.UPDATED":
       default:
         break;
     }
@@ -84,7 +79,7 @@ export const verifyWebhookEvent = async (input: { body: unknown; token: string }
     {
       method: "POST",
       headers: {
-        Authorization: "Bearer " + input.token,
+        Authorization: `Bearer ${input.token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(input.body),

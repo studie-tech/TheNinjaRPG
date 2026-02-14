@@ -1,9 +1,8 @@
 "use client";
 
+import { BattleLengthHistogram } from "@/layout/BattleLengthHistogram";
 import ContentBox from "@/layout/ContentBox";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
-import React from "react";
-import { BattleLengthHistogram } from "@/layout/BattleLengthHistogram";
 
 export default function ManualCombat() {
   return (
@@ -17,10 +16,10 @@ export default function ManualCombat() {
         action in turns of {COMBAT_SECONDS} seconds. The user with the highest
         initiative goes first. Each action has a action point cost, and so one or more
         actions may be possible in each turn.
-        <h2 className="text-xl font-bold mt-5">Initiative</h2>
+        <h2 className="mt-5 font-bold text-xl">Initiative</h2>
         Initiative is calculated by rolling a random number between 1 and 20 for each
         user. Several modifiers are added to this number:
-        <ul className="list-disc ml-5">
+        <ul className="ml-5 list-disc">
           <li>For each lvl above defender, a bonus of 3% is added</li>
           <li>If in own territory, a bonus of 10% is added</li>
           <li>If outside own territory, initiative is reduced by 10%</li>

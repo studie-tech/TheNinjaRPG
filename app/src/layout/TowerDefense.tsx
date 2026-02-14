@@ -1,72 +1,72 @@
-import React, {
-  useRef,
-  useEffect,
-  useCallback,
-  useImperativeHandle,
-  useState,
+import type { Grid } from "honeycomb-grid";
+import type React from "react";
+import {
   memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
 } from "react";
-import { OrthographicCamera, Group, Clock } from "three";
 import type {
-  Scene,
-  WebGLRenderer,
-  Raycaster,
-  Sprite,
   InstancedMesh,
   Material,
+  Raycaster,
+  Scene,
+  Sprite,
+  WebGLRenderer,
 } from "three";
-import WebGlError from "@/layout/WebGLError";
-import { OrbitControls } from "@/libs/threejs/OrbitControls";
-import { FrameAnimator } from "@/libs/threejs/FrameAnimator";
-import {
-  loadTexture,
-  setupScene,
-  cleanUp,
-  setRaycasterFromMouse,
-  profiler,
-} from "@/libs/threejs/util";
-import { SpriteMixer } from "@/libs/threejs/SpriteMixer";
+import { Clock, Group, OrthographicCamera } from "three";
+import { TD_HEX_SIZE } from "@/drizzle/constants";
+import type { GameAsset } from "@/drizzle/schema";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
+import WebGlError from "@/layout/WebGLError";
+import type { TerrainHex } from "@/libs/hexgrid";
+import { FrameAnimator } from "@/libs/threejs/FrameAnimator";
+import { calculateWidth2Height } from "@/libs/threejs/hexgrid";
+import { OrbitControls } from "@/libs/threejs/OrbitControls";
+import { SpriteMixer } from "@/libs/threejs/SpriteMixer";
+import { updateWaveAnimation, updateWindAnimation } from "@/libs/threejs/shaders";
 import {
-  getTowerDefenseGrid,
-  drawTowerDefenseBackground,
-  drawTowerDefensePlayer,
-  drawTowerDefenseEnemies,
-  updateEnemyHealthBars,
   drawRangeIndicator,
+  drawTowerDefenseBackground,
+  drawTowerDefenseEnemies,
+  drawTowerDefensePlayer,
+  getTowerDefenseGrid,
+  type PlayerState,
   resetEnemyInstancedMeshes,
   resetRangeIndicatorCache,
-  type PlayerState,
+  updateEnemyHealthBars,
 } from "@/libs/threejs/towerDefense";
 import {
-  showImpactAnimation,
-  preloadProjectileTextures,
-  updateProjectiles,
-  spawnProjectile,
-  spawnDamageNumber,
   createEnemyPositionMap,
   initDamageNumberPool,
+  preloadProjectileTextures,
+  showImpactAnimation,
+  spawnDamageNumber,
+  spawnProjectile,
+  updateProjectiles,
 } from "@/libs/threejs/towerDefenseEffects";
-import { updateWindAnimation, updateWaveAnimation } from "@/libs/threejs/shaders";
+import {
+  cleanUp,
+  loadTexture,
+  profiler,
+  setRaycasterFromMouse,
+  setupScene,
+} from "@/libs/threejs/util";
 import {
   calculateEnemyDirection,
   calculateHexDistance,
 } from "@/libs/towerDefense/game";
-import { calculateWidth2Height } from "@/libs/threejs/hexgrid";
 // PERFORMANCE: Import audio functions at module level to avoid dynamic imports in animation loop
 import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
-
-import { TD_HEX_SIZE } from "@/drizzle/constants";
-import type { Grid } from "honeycomb-grid";
-import type { TerrainHex } from "@/libs/hexgrid";
 import type {
-  HexPosition,
-  TowerDefenseProjectile,
   EntityStore,
-  RuntimeState,
+  HexPosition,
   HitEvent,
+  RuntimeState,
+  TowerDefenseProjectile,
 } from "@/validators/towerDefense";
-import type { GameAsset } from "@/drizzle/schema";
 
 /**
  * PERFORMANCE: Stable props interface - only contains refs and stable callbacks.
@@ -300,7 +300,7 @@ const TowerDefenseInner = ({
           if (!assetsSpatialMapRef.current.has(tileKey)) {
             assetsSpatialMapRef.current.set(tileKey, []);
           }
-          assetsSpatialMapRef.current.get(tileKey)!.push(asset);
+          assetsSpatialMapRef.current.get(tileKey)?.push(asset);
         }
       },
       onTileAdded: (tile) => {
@@ -461,7 +461,9 @@ const TowerDefenseInner = ({
       ui: new Group(),
     };
 
-    Object.values(groupsRef.current).forEach((group) => scene.add(group));
+    Object.values(groupsRef.current).forEach((group) => {
+      scene.add(group);
+    });
 
     // Animators
     frameAnimatorRef.current = new FrameAnimator(loadTexture);
@@ -485,10 +487,9 @@ const TowerDefenseInner = ({
       if (gridRef.current && groups?.tiles) {
         const intersects = raycasterRef.current.intersectObjects(groups.tiles.children);
         const firstIntersect = intersects[0];
-        mouseHexRef.current =
-          firstIntersect && firstIntersect.object.userData.tile
-            ? (firstIntersect.object.userData.tile as TerrainHex)
-            : null;
+        mouseHexRef.current = firstIntersect?.object.userData.tile
+          ? (firstIntersect.object.userData.tile as TerrainHex)
+          : null;
       }
     };
 
@@ -804,7 +805,6 @@ const TowerDefenseInner = ({
                   const existingTimeout = punchingTimeoutsRef.current.get(enemy.id);
                   if (existingTimeout) clearTimeout(existingTimeout);
                   // Timeout is stored in Map and cleared via punchingTimeouts.forEach in cleanup
-                  // eslint-disable-next-line @eslint-react/web-api/no-leaked-timeout
                   const newTimeout = setTimeout(() => {
                     punchingEnemiesRef.current.delete(enemy.id);
                     punchingTimeoutsRef.current.delete(enemy.id);
@@ -860,13 +860,15 @@ const TowerDefenseInner = ({
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       if (frameAnimatorRef.current) frameAnimatorRef.current.dispose();
       if (throwingTimeoutRef.current) clearTimeout(throwingTimeoutRef.current);
-      punchingTimeouts.forEach((timeout) => clearTimeout(timeout));
+      punchingTimeouts.forEach((timeout) => {
+        clearTimeout(timeout);
+      });
       punchingTimeouts.clear();
       damageNumbersRef.current = [];
       resetEnemyInstancedMeshes();
       resetRangeIndicatorCache();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   if (webglError) return <WebGlError />;
 

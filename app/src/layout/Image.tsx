@@ -1,7 +1,7 @@
 "use client";
 
-import NextImage from "next/image";
 import type { ImageProps } from "next/image";
+import NextImage from "next/image";
 
 /**
  * Transforms image URLs to use the CDN endpoint.

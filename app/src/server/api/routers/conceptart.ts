@@ -1,29 +1,34 @@
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { baseServerResponse, errorResponse } from "../trpc";
-import { sql, eq, and, isNotNull, gte } from "drizzle-orm";
-import { userData, conceptImage, userLikes } from "@/drizzle/schema";
-import { fetchUser } from "@/routers/profile";
-import { z } from "zod";
+import type { inferRouterOutputs } from "@trpc/server";
+import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { z } from "zod";
+import {
+  COST_CONCEPT_IMAGE,
+  COST_CONCEPT_VIDEO,
+  SmileyEmotions,
+} from "@/drizzle/constants";
+import { conceptImage, userData, userLikes } from "@/drizzle/schema";
+import {
+  fastTxt2imgReplicate,
+  getVideoGenerationStatus,
+  startVideoGeneration,
+  uploadCompletedVideo,
+} from "@/libs/replicate";
+import { fetchUser } from "@/routers/profile";
 import {
   conceptArtFilterSchema,
   conceptArtPromptSchema,
   conceptVideoPromptSchema,
+  getTimeFrameinSeconds,
 } from "@/validators/art";
-import { getTimeFrameinSeconds } from "@/validators/art";
-import {
-  SmileyEmotions,
-  COST_CONCEPT_IMAGE,
-  COST_CONCEPT_VIDEO,
-} from "@/drizzle/constants";
-import type { inferRouterOutputs } from "@trpc/server";
 import type { DrizzleClient } from "../../db";
 import {
-  fastTxt2imgReplicate,
-  startVideoGeneration,
-  getVideoGenerationStatus,
-  uploadCompletedVideo,
-} from "@/libs/replicate";
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+} from "../trpc";
 
 export const CONCEPT_PROMPT = `, trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, dramatic`;
 
@@ -394,7 +399,7 @@ export const conceptartRouter = createTRPCRouter({
           cursor: z.number().nullish(),
           limit: z.number().min(1).max(500),
         })
-        .merge(conceptArtFilterSchema),
+        .extend(conceptArtFilterSchema.shape),
     )
     .query(async ({ ctx, input }) => {
       const currentCursor = input.cursor ? input.cursor : 0;
@@ -437,7 +442,7 @@ export const conceptartRouter = createTRPCRouter({
             where: (userLikes) => eq(userLikes.userId, userSearch),
           },
         },
-        orderBy: (image, { desc }) => [
+        orderBy: (_image, { desc }) => [
           ...(input.sort === "Most Liked" ? [desc(sql`total_reaction`)] : []),
           ...(input.sort === "Most Recent" ? [desc(sql`createdAt`)] : []),
         ],

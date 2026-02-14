@@ -163,9 +163,9 @@ lint: # Run linting of the project
 	cd app && bun run lint
 
 .PHONY: format
-format: # Run prettier formatter on the project
-	@echo "${YELLOW}Running prettier formatter${RESET}"
-	cd app && bun prettier --write "src/**/*.{ts,tsx,js,jsx,css}"
+format: # Run biome formatter on the project
+	@echo "${YELLOW}Running biome formatter${RESET}"
+	cd app && ./node_modules/@biomejs/biome/bin/biome format --write src/
 
 .PHONY: typecheck
 typecheck: # Run TypeScript type checking

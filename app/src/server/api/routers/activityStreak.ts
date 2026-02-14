@@ -1,30 +1,34 @@
-import { z } from "zod";
+import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
-import { eq, and, desc, gte, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 import {
-  userData,
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/api/trpc";
+import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
+import {
+  actionLog,
   activityStreakConfig,
   activityStreakReward,
+  userData,
   userStreakProgress,
-  actionLog,
 } from "@/drizzle/schema";
+import { getRewardPreview } from "@/libs/objectives";
+import { postProcessRewards } from "@/libs/quest";
+import { fetchUser } from "@/routers/profile";
+import { updateRewards } from "@/server/api/routers/quests";
+import type { DrizzleClient } from "@/server/db";
 import { canChangeContent } from "@/utils/permissions";
-import { isToday, isWithinDateRange, hoursSince } from "@/utils/time";
+import { hoursSince, isToday, isWithinDateRange } from "@/utils/time";
 import {
   activityStreakConfigSchema,
   activityStreakConfigUpdateSchema,
-  purchaseEventPassSchema,
   claimStreakDaySchema,
+  purchaseEventPassSchema,
 } from "@/validators/activityStreak";
-import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
-import { baseServerResponse, errorResponse } from "@/api/trpc";
-import { fetchUser } from "@/routers/profile";
-import { updateRewards } from "@/server/api/routers/quests";
-import { postProcessRewards } from "@/libs/quest";
-import { getRewardPreview } from "@/libs/objectives";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
-import type { DrizzleClient } from "@/server/db";
 
 const STREAK_CONTINUITY_HOURS = 36;
 
@@ -40,171 +44,179 @@ export const activityStreakRouter = createTRPCRouter({
   // ===== Player Endpoints =====
 
   // Get all user's active streaks (RECURRING + owned EVENT_PASSes)
-  getUserStreaks: protectedProcedure.query(async ({ ctx }) => {
-    // Get user's progress entries and active RECURRING config in parallel
-    const [progressEntries, activeRecurring] = await Promise.all([
-      ctx.drizzle.query.userStreakProgress.findMany({
-        where: eq(userStreakProgress.userId, ctx.userId),
-        with: {
-          config: {
-            with: {
-              rewards: true,
+  getUserStreaks: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user's active activity streaks" } })
+    .query(async ({ ctx }) => {
+      // Get user's progress entries and active RECURRING config in parallel
+      const [progressEntries, activeRecurring] = await Promise.all([
+        ctx.drizzle.query.userStreakProgress.findMany({
+          where: eq(userStreakProgress.userId, ctx.userId),
+          with: {
+            config: {
+              with: {
+                rewards: true,
+              },
             },
           },
-        },
-      }),
-      ctx.drizzle.query.activityStreakConfig.findFirst({
-        where: and(
-          eq(activityStreakConfig.streakType, "RECURRING"),
-          eq(activityStreakConfig.isActive, true),
-        ),
-        with: {
-          rewards: true,
-        },
-      }),
-    ]);
+        }),
+        ctx.drizzle.query.activityStreakConfig.findFirst({
+          where: and(
+            eq(activityStreakConfig.streakType, "RECURRING"),
+            eq(activityStreakConfig.isActive, true),
+          ),
+          with: {
+            rewards: true,
+          },
+        }),
+      ]);
 
-    // Check if user has progress for the active recurring config
-    const hasRecurringProgress = progressEntries.some(
-      (p) => p.config?.streakType === "RECURRING" && p.config.isActive,
-    );
+      // Check if user has progress for the active recurring config
+      const hasRecurringProgress = progressEntries.some(
+        (p) => p.config?.streakType === "RECURRING" && p.config.isActive,
+      );
 
-    // Build response - filter out deactivated configs to avoid showing claimable streaks that can't actually be claimed
-    const streaks = progressEntries
-      .map((progress) => {
-        const config = progress.config;
-        if (!config) return null;
+      // Build response - filter out deactivated configs to avoid showing claimable streaks that can't actually be claimed
+      const streaks = progressEntries
+        .map((progress) => {
+          const config = progress.config;
+          if (!config) return null;
 
-        // Skip deactivated configs - users cannot claim these
-        if (!config.isActive) return null;
+          // Skip deactivated configs - users cannot claim these
+          if (!config.isActive) return null;
 
-        const alreadyClaimedToday = isToday(progress.lastClaimDate);
-        const withinThreshold = isStreakContinuous(progress.lastClaimDate);
+          const alreadyClaimedToday = isToday(progress.lastClaimDate);
+          const withinThreshold = isStreakContinuous(progress.lastClaimDate);
 
-        // Calculate theoretical max day based on days since started (capped at totalDays)
-        const daysSinceStart = Math.floor(
-          (Date.now() - new Date(progress.startedAt).getTime()) / (1000 * 60 * 60 * 24),
-        );
-        const theoreticalMaxDay = Math.min(daysSinceStart + 1, config.totalDays);
+          // Calculate theoretical max day based on days since started (capped at totalDays)
+          const daysSinceStart = Math.floor(
+            (Date.now() - new Date(progress.startedAt).getTime()) /
+              (1000 * 60 * 60 * 24),
+          );
+          const theoreticalMaxDay = Math.min(daysSinceStart + 1, config.totalDays);
 
-        // User is behind if their current day is less than theoretical max
-        // Note: currentDay === 0 means "fresh start" (never claimed or just completed/reset),
-        // not "behind" - you can't be behind if you haven't started
-        const isBehind =
-          progress.currentDay > 0 && progress.currentDay < theoreticalMaxDay;
+          // User is behind if their current day is less than theoretical max
+          // Note: currentDay === 0 means "fresh start" (never claimed or just completed/reset),
+          // not "behind" - you can't be behind if you haven't started
+          const isBehind =
+            progress.currentDay > 0 && progress.currentDay < theoreticalMaxDay;
 
-        // Streak is broken if outside the 36-hour window (but user has progress)
-        const streakBroken = !withinThreshold && progress.currentDay > 0;
+          // Streak is broken if outside the 36-hour window (but user has progress)
+          const streakBroken = !withinThreshold && progress.currentDay > 0;
 
-        // User needs to catch up if they're behind AND either:
-        // - Their streak is broken (missed 36hr window), OR
-        // - They've already claimed today (actively catching up)
-        const needsCatchUp = isBehind && (streakBroken || alreadyClaimedToday);
+          // User needs to catch up if they're behind AND either:
+          // - Their streak is broken (missed 36hr window), OR
+          // - They've already claimed today (actively catching up)
+          const needsCatchUp = isBehind && (streakBroken || alreadyClaimedToday);
 
-        // Calculate days remaining to catch up
-        const daysToGo = needsCatchUp
-          ? Math.max(0, theoreticalMaxDay - progress.currentDay)
-          : 0;
+          // Calculate days remaining to catch up
+          const daysToGo = needsCatchUp
+            ? Math.max(0, theoreticalMaxDay - progress.currentDay)
+            : 0;
 
-        // Can claim normally if not already claimed today and streak not broken
-        const canClaimToday = !alreadyClaimedToday && !streakBroken;
+          // Can claim normally if not already claimed today and streak not broken
+          const canClaimToday = !alreadyClaimedToday && !streakBroken;
 
-        // Next day number is always currentDay + 1 (user continues from where they are)
-        const nextDayNumber = progress.currentDay + 1;
-        const nextReward = config.rewards.find((r) => r.dayNumber === nextDayNumber);
+          // Next day number is always currentDay + 1 (user continues from where they are)
+          const nextDayNumber = progress.currentDay + 1;
+          const nextReward = config.rewards.find((r) => r.dayNumber === nextDayNumber);
 
-        return {
-          progressId: progress.id,
-          configId: config.id,
-          configName: config.name,
-          configImage: config.image,
-          streakType: config.streakType,
-          totalDays: config.totalDays,
-          currentDay: progress.currentDay,
-          theoreticalMaxDay,
-          daysToGo,
-          nextDayNumber,
-          canClaimToday,
-          alreadyClaimedToday,
-          needsCatchUp,
-          nextRewards: nextReward?.rewards ?? null,
-          allRewards: config.rewards.sort((a, b) => a.dayNumber - b.dayNumber),
-          startedAt: progress.startedAt,
-          lastClaimDate: progress.lastClaimDate,
-        };
-      })
-      .filter((s): s is NonNullable<typeof s> => s !== null);
+          return {
+            progressId: progress.id,
+            configId: config.id,
+            configName: config.name,
+            configImage: config.image,
+            streakType: config.streakType,
+            totalDays: config.totalDays,
+            currentDay: progress.currentDay,
+            theoreticalMaxDay,
+            daysToGo,
+            nextDayNumber,
+            canClaimToday,
+            alreadyClaimedToday,
+            needsCatchUp,
+            nextRewards: nextReward?.rewards ?? null,
+            allRewards: config.rewards.sort((a, b) => a.dayNumber - b.dayNumber),
+            startedAt: progress.startedAt,
+            lastClaimDate: progress.lastClaimDate,
+          };
+        })
+        .filter((s): s is NonNullable<typeof s> => s !== null);
 
-    return {
-      streaks,
-      // Include info about active recurring for UI to show the streak calendar
-      // even before the user has claimed their first day
-      activeRecurringConfig:
-        activeRecurring && !hasRecurringProgress
-          ? {
-              id: activeRecurring.id,
-              name: activeRecurring.name,
-              image: activeRecurring.image,
-              totalDays: activeRecurring.totalDays,
-              rewards: activeRecurring.rewards.sort(
-                (a, b) => a.dayNumber - b.dayNumber,
-              ),
-            }
-          : null,
-    };
-  }),
+      return {
+        streaks,
+        // Include info about active recurring for UI to show the streak calendar
+        // even before the user has claimed their first day
+        activeRecurringConfig:
+          activeRecurring && !hasRecurringProgress
+            ? {
+                id: activeRecurring.id,
+                name: activeRecurring.name,
+                image: activeRecurring.image,
+                totalDays: activeRecurring.totalDays,
+                rewards: activeRecurring.rewards.sort(
+                  (a, b) => a.dayNumber - b.dayNumber,
+                ),
+              }
+            : null,
+      };
+    }),
 
   // Get purchasable EVENT_PASSes (active, within date range, not owned)
-  getAvailablePasses: protectedProcedure.query(async ({ ctx }) => {
-    // Get all active EVENT_PASS configs and user's progress in parallel
-    const [eventPasses, userProgress] = await Promise.all([
-      ctx.drizzle.query.activityStreakConfig.findMany({
-        where: and(
-          eq(activityStreakConfig.streakType, "EVENT_PASS"),
-          eq(activityStreakConfig.isActive, true),
-        ),
-        with: {
-          rewards: true,
-        },
-      }),
-      ctx.drizzle.query.userStreakProgress.findMany({
-        where: eq(userStreakProgress.userId, ctx.userId),
-        columns: { configId: true },
-      }),
-    ]);
+  getAvailablePasses: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get available event passes for purchase" },
+    })
+    .query(async ({ ctx }) => {
+      // Get all active EVENT_PASS configs and user's progress in parallel
+      const [eventPasses, userProgress] = await Promise.all([
+        ctx.drizzle.query.activityStreakConfig.findMany({
+          where: and(
+            eq(activityStreakConfig.streakType, "EVENT_PASS"),
+            eq(activityStreakConfig.isActive, true),
+          ),
+          with: {
+            rewards: true,
+          },
+        }),
+        ctx.drizzle.query.userStreakProgress.findMany({
+          where: eq(userStreakProgress.userId, ctx.userId),
+          columns: { configId: true },
+        }),
+      ]);
 
-    const ownedConfigIds = new Set(userProgress.map((p) => p.configId));
+      const ownedConfigIds = new Set(userProgress.map((p) => p.configId));
 
-    // Filter to only available passes
-    const availablePasses = eventPasses
-      .filter((config) => {
-        // Not already owned
-        if (ownedConfigIds.has(config.id)) return false;
+      // Filter to only available passes
+      const availablePasses = eventPasses
+        .filter((config) => {
+          // Not already owned
+          if (ownedConfigIds.has(config.id)) return false;
 
-        // Within date range
-        if (!isWithinDateRange(config.startDate, config.endDate)) return false;
+          // Within date range
+          if (!isWithinDateRange(config.startDate, config.endDate)) return false;
 
-        return true;
-      })
-      .map((config) => ({
-        id: config.id,
-        name: config.name,
-        description: config.description,
-        image: config.image,
-        totalDays: config.totalDays,
-        ryoCost: config.ryoCost,
-        repsCost: config.repsCost,
-        seichiSilverCost: config.seichiSilverCost,
-        startDate: config.startDate,
-        endDate: config.endDate,
-        rewards: config.rewards.sort((a, b) => a.dayNumber - b.dayNumber),
-      }));
+          return true;
+        })
+        .map((config) => ({
+          id: config.id,
+          name: config.name,
+          description: config.description,
+          image: config.image,
+          totalDays: config.totalDays,
+          ryoCost: config.ryoCost,
+          repsCost: config.repsCost,
+          seichiSilverCost: config.seichiSilverCost,
+          startDate: config.startDate,
+          endDate: config.endDate,
+          rewards: config.rewards.sort((a, b) => a.dayNumber - b.dayNumber),
+        }));
 
-    return availablePasses;
-  }),
+      return availablePasses;
+    }),
 
   // Purchase an EVENT_PASS
   purchaseEventPass: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Purchase an event pass" } })
     .input(purchaseEventPassSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -311,6 +323,7 @@ export const activityStreakRouter = createTRPCRouter({
 
   // Claim daily reward for a specific config
   claimStreakDay: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Claim daily streak reward" } })
     .input(claimStreakDaySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -401,9 +414,9 @@ export const activityStreakRouter = createTRPCRouter({
 
       // Handle explicit reset first - only allowed when behind and not claimed today
       if (input.reset) {
-        // Guard: must have progress to reset (can't reset from day 0 or day 1)
-        if (progress.currentDay <= 1) {
-          return errorResponse("Nothing to reset - you're already at the beginning");
+        // Guard: can't reset if haven't started yet (day 0)
+        if (progress.currentDay === 0) {
+          return errorResponse("Nothing to reset - you haven't started yet");
         }
         // Guard: can only reset if not already claimed today
         if (alreadyClaimedToday) {

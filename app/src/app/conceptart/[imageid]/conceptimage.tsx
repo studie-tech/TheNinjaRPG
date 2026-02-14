@@ -1,7 +1,7 @@
 "use client";
 
-import { api } from "@/app/_trpc/client";
 import Link from "next/link";
+import { api } from "@/app/_trpc/client";
 import AvatarImage from "@/layout/Avatar";
 import ConceptImage from "@/layout/ConceptImage";
 import ContentBox, { type ContentBoxProps } from "@/layout/ContentBox";

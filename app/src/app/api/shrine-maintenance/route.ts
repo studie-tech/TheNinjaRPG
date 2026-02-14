@@ -1,15 +1,15 @@
-import { drizzleDB } from "@/server/db";
+import { and, eq, gt, inArray, lte } from "drizzle-orm";
+import { cookies } from "next/headers";
+import { WAR_SHRINE_MAINTENANCE_DAYS } from "@/drizzle/constants";
 import { sector, shrineBoostSchedule, village } from "@/drizzle/schema";
-import { eq, lte, gt, inArray, and } from "drizzle-orm";
 import {
-  lockWithMinuteTimer,
-  lockWithDailyTimer,
   handleEndpointError,
+  lockWithDailyTimer,
+  lockWithMinuteTimer,
   updateGameSetting,
 } from "@/libs/gamesettings";
 import { fetchVillages } from "@/server/api/routers/village";
-import { cookies } from "next/headers";
-import { WAR_SHRINE_MAINTENANCE_DAYS } from "@/drizzle/constants";
+import { drizzleDB } from "@/server/db";
 import { secondsFromDate } from "@/utils/time";
 
 const ENDPOINT_NAME = "shrine-maintenance";
@@ -49,7 +49,7 @@ export async function GET() {
     if (dailyCheck) {
       await updateGameSetting(drizzleDB, ENDPOINT_NAME_DAILY, 0, dailyCheck.prevTime);
     }
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }
 
@@ -65,14 +65,16 @@ async function runShrineMaintenance(now: Date) {
     fetchVillages(drizzleDB),
   ]);
 
-  const villageSectors = new Set(villages?.map((v) => v.sector) ?? []);
+  type VillageType = NonNullable<typeof villages>[number];
+  const villageSectors = new Set(villages?.map((v: VillageType) => v.sector) ?? []);
 
   let shrinesDowngraded = 0;
   let shrinesDestroyed = 0;
 
+  type SectorType = (typeof overdueSectors)[number];
   const mutations = overdueSectors
-    .filter((s) => !villageSectors.has(s.sector))
-    .map((s) => {
+    .filter((s: SectorType) => !villageSectors.has(s.sector))
+    .map((s: SectorType) => {
       const newLevel = s.shrineLevel - 1;
       if (newLevel < 1) {
         shrinesDestroyed++;
@@ -168,7 +170,7 @@ async function runShrineBoostTick(now: Date = new Date()) {
     if (!expiredByVillage.has(schedule.villageId)) {
       expiredByVillage.set(schedule.villageId, new Set());
     }
-    expiredByVillage.get(schedule.villageId)!.add(schedule.boostType);
+    expiredByVillage.get(schedule.villageId)?.add(schedule.boostType);
   }
 
   // Merge active and expired updates per village to avoid race conditions
@@ -211,14 +213,17 @@ async function runShrineBoostTick(now: Date = new Date()) {
       villageUpdates.push(
         drizzleDB
           .update(village)
-          .set({ shrineSettings: withUpdatedBoosts(settings ?? null, currentBoosts) })
+          .set({
+            shrineSettings: withUpdatedBoosts(settings ?? null, currentBoosts),
+          })
           .where(eq(village.id, villageId)),
       );
     }
   }
 
   // Delete expired schedule records
-  const expiredScheduleIds = expiredSchedules.map((s) => s.id);
+  type ScheduleType = (typeof expiredSchedules)[number];
+  const expiredScheduleIds = expiredSchedules.map((s: ScheduleType) => s.id);
   const deleteExpired =
     expiredScheduleIds.length > 0
       ? drizzleDB

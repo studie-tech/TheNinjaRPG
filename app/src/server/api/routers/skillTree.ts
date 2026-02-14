@@ -1,40 +1,55 @@
-import { z } from "zod";
+import { and, asc, eq, gte, isNull, like, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { eq, and, sql, like, gte, lt } from "drizzle-orm";
-import { skillTree, userSkill, userData } from "@/drizzle/schema";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/api/trpc";
-import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
-import { fetchUpdatedUser } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
-import { callDiscordContent } from "@/libs/socials";
-import { calculateContentDiff } from "@/utils/diff";
-import { IMG_AVATAR_DEFAULT, COST_SKILL_RESET } from "@/drizzle/constants";
-import { SkillTreeValidator } from "@/validators/combat";
-import { canUnequipAllUsers } from "@/utils/permissions";
-import { actionLog } from "@/drizzle/schema";
-import { getUserFederalStatus } from "@/utils/paypal";
+import { z } from "zod";
 import {
-  skillTreeFilteringSchema,
-  type SkillTreeFilteringSchema,
-} from "@/validators/skillTree";
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/api/trpc";
 import {
+  COST_SKILL_RESET,
+  IMG_AVATAR_DEFAULT,
   SKILL_TREE_RESET_FREE_GOLD,
   SKILL_TREE_RESET_FREE_NORMAL,
   SKILL_TREE_RESET_FREE_SILVER,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
+import {
+  actionLog,
+  skillTree,
+  skillTreeFolder,
+  userData,
+  userSkill,
+} from "@/drizzle/schema";
+import { callDiscordContent } from "@/libs/socials";
+import { fetchUpdatedUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { calculateContentDiff } from "@/utils/diff";
+import { getUserFederalStatus } from "@/utils/paypal";
+import { canChangeContent, canUnequipAllUsers } from "@/utils/permissions";
+import { SkillTreeValidator } from "@/validators/combat";
+import {
+  type SkillTreeFilteringSchema,
+  skillTreeFilteringSchema,
+  skillTreeFolderSchema,
+} from "@/validators/skillTree";
 
 export const skillTreeRouter = createTRPCRouter({
   // Get all skill names for selectors
-  getAllNames: publicProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle.query.skillTree.findMany({
-      columns: { id: true, name: true, skillType: true },
-      orderBy: (table, { asc }) => [asc(table.name)],
-    });
-  }),
+  getAllNames: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all skill names for selectors" } })
+    .query(async ({ ctx }) => {
+      return await ctx.drizzle.query.skillTree.findMany({
+        columns: { id: true, name: true, skillType: true },
+        orderBy: (table, { asc }) => [asc(table.name)],
+      });
+    }),
   // Get single skill by ID
   get: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get a skill by ID" } })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const skill = await ctx.drizzle.query.skillTree.findFirst({
@@ -45,13 +60,14 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Get all skills for tree view
   getAll: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all skills with filtering" } })
     .input(
       z
         .object({
           cursor: z.number().nullish(),
           limit: z.number().min(1).max(500),
         })
-        .merge(skillTreeFilteringSchema)
+        .extend(skillTreeFilteringSchema.shape)
         .optional(),
     )
     .query(async ({ ctx, input }) => {
@@ -67,6 +83,7 @@ export const skillTreeRouter = createTRPCRouter({
         orderBy: [skillTree.tier, skillTree.name],
         limit: limit,
         offset: skip,
+        with: { folder: true },
       });
 
       const nextCursor = results.length < limit ? null : currentCursor + 1;
@@ -77,12 +94,15 @@ export const skillTreeRouter = createTRPCRouter({
     }),
 
   // Get user's purchased skills
-  getUserSkills: protectedProcedure.query(async ({ ctx }) => {
-    return await fetchUserSkills(ctx.drizzle, ctx.userId);
-  }),
+  getUserSkills: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user's purchased skills" } })
+    .query(async ({ ctx }) => {
+      return await fetchUserSkills(ctx.drizzle, ctx.userId);
+    }),
 
   // Purchase a skill or activate an unlocked skill
   purchaseSkill: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Purchase or activate a skill" } })
     .input(z.object({ skillId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -146,12 +166,18 @@ export const skillTreeRouter = createTRPCRouter({
       }
 
       // Purchase the skill (add to userSkill table, activated by default)
-      await ctx.drizzle.insert(userSkill).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        skillId: input.skillId,
-        activated: true,
-      });
+      // Uses onDuplicateKeyUpdate to handle race conditions where concurrent requests
+      // both pass the ownership check. The unique index on (userId, skillId) ensures
+      // only one record exists, and we simply update activated=true if it already exists.
+      await ctx.drizzle
+        .insert(userSkill)
+        .values({
+          id: nanoid(),
+          userId: ctx.userId,
+          skillId: input.skillId,
+          activated: true,
+        })
+        .onDuplicateKeyUpdate({ set: { activated: true } });
 
       return { success: true, message: `Successfully purchased ${skill.name}!` };
     }),
@@ -230,6 +256,7 @@ export const skillTreeRouter = createTRPCRouter({
         costSkillPoints: input.data.costSkillPoints,
         hidden: input.data.hidden,
         skillType: input.data.skillType,
+        folderId: input.data.folderId || null,
       };
 
       const diff = calculateContentDiff(skill, {
@@ -292,6 +319,7 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Reset user's skill points (clear all skills and refund points)
   resetSkillPoints: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Reset user's skill tree" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Fetch user data
@@ -317,25 +345,32 @@ export const skillTreeRouter = createTRPCRouter({
         );
       }
 
-      // Perform the reset (parallel operations)
-      const updates: Promise<unknown>[] = [];
-      // Delete all user skills (skill points remain, just reset used skills)
-      updates.push(
-        ctx.drizzle.delete(userSkill).where(eq(userSkill.userId, ctx.userId)),
-      );
+      // For paid resets, atomically deduct reputation points with a WHERE guard
+      // to prevent race conditions where concurrent requests bypass the balance check
       if (!isFreeReset) {
-        updates.push(
-          ctx.drizzle
-            .update(userData)
-            .set({
-              reputationPoints: sql`${userData.reputationPoints} - ${COST_SKILL_RESET}`,
-            })
-            .where(eq(userData.userId, ctx.userId)),
-        );
+        const result = await ctx.drizzle
+          .update(userData)
+          .set({
+            reputationPoints: sql`${userData.reputationPoints} - ${COST_SKILL_RESET}`,
+          })
+          .where(
+            and(
+              eq(userData.userId, ctx.userId),
+              gte(userData.reputationPoints, COST_SKILL_RESET),
+            ),
+          );
+        if (result.rowsAffected === 0) {
+          return errorResponse(
+            `Not enough reputation points. Need ${COST_SKILL_RESET} reputation points.`,
+          );
+        }
       }
 
-      // Log the reset for monthly tracking
-      updates.push(
+      // Perform the reset (parallel operations)
+      await Promise.all([
+        // Delete all user skills (skill points remain, just reset used skills)
+        ctx.drizzle.delete(userSkill).where(eq(userSkill.userId, ctx.userId)),
+        // Log the reset for monthly tracking
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
@@ -356,43 +391,38 @@ export const skillTreeRouter = createTRPCRouter({
           relatedImage: user.avatarLight,
           relatedValue: isFreeReset ? 0 : COST_SKILL_RESET,
         }),
-      );
-
-      // Execute all promises
-      await Promise.all(updates);
+      ]);
 
       return {
         success: true,
-        message: `Skills points reset!${
-          isFreeReset
-            ? canChangeContent(user.role)
-              ? " (Free for staff member)"
-              : " (Free for GOLD supporter)"
-            : ""
-        }`,
+        message: `Skills points reset!${isFreeReset ? (canChangeContent(user.role) ? " (Free for staff member)" : " (Free for GOLD supporter)") : ""}`,
       };
     }),
 
   // Info: whether current user has a free reset available this month
-  getResetInfo: protectedProcedure.query(async ({ ctx }) => {
-    // Query
-    const [{ user }, monthlyResets] = await Promise.all([
-      fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      }),
-      fetchMonthlyResets(ctx.drizzle, ctx.userId),
-    ]);
-    // Guard
-    if (!user) return { isFree: false, freeResetsUsed: 0, freeResetsRemaining: 0 };
-    // Derived
-    const freeResets = getFreeResetAmount(user);
-    const freeResetsUsed = monthlyResets.length;
-    const freeResetsRemaining = freeResets - freeResetsUsed;
-    const isFree = freeResetsRemaining > 0 || canChangeContent(user.role);
-    // Return
-    return { isFree, freeResetsUsed, freeResetsRemaining };
-  }),
+  getResetInfo: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get skill reset info and free resets" },
+    })
+    .query(async ({ ctx }) => {
+      // Query
+      const [{ user }, monthlyResets] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        fetchMonthlyResets(ctx.drizzle, ctx.userId),
+      ]);
+      // Guard
+      if (!user) return { isFree: false, freeResetsUsed: 0, freeResetsRemaining: 0 };
+      // Derived
+      const freeResets = getFreeResetAmount(user);
+      const freeResetsUsed = monthlyResets.length;
+      const freeResetsRemaining = freeResets - freeResetsUsed;
+      const isFree = freeResetsRemaining > 0 || canChangeContent(user.role);
+      // Return
+      return { isFree, freeResetsUsed, freeResetsRemaining };
+    }),
 
   // Reset all users' skill points (staff only)
   resetAllUsersSkillPoints: protectedProcedure
@@ -443,6 +473,216 @@ export const skillTreeRouter = createTRPCRouter({
         message: `Reset skill trees for all ${allUsers.length} users`,
       };
     }),
+
+  // ============================================
+  // FOLDER ENDPOINTS
+  // ============================================
+
+  // Get all folders (with optional hidden filter for admins)
+  getAllFolders: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all skill tree folders" } })
+    .input(z.object({ includeHidden: z.boolean().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      // Run queries in parallel for efficiency
+      const [userResult, folders] = await Promise.all([
+        ctx.userId
+          ? fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId })
+          : Promise.resolve({ user: null }),
+        ctx.drizzle.query.skillTreeFolder.findMany({
+          orderBy: [asc(skillTreeFolder.order), asc(skillTreeFolder.name)],
+        }),
+      ]);
+
+      // Check if user is staff before honoring includeHidden
+      const isStaff = userResult.user ? canChangeContent(userResult.user.role) : false;
+
+      // Filter out hidden folders unless staff requested them
+      if (!input?.includeHidden || !isStaff) {
+        return folders.filter((folder) => !folder.hidden);
+      }
+      return folders;
+    }),
+
+  // Get folder stats (owned/total skill counts per folder for current user)
+  getFolderStats: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get skill folder progress stats" } })
+    .query(async ({ ctx }) => {
+      // Fetch all data in parallel for efficiency
+      const [folders, allSkills, userSkillsData] = await Promise.all([
+        ctx.drizzle.query.skillTreeFolder.findMany({
+          where: eq(skillTreeFolder.hidden, false),
+          orderBy: [asc(skillTreeFolder.order), asc(skillTreeFolder.name)],
+        }),
+        ctx.drizzle.query.skillTree.findMany({
+          where: eq(skillTree.hidden, false),
+          columns: { id: true, folderId: true },
+        }),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
+      ]);
+
+      // Get activated skill IDs (only activated skills count toward progression)
+      const ownedSkillIds = new Set(
+        userSkillsData.filter((us) => us.activated).map((us) => us.skillId),
+      );
+
+      // Calculate stats per folder
+      const folderStats = folders.map((folder) => {
+        const folderSkills = allSkills.filter((s) => s.folderId === folder.id);
+        const totalSkills = folderSkills.length;
+        const ownedSkills = folderSkills.filter((s) => ownedSkillIds.has(s.id)).length;
+        return {
+          folderId: folder.id,
+          folderName: folder.name,
+          folderImage: folder.image,
+          totalSkills,
+          ownedSkills,
+        };
+      });
+
+      // Also add stats for skills without a folder (if any)
+      const unassignedSkills = allSkills.filter((s) => !s.folderId);
+      if (unassignedSkills.length > 0) {
+        folderStats.push({
+          folderId: "",
+          folderName: "Uncategorized",
+          folderImage: "",
+          totalSkills: unassignedSkills.length,
+          ownedSkills: unassignedSkills.filter((s) => ownedSkillIds.has(s.id)).length,
+        });
+      }
+
+      return folderStats;
+    }),
+
+  // Admin: Create new folder
+  createFolder: protectedProcedure
+    .input(skillTreeFolderSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Check permissions
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      if (!user || !canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "You are not authorized to create folders");
+      }
+
+      const id = nanoid();
+      await ctx.drizzle.insert(skillTreeFolder).values({
+        id,
+        name: input.name,
+        image: input.image || "",
+        description: input.description || null,
+        hidden: input.hidden || false,
+        order: input.order || 0,
+      });
+
+      return { success: true, message: id };
+    }),
+
+  // Admin: Update folder
+  updateFolder: protectedProcedure
+    .input(z.object({ id: z.string(), data: skillTreeFolderSchema }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Check permissions and fetch folder in parallel
+      const [{ user }, folder] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        ctx.drizzle.query.skillTreeFolder.findFirst({
+          where: eq(skillTreeFolder.id, input.id),
+        }),
+      ]);
+      if (!user || !canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "You are not authorized to edit folders");
+      }
+      if (!folder) return errorResponse("Folder not found");
+
+      await ctx.drizzle
+        .update(skillTreeFolder)
+        .set({
+          name: input.data.name,
+          image: input.data.image || "",
+          description: input.data.description || null,
+          hidden: input.data.hidden || false,
+          order: input.data.order || 0,
+          updatedAt: new Date(),
+        })
+        .where(eq(skillTreeFolder.id, input.id));
+
+      return { success: true, message: "Folder updated successfully" };
+    }),
+
+  // Admin: Delete folder (with guard for non-empty folders)
+  deleteFolder: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Check permissions, fetch folder, and fetch skills in folder in parallel
+      const [{ user }, folder, skillsInFolder] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        ctx.drizzle.query.skillTreeFolder.findFirst({
+          where: eq(skillTreeFolder.id, input.id),
+          columns: { id: true },
+        }),
+        ctx.drizzle.query.skillTree.findMany({
+          where: eq(skillTree.folderId, input.id),
+          columns: { id: true },
+        }),
+      ]);
+      if (!user || !canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "You are not authorized to delete folders");
+      }
+      if (!folder) {
+        return errorResponse("Folder not found");
+      }
+      if (skillsInFolder.length > 0) {
+        return errorResponse(
+          `Cannot delete folder that contains ${skillsInFolder.length} skill(s). Please move or delete skills first.`,
+        );
+      }
+
+      await ctx.drizzle.delete(skillTreeFolder).where(eq(skillTreeFolder.id, input.id));
+
+      return { success: true, message: "Folder deleted successfully" };
+    }),
+
+  // Admin: Reorder folders (batch update folder ordering)
+  reorderFolders: protectedProcedure
+    .input(
+      z.object({
+        folderOrders: z.array(z.object({ id: z.string(), order: z.number() })),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Check permissions
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      if (!user || !canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "You are not authorized to reorder folders");
+      }
+
+      // Update each folder's order in parallel
+      await Promise.all(
+        input.folderOrders.map(({ id, order }) =>
+          ctx.drizzle
+            .update(skillTreeFolder)
+            .set({ order, updatedAt: new Date() })
+            .where(eq(skillTreeFolder.id, id)),
+        ),
+      );
+
+      return { success: true, message: "Folders reordered successfully" };
+    }),
 });
 
 /**
@@ -476,6 +716,15 @@ export const skillTreeDatabaseFilter = (input: SkillTreeFilteringSchema) => {
     filters.push(eq(skillTree.hidden, input.hidden));
   } else {
     filters.push(eq(skillTree.hidden, false));
+  }
+
+  // Filter by folder ID
+  if (input.folderId) {
+    if (input.folderId === "uncategorized") {
+      filters.push(isNull(skillTree.folderId));
+    } else {
+      filters.push(eq(skillTree.folderId, input.folderId));
+    }
   }
 
   return filters;

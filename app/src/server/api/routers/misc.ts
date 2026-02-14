@@ -1,39 +1,48 @@
-import { z } from "zod";
-import path from "path";
-import TextToSVG from "text-to-svg";
-import { randomString } from "@/libs/random";
-import { sql, and, desc, eq, inArray, gte, like, gt, lt } from "drizzle-orm";
-import {
-  notification,
-  userData,
-  gameSetting,
-  gameAsset,
-  captcha,
-  userRewards,
-  emailReminder,
-  supportReview,
-  visitorLog,
-  abEvent,
-  conversation,
-} from "@/drizzle/schema";
-import { canAwardReputation, canEnableGlobalTavern } from "@/utils/permissions";
+import path from "node:path";
+import { and, desc, eq, gt, gte, inArray, like, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
-import { canSubmitNotification, canModifyEventGains } from "@/utils/permissions";
-import { fetchUser } from "@/routers/profile";
-import { secondsFromNow, DAY_S } from "@/utils/time";
-import { baseServerResponse, errorResponse } from "../trpc";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { ratelimitMiddleware, hasUserMiddleware } from "../trpc";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { changeSettingSchema } from "@/validators/misc";
-import { getGameSetting } from "@/libs/gamesettings";
-
+import TextToSVG from "text-to-svg";
+import { z } from "zod";
 import { Sentiment } from "@/drizzle/constants";
+import {
+  abEvent,
+  captcha,
+  conversation,
+  emailReminder,
+  gameAsset,
+  gameSetting,
+  notification,
+  supportReview,
+  userData,
+  userRewards,
+  visitorLog,
+} from "@/drizzle/schema";
+import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
+import { randomString } from "@/libs/random";
+import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import {
+  canAwardReputation,
+  canEnableGlobalTavern,
+  canModifyEventGains,
+  canSubmitNotification,
+} from "@/utils/permissions";
+import { DAY_S, secondsFromNow } from "@/utils/time";
+import { changeSettingSchema } from "@/validators/misc";
+import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  hasUserMiddleware,
+  protectedProcedure,
+  publicProcedure,
+  ratelimitMiddleware,
+} from "../trpc";
 
 export const miscRouter = createTRPCRouter({
   trackVisitor: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Track visitor for analytics" } })
     .input(
       z.object({
         ref: z.string().max(191).optional(),
@@ -92,11 +101,13 @@ export const miscRouter = createTRPCRouter({
       return { success: true, message: "Visitor tracked" };
     }),
   getAllGameAssetNames: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all game asset names" } })
     .input(z.object({ ids: z.array(z.string()) }).optional())
     .query(async ({ ctx, input }) => {
       return await fetchGameAssets(ctx.drizzle, input?.ids);
     }),
   getCaptcha: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get captcha for verification" } })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .query(async ({ ctx }) => {
@@ -134,6 +145,9 @@ export const miscRouter = createTRPCRouter({
       }
     }),
   getPreviousNotifications: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get paginated notifications history" },
+    })
     .input(
       z.object({
         cursor: z.number().nullish(),
@@ -156,6 +170,7 @@ export const miscRouter = createTRPCRouter({
       };
     }),
   getSetting: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get a game setting by name" } })
     .input(z.object({ name: z.string() }))
     .query(async ({ ctx, input }) => {
       const setting = await ctx.drizzle.query.gameSetting.findFirst({
@@ -163,13 +178,15 @@ export const miscRouter = createTRPCRouter({
       });
       return setting ?? null;
     }),
-  getGlobalTavernEnabled: publicProcedure.query(async ({ ctx }) => {
-    const convo = await ctx.drizzle.query.conversation.findFirst({
-      where: eq(conversation.title, "Global"),
-    });
-    // Default to enabled if conversation not found
-    return convo?.isEnabled ?? true;
-  }),
+  getGlobalTavernEnabled: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Check if global tavern is enabled" } })
+    .query(async ({ ctx }) => {
+      const convo = await ctx.drizzle.query.conversation.findFirst({
+        where: eq(conversation.title, "Global"),
+      });
+      // Default to enabled if conversation not found
+      return convo?.isEnabled ?? true;
+    }),
   toggleGlobalTavern: protectedProcedure
     .input(z.object({ enabled: z.boolean() }))
     .output(baseServerResponse)
@@ -195,10 +212,15 @@ export const miscRouter = createTRPCRouter({
         message: `Global tavern ${input.enabled ? "enabled" : "disabled"}`,
       };
     }),
-  getActivePlayers24h: publicProcedure.output(z.number()).query(async ({ ctx }) => {
-    const setting = await getGameSetting(ctx.drizzle, "hourly-active-players");
-    return setting.value;
-  }),
+  getActivePlayers24h: publicProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get active players in last 24 hours" },
+    })
+    .output(z.number())
+    .query(async ({ ctx }) => {
+      const setting = await getGameSetting(ctx.drizzle, "hourly-active-players");
+      return setting.value;
+    }),
   setEventGameSetting: protectedProcedure
     .input(changeSettingSchema)
     .output(baseServerResponse)
@@ -212,7 +234,7 @@ export const miscRouter = createTRPCRouter({
       await updateGameSetting(
         ctx.drizzle,
         input.setting,
-        parseInt(input.multiplier),
+        parseInt(input.multiplier, 10),
         secondsFromNow(input.days * 24 * 3600),
       );
       return { success: true, message: `Setting set to: ${input.multiplier}X` };
@@ -272,6 +294,7 @@ export const miscRouter = createTRPCRouter({
     }),
 
   getAllAwards: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all reputation awards" } })
     .input(
       awardsFilteringSchema.extend({
         cursor: z.number().nullish(),
@@ -357,24 +380,28 @@ export const miscRouter = createTRPCRouter({
       return { data: results, nextCursor: nextCursor };
     }),
 
-  getPersonalEmailReminder: protectedProcedure.query(async ({ ctx }) => {
-    const reminder = await ctx.drizzle.query.emailReminder.findFirst({
-      where: eq(emailReminder.userId, ctx.userId),
-    });
-    return reminder ?? null;
-  }),
+  getPersonalEmailReminder: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user's email reminder settings" } })
+    .query(async ({ ctx }) => {
+      const reminder = await ctx.drizzle.query.emailReminder.findFirst({
+        where: eq(emailReminder.userId, ctx.userId),
+      });
+      return reminder ?? null;
+    }),
 
   getEmailReminder: publicProcedure
-    .input(z.object({ email: z.string().email(), secret: z.string() }))
+    .meta({ mcp: { enabled: true, description: "Get email reminder by secret" } })
+    .input(z.object({ email: z.email(), secret: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await fetchEmailReminder(ctx.drizzle, input.email, input.secret);
       return result ?? null;
     }),
 
   toggleEmailReminder: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Toggle email reminder on/off" } })
     .input(
       z.object({
-        email: z.string().email(),
+        email: z.email(),
         secret: z.string(),
         disabled: z.boolean(),
       }),
@@ -410,9 +437,10 @@ export const miscRouter = createTRPCRouter({
     }),
 
   deleteEmailReminder: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Delete email reminder" } })
     .input(
       z.object({
-        email: z.string().email(),
+        email: z.email(),
         secret: z.string(),
       }),
     )
@@ -446,6 +474,7 @@ export const miscRouter = createTRPCRouter({
     }),
 
   reviewSupportWithAI: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Submit AI support chat review" } })
     .input(
       z.object({
         apiRoute: z.string(),

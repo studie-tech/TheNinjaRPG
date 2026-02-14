@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 
 interface PaginationProps {
   current: number;
@@ -12,40 +12,39 @@ const Pagination: React.FC<PaginationProps> = (props) => {
       <nav aria-label="Page navigation example">
         <ul className="inline-flex -space-x-px">
           <li>
-            <a
-              href="#"
-              className="ml-0 rounded-l-lg border border-gray-300 bg-white px-3 py-2 leading-tight text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            <button
+              type="button"
+              className="ml-0 rounded-l-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700"
             >
               Previous
-            </a>
+            </button>
           </li>
-          {Array.from(Array(props.total)).map((_, i) => {
+          {Array.from({ length: props.total }, (_, idx) => idx).map((pageNum) => {
             return (
-              <li key={i}>
-                <a
-                  href="#"
+              <li key={`page-${pageNum}`}>
+                <button
+                  type="button"
                   className={
-                    i === props.current
+                    pageNum === props.current
                       ? "border border-gray-300 bg-blue-50 px-3 py-2 text-blue-600 hover:bg-blue-100 hover:text-blue-700"
-                      : "border border-gray-300 bg-white px-3 py-2 leading-tight text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      : "border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700"
                   }
-                  onClick={(e) => {
-                    e.preventDefault();
-                    props.setPage(i);
+                  onClick={() => {
+                    props.setPage(pageNum);
                   }}
                 >
-                  {i + 1}
-                </a>
+                  {pageNum + 1}
+                </button>
               </li>
             );
           })}
           <li>
-            <a
-              href="#"
-              className="rounded-r-lg border border-gray-300 bg-white px-3 py-2 leading-tight text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            <button
+              type="button"
+              className="rounded-r-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700"
             >
               Next
-            </a>
+            </button>
           </li>
         </ul>
       </nav>

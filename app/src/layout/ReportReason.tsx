@@ -1,41 +1,49 @@
-import React from "react";
+import type React from "react";
 import Image from "@/layout/Image";
-import type { UserReport } from "../../drizzle/schema";
+import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 import { canSeeSecretData } from "@/utils/permissions";
-import type { UserWithRelations } from "@/routers/profile";
+import type { UserReport } from "../../drizzle/schema";
+
+type InfractionData = {
+  title?: string;
+  summary?: string;
+  content?: string;
+  image?: string;
+};
 
 const ParsedReportJson: React.FC<{
   report: Omit<UserReport, "reporterUserId">;
   viewer: NonNullable<UserWithRelations>;
 }> = (props) => {
+  const infraction = props.report.infraction as InfractionData | null;
   return (
     <div>
       <b>Report Reason:</b> {parseHtml(props.report.reason)}
       <br />
-      {props.report.infraction?.hasOwnProperty("title") && (
+      {infraction?.title && (
         <div className="py-5">
           <b>Reported Title:</b>
           <hr />
-          {parseHtml((props.report.infraction as { title: string }).title)}
+          {parseHtml(infraction.title)}
           <br />
           <br />
         </div>
       )}
-      {props.report.infraction?.hasOwnProperty("summary") && (
+      {infraction?.summary && (
         <div className="py-5">
           <b>Reported Summary:</b>
           <hr />
-          {parseHtml((props.report.infraction as { summary: string }).summary)}
+          {parseHtml(infraction.summary)}
           <br />
           <br />
         </div>
       )}
-      {props.report.infraction?.hasOwnProperty("content") && (
+      {infraction?.content && (
         <div className="py-5">
           <b>Reported Content:</b>
           <hr />
-          {parseHtml((props.report.infraction as { content: string }).content)}
+          {parseHtml(infraction.content)}
         </div>
       )}
       {props.report.aiInterpretation && (
@@ -50,12 +58,12 @@ const ParsedReportJson: React.FC<{
           )}
         </div>
       )}
-      {props.report.infraction?.hasOwnProperty("image") && (
+      {infraction?.image && (
         <div className="py-5">
           <b>Image:</b>
           <hr />
           <Image
-            src={(props.report.infraction as { image: string }).image}
+            src={infraction.image}
             width={100}
             className="w-full"
             alt="ReportingImage"

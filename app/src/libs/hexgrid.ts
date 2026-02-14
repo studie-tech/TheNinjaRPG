@@ -1,13 +1,24 @@
-import { spiral, ring, Hex } from "honeycomb-grid";
-import { defaultHexSettings } from "honeycomb-grid";
-import { createHexDimensions } from "honeycomb-grid";
-import { createHexOrigin } from "honeycomb-grid";
 import { aStar } from "abstract-astar";
-import type { CombatAction } from "./combat/types";
-import type { BoundingBox, Grid, Ellipse } from "honeycomb-grid";
-import type { Orientation, Point } from "honeycomb-grid";
-import type { HexOffset, HexOptions } from "honeycomb-grid";
+import type {
+  BoundingBox,
+  Ellipse,
+  Grid,
+  HexOffset,
+  HexOptions,
+  Orientation,
+  Point,
+} from "honeycomb-grid";
+import {
+  createHexDimensions,
+  createHexOrigin,
+  defaultHexSettings,
+  Hex,
+  ring,
+  spiral,
+} from "honeycomb-grid";
+import type * as THREE from "three";
 import type { HEXTILE_TYPE } from "@/drizzle/constants";
+import type { CombatAction } from "./combat/types";
 
 /**
  * Custom hex used by honeycomb.js
@@ -24,9 +35,9 @@ export class TerrainHex extends Hex {
 /**
  * Hexagonal face mesh for Three.js
  */
-export interface HexagonalFaceMesh extends THREE.Mesh {
+export interface HexagonalFaceMesh
+  extends THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> {
   currentHex: number;
-  material: THREE.MeshBasicMaterial;
   userData: {
     id: number;
     hex: number;
@@ -106,7 +117,7 @@ export const getPossibleActionTiles = (
   origin: TerrainHex | undefined,
   grid: Grid<TerrainHex>,
 ) => {
-  let highlights: Grid<TerrainHex> | undefined = undefined;
+  let highlights: Grid<TerrainHex> | undefined;
   if (action && origin) {
     const radius = action.range;
     if (
@@ -121,7 +132,7 @@ export const getPossibleActionTiles = (
       const f = spiral<TerrainHex>({ start: [origin.q, origin.r], radius: radius });
       highlights = grid.traverse(f);
     } else if (action.method === "ALL") {
-      highlights = grid.forEach((hex) => hex);
+      highlights = grid;
     }
   }
   return highlights;

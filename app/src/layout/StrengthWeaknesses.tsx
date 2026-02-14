@@ -1,29 +1,31 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
-import ContentBox from "@/layout/ContentBox";
-import NavTabs from "@/layout/NavTabs";
-import ElementImage from "@/layout/ElementImage";
-import SkillTreeGraph from "@/layout/SkillTreeGraph";
+import { Chart as ChartJS } from "chart.js/auto";
 import { CircleHelp, Eye, Lock, Search } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
-  UserRolesWithSkillTreeAccess,
   STEALTH_SENSORY_CAP,
   STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
+  UserRolesWithSkillTreeAccess,
 } from "@/drizzle/constants";
-import { capUserStats } from "@/libs/profile";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { Chart as ChartJS } from "chart.js/auto";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
-import { getUserElements } from "@/validators/user";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
+import ContentBox from "@/layout/ContentBox";
+import ElementImage from "@/layout/ElementImage";
+import NavTabs from "@/layout/NavTabs";
+import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
+import SkillTreeFolderModal from "@/layout/SkillTreeFolderModal";
+import { capUserStats } from "@/libs/profile";
 import { getStealthStatus } from "@/libs/stealth";
+import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import { useRequiredUserData } from "@/utils/UserContext";
+import { getUserElements } from "@/validators/user";
 
 // Main StrengthWeaknesses Component
 const StrengthWeaknesses: React.FC = () => {
@@ -127,22 +129,22 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
         <div>
           <b>Offences</b>
           <div className="flex flex-row items-center">
-            <ElementImage element="Ninjutsu" className="w-6 h-6 mr-1 mb-1" />
+            <ElementImage element="Ninjutsu" className="mr-1 mb-1 h-6 w-6" />
             Ninjutsu offence:{" "}
             {Number(userData.ninjutsuOffence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
-            <ElementImage element="Genjutsu" className="w-6 h-6 mr-1 mb-1" />
+            <ElementImage element="Genjutsu" className="mr-1 mb-1 h-6 w-6" />
             Genjutsu offence:{" "}
             {Number(userData.genjutsuOffence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
-            <ElementImage element="Taijutsu" className="w-6 h-6 mr-1 mb-1" />
+            <ElementImage element="Taijutsu" className="mr-1 mb-1 h-6 w-6" />
             Taijutsu offence:{" "}
             {Number(userData.taijutsuOffence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
-            <ElementImage element="Bukijutsu" className="w-6 h-6 mr-1 mb-1" />
+            <ElementImage element="Bukijutsu" className="mr-1 mb-1 h-6 w-6" />
             Bukijutsu offence:{" "}
             {Number(userData.bukijutsuOffence.toFixed(2)).toLocaleString()}
           </div>
@@ -151,22 +153,22 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
         <div>
           <b>Defences</b>
           <div className="flex flex-row items-center">
-            <ElementImage element="Ninjutsu" className="w-6 h-6 mr-1 mb-1" />
+            <ElementImage element="Ninjutsu" className="mr-1 mb-1 h-6 w-6" />
             Ninjutsu defence:{" "}
             {Number(userData.ninjutsuDefence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
-            <ElementImage element="Genjutsu" className="w-6 h-6 mr-1 mb-1" />
+            <ElementImage element="Genjutsu" className="mr-1 mb-1 h-6 w-6" />
             Genjutsu defence:{" "}
             {Number(userData.genjutsuDefence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
-            <ElementImage element="Taijutsu" className="w-6 h-6 mr-1 mb-1" />
+            <ElementImage element="Taijutsu" className="mr-1 mb-1 h-6 w-6" />
             Taijutsu defence:{" "}
             {Number(userData.taijutsuDefence.toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
-            <ElementImage element="Bukijutsu" className="w-6 h-6 mr-1 mb-1" />
+            <ElementImage element="Bukijutsu" className="mr-1 mb-1 h-6 w-6" />
             Bukijutsu defence:{" "}
             {Number(userData.bukijutsuDefence.toFixed(2)).toLocaleString()}
           </div>
@@ -177,27 +179,27 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
           <div>
             <b>Generals</b>
             <div className="flex flex-row items-center">
-              <ElementImage element="Strength" className="w-6 h-6 mr-1 mb-1" />
+              <ElementImage element="Strength" className="mr-1 mb-1 h-6 w-6" />
               Strength: {Number(userData.strength.toFixed(2)).toLocaleString()}
             </div>
             <div className="flex flex-row items-center">
-              <ElementImage element="Intelligence" className="w-6 h-6 mr-1 mb-1" />
+              <ElementImage element="Intelligence" className="mr-1 mb-1 h-6 w-6" />
               Intelligence: {Number(userData.intelligence.toFixed(2)).toLocaleString()}
             </div>
             <div className="flex flex-row items-center">
-              <ElementImage element="Willpower" className="w-6 h-6 mr-1 mb-1" />
+              <ElementImage element="Willpower" className="mr-1 mb-1 h-6 w-6" />
               Willpower: {Number(userData.willpower.toFixed(2)).toLocaleString()}
             </div>
             <div className="flex flex-row items-center">
-              <ElementImage element="Speed" className="w-6 h-6 mr-1 mb-1" />
+              <ElementImage element="Speed" className="mr-1 mb-1 h-6 w-6" />
               Speed: {Number(userData.speed.toFixed(2)).toLocaleString()}
             </div>
           </div>
           <div>
             <b>Elemental Proficiency</b>
             <div className="grid grid-cols-2 gap-1">
-              {userElements.map((element) => (
-                <div key={element} className="flex flex-row pt-1">
+              {userElements.map((element, i) => (
+                <div key={`${element}-${i}`} className="flex flex-row pt-1">
                   <ElementImage element={element} className="w-6" />
                   <p className="pl-2">{element}</p>
                 </div>
@@ -347,7 +349,7 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
   }, [userData]);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 pt-3">
+    <div className="grid grid-cols-1 pt-3 sm:grid-cols-2">
       <div>
         <p className="font-bold">Generals</p>
         <div className="relative w-[99%] p-3">
@@ -359,10 +361,10 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
         <div className="relative w-[99%]">
           <canvas ref={statsChartRef} id="statsChartRef"></canvas>
         </div>
-        <p className="font-bold pt-2">Elemental Proficiency</p>
-        <div className="flex flex-row w-full justify-center gap-2 pt-2">
-          {userElements.map((element) => (
-            <ElementImage key={element} element={element} className="w-14" />
+        <p className="pt-2 font-bold">Elemental Proficiency</p>
+        <div className="flex w-full flex-row justify-center gap-2 pt-2">
+          {userElements.map((element, i) => (
+            <ElementImage key={`${element}-${i}`} element={element} className="w-14" />
           ))}
         </div>
         {userElements.length === 0 && (
@@ -382,6 +384,11 @@ interface SkillsTabProps {
 }
 
 export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
+  // State for folder UI
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
+
   // Get tRPC utils
   const utils = api.useUtils();
 
@@ -395,19 +402,29 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
     enabled: !!userData,
   });
 
-  // Skill Tree Mutations
-  const { mutate: purchaseSkill } = api.skillTree.purchaseSkill.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await Promise.all([
-          utils.skillTree.getUserSkills.invalidate(),
-          utils.skillTree.getAll.invalidate(),
-          utils.profile.getUser.invalidate(),
-        ]);
-      }
-    },
+  const { data: folders } = api.skillTree.getAllFolders.useQuery(undefined, {
+    enabled: !!userData,
   });
+
+  const { data: folderStats } = api.skillTree.getFolderStats.useQuery(undefined, {
+    enabled: !!userData,
+  });
+
+  // Skill Tree Mutations
+  const { mutate: purchaseSkill, isPending: isPurchasing } =
+    api.skillTree.purchaseSkill.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await Promise.all([
+            utils.skillTree.getUserSkills.invalidate(),
+            utils.skillTree.getAll.invalidate(),
+            utils.skillTree.getFolderStats.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
+        }
+      },
+    });
 
   // Skill tree derived data
   const allSkillsData = allSkills?.data ?? [];
@@ -419,15 +436,29 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
     0,
   );
 
+  // Get selected folder
+  const selectedFolder = folders?.find((f) => f.id === selectedFolderId) ?? null;
+
+  // Handle folder click
+  const handleFolderClick = (folderId: string) => {
+    setSelectedFolderId(folderId);
+    setIsModalOpen(true);
+  };
+
+  // Handle folder navigation (from prereq links)
+  const handleNavigateToFolder = (folderId: string) => {
+    setSelectedFolderId(folderId);
+  };
+
   // Check if user has chunin+ rank to access skill tree
   const hasSkillTreeAccess =
     userData && UserRolesWithSkillTreeAccess.includes(userData.rank);
 
   if (!hasSkillTreeAccess) {
     return (
-      <div className="text-center py-8">
-        <Lock className="h-16 w-16 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold mb-2">Skill Tree Locked</h3>
+      <div className="py-8 text-center">
+        <Lock className="mx-auto mb-4 h-16 w-16" />
+        <h3 className="mb-2 font-semibold text-xl">Skill Tree Locked</h3>
         <div className="text-gray-600">
           Reach <Badge variant="secondary">Chunin</Badge> rank to unlock the skill tree
           and start earning skill points!
@@ -439,34 +470,61 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   return (
     <>
       {/* Skill Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-600">
+      <div className="mb-6 grid grid-cols-3 gap-4">
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center dark:border-green-800 dark:bg-green-950/30">
+          <div className="font-bold text-2xl text-green-600 dark:text-green-400">
             {activatedSkills.length}
           </div>
-          <div className="text-sm text-green-700">Skills Activated</div>
+          <div className="text-green-700 text-sm dark:text-green-300">
+            Skills Activated
+          </div>
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-blue-600">{totalSkillPoints}</div>
-          <div className="text-sm text-blue-700">Total Skill Points</div>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-center dark:border-blue-800 dark:bg-blue-950/30">
+          <div className="font-bold text-2xl text-blue-600 dark:text-blue-400">
+            {totalSkillPoints}
+          </div>
+          <div className="text-blue-700 text-sm dark:text-blue-300">
+            Total Skill Points
+          </div>
         </div>
 
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-yellow-600">{usedSkillPoints}</div>
-          <div className="text-sm text-yellow-700">Used Skill Points</div>
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-center dark:border-yellow-800 dark:bg-yellow-950/30">
+          <div className="font-bold text-2xl text-yellow-600 dark:text-yellow-400">
+            {totalSkillPoints - usedSkillPoints}
+          </div>
+          <div className="text-sm text-yellow-700 dark:text-yellow-300">
+            Available SP
+          </div>
         </div>
       </div>
 
-      {/* Skill Tree View */}
+      {/* Skill Tree Folder Grid */}
       <div className="mb-6">
-        <SkillTreeGraph
-          skills={allSkillsData}
-          userSkills={userSkills}
-          userSkillPoints={totalSkillPoints - usedSkillPoints}
-          onPurchaseSkill={(skillId) => purchaseSkill({ skillId })}
+        <SkillTreeFolderGrid
+          folders={folders ?? []}
+          folderStats={folderStats ?? []}
+          allSkills={allSkillsData}
+          onFolderClick={handleFolderClick}
+          selectedEffects={selectedEffects}
+          onEffectsChange={setSelectedEffects}
         />
       </div>
+
+      {/* Folder Modal */}
+      <SkillTreeFolderModal
+        isOpen={isModalOpen}
+        setIsOpen={setIsModalOpen}
+        folder={selectedFolder}
+        folders={folders ?? []}
+        allSkills={allSkillsData}
+        userSkills={userSkills ?? []}
+        userSkillPoints={totalSkillPoints - usedSkillPoints}
+        onPurchaseSkill={(skillId) => purchaseSkill({ skillId })}
+        onNavigateToFolder={handleNavigateToFolder}
+        selectedEffects={selectedEffects}
+        isPurchasing={isPurchasing}
+      />
     </>
   );
 };
@@ -495,14 +553,14 @@ export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
   return (
     <div className="space-y-6">
       {/* Stealth Section */}
-      <div className="border rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-3">
+      <div className="rounded-lg border p-4">
+        <div className="mb-3 flex items-center gap-2">
           <Eye className="h-5 w-5 text-purple-600" />
           <h3 className="font-bold text-lg">Stealth</h3>
         </div>
-        <div className="flex justify-between mb-1">
+        <div className="mb-1 flex justify-between">
           <span className="text-sm">Progress</span>
-          <span className="text-sm font-medium">
+          <span className="font-medium text-sm">
             {Math.floor(
               stealthStatus?.stealth ?? STEALTH_SENSORY_DEFAULT,
             ).toLocaleString()}{" "}
@@ -510,7 +568,7 @@ export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
           </span>
         </div>
         <Progress value={stealthProgress} className="h-2" />
-        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+        <div className="mt-3 space-y-1 text-muted-foreground text-sm">
           <p>
             Duration: {Math.floor((stealthStatus?.stealthDurationMax ?? 60) / 60)} min
           </p>
@@ -519,14 +577,14 @@ export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
       </div>
 
       {/* Sensory Section */}
-      <div className="border rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-3">
+      <div className="rounded-lg border p-4">
+        <div className="mb-3 flex items-center gap-2">
           <Search className="h-5 w-5 text-blue-600" />
           <h3 className="font-bold text-lg">Sensory</h3>
         </div>
-        <div className="flex justify-between mb-1">
+        <div className="mb-1 flex justify-between">
           <span className="text-sm">Progress</span>
-          <span className="text-sm font-medium">
+          <span className="font-medium text-sm">
             {Math.floor(
               stealthStatus?.sensory ?? STEALTH_SENSORY_DEFAULT,
             ).toLocaleString()}{" "}
@@ -534,7 +592,7 @@ export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
           </span>
         </div>
         <Progress value={sensoryProgress} className="h-2" />
-        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+        <div className="mt-3 space-y-1 text-muted-foreground text-sm">
           <p>
             Detection Chance: {(stealthStatus?.sensoryDetectChance ?? 5).toFixed(1)}%
           </p>

@@ -1,58 +1,23 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Image from "@/layout/Image";
-import Link from "next/link";
-import ContentBox from "@/layout/ContentBox";
-import BanInfo from "@/layout/BanInfo";
-import Confirm2 from "@/layout/Confirm2";
-import Loader from "@/layout/Loader";
-import Countdown from "@/layout/Countdown";
-import NavTabs from "@/layout/NavTabs";
-import AvatarImage from "@/layout/Avatar";
-import PublicUserComponent from "@/layout/PublicUser";
-import UserRequestSystem from "@/layout/UserRequestSystem";
-import UserSearchSelect from "@/layout/UserSearchSelect";
-import { Handshake, LandPlot, DoorOpen, Swords } from "lucide-react";
-import { CircleArrowUp, Lock, LockOpen, Ban } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { showMutationToast } from "@/libs/toast";
-import { secondsPassed, secondsFromDate } from "@/utils/time";
-import { DoorClosed, ShieldPlus } from "lucide-react";
-import { api } from "@/app/_trpc/client";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { canTakeKage } from "@/utils/permissions";
-import { canChallengeKage } from "@/utils/kage";
-import { findRelationship } from "@/utils/alliance";
-import { KAGE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
-import { KAGE_CHALLENGE_SECS, KAGE_CHALLENGE_MINS } from "@/drizzle/constants";
-import {
-  KAGE_RANK_REQUIREMENT,
-  WAR_FUNDS_COST,
-  KAGE_DELAY_SECS,
-} from "@/drizzle/constants";
-import { KAGE_PRESTIGE_COST } from "@/drizzle/constants";
-import { KAGE_MIN_DAYS_IN_VILLAGE } from "@/drizzle/constants";
-import { KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS } from "@/drizzle/constants";
-import { getSearchValidator } from "@/validators/register";
-import { useForm, useWatch } from "react-hook-form";
-import { useLocalStorage } from "@/hooks/localstorage";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import type { Village, VillageAlliance } from "@/drizzle/schema";
-import type { UserWithRelations } from "@/routers/profile";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import Modal2 from "@/layout/Modal2";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { calculateEnemyConsequences } from "@/utils/alliance";
+  CircleArrowUp,
+  DoorClosed,
+  DoorOpen,
+  Handshake,
+  LandPlot,
+  Lock,
+  LockOpen,
+  ShieldPlus,
+  Swords,
+} from "lucide-react";
+import Link from "next/link";
+import type React from "react";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -60,8 +25,55 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import { WarRoom } from "@/layout/WarSystem";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  ELDER_NOMINATION_CUTOFF_DAY,
+  ELDER_NOMINATION_DEADLINE_DAY,
+  KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS,
+  KAGE_CHALLENGE_MINS,
+  KAGE_CHALLENGE_SECS,
+  KAGE_MIN_DAYS_IN_VILLAGE,
+  KAGE_PRESTIGE_COST,
+  KAGE_PRESTIGE_REQUIREMENT,
+  KAGE_RANK_REQUIREMENT,
+  WAR_FUNDS_COST,
+} from "@/drizzle/constants";
+import type { Village, VillageAlliance } from "@/drizzle/schema";
+import { useLocalStorage } from "@/hooks/localstorage";
+import AvatarImage from "@/layout/Avatar";
+import BanInfo from "@/layout/BanInfo";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import NavTabs from "@/layout/NavTabs";
+import PublicUserComponent from "@/layout/PublicUser";
 import { ShrineHall } from "@/layout/ShrineHall";
+import UserRequestSystem from "@/layout/UserRequestSystem";
+import { WarRoom } from "@/layout/WarSystem";
+import { showMutationToast } from "@/libs/toast";
+import type { UserWithRelations } from "@/routers/profile";
+import { calculateEnemyConsequences, findRelationship } from "@/utils/alliance";
+import { canChallengeKage } from "@/utils/kage";
+import { canTakeKage } from "@/utils/permissions";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { secondsFromDate, secondsPassed } from "@/utils/time";
+import { useRequiredUserData } from "@/utils/UserContext";
+import {
+  createPrestigeTransferSchema,
+  type PrestigeTransferSchema,
+  type PrestigeTransferSchemaInput,
+} from "@/validators/misc";
 
 export default function TownHall() {
   const { data: userData } = useRequiredUserData();
@@ -103,40 +115,27 @@ const ElderHall: React.FC<{
   user: NonNullable<UserWithRelations>;
   navTabs: React.ReactNode;
 }> = ({ user, navTabs }) => {
-  // API utility
-  const utils = api.useUtils();
-
   // Fetch elders
   const { data: elders, isPending } = api.kage.getElders.useQuery(
     { villageId: user.villageId ?? "" },
     { staleTime: 10000, enabled: !!user.villageId },
   );
 
-  // Mutations for promoting & resigning elders
-  const { mutate: toggleElder } = api.kage.toggleElder.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.kage.getElders.invalidate();
-      }
-    },
-  });
+  // Fetch clans for activity ranking
+  const { data: clans, isPending: isClansLoading } = api.clan.getAll.useQuery(
+    { villageId: user.villageId ?? "", isOutlaw: false },
+    { staleTime: 10000, enabled: !!user.villageId },
+  );
 
-  // User search
-  const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUser = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
-
-  // Derived
-  const isKage = user.userId === user.village?.kageId;
+  // Sort clans by activity points, with all-time points as tie-breaker
+  const rankedClans = clans
+    ?.slice()
+    .sort((a, b) => {
+      const activityDiff = (b.activityPoints ?? 0) - (a.activityPoints ?? 0);
+      if (activityDiff !== 0) return activityDiff;
+      return (b.points ?? 0) - (a.points ?? 0);
+    })
+    .slice(0, 3);
 
   return (
     <>
@@ -148,24 +147,30 @@ const ElderHall: React.FC<{
         topRightContent={navTabs}
       >
         <p className="pb-2">
-          The Elder Council, composed of respected individuals, advises the Kage and
-          ensures the village&apos;s prosperity. Known for their wisdom and leadership,
-          they guide crucial decisions, maintain order, and uphold traditions. Chosen
-          for their skills and dedication, these experienced ninjas play a vital role in
-          shaping the village&apos;s future and its continued success.
+          The Elder Council is composed of representatives from the village&apos;s most
+          active clans. Each month, elders are automatically selected from the top 3
+          clans by activity points. Clan rankings are locked on the{" "}
+          {ELDER_NOMINATION_CUTOFF_DAY}th of each month, and clan leaders can nominate a
+          member to become elder between the {ELDER_NOMINATION_CUTOFF_DAY}th and{" "}
+          {ELDER_NOMINATION_DEADLINE_DAY}th if their clan qualifies.
+        </p>
+        <p className="text-muted-foreground text-sm">
+          Activity points are earned through PvP combat, completing quests, and other
+          clan activities. Points reset at the start of each month. All-time clan points
+          are used as a tie-breaker when clans have equal activity points.
         </p>
       </ContentBox>
-      {/* SHOW ELDERS */}
+      {/* SHOW CURRENT ELDERS */}
       {elders && elders.length > 0 && (
         <ContentBox
           title="Current Elders"
           initialBreak={true}
-          subtitle={`Currently elected elders in the village`}
+          subtitle={`Currently serving elders`}
         >
           {isPending && <Loader explanation="Loading Elders" />}
           <div className="grid grid-cols-3 pt-3">
-            {elders?.map((elder, i) => (
-              <div key={i} className="relative">
+            {elders?.map((elder) => (
+              <div key={elder.userId} className="relative">
                 <Link href={`/userid/${elder.userId}`} className="text-center">
                   <AvatarImage
                     href={elder.avatar}
@@ -181,86 +186,63 @@ const ElderHall: React.FC<{
                       Lvl. {elder.level} {capitalizeFirstLetter(elder.rank)}
                     </div>
                   </div>
-                  {isKage &&
-                    (() => {
-                      const threeDaysAgo = new Date(
-                        Date.now() - KAGE_DELAY_SECS * 1000,
-                      );
-                      const canRemove =
-                        user.village?.leaderUpdatedAt &&
-                        new Date(user.village.leaderUpdatedAt) <= threeDaysAgo;
-                      return canRemove ? (
-                        <Confirm2
-                          title="Confirm Demotion"
-                          button={
-                            <Ban className="absolute right-[13%] top-[3%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
-                          }
-                          onAccept={(e) => {
-                            e.preventDefault();
-                            toggleElder({
-                              userId: elder.userId,
-                              villageId: elder.villageId,
-                            });
-                          }}
-                        >
-                          You are about to remove this user as a village elder. Are you
-                          sure?
-                        </Confirm2>
-                      ) : (
-                        <div className="absolute right-[13%] top-[3%] h-9 w-9 rounded-full bg-gray-200 p-1 flex items-center justify-center">
-                          <span className="text-xs text-gray-500">3d</span>
-                        </div>
-                      );
-                    })()}
                 </Link>
               </div>
             ))}
           </div>
         </ContentBox>
       )}
-      {/* KAGE CONTROL */}
-      {isKage && (
-        <ContentBox
-          title="Appoint Elder"
-          initialBreak={true}
-          subtitle="Search for someone to promote to elder"
-        >
-          <p className="pb-2"></p>
-          <UserSearchSelect
-            useFormMethods={userSearchMethods}
-            label="Search for receiver"
-            selectedUsers={[]}
-            showYourself={false}
-            showAi={false}
-            inline={true}
-            maxUsers={maxUsers}
-          />
-          {targetUser && (
-            <div>
-              {targetUser.rank !== "JONIN" && targetUser.rank !== "ELITE JONIN" && (
-                <p className="text-red-500 font-bold text-center pt-2">
-                  User must be at least Jonin!
-                </p>
-              )}
-              {(targetUser.rank === "JONIN" || targetUser.rank === "ELITE JONIN") && (
-                <Button
-                  id="promote"
-                  className="mt-2 w-full"
-                  onClick={() =>
-                    toggleElder({
-                      userId: targetUser.userId,
-                      villageId: user.villageId,
-                    })
-                  }
-                >
-                  <CircleArrowUp className="h-5 w-5 mr-2" />
-                  Promote
-                </Button>
-              )}
-            </div>
-          )}
-        </ContentBox>
-      )}
+      {/* CLAN ACTIVITY RANKINGS */}
+      <ContentBox
+        title="Clan Activity Rankings"
+        initialBreak={true}
+        subtitle="Top 3 clans will have their nominees become elders next month"
+      >
+        {isClansLoading ? (
+          <Loader explanation="Loading clan rankings" />
+        ) : rankedClans && rankedClans.length > 0 ? (
+          <div className="space-y-2">
+            {rankedClans.map((clan, i) => (
+              <div
+                key={clan.id}
+                className={`flex items-center justify-between rounded-lg p-3 ${i === 0 ? "border border-amber-500/40 bg-amber-500/20" : i === 1 ? "border border-border bg-muted" : "border border-orange-500/30 bg-orange-500/10"}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-lg">#{i + 1}</span>
+                  <Link href={`/clanhall/${clan.id}`}>
+                    <AvatarImage
+                      href={clan.image}
+                      alt={clan.name}
+                      size={50}
+                      hover_effect={true}
+                    />
+                  </Link>
+                  <div>
+                    <Link
+                      href={`/clanhall/${clan.id}`}
+                      className="font-bold hover:text-orange-500"
+                    >
+                      {clan.name}
+                    </Link>
+                    <div className="text-muted-foreground text-sm">
+                      {clan.members.length} members
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold">{clan.activityPoints ?? 0}</div>
+                  <div className="text-muted-foreground text-sm">activity points</div>
+                  <div className="text-muted-foreground text-xs">
+                    {clan.points ?? 0} all-time pts
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted-foreground">No clans found in this village.</p>
+        )}
+      </ContentBox>
     </>
   );
 };
@@ -310,17 +292,14 @@ const KageHall: React.FC<{
   const isElder = user.rank === "ELDER";
 
   // Schema for prestige sending
-  const prestigeSchema = z.object({
-    amount: z.coerce
-      .number()
-      .int()
-      .positive()
-      .max(user.villagePrestige ?? 0)
-      .optional(),
-  });
+  const prestigeSchema = createPrestigeTransferSchema(user.villagePrestige ?? 0);
 
   // Form for prestige sending
-  const prestigeForm = useForm<z.infer<typeof prestigeSchema>>({
+  const prestigeForm = useForm<
+    PrestigeTransferSchemaInput,
+    unknown,
+    PrestigeTransferSchema
+  >({
     resolver: zodResolver(prestigeSchema),
   });
 
@@ -364,7 +343,7 @@ const KageHall: React.FC<{
             className="my-2 w-full"
             onClick={() => resign({ villageId: village.villageData.id })}
           >
-            <DoorClosed className="h-6 w-6 mr-2" />
+            <DoorClosed className="mr-2 h-6 w-6" />
             Resign as Kage
           </Button>
         )}
@@ -376,12 +355,13 @@ const KageHall: React.FC<{
                 control={prestigeForm.control}
                 name="amount"
                 render={({ field }) => (
-                  <FormItem className="w-full flex flex-col">
+                  <FormItem className="flex w-full flex-col">
                     <FormControl>
                       <Input
                         id="amount"
                         placeholder={`Send prestige (max ${user.villagePrestige})`}
                         {...field}
+                        value={field.value as number | undefined}
                       />
                     </FormControl>
                     <FormMessage />
@@ -407,9 +387,9 @@ const KageHall: React.FC<{
           subtitle="Kage Challenges & Outcomes"
           initialBreak={true}
         >
-          <div className="grid grid-cols-4 lggrid-cols-5">
-            {village.defendedChallenges.map((challenge, i) => (
-              <div key={i} className="p-2 text-center">
+          <div className="lggrid-cols-5 grid grid-cols-4">
+            {village.defendedChallenges.map((challenge) => (
+              <div key={challenge.id} className="p-2 text-center">
                 <Link href={`/userid/${challenge.userId}`}>
                   <AvatarImage
                     href={challenge.user.avatar}
@@ -426,10 +406,10 @@ const KageHall: React.FC<{
                       Lost, {challenge.rounds} rounds
                     </p>
                   )}
-                  <p className="italic text-xs">
+                  <p className="text-xs italic">
                     {challenge.createdAt.toLocaleDateString()}
                   </p>
-                  <p className="italic text-xs">
+                  <p className="text-xs italic">
                     {challenge.createdAt.toLocaleTimeString()}
                   </p>
                 </Link>
@@ -581,7 +561,7 @@ const KageChallenge: React.FC<{
       padding={false}
     >
       {isAtWar ? (
-        <p className="p-3 text-red-500 font-bold text-center">
+        <p className="p-3 text-center font-bold text-red-500">
           Kage challenges are disabled while the village is at war
         </p>
       ) : (
@@ -594,21 +574,21 @@ const KageChallenge: React.FC<{
               onClick={() => toggleChallenges({ villageId: user.villageId ?? "" })}
             >
               {openForChallenges ? (
-                <LockOpen className="h-6 w-6 mr-2" />
+                <LockOpen className="mr-2 h-6 w-6" />
               ) : (
-                <Lock className="h-6 w-6 mr-2" />
+                <Lock className="mr-2 h-6 w-6" />
               )}
               {openForChallenges ? "Accepting Challenges" : "Not Accepting Challenges"}
             </Button>
           </p>
           {isKage && (
-            <div className="p-3 text-sm text-gray-600">
+            <div className="p-3 text-gray-600 text-sm">
               <p>
                 <span className="font-bold">Daily Lock Time Used: </span>
                 <span
                   className={
                     dailyLockedTimeSeconds >= maxDailySeconds
-                      ? "text-red-500 font-bold"
+                      ? "font-bold text-red-500"
                       : ""
                   }
                 >
@@ -616,7 +596,7 @@ const KageChallenge: React.FC<{
                 </span>
               </p>
               {dailyLockedTimeSeconds >= maxDailySeconds ? (
-                <p className="text-red-500 font-bold">
+                <p className="font-bold text-red-500">
                   Daily limit reached! Challenges will be automatically unlocked at the
                   start of the next day.
                 </p>
@@ -651,7 +631,7 @@ const KageChallenge: React.FC<{
             <p className="p-3">No current challenge requests</p>
           )}
           {activeRequest && (
-            <div className="p-3 flex flex-col items-center">
+            <div className="flex flex-col items-center p-3">
               <p>If not accepted by kage, challenge will execute as Ai vs Ai in:</p>
               <Countdown
                 targetDate={secondsFromDate(
@@ -677,7 +657,7 @@ const KageChallenge: React.FC<{
                       }
                     }}
                   >
-                    <Swords className="h-6 w-6 mr-2" />
+                    <Swords className="mr-2 h-6 w-6" />
                     Send Kage Challenge Request
                   </Button>
                   <p>
@@ -727,7 +707,7 @@ const KageChallenge: React.FC<{
             onClick={() => setShowTakeKageModal(true)}
             loading={isTaking}
           >
-            <ShieldPlus className="h-6 w-6 mr-2" />
+            <ShieldPlus className="mr-2 h-6 w-6" />
             Take kage as Staff
           </Button>
         </div>
@@ -754,7 +734,7 @@ const KageChallenge: React.FC<{
           isValid={takeKageReason.trim().length >= 10}
         >
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               You are about to take the kage position as staff. This action will be
               logged and should only be used for administrative purposes.
             </p>
@@ -767,7 +747,7 @@ const KageChallenge: React.FC<{
                 onChange={(e) => setTakeKageReason(e.target.value)}
                 placeholder="Enter reason for taking kage position (minimum 10 characters)..."
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 This reason will be logged in the action log. Minimum 10 characters
                 required.
               </p>
@@ -962,7 +942,7 @@ const AllianceList: React.FC<{
           placeholder="Search villages & factions..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-[150px]"
+          className="min-w-[150px] flex-1"
         />
         <Select
           value={typeFilter}
@@ -1012,7 +992,7 @@ const AllianceList: React.FC<{
           />
         ))}
         {filteredEntities.length === 0 && (
-          <p className="text-center text-muted-foreground py-4">
+          <p className="py-4 text-center text-muted-foreground">
             No villages or factions found
           </p>
         )}
@@ -1069,7 +1049,7 @@ const AllianceCard: React.FC<{
   };
 
   return (
-    <div className="flex items-center justify-between p-3 border rounded-lg">
+    <div className="flex items-center justify-between rounded-lg border p-3">
       <div className="flex items-center gap-3">
         <Image
           src={entity.villageGraphic}
@@ -1081,10 +1061,10 @@ const AllianceCard: React.FC<{
         <div>
           <p className="font-bold">{entity.name}</p>
           <div className="flex gap-1">
-            <span className={`text-xs px-2 py-0.5 rounded ${typeColors}`}>
+            <span className={`rounded px-2 py-0.5 text-xs ${typeColors}`}>
               {typeLabel}
             </span>
-            <span className={`text-xs px-2 py-0.5 rounded ${statusColors[status]}`}>
+            <span className={`rounded px-2 py-0.5 text-xs ${statusColors[status]}`}>
               {capitalizeFirstLetter(status)}
             </span>
           </div>

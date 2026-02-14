@@ -1,20 +1,20 @@
 "use client";
 
+import { Copy, Edit2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { api } from "@/app/_trpc/client";
-import { canEditCannedResponses } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
-import Modal2 from "@/layout/Modal2";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Edit2, Plus, Trash2, Copy } from "lucide-react";
-import { showMutationToast } from "@/libs/toast";
-import { toast } from "sonner";
-import Loader from "@/layout/Loader";
 import type { CannedResponse } from "@/drizzle/schema";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import { showMutationToast } from "@/libs/toast";
+import { canEditCannedResponses } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 interface CannedResponsesManagementProps {
   isOpen: boolean;
@@ -120,12 +120,12 @@ export default function CannedResponsesManagement({
     <>
       <Modal2 isOpen={isOpen} setIsOpen={setIsOpen} title="Manage Canned Responses">
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-600">
+          <div className="flex items-center justify-between">
+            <p className="text-gray-600 text-sm">
               Manage pre-written responses for support tickets
             </p>
             <Button onClick={() => setIsCreateModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="mr-2 h-4 w-4" />
               Add Response
             </Button>
           </div>
@@ -133,7 +133,7 @@ export default function CannedResponsesManagement({
           {isLoading ? (
             <Loader explanation="Loading canned responses..." />
           ) : (
-            <div className="space-y-4 max-h-96 overflow-y-auto">
+            <div className="max-h-96 space-y-4 overflow-y-auto">
               {cannedResponses?.map((response) => (
                 <Card key={response.id} className="relative">
                   <CardHeader className="pb-3">
@@ -165,10 +165,10 @@ export default function CannedResponsesManagement({
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                    <p className="whitespace-pre-wrap text-gray-600 text-sm">
                       {response.description}
                     </p>
-                    <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                    <div className="mt-3 flex items-center gap-2 text-gray-500 text-xs">
                       <Badge variant="outline">
                         Created: {new Date(response.createdAt).toLocaleDateString()}
                       </Badge>
@@ -182,7 +182,7 @@ export default function CannedResponsesManagement({
                 </Card>
               ))}
               {cannedResponses?.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
+                <div className="py-8 text-center text-gray-500">
                   No canned responses yet. Create your first one!
                 </div>
               )}
@@ -198,7 +198,7 @@ export default function CannedResponsesManagement({
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="title" className="block text-sm font-medium mb-1">
+            <label htmlFor="title" className="mb-1 block font-medium text-sm">
               Title
             </label>
             <Input
@@ -210,7 +210,7 @@ export default function CannedResponsesManagement({
             />
           </div>
           <div>
-            <label htmlFor="description" className="block text-sm font-medium mb-1">
+            <label htmlFor="description" className="mb-1 block font-medium text-sm">
               Response
             </label>
             <Textarea

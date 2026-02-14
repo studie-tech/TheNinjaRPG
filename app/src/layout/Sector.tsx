@@ -1,75 +1,77 @@
 "use client";
 
-import React from "react";
-import { useRef, useEffect, useState } from "react";
-import Link from "next/link";
-import Image from "@/layout/Image";
+import { zodResolver } from "@hookform/resolvers/zod";
 import alea from "alea";
+import type { Grid } from "honeycomb-grid";
+import { Swords } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { Group, OrthographicCamera, Vector2 } from "three";
+import { api } from "@/app/_trpc/client";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  HEX_ASPECT_RATIO,
+  HEX_STACKING_DISPLACEMENT,
+  IMG_ICON_MOVE,
+  IMG_SECTOR_ATTACK,
+  IMG_SECTOR_INFO,
+  IMG_SECTOR_ROB,
+  MEDNIN_MIN_RANK,
+  RANKS_RESTRICTED_FROM_PVP,
+  SECTOR_HEIGHT,
+  SECTOR_WIDTH,
+  STRUCTURE_ADJACENTS,
+  WAR_SHRINE_IMAGE,
+} from "@/drizzle/constants";
+import type { UserData, VillageStructure } from "@/drizzle/schema";
+import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
+import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import AvatarImage from "@/layout/Avatar";
+import HealingPopover from "@/layout/HealingPopover";
+import Image from "@/layout/Image";
+import { LogbookEntry } from "@/layout/Logbook";
 import Modal2 from "@/layout/Modal2";
+import RaidBrowser from "@/layout/RaidBrowser";
 import SliderField from "@/layout/SliderField";
 import WebGlError from "@/layout/WebGLError";
-import { LogbookEntry } from "@/layout/Logbook";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "src/components/ui/label";
-import { z } from "zod";
-import { useLocalStorage, safeLocalStorageGetItem } from "@/hooks/localstorage";
-import { usePerformanceMonitor } from "@/hooks/performance-monitor";
-import { useForm, useWatch } from "react-hook-form";
-import { Vector2, OrthographicCamera, Group } from "three";
-import { api } from "@/app/_trpc/client";
-import { useRouter } from "next/navigation";
-import { PathCalculator, findHex } from "@/libs/hexgrid";
-import { OrbitControls } from "@/libs/threejs/OrbitControls";
+import type { TerrainHex } from "@/libs/hexgrid";
+import { findHex, PathCalculator } from "@/libs/hexgrid";
+import { isQuestObjectiveAvailable } from "@/libs/objectives";
+import { isLocationObjective } from "@/libs/quest";
+import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { getBackgroundColor } from "@/libs/threejs/biome";
-import { updateWindAnimation, updateWaveAnimation } from "@/libs/threejs/shaders";
+import { OrbitControls } from "@/libs/threejs/OrbitControls";
+import {
+  createGenericStructure,
+  drawQuest,
+  drawSector,
+  drawUsers,
+  drawVillage,
+  intersectTiles,
+  intersectUsers,
+} from "@/libs/threejs/sector";
+import { updateWaveAnimation, updateWindAnimation } from "@/libs/threejs/shaders";
+import type { GlobalTile, SectorPoint, SectorUser } from "@/libs/threejs/types";
 import {
   cleanUp,
-  setupScene,
-  setRaycasterFromMouse,
-  smoothCameraFollow,
   profiler,
+  setRaycasterFromMouse,
+  setupScene,
+  smoothCameraFollow,
 } from "@/libs/threejs/util";
-import { drawSector, drawVillage, drawUsers, drawQuest } from "@/libs/threejs/sector";
-import { intersectUsers } from "@/libs/threejs/sector";
-import { intersectTiles } from "@/libs/threejs/sector";
-import { useRequiredUserData } from "@/utils/UserContext";
 import { showMutationToast } from "@/libs/toast";
-import { isLocationObjective } from "@/libs/quest";
-import { getAllyStatus } from "@/utils/alliance";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { hasRequiredRank } from "@/libs/train";
+import { isWarAllies } from "@/libs/war";
+import type { UserWithRelations } from "@/routers/profile";
+import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
 import { round } from "@/utils/math";
 import { sleep } from "@/utils/time";
-import { findVillageUserRelationship } from "@/utils/alliance";
-import { isQuestObjectiveAvailable } from "@/libs/objectives";
-import {
-  HEX_STACKING_DISPLACEMENT,
-  HEX_ASPECT_RATIO,
-  SECTOR_WIDTH,
-  SECTOR_HEIGHT,
-} from "@/drizzle/constants";
-import { RANKS_RESTRICTED_FROM_PVP, MEDNIN_MIN_RANK } from "@/drizzle/constants";
-import { WAR_SHRINE_IMAGE } from "@/drizzle/constants";
-import { isWarAllies } from "@/libs/war";
-import {
-  IMG_SECTOR_INFO,
-  IMG_SECTOR_ATTACK,
-  IMG_SECTOR_ROB,
-  IMG_ICON_MOVE,
-  STRUCTURE_ADJACENTS,
-} from "@/drizzle/constants";
-import type { UserWithRelations } from "@/routers/profile";
-import type { UserData } from "@/drizzle/schema";
-import type { Grid } from "honeycomb-grid";
-import type { GlobalTile, SectorPoint, SectorUser } from "@/libs/threejs/types";
-import type { TerrainHex } from "@/libs/hexgrid";
-import type { VillageStructure } from "@/drizzle/schema";
-import { createGenericStructure } from "@/libs/threejs/sector";
-import { hasRequiredRank } from "@/libs/train";
-import { isUserCurrentlyStealthed } from "@/libs/stealth";
-import HealingPopover from "@/layout/HealingPopover";
-import RaidBrowser from "@/layout/RaidBrowser";
-import { Swords } from "lucide-react";
+import { useRequiredUserData } from "@/utils/UserContext";
+import { type LevelSliderSchema, levelSliderSchema } from "@/validators/travel";
 
 interface SectorProps {
   sector: number;
@@ -476,7 +478,6 @@ const Sector: React.FC<SectorProps> = (props) => {
         pusher.unsubscribe(props.sector.toString());
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -499,6 +500,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       const lastAttackTime = lastAutoAttackTimeRef.current;
       const attackDelaySeconds = parseInt(
         safeLocalStorageGetItem("autoAttackDelay") || "5",
+        10,
       );
       const attackDelayMs = attackDelaySeconds * 1000; // Convert seconds to milliseconds
 
@@ -530,7 +532,10 @@ const Sector: React.FC<SectorProps> = (props) => {
         if (RANKS_RESTRICTED_FROM_PVP.includes(user.rank)) return false;
 
         // Check minimum level requirement
-        const minLevel = parseInt(safeLocalStorageGetItem("autoAttackMinLevel") || "1");
+        const minLevel = parseInt(
+          safeLocalStorageGetItem("autoAttackMinLevel") || "1",
+          10,
+        );
         if (user.level < minLevel) return false;
 
         return true;
@@ -538,12 +543,14 @@ const Sector: React.FC<SectorProps> = (props) => {
       if (nearbyEnemies.length > 0) {
         // Find the closest enemy
         const closestEnemy = nearbyEnemies.reduce((closest, enemy) => {
+          const originCol = originRef.current?.col ?? 0;
+          const originRow = originRef.current?.row ?? 0;
           const currentDistance =
-            Math.abs(enemy.longitude - originRef.current!.col) +
-            Math.abs(enemy.latitude - originRef.current!.row);
+            Math.abs(enemy.longitude - originCol) +
+            Math.abs(enemy.latitude - originRow);
           const closestDistance =
-            Math.abs(closest.longitude - originRef.current!.col) +
-            Math.abs(closest.latitude - originRef.current!.row);
+            Math.abs(closest.longitude - originCol) +
+            Math.abs(closest.latitude - originRow);
 
           return currentDistance < closestDistance ? enemy : closest;
         });
@@ -566,7 +573,6 @@ const Sector: React.FC<SectorProps> = (props) => {
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sorrounding]);
 
   // Clear heal target if user moves away or target moves away
@@ -624,7 +630,6 @@ const Sector: React.FC<SectorProps> = (props) => {
         });
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target, userData, moves, sector, isMoving, move]);
 
   // Update the state containing sorrounding users on first load
@@ -648,7 +653,6 @@ const Sector: React.FC<SectorProps> = (props) => {
       setSorrounding(enrichedData);
       usersRef.current = enrichedData;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchedUsers]);
 
   // Update information whenever we fetch new user data
@@ -673,7 +677,6 @@ const Sector: React.FC<SectorProps> = (props) => {
         setCurrentStructure(null);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData, villageData]);
 
   useEffect(() => {
@@ -1046,7 +1049,6 @@ const Sector: React.FC<SectorProps> = (props) => {
         cleanUp(scene, renderer);
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.sector, isAttacking, fetchedUsers]);
 
   return (
@@ -1066,10 +1068,10 @@ const Sector: React.FC<SectorProps> = (props) => {
               />
             </div>
             <div>
-              <h3 className="text-lg font-semibold">{currentStructure.name}</h3>
+              <h3 className="font-semibold text-lg">{currentStructure.name}</h3>
               <Link
                 href={currentStructure.route}
-                className="mt-2 inline-block rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+                className="mt-2 inline-block rounded-md bg-blue-500 px-4 py-2 font-medium text-sm text-white transition-colors hover:bg-blue-600"
               >
                 Enter {currentStructure.name}
               </Link>
@@ -1078,16 +1080,16 @@ const Sector: React.FC<SectorProps> = (props) => {
         </div>
       )}
       {activeRaid && (
-        <div className="absolute bottom-4 right-4 z-20 rounded-lg bg-black/70 p-4 text-white shadow-lg">
+        <div className="absolute right-4 bottom-4 z-20 rounded-lg bg-black/70 p-4 text-white shadow-lg">
           <div className="flex items-center gap-4">
             <Swords className="h-12 w-12 text-red-500" />
             <div>
-              <h3 className="text-lg font-semibold">{activeRaid.name}</h3>
-              <p className="text-sm text-gray-300">Active Raid in this sector</p>
+              <h3 className="font-semibold text-lg">{activeRaid.name}</h3>
+              <p className="text-gray-300 text-sm">Active Raid in this sector</p>
               <button
                 type="button"
                 onClick={() => setShowRaidModal(true)}
-                className="mt-2 inline-block rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+                className="mt-2 inline-block rounded-md bg-red-600 px-4 py-2 font-medium text-sm text-white transition-colors hover:bg-red-700"
               >
                 View Raid
               </button>
@@ -1161,9 +1163,9 @@ const Sector: React.FC<SectorProps> = (props) => {
         </Modal2>
       )}
       {targetUser && (isAttacking || userData?.status === "BATTLE") && (
-        <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex flex-col justify-center bg-black">
+        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black">
           <div className="m-auto text-center text-white">
-            <p className="p-5  text-3xl">
+            <p className="p-5 text-3xl">
               <AvatarImage
                 href={targetUser.avatar}
                 userId={targetUser.userId}
@@ -1177,7 +1179,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         </div>
       )}
       {healTargetUser && userData && originRef.current && (
-        <div className="pointer-events-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        <div className="pointer-events-auto absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 transform">
           <HealingPopover
             targetUser={healTargetUser}
             userData={userData}
@@ -1191,7 +1193,7 @@ const Sector: React.FC<SectorProps> = (props) => {
               }
             }}
             onHealComplete={() => setHealTargetUser(null)}
-            trigger={<div className="w-1 h-1 opacity-0" />}
+            trigger={<div className="h-1 w-1 opacity-0" />}
           />
         </div>
       )}
@@ -1224,12 +1226,6 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   // Query
   const { data } = api.village.getAll.useQuery(undefined);
 
-  // Form schema
-  const levelSliderSchema = z.object({
-    value: z.number().min(0).max(100),
-  });
-  type LevelSliderSchema = z.infer<typeof levelSliderSchema>;
-
   // Form control
   const {
     register,
@@ -1251,7 +1247,6 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   // Update the localStorage whenever we change
   useEffect(() => {
     setStoredLvl(watchedLevel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedLevel]);
 
   return (
@@ -1267,7 +1262,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
           No awake users above level {watchedLevel} in this sector
         </p>
       )}
-      <div className="grid grid-cols-3 gap-4 text-center sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10  xl:grid-cols-14 pb-3">
+      <div className="grid grid-cols-3 gap-4 pb-3 text-center sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 xl:grid-cols-14">
         {users.map((user) => {
           // Derived
           const sameHex =
@@ -1288,7 +1283,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
           return (
             <div key={`${user.userId}-sorrounding-${user.longitude}-${user.latitude}`}>
               <div className="relative">
-                <div className="absolute right-0 top-0 z-50 hover:opacity-80 hover:cursor-pointer max-w-1/3">
+                <div className="absolute top-0 right-0 z-50 max-w-1/3 hover:cursor-pointer hover:opacity-80">
                   {showAttack && sameHex && (
                     <Image
                       src={IMG_SECTOR_ATTACK}
@@ -1309,7 +1304,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
                     />
                   )}
                 </div>
-                <div className="absolute left-0 top-0 z-50 hover:opacity-80  hover:cursor-pointer max-w-1/3">
+                <div className="absolute top-0 left-0 z-50 max-w-1/3 hover:cursor-pointer hover:opacity-80">
                   <Link href={`/userid/${user.userId}`}>
                     <Image
                       src={IMG_SECTOR_INFO}
@@ -1319,7 +1314,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
                     />
                   </Link>
                 </div>
-                <div className="absolute left-0 bottom-0 z-50 hover:opacity-80  hover:cursor-pointer max-w-1/3">
+                <div className="absolute bottom-0 left-0 z-50 max-w-1/3 hover:cursor-pointer hover:opacity-80">
                   {user.curHealth < user.maxHealth &&
                     hasRequiredRank(userData.rank, MEDNIN_MIN_RANK) && (
                       <HealingPopover
@@ -1341,7 +1336,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
               </div>
               <div className="relative">
                 {sameHex && userData.isOutlaw && (
-                  <div className="absolute right-0 bottom-0 z-50 w-1/3 hover:opacity-80  hover:cursor-pointer">
+                  <div className="absolute right-0 bottom-0 z-50 w-1/3 hover:cursor-pointer hover:opacity-80">
                     <Image
                       src={IMG_SECTOR_ROB}
                       onClick={() => {

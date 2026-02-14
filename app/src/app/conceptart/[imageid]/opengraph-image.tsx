@@ -1,7 +1,7 @@
-import { ImageResponse } from "next/og";
-import { drizzleDB } from "@/server/db";
 import { eq } from "drizzle-orm";
+import { ImageResponse } from "next/og";
 import { conceptImage } from "@/drizzle/schema";
+import { drizzleDB } from "@/server/db";
 
 // Route segment config
 export const runtime = "nodejs";
@@ -29,32 +29,32 @@ export default async function Image({
   const height = url ? 768 : 130;
 
   return new ImageResponse(
-    (
-      <div
-        style={{
-          display: "flex",
-          fontSize: 60,
-          color: "black",
-          background: "#f6f6f6",
-          width: "100%",
-          height: "100%",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        {url ? (
-          <img width={width} height={height} src={url} alt="Concept Art" />
-        ) : (
-          <img
-            width={width}
-            height={height}
-            src="https://uploadthing.b-cdn.net/f/10b0df72-5e27-4785-92ad-a63996127c85-hzez4j.png"
-            alt="Concept Art"
-          />
-        )}
-      </div>
-    ),
+    <div
+      style={{
+        display: "flex",
+        fontSize: 60,
+        color: "black",
+        background: "#f6f6f6",
+        width: "100%",
+        height: "100%",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      {url ? (
+        /* biome-ignore lint/performance/noImgElement: img is required for OpenGraph image generation */
+        <img width={width} height={height} src={url} alt="Concept Art" />
+      ) : (
+        /* biome-ignore lint/performance/noImgElement: img is required for OpenGraph image generation */
+        <img
+          width={width}
+          height={height}
+          src="https://uploadthing.b-cdn.net/f/10b0df72-5e27-4785-92ad-a63996127c85-hzez4j.png"
+          alt="Concept Art"
+        />
+      )}
+    </div>,
     {
       width: width,
       height: height,

@@ -1,15 +1,15 @@
 /**
  * This is a modal that is used to display a modal.
- * This is a replacement for the Modal component, which will be deprecated.
  */
-import React, { useEffect } from "react";
+import type React from "react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/libs/shadui";
 
@@ -19,8 +19,10 @@ interface Modal2Props {
   children: string | React.ReactNode;
   className?: string;
   proceed_label?: string | null;
+  proceed_loading_label?: string | null;
   confirmClassName?: string;
   isValid?: boolean;
+  isLoading?: boolean;
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   onAccept?: (
@@ -52,7 +54,6 @@ const Modal2: React.FC<Modal2Props> = (props) => {
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.isOpen, props.onAccept]);
 
   const handleDialogClose = () => {
@@ -66,7 +67,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
         id={props.id ? `${props.id}-content` : undefined}
         className={cn(
           props.className || "",
-          "overflow-y-scroll max-h-screen",
+          "max-h-screen overflow-y-scroll",
           "!top-4 !translate-y-0 sm:!top-[50%] sm:!-translate-y-1/2",
           "data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0",
           "sm:data-[state=open]:slide-in-from-top-[48%] sm:data-[state=closed]:slide-out-to-top-[48%]",
@@ -85,6 +86,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
             <>
               <Button
                 id={props.id ? `${props.id}-proceed` : undefined}
+                disabled={props.isLoading}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -93,9 +95,11 @@ const Modal2: React.FC<Modal2Props> = (props) => {
                     props.setIsOpen(false);
                   }
                 }}
-                className={`rounded-lg z-30 ${confirmBtnClassName}`}
+                className={`z-30 rounded-lg ${confirmBtnClassName}`}
               >
-                {props.proceed_label}
+                {props.isLoading && props.proceed_loading_label
+                  ? props.proceed_loading_label
+                  : props.proceed_label}
               </Button>
               <div className="grow"></div>
             </>
@@ -107,7 +111,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
               e.stopPropagation();
               handleDialogClose();
             }}
-            className="z-30 rounded-lg border border-gray-500 bg-gray-700 text-sm font-medium text-gray-300 hover:bg-gray-600 hover:text-white"
+            className="z-30 rounded-lg border border-gray-500 bg-gray-700 font-medium text-gray-300 text-sm hover:bg-gray-600 hover:text-white"
           >
             Close
           </Button>

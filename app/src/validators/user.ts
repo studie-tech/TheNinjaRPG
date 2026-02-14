@@ -1,11 +1,9 @@
 import { z } from "zod";
-import { UserRoles, UserRanks } from "@/drizzle/constants";
-import { GeneralTypes, StatTypes } from "@/drizzle/constants";
-import { usernameSchema } from "@/validators/register";
-import type { LetterRank, QuestType } from "@/drizzle/constants";
+import type { ElementName, LetterRank, QuestType } from "@/drizzle/constants";
+import { GeneralTypes, StatTypes, UserRanks, UserRoles } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
-import type { ElementName } from "@/drizzle/constants";
 import type { ZodAllTags } from "@/validators/combat";
+import { genders, usernameSchema } from "@/validators/register";
 
 export const updateUserSchema = z.object({
   username: usernameSchema,
@@ -22,7 +20,8 @@ export const updateUserSchema = z.object({
   rankedLp: z.coerce.number().int().min(0).optional(),
 });
 
-export type UpdateUserSchema = z.infer<typeof updateUserSchema>;
+export type UpdateUserSchema = z.output<typeof updateUserSchema>;
+export type UpdateUserInput = z.input<typeof updateUserSchema>;
 
 export const getQuestCounterFieldName = (
   type: QuestType | undefined,
@@ -53,9 +52,12 @@ export const getUserElements = (user: UserWithRelations) => {
   let finalElements: ElementName[] = [];
 
   if (bloodlineElements.length === 1 && userElements.length === 2) {
-    const bloodlineElement = bloodlineElements[0]!;
-    const primaryElement = userElements[0]!;
-    const secondaryElement = userElements[1]!;
+    const bloodlineElement = bloodlineElements[0];
+    const primaryElement = userElements[0];
+    const secondaryElement = userElements[1];
+    if (!bloodlineElement || !primaryElement || !secondaryElement) {
+      return userElements;
+    }
 
     if (secondaryElement === bloodlineElement) {
       // Secondary matches bloodline, keep primary and bloodline
@@ -78,7 +80,7 @@ export const getUserElements = (user: UserWithRelations) => {
 
 export const getBloodlineElements = (user: UserWithRelations) => {
   const bloodlineElements: ElementName[] = [];
-  user?.bloodline?.effects.map((effect) => {
+  user?.bloodline?.effects.forEach((effect) => {
     if ("elements" in effect && effect.elements) {
       if (isBloodlineEffectBeneficial(effect)) {
         bloodlineElements.push(...effect.elements);
@@ -108,7 +110,7 @@ export const isBloodlineEffectBeneficial = (effect: ZodAllTags) => {
 export const getPublicUsersSchema = z.object({
   cursor: z.number().nullish(),
   limit: z.number().min(1).max(100),
-  isAi: z.boolean().default(false),
+  isAi: z.boolean().prefault(false),
   orderBy: z.enum([
     "Online",
     "Strongest",
@@ -160,8 +162,15 @@ export const updateUserPreferencesSchema = z
       return true;
     },
     {
-      message: "General preferences must be different",
+      error: "General preferences must be different",
     },
   );
 
 export type UpdateUserPreferencesSchema = z.infer<typeof updateUserPreferencesSchema>;
+
+// Profile edit schemas
+export const titleChangeSchema = z.object({ title: z.string().min(1).max(15) });
+export type TitleChangeSchema = z.infer<typeof titleChangeSchema>;
+
+export const genderChangeSchema = z.object({ gender: z.enum(genders) });
+export type GenderChangeSchema = z.infer<typeof genderChangeSchema>;

@@ -1,27 +1,28 @@
 "use client";
 
-import React, { useState } from "react";
+import { BarChart3, InfoIcon, Pencil } from "lucide-react";
+import Link from "next/link";
+import type React from "react";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import { api } from "@/app/_trpc/client";
-import SkillTreeBalanceFiltering, {
-  useFiltering,
-  getFilter,
-} from "@/layout/SkillTreeBalanceFiltering";
-import Link from "next/link";
 import NavTabs from "@/layout/NavTabs";
+import SkillTreeBalanceFiltering, {
+  getFilter,
+  useFiltering,
+} from "@/layout/SkillTreeBalanceFiltering";
 import SkillTreeFiltering, {
-  useFiltering as useSkillTreeFiltering,
   getFilter as getSkillTreeFilter,
+  useFiltering as useSkillTreeFiltering,
 } from "@/layout/SkillTreeFiltering";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import { BarChart3, InfoIcon, Pencil } from "lucide-react";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
 
 export default function ManualSkillTreeBalance() {
   // State
@@ -70,7 +71,7 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
   const canEdit = canChangeContent(userData?.role ?? "USER");
 
   const tableData = data
-    ?.map((skill) => {
+    ?.flatMap((skill) => {
       return skill.effects.map((effect) => {
         return {
           name: skill.name,
@@ -85,7 +86,7 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
                 </Link>
               )}
               <InfoIcon
-                className="h-4 w-4 text-muted-foreground hover:text-primary cursor-pointer"
+                className="h-4 w-4 cursor-pointer text-muted-foreground hover:text-primary"
                 onClick={() => {
                   setSelectedSkillId(skill.id);
                   setIsModalOpen(true);
@@ -102,7 +103,6 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
         };
       });
     })
-    .flat()
     .sort((a, b) => b.power - a.power)
     .filter(Boolean);
 
@@ -204,7 +204,7 @@ const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
             </Link>
           )}
           <InfoIcon
-            className="h-4 w-4 text-muted-foreground hover:text-primary cursor-pointer"
+            className="h-4 w-4 cursor-pointer text-muted-foreground hover:text-primary"
             onClick={() => {
               setSelectedSkillId(skill.skillId);
               setIsModalOpen(true);

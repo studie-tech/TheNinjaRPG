@@ -1,17 +1,17 @@
-import { NextResponse } from "next/server";
 import { and, eq, lt } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { auctionListing } from "@/drizzle/schema";
 import {
-  handleEndpointError,
   checkGameTimer,
+  handleEndpointError,
   updateGameSetting,
 } from "@/libs/gamesettings";
-import { cookies } from "next/headers";
 import {
   completeAuctionInternal,
   fetchAuctionListing,
 } from "@/server/api/routers/auction";
+import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "auction-expire";
 
@@ -99,8 +99,10 @@ export async function GET() {
       }),
     );
 
-    const successful = results.filter((r) => r.success).length;
-    const failed = results.filter((r) => !r.success).length;
+    const successful = results.filter(
+      (r: (typeof results)[number]) => r.success,
+    ).length;
+    const failed = results.filter((r: (typeof results)[number]) => !r.success).length;
 
     return NextResponse.json({
       success: true,
@@ -111,6 +113,6 @@ export async function GET() {
       results: results,
     });
   } catch (error) {
-    return handleEndpointError(error);
+    return await handleEndpointError(error);
   }
 }

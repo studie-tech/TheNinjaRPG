@@ -1,16 +1,15 @@
 "use client";
 import { use } from "react";
-
+import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { useUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { UsageStats } from "@/layout/UsageStatistics";
 import StatisticsFiltering, {
-  useFiltering as useStatisticsFiltering,
   getFilter as getStatisticsFilter,
+  useFiltering as useStatisticsFiltering,
 } from "@/layout/StatisticsFiltering";
 import { itemText } from "@/layout/seoTexts";
+import { UsageStats } from "@/layout/UsageStatistics";
+import { useUserData } from "@/utils/UserContext";
 
 export default function ItemStatistics(props: { params: Promise<{ itemid: string }> }) {
   const params = use(props.params);

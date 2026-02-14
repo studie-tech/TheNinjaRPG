@@ -1,11 +1,11 @@
+import { BattleTypes } from "@/drizzle/constants";
 import {
-  ContentFiltering,
-  useContentFiltering,
   buildFilter,
+  ContentFiltering,
   defineFilteringSchema,
   toOptions,
+  useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { BattleTypes } from "@/drizzle/constants";
 
 interface BattleLengthFilteringProps {
   state: BattleLengthFilteringState;

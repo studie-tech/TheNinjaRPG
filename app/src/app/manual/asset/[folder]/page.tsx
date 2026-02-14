@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
 import { useParams } from "next/navigation";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import Modal2 from "@/layout/Modal2";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import type { GameAsset } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
+import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
 import { useInfinitePagination } from "@/libs/pagination";
-import { useUserData } from "@/utils/UserContext";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import type { GameAsset } from "@/drizzle/schema";
+import { useUserData } from "@/utils/UserContext";
 
 export default function ManualAssetsFolderPage() {
   const params = useParams<{ folder: string }>();
@@ -36,7 +36,7 @@ export default function ManualAssetsFolderPage() {
       placeholderData: (previousData) => previousData,
     },
   );
-  const allAssets = assets?.pages.map((page) => page.data).flat();
+  const allAssets = assets?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   const { mutate: remove } = api.gameAsset.delete.useMutation({

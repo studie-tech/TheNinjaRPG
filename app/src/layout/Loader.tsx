@@ -1,6 +1,6 @@
-import React from "react";
-import Image from "@/layout/Image";
+import type React from "react";
 import { IMG_LOADER } from "@/drizzle/constants";
+import Image from "@/layout/Image";
 
 interface LoaderProps {
   explanation?: string;
@@ -10,7 +10,7 @@ interface LoaderProps {
 
 const Loader: React.FC<LoaderProps> = (props) => {
   return (
-    <div className={`flex flex-col  items-center ${props.noPadding ? "" : "py-2"}`}>
+    <div className={`flex flex-col items-center ${props.noPadding ? "" : "py-2"}`}>
       <Image
         alt="Loader Icon"
         src={IMG_LOADER}

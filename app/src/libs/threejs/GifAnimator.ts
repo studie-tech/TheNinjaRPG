@@ -1,12 +1,12 @@
+import type { ParsedFrame } from "gifuct-js";
+import { decompressFrames, parseGIF } from "gifuct-js";
 import {
   CanvasTexture,
-  NearestFilter,
   LinearFilter,
+  NearestFilter,
   Sprite,
   SpriteMaterial,
 } from "three";
-import { parseGIF, decompressFrames } from "gifuct-js";
-import type { ParsedFrame } from "gifuct-js";
 
 /**
  * Represents a single animated GIF with its frames and playback state.
@@ -97,8 +97,9 @@ export class GifAnimator {
 
     // Get dimensions from the parsed GIF data (logical screen descriptor)
     const parsedGif = this.parsedGifs.get(url);
-    const width = parsedGif?.width ?? frames[0]!.dims.width;
-    const height = parsedGif?.height ?? frames[0]!.dims.height;
+    const firstFrame = frames[0];
+    const width: number = parsedGif?.width ?? firstFrame?.dims.width ?? 64;
+    const height: number = parsedGif?.height ?? firstFrame?.dims.height ?? 64;
 
     // Dispose old texture and material
     gifEntry.texture.dispose();
@@ -108,12 +109,14 @@ export class GifAnimator {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = width;
     tempCanvas.height = height;
-    const tempCtx = tempCanvas.getContext("2d")!;
+    const tempCtx = tempCanvas.getContext("2d");
+    if (!tempCtx) return;
 
     // Create new texture and material
     const texture = new CanvasTexture(canvas);
@@ -192,14 +195,16 @@ export class GifAnimator {
     const canvas = document.createElement("canvas");
     canvas.width = 64; // Placeholder size until GIF loads
     canvas.height = 64;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not get 2d context");
     ctx.fillStyle = "transparent";
     ctx.fillRect(0, 0, 64, 64);
 
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = 64;
     tempCanvas.height = 64;
-    const tempCtx = tempCanvas.getContext("2d")!;
+    const tempCtx = tempCanvas.getContext("2d");
+    if (!tempCtx) throw new Error("Could not get 2d context");
 
     const texture = new CanvasTexture(canvas);
     texture.minFilter = LinearFilter;

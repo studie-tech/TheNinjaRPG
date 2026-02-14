@@ -1,19 +1,19 @@
-import { useUserData } from "@/utils/UserContext";
-import {
-  ContentFiltering,
-  useContentFiltering,
-  defineFilteringSchema,
-  toOptions,
-} from "@/layout/ContentFiltering";
+import { api } from "@/app/_trpc/client";
 import {
   SupportTicketCategories,
-  SupportTicketPriorities,
-  SupportTicketStatuses,
-  type SupportTicketStatus,
-  type SupportTicketPriority,
   type SupportTicketCategory,
+  SupportTicketPriorities,
+  type SupportTicketPriority,
+  type SupportTicketStatus,
+  SupportTicketStatuses,
 } from "@/drizzle/constants";
-import { api } from "@/app/_trpc/client";
+import {
+  ContentFiltering,
+  defineFilteringSchema,
+  toOptions,
+  useContentFiltering,
+} from "@/layout/ContentFiltering";
+import { useUserData } from "@/utils/UserContext";
 
 interface SupportTicketFilteringProps {
   state: SupportTicketFilteringState;

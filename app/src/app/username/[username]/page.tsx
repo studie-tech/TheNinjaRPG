@@ -1,6 +1,6 @@
-import PublicUserComponent from "@/layout/PublicUser";
-import { userData } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
+import { userData } from "@/drizzle/schema";
+import PublicUserComponent from "@/layout/PublicUser";
 import { drizzleDB } from "@/server/db";
 
 export default async function PublicProfile(props: {

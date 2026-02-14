@@ -1,22 +1,7 @@
 "use client";
 
-import Loader from "@/layout/Loader";
-import { LogbookEntry } from "@/layout/Logbook";
-import Image from "@/layout/Image";
-import { showMutationToast } from "@/libs/toast";
+import { Fragment } from "react";
 import { api } from "@/app/_trpc/client";
-import { availableQuestLetterRanks } from "@/libs/train";
-import { getMissionHallSettings, fallbackQuestsFilter } from "@/libs/quest";
-import {
-  MISSIONS_PER_DAY,
-  ERRANDS_PER_DAY,
-  MEDICAL_MISSIONS_PER_DAY,
-  PVP_MISSIONS_PER_DAY,
-  IMG_BUILDING_MISSIONHALL,
-} from "@/drizzle/constants";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
-import MissionPicker from "@/layout/MissionPicker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,9 +13,24 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { cn } from "src/libs/shadui";
-import React, { Fragment } from "react";
+import {
+  ERRANDS_PER_DAY,
+  IMG_BUILDING_MISSIONHALL,
+  MEDICAL_MISSIONS_PER_DAY,
+  MISSIONS_PER_DAY,
+  PVP_MISSIONS_PER_DAY,
+  VILLAGE_SYNDICATE_ID,
+} from "@/drizzle/constants";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import { LogbookEntry } from "@/layout/Logbook";
+import MissionPicker from "@/layout/MissionPicker";
+import { fallbackQuestsFilter, getMissionHallSettings } from "@/libs/quest";
+import { cn } from "@/libs/shadui";
+import { showMutationToast } from "@/libs/toast";
+import { availableQuestLetterRanks } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
 
 interface MissionHallProps {
   userData: NonNullable<UserWithRelations>;
@@ -92,11 +92,11 @@ export default function MissionHall({ userData }: MissionHallProps) {
             className="w-full"
             priority={true}
           />
-          <p className="text-center font-bold p-3">
+          <p className="p-3 text-center font-bold">
             Missions are special assignments that advance the game&apos;s narrative.
             They can only be started here at the Mission Hall.
           </p>
-          <p className="text-center p-3 text-md font-bold">
+          <p className="p-3 text-center font-bold text-md">
             Errands [{userData.dailyErrands} / {ERRANDS_PER_DAY}] -{" "}
             {capitalizeFirstLetter(classifier)}s [{userData.dailyMissions} /{" "}
             {MISSIONS_PER_DAY}] - Medical [{userData.dailyMedicalMissions} /{" "}
@@ -113,8 +113,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
         </div>
       )}
       {!currentQuest && !isPending && (
-        <div className="grid grid-cols-3 italic p-3 gap-4 text-center">
-          {getMissionHallSettings(userData.isOutlaw).map((setting, i) => {
+        <div className="grid grid-cols-3 gap-4 p-3 text-center italic">
+          {getMissionHallSettings(userData.isOutlaw).map((setting) => {
             // Count how many of this type and rank are available
             const { filtered, rankInfo } = fallbackQuestsFilter(
               hallData || [],
@@ -206,7 +206,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
 
               return (
                 <MissionPicker
-                  key={`${keyPrefix}-${i}`}
+                  key={`${keyPrefix}-${setting.name}`}
                   setting={setting}
                   missions={missions}
                   count={count}
@@ -251,7 +251,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         <p className="text-sm text-yellow-500">40% Rewards</p>
                       )}
                       {isDailyLimitReached && (
-                        <p className="text-sm text-red-500">Daily Limit Reached</p>
+                        <p className="text-red-500 text-sm">Daily Limit Reached</p>
                       )}
                     </>
                   )}
@@ -259,13 +259,13 @@ export default function MissionHall({ userData }: MissionHallProps) {
               );
             } else {
               return (
-                <Fragment key={i}>
+                <Fragment key={setting.name}>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <div
                         className={cn(
                           grayScale
-                            ? "filter grayscale"
+                            ? "grayscale filter"
                             : "hover:cursor-pointer hover:opacity-30",
                         )}
                       >
@@ -292,17 +292,17 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         {!isErrand &&
                           !isPvp &&
                           userData.dailyMissions >= MISSIONS_PER_DAY && (
-                            <p className="text-sm text-red-500">Daily Limit Reached</p>
+                            <p className="text-red-500 text-sm">Daily Limit Reached</p>
                           )}
                         {isErrand && userData.dailyErrands >= ERRANDS_PER_DAY && (
-                          <p className="text-sm text-red-500">Daily Limit Reached</p>
+                          <p className="text-red-500 text-sm">Daily Limit Reached</p>
                         )}
                         {isMedical &&
                           userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY && (
-                            <p className="text-sm text-red-500">Daily Limit Reached</p>
+                            <p className="text-red-500 text-sm">Daily Limit Reached</p>
                           )}
                         {isPvp && dailyPvpMissions >= PVP_MISSIONS_PER_DAY && (
-                          <p className="text-sm text-red-500">Daily Limit Reached</p>
+                          <p className="text-red-500 text-sm">Daily Limit Reached</p>
                         )}
                       </div>
                     </AlertDialogTrigger>

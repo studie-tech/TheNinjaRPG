@@ -1,27 +1,27 @@
 "use client";
 
-import { useEffect, use } from "react";
+import { FileMinus, FilePlus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import ChatInputField from "@/layout/ChatInputField";
+import { use, useEffect } from "react";
+import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import type { Bloodline } from "@/drizzle/schema";
+import { useBloodlineEditForm } from "@/hooks/bloodline";
+import ChatInputField from "@/layout/ChatInputField";
+import ContentBox from "@/layout/ContentBox";
+import { BloodlineHelper } from "@/layout/ContentHelp";
+import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
+import Loader from "@/layout/Loader";
+import { canChangeContent } from "@/utils/permissions";
+import { setNullsToEmptyStrings } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type { ZodAllTags, ZodBloodlineType } from "@/validators/combat";
 import {
-  DamageTag,
   BloodlineValidator,
+  DamageTag,
   getTagSchema,
   tagTypes,
 } from "@/validators/combat";
-import { EditContent } from "@/layout/EditContent";
-import { EffectFormWrapper } from "@/layout/EditContent";
-import { BloodlineHelper } from "@/layout/ContentHelp";
-import { FilePlus, FileMinus } from "lucide-react";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { canChangeContent } from "@/utils/permissions";
-import { useBloodlineEditForm } from "@/hooks/bloodline";
-import type { ZodBloodlineType } from "@/validators/combat";
-import type { Bloodline } from "@/drizzle/schema";
 
 export default function BloodlineEdit(props: {
   params: Promise<{ bloodlineid: string }>;
@@ -45,7 +45,6 @@ export default function BloodlineEdit(props: {
     if (userData && !canChangeContent(userData.role)) {
       void router.push("/profile");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData]);
 
   // Prevent unauthorized access
@@ -73,13 +72,17 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
     handleBloodlineSubmit,
   } = useBloodlineEditForm(props.bloodline, props.refetch);
 
+  // Filter out any undefined effects from useWatch
+  const validEffects = (effects?.filter((e): e is ZodAllTags => e !== undefined) ??
+    []) as ZodAllTags[];
+
   // Icon for adding tag
   const AddTagIcon = (
     <FilePlus
       className="h-6 w-6 cursor-pointer hover:text-orange-500"
       onClick={() => {
         setEffects([
-          ...effects,
+          ...validEffects,
           DamageTag.parse({
             description: "placeholder",
             residualModifier: 0,
@@ -117,7 +120,6 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
                   let key: keyof typeof data;
                   for (key in data) {
                     if (["villageId", "image"].includes(key)) {
-                      continue;
                     } else if (key === "effects") {
                       const newEffects = data.effects
                         .map((effect) => {
@@ -139,7 +141,9 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
                 }}
               />
             ) : undefined}
-            <BloodlineHelper bloodline={form.getValues()} />
+            <BloodlineHelper
+              bloodline={form.getValues() as unknown as ZodBloodlineType}
+            />
           </div>
         }
       >
@@ -147,7 +151,7 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
         {!loading && bloodline && (
           <EditContent
             schema={BloodlineValidator}
-            form={form}
+            form={form as unknown as UseFormReturn<ZodBloodlineType, any>}
             formData={formData}
             showSubmit={true}
             buttonTxt="Save to Database"
@@ -159,7 +163,7 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
         )}
       </ContentBox>
 
-      {effects.length === 0 && (
+      {validEffects.length === 0 && (
         <ContentBox
           title={`Bloodline Tags`}
           initialBreak={true}
@@ -168,7 +172,7 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
           Please add effects to this bloodline
         </ContentBox>
       )}
-      {effects.map((tag, i) => {
+      {validEffects.map((tag, i) => {
         return (
           <ContentBox
             key={`${tag.type}-${i}`}
@@ -181,7 +185,7 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
                 <FileMinus
                   className="h-6 w-6 cursor-pointer hover:text-orange-500"
                   onClick={() => {
-                    const newEffects = [...effects];
+                    const newEffects = [...validEffects];
                     newEffects.splice(i, 1);
                     setEffects(newEffects);
                   }}
@@ -194,7 +198,7 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
               type="bloodline"
               tag={tag}
               availableTags={tagTypes}
-              effects={effects}
+              effects={validEffects}
               setEffects={setEffects}
             />
           </ContentBox>

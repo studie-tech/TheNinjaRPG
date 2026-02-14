@@ -1,45 +1,46 @@
 "use client";
 
-import { nanoid } from "nanoid";
-import { useState, useEffect, useRef, use } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import { useUserData } from "@/utils/UserContext";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Save, Users, ClipboardCopy, Trash2, Eye, EyeOff } from "lucide-react";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
+import { Chart as ChartJS } from "chart.js/auto";
+import { ClipboardCopy, Eye, EyeOff, Save, Trash2, Users } from "lucide-react";
+import { nanoid } from "nanoid";
+import { use, useEffect, useRef, useState } from "react";
+import type { UseFormReturn } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
 import Toggle from "@/components/control/Toggle";
 import { Button } from "@/components/ui/button";
-import { damageUser } from "@/libs/combat/tags";
-import { calcLevel, calcHP } from "@/libs/profile";
-import { StatTypes, GeneralTypes } from "@/drizzle/constants";
-import { statSchema, actSchema, confSchema } from "@/validators/combat";
-import { dmgConfig } from "@/libs/combat/constants";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { Chart as ChartJS } from "chart.js/auto";
-import { MultiSelect } from "@/components/ui/multi-select";
 import {
   Form,
   FormControl,
-  FormLabel,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { battleCalcText } from "@/layout/seoTexts";
 import { Input } from "@/components/ui/input";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { GeneralTypes, StatTypes } from "@/drizzle/constants";
 import type { DamageSimulation } from "@/drizzle/schema";
-import type { z } from "zod";
-import type { UseFormReturn } from "react-hook-form";
-import type { UserEffect } from "@/libs/combat/types";
-import type { BattleUserState } from "@/libs/combat/types";
-import type { Consequence } from "@/libs/combat/types";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import { battleCalcText } from "@/layout/seoTexts";
+import { dmgConfig } from "@/libs/combat/constants";
+import { damageUser } from "@/libs/combat/tags";
+import type { BattleUserState, Consequence, UserEffect } from "@/libs/combat/types";
+import { calcHP, calcLevel } from "@/libs/profile";
+import { showMutationToast } from "@/libs/toast";
+import { useUserData } from "@/utils/UserContext";
+import { actSchema, confSchema, statSchema } from "@/validators/combat";
 
 // Default user
-type StatSchema = z.infer<typeof statSchema>;
-type ActSchema = z.infer<typeof actSchema>;
-type ConfigSchema = z.infer<typeof confSchema>;
+type StatSchemaInput = z.input<typeof statSchema>;
+type StatSchemaOutput = z.infer<typeof statSchema>;
+type ActSchemaInput = z.input<typeof actSchema>;
+type ActSchemaOutput = z.infer<typeof actSchema>;
+type ConfigSchemaInput = z.input<typeof confSchema>;
+type ConfigSchemaOutput = z.infer<typeof confSchema>;
 const defaultsStats = statSchema.parse({});
 const statNames = Object.keys(defaultsStats) as (keyof typeof defaultsStats)[];
 
@@ -86,21 +87,32 @@ export default function Simulator(props: {
 
   // Forms setup
   const conf1 = { defaultValues: defaultsStats, mode: "all" as const };
-  const attForm = useForm<StatSchema>({ ...conf1, resolver: zodResolver(statSchema) });
-  const defForm = useForm<StatSchema>({ ...conf1, resolver: zodResolver(statSchema) });
+  const attForm = useForm<StatSchemaInput, unknown, StatSchemaOutput>({
+    ...conf1,
+    resolver: zodResolver(statSchema),
+  });
+  const defForm = useForm<StatSchemaInput, unknown, StatSchemaOutput>({
+    ...conf1,
+    resolver: zodResolver(statSchema),
+  });
   const conf2 = { defaultValues: actSchema.parse({}), mode: "all" as const };
-  const actForm = useForm<ActSchema>({ ...conf2, resolver: zodResolver(actSchema) });
-  const configForm = useForm<ConfigSchema>({
+  const actForm = useForm<ActSchemaInput, unknown, ActSchemaOutput>({
+    ...conf2,
+    resolver: zodResolver(actSchema),
+  });
+  const configForm = useForm<ConfigSchemaInput, unknown, ConfigSchemaOutput>({
     defaultValues: confSchema.parse(dmgConfig),
     mode: "all" as const,
     resolver: zodResolver(confSchema),
   });
 
   // Watch all the forms simultaneously
-  const attValues = useWatch({ control: attForm.control }) as StatSchema;
-  const defValues = useWatch({ control: defForm.control }) as StatSchema;
-  const actValues = useWatch({ control: actForm.control }) as ActSchema;
-  const configValues = useWatch({ control: configForm.control }) as ConfigSchema;
+  const attValues = useWatch({ control: attForm.control }) as StatSchemaOutput;
+  const defValues = useWatch({ control: defForm.control }) as StatSchemaOutput;
+  const actValues = useWatch({ control: actForm.control }) as ActSchemaOutput;
+  const configValues = useWatch({
+    control: configForm.control,
+  }) as ConfigSchemaOutput;
 
   // Query for fetching previous entries
   const { data, refetch } = api.simulator.getDamageSimulations.useQuery(undefined, {
@@ -132,7 +144,7 @@ export default function Simulator(props: {
   const isPending = isSaving || isUpdating || isDeleting;
 
   // Calculate experience from stats
-  const calcExperience = (values: StatSchema) => {
+  const calcExperience = (values: StatSchemaOutput) => {
     return (
       statNames
         .map((k) => values[k])
@@ -151,9 +163,9 @@ export default function Simulator(props: {
 
   // Monkey-wrap the damage function
   const getDamage = (
-    attValues: StatSchema,
-    defValues: StatSchema,
-    actValues: ActSchema,
+    attValues: StatSchemaOutput,
+    defValues: StatSchemaOutput,
+    actValues: ActSchemaOutput,
   ) => {
     const attacker = {
       ...attValues,
@@ -215,9 +227,9 @@ export default function Simulator(props: {
             .filter((e) => e.active === 1)
             .map((entry, i) => {
               const { attacker, defender, action } = entry.state as {
-                attacker: StatSchema;
-                defender: StatSchema;
-                action: ActSchema;
+                attacker: StatSchemaOutput;
+                defender: StatSchemaOutput;
+                action: ActSchemaOutput;
               };
               const stateDmg = getDamage(attacker, defender, action);
               return {
@@ -232,33 +244,35 @@ export default function Simulator(props: {
         myChart.destroy();
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   // Handle updating current form values whenever retrieve entry changes
   useEffect(() => {
     if (previous?.state) activateEntry(previous);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previous]);
 
   // Handle updating damage whenever form changes
   useEffect(() => {
     setSelectedDmg(getDamage(attValues, defValues, actValues));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attValues, defValues, actValues]);
 
   // Handle simulation
   const onSubmit = attForm.handleSubmit(
-    () => saveEntry({ attacker: attValues, defender: defValues, action: actValues }),
+    () =>
+      saveEntry({
+        attacker: attValues,
+        defender: defValues,
+        action: actValues,
+      }),
     (errors) => console.error(errors),
   );
 
   // Handle inserting historical entry into form
   const activateEntry = (entry: DamageSimulation) => {
     const { attacker, defender, action } = entry.state as {
-      attacker: StatSchema;
-      defender: StatSchema;
-      action: ActSchema;
+      attacker: StatSchemaOutput;
+      defender: StatSchemaOutput;
+      action: ActSchemaOutput;
     };
     let statKey: keyof typeof attacker;
     let actKey: keyof typeof action;
@@ -274,7 +288,9 @@ export default function Simulator(props: {
   };
 
   // Handle setting user data into form
-  const setUserData = (form: UseFormReturn<StatSchema>) => {
+  const setUserData = (
+    form: UseFormReturn<StatSchemaInput, unknown, StatSchemaOutput>,
+  ) => {
     statNames.forEach((stat) => {
       form.setValue(stat, userData?.[stat] ?? 0);
     });
@@ -310,16 +326,16 @@ export default function Simulator(props: {
         <div className="grid grid-cols-2">
           <div>
             <div className="flex flex-row items-center">
-              <p className="px-3 pt-3 text-lg font-bold">Attacker</p>
+              <p className="px-3 pt-3 font-bold text-lg">Attacker</p>
               <div className="grow"></div>
               <Users
-                className="h-5 w-5 mr-3 mt-3"
+                className="mt-3 mr-3 h-5 w-5"
                 onClick={() => setUserData(attForm)}
               />
             </div>
-            <p className="px-3 italic text-sm">Experience: {attExp}</p>
-            <p className="px-3 pb-1 italic text-sm">Level: {attLevel}</p>
-            <p className="px-3 pb-1 italic text-sm">Health: {attHp}</p>
+            <p className="px-3 text-sm italic">Experience: {attExp}</p>
+            <p className="px-3 pb-1 text-sm italic">Level: {attLevel}</p>
+            <p className="px-3 pb-1 text-sm italic">Health: {attHp}</p>
             <hr />
             <UserInput
               id="u1"
@@ -329,16 +345,16 @@ export default function Simulator(props: {
           </div>
           <div>
             <div className="flex flex-row items-center">
-              <p className="px-3 pt-3 text-lg font-bold">Defender</p>
+              <p className="px-3 pt-3 font-bold text-lg">Defender</p>
               <div className="grow"></div>
               <Users
-                className="h-5 w-5 mr-3 mt-3"
+                className="mt-3 mr-3 h-5 w-5"
                 onClick={() => setUserData(defForm)}
               />
             </div>
-            <p className="px-3 italic text-sm">Experience: {defExp}</p>
-            <p className="px-3 pb-1 italic text-sm">Level: {defLevel}</p>
-            <p className="px-3 pb-1 italic text-sm">Health: {defHp}</p>
+            <p className="px-3 text-sm italic">Experience: {defExp}</p>
+            <p className="px-3 pb-1 text-sm italic">Level: {defLevel}</p>
+            <p className="px-3 pb-1 text-sm italic">Health: {defHp}</p>
             <hr />
             <UserInput
               id="u2"
@@ -348,9 +364,9 @@ export default function Simulator(props: {
           </div>
         </div>
         <div className="mb-3">
-          <p className="px-3 pt-3 text-lg font-bold">Attack Settings</p>
+          <p className="px-3 pt-3 font-bold text-lg">Attack Settings</p>
           <hr />
-          <div className="px-3 space-y-2">
+          <div className="space-y-2 px-3">
             <Form {...actForm}>
               <FormField
                 control={actForm.control}
@@ -359,7 +375,7 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>Set power</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value as number} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -388,7 +404,10 @@ export default function Simulator(props: {
                     <FormLabel>Set Generals</FormLabel>
                     <MultiSelect
                       selected={field.value ? field.value : []}
-                      options={GeneralTypes.map((o) => ({ label: o, value: o }))}
+                      options={GeneralTypes.map((o) => ({
+                        label: o,
+                        value: o,
+                      }))}
                       onChange={field.onChange}
                     />
                     <FormMessage />
@@ -399,9 +418,9 @@ export default function Simulator(props: {
           </div>
         </div>
         <div className="mb-3">
-          <p className="px-3 pt-3 text-lg font-bold">Formula Parameters</p>
+          <p className="px-3 pt-3 font-bold text-lg">Formula Parameters</p>
           <hr />
-          <div className="px-3 grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 px-3">
             <Form {...configForm}>
               <FormField
                 control={configForm.control}
@@ -410,7 +429,7 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>atk_scaling</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value as number} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -423,7 +442,7 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>def_scaling</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value as number} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -436,7 +455,7 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>exp_scaling</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value as number} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -449,7 +468,7 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>dmg_scaling</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value as number} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -462,7 +481,7 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>gen_scaling</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value as number} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -475,7 +494,7 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>stats_scaling</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value as number} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -488,7 +507,7 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>power_scaling</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value as number} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -501,7 +520,7 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>dmg_base</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value as number} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -511,13 +530,13 @@ export default function Simulator(props: {
           </div>
         </div>
         <hr />
-        <div className="grid grid-cols-2 my-2 mx-2 items-center">
+        <div className="mx-2 my-2 grid grid-cols-2 items-center">
           {selectedDmg && (
             <div>
-              <p className="text-2xl text-center mt-3 font-bold">
+              <p className="mt-3 text-center font-bold text-2xl">
                 Damage: {selectedDmg}
               </p>
-              <p className="text-center mb-3 italic">
+              <p className="mb-3 text-center italic">
                 [{((100 * selectedDmg) / defHp)?.toFixed(1)}% of Defender HP]
               </p>
             </div>
@@ -538,19 +557,19 @@ export default function Simulator(props: {
           initialBreak={true}
         >
           <div className="grid grid-cols-3">
-            <div className="col-span-2 text-center mr-5">
+            <div className="col-span-2 mr-5 text-center">
               <canvas ref={chartRef} id="overview"></canvas>
             </div>
             <div>
-              <div className="text-lg font-bold flex flex-row">
+              <div className="flex flex-row font-bold text-lg">
                 <p>History</p>
                 <div className="grow"></div>
                 <Eye
-                  className={`h-5 w-5 mr-1 hover:text-orange-500 hover:cursor-pointer`}
+                  className={`mr-1 h-5 w-5 hover:cursor-pointer hover:text-orange-500`}
                   onClick={() => updateEntry({ active: true })}
                 />
                 <EyeOff
-                  className={`h-5 w-5 mr-1 hover:text-orange-500 hover:cursor-pointer`}
+                  className={`mr-1 h-5 w-5 hover:cursor-pointer hover:text-orange-500`}
                   onClick={() => updateEntry({ active: false })}
                 />
               </div>
@@ -558,22 +577,23 @@ export default function Simulator(props: {
               <p className="my-1"></p>
               {data?.map((entry, i) => {
                 return (
-                  <div key={i} className="flex flex-row items-center">
+                  <div key={entry.id} className="flex flex-row items-center">
                     {entry.active === 1 && (
                       <Eye
-                        className={`h-5 w-5 mr-1 hover:cursor-pointer`}
+                        className={`mr-1 h-5 w-5 hover:cursor-pointer`}
                         style={{ color: colors[i % colors.length] }}
                         onClick={() => updateEntry({ id: entry.id, active: false })}
                       />
                     )}
                     {entry.active === 0 && (
                       <EyeOff
-                        className="h-5 w-5 mr-1 hover:text-orange-500 hover:cursor-pointer"
+                        className="mr-1 h-5 w-5 hover:cursor-pointer hover:text-orange-500"
                         onClick={() => updateEntry({ id: entry.id, active: true })}
                       />
                     )}
-                    <div
-                      className=" hover:text-orange-500"
+                    <button
+                      type="button"
+                      className="hover:text-orange-500"
                       onClick={() => activateEntry(entry)}
                     >
                       {entry.createdAt.toLocaleString(undefined, {
@@ -585,15 +605,15 @@ export default function Simulator(props: {
                         minute: "numeric",
                         second: "numeric",
                       })}
-                    </div>
+                    </button>
 
                     <div className="grow" />
                     <Trash2
-                      className="mr-1 h-5 w-5 hover:text-orange-500 hover:cursor-pointer"
+                      className="mr-1 h-5 w-5 hover:cursor-pointer hover:text-orange-500"
                       onClick={() => deleteEntry({ id: entry.id })}
                     />
                     <ClipboardCopy
-                      className="ml-1 h-5 w-5 hover:text-orange-900 hover:cursor-pointer"
+                      className="ml-1 h-5 w-5 hover:cursor-pointer hover:text-orange-900"
                       onClick={() => {
                         const origin =
                           typeof window !== "undefined" && window.location.origin
@@ -601,14 +621,14 @@ export default function Simulator(props: {
                             : "";
                         const link = `${origin}/manual/damage_calcs/${entry.id}`;
                         navigator.clipboard.writeText(link).then(
-                          function () {
+                          () => {
                             showMutationToast({
                               success: true,
                               title: "Saved",
                               message: "Copied to clipboard!",
                             });
                           },
-                          function () {
+                          () => {
                             showMutationToast({
                               success: false,
                               title: "Error",
@@ -621,7 +641,7 @@ export default function Simulator(props: {
                   </div>
                 );
               })}
-              <p className="italic text-xs">- Max 20 items</p>
+              <p className="text-xs italic">- Max 20 items</p>
             </div>
           </div>
         </ContentBox>
@@ -633,7 +653,7 @@ export default function Simulator(props: {
 interface UserInputProps {
   id: string;
   ignoreContains: string;
-  selectForm: UseFormReturn<StatSchema>;
+  selectForm: UseFormReturn<StatSchemaInput, unknown, StatSchemaOutput>;
 }
 
 const UserInput: React.FC<UserInputProps> = (props) => {
@@ -654,7 +674,7 @@ const UserInput: React.FC<UserInputProps> = (props) => {
                 <FormItem>
                   <FormLabel>{stat}</FormLabel>
                   <FormControl>
-                    <Input type="number" {...field} />
+                    <Input type="number" {...field} value={field.value as number} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, use } from "react";
-import Loader from "@/layout/Loader";
-import ContentBox from "@/layout/ContentBox";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import NavTabs from "@/layout/NavTabs";
+import { use, useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { api } from "@/app/_trpc/client";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import NavTabs from "@/layout/NavTabs";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
 import { useUserSearch } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -40,7 +40,7 @@ export default function VillageUsers(props: {
       staleTime: 1000 * 60 * 5, // every 5min
     },
   );
-  const allUsers = users?.pages.map((page) => page.data).flat();
+  const allUsers = users?.pages.flatMap((page) => page.data);
   type User = ArrayElement<typeof allUsers>;
 
   useInfinitePagination({
@@ -70,7 +70,7 @@ export default function VillageUsers(props: {
       defaultBackHref="/village"
       padding={false}
       topRightContent={
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <div className="max-w-40">
             <Form {...form}>
               <FormField

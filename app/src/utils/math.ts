@@ -12,7 +12,7 @@ export const randomInt = (min: number, max: number) => {
  * @returns The rounded number.
  */
 export const round = (value: number, decimals = 2) => {
-  return Number(Math.round(Number(value + "e" + decimals)) + "e-" + decimals);
+  return Number(`${Math.round(Number(`${value}e${decimals}`))}e-${decimals}`);
 };
 
 /**

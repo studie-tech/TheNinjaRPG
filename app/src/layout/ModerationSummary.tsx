@@ -1,5 +1,15 @@
-import React, { useRef, useEffect } from "react";
+import type { ChartTypeRegistry, TooltipItem } from "chart.js/auto";
+import { Chart as ChartJS } from "chart.js/auto";
+import { AlertTriangle } from "lucide-react";
+import React, { useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -8,16 +18,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { AlertTriangle } from "lucide-react";
-import { Chart as ChartJS } from "chart.js/auto";
-import type { ChartTypeRegistry, TooltipItem } from "chart.js/auto";
 
 interface ModerationSummaryProps {
   userId?: string;
@@ -86,9 +86,8 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
             },
             tooltip: {
               callbacks: {
-                label: function (tooltipItem: TooltipItem<"bar">) {
-                  return `Count: ${tooltipItem.formattedValue}`;
-                },
+                label: (tooltipItem: TooltipItem<"bar">) =>
+                  `Count: ${tooltipItem.formattedValue}`,
               },
             },
           },
@@ -119,7 +118,6 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
         chartInstanceRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, categoryChartData]);
 
   // Effect to handle dialog open/close
@@ -131,7 +129,6 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
       }, 100); // Small delay to ensure the canvas is visible
       return () => clearTimeout(timeoutId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const totalEntries = data?.[0]?.totalEntries || 0;
@@ -149,15 +146,15 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex justify-center items-center h-64">
+          <div className="flex h-64 items-center justify-center">
             <p>Loading moderation data...</p>
           </div>
         ) : !data || totalEntries === 0 ? (
-          <div className="flex flex-col justify-center items-center h-64">
-            <p className="text-green-600 font-semibold mb-2">
+          <div className="flex h-64 flex-col items-center justify-center">
+            <p className="mb-2 font-semibold text-green-600">
               No moderation flags found
             </p>
-            <p className="text-gray-500 text-sm text-center">
+            <p className="text-center text-gray-500 text-sm">
               Your content hasn&apos;t triggered any automated moderation flags.
             </p>
           </div>
@@ -195,20 +192,20 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
                     <canvas ref={categoryChartRef} />
                   </div>
                 ) : (
-                  <p className="text-center text-gray-500 py-8">
+                  <p className="py-8 text-center text-gray-500">
                     No category data available
                   </p>
                 )}
               </CardContent>
             </Card>
 
-            <div className="p-4 bg-orange-50 border border-orange-200 rounded-md flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 rounded-md border border-orange-200 bg-orange-50 p-4">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
               <div>
                 <h4 className="font-medium text-orange-800">
                   Understanding Your Moderation Data
                 </h4>
-                <p className="text-sm text-orange-700 mt-1">
+                <p className="mt-1 text-orange-700 text-sm">
                   Content moderation is performed automatically to ensure community
                   guidelines are followed. If you notice a pattern of flags, consider
                   reviewing our community guidelines. Flags older than 3 months are

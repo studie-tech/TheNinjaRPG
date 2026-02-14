@@ -15,11 +15,11 @@
  * 7. Server re-calculates signature and verifies before awarding points
  */
 
-import { createHmac, randomBytes } from "crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { env } from "@/env/server.mjs";
 import type {
-  SignedUpgradeDefinition,
   SignedEnemyDefinition,
+  SignedUpgradeDefinition,
 } from "@/validators/towerDefense";
 
 // Secret key for HMAC - uses a dedicated env var or falls back to a derived key

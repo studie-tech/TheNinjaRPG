@@ -1,9 +1,9 @@
 "use client";
 
-import * as React from "react";
-import { useState, useRef } from "react";
 import { GripVertical } from "lucide-react";
-import { cn } from "src/libs/shadui";
+import type * as React from "react";
+import { useRef, useState } from "react";
+import { cn } from "@/libs/shadui";
 
 interface SortableItem {
   id: string;
@@ -100,6 +100,7 @@ export const SortableList: React.FC<SortableListProps> = ({
         const isDragOver = dragOverIndex === index;
 
         return (
+          // biome-ignore lint/a11y/noStaticElementInteractions: Drag and drop uses native HTML5 drag events which don't require keyboard handlers
           <div
             key={item.id}
             draggable
@@ -109,8 +110,8 @@ export const SortableList: React.FC<SortableListProps> = ({
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, index)}
             className={cn(
-              "flex items-center gap-2 rounded-md border bg-card p-2 transition-all select-none",
-              isDragging && "opacity-50 border-dashed",
+              "flex select-none items-center gap-2 rounded-md border bg-card p-2 transition-all",
+              isDragging && "border-dashed opacity-50",
               isDragOver &&
                 draggedIndex !== null &&
                 draggedIndex !== index &&
@@ -121,8 +122,8 @@ export const SortableList: React.FC<SortableListProps> = ({
             )}
           >
             <div
-              className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded"
-              aria-label="Drag handle"
+              className="cursor-grab rounded p-1 hover:bg-muted active:cursor-grabbing"
+              title="Drag handle"
             >
               <GripVertical className="h-4 w-4 text-muted-foreground" />
             </div>

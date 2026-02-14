@@ -1,32 +1,34 @@
-import React, { useEffect, useState, useMemo } from "react";
+import { useAtomValue } from "jotai";
+import {
+  Atom,
+  Dumbbell,
+  Filter,
+  LayoutList,
+  Moon,
+  ShieldCheck,
+  Star,
+  Sun,
+  Swords,
+} from "lucide-react";
 import Link from "next/link";
-import Image from "@/layout/Image";
-import StatusBar from "@/layout/StatusBar";
-import AvatarImage from "@/layout/Avatar";
-import Countdown from "@/layout/Countdown";
-import LevelUpBtn from "@/layout/LevelUpBtn";
-import ElementImage from "@/layout/ElementImage";
+import React, { useEffect, useMemo, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { trainingSpeedSeconds } from "@/libs/train";
-import { useUserData } from "@/utils/UserContext";
-import { ShieldCheck, Swords, Moon, Sun, Dumbbell, Star } from "lucide-react";
-import { LayoutList, Atom } from "lucide-react";
-import { sealCheck } from "@/libs/combat/tags";
-import { isEffectActive, getPreventTypeName } from "@/libs/combat/util";
-import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
-import { useGameMenu } from "@/libs/menus";
-import { secondsFromDate } from "@/utils/time";
-import { useAtomValue } from "jotai";
-import { userBattleAtom } from "@/utils/UserContext";
-import { calcLevelRequirements } from "@/libs/profile";
-import { DISCORD_INVITE_URL, MISSIONS_PER_DAY } from "@/drizzle/constants";
-import { cn } from "src/libs/shadui";
+import type {
+  ElementName,
+  GeneralType,
+  StatType,
+  UserStatuses,
+} from "@/drizzle/constants";
 import {
+  DISCORD_INVITE_URL,
   IMG_ICON_DISCORD,
   IMG_ICON_FACEBOOK,
   IMG_ICON_INSTAGRAM,
@@ -34,17 +36,27 @@ import {
   IMG_ICON_TIKTOK,
   IMG_ICON_TWITTER,
   IMG_ICON_YOUTUBE,
+  MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { Switch } from "@/components/ui/switch";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Filter } from "lucide-react";
-import type { GeneralType, StatType, ElementName } from "@/drizzle/constants";
-import type { UserStatuses } from "@/drizzle/constants";
-import type { UserEffect, GroundEffect } from "@/libs/combat/types";
-import { isPositiveUserEffect, isNegativeUserEffect } from "@/validators/combat";
-import { api } from "@/app/_trpc/client";
-import { useFiltering, getFilter } from "@/layout/JutsuFiltering";
+import { useEffectivePools } from "@/hooks/useEffectivePools";
+import AvatarImage from "@/layout/Avatar";
+import Countdown from "@/layout/Countdown";
+import ElementImage from "@/layout/ElementImage";
+import Image from "@/layout/Image";
+import { getFilter, useFiltering } from "@/layout/JutsuFiltering";
+import LevelUpBtn from "@/layout/LevelUpBtn";
+import StatusBar from "@/layout/StatusBar";
+import { sealCheck } from "@/libs/combat/tags";
+import type { GroundEffect, UserEffect } from "@/libs/combat/types";
+import { getPreventTypeName, isEffectActive } from "@/libs/combat/util";
+import { useGameMenu } from "@/libs/menus";
+import { calcLevelRequirements } from "@/libs/profile";
+import { cn } from "@/libs/shadui";
+import { trainingSpeedSeconds } from "@/libs/train";
+import { getDaysHoursMinutesSeconds, getGameTime, secondsFromDate } from "@/utils/time";
+import { userBattleAtom, useUserData } from "@/utils/UserContext";
+import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
 
 /**
  * Social media links
@@ -129,6 +141,13 @@ const MenuBoxProfile: React.FC = () => {
   // Battle user state
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
 
+  // Calculate effective pool values with fallbacks (effectivePools → battleUser → userData)
+  const pools = useEffectivePools({
+    battleUser,
+    usersEffects: battle?.usersEffects,
+    userData,
+  });
+
   // Status link
   const statusLink = (status: (typeof UserStatuses)[number] | "UNKNOWN") => {
     switch (status) {
@@ -174,8 +193,8 @@ const MenuBoxProfile: React.FC = () => {
 
   return (
     <>
-      <div className="flex-col items-center justify-center ">
-        <div className="grid grid-cols-2 md:grid-cols-1 items-center justify-center">
+      <div className="flex-col items-center justify-center">
+        <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
           <Link href="/profile">
             <AvatarImage
               href={userData?.avatar}
@@ -190,6 +209,7 @@ const MenuBoxProfile: React.FC = () => {
 
           <div className="pt-5">
             <StatusBar
+              key={`hp-${pools.curHealth}-${pools.maxHealth}`}
               title="HP"
               tooltip="Health"
               color="bg-red-500"
@@ -197,11 +217,12 @@ const MenuBoxProfile: React.FC = () => {
               lastRegenAt={userData?.regenAt}
               regen={battleUser ? 0 : userData?.regeneration}
               status={battleUser ? "AWAKE" : userData?.status}
-              current={battleUser?.curHealth || userData?.curHealth}
-              total={battleUser?.maxHealth || userData?.maxHealth}
+              current={pools.curHealth}
+              total={pools.maxHealth}
               timeDiff={timeDiff}
             />
             <StatusBar
+              key={`cp-${pools.curChakra}-${pools.maxChakra}`}
               title="CP"
               tooltip="Chakra"
               color="bg-blue-500"
@@ -209,11 +230,12 @@ const MenuBoxProfile: React.FC = () => {
               lastRegenAt={userData?.regenAt}
               regen={battleUser ? 0 : userData?.regeneration}
               status={battleUser ? "AWAKE" : userData?.status}
-              current={battleUser?.curChakra || userData?.curChakra}
-              total={battleUser?.maxChakra || userData?.maxChakra}
+              current={pools.curChakra}
+              total={pools.maxChakra}
               timeDiff={timeDiff}
             />
             <StatusBar
+              key={`sp-${pools.curStamina}-${pools.maxStamina}`}
               title="SP"
               tooltip="Stamina"
               color="bg-green-500"
@@ -221,8 +243,8 @@ const MenuBoxProfile: React.FC = () => {
               lastRegenAt={userData?.regenAt}
               regen={battleUser ? 0 : userData?.regeneration}
               status={battleUser ? "AWAKE" : userData?.status}
-              current={battleUser?.curStamina || userData?.curStamina}
-              total={battleUser?.maxStamina || userData?.maxStamina}
+              current={pools.curStamina}
+              total={pools.maxStamina}
               timeDiff={timeDiff}
             />
             {expRequired &&
@@ -288,7 +310,7 @@ const MenuBoxProfile: React.FC = () => {
                   className="hover:text-orange-500"
                 >
                   <div className="flex flex-row items-center">
-                    <p className="text-xl mr-3">両</p>
+                    <p className="mr-3 text-xl">両</p>
                     {userData?.money?.toLocaleString() ?? "??"}
                   </div>
                 </Link>
@@ -296,12 +318,12 @@ const MenuBoxProfile: React.FC = () => {
               <TooltipContent>Money on hand</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {userData && userData.immunityUntil > new Date() && (
+          {userData && immunitySecsLeft > 0 && (
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center">
-                    <ShieldCheck className="h-6 w-6 mr-2" />
+                    <ShieldCheck className="mr-2 h-6 w-6" />
                     <Cooldown
                       createdAt={immunityData.createdAt}
                       totalSeconds={immunitySecsLeft}
@@ -319,7 +341,7 @@ const MenuBoxProfile: React.FC = () => {
               <Tooltip>
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center hover:text-orange-500">
-                    <Dumbbell className="h-6 w-6 mr-2" />
+                    <Dumbbell className="mr-2 h-6 w-6" />
                     <Link href="/traininggrounds">
                       <Countdown
                         targetDate={secondsFromDate(
@@ -340,7 +362,7 @@ const MenuBoxProfile: React.FC = () => {
               <Tooltip>
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center hover:text-orange-500">
-                    <Atom className="h-6 w-6 mr-2" />
+                    <Atom className="mr-2 h-6 w-6" />
                     <Link href="/traininggrounds">
                       <Countdown
                         targetDate={trainingJutsu.finishTraining || new Date()}
@@ -363,7 +385,7 @@ const MenuBoxProfile: React.FC = () => {
               <TooltipTrigger className="w-full">
                 <Link href="/points" className="hover:text-orange-500">
                   <div className="flex flex-row items-center">
-                    <Star className="h-6 w-6 mr-2" />{" "}
+                    <Star className="mr-2 h-6 w-6" />{" "}
                     {userData?.reputationPoints ?? "??"}
                   </div>
                 </Link>
@@ -377,7 +399,7 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <Link href="/missionhall" className="hover:text-orange-500">
                     <div className="flex flex-row items-center">
-                      <LayoutList className="h-6 w-6 mr-2" />{" "}
+                      <LayoutList className="mr-2 h-6 w-6" />{" "}
                       {userData?.dailyMissions ?? "??"} / {MISSIONS_PER_DAY}
                     </div>
                   </Link>
@@ -389,10 +411,15 @@ const MenuBoxProfile: React.FC = () => {
         </div>
       </div>
       <hr className="my-2" />
-      <div className="px-2 pt-2 flex align-center justify-center">
-        {socials.map((social, i) => {
+      <div className="flex justify-center px-2 pt-2 align-center">
+        {socials.map((social) => {
           return (
-            <a target="_blank" href={social.url} key={i} className="hover:opacity-80">
+            <a
+              target="_blank"
+              href={social.url}
+              key={social.url}
+              className="hover:opacity-80"
+            >
               <Image src={social.image} width={64} height={64} alt={social.alt}></Image>
             </a>
           );
@@ -450,8 +477,11 @@ const Cooldown: React.FC<CooldownProps> = (props) => {
   const hasNotifiedRef = React.useRef(false);
 
   useEffect(() => {
-    // Reset notification flag when countdown restarts
-    hasNotifiedRef.current = false;
+    // Only reset notification flag when countdown actually restarts (has time remaining)
+    const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
+    if (secondsLeft > 0) {
+      hasNotifiedRef.current = false;
+    }
   }, [createdAt, totalSeconds]);
 
   useEffect(() => {
@@ -474,7 +504,7 @@ const Cooldown: React.FC<CooldownProps> = (props) => {
     }
   }, [totalSeconds, createdAt, initialSecondsLeft, setState]);
 
-  return counter ? <>[{counter}]</> : <></>;
+  return counter ? <>[{counter}]</> : null;
 };
 
 type EffectCategory = GeneralType | StatType | ElementName | "All";
@@ -552,7 +582,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   const sealEffects = filteredEffects.filter((e) => e.type === "seal" && !e.isNew);
 
   // Collapse consequences based on their type & calculation type
-  const collapsedEffects =
+  const collapsedEffects: CollapsedEffect[] =
     filteredEffects
       .filter(isEffectActive)
       .filter((e) => e.targetId === userId)
@@ -563,6 +593,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           ...(("generalTypes" in val && val?.generalTypes) || []),
           ...(("elements" in val && val?.elements) || []),
           ...(("actionsAffected" in val && val?.actionsAffected) || []),
+          ...(("poolsAffected" in val && val?.poolsAffected) || []),
         ];
         const isSealed = sealCheck(val, sealEffects);
         let cats = stats.length === 0 ? ["All"] : stats;
@@ -572,9 +603,13 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           cats.push("All");
         }
         const dual = val.type.includes("increase") || val.type.includes("decrease");
-        const baseType = dual
+        let baseType = dual
           ? val.type.replace("increase", "").replace("decrease", "")
           : val.type;
+        // Normalize maxpools to pools for display
+        if (baseType === "maxpools") {
+          baseType = "pools";
+        }
         const sign = val.type.includes("decrease") ? -1 : 1;
 
         // Clean, targeted handling for wound effects only
@@ -592,7 +627,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         cats.forEach((cat) => {
           const valBlocks = "blocks" in val ? (val.blocks as string) : undefined;
           const found = acc.find(
-            (e) =>
+            (e: CollapsedEffect) =>
               e.type === baseType &&
               e.calculation === val.calculation &&
               e.category === cat &&
@@ -628,10 +663,12 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     if (e.type === "heal" && e.calculation === "percentage") {
       return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}%`;
     }
+    // Special handling for pools - show pool name in the value text
+    if (e.type === "pools") {
+      return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${e.calculation === "percentage" ? "%" : ""}`;
+    }
     // Standard handling for all other effects
-    return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${
-      e.calculation === "percentage" ? "%" : ""
-    }`;
+    return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${e.calculation === "percentage" ? "%" : ""}`;
   };
   const roundsTxt = (e: CollapsedEffect) =>
     e.rounds.length > 0 ? `↻ ${Math.max(...e.rounds)}` : "";
@@ -656,7 +693,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         key={`${i}-${e.type}-${e.category}-${e.blocks || ""}`}
         className="flex flex-row items-center gap-2"
       >
-        <ElementImage element={e.category} className="w-6 h-6 shrink-0" />
+        <ElementImage element={e.category} className="h-6 w-6 shrink-0" />
         <div className="flex flex-col leading-none">
           <div
             className={cn(
@@ -706,6 +743,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     "timecompression",
     "timedilation",
     "redirection",
+    "pools",
   ]);
 
   // Calculate net multiplicative heal given effects
@@ -802,6 +840,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     timecompression: "Time Compression",
     timedilation: "Time Dilation",
     redirection: "Redirection",
+    pools: "Pool",
   };
 
   const getEffectLabel = (e: (typeof statusEffects)[number]) => {
@@ -817,7 +856,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
       key={`${e.type}-${e.category}-${e.blocks || ""}`}
       className="flex flex-row items-center gap-2 text-xs"
     >
-      <ElementImage element={e.category} className="w-6 h-6 shrink-0" />
+      <ElementImage element={e.category} className="h-6 w-6 shrink-0" />
       <div
         className={cn(e.sealed && "line-through")}
       >{`${getEffectLabel(e)} ${valueTxt(e)} ${roundsTxt(e)}`}</div>
@@ -830,7 +869,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
       {effects.length > 0 && (
         <Popover>
           <PopoverTrigger asChild>
-            <Filter className="w-5 h-5 absolute top-0 right-0 hover:cursor-pointer hover:text-orange-500" />
+            <Filter className="absolute top-0 right-0 h-5 w-5 hover:cursor-pointer hover:text-orange-500" />
           </PopoverTrigger>
           <PopoverContent align="end" className="w-max p-2 text-xs">
             <div className="flex flex-col gap-2">
@@ -888,14 +927,14 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
       {statusVisuals.length > 0 && (
         <div>
-          <div className="font-semibold mb-1">Statuses</div>
+          <div className="mb-1 font-semibold">Statuses</div>
           <div className="flex flex-col gap-1">{statusVisuals}</div>
         </div>
       )}
 
       {damageGivenEffects.length > 0 && (
         <div>
-          <div className="font-semibold mb-1">Damage Given</div>
+          <div className="mb-1 font-semibold">Damage Given</div>
           <div className="grid grid-cols-2 gap-1">
             {damageGivenEffects.map(renderCompact)}
           </div>
@@ -904,7 +943,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
       {damageTakenEffects.length > 0 && (
         <div>
-          <div className="font-semibold mb-1">Damage Taken</div>
+          <div className="mb-1 font-semibold">Damage Taken</div>
           <div className="grid grid-cols-2 gap-1">
             {damageTakenEffects.map(renderCompact)}
           </div>
@@ -913,7 +952,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
       {healGivenEffects.length > 0 && (
         <div>
-          <div className="font-semibold mb-1">Heal Given</div>
+          <div className="mb-1 font-semibold">Heal Given</div>
           <div className="grid grid-cols-2 gap-1">
             {healGivenEffects.map(renderCompact)}
           </div>
@@ -922,14 +961,14 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
       {statEffects.length > 0 && (
         <div>
-          <div className="font-semibold mb-1">Stats</div>
+          <div className="mb-1 font-semibold">Stats</div>
           <div className="grid grid-cols-2 gap-1">{statEffects.map(renderCompact)}</div>
         </div>
       )}
 
       {damageEffects.length > 0 && (
         <div>
-          <div className="font-semibold mb-1">Residual Damage</div>
+          <div className="mb-1 font-semibold">Residual Damage</div>
           <div className="grid grid-cols-2 gap-1">
             {damageEffects.map(renderCompact)}
           </div>
@@ -1034,30 +1073,30 @@ export const VisualizeGroundEffects: React.FC<VisualizeGroundEffectsProps> = ({
     );
   };
 
-  const positiveEffects = groupedEffects["positive"] || [];
-  const negativeEffects = groupedEffects["negative"] || [];
-  const neutralEffects = groupedEffects["neutral"] || [];
+  const positiveEffects = groupedEffects.positive || [];
+  const negativeEffects = groupedEffects.negative || [];
+  const neutralEffects = groupedEffects.neutral || [];
 
   return (
     <div className="flex flex-col gap-2 text-sm">
-      <div className="font-semibold text-xs text-gray-500 uppercase">
+      <div className="font-semibold text-gray-500 text-xs uppercase">
         Ground Effects
       </div>
       {positiveEffects.length > 0 && (
         <div className="flex flex-col gap-1">
-          <div className="text-green-600 font-medium text-xs">Buffs</div>
+          <div className="font-medium text-green-600 text-xs">Buffs</div>
           {positiveEffects.map(renderEffect)}
         </div>
       )}
       {negativeEffects.length > 0 && (
         <div className="flex flex-col gap-1">
-          <div className="text-red-600 font-medium text-xs">Debuffs</div>
+          <div className="font-medium text-red-600 text-xs">Debuffs</div>
           {negativeEffects.map(renderEffect)}
         </div>
       )}
       {neutralEffects.length > 0 && (
         <div className="flex flex-col gap-1">
-          <div className="text-gray-500 font-medium text-xs">Other</div>
+          <div className="font-medium text-gray-500 text-xs">Other</div>
           {neutralEffects.map(renderEffect)}
         </div>
       )}

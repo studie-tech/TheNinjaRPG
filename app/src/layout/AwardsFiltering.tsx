@@ -1,8 +1,8 @@
 import {
-  ContentFiltering,
-  useContentFiltering,
-  defineFilteringSchema,
   buildFilter,
+  ContentFiltering,
+  defineFilteringSchema,
+  useContentFiltering,
 } from "@/layout/ContentFiltering";
 
 interface AwardsFilteringProps {

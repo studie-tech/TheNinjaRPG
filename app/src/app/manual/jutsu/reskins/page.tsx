@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import JutsuFiltering, { useFiltering, getFilter } from "@/layout/JutsuFiltering";
-import { useInfinitePagination } from "@/libs/pagination";
 import { api } from "@/app/_trpc/client";
+import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
+import Loader from "@/layout/Loader";
+import { useInfinitePagination } from "@/libs/pagination";
 
 export default function ManualJutsuReskins() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
@@ -27,7 +27,7 @@ export default function ManualJutsuReskins() {
       placeholderData: (previousData) => previousData,
     },
   );
-  const allReskins = reskins?.pages.map((page) => page.data).flat();
+  const allReskins = reskins?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Transform reskin data to jutsu-like objects for ItemWithEffects
@@ -70,7 +70,7 @@ export default function ManualJutsuReskins() {
         subtitle="All custom jutsu reskins"
         initialBreak={true}
         topRightContent={
-          <div className="flex flex-row gap-1 items-center">
+          <div className="flex flex-row items-center gap-1">
             <JutsuFiltering state={state} />
           </div>
         }

@@ -7,7 +7,6 @@
  * TODO: At some point this is likely in the native nextjs package, and can be swapped back
  */
 
-import React from "react";
 import Script from "next/script";
 
 type JSONValue = string | number | boolean | JSONValue[] | { [key: string]: JSONValue };
@@ -45,12 +44,12 @@ export function GoogleTagManager(props: GTMParams) {
     <>
       <script
         data-partytown-config
-        // eslint-disable-next-line @eslint-react/dom/no-dangerously-set-innerhtml
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: Required for partytown configuration - content is static and trusted
         dangerouslySetInnerHTML={{
           __html: `
             partytown = {
                 lib: "/_next/static/~partytown/",
-                forward: ["${dataLayerName}"]           
+                forward: ["${dataLayerName}"]
             };
             `,
         }}
@@ -58,7 +57,7 @@ export function GoogleTagManager(props: GTMParams) {
       <Script
         id="_next-gtm-init"
         strategy="worker"
-        // eslint-disable-next-line @eslint-react/dom/no-dangerously-set-innerhtml
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: Required for GTM initialization - content is trusted GA code
         dangerouslySetInnerHTML={{
           __html: `
       (function(w,l){

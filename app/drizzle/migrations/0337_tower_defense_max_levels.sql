@@ -1,0 +1,17 @@
+-- Increase tower defense upgrade maxLevels to 5X original values
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-damage';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-attack-speed';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 25 WHERE `id` = 'td-range';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-crit-chance';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 25 WHERE `id` = 'td-damage-per-tile';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-health';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-defense-flat';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-defense-percent';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-health-regen';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-lifesteal';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-knockback-chance';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 25 WHERE `id` = 'td-knockback-force';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-tokens-per-kill';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-tokens-per-wave';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-interest';
+UPDATE `TowerDefenseUpgrade` SET `maxLevel` = 50 WHERE `id` = 'td-skip-enemy';

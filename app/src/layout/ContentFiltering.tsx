@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useDelayState } from "@/hooks/useDelayState";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { MultiSelect } from "@/components/ui/multi-select";
-import { TriStateToggle } from "@/components/control/Toggle";
 import { Filter, X } from "lucide-react";
+import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { TriStateToggle } from "@/components/control/Toggle";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -13,8 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { api } from "@/app/_trpc/client";
+import { useDelayState } from "@/hooks/useDelayState";
 
 /**
  * Generic, type-safe filtering system.
@@ -511,10 +512,10 @@ const ExcludedItemsList: React.FC<{
 }> = ({ title, items, onRemove }) => {
   if (items.length === 0) return null;
   return (
-    <p className="text-sm mt-2">
+    <p className="mt-2 text-sm">
       <strong>{title}:</strong>{" "}
-      {items.map((item) => (
-        <span key={item} className="inline-flex items-center mr-2">
+      {items.map((item, i) => (
+        <span key={`${item}-${i}`} className="mr-2 inline-flex items-center">
           {item}
           <Button
             variant="destructive"
@@ -795,13 +796,15 @@ export const ContentFiltering = <
                     />
                   </div>
                 );
+              default:
+                return null;
             }
           })}
         </div>
 
         {schema.exclusions && schema.exclusions.length > 0 && (
-          <div className="mt-3 p-2 border-t border-gray-300">
-            <div className="flex justify-between items-center">
+          <div className="mt-3 border-gray-300 border-t p-2">
+            <div className="flex items-center justify-between">
               <Label>Exclusions</Label>
               <Button
                 variant="outline"
@@ -833,7 +836,7 @@ export const ContentFiltering = <
             ))}
 
             {showExclusionPopover && (
-              <div className="mt-2 border p-2 rounded">
+              <div className="mt-2 rounded border p-2">
                 <Label>Pick Category</Label>
                 <Select
                   onValueChange={(val) => {

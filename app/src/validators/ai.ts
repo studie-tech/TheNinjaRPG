@@ -20,46 +20,46 @@ export type AvailableTarget = (typeof AvailableTargets)[number];
 /*          Conditions           */
 /*********************************/
 export const ConditionHealthBelow = z.object({
-  type: z.literal("health_below").default("health_below"),
-  description: z.string().default("Health below given percentage"),
-  value: z.coerce.number().int().positive().default(10),
+  type: z.literal("health_below").prefault("health_below"),
+  description: z.string().prefault("Health below given percentage"),
+  value: z.coerce.number().int().positive().prefault(10),
 });
 
 export const ConditionDistanceHigherThan = z.object({
-  type: z.literal("distance_higher_than").default("distance_higher_than"),
-  description: z.string().default("Distance higher than or equal given value"),
-  value: z.coerce.number().int().positive().default(3),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
+  type: z.literal("distance_higher_than").prefault("distance_higher_than"),
+  description: z.string().prefault("Distance higher than or equal given value"),
+  value: z.coerce.number().int().positive().prefault(3),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
 });
 
 export const ConditionDistanceLowerThan = z.object({
-  type: z.literal("distance_lower_than").default("distance_lower_than"),
-  description: z.string().default("Distance lower than or equal given value"),
-  value: z.coerce.number().int().positive().default(2),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
+  type: z.literal("distance_lower_than").prefault("distance_lower_than"),
+  description: z.string().prefault("Distance lower than or equal given value"),
+  value: z.coerce.number().int().positive().prefault(2),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
 });
 
 export const ConditionSpecificRound = z.object({
-  type: z.literal("specific_round").default("specific_round"),
-  description: z.string().default("A specific round number"),
-  value: z.coerce.number().int().positive().default(10),
+  type: z.literal("specific_round").prefault("specific_round"),
+  description: z.string().prefault("A specific round number"),
+  value: z.coerce.number().int().positive().prefault(10),
 });
 
 export const ConditionRoundGreaterThan = z.object({
-  type: z.literal("round_greater_than").default("round_greater_than"),
-  description: z.string().default("Current round is greater than specified value"),
-  value: z.coerce.number().int().positive().default(5),
+  type: z.literal("round_greater_than").prefault("round_greater_than"),
+  description: z.string().prefault("Current round is greater than specified value"),
+  value: z.coerce.number().int().positive().prefault(5),
 });
 
 export const ConditionRoundLowerThan = z.object({
-  type: z.literal("round_lower_than").default("round_lower_than"),
-  description: z.string().default("Current round is lower than specified value"),
-  value: z.coerce.number().int().positive().default(3),
+  type: z.literal("round_lower_than").prefault("round_lower_than"),
+  description: z.string().prefault("Current round is lower than specified value"),
+  value: z.coerce.number().int().positive().prefault(3),
 });
 
 export const ConditionDoesNotHaveSummon = z.object({
-  type: z.literal("does_not_have_summon").default("does_not_have_summon"),
-  description: z.string().default("Does not have a summon active"),
+  type: z.literal("does_not_have_summon").prefault("does_not_have_summon"),
+  description: z.string().prefault("Does not have a summon active"),
 });
 
 // Import effect types from the combat system
@@ -70,18 +70,18 @@ export const AvailableEffectTypes = (tagTypes.length > 0 ? tagTypes : ["damage"]
 export type AvailableEffectType = (typeof AvailableEffectTypes)[number];
 
 export const ConditionHasEffect = z.object({
-  type: z.literal("has_effect").default("has_effect"),
-  description: z.string().default("AI is affected by a specific effect"),
-  effectType: z.enum(AvailableEffectTypes).default("damage"),
-  threshold: z.coerce.number().int().min(0).max(100).default(0),
+  type: z.literal("has_effect").prefault("has_effect"),
+  description: z.string().prefault("AI is affected by a specific effect"),
+  effectType: z.enum(AvailableEffectTypes).prefault("damage"),
+  threshold: z.coerce.number().int().min(0).max(100).prefault(0),
 });
 
 export const ConditionTargetHasEffect = z.object({
-  type: z.literal("target_has_effect").default("target_has_effect"),
-  description: z.string().default("Target is affected by a specific effect"),
-  effectType: z.enum(AvailableEffectTypes).default("damage"),
-  target: z.enum(AvailableTargets).default("CLOSEST_OPPONENT"),
-  threshold: z.coerce.number().int().min(0).max(100).default(0),
+  type: z.literal("target_has_effect").prefault("target_has_effect"),
+  description: z.string().prefault("Target is affected by a specific effect"),
+  effectType: z.enum(AvailableEffectTypes).prefault("damage"),
+  target: z.enum(AvailableTargets).prefault("CLOSEST_OPPONENT"),
+  threshold: z.coerce.number().int().min(0).max(100).prefault(0),
 });
 
 export const ZodAllAiConditions = z.union([
@@ -96,18 +96,22 @@ export const ZodAllAiConditions = z.union([
   ConditionTargetHasEffect,
 ]);
 
-export const AiConditionTypes = ZodAllAiConditions._def.options.map(
-  (o) => o.shape.type._def.innerType._def.value,
-);
+export const AiConditionTypes = ZodAllAiConditions.options.map((o) => {
+  const typeField = o.shape.type;
+  const literal = typeField.unwrap(); // ZodLiteral
+  return literal.value as string;
+});
 
 export type AiConditionType = (typeof AiConditionTypes)[number];
 
 export type ZodAllAiCondition = z.infer<typeof ZodAllAiConditions>;
 
 export const getConditionSchema = (type: ZodAllAiCondition["type"]) => {
-  const schema = ZodAllAiConditions._def.options.find(
-    (o) => o.shape.type._def.innerType._def.value === type,
-  );
+  const schema = ZodAllAiConditions.options.find((o) => {
+    const typeField = o.shape.type;
+    const literal = typeField.unwrap();
+    return literal.value === type;
+  });
   if (!schema) throw new Error(`No schema found for type ${type}`);
   return schema;
 };
@@ -116,68 +120,68 @@ export const getConditionSchema = (type: ZodAllAiCondition["type"]) => {
 /*            Actions            */
 /*********************************/
 export const ActionMoveTowardsOpponent = z.object({
-  type: z.literal("move_towards_opponent").default("move_towards_opponent"),
-  description: z.string().default("Move towards opponent"),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
+  type: z.literal("move_towards_opponent").prefault("move_towards_opponent"),
+  description: z.string().prefault("Move towards opponent"),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
 });
 
 export const ActionEndTurn = z.object({
-  type: z.literal("end_turn").default("end_turn"),
-  description: z.string().default("End turn"),
+  type: z.literal("end_turn").prefault("end_turn"),
+  description: z.string().prefault("End turn"),
 });
 
 export const ActionUseSpecificJutsu = z.object({
-  type: z.literal("use_specific_jutsu").default("use_specific_jutsu"),
-  description: z.string().default("Select specific jutsu"),
-  jutsuId: z.string().default(""),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
+  type: z.literal("use_specific_jutsu").prefault("use_specific_jutsu"),
+  description: z.string().prefault("Select specific jutsu"),
+  jutsuId: z.string().prefault(""),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
 });
 
 export const ActionUseRandomJutsu = z.object({
-  type: z.literal("use_random_jutsu").default("use_random_jutsu"),
-  description: z.string().default("Use random jutsu"),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
+  type: z.literal("use_random_jutsu").prefault("use_random_jutsu"),
+  description: z.string().prefault("Use random jutsu"),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
 });
 
 export const ActionWithHighestPowerJutsuEffect = z.object({
-  type: z.literal("use_highest_power_jutsu").default("use_highest_power_jutsu"),
-  description: z.string().default("Use jutsu with given effect with highest power"),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
-  effect: z.string().default("damage"),
+  type: z.literal("use_highest_power_jutsu").prefault("use_highest_power_jutsu"),
+  description: z.string().prefault("Use jutsu with given effect with highest power"),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  effect: z.string().prefault("damage"),
 });
 
 export const ActionUseSpecificItem = z.object({
-  type: z.literal("use_specific_item").default("use_specific_item"),
-  description: z.string().default("Select specific item"),
-  itemId: z.string().default(""),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
+  type: z.literal("use_specific_item").prefault("use_specific_item"),
+  description: z.string().prefault("Select specific item"),
+  itemId: z.string().prefault(""),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
 });
 
 export const ActionUseRandomItem = z.object({
-  type: z.literal("use_random_item").default("use_random_item"),
-  description: z.string().default("Use random item"),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
+  type: z.literal("use_random_item").prefault("use_random_item"),
+  description: z.string().prefault("Use random item"),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
 });
 
 export const ActionWithHighestPowerItemEffect = z.object({
-  type: z.literal("use_highest_power_item").default("use_highest_power_item"),
-  description: z.string().default("Use item with given effect with highest power"),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
-  effect: z.string().default("damage"),
+  type: z.literal("use_highest_power_item").prefault("use_highest_power_item"),
+  description: z.string().prefault("Use item with given effect with highest power"),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  effect: z.string().prefault("damage"),
 });
 
 export const ActionWithEffectHighestPower = z.object({
-  type: z.literal("use_highest_power_action").default("use_highest_power_action"),
-  description: z.string().default("Use action with given effect with highest power"),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
-  effect: z.string().default("damage"),
+  type: z.literal("use_highest_power_action").prefault("use_highest_power_action"),
+  description: z.string().prefault("Use action with given effect with highest power"),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  effect: z.string().prefault("damage"),
 });
 
 export const ActionSpecificCombo = z.object({
-  type: z.literal("use_combo_action").default("use_combo_action"),
-  description: z.string().default("Cycly through a specific combo of jutsu & items"),
-  comboIds: z.array(z.string()).default([]),
-  target: z.enum(AvailableTargets).default("RANDOM_OPPONENT"),
+  type: z.literal("use_combo_action").prefault("use_combo_action"),
+  description: z.string().prefault("Cycly through a specific combo of jutsu & items"),
+  comboIds: z.array(z.string()).prefault([]),
+  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
 });
 
 export const ZodAllAiActions = z.union([
@@ -193,18 +197,22 @@ export const ZodAllAiActions = z.union([
   ActionSpecificCombo,
 ]);
 
-export const AiActionTypes = ZodAllAiActions._def.options.map(
-  (o) => o.shape.type._def.innerType._def.value,
-);
+export const AiActionTypes = ZodAllAiActions.options.map((o) => {
+  const typeField = o.shape.type;
+  const literal = typeField.unwrap(); // ZodLiteral
+  return literal.value as string;
+});
 
 export type AiActionType = (typeof AiActionTypes)[number];
 
 export type ZodAllAiAction = z.infer<typeof ZodAllAiActions>;
 
 export const getActionSchema = (type: ZodAllAiAction["type"]) => {
-  const schema = ZodAllAiActions._def.options.find(
-    (o) => o.shape.type._def.innerType._def.value === type,
-  );
+  const schema = ZodAllAiActions.options.find((o) => {
+    const typeField = o.shape.type;
+    const literal = typeField.unwrap();
+    return literal.value === type;
+  });
   if (!schema) throw new Error(`No schema found for type ${type}`);
   return schema;
 };
@@ -276,3 +284,11 @@ export const enforceExtraRules = (rules: AiRuleType[], enforced: AiRuleType[]) =
     rules.push(...enforced);
   }
 };
+
+// Prompt form schema for AI image generation
+export const promptFormSchema = z.object({
+  systemPrompt: z.string(),
+  userPrompt: z.string(),
+  editPrompt: z.string(),
+});
+export type PromptFormSchema = z.infer<typeof promptFormSchema>;

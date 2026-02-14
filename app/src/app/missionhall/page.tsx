@@ -1,14 +1,13 @@
 "use client";
 
+import { useLocalStorage } from "@/hooks/localstorage";
+import BanInfo from "@/layout/BanInfo";
+import BountyBoard from "@/layout/BountyBoard";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import BanInfo from "@/layout/BanInfo";
-import { useRequireInVillage } from "@/utils/UserContext";
-import NavTabs from "@/layout/NavTabs";
-import BountyBoard from "@/layout/BountyBoard";
 import MissionHall from "@/layout/MissionHall";
-import React from "react";
-import { useLocalStorage } from "@/hooks/localstorage";
+import NavTabs from "@/layout/NavTabs";
+import { useRequireInVillage } from "@/utils/UserContext";
 
 export default function MissionHallPage() {
   const { userData, access } = useRequireInVillage("/missionhall");

@@ -1,10 +1,21 @@
-import { UserRoles, StaffApprovalGroups } from "@/drizzle/constants";
-import type { StaffApprovalGroup, UserRole } from "@/drizzle/constants";
-import type { UserData, UserRank, UserReport } from "@/drizzle/schema";
-import type { SupportTicket } from "@/drizzle/schema";
-import { SUPPORT_TICKET_STATUS_TRANSITIONS } from "@/drizzle/constants";
-import type { SupportTicketStatus } from "@/drizzle/constants";
-import type { User2Conversation, Conversation } from "@/drizzle/schema";
+import type {
+  StaffApprovalGroup,
+  SupportTicketStatus,
+  UserRole,
+} from "@/drizzle/constants";
+import {
+  StaffApprovalGroups,
+  SUPPORT_TICKET_STATUS_TRANSITIONS,
+  UserRoles,
+} from "@/drizzle/constants";
+import type {
+  Conversation,
+  SupportTicket,
+  User2Conversation,
+  UserData,
+  UserRank,
+  UserReport,
+} from "@/drizzle/schema";
 
 export const canChangeContent = (role: UserRole) => {
   return [

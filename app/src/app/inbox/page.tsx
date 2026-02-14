@@ -1,38 +1,47 @@
 "use client";
 
-import { type z } from "zod";
-import { useState, useEffect } from "react";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import Conversation from "@/layout/Conversation";
-import RichInput from "@/layout/RichInput";
-import Confirm2 from "@/layout/Confirm2";
-import Loader from "@/layout/Loader";
-import AvatarImage from "@/layout/Avatar";
-import ContentBox from "@/layout/ContentBox";
-import UserSearchSelect from "@/layout/UserSearchSelect";
-import UserBlacklistControl from "@/layout/UserBlacklistControl";
+import {
+  BellOff,
+  BellRing,
+  SquarePen,
+  Trash2,
+  UserRoundX,
+  Users,
+  X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { UserRoundX } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import {
   Form,
-  FormLabel,
   FormControl,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { SquarePen, Users, X, Trash2, BellRing, BellOff } from "lucide-react";
-import { api } from "@/app/_trpc/client";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { createConversationSchema } from "@/validators/comments";
-import { type CreateConversationSchema } from "@/validators/comments";
-import { getSearchValidator } from "@/validators/register";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { FederalStatus, UserRank } from "@/drizzle/schema";
+import AvatarImage from "@/layout/Avatar";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Conversation from "@/layout/Conversation";
+import Loader from "@/layout/Loader";
+import RichInput from "@/layout/RichInput";
+import UserBlacklistControl from "@/layout/UserBlacklistControl";
+import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import { canPostAsAi } from "@/utils/permissions";
+import { useRequiredUserData } from "@/utils/UserContext";
+import {
+  type CreateConversationSchema,
+  createConversationSchema,
+} from "@/validators/comments";
+import { getSearchValidator } from "@/validators/register";
 
 export default function Inbox() {
   const { data: userData } = useRequiredUserData();
@@ -56,7 +65,7 @@ export default function Inbox() {
             <UserRoundX className="h-6 w-6 hover:text-orange-500" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0 overflow-hidden">
+        <PopoverContent className="w-[300px] overflow-hidden p-0">
           <UserBlacklistControl />
         </PopoverContent>
       </Popover>
@@ -139,28 +148,32 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
         <div className="relative">
           <ul className="space-y-2">
             <li>
-              <a href="#" className="flex items-center rounded-lg p-2">
+              <button
+                type="button"
+                className="flex w-full items-center rounded-lg p-2 text-left"
+                onClick={() => selectedConvo && setSelectedConvo(null)}
+              >
                 {selectedConvo ? (
-                  <X
-                    className="h-6 w-6 hover:text-orange-500"
-                    onClick={() => setSelectedConvo(null)}
-                  />
+                  <X className="h-6 w-6 hover:text-orange-500" />
                 ) : (
                   <Users className="h-6 w-6" />
                 )}
                 <span className="... ml-3 truncate font-bold">Chats</span>
-              </a>
+              </button>
             </li>
 
             <hr />
             {filteredConversations?.map((convo) => (
               <li
-                className={`relative mx-3 my-3 flex h-12 flex-row items-center rounded-lg hover:bg-popover ${
-                  selectedConvo && selectedConvo === convo.id ? "bg-popover" : ""
-                }`}
+                className={`relative mx-3 my-3 flex h-12 flex-row items-center rounded-lg hover:bg-popover ${selectedConvo && selectedConvo === convo.id ? "bg-popover" : ""}`}
                 key={convo.id}
-                onClick={() => setSelectedConvo(convo.id)}
               >
+                <button
+                  type="button"
+                  className="absolute inset-0 h-full w-full"
+                  onClick={() => setSelectedConvo(convo.id)}
+                  aria-label={`Select conversation with ${convo.users.map((u) => u.userData.username).join(", ")}`}
+                />
                 {convo.users.length > 0 &&
                   convo.users.map((relation, i) => {
                     const user = relation.userData;
@@ -181,9 +194,9 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
                     );
                   })}
                 <span
-                  className="... truncate text-sm grow"
+                  className="... grow truncate text-sm"
                   style={{
-                    marginLeft: (convo.users.length * 2 + 1.5).toString() + "rem",
+                    marginLeft: `${(convo.users.length * 2 + 1.5).toString()}rem`,
                   }}
                 >
                   {convo.title}
@@ -192,10 +205,10 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
                 </span>
                 <div className="grow"></div>
                 {convo.hasNewMessages && (
-                  <BellRing className="h-6 w-6 text-red-500 hover:text-orange-500 hover:cursor-pointer animate-[wiggle_1s_ease-in-out_infinite]" />
+                  <BellRing className="h-6 w-6 animate-[wiggle_1s_ease-in-out_infinite] text-red-500 hover:cursor-pointer hover:text-orange-500" />
                 )}
                 <Trash2
-                  className="mx-2 h-6 w-6 hover:cursor-pointer rounded-full hover:text-orange-500"
+                  className="mx-2 h-6 w-6 rounded-full hover:cursor-pointer hover:text-orange-500"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -205,7 +218,7 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
               </li>
             ))}
           </ul>
-          <div className="italic m-3">- Messages deleted after 14 days</div>
+          <div className="m-3 italic">- Messages deleted after 14 days</div>
         </div>
       )}
     </div>
@@ -235,7 +248,10 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   const create = useForm<CreateConversationSchema>({
     resolver: zodResolver(createConversationSchema),
     defaultValues: {
+      title: "",
+      comment: "",
       users: props.preSelectedUser?.userId ? [props.preSelectedUser?.userId] : [],
+      senderId: null,
     },
   });
 
@@ -243,6 +259,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
     resolver: zodResolver(userSearchSchema),
     defaultValues: {
+      username: "",
       users: [props.preSelectedUser],
     },
   });
@@ -288,20 +305,24 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
 
   const onSubmit = create.handleSubmit(
     (data) => {
-      console.log(data);
       createConversation.mutate({
         ...data,
         ...(senderUser?.userId ? { senderId: senderUser.userId } : {}),
       });
     },
-    (error) => console.error(error),
+    (errors) => {
+      const firstError = Object.values(errors)[0];
+      if (firstError?.message) {
+        showMutationToast({ success: false, message: firstError.message });
+      }
+    },
   );
 
   return (
     <div className="flex flex-row items-center">
       {userData && (userData.isBanned || userData.isSilenced) && (
         <Button id="conversation">
-          <BellOff className="h-6 w-6 text-red-500 mr-2" />
+          <BellOff className="mr-2 h-6 w-6 text-red-500" />
           {userData.isBanned && "Banned"}
           {userData.isSilenced && "Silenced"}
         </Button>

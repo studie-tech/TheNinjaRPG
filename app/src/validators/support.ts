@@ -16,9 +16,9 @@ export const createSupportTicketSchema = z.object({
     .min(50, "Description must be at least 50 characters")
     .max(5000, "Description cannot exceed 5000 characters"),
   category: z.enum(SupportTicketCategories),
-  priority: z.enum(SupportTicketPriorities).default("MEDIUM"),
-  isPublic: z.boolean().default(false),
-  tags: z.array(z.string()).default([]),
+  priority: z.enum(SupportTicketPriorities).prefault("MEDIUM"),
+  isPublic: z.boolean().prefault(false),
+  tags: z.array(z.string()).prefault([]),
 });
 
 // Update Support Ticket Schema (staff only)
@@ -42,8 +42,8 @@ export const createSupportTicketCommentSchema = z.object({
     .string()
     .min(1, "Comment cannot be empty")
     .max(5000, "Comment cannot exceed 5000 characters"),
-  isStaffOnly: z.boolean().default(false),
-  isResolution: z.boolean().default(false),
+  isStaffOnly: z.boolean().prefault(false),
+  isResolution: z.boolean().prefault(false),
 });
 
 // Support Ticket Filter Schema
@@ -56,23 +56,23 @@ export const supportTicketFilterSchema = z.object({
   tags: z.array(z.string()).optional(),
   isPublic: z.boolean().optional(),
   search: z.string().optional(),
-  dateFrom: z.string().datetime().optional(),
-  dateTo: z.string().datetime().optional(),
+  dateFrom: z.iso.datetime().optional(),
+  dateTo: z.iso.datetime().optional(),
   cursor: z.number().nullish(),
-  limit: z.number().min(1).max(100).default(20),
-  offset: z.number().min(0).default(0),
+  limit: z.number().min(1).max(100).prefault(20),
+  offset: z.number().min(0).prefault(0),
   orderBy: z
     .enum(["createdAt", "updatedAt", "priority", "status"])
-    .default("createdAt"),
-  orderDirection: z.enum(["asc", "desc"]).default("desc"),
+    .prefault("createdAt"),
+  orderDirection: z.enum(["asc", "desc"]).prefault("desc"),
 });
 export type SupportTicketFilteringSchema = z.infer<typeof supportTicketFilterSchema>;
 
 // Support Ticket Metrics Schema
 export const supportTicketMetricsSchema = z.object({
-  dateFrom: z.string().datetime().optional(),
-  dateTo: z.string().datetime().optional(),
-  groupBy: z.enum(["day", "week", "month"]).default("day"),
+  dateFrom: z.iso.datetime().optional(),
+  dateTo: z.iso.datetime().optional(),
+  groupBy: z.enum(["day", "week", "month"]).prefault("day"),
   category: z.enum(SupportTicketCategories).optional(),
   assignedToUserId: z.string().optional(),
 });

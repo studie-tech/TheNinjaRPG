@@ -1,14 +1,13 @@
-import React, { useState } from "react";
-
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { MultiSelect } from "@/components/ui/multi-select";
 import { Filter } from "lucide-react";
+import type React from "react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-
-import { effectFilters } from "@/validators/combat";
 import type { EffectType } from "@/validators/combat";
+import { effectFilters } from "@/validators/combat";
 
 /**
  * STATE HOOK
@@ -54,7 +53,7 @@ const SkillTreeBalanceFiltering: React.FC<SkillTreeBalanceFilteringProps> = (pro
     <Popover>
       <PopoverTrigger asChild>
         <Button count={numFilters}>
-          <Filter className="sm:mr-2 h-6 w-6 hover:text-orange-500" />
+          <Filter className="h-6 w-6 hover:text-orange-500 sm:mr-2" />
           <p className="hidden sm:block">Filter</p>
         </Button>
       </PopoverTrigger>
@@ -100,7 +99,7 @@ const SkillTreeBalanceFiltering: React.FC<SkillTreeBalanceFilteringProps> = (pro
                   typeof selectedTiers === "function"
                     ? selectedTiers(tiers.map((tier) => tier.toString()))
                     : selectedTiers;
-                setTiers(tiersArray.map((tier) => parseInt(tier)));
+                setTiers(tiersArray.map((tier) => parseInt(tier, 10)));
               }}
             />
           </div>

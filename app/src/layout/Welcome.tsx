@@ -1,39 +1,42 @@
 "use client";
 
-import React, { useEffect } from "react";
-import Image from "@/layout/Image";
-import Link from "next/link";
-import { UserPlus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { IMG_LAYOUT_WELCOME_IMG } from "@/drizzle/constants";
-import { IMG_FRONTPAGE_SCREENSHOT_COMBAT } from "@/drizzle/constants";
-import { IMG_FRONTPAGE_SCREENSHOT_JUTSUS } from "@/drizzle/constants";
-import { IMG_FRONTPAGE_SCREENSHOT_GLOBAL } from "@/drizzle/constants";
-import { IMG_FRONTPAGE_SCREENSHOT_SECTOR } from "@/drizzle/constants";
-import { IMG_FRONTPAGE_SCREENSHOT_VILLAGE } from "@/drizzle/constants";
-import { api } from "@/app/_trpc/client";
 import { useUser } from "@clerk/nextjs";
-import { cn } from "src/libs/shadui";
+import { UserPlus } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import type React from "react";
+import { Suspense, useEffect } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import {
+  IMG_FRONTPAGE_SCREENSHOT_COMBAT,
+  IMG_FRONTPAGE_SCREENSHOT_GLOBAL,
+  IMG_FRONTPAGE_SCREENSHOT_JUTSUS,
+  IMG_FRONTPAGE_SCREENSHOT_SECTOR,
+  IMG_FRONTPAGE_SCREENSHOT_VILLAGE,
+  IMG_LAYOUT_WELCOME_IMG,
+} from "@/drizzle/constants";
+import { env } from "@/env/client.mjs";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import Image from "@/layout/Image";
+import { cn } from "@/libs/shadui";
 
 const Welcome: React.FC = () => {
   // Snap container for full-height sections
   const backgroundClass = cn(
-    "flex flex-col gap-4 snap-start snap-always flex justify-center",
+    "flex flex snap-start snap-always flex-col justify-center gap-4",
   );
 
   // Content wrapper with background styling
   const contentClass = cn(
-    "flex flex-col items-center bg-popover/75 rounded-xl max-w-[768px] w-[99%] ml-auto mr-auto",
+    "mr-auto ml-auto flex w-[99%] max-w-[768px] flex-col items-center rounded-xl bg-popover/75",
   );
 
   // Render
   return (
     <div
       className={cn(
-        "flex flex-col snap-y snap-mandatory h-screen overflow-y-scroll gap-4",
+        "flex h-screen snap-y snap-mandatory flex-col gap-4 overflow-y-scroll",
       )}
     >
       <div className={cn(backgroundClass, "justify-start")}>
@@ -49,29 +52,29 @@ const Welcome: React.FC = () => {
 
           <div
             className={
-              "w-full text-sm sm:text-md sm:text-xl md:text-md lg:text-xl flex flex-col text-center items-center gap-0 px-4 italic py-4"
+              "flex w-full flex-col items-center gap-0 px-4 py-4 text-center text-sm italic sm:text-md sm:text-xl md:text-md lg:text-xl"
             }
           >
             <p>
               More than <b>{(1000000).toLocaleString()}</b> have played TheNinja-RPG!
             </p>
             <p>Join the new version and experience our ninja world!</p>
-            <Link href="/signup" aria-label="Signup" className="w-full p-3 m-3">
+            <Link href="/signup" aria-label="Signup" className="m-3 w-full p-3">
               <Button
                 id="signup_btn"
-                className="font-bold w-full text-xl"
+                className="w-full font-bold text-xl"
                 size="xl2"
                 animation="glow"
               >
-                <UserPlus className="h-6 w-6 mr-2" />
+                <UserPlus className="mr-2 h-6 w-6" />
                 Create an Account
               </Button>
             </Link>
           </div>
-          <div className={"w-full flex flex-col justify-center items-center gap-4"}>
-            <div className={cn("inline items-center gap-2 text-xl mb-4")}>
+          <div className={"flex w-full flex-col items-center justify-center gap-4"}>
+            <div className={cn("mb-4 inline items-center gap-2 text-xl")}>
               Already have an account?{" "}
-              <Link href="/login" aria-label="Login" className="underline font-bold">
+              <Link href="/login" aria-label="Login" className="font-bold underline">
                 Log In
               </Link>
             </div>
@@ -108,7 +111,95 @@ const Welcome: React.FC = () => {
           )} */}
         </div>
       </div>
-      <div className={cn(backgroundClass, "text-5xl font-bold text-foreground pl-3")}>
+      {env.NEXT_PUBLIC_MCP_ENABLED === "true" && (
+        <div className="mb-4 flex flex-col gap-4">
+          <div
+            className={cn(backgroundClass, "pl-3 font-bold text-5xl text-foreground")}
+          >
+            AI Agent Instructions
+          </div>
+          <div className={backgroundClass}>
+            <div className={contentClass}>
+              <div className="w-full p-3">
+                <div className="flex flex-col gap-4">
+                  <h2 className="font-bold text-2xl">Play with AI Assistants</h2>
+                  <p>
+                    TheNinja-RPG supports the Model Context Protocol (MCP), allowing AI
+                    assistants like Claude, ChatGPT, and Cursor to interact with the
+                    game on your behalf. Train your ninja, manage your village, engage
+                    in combat, and more - all through natural language conversations
+                    with your AI assistant.
+                  </p>
+
+                  <div className="rounded-lg border border-border bg-muted/50 p-4">
+                    <h3 className="mb-2 font-bold text-lg">MCP Server URL</h3>
+                    <code className="block rounded bg-background p-3 font-mono text-sm">
+                      {env.NEXT_PUBLIC_BASE_URL}/api/mcp
+                    </code>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <h3 className="font-bold text-xl">Setup Instructions</h3>
+
+                    <div className="rounded-lg border border-border p-4">
+                      <h4 className="mb-2 font-bold">Claude Code (CLI)</h4>
+                      <p className="mb-2 text-sm">
+                        Add the MCP server using the Claude Code settings command:
+                      </p>
+                      <code className="block rounded bg-background p-3 font-mono text-xs">
+                        claude mcp add --transport http theninja-rpg{" "}
+                        {env.NEXT_PUBLIC_BASE_URL}/api/mcp
+                      </code>
+                    </div>
+
+                    <div className="rounded-lg border border-border p-4">
+                      <h4 className="mb-2 font-bold">Claude Desktop</h4>
+                      <p className="mb-2 text-sm">
+                        Add to your Claude Desktop configuration file
+                        (claude_desktop_config.json):
+                      </p>
+                      <pre className="overflow-x-auto rounded bg-background p-3 font-mono text-xs">
+                        {`{
+  "mcpServers": {
+    "theninja-rpg": {
+      "url": "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"
+    }
+  }
+}`}
+                      </pre>
+                    </div>
+
+                    <div className="rounded-lg border border-border p-4">
+                      <h4 className="mb-2 font-bold">Cursor / VS Code</h4>
+                      <p className="mb-2 text-sm">
+                        Add to your MCP settings in the editor&apos;s configuration:
+                      </p>
+                      <pre className="overflow-x-auto rounded bg-background p-3 font-mono text-xs">
+                        {`{
+  "mcp": {
+    "servers": {
+      "theninja-rpg": {
+        "url": "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"
+      }
+    }
+  }
+}`}
+                      </pre>
+                    </div>
+                  </div>
+
+                  <p className="text-muted-foreground text-sm">
+                    When you first connect, you&apos;ll be prompted to authenticate with
+                    your TheNinja-RPG account via Clerk OAuth. This allows the AI
+                    assistant to perform actions on your behalf securely.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className={cn(backgroundClass, "pl-3 font-bold text-5xl text-foreground")}>
         Game Features
       </div>
 
@@ -116,7 +207,7 @@ const Welcome: React.FC = () => {
         <div className={contentClass}>
           <div className="w-full p-3">
             <div className="flex flex-col gap-2">
-              <h2 className="text-2xl font-bold">Jutsus</h2>
+              <h2 className="font-bold text-2xl">Jutsus</h2>
               <p>
                 Jutsu are the cornerstone of strategic combat, blending skill,
                 creativity, and tactical planning to overcome your opponents. Players
@@ -146,7 +237,7 @@ const Welcome: React.FC = () => {
         <div className={contentClass}>
           <div className="w-full p-3">
             <div className="flex flex-col gap-2">
-              <h2 className="text-2xl font-bold pt-4">Combat</h2>
+              <h2 className="pt-4 font-bold text-2xl">Combat</h2>
               <p>
                 Experience the thrill of ninja combat in dynamic, round-based 2D
                 strategic battle system. Every encounter is a test of wit and skill,
@@ -176,7 +267,7 @@ const Welcome: React.FC = () => {
         <div className={contentClass}>
           <div className="w-full p-3">
             <div className="flex flex-col gap-2">
-              <h2 className="text-2xl font-bold pt-4">Village</h2>
+              <h2 className="pt-4 font-bold text-2xl">Village</h2>
               <p>
                 The ninja village is your home, your sanctuary, and the center of your
                 growth as a shinobi. This bustling hub is where strategy meets daily
@@ -209,7 +300,7 @@ const Welcome: React.FC = () => {
         <div className={contentClass}>
           <div className="w-full p-3">
             <div className="flex flex-col gap-2">
-              <h2 className="text-2xl font-bold pt-4">Sectors</h2>
+              <h2 className="pt-4 font-bold text-2xl">Sectors</h2>
               <p>
                 The 2D travel system brings the ninja world to life, allowing you to
                 explore local sectors, navigate terrain, and engage with players and
@@ -239,7 +330,7 @@ const Welcome: React.FC = () => {
         <div className={contentClass}>
           <div className="w-full p-3">
             <div className="flex flex-col gap-2">
-              <h2 className="text-2xl font-bold pt-4">Travel</h2>
+              <h2 className="pt-4 font-bold text-2xl">Travel</h2>
               <p>
                 The 3D global travel system expands your journey beyond your village,
                 opening the gates to a vast world filled with diverse regions and hidden
@@ -265,6 +356,7 @@ const Welcome: React.FC = () => {
           </div>
         </div>
       </div>
+
       <div className={backgroundClass}>
         <div className={cn(contentClass, "p-3")}>{textSEO}</div>
       </div>
@@ -307,7 +399,7 @@ function SetReferal() {
  */
 const textSEO = (
   <div>
-    <h1 className="text-left text-xl md:text-4xl font-bold px-2">
+    <h1 className="px-2 text-left font-bold text-xl md:text-4xl">
       Free Online Ninja Browser Game
     </h1>
     <p className="p-2">
@@ -323,11 +415,11 @@ const textSEO = (
     </p>
 
     <div className="pl-2">
-      <h2 className="text-2xl font-bold pt-4">Key Features</h2>
+      <h2 className="pt-4 font-bold text-2xl">Key Features</h2>
       <p className="pb-4">
         The game features a variety of features that make it unique and engaging:
       </p>
-      <ul className="list-disc list-outside pl-6 flex flex-col gap-3">
+      <ul className="flex list-outside list-disc flex-col gap-3 pl-6">
         <li>
           <h3 className="font-bold">Master Your Jutsu</h3>
           Unlock powerful jutsu, train your ninja, and create signature moves that set

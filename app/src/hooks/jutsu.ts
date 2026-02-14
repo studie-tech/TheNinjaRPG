@@ -1,22 +1,24 @@
 "use client";
 
-import { calculateContentDiff } from "@/utils/diff";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { JutsuValidator } from "@/validators/combat";
-import { AttackTargets } from "@/drizzle/constants";
-import { AttackMethods } from "@/drizzle/constants";
-import { LetterRanks } from "@/drizzle/constants";
-import { WeaponTypes } from "@/drizzle/constants";
-import { JutsuTypes } from "@/drizzle/constants";
-import { UserRanks } from "@/drizzle/constants";
-import { StatTypes } from "@/drizzle/constants";
-import { BattleUsageTypes } from "@/drizzle/constants";
-import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
-import type { ZodAllTags, ZodJutsuType } from "@/validators/combat";
-import type { FormEntry } from "@/layout/EditContent";
+import {
+  AttackMethods,
+  AttackTargets,
+  BattleUsageTypes,
+  JutsuTypes,
+  LetterRanks,
+  StatTypes,
+  UserRanks,
+  WeaponTypes,
+} from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
+import type { FormEntry } from "@/layout/EditContent";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { calculateContentDiff } from "@/utils/diff";
+import type { ZodAllTags, ZodJutsuInput, ZodJutsuType } from "@/validators/combat";
+import { JutsuValidator } from "@/validators/combat";
 
 /**
  * Hook used when creating frontend forms for editing jutsus
@@ -27,11 +29,11 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   const jutsu = { ...data, effects: data.effects };
 
   // Form handling
-  const form = useForm<ZodJutsuType>({
+  const form = useForm<ZodJutsuInput, unknown, ZodJutsuType>({
     mode: "all",
     criteriaMode: "all",
-    values: jutsu as ZodJutsuType,
-    defaultValues: jutsu as ZodJutsuType,
+    values: jutsu as ZodJutsuInput,
+    defaultValues: jutsu as ZodJutsuInput,
     resolver: zodResolver(JutsuValidator),
   });
 

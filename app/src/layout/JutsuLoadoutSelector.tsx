@@ -1,9 +1,9 @@
-import React from "react";
-import Loader from "@/layout/Loader";
-import { api } from "@/app/_trpc/client";
-import { fedJutsuLoadouts } from "@/utils/paypal";
 import { Folder } from "lucide-react";
+import type React from "react";
+import { api } from "@/app/_trpc/client";
+import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
+import { fedJutsuLoadouts } from "@/utils/paypal";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 interface JutsuLoadoutSelectorProps {
@@ -69,18 +69,21 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
       <div className="flex flex-row gap-1">
         {data?.map((loadout, i) => {
           return (
-            <div className="relative" key={i}>
+            <button
+              type="button"
+              className="relative"
+              key={loadout.id}
+              onClick={() => handleSelect(loadout.id)}
+            >
               <Folder
                 className={`${iconSize} ${selectedId === loadout.id ? "fill-orange-300" : "hover:cursor-pointer hover:fill-orange-300"}`}
-                onClick={() => handleSelect(loadout.id)}
               />
               <div
-                className={`absolute font-bold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 hover:cursor-pointer ${textSize}`}
-                onClick={() => handleSelect(loadout.id)}
+                className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-bold ${textSize}`}
               >
                 {i + 1}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

@@ -1,28 +1,35 @@
+import { and, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { baseServerResponse, errorResponse } from "@/server/api/trpc";
-import { eq, gte, and, sql } from "drizzle-orm";
-import { userData, userItem } from "@/drizzle/schema";
-import { fetchUpdatedUser } from "@/routers/profile";
-import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
-import { calcIsInVillage } from "@/libs/travel";
-import { fetchSectorVillage } from "@/routers/village";
+import type { UserStatus } from "@/drizzle/constants";
 import {
-  HomeTypes,
   HomeTypeDetails,
+  HomeTypes,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
 } from "@/drizzle/constants";
-import { fetchUserItems } from "@/routers/item";
+import { userData, userItem } from "@/drizzle/schema";
 import {
-  calcMaxItems,
   calcMaxEventItems,
-  calcMaxMaterials,
   calcMaxHouseMaterials,
+  calcMaxItems,
+  calcMaxMaterials,
 } from "@/libs/item";
-import type { UserStatus } from "@/drizzle/constants";
+import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
+import { calcIsInVillage } from "@/libs/travel";
+import { fetchUserItems } from "@/routers/item";
+import { fetchUpdatedUser } from "@/routers/profile";
+import { fetchSectorVillage } from "@/routers/village";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 
 export const homeRouter = createTRPCRouter({
   toggleSleep: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Toggle between awake and asleep status" },
+    })
     .output(
       baseServerResponse.extend({
         newStatus: z.enum(["AWAKE", "ASLEEP"]).optional(),
@@ -111,55 +118,58 @@ export const homeRouter = createTRPCRouter({
       };
     }),
 
-  getUserHome: protectedProcedure.query(async ({ ctx }) => {
-    // Query
-    const { user } = await fetchUpdatedUser({
-      client: ctx.drizzle,
-      userId: ctx.userId,
-    });
-    // Guard
-    if (!user) return null;
-    // Return
-    return {
-      homeType: user.homeType,
-      regen: HomeTypeDetails[user.homeType].regen,
-      storage: HomeTypeDetails[user.homeType].storage,
-    };
-  }),
-
-  getAvailableUpgrades: protectedProcedure.query(async ({ ctx }) => {
-    // Query
-    const { user } = await fetchUpdatedUser({
-      client: ctx.drizzle,
-      userId: ctx.userId,
-    });
-    // Guard
-    if (!user) return [];
-    // Derived
-    const currentHomeIndex = HomeTypes.indexOf(user.homeType);
-    const currentHomeCost = HomeTypeDetails[user.homeType].cost;
-    // Return all other home types; upgradeCost is what the user pays (target cost minus current home value)
-    const upgrades = HomeTypes.map((homeType, i) => {
-      const details = HomeTypeDetails[homeType];
-      const isUpgrade = i > currentHomeIndex;
-      const upgradeCost = isUpgrade
-        ? Math.max(0, details.cost - currentHomeCost)
-        : 0;
-      const downgradeRefund = !isUpgrade
-        ? Math.floor((currentHomeCost - details.cost) * 0.75)
-        : 0;
+  getUserHome: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get current user home info" } })
+    .query(async ({ ctx }) => {
+      // Query
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      // Guard
+      if (!user) return null;
+      // Return
       return {
-        type: homeType,
-        ...details,
-        isUpgrade,
-        upgradeCost,
-        downgradeRefund,
+        homeType: user.homeType,
+        regen: HomeTypeDetails[user.homeType].regen,
+        storage: HomeTypeDetails[user.homeType].storage,
       };
-    }).filter((upgrade) => upgrade.type !== user.homeType);
-    return upgrades;
-  }),
+    }),
+
+  getAvailableUpgrades: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get available home upgrades" } })
+    .query(async ({ ctx }) => {
+      // Query
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      // Guard
+      if (!user) return [];
+      // Derived
+      const currentHomeIndex = HomeTypes.indexOf(user.homeType);
+      const currentHomeCost = HomeTypeDetails[user.homeType].cost;
+      // Return all other home types; upgradeCost is what the user pays (target cost minus current home value)
+      const upgrades = HomeTypes.map((homeType, i) => {
+        const details = HomeTypeDetails[homeType];
+        const isUpgrade = i > currentHomeIndex;
+        const upgradeCost = isUpgrade ? Math.max(0, details.cost - currentHomeCost) : 0;
+        const downgradeRefund = !isUpgrade
+          ? Math.floor((currentHomeCost - details.cost) * 0.75)
+          : 0;
+        return {
+          type: homeType,
+          ...details,
+          isUpgrade,
+          upgradeCost,
+          downgradeRefund,
+        };
+      }).filter((upgrade) => upgrade.type !== user.homeType);
+      return upgrades;
+    }),
 
   upgradeHome: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Upgrade or downgrade home" } })
     .input(z.object({ homeType: z.enum(HomeTypes) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -216,9 +226,7 @@ export const homeRouter = createTRPCRouter({
             `You need to remove some materials from storage first (max ${calcMaxHouseMaterials(user, targetHome.storage)})`,
           );
         }
-        const downgradeRefund = Math.floor(
-          (currentHomeCost - targetHome.cost) * 0.75,
-        );
+        const downgradeRefund = Math.floor((currentHomeCost - targetHome.cost) * 0.75);
         const result = await ctx.drizzle
           .update(userData)
           .set({
@@ -226,10 +234,7 @@ export const homeRouter = createTRPCRouter({
             money: sql`${userData.money} + ${downgradeRefund}`,
           })
           .where(
-            and(
-              eq(userData.userId, ctx.userId),
-              eq(userData.homeType, user.homeType),
-            ),
+            and(eq(userData.userId, ctx.userId), eq(userData.homeType, user.homeType)),
           );
         if (result.rowsAffected === 0) {
           return errorResponse("Home type changed during transaction");
@@ -239,6 +244,7 @@ export const homeRouter = createTRPCRouter({
     }),
 
   toggleStoreItem: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Store or retrieve item from home" } })
     .input(z.object({ userItemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -274,7 +280,11 @@ export const homeRouter = createTRPCRouter({
           nonStoredNonMaterials.filter((ui) => ui.item.isEventItem).length || 0;
         const nMaterials =
           nonStoredItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
-        if (!userItemResult.item.isEventItem && nRegularItems >= calcMaxItems(user)) {
+        if (
+          !userItemResult.item.isEventItem &&
+          userItemResult.item.itemType !== "MATERIAL" &&
+          nRegularItems >= calcMaxItems(user)
+        ) {
           return errorResponse("Inventory is full");
         }
         if (userItemResult.item.isEventItem && nEventItems >= calcMaxEventItems(user)) {

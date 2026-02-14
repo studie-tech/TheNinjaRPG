@@ -246,7 +246,8 @@ export const preloadAudioBuffers = async (urls: string[]) => {
   const unique = [...new Set(urls.filter(Boolean))];
   const results = await Promise.allSettled(
     unique.map(async (url) => {
-      if (bufferCache.has(url)) return bufferCache.get(url)!;
+      const cached = bufferCache.get(url);
+      if (cached) return cached;
       const existing = bufferPending.get(url);
       if (existing) return existing;
       const promise = (async () => {

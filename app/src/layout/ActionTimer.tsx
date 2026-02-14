@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Progress } from "@/components/ui/progress";
-import Loader from "./Loader";
-import { useUserData } from "@/utils/UserContext";
-import { calcActiveUser, availableUserActions } from "@/libs/combat/actions";
+import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
+import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { calcApReduction } from "@/libs/combat/util";
-import type { CombatAction } from "@/libs/combat/types";
-import type { ReturnedBattle } from "@/libs/combat/types";
+import { useUserData } from "@/utils/UserContext";
+import Loader from "./Loader";
 
 interface ActionTimerProps {
   action?: CombatAction | undefined;
@@ -47,7 +46,6 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
   // Precompute actions for this user, recompute only when battle version changes
   const precomputedActions = useMemo(() => {
     return availableUserActions(battle, user.userId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battle?.version, user.userId]);
 
   // Active updating of this component
@@ -88,22 +86,16 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
       <div className="relative w-full overflow-hidden rounded-lg border bg-slate-700/70 shadow-lg backdrop-blur-sm">
         <div className="flex flex-row">
           {/* Round & action bar */}
-          <div className="flex flex-col py-1 px-4 grow">
-            <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold uppercase tracking-wide text-slate-200">
-              <div className="flex items-center gap-3 w-full whitespace-nowrap">
+          <div className="flex grow flex-col px-4 py-1">
+            <div className="flex flex-wrap items-center gap-3 font-semibold text-[11px] text-slate-200 uppercase tracking-wide">
+              <div className="flex w-full items-center gap-3 whitespace-nowrap">
                 <span>Round {battle.round}</span>
                 <div className="grow"></div>
                 <div
-                  className={`flex items-center gap-2 rounded-full px-3 pt-1 text-[11px] ${
-                    state.waiting
-                      ? "bg-amber-500/10 text-amber-200"
-                      : "bg-emerald-500/10 text-emerald-200"
-                  }`}
+                  className={`flex items-center gap-2 rounded-full px-3 pt-1 text-[11px] ${state.waiting ? "bg-amber-500/10 text-amber-200" : "bg-emerald-500/10 text-emerald-200"}`}
                 >
                   <span
-                    className={`h-2 w-2 rounded-full ${
-                      state.waiting ? "bg-amber-300" : "bg-emerald-300"
-                    }`}
+                    className={`h-2 w-2 rounded-full ${state.waiting ? "bg-amber-300" : "bg-emerald-300"}`}
                   />
                   <span className="font-semibold">{state.label || "..."}</span>
                 </div>
@@ -123,22 +115,12 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
                 />
                 {spentWidth > 0 && !isPending && (
                   <div
-                    className={`
-                      pointer-events-none absolute inset-y-0 right-0 z-10 bg-white/35
-                      ${
-                        spentStart <= 0 && spentWidth >= 100
-                          ? "rounded-l-full rounded-r-full"
-                          : spentStart <= 0
-                            ? "rounded-l-full"
-                            : spentStart + spentWidth >= 100
-                              ? "rounded-r-full"
-                              : ""
-                      }
+                    className={`pointer-events-none absolute inset-y-0 right-0 z-10 bg-white/35 ${spentStart <= 0 && spentWidth >= 100 ? "rounded-r-full rounded-l-full" : spentStart <= 0 ? "rounded-l-full" : spentStart + spentWidth >= 100 ? "rounded-r-full" : ""}
                     `}
                     style={{ left: `${spentStart}%`, width: `${spentWidth}%` }}
                   />
                 )}
-                <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center text-xs font-bold text-white drop-shadow-sm">
+                <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center font-bold text-white text-xs drop-shadow-sm">
                   {!isPending && `${Math.max(actionNow, 0).toFixed(1)}% AP`}
                 </div>
               </div>
@@ -146,8 +128,8 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
           </div>
           {/* Cost before & after */}
           <div className="flex flex-col items-center gap-1 pt-1 pr-2">
-            <span className="flex items-center gap-1 rounded-full bg-slate-800/70 px-2.5 font-semibold w-full">
-              <span className="text-[11px] uppercase tracking-wide text-slate-400">
+            <span className="flex w-full items-center gap-1 rounded-full bg-slate-800/70 px-2.5 font-semibold">
+              <span className="text-[11px] text-slate-400 uppercase tracking-wide">
                 Cost
               </span>
               <div className="grow"></div>
@@ -155,8 +137,8 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
                 {cost ? `${cost.toFixed(1)}%` : "N/A"}
               </span>
             </span>
-            <span className="flex items-center gap-1 rounded-full bg-slate-800/70 px-2.5 font-semibold w-full">
-              <span className="text-[11px] uppercase tracking-wide text-slate-400">
+            <span className="flex w-full items-center gap-1 rounded-full bg-slate-800/70 px-2.5 font-semibold">
+              <span className="text-[11px] text-slate-400 uppercase tracking-wide">
                 After
               </span>
               <div className="grow"></div>

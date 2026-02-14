@@ -1,21 +1,21 @@
 "use client";
 
-import Loader from "@/layout/Loader";
-import ContentBox from "@/layout/ContentBox";
-import AvatarImage from "@/layout/Avatar";
-import RichInput from "@/layout/RichInput";
-import { useUserData } from "@/utils/UserContext";
-import { Button } from "@/components/ui/button";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { useForm, useWatch } from "react-hook-form";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Form } from "@/components/ui/form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { showMutationToast } from "@/libs/toast";
-import { userReviewSchema, type UserReviewSchema } from "@/validators/reports";
-import { cn } from "src/libs/shadui";
+import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { Form } from "@/components/ui/form";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import AvatarImage from "@/layout/Avatar";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import RichInput from "@/layout/RichInput";
+import { cn } from "@/libs/shadui";
+import { showMutationToast } from "@/libs/toast";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { useUserData } from "@/utils/UserContext";
+import { type UserReviewSchema, userReviewSchema } from "@/validators/reports";
 
 export default function ManualTravel() {
   // User state
@@ -62,11 +62,11 @@ export default function ManualTravel() {
           </p>
         )}
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-          {users.map((user, i) => {
+          {users.map((user) => {
             const review = userReviews?.find((r) => r.targetUserId === user.userId);
             return (
               <ReportImage
-                key={`staffreview-${i}`}
+                key={user.userId}
                 user={user}
                 positive={review?.positive}
                 review={review?.review}
@@ -119,13 +119,19 @@ const ReportImage: React.FC<ReportimageProps> = (props) => {
       staffUserId: user.userId,
     },
   });
-  const watchedPositive = useWatch({ control: createForm.control, name: "positive" });
+  const watchedPositive = useWatch({
+    control: createForm.control,
+    name: "positive",
+  });
 
   // Form handlers
   const onSubmit = createForm.handleSubmit((data) => {
     // Must submit either positive or negative
     if (data.positive === undefined) {
-      showMutationToast({ success: false, message: "Select positive or negative" });
+      showMutationToast({
+        success: false,
+        message: "Select positive or negative",
+      });
       return;
     }
     upsertReview(data);
@@ -135,7 +141,7 @@ const ReportImage: React.FC<ReportimageProps> = (props) => {
 
   // Base staff display content
   const staffDisplay = (
-    <div className="text-center relative">
+    <div className="relative text-center">
       <AvatarImage
         href={user.avatar}
         alt={user.username}
@@ -151,10 +157,10 @@ const ReportImage: React.FC<ReportimageProps> = (props) => {
         </div>
       </div>
       {props.positive === true && (
-        <ThumbsUp className={cn("w-6 h-6 fill-orange-500 absolute top-2 right-4")} />
+        <ThumbsUp className={cn("absolute top-2 right-4 h-6 w-6 fill-orange-500")} />
       )}
       {props.positive === false && (
-        <ThumbsDown className={cn("w-6 h-6 fill-orange-500 absolute top-2 right-4")} />
+        <ThumbsDown className={cn("absolute top-2 right-4 h-6 w-6 fill-orange-500")} />
       )}
     </div>
   );
@@ -168,18 +174,18 @@ const ReportImage: React.FC<ReportimageProps> = (props) => {
     <Popover>
       <PopoverTrigger asChild>{staffDisplay}</PopoverTrigger>
       <PopoverContent>
-        <div className="max-w-[320px] relative">
+        <div className="relative max-w-[320px]">
           <div className="flex flex-row gap-2">
             <ThumbsDown
               className={cn(
-                "w-6 h-6",
+                "h-6 w-6",
                 watchedPositive === false ? "fill-orange-500" : "",
               )}
               onClick={() => createForm.setValue("positive", false)}
             />{" "}
             <ThumbsUp
               className={cn(
-                "w-6 h-6",
+                "h-6 w-6",
                 watchedPositive === true ? "fill-orange-500" : "",
               )}
               onClick={() => createForm.setValue("positive", true)}
@@ -196,7 +202,7 @@ const ReportImage: React.FC<ReportimageProps> = (props) => {
                 error={createForm.formState.errors.review?.message}
               />
             </form>
-            <Button className="w-full mt-2" onClick={onSubmit}>
+            <Button className="mt-2 w-full" onClick={onSubmit}>
               Submit
             </Button>
           </Form>

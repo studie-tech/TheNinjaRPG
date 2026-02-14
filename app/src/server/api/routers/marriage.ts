@@ -1,8 +1,9 @@
-import { userAssociation } from "@/drizzle/schema";
-import { z } from "zod";
 import type { inferRouterOutputs } from "@trpc/server";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { errorResponse, baseServerResponse, publicProcedure } from "@/server/api/trpc";
+import { and, eq, inArray, or } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { z } from "zod";
+import type { UserAssociation } from "@/drizzle/constants";
+import { userAssociation } from "@/drizzle/schema";
 import { getServerPusher } from "@/libs/pusher";
 import { fetchUser } from "@/routers/profile";
 import {
@@ -11,14 +12,22 @@ import {
   insertRequest,
   updateRequestState,
 } from "@/routers/sparring";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import type { UserAssociation } from "@/drizzle/constants";
-import { nanoid } from "nanoid";
-import { and, eq, or, inArray } from "drizzle-orm";
+
 const pusher = getServerPusher();
 
 export const marriageRouter = createTRPCRouter({
   createRequest: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Send a marriage proposal to another user" },
+    })
     .input(z.object({ userId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -44,10 +53,13 @@ export const marriageRouter = createTRPCRouter({
       // Create
       return { success: true, message: "You have proposed!" };
     }),
-  getRequests: protectedProcedure.query(async ({ ctx }) => {
-    return await fetchRequests(ctx.drizzle, ["MARRIAGE"], 3600 * 12, ctx.userId);
-  }),
+  getRequests: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get pending marriage requests" } })
+    .query(async ({ ctx }) => {
+      return await fetchRequests(ctx.drizzle, ["MARRIAGE"], 3600 * 12, ctx.userId);
+    }),
   rejectRequest: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Reject a marriage proposal" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -63,6 +75,7 @@ export const marriageRouter = createTRPCRouter({
       return { success: true, message: "Proposal Rejected" };
     }),
   cancelRequest: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Cancel your marriage proposal" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -78,6 +91,7 @@ export const marriageRouter = createTRPCRouter({
       return { success: true, message: "Proposal cancelled" };
     }),
   acceptRequest: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Accept a marriage proposal" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -119,6 +133,7 @@ export const marriageRouter = createTRPCRouter({
       return { success: true, message: "Proposal Accepted" };
     }),
   getMarriedUsers: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get list of married users" } })
     .input(z.object({ id: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const associations = await fetchAssociations(
@@ -132,10 +147,13 @@ export const marriageRouter = createTRPCRouter({
 
       return marriedUsers;
     }),
-  getDivorcedAssociations: protectedProcedure.query(async ({ ctx }) => {
-    return await fetchAssociations(ctx.drizzle, ctx.userId, ["DIVORCED"]);
-  }),
+  getDivorcedAssociations: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get divorce history" } })
+    .query(async ({ ctx }) => {
+      return await fetchAssociations(ctx.drizzle, ctx.userId, ["DIVORCED"]);
+    }),
   divorce: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Divorce a married user" } })
     .input(z.object({ userId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

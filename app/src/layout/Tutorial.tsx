@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Info, ArrowRight } from "lucide-react";
-import { cn } from "src/libs/shadui";
-import { useUserData } from "@/utils/UserContext";
+import { ArrowRight, Info } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,8 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/libs/shadui";
 import { getMobileOperatingSystem } from "@/utils/hardware";
-import { api } from "@/app/_trpc/client";
+import { useUserData } from "@/utils/UserContext";
 
 interface TutorialStepConfig {
   title: string;
@@ -367,7 +368,6 @@ const Tutorial: React.FC<TutorialProps> = ({
         setIsVisible(false);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData, pathname, router, updateTutorialStep, rightSideBarOpen, isMobile]);
 
   // Effect to calculate tooltip position after it's rendered and we know its height
@@ -494,7 +494,6 @@ const Tutorial: React.FC<TutorialProps> = ({
       window.removeEventListener("resize", handleResize);
       observer.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, isVisible, pathname]);
 
   // Handle next step
@@ -569,17 +568,13 @@ const Tutorial: React.FC<TutorialProps> = ({
     // If we found the game button, show a tooltip-style highlight
     if (gameBtnHighlight) {
       return (
-        <div
-          className="fixed inset-0 z-60
-        "
-        >
+        <div className="fixed inset-0 z-60">
           {/* Semi-transparent overlay with a hole for the game button */}
           <div className="absolute inset-0 bg-black/30" />
 
           {/* Create a "hole" in the overlay for the game button */}
           <div
-            className="absolute bg-transparent
-             shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+            className="absolute bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
             style={{
               top: gameBtnHighlight.top - 10,
               left: gameBtnHighlight.left - 10,
@@ -588,18 +583,20 @@ const Tutorial: React.FC<TutorialProps> = ({
             }}
           >
             {/* Pulsing border effect */}
-            <div className="absolute inset-0 border-3 border-amber-400 rounded-md animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.7)] z-[1]">
+            <div className="absolute inset-0 z-[1] animate-pulse rounded-md border-3 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.7)]">
               {/* Make the game button clickable through the overlay */}
-              <div
-                className="absolute inset-0 cursor-pointer z-[2]"
+              <button
+                type="button"
+                className="absolute inset-0 z-[2] cursor-pointer"
                 onClick={() => setRightSideBarOpen(true)}
+                aria-label="Open game menu"
               />
             </div>
           </div>
 
           {/* Tutorial tooltip below the game button */}
           <div
-            className="absolute bg-card p-4 rounded-lg shadow-lg w-64"
+            className="absolute w-64 rounded-lg bg-card p-4 shadow-lg"
             style={{
               top: gameBtnHighlight.top + gameBtnHighlight.height + 15,
               left: isMobile
@@ -609,7 +606,7 @@ const Tutorial: React.FC<TutorialProps> = ({
           >
             {/* Arrow pointing up to the game button */}
             <div
-              className="absolute w-5 h-5 transform rotate-45 bg-card border-2 border-amber-400 border-t-0 border-l-0"
+              className="absolute h-5 w-5 rotate-45 transform border-2 border-amber-400 border-t-0 border-l-0 bg-card"
               style={{
                 top: "-8px",
                 left: isMobile
@@ -619,11 +616,11 @@ const Tutorial: React.FC<TutorialProps> = ({
                 zIndex: 10,
               }}
             ></div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="mb-2 flex items-center gap-2">
               <Info className="h-5 w-5 text-primary" />
               <h3 className="font-bold text-lg">Game Menu</h3>
             </div>
-            <p className="text-sm mb-4">
+            <p className="mb-4 text-sm">
               Click this button to open the game menu and continue the tutorial.
             </p>
             <div className="flex justify-between">
@@ -642,7 +639,7 @@ const Tutorial: React.FC<TutorialProps> = ({
     // Fallback to dialog if we couldn't find the game button
     return (
       <Dialog open={true}>
-        <DialogContent className="sm:max-w-md z-60">
+        <DialogContent className="z-60 sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Continue the Tutorial</DialogTitle>
             <DialogDescription>
@@ -650,7 +647,7 @@ const Tutorial: React.FC<TutorialProps> = ({
               game menu and continue the tutorial.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-between mt-4">
+          <div className="mt-4 flex justify-between">
             <Button variant="outline" onClick={handleSkipTutorial}>
               Skip Tutorial
             </Button>
@@ -680,7 +677,7 @@ const Tutorial: React.FC<TutorialProps> = ({
   if (!isOnCorrectPage) {
     return (
       <Dialog open={true} onOpenChange={() => setIsVisible(true)}>
-        <DialogContent className="sm:max-w-md z-60">
+        <DialogContent className="z-60 sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Continue the Tutorial</DialogTitle>
             <DialogDescription>
@@ -688,7 +685,7 @@ const Tutorial: React.FC<TutorialProps> = ({
               the tutorial.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-between mt-4">
+          <div className="mt-4 flex justify-between">
             <Button variant="outline" onClick={handleSkipTutorial}>
               Skip Tutorial
             </Button>
@@ -705,7 +702,7 @@ const Tutorial: React.FC<TutorialProps> = ({
   if (showMissingElementDialog) {
     return (
       <Dialog open={true} onOpenChange={() => setShowMissingElementDialog(false)}>
-        <DialogContent className="sm:max-w-md z-60">
+        <DialogContent className="z-60 sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Element Not Found</DialogTitle>
             <DialogDescription>
@@ -714,7 +711,7 @@ const Tutorial: React.FC<TutorialProps> = ({
               have been moved.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-between mt-4">
+          <div className="mt-4 flex justify-between">
             <Button variant="outline" onClick={handleSkipTutorial}>
               End Tutorial
             </Button>
@@ -730,14 +727,13 @@ const Tutorial: React.FC<TutorialProps> = ({
     <>
       {/* Fixed position container to hold all tutorial UI elements */}
       {highlight && (
-        <div className="fixed inset-0 z-60 pointer-events-none">
+        <div className="pointer-events-none fixed inset-0 z-60">
           {/* Semi-transparent overlay with a hole for the highlighted element */}
-          <div className="absolute inset-0 bg-black/30 min-h-[2000px]" />
+          <div className="absolute inset-0 min-h-[2000px] bg-black/30" />
 
           {/* Create a "hole" in the overlay by masking the area where the element is */}
           <div
-            className="absolute bg-transparent
-             shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+            className="absolute bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
             style={{
               top: highlight.top - 10,
               left: highlight.left - 10,
@@ -746,16 +742,16 @@ const Tutorial: React.FC<TutorialProps> = ({
             }}
           >
             {/* This div creates the pulsing border effect */}
-            <div className="absolute inset-0 border-3 border-amber-400 rounded-md animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.7)] z-[1]">
+            <div className="absolute inset-0 z-[1] animate-pulse rounded-md border-3 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.7)]">
               {/* This empty div ensures the highlighted element can be clicked */}
-              <div className="absolute inset-0 cursor-pointer z-[2]" />
+              <div className="absolute inset-0 z-[2] cursor-pointer" />
             </div>
           </div>
 
           {/* Tutorial tooltip positioned relative to the highlighted element */}
           <div
             ref={tutorialRef}
-            className="absolute bg-card p-4 rounded-lg shadow-lg w-64"
+            className="absolute w-64 rounded-lg bg-card p-4 shadow-lg"
             style={{
               visibility: tooltipPosition ? "visible" : "hidden",
               ...(tooltipPosition && {
@@ -768,7 +764,7 @@ const Tutorial: React.FC<TutorialProps> = ({
             {tooltipPosition && (
               <div
                 className={cn(
-                  "absolute w-5 h-5 transform rotate-45 bg-card border-2 border-amber-400",
+                  "absolute h-5 w-5 rotate-45 transform border-2 border-amber-400 bg-card",
                   {
                     "border-t-0 border-l-0": tooltipPosition.top > highlight.top, // For below, show top-left corner (arrow points up)
                     "border-r-0 border-b-0": tooltipPosition.top < highlight.top, // For above, show bottom-right corner (arrow points down)
@@ -783,18 +779,18 @@ const Tutorial: React.FC<TutorialProps> = ({
                 }}
               />
             )}
-            <div className="flex items-center gap-2 mb-2">
+            <div className="mb-2 flex items-center gap-2">
               <Info className="h-5 w-5 text-primary" />
               <h3 className="font-bold text-lg">{currentTutorialStep.title}</h3>
             </div>
             {typeof currentTutorialStep.description === "string" ? (
-              <p className="text-sm mb-4">{currentTutorialStep.description}</p>
+              <p className="mb-4 text-sm">{currentTutorialStep.description}</p>
             ) : (
-              <div className="text-sm mb-4">{currentTutorialStep.description}</div>
+              <div className="mb-4 text-sm">{currentTutorialStep.description}</div>
             )}
             {currentTutorialStep.externalLink && (
               <Button
-                className="pointer-events-auto w-full mb-2"
+                className="pointer-events-auto mb-2 w-full"
                 variant="outline"
                 size="sm"
                 onClick={() => window.open(currentTutorialStep.externalLink, "_blank")}

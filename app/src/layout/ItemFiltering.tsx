@@ -1,22 +1,22 @@
-import { useUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
 import {
-  ContentFiltering,
-  useContentFiltering,
-  buildFilter,
-  defineFilteringSchema,
-  toOptions,
-} from "@/layout/ContentFiltering";
-import {
-  ItemTypes,
+  AttackMethods,
+  AttackTargets,
+  BattleUsageTypes,
   ItemRarities,
   ItemSlotTypes,
-  AttackTargets,
-  AttackMethods,
-  BattleUsageTypes,
+  ItemTypes,
 } from "@/drizzle/constants";
-import { effectFilters } from "@/validators/combat";
+import {
+  buildFilter,
+  ContentFiltering,
+  defineFilteringSchema,
+  toOptions,
+  useContentFiltering,
+} from "@/layout/ContentFiltering";
+import { canChangeContent } from "@/utils/permissions";
 import { formatBattleUsageType } from "@/utils/string";
+import { useUserData } from "@/utils/UserContext";
+import { effectFilters } from "@/validators/combat";
 
 // Inline schema (single source of truth)
 const itemFilteringSchema = defineFilteringSchema({

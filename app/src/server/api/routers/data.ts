@@ -1,87 +1,86 @@
-import { z } from "zod";
-import { nanoid } from "nanoid";
 import {
   and,
-  eq,
-  gte,
-  lte,
-  lt,
-  sql,
   asc,
-  inArray,
-  or,
-  ne,
+  eq,
   gt,
+  gte,
+  inArray,
   isNotNull,
+  lt,
+  lte,
+  ne,
+  or,
+  sql,
 } from "drizzle-orm";
-import {
-  userJutsu,
-  userItem,
-  userData,
-  bloodline,
-  skillTree,
-  userSkill,
-  referralSource,
-  paypalTransaction,
-  abEvent,
-  visitorLog,
-  historicalIp,
-  questHistory,
-} from "@/drizzle/schema";
-import {
-  dataBattleAction,
-  jutsu,
-  item,
-  actionLog,
-  logBattleLengths,
-  logRankedPicks,
-} from "@/drizzle/schema";
-import {
-  BattleDataEntryType,
-  RecruitmentMetrics,
-  RecruitmentMetricMax,
-  TUTORIAL_STEPS_COUNT,
-} from "@/drizzle/constants";
-import {
-  createTRPCRouter,
-  publicProcedure,
-  protectedProcedure,
-  serverError,
-  baseServerResponse,
-  errorResponse,
-} from "../trpc";
-import { fetchJutsu, jutsuDatabaseFilter } from "./jutsu";
-import { fetchBloodline, bloodlineDatabaseFilter } from "./bloodline";
-import { fetchItem, itemDatabaseFilter } from "./item";
-import { fetchUser } from "./profile";
-import { BattleTypes } from "@/drizzle/constants";
-import { jutsuFilteringSchema } from "@/validators/jutsu";
-import { itemFilteringSchema } from "@/validators/item";
-import { bloodlineFilteringSchema } from "@/validators/bloodline";
-import { skillTreeFilteringSchema } from "@/validators/skillTree";
-import { fetchPublicUsers } from "@/routers/profile";
-import { getPublicUsersSchema } from "@/validators/user";
-import { skillTreeDatabaseFilter } from "./skillTree";
+import { nanoid } from "nanoid";
+import { z } from "zod";
 import type {
   ItemType,
   LetterRank,
+  RankedRank,
   StatType,
   UserRank,
-  RankedRank,
 } from "@/drizzle/constants";
+import {
+  BattleDataEntryType,
+  BattleTypes,
+  QuestRewardMetrics,
+  QuestTypes,
+  RANKED_RANKS,
+  RecruitmentMetricMax,
+  RecruitmentMetrics,
+  TUTORIAL_STEPS_COUNT,
+} from "@/drizzle/constants";
+import {
+  abEvent,
+  actionLog,
+  bloodline,
+  dataBattleAction,
+  historicalIp,
+  item,
+  jutsu,
+  logBattleLengths,
+  logQueueLengths,
+  logRankedPicks,
+  paypalTransaction,
+  quest,
+  questHistory,
+  referralSource,
+  skillTree,
+  userData,
+  userItem,
+  userJutsu,
+  userSkill,
+  visitorLog,
+} from "@/drizzle/schema";
+import { getRankedRank } from "@/libs/ranked_pvp";
+import { fetchPublicUsers } from "@/routers/profile";
+import { fetchSanninRankedPlayers } from "@/server/api/routers/pvprank";
+import { type DeviceType, getDeviceType } from "@/utils/hardware";
 import {
   canChangeContent,
   canViewRecruitmentAnalytics,
   canViewRevenueAnalytics,
 } from "@/utils/permissions";
 import type { QueryCondition } from "@/utils/typeutils";
-import { RANKED_RANKS } from "@/drizzle/constants";
-import { logQueueLengths } from "@/drizzle/schema";
-import { getRankedRank } from "@/libs/ranked_pvp";
-import { fetchSanninRankedPlayers } from "@/server/api/routers/pvprank";
-import { quest } from "@/drizzle/schema";
-import { QuestTypes, QuestRewardMetrics } from "@/drizzle/constants";
-import { getDeviceType, type DeviceType } from "@/utils/hardware";
+import { bloodlineFilteringSchema } from "@/validators/bloodline";
+import { itemFilteringSchema } from "@/validators/item";
+import { jutsuFilteringSchema } from "@/validators/jutsu";
+import { skillTreeFilteringSchema } from "@/validators/skillTree";
+import { getPublicUsersSchema } from "@/validators/user";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "../trpc";
+import { bloodlineDatabaseFilter, fetchBloodline } from "./bloodline";
+import { fetchItem, itemDatabaseFilter } from "./item";
+import { fetchJutsu, jutsuDatabaseFilter } from "./jutsu";
+import { fetchUser } from "./profile";
+import { skillTreeDatabaseFilter } from "./skillTree";
 
 export const dataRouter = createTRPCRouter({
   // AB tests summaries (protected)
@@ -127,7 +126,7 @@ export const dataRouter = createTRPCRouter({
       if (input.deviceType && input.deviceType.length > 0) {
         filteredRows = rows.filter((row) => {
           const deviceType = getDeviceType(row.userAgent ?? undefined);
-          return input.deviceType!.includes(deviceType);
+          return input.deviceType?.includes(deviceType);
         });
       }
 
@@ -141,7 +140,8 @@ export const dataRouter = createTRPCRouter({
         const variant = r.variant ?? "";
         const event = r.event ?? "";
         if (!experiments.has(exp)) experiments.set(exp, {});
-        const map = experiments.get(exp)!;
+        const map = experiments.get(exp);
+        if (!map) return;
         if (!map[variant]) map[variant] = { loaded: 0, register: 0 };
         if (event === "loaded") map[variant].loaded += 1;
         if (event === "success") map[variant].register += 1;
@@ -172,7 +172,9 @@ export const dataRouter = createTRPCRouter({
         and(sql`${visitorLog.utmSource} IS NOT NULL`, ne(visitorLog.utmSource, "")),
       )
       .orderBy(asc(visitorLog.utmSource));
-    return rows.map((r) => r.utmSource!).filter((v) => typeof v === "string");
+    return rows
+      .map((r) => r.utmSource)
+      .filter((v): v is string => typeof v === "string");
   }),
   getRecruitmentMainMetrics: protectedProcedure
     .input(
@@ -462,38 +464,38 @@ export const dataRouter = createTRPCRouter({
       if (input.deviceType && input.deviceType.length > 0) {
         allVisitorsRow = allVisitorsRow.filter((visitor) => {
           const deviceType = getDeviceType(visitor.userAgent ?? undefined);
-          return input.deviceType!.includes(deviceType);
+          return input.deviceType?.includes(deviceType);
         });
         signupsRow = signupsRow.filter((signup) => {
           const deviceType = getDeviceType(signup.userAgent ?? undefined);
-          return input.deviceType!.includes(deviceType);
+          return input.deviceType?.includes(deviceType);
         });
         characterCreationsRow = signupsRowRaw
           .filter((signup) => signup.userId)
           .filter((characterCreation) => {
             const deviceType = getDeviceType(characterCreation.userAgent ?? undefined);
-            return input.deviceType!.includes(deviceType);
+            return input.deviceType?.includes(deviceType);
           });
         nonStudentSignupsRow = nonStudentSignupsRow.filter((nonStudentSignup) => {
           const deviceType = getDeviceType(nonStudentSignup.userAgent ?? undefined);
-          return input.deviceType!.includes(deviceType);
+          return input.deviceType?.includes(deviceType);
         });
         nonStudentGeninSignupsRow = nonStudentGeninSignupsRow.filter(
           (nonStudentSignup) => {
             const deviceType = getDeviceType(nonStudentSignup.userAgent ?? undefined);
-            return input.deviceType!.includes(deviceType);
+            return input.deviceType?.includes(deviceType);
           },
         );
         pvpSignupsRow = pvpSignupsRow.filter((pvpSignup) => {
           const deviceType = getDeviceType(pvpSignup.userAgent ?? undefined);
-          return input.deviceType!.includes(deviceType);
+          return input.deviceType?.includes(deviceType);
         });
         tutorialFinishedSignupsRow = tutorialFinishedSignupsRow.filter(
           (tutorialFinishedSignup) => {
             const deviceType = getDeviceType(
               tutorialFinishedSignup.userAgent ?? undefined,
             );
-            return input.deviceType!.includes(deviceType);
+            return input.deviceType?.includes(deviceType);
           },
         );
       }
@@ -514,7 +516,7 @@ export const dataRouter = createTRPCRouter({
       if (input.deviceType && input.deviceType.length > 0) {
         filteredSignupsRow = signupsRow.filter((signup) => {
           const deviceType = getDeviceType(signup.userAgent ?? undefined);
-          return input.deviceType!.includes(deviceType);
+          return input.deviceType?.includes(deviceType);
         });
       }
 
@@ -581,7 +583,7 @@ export const dataRouter = createTRPCRouter({
           if (!completedQuestsMap.has(cq.userId)) {
             completedQuestsMap.set(cq.userId, new Set());
           }
-          completedQuestsMap.get(cq.userId)!.add(cq.questId);
+          completedQuestsMap.get(cq.userId)?.add(cq.questId);
         });
 
         for (const questId of input.questFunnels) {
@@ -643,7 +645,7 @@ export const dataRouter = createTRPCRouter({
         if (!completedTierQuestsMap.has(cq.odUserId)) {
           completedTierQuestsMap.set(cq.odUserId, new Set());
         }
-        completedTierQuestsMap.get(cq.odUserId)!.add(cq.questId);
+        completedTierQuestsMap.get(cq.odUserId)?.add(cq.questId);
       });
 
       // Get set of users who finished the tutorial
@@ -744,7 +746,7 @@ export const dataRouter = createTRPCRouter({
       const rows = await ctx.drizzle
         .select({
           source: visitorLog.utmSource,
-          totalUsd: sql<number>`SUM(${paypalTransaction.amount})`.mapWith(Number),
+          totalUsd: sql`SUM(${paypalTransaction.amount})`.mapWith(Number),
         })
         .from(paypalTransaction)
         .innerJoin(userData, eq(paypalTransaction.createdById, userData.userId))
@@ -857,15 +859,16 @@ export const dataRouter = createTRPCRouter({
         const bySource = new Map<string, Map<number, number>>();
         rows.forEach((r) => {
           if (!bySource.has(r.source)) bySource.set(r.source, new Map());
-          const inner = bySource.get(r.source)!;
+          const inner = bySource.get(r.source);
+          if (!inner) return;
           inner.set(r.level, (inner.get(r.level) ?? 0) + 1);
         });
         const out: { source: string; level: number; count: number }[] = [];
-        bySource.forEach((lvlMap, src) =>
-          lvlMap.forEach((cnt, lvl) =>
-            out.push({ source: src, level: lvl, count: cnt }),
-          ),
-        );
+        bySource.forEach((lvlMap, src) => {
+          lvlMap.forEach((cnt, lvl) => {
+            out.push({ source: src, level: lvl, count: cnt });
+          });
+        });
         return out;
       };
 
@@ -876,7 +879,7 @@ export const dataRouter = createTRPCRouter({
               .select({
                 source: referralSource.source,
                 level: clampedExpr,
-                count: sql<number>`COUNT(${userData.userId})`.mapWith(Number),
+                count: sql`COUNT(${userData.userId})`.mapWith(Number),
               })
               .from(userData)
               .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
@@ -911,7 +914,7 @@ export const dataRouter = createTRPCRouter({
             ? ctx.drizzle
                 .select({
                   level: clampedExpr,
-                  count: sql<number>`COUNT(${userData.userId})`.mapWith(Number),
+                  count: sql`COUNT(${userData.userId})`.mapWith(Number),
                 })
                 .from(userData)
                 .where(and(...dynamicWhere))
@@ -941,7 +944,7 @@ export const dataRouter = createTRPCRouter({
             ? ctx.drizzle
                 .select({
                   level: clampedExpr,
-                  count: sql<number>`COUNT(${userData.userId})`.mapWith(Number),
+                  count: sql`COUNT(${userData.userId})`.mapWith(Number),
                 })
                 .from(userData)
                 .where(and(...recruitedWhere))
@@ -975,7 +978,7 @@ export const dataRouter = createTRPCRouter({
       if (rows.length > 0) {
         rows.forEach((r) => {
           if (!bySource.has(r.source)) bySource.set(r.source, []);
-          bySource.get(r.source)!.push({ level: r.level, count: r.count });
+          bySource.get(r.source)?.push({ level: r.level, count: r.count });
         });
       }
       if (dynamicRows.length > 0) {
@@ -1018,9 +1021,9 @@ export const dataRouter = createTRPCRouter({
       const rows = await ctx.drizzle
         .select({
           day: dayExpr,
-          mean: sql<number>`AVG(${userData.level})`.mapWith(Number),
-          std: sql<number>`STDDEV_SAMP(${userData.level})`.mapWith(Number),
-          count: sql<number>`COUNT(${userData.userId})`.mapWith(Number),
+          mean: sql`AVG(${userData.level})`.mapWith(Number),
+          std: sql`STDDEV_SAMP(${userData.level})`.mapWith(Number),
+          count: sql`COUNT(${userData.userId})`.mapWith(Number),
         })
         .from(userData)
         .leftJoin(referralSource, eq(referralSource.userId, userData.userId))
@@ -1108,7 +1111,7 @@ export const dataRouter = createTRPCRouter({
             .select({
               day: dayExpr,
               source: referralSource.source,
-              count: sql<number>`COUNT(${userData.userId})`.mapWith(Number),
+              count: sql`COUNT(${userData.userId})`.mapWith(Number),
             })
             .from(userData)
             .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
@@ -1125,7 +1128,7 @@ export const dataRouter = createTRPCRouter({
           ? ctx.drizzle
               .select({
                 day: dayExpr,
-                count: sql<number>`COUNT(${userData.userId})`.mapWith(Number),
+                count: sql`COUNT(${userData.userId})`.mapWith(Number),
               })
               .from(userData)
               .where(
@@ -1150,7 +1153,7 @@ export const dataRouter = createTRPCRouter({
           ? ctx.drizzle
               .select({
                 day: dayExpr,
-                count: sql<number>`COUNT(${userData.userId})`.mapWith(Number),
+                count: sql`COUNT(${userData.userId})`.mapWith(Number),
               })
               .from(userData)
               .where(
@@ -1179,7 +1182,7 @@ export const dataRouter = createTRPCRouter({
       (rows as { day: Date | string; source: string; count: number }[]).forEach((r) => {
         const d = (r.day as unknown as string) ?? String(r.day);
         if (!bySource.has(r.source)) bySource.set(r.source, []);
-        bySource.get(r.source)!.push({ date: d, count: r.count });
+        bySource.get(r.source)?.push({ date: d, count: r.count });
       });
       if (dynamicRows.length > 0) {
         bySource.set(
@@ -1340,7 +1343,7 @@ export const dataRouter = createTRPCRouter({
             name: bloodline.name,
             bloodlineId: bloodline.id,
             battleWon: dataBattleAction.battleWon,
-            count: sql<number>`SUM(${dataBattleAction.count})`.mapWith(Number),
+            count: sql`SUM(${dataBattleAction.count})`.mapWith(Number),
           })
           .from(dataBattleAction)
           .innerJoin(bloodline, eq(dataBattleAction.contentId, bloodline.id))
@@ -1363,7 +1366,7 @@ export const dataRouter = createTRPCRouter({
         if (!battleStatsMap.has(stat.bloodlineId)) {
           battleStatsMap.set(stat.bloodlineId, []);
         }
-        battleStatsMap.get(stat.bloodlineId)!.push({
+        battleStatsMap.get(stat.bloodlineId)?.push({
           battleWon: stat.battleWon,
           count: stat.count,
         });
@@ -1459,7 +1462,7 @@ export const dataRouter = createTRPCRouter({
             name: jutsu.name,
             jutsuId: jutsu.id,
             battleWon: dataBattleAction.battleWon,
-            count: sql<number>`SUM(${dataBattleAction.count})`.mapWith(Number),
+            count: sql`SUM(${dataBattleAction.count})`.mapWith(Number),
           })
           .from(dataBattleAction)
           .innerJoin(jutsu, eq(dataBattleAction.contentId, jutsu.id))
@@ -1589,40 +1592,38 @@ export const dataRouter = createTRPCRouter({
       });
 
       // Process results to extract effects
-      const results = aiUsers.data
-        .map((ai) => {
-          const aiEffects = "effects" in ai && ai.effects ? ai.effects : [];
-          const jutsuEffects =
-            "jutsus" in ai && ai.jutsus
-              ? ai.jutsus.flatMap((uj) =>
-                  "jutsu" in uj ? (uj.jutsu?.effects ?? []) : [],
-                )
-              : [];
-          const itemEffects =
-            "items" in ai && ai.items
-              ? ai.items.flatMap((ui) => ("item" in ui ? (ui.item?.effects ?? []) : []))
-              : [];
-          const effects = [
-            ...aiEffects.map((e) => ({ ...e, origin: "ai" })),
-            ...jutsuEffects.map((e) => ({ ...e, origin: "jutsu" })),
-            ...itemEffects.map((e) => ({ ...e, origin: "item" })),
-          ];
-          return effects
-            .filter((effect) => input.effect.includes(effect.type))
-            .map((effect) => ({
-              id: ai.userId,
-              name: ai.username,
-              rank: ai.rank,
-              level: ai.level,
-              origin: effect.origin,
-              villageId: ai.villageId,
-              effect: effect.type,
-              power: effect.power,
-              rounds: effect.rounds,
-              powerPerLevel: effect.powerPerLevel,
-            }));
-        })
-        .flat();
+      const results = aiUsers.data.flatMap((ai) => {
+        const aiEffects = "effects" in ai && ai.effects ? ai.effects : [];
+        const jutsuEffects =
+          "jutsus" in ai && ai.jutsus
+            ? ai.jutsus.flatMap((uj) =>
+                "jutsu" in uj ? (uj.jutsu?.effects ?? []) : [],
+              )
+            : [];
+        const itemEffects =
+          "items" in ai && ai.items
+            ? ai.items.flatMap((ui) => ("item" in ui ? (ui.item?.effects ?? []) : []))
+            : [];
+        const effects = [
+          ...aiEffects.map((e) => ({ ...e, origin: "ai" })),
+          ...jutsuEffects.map((e) => ({ ...e, origin: "jutsu" })),
+          ...itemEffects.map((e) => ({ ...e, origin: "item" })),
+        ];
+        return effects
+          .filter((effect) => input.effect.includes(effect.type))
+          .map((effect) => ({
+            id: ai.userId,
+            name: ai.username,
+            rank: ai.rank,
+            level: ai.level,
+            origin: effect.origin,
+            villageId: ai.villageId,
+            effect: effect.type,
+            power: effect.power,
+            rounds: effect.rounds,
+            powerPerLevel: effect.powerPerLevel,
+          }));
+      });
 
       return results;
     }),
@@ -1661,7 +1662,7 @@ export const dataRouter = createTRPCRouter({
         ctx.drizzle
           .select({
             skillId: userSkill.skillId,
-            userCount: sql<number>`COUNT(${userSkill.userId})`.mapWith(Number),
+            userCount: sql`COUNT(${userSkill.userId})`.mapWith(Number),
           })
           .from(userSkill)
           .groupBy(userSkill.skillId),
@@ -1769,7 +1770,7 @@ export const dataRouter = createTRPCRouter({
             name: item.name,
             itemId: item.id,
             battleWon: dataBattleAction.battleWon,
-            count: sql<number>`SUM(${dataBattleAction.count})`.mapWith(Number),
+            count: sql`SUM(${dataBattleAction.count})`.mapWith(Number),
           })
           .from(dataBattleAction)
           .innerJoin(item, eq(dataBattleAction.contentId, item.id))
@@ -1839,7 +1840,7 @@ export const dataRouter = createTRPCRouter({
             name: sql<string>`CONCAT(${userData.username}, ' - lvl', ${userData.level})`,
             aiUserId: userData.userId,
             battleWon: dataBattleAction.battleWon,
-            count: sql<number>`SUM(${dataBattleAction.count})`.mapWith(Number),
+            count: sql`SUM(${dataBattleAction.count})`.mapWith(Number),
           })
           .from(dataBattleAction)
           .innerJoin(userData, eq(dataBattleAction.contentId, userData.userId))
@@ -1856,6 +1857,9 @@ export const dataRouter = createTRPCRouter({
       return usage;
     }),
   getBattleLengthStatistics: publicProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get battle length distribution data" },
+    })
     .input(
       z.object({
         battleTypes: z.array(z.enum(BattleTypes)).optional(),
@@ -1899,7 +1903,7 @@ export const dataRouter = createTRPCRouter({
         .select({
           battleType: logBattleLengths.battleType,
           rounds: logBattleLengths.rounds,
-          count: sql<number>`SUM(${logBattleLengths.count})`.mapWith(Number),
+          count: sql`SUM(${logBattleLengths.count})`.mapWith(Number),
         })
         .from(logBattleLengths)
         .groupBy(logBattleLengths.battleType, logBattleLengths.rounds)
@@ -1950,7 +1954,7 @@ export const dataRouter = createTRPCRouter({
         .select({
           rankedRank: logQueueLengths.rankedRank,
           ceiledMinutes: logQueueLengths.ceiledMinutes,
-          count: sql<number>`SUM(${logQueueLengths.count})`.mapWith(Number),
+          count: sql`SUM(${logQueueLengths.count})`.mapWith(Number),
         })
         .from(logQueueLengths)
         .groupBy(logQueueLengths.rankedRank, logQueueLengths.ceiledMinutes)
@@ -2028,7 +2032,7 @@ export const dataRouter = createTRPCRouter({
           : undefined;
 
       // Build name filtering conditions
-      const nameConditions = input.name && input.name.length > 0 ? true : false;
+      const nameConditions = !!(input.name && input.name.length > 0);
 
       // Fetch ranked loadout data with content names
       const [jutsuPicks, itemPicks, consumablePicks] = await Promise.all([
@@ -2037,7 +2041,7 @@ export const dataRouter = createTRPCRouter({
             type: logRankedPicks.type,
             contentId: logRankedPicks.contentId,
             battleType: logRankedPicks.battleType,
-            count: sql<number>`SUM(${logRankedPicks.count})`.mapWith(Number),
+            count: sql`SUM(${logRankedPicks.count})`.mapWith(Number),
             name: jutsu.name,
           })
           .from(logRankedPicks)
@@ -2060,7 +2064,7 @@ export const dataRouter = createTRPCRouter({
             type: logRankedPicks.type,
             contentId: logRankedPicks.contentId,
             battleType: logRankedPicks.battleType,
-            count: sql<number>`SUM(${logRankedPicks.count})`.mapWith(Number),
+            count: sql`SUM(${logRankedPicks.count})`.mapWith(Number),
             name: item.name,
           })
           .from(logRankedPicks)
@@ -2083,7 +2087,7 @@ export const dataRouter = createTRPCRouter({
             type: logRankedPicks.type,
             contentId: logRankedPicks.contentId,
             battleType: logRankedPicks.battleType,
-            count: sql<number>`SUM(${logRankedPicks.count})`.mapWith(Number),
+            count: sql`SUM(${logRankedPicks.count})`.mapWith(Number),
             name: item.name,
           })
           .from(logRankedPicks)
@@ -2232,7 +2236,7 @@ export const dataRouter = createTRPCRouter({
         .select({
           battleWon: dataBattleAction.battleWon,
           battleType: dataBattleAction.battleType,
-          count: sql<number>`COUNT(${dataBattleAction.id})`.mapWith(Number),
+          count: sql`COUNT(${dataBattleAction.id})`.mapWith(Number),
         })
         .from(dataBattleAction)
         .groupBy(dataBattleAction.battleWon, dataBattleAction.battleType)
@@ -2257,14 +2261,14 @@ export const dataRouter = createTRPCRouter({
         const levelDistribution = await ctx.drizzle
           .select({
             level: userJutsu.level,
-            count: sql<number>`COUNT(${userJutsu.userId})`.mapWith(Number),
+            count: sql`COUNT(${userJutsu.userId})`.mapWith(Number),
           })
           .from(userJutsu)
           .groupBy(userJutsu.level)
           .where(eq(userJutsu.jutsuId, input.id))
           .orderBy(asc(userJutsu.level));
         const total = await ctx.drizzle
-          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .select({ count: sql`count(*)`.mapWith(Number) })
           .from(userJutsu)
           .where(eq(userJutsu.jutsuId, input.id));
         const totalUsers = total?.[0]?.count || 0;
@@ -2275,14 +2279,14 @@ export const dataRouter = createTRPCRouter({
         const levelDistribution = await ctx.drizzle
           .select({
             level: userData.level,
-            count: sql<number>`COUNT(${userData.userId})`.mapWith(Number),
+            count: sql`COUNT(${userData.userId})`.mapWith(Number),
           })
           .from(userData)
           .groupBy(userData.level)
           .where(eq(userData.bloodlineId, input.id))
           .orderBy(asc(userData.level));
         const total = await ctx.drizzle
-          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .select({ count: sql`count(*)`.mapWith(Number) })
           .from(userData)
           .where(eq(userData.bloodlineId, input.id));
         const totalUsers = total?.[0]?.count || 0;
@@ -2291,7 +2295,7 @@ export const dataRouter = createTRPCRouter({
         // Item Statistics
         const info = await fetchItem(ctx.drizzle, input.id);
         const total = await ctx.drizzle
-          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .select({ count: sql`count(*)`.mapWith(Number) })
           .from(userItem)
           .where(eq(userItem.id, input.id));
         const totalUsers = total?.[0]?.count || 0;

@@ -1,21 +1,20 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
+import { Gamepad2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { IMG_BUILDING_ADMINBUILDING, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import Accordion from "@/layout/Accordion";
 import BanInfo from "@/layout/BanInfo";
+import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import Accordion from "@/layout/Accordion";
+import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
-import { Gamepad2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { showMutationToast } from "@/libs/toast";
-import { api } from "@/app/_trpc/client";
 import { availableQuestLetterRanks } from "@/libs/train";
 import { useRequireInVillage } from "@/utils/UserContext";
-import { IMG_BUILDING_ADMINBUILDING } from "@/drizzle/constants";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 
 export default function AdministrationBuilding() {
   const util = api.useUtils();
@@ -56,7 +55,6 @@ export default function AdministrationBuilding() {
         setActiveElement(currentQuest.quest.name);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData]);
 
   // Guard

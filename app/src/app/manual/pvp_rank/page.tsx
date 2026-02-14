@@ -1,5 +1,6 @@
 "use client";
 
+import { api } from "@/app/_trpc/client";
 import {
   Card,
   CardContent,
@@ -7,31 +8,30 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  RANKED_LOADOUT_MAX_JUTSUS,
-  RANKED_LOADOUT_MAX_WEAPONS,
   RANKED_LOADOUT_MAX_CONSUMABLES,
-  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
-  RANKED_LOADOUT_MAX_POISON_ITEMS,
-  RANKED_LOADOUT_MAX_POISON_JUTSUS,
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
   RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
+  RANKED_LOADOUT_MAX_JUTSUS,
+  RANKED_LOADOUT_MAX_POISON_ITEMS,
+  RANKED_LOADOUT_MAX_POISON_JUTSUS,
+  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
+  RANKED_LOADOUT_MAX_WEAPONS,
 } from "@/drizzle/constants";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocalStorage } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
-import { SeasonManager } from "@/layout/SeasonManager";
-import { UnclaimedSeasonRewards } from "@/layout/UnclaimedSeasonRewards";
 import { QueueLengthHistogram } from "@/layout/QueueLengthHistogram";
-import { RankedRankDistributionHistogram } from "@/layout/RankedRankDistributionHistogram";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import { api } from "@/app/_trpc/client";
-import type { ArrayElement } from "@/utils/typeutils";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
 import RankedLoadoutFiltering, {
-  useFiltering,
   getFilter,
+  useFiltering,
 } from "@/layout/RankedLoadoutFiltering";
+import { RankedRankDistributionHistogram } from "@/layout/RankedRankDistributionHistogram";
+import { SeasonManager } from "@/layout/SeasonManager";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { UnclaimedSeasonRewards } from "@/layout/UnclaimedSeasonRewards";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import type { ArrayElement } from "@/utils/typeutils";
 
 export default function RankedManualPage() {
   type Tab = "overview" | "matchmaking" | "loadouts" | "rewards";
@@ -67,7 +67,7 @@ export default function RankedManualPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <h3 className=" font-semibold mb-2">League Points (LP)</h3>
+                  <h3 className="mb-2 font-semibold">League Points (LP)</h3>
                   <p className="text-muted-foreground text-sm">
                     League Points represent your skill rating in ranked PvP. You gain LP
                     by winning matches and lose LP when defeated. The amount of LP
@@ -77,12 +77,12 @@ export default function RankedManualPage() {
                 </div>
 
                 <div>
-                  <h3 className=" font-semibold mb-2">Ranked Stats</h3>
+                  <h3 className="mb-2 font-semibold">Ranked Stats</h3>
                   <p className="text-muted-foreground text-sm">
                     In ranked battles, all players have standardized stats to ensure
                     fair competition:
                   </p>
-                  <ul className="list-disc list-inside mt-2 space-y-1 text-muted-foreground text-sm">
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground text-sm">
                     <li>Level 100 with maximum experience</li>
                     <li>Equalized health, chakra, and stamina pools</li>
                     <li>Balanced combat stats for all players</li>
@@ -91,11 +91,11 @@ export default function RankedManualPage() {
                 </div>
 
                 <div>
-                  <h3 className=" font-semibold mb-2">Battle Format</h3>
+                  <h3 className="mb-2 font-semibold">Battle Format</h3>
                   <p className="text-muted-foreground text-sm">
                     Ranked battles are 1v1 matches where players can use:
                   </p>
-                  <ul className="list-disc list-inside mt-2 space-y-1 text-muted-foreground text-sm">
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground text-sm">
                     <li>
                       {RANKED_LOADOUT_MAX_WEAPONS} weapons from their ranked loadout
                     </li>
@@ -129,12 +129,12 @@ export default function RankedManualPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <h3 className=" font-semibold mb-2">LP-Based Matchmaking</h3>
+                  <h3 className="mb-2 font-semibold">LP-Based Matchmaking</h3>
                   <p className="text-muted-foreground text-sm">
                     Players are matched based on their League Points (LP) to ensure fair
                     and competitive matches:
                   </p>
-                  <ul className="list-disc list-inside mt-2 space-y-1 text-muted-foreground text-sm">
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground text-sm">
                     <li>Matches are made within a reasonable LP range</li>
                     <li>Longer queue times may result in wider LP ranges</li>
                     <li>Players with similar LP are prioritized for matches</li>
@@ -142,11 +142,11 @@ export default function RankedManualPage() {
                 </div>
 
                 <div>
-                  <h3 className=" font-semibold mb-2">Queue System</h3>
+                  <h3 className="mb-2 font-semibold">Queue System</h3>
                   <p className="text-muted-foreground text-sm">
                     How the ranked queue works:
                   </p>
-                  <ul className="list-disc list-inside mt-2 space-y-1 text-muted-foreground text-sm">
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground text-sm">
                     <li>Join the queue to be matched with other players</li>
                     <li>You can leave the queue at any time</li>
                     <li>
@@ -169,11 +169,11 @@ export default function RankedManualPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <h3 className=" font-semibold mb-2">Setting Up Your Loadout</h3>
+                  <h3 className="mb-2 font-semibold">Setting Up Your Loadout</h3>
                   <p className="text-muted-foreground text-sm">
                     To set up your ranked loadout:
                   </p>
-                  <ol className="list-decimal list-inside mt-2 space-y-1 text-muted-foreground text-sm">
+                  <ol className="mt-2 list-inside list-decimal space-y-1 text-muted-foreground text-sm">
                     <li>Visit the battle arena page and click the PVP Rank tab</li>
                     <li>Select your preferred weapons</li>
                     <li>Choose two different consumables</li>
@@ -182,9 +182,9 @@ export default function RankedManualPage() {
                 </div>
 
                 <div>
-                  <h3 className=" font-semibold mb-2">Loadout Restrictions</h3>
+                  <h3 className="mb-2 font-semibold">Loadout Restrictions</h3>
                   <p className="text-muted-foreground text-sm">Keep in mind:</p>
-                  <ul className="list-disc list-inside mt-2 space-y-1 text-muted-foreground text-sm">
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground text-sm">
                     <li>
                       Only items available in the shop can be used in ranked loadouts
                     </li>
@@ -225,12 +225,12 @@ export default function RankedManualPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <h3 className=" font-semibold mb-2">LP Gains and Losses</h3>
+                  <h3 className="mb-2 font-semibold">LP Gains and Losses</h3>
                   <p className="text-muted-foreground text-sm">
                     The amount of LP you gain or lose depends on the LP difference
                     between you and your opponent:
                   </p>
-                  <ul className="list-disc list-inside mt-2 space-y-1 text-muted-foreground text-sm">
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground text-sm">
                     <li>Beating a higher LP opponent: +20-30 LP</li>
                     <li>Beating a similar LP opponent: +15-20 LP</li>
                     <li>Beating a lower LP opponent: +10-15 LP</li>
@@ -241,7 +241,7 @@ export default function RankedManualPage() {
                 </div>
 
                 <div>
-                  <h3 className=" font-semibold mb-2">Seasonal Rewards</h3>
+                  <h3 className="mb-2 font-semibold">Seasonal Rewards</h3>
                   <p className="text-muted-foreground text-sm">
                     At the end of each ranked season, players receive rewards based on
                     their final LP. See the season for details on rewards for each
@@ -251,7 +251,7 @@ export default function RankedManualPage() {
                 </div>
 
                 <div className="w-full">
-                  <h3 className=" font-semibold mb-2">Season Overview</h3>
+                  <h3 className="mb-2 font-semibold">Season Overview</h3>
 
                   <SeasonManager />
                 </div>

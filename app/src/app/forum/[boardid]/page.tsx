@@ -1,42 +1,40 @@
 "use client";
 
-import { useState, use } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Bookmark, Instagram, Lock, Trash2, Unlock } from "lucide-react";
 import Link from "next/link";
-import Image from "@/layout/Image";
-import Loader from "@/layout/Loader";
-import ContentBox from "@/layout/ContentBox";
-import RichInput from "@/layout/RichInput";
-import Post from "@/layout/Post";
-import Confirm2 from "@/layout/Confirm2";
+import { use, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
-  FormLabel,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { forumText } from "@/layout/seoTexts";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { showMutationToast } from "@/libs/toast";
-import { Bookmark, Lock, Unlock, Trash2 } from "lucide-react";
-import { api } from "@/app/_trpc/client";
-import { forumBoardSchema, type ForumBoardSchema } from "@/validators/forum";
-import { useUserData } from "@/utils/UserContext";
-import { secondsPassed } from "@/utils/time";
-import { useInfinitePagination } from "@/libs/pagination";
-import { canModerate, canPostAsAi, canCreateNews } from "@/utils/permissions";
 import { IMG_ICON_FORUM } from "@/drizzle/constants";
-import { getSearchValidator } from "@/validators/register";
-import UserSearchSelect from "@/layout/UserSearchSelect";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
-import { useWatch } from "react-hook-form";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Instagram } from "lucide-react";
-import type { z } from "zod";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import Post from "@/layout/Post";
+import RichInput from "@/layout/RichInput";
+import { forumText } from "@/layout/seoTexts";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
+import { canCreateNews, canModerate, canPostAsAi } from "@/utils/permissions";
+import { secondsPassed } from "@/utils/time";
+import { useUserData } from "@/utils/UserContext";
+import { type ForumBoardSchema, forumBoardSchema } from "@/validators/forum";
+import { getSearchValidator } from "@/validators/register";
 
 export default function Board(props: { params: Promise<{ boardid: string }> }) {
   const params = use(props.params);
@@ -57,7 +55,7 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
       placeholderData: (previousData) => previousData,
     },
   );
-  const allThreads = threads?.pages.map((page) => page.threads).flat();
+  const allThreads = threads?.pages.flatMap((page) => page.threads);
   const board = threads?.pages[0]?.board;
 
   useInfinitePagination({
@@ -148,7 +146,7 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
       <ContentBox
         title="Forum"
         defaultBackHref={userData ? "/forum/" : undefined}
-        initialBreak={userData ? false : true}
+        initialBreak={!userData}
         subtitle={board.name}
         topRightContent={
           <>
@@ -200,7 +198,7 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
                         error={form.formState.errors.content?.message}
                       />
                       {isNewsBoard && canPostNews && (
-                        <div className="mt-4 space-y-3 ">
+                        <div className="mt-4 space-y-3">
                           <ContentImageSelector
                             label="News Image (for Instagram)"
                             imageUrl={watchedImage}
@@ -236,13 +234,7 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
           // Icons, which have to be clickable for moderators+, but just shown otherwise
           const MyBookmark = (
             <Bookmark
-              className={`mr-2 h-6 w-6 ${
-                thread.isPinned
-                  ? "text-orange-500"
-                  : canEdit
-                    ? "hover:text-orange-500"
-                    : ""
-              }`}
+              className={`mr-2 h-6 w-6 ${thread.isPinned ? "text-orange-500" : canEdit ? "hover:text-orange-500" : ""}`}
             />
           );
           const MyLockIcon = thread.isLocked ? (
@@ -259,15 +251,15 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
           const pinAction = thread.isPinned ? "unpin" : "pin";
           const lockAction = thread.isLocked ? "unlock" : "lock";
           let title = thread.title;
-          title = thread.isLocked ? "[Locked] " + title : title;
-          title = thread.isPinned ? "[Pinned] " + title : title;
+          title = thread.isLocked ? `[Locked] ${title}` : title;
+          title = thread.isPinned ? `[Pinned] ${title}` : title;
 
           return (
             <div
               key={thread.id}
               ref={i === allThreads.length - 1 ? setLastElement : null}
             >
-              <Link href={"/forum/" + board.id + "/" + thread.id}>
+              <Link href={`/forum/${board.id}/${thread.id}`}>
                 <Post
                   title={title}
                   hover_effect={true}
@@ -289,7 +281,7 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
                   }
                   options={
                     <div className="ml-3">
-                      <div className="mt-2 flex flex-row items-center ">
+                      <div className="mt-2 flex flex-row items-center">
                         {userData && canModerate(userData.role) ? (
                           <>
                             <Confirm2

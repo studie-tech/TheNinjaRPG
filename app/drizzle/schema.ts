@@ -43,7 +43,7 @@ import type {
 import type { AiRuleType } from "@/validators/ai";
 import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import type { AdditionalContext } from "@/validators/reports";
-import type { CoreMessage } from "ai";
+import type { ModelMessage } from "ai";
 import type {
   TowerDefenseState,
   CharacterAssetConfig,
@@ -479,6 +479,34 @@ export const bloodlineReskinRelations = relations(bloodlineReskin, ({ one }) => 
   }),
 }));
 
+export const skillTreeFolder = mysqlTable(
+  "SkillTreeFolder",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    image: varchar("image", { length: 512 }).default("").notNull(),
+    description: text("description"),
+    hidden: boolean("hidden").default(false).notNull(),
+    order: int("order").default(0).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => [
+    index("SkillTreeFolder_name_idx").on(table.name),
+    index("SkillTreeFolder_order_idx").on(table.order),
+    index("SkillTreeFolder_hidden_idx").on(table.hidden),
+  ],
+);
+export type SkillTreeFolder = InferSelectModel<typeof skillTreeFolder>;
+
+export const skillTreeFolderRelations = relations(skillTreeFolder, ({ many }) => ({
+  skills: many(skillTree),
+}));
+
 export const skillTree = mysqlTable(
   "SkillTree",
   {
@@ -495,6 +523,7 @@ export const skillTree = mysqlTable(
     skillType: mysqlEnum("skillType", consts.SkillTreeEntryTypes)
       .default("DEFAULT")
       .notNull(),
+    folderId: varchar("folderId", { length: 191 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -508,13 +537,18 @@ export const skillTree = mysqlTable(
       tierIdx: index("SkillTree_tier_idx").on(table.tier),
       hiddenIdx: index("SkillTree_hidden_idx").on(table.hidden),
       skillTypeIdx: index("SkillTree_skillType_idx").on(table.skillType),
+      folderIdIdx: index("SkillTree_folderId_idx").on(table.folderId),
     };
   },
 );
 export type SkillTree = InferSelectModel<typeof skillTree>;
 
-export const skillTreeRelations = relations(skillTree, ({ many }) => ({
+export const skillTreeRelations = relations(skillTree, ({ one, many }) => ({
   userSkills: many(userSkill),
+  folder: one(skillTreeFolder, {
+    fields: [skillTree.folderId],
+    references: [skillTreeFolder.id],
+  }),
 }));
 
 export const userSkill = mysqlTable(
@@ -631,6 +665,16 @@ export const clan = mysqlTable(
     trainingBoost: double("trainingBoost").default(0).notNull(),
     ryoBoost: double("ryoBoost").default(0).notNull(),
     regenBoost: double("regenBoost").default(0).notNull(),
+    missionRewardBoost: double("missionRewardBoost").default(0).notNull(),
+    craftingTimeBoost: double("craftingTimeBoost").default(0).notNull(),
+    craftingExpBoost: double("craftingExpBoost").default(0).notNull(),
+    hunterExpBoost: double("hunterExpBoost").default(0).notNull(),
+    gathererExpBoost: double("gathererExpBoost").default(0).notNull(),
+    elderNomineeId: varchar("elderNomineeId", { length: 191 }),
+    elderCutoffMonth: tinyint("elderCutoffMonth"),
+    elderCutoffYear: smallint("elderCutoffYear"),
+    elderCutoffRank: tinyint("elderCutoffRank"),
+    activityPoints: int("activityPoints").default(0).notNull(),
     points: int("points").default(0).notNull(),
     bank: bigint("bank", { mode: "number" }).default(0).notNull(),
     pvpActivity: int("pvpActivity").default(0).notNull(),
@@ -669,6 +713,10 @@ export const clanRelations = relations(clan, ({ one, many }) => ({
   leaderOrder: one(userNindo, {
     fields: [clan.leaderOrderId],
     references: [userNindo.userId],
+  }),
+  elderNominee: one(userData, {
+    fields: [clan.elderNomineeId],
+    references: [userData.userId],
   }),
 }));
 
@@ -744,6 +792,8 @@ export const mpvpBattleUser = mysqlTable(
         table.side,
         table.slot,
       ),
+      // Unique constraint to prevent user being in multiple battles at once
+      userKey: uniqueIndex("MpvpBattleUser_userId_key").on(table.userId),
     };
   },
 );
@@ -2088,7 +2138,10 @@ export const userData = mysqlTable(
     lastSensoryAt: datetime("lastSensoryAt", { mode: "date", fsp: 3 }),
     // Covert training (timer-based like jutsu training)
     covertTrainingType: mysqlEnum("covertTrainingType", consts.CovertTrainingTypes),
-    covertTrainingStartedAt: datetime("covertTrainingStartedAt", { mode: "date", fsp: 3 }),
+    covertTrainingStartedAt: datetime("covertTrainingStartedAt", {
+      mode: "date",
+      fsp: 3,
+    }),
     covertTrainingMinutes: smallint("covertTrainingMinutes", { unsigned: true }),
   },
   (table) => {
@@ -2150,40 +2203,41 @@ export const insertAiSchema = createInsertSchema(userData)
     covertTrainingStartedAt: true,
     covertTrainingMinutes: true,
   })
-  .merge(
+  .extend(
     z.object({
-      jutsus: z.array(z.string()).optional(),
-      items: z
-        .array(
-          z.object({
-            ids: z.array(z.string()).default([]),
-            number: z.coerce.number(),
-          }),
-        )
-        .optional(),
-      primaryElement: z.enum([...consts.ElementNames, ""]).nullish(),
-      secondaryElement: z.enum([...consts.ElementNames, ""]).nullish(),
-      level: z.coerce.number().min(1).max(200),
-      regeneration: z.coerce.number().min(1).max(100),
-      ninjutsuOffence: z.coerce.number().min(10),
-      ninjutsuDefence: z.coerce.number().min(10),
-      genjutsuOffence: z.coerce.number().min(10),
-      genjutsuDefence: z.coerce.number().min(10),
-      taijutsuOffence: z.coerce.number().min(10),
-      taijutsuDefence: z.coerce.number().min(10),
-      bukijutsuOffence: z.coerce.number().min(10),
-      bukijutsuDefence: z.coerce.number().min(10),
-      statsMultiplier: z.coerce.number().min(1).max(50),
-      poolsMultiplier: z.coerce.number().min(1).max(50),
-      strength: z.coerce.number().min(10),
-      intelligence: z.coerce.number().min(10),
-      willpower: z.coerce.number().min(10),
-      speed: z.coerce.number().min(10),
-      isSummon: z.coerce.boolean(),
-      effects: z.array(AllTags).superRefine(SuperRefineEffects),
-    }),
+          jutsus: z.array(z.string()).optional(),
+          items: z
+            .array(
+              z.object({
+                ids: z.array(z.string()).prefault([]),
+                number: z.coerce.number(),
+              }),
+            )
+            .optional(),
+          primaryElement: z.enum([...consts.ElementNames, ""]).nullish(),
+          secondaryElement: z.enum([...consts.ElementNames, ""]).nullish(),
+          level: z.coerce.number().min(1).max(200),
+          regeneration: z.coerce.number().min(1).max(100),
+          ninjutsuOffence: z.coerce.number().min(10),
+          ninjutsuDefence: z.coerce.number().min(10),
+          genjutsuOffence: z.coerce.number().min(10),
+          genjutsuDefence: z.coerce.number().min(10),
+          taijutsuOffence: z.coerce.number().min(10),
+          taijutsuDefence: z.coerce.number().min(10),
+          bukijutsuOffence: z.coerce.number().min(10),
+          bukijutsuDefence: z.coerce.number().min(10),
+          statsMultiplier: z.coerce.number().min(1).max(50),
+          poolsMultiplier: z.coerce.number().min(1).max(50),
+          strength: z.coerce.number().min(10),
+          intelligence: z.coerce.number().min(10),
+          willpower: z.coerce.number().min(10),
+          speed: z.coerce.number().min(10),
+          isSummon: z.coerce.boolean(),
+          effects: z.array(AllTags).superRefine(SuperRefineEffects),
+        }).shape
   );
 export type InsertAiSchema = z.infer<typeof insertAiSchema>;
+export type InsertAiSchemaInput = z.input<typeof insertAiSchema>;
 export type UserData = InferSelectModel<typeof userData>;
 export type UserRank = UserData["rank"];
 export type UserStatus = UserData["status"];
@@ -2734,7 +2788,7 @@ export const sectorRelations = relations(sector, ({ one, many }) => ({
 export const supportReview = mysqlTable("SupportReview", {
   id: varchar("id", { length: 191 }).primaryKey().notNull(),
   apiRoute: varchar("apiRoute", { length: 191 }).notNull(),
-  chatHistory: json("chatHistory").$type<CoreMessage[]>().notNull(),
+  chatHistory: json("chatHistory").$type<ModelMessage[]>().notNull(),
   userId: varchar("userId", { length: 191 }).notNull(),
   sentiment: mysqlEnum("sentiment", consts.Sentiment).notNull(),
   createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
@@ -3248,12 +3302,15 @@ export const raidDamageThreshold = mysqlTable(
 );
 export type RaidDamageThreshold = InferSelectModel<typeof raidDamageThreshold>;
 
-export const raidDamageThresholdRelations = relations(raidDamageThreshold, ({ one }) => ({
-  quest: one(quest, {
-    fields: [raidDamageThreshold.questId],
-    references: [quest.id],
+export const raidDamageThresholdRelations = relations(
+  raidDamageThreshold,
+  ({ one }) => ({
+    quest: one(quest, {
+      fields: [raidDamageThreshold.questId],
+      references: [quest.id],
+    }),
   }),
-}));
+);
 
 export const userRaidBuff = mysqlTable(
   "UserRaidBuff",

@@ -14,6 +14,9 @@ Sentry.init({
   // Error sample rate
   sampleRate: 1.0,
 
+  // Which errors to ignore (synced with server config)
+  ignoreErrors: ["Unauthorized for tRPC endpoint", "You are acting too fast"],
+
   // Set the environment
   environment: process.env.NODE_ENV,
 

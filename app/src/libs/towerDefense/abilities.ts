@@ -7,17 +7,17 @@
  */
 
 import {
-  TD_SHURIKEN_BASE_DAMAGE,
-  TD_SHURIKEN_BASE_RANGE,
-  TD_SHURIKEN_BASE_COOLDOWN,
+  TD_ABILITY_IDS,
   TD_BASE_CRIT_CHANCE,
   TD_BASE_DAMAGE_PER_TILE,
   TD_PLAYER_BASE_HEALTH,
   TD_SCORE_PER_KILL,
-  TD_ABILITY_IDS,
+  TD_SHURIKEN_BASE_COOLDOWN,
+  TD_SHURIKEN_BASE_DAMAGE,
+  TD_SHURIKEN_BASE_RANGE,
 } from "@/drizzle/constants";
-import type { TowerDefenseAbility, PlayerBonuses } from "@/validators/towerDefense";
-import type { UserTowerDefenseUpgrade, TowerDefenseUpgrade } from "@/drizzle/schema";
+import type { TowerDefenseUpgrade, UserTowerDefenseUpgrade } from "@/drizzle/schema";
+import type { PlayerBonuses, TowerDefenseAbility } from "@/validators/towerDefense";
 
 /**
  * Get the base shuriken ability definition.

@@ -1,29 +1,28 @@
 "use client";
 
+import { differenceInDays, differenceInHours } from "date-fns";
+import { Info, Share2, Wrench } from "lucide-react";
 import Link from "next/link";
-import ContentBox from "@/layout/ContentBox";
-import DeleteUserButton from "@/layout/DeleteUserButton";
-import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
-import Logbook from "@/layout/Logbook";
-import Loader from "@/layout/Loader";
-import LevelUpBtn from "@/layout/LevelUpBtn";
+import { api } from "@/app/_trpc/client";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { getRankedRank } from "@/libs/ranked_pvp";
-import { Wrench, Share2, Info } from "lucide-react";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { showUserRank } from "@/libs/profile";
-import { calcMedninRank } from "@/libs/hospital";
-import { calcLevelRequirements } from "@/libs/profile";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { differenceInDays, differenceInHours } from "date-fns";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import ContentBox from "@/layout/ContentBox";
+import DeleteUserButton from "@/layout/DeleteUserButton";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import LevelUpBtn from "@/layout/LevelUpBtn";
+import Loader from "@/layout/Loader";
+import Logbook from "@/layout/Logbook";
+import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
+import { calcMedninRank } from "@/libs/hospital";
+import { calcLevelRequirements, showUserRank } from "@/libs/profile";
+import { getRankedRank } from "@/libs/ranked_pvp";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Profile() {
   // State
@@ -64,9 +63,9 @@ export default function Profile() {
         topRightContent={
           <div className="flex flex-row gap-3">
             <Link href="/profile/recruit" className="relative">
-              <Share2 className="h-6 w-6 cursor-pointer hover:text-orange-500 animate-[wiggle_1s_ease-in-out_infinite]" />
+              <Share2 className="h-6 w-6 animate-[wiggle_1s_ease-in-out_infinite] cursor-pointer hover:text-orange-500" />
               {newInRecruit > 0 && (
-                <div className="absolute top-[-10px] right-[-10px] flex items-center justify-center text-sm text-orange-100 bg-orange-500 rounded-full w-5 h-5 z-50">
+                <div className="absolute top-[-10px] right-[-10px] z-50 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-sm">
                   {newInRecruit}
                 </div>
               )}
@@ -100,7 +99,7 @@ export default function Profile() {
                 <TooltipTrigger>
                   <div className="flex flex-row items-center justify-center gap-1">
                     <p>PvP Activity: {userData.pvpActivity}</p>{" "}
-                    <Info className="h-4 w-4 mb-1" />
+                    <Info className="mb-1 h-4 w-4" />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -123,7 +122,7 @@ export default function Profile() {
                           topPlayers.map((x) => x.rankedLp),
                         )}
                       </p>{" "}
-                      <Info className="h-4 w-4 mb-1" />
+                      <Info className="mb-1 h-4 w-4" />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -177,11 +176,11 @@ export default function Profile() {
               {userData.bloodline ? (
                 <Popover>
                   <PopoverTrigger asChild>
-                    <span className="font-bold cursor-pointer hover:text-orange-500">
+                    <span className="cursor-pointer font-bold hover:text-orange-500">
                       {userData.bloodline.name}
                     </span>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[500px] max-w-[90vw] ">
+                  <PopoverContent className="w-[500px] max-w-[90vw]">
                     <ItemWithEffects item={userData.bloodline} />
                   </PopoverContent>
                 </Popover>
@@ -203,7 +202,7 @@ export default function Profile() {
                       href={`/username/${x.username}`}
                       className="font-bold"
                     >
-                      {i >= 1 ? ", " + x.username : x.username}
+                      {i >= 1 ? `, ${x.username}` : x.username}
                     </Link>
                   ))
                 : "None"}

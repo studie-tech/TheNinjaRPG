@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import type React from "react";
 import Image from "@/layout/Image";
-import { cn } from "src/libs/shadui";
+import { cn } from "@/libs/shadui";
 
 interface AvatarImageProps {
   href?: string | null;
@@ -20,7 +20,7 @@ const AvatarImage: React.FC<AvatarImageProps> = (props) => {
   if (!props.href) {
     return (
       <div
-        className={`relative m-auto w-5/6 aspect-square rounded-2xl border-2 border-black bg-linear-to-r from-slate-500 to-slate-400 background-animate opacity-20`}
+        className={`background-animate relative m-auto aspect-square w-5/6 rounded-2xl border-2 border-black bg-linear-to-r from-slate-500 to-slate-400 opacity-20`}
       ></div>
     );
   } else {
@@ -31,7 +31,7 @@ const AvatarImage: React.FC<AvatarImageProps> = (props) => {
       <Image
         className={cn(base, hover, props.className)}
         src={props.href}
-        alt={(props.alt || "unknown") + " AvatarImage"}
+        alt={`${props.alt || "unknown"} AvatarImage`}
         width={props.size}
         height={props.size}
         priority={props.priority}

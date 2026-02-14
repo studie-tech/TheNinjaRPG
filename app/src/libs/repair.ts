@@ -104,7 +104,7 @@ export const calculateKitsToUse = (
     if (!kitsByPower.has(kit.repairAmount)) {
       kitsByPower.set(kit.repairAmount, []);
     }
-    kitsByPower.get(kit.repairAmount)!.push({
+    kitsByPower.get(kit.repairAmount)?.push({
       kitId: kit.userItem.id,
       available,
       power: kit.repairAmount,
@@ -119,7 +119,8 @@ export const calculateKitsToUse = (
   for (const power of sortedPowers) {
     if (remainingDurability <= 0) break;
 
-    const kitsWithThisPower = kitsByPower.get(power)!;
+    const kitsWithThisPower = kitsByPower.get(power);
+    if (!kitsWithThisPower) continue;
     const totalAvailable = kitsWithThisPower.reduce((sum, k) => sum + k.available, 0);
 
     if (totalAvailable <= 0) continue;

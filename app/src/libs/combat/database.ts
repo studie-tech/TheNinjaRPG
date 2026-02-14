@@ -1,58 +1,57 @@
+import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { eq, and, or, sql, lt, gte, inArray, isNull } from "drizzle-orm";
+import type { BattleDataEntryType, BattleTypes } from "@/drizzle/constants";
 import {
-  HOSPITAL_LONG,
   HOSPITAL_LAT,
+  HOSPITAL_LONG,
+  JUTSU_TRAIN_LEVEL_CAP,
+  JUTSU_XP_TO_LEVEL,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
+  VILLAGE_SYNDICATE_ID,
+  WAR_RECAPTURE_THRESHOLD,
+  WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
+  WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
+import type { Battle } from "@/drizzle/schema";
 import {
+  anbuSquad,
   battle,
   battleAction,
+  bounty,
+  clan,
+  dataBattleAction,
+  kageDefendedChallenges,
   logBattleLengths,
+  mpvpBattleQueue,
+  mpvpBattleUser,
   notification,
+  quest,
+  raidParticipation,
   tournamentMatch,
   userData,
   userItem,
   userItemImbuement,
   userJutsu,
-  mpvpBattleQueue,
-  mpvpBattleUser,
-  warKill,
-  bounty,
+  village,
   war,
-  quest,
-  raidParticipation,
+  warKill,
 } from "@/drizzle/schema";
-import { kageDefendedChallenges, village, clan, anbuSquad } from "@/drizzle/schema";
-import { dataBattleAction } from "@/drizzle/schema";
-import { getNewTrackers } from "@/libs/quest";
-import { battleJutsuExp } from "@/libs/train";
-import { updateUserOnMap, broadcastRaidAvailability } from "@/libs/pusher";
-import { prepareExclusiveRaidActivation } from "@/libs/raids";
-import { JUTSU_XP_TO_LEVEL } from "@/drizzle/constants";
-import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
+import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
 import {
-  VILLAGE_SYNDICATE_ID,
-  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
-  WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
-  WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
-  WAR_RECAPTURE_THRESHOLD,
-} from "@/drizzle/constants";
-import { findWarsWithUser } from "@/libs/war";
-import {
-  getWarsArray,
   getItem,
-  getVillage,
   getUserQuestsFromBattle,
+  getVillage,
+  getWarsArray,
   hydrateUserForQuests,
 } from "@/libs/combat/util";
 import type { PusherClient } from "@/libs/pusher";
-import type { BattleTypes, BattleDataEntryType } from "@/drizzle/constants";
+import { broadcastRaidAvailability, updateUserOnMap } from "@/libs/pusher";
+import { getNewTrackers } from "@/libs/quest";
+import { prepareExclusiveRaidActivation } from "@/libs/raids";
+import { battleJutsuExp } from "@/libs/train";
+import { findWarsWithUser } from "@/libs/war";
 import type { DrizzleClient } from "@/server/db";
-import type { Battle } from "@/drizzle/schema";
-import type { CombatResult } from "@/libs/combat/types";
-import type { ActionEffect } from "@/libs/combat/types";
-import type { CompleteBattle } from "@/libs/combat/types";
 
 type DataBattleAction = {
   type: (typeof BattleDataEntryType)[number];
@@ -178,7 +177,7 @@ export const saveUsage = async (
       oppositeOutcome === "Won" ? 1 : oppositeOutcome === "Lost" ? 2 : 0;
     // Basic actions from this user
     const data: DataBattleAction[] = [];
-    user.usedActions?.map((action) => {
+    user.usedActions?.forEach((action) => {
       data.push({
         type: action.type,
         contentId: action.id,
@@ -199,7 +198,7 @@ export const saveUsage = async (
     // If battle is over, check for any AIs in the battle, and add these as well to the statistics
     curBattle.usersState
       .filter((u) => u.isAi && !u.isSummon)
-      .map((ai) => {
+      .forEach((ai) => {
         data.push({
           type: "ai",
           contentId: ai.controllerId,
@@ -862,6 +861,7 @@ export const updateVillageAnbuClan = async (
             .set({
               pvpActivity: sql`${clan.pvpActivity} + 1`,
               points: sql`${clan.points} + ${result.clanPoints}`,
+              activityPoints: sql`${clan.activityPoints} + ${result.clanPoints}`,
             })
             .where(eq(clan.id, user.clanId)),
         ]
@@ -1067,7 +1067,7 @@ export const updateUser = async (
     const trackerEvents = [
       ...curBattle.usersState
         .filter((u) => u.userId !== userId)
-        .map((u) => [
+        .flatMap((u) => [
           // Defeat opponent with outcome - only if conditions are met
           ...(shouldIncrementDefeatOpponents
             ? [
@@ -1084,8 +1084,7 @@ export const updateUser = async (
             contentId: u.controllerId,
             text: result.outcome,
           },
-        ])
-        .flat(),
+        ]),
       // Winning random encounter
       ...(curBattle.battleType === "RANDOM_ENCOUNTER"
         ? [
@@ -1133,7 +1132,7 @@ export const updateUser = async (
 
     // Check for low durability warnings (percent-based: <=50% and <=25%) and for broken items
     const initialDurability = curBattle.extraState.initialDurability;
-    if (initialDurability && initialDurability[userId]) {
+    if (initialDurability?.[userId]) {
       const userInitialDurability = initialDurability[userId];
       user.items.forEach((battleItem) => {
         const item = getItem(curBattle, battleItem.itemId);
@@ -1309,9 +1308,7 @@ export const updateUser = async (
           taijutsuDefence: sql`taijutsuDefence + ${result.taijutsuDefence}`,
           bukijutsuDefence: sql`bukijutsuDefence + ${result.bukijutsuDefence}`,
           villagePrestige: sql`villagePrestige + ${result.villagePrestige}`,
-          dailyArenaFights: sql`dailyArenaFights + ${
-            curBattle.battleType === "ARENA" ? 1 : 0
-          }`,
+          dailyArenaFights: sql`dailyArenaFights + ${curBattle.battleType === "ARENA" ? 1 : 0}`,
           questData: updatedQuestData,
           battleId: null,
           regenAt: new Date(),

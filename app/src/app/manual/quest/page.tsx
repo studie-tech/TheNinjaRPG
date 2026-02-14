@@ -1,20 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import { Button } from "@/components/ui/button";
+import { ChartCandlestick, FilePlus } from "lucide-react";
 import Link from "next/link";
-import { ChartCandlestick } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { FilePlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import QuestFiltering, { getFilter, useFiltering } from "@/layout/QuestFiltering";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import { showMutationToast } from "@/libs/toast";
-import { useInfinitePagination } from "@/libs/pagination";
-import QuestFiltering, { useFiltering, getFilter } from "@/layout/QuestFiltering";
 
 export default function ManualQuests() {
   // Settings
@@ -42,8 +41,7 @@ export default function ManualQuests() {
     },
   );
   const allQuests = quests?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .map((q) => ({ ...q, village: { name: q.village?.name ?? "Any" } }));
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 

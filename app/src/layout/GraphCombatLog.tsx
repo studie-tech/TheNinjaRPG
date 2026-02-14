@@ -1,8 +1,8 @@
-import React from "react";
+import type React from "react";
 import { api } from "@/app/_trpc/client";
-import { getUnique } from "@/utils/grouping";
-import Loader from "@/layout/Loader";
 import GraphUsersGeneric from "@/layout/GraphUsersGeneric";
+import Loader from "@/layout/Loader";
+import { getUnique } from "@/utils/grouping";
 
 interface GraphCombatLogProps {
   userId: string;

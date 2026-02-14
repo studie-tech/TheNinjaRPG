@@ -1,85 +1,97 @@
+import type { ExecutedQuery } from "@planetscale/database";
+import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { serverError, baseServerResponse, errorResponse } from "@/server/api/trpc";
-import { sql, eq, gte, lte, and, or, inArray, isNull } from "drizzle-orm";
-import { userData } from "@/drizzle/schema";
-import { hasRequiredRank } from "@/libs/train";
-import { calcHealFinish } from "@/libs/hospital";
-import { calcHealCost } from "@/libs/hospital";
-import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
-import { fetchStructures } from "@/routers/village";
-import { getStrucBoost } from "@/utils/village";
-import { findRelationship } from "@/utils/alliance";
-import { fetchAlliances } from "@/routers/village";
-import { getNewTrackers } from "@/libs/quest";
-import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
-import { calcHealthToChakra } from "@/libs/hospital";
-import { calcHowMuchToHeal } from "@/libs/hospital";
-import { MEDNIN_MIN_RANK } from "@/drizzle/constants";
 import {
+  MEDNIN_EXP_CAP,
   MEDNIN_HEAL_TO_EXP,
+  MEDNIN_HEALABLE_STATES,
+  MEDNIN_MIN_RANK,
   SENSEI_GENIN_MED_EXP_SHARE_PERC,
   SENSEI_MAX_STUDENT_LEVEL,
-  MEDNIN_EXP_CAP,
 } from "@/drizzle/constants";
-import { MEDNIN_HEALABLE_STATES } from "@/drizzle/constants";
-import type { ExecutedQuery } from "@planetscale/database";
+import { userData } from "@/drizzle/schema";
+import {
+  calcHealCost,
+  calcHealFinish,
+  calcHealthToChakra,
+  calcHowMuchToHeal,
+} from "@/libs/hospital";
+import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
+import { getNewTrackers } from "@/libs/quest";
+import { hasRequiredRank } from "@/libs/train";
+import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import { fetchAlliances, fetchStructures } from "@/routers/village";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  serverError,
+} from "@/server/api/trpc";
+import { findRelationship } from "@/utils/alliance";
+import { getStrucBoost } from "@/utils/village";
 
 const pusher = getServerPusher();
 
 export const hospitalRouter = createTRPCRouter({
-  getHospitalizedUsers: protectedProcedure.query(async ({ ctx }) => {
-    // Query
-    const [user, alliances] = await Promise.all([
-      fetchUser(ctx.drizzle, ctx.userId),
-      ctx.drizzle.query.villageAlliance.findMany(),
-    ]);
-    // Derived
-    const allies = alliances
-      .filter((a) => a.villageIdA === user.villageId || a.villageIdB === user.villageId)
-      .filter((a) => a.status === "ALLY")
-      .map((a) => [a.villageIdA, a.villageIdB])
-      .flat();
-    const uniqueVillageIds = user.villageId
-      ? [...new Set([user.villageId, ...allies])]
-      : [];
-    // Return filtered data
-    return await ctx.drizzle.query.userData.findMany({
-      columns: {
-        userId: true,
-        avatar: true,
-        username: true,
-        curHealth: true,
-        maxHealth: true,
-        regeneration: true,
-        regenAt: true,
-        level: true,
-        status: true,
-        sector: true,
-        longitude: true,
-        latitude: true,
-        rank: true,
-        isOutlaw: true,
-      },
-      where: and(
-        eq(userData.sector, user.sector),
-        user.villageId
-          ? inArray(userData.villageId, uniqueVillageIds)
-          : isNull(userData.villageId),
-        lte(userData.curHealth, userData.maxHealth),
-        or(...MEDNIN_HEALABLE_STATES.map((s) => eq(userData.status, s))),
-        sql`(${userData.maxHealth} - ${userData.curHealth}) > 0`,
-      ),
-      limit: 10,
-      orderBy: sql`RAND()`,
-    });
-  }),
+  getHospitalizedUsers: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get hospitalized users in current sector" },
+    })
+    .query(async ({ ctx }) => {
+      // Query
+      const [user, alliances] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.villageAlliance.findMany(),
+      ]);
+      // Derived
+      const allies = alliances
+        .filter(
+          (a) => a.villageIdA === user.villageId || a.villageIdB === user.villageId,
+        )
+        .filter((a) => a.status === "ALLY")
+        .flatMap((a) => [a.villageIdA, a.villageIdB]);
+      const uniqueVillageIds = user.villageId
+        ? [...new Set([user.villageId, ...allies])]
+        : [];
+      // Return filtered data
+      return await ctx.drizzle.query.userData.findMany({
+        columns: {
+          userId: true,
+          avatar: true,
+          username: true,
+          curHealth: true,
+          maxHealth: true,
+          regeneration: true,
+          regenAt: true,
+          level: true,
+          status: true,
+          sector: true,
+          longitude: true,
+          latitude: true,
+          rank: true,
+          isOutlaw: true,
+        },
+        where: and(
+          eq(userData.sector, user.sector),
+          user.villageId
+            ? inArray(userData.villageId, uniqueVillageIds)
+            : isNull(userData.villageId),
+          lte(userData.curHealth, userData.maxHealth),
+          or(...MEDNIN_HEALABLE_STATES.map((s) => eq(userData.status, s))),
+          sql`(${userData.maxHealth} - ${userData.curHealth}) > 0`,
+        ),
+        limit: 10,
+        orderBy: sql`RAND()`,
+      });
+    }),
   // Let users heal other users if they are GENIN or above
   userHeal: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Heal another user using chakra" } })
     .input(
       z.object({
         userId: z.string(),
-        healPercentage: z.number().int().min(1).max(100),
+        healPercentage: z.int().min(1).max(100),
       }),
     )
     .output(
@@ -217,6 +229,7 @@ export const hospitalRouter = createTRPCRouter({
     }),
   // Pay to heal & get out of hospital
   npcHeal: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Pay NPC to heal and leave hospital" } })
     .input(z.object({ villageId: z.string().nullish() }))
     .output(
       baseServerResponse.extend({

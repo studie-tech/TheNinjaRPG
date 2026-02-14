@@ -1,15 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
+import { EffectFieldSelector, MassEffectEditor } from "@/layout/EditContent";
+import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
 import Loader from "@/layout/Loader";
 import { useInfinitePagination } from "@/libs/pagination";
-import { api } from "@/app/_trpc/client";
-import JutsuFiltering, { useFiltering, getFilter } from "@/layout/JutsuFiltering";
-import { useUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
-import { MassEffectEditor } from "@/layout/EditContent";
-import { EffectFieldSelector } from "@/layout/EditContent";
+import { useUserData } from "@/utils/UserContext";
 
 export default function JutsuMassEditPage() {
   const { data: userData } = useUserData();

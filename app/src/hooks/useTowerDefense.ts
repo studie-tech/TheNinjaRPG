@@ -6,53 +6,53 @@
  * in real-time - no client-side simulation or server validation needed.
  */
 
-import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api } from "@/app/_trpc/client";
-import { profiler } from "@/libs/threejs/util";
-import {
-  registerEnemyAssetConfig,
-  clearEnemyAssetConfigCache,
-  registerPlayerAssetConfig,
-  clearPlayerAssetConfigCache,
-} from "@/libs/threejs/towerDefense";
-import {
-  getSpacetimeDBConnection,
-  type GameSession,
-  type SessionState,
-  type Enemy,
-  type Projectile,
-  type SessionUpgrade,
-  type CompletedRun,
-  type SpacetimeDBEvent,
-  type EnemySpawn,
-} from "@/libs/spacetimedb/client";
-import { getDefaultPlayerBonuses } from "@/libs/towerDefense/abilities";
-import { calculateHexDistance } from "@/libs/towerDefense/game";
-import {
-  towerDefenseEnemySchema,
-  towerDefenseProjectileSchema,
-  towerDefenseStateSchema,
-  towerDefenseAbilitySchema,
-  playerBonusesSchema,
-  towerDefenseGameStateSchema,
-} from "@/validators/towerDefense";
-import type {
-  TowerDefenseState,
-  TowerDefenseEnemy,
-  TowerDefenseProjectile,
-  HexPosition,
-  TowerDefenseGameState,
-  GameMode,
-  EntityStore,
-  RuntimeState,
-  HudValues,
-} from "@/validators/towerDefense";
 import {
   TD_EXISTING_SESSION_CHECK_TIMEOUT_MS,
   TD_HIT_EVENT_DURATION_MS,
   TD_PLAYER_BASE_HEALTH,
   TD_PROJECTILE_SPEED,
 } from "@/drizzle/constants";
+import {
+  type CompletedRun,
+  type Enemy,
+  type EnemySpawn,
+  type GameSession,
+  getSpacetimeDBConnection,
+  type Projectile,
+  type SessionState,
+  type SessionUpgrade,
+  type SpacetimeDBEvent,
+} from "@/libs/spacetimedb/client";
+import {
+  clearEnemyAssetConfigCache,
+  clearPlayerAssetConfigCache,
+  registerEnemyAssetConfig,
+  registerPlayerAssetConfig,
+} from "@/libs/threejs/towerDefense";
+import { profiler } from "@/libs/threejs/util";
+import { getDefaultPlayerBonuses } from "@/libs/towerDefense/abilities";
+import { calculateHexDistance } from "@/libs/towerDefense/game";
+import type {
+  EntityStore,
+  GameMode,
+  HexPosition,
+  HudValues,
+  RuntimeState,
+  TowerDefenseEnemy,
+  TowerDefenseGameState,
+  TowerDefenseProjectile,
+  TowerDefenseState,
+} from "@/validators/towerDefense";
+import {
+  playerBonusesSchema,
+  towerDefenseAbilitySchema,
+  towerDefenseEnemySchema,
+  towerDefenseGameStateSchema,
+  towerDefenseProjectileSchema,
+  towerDefenseStateSchema,
+} from "@/validators/towerDefense";
 
 // ============================================================================
 // MODULE-LEVEL HUD STORE (Global Singleton)
@@ -101,7 +101,9 @@ const createHudStore = (): HudStore => {
     update: (newValues: Partial<HudValues>) => {
       values = { ...values, ...newValues };
       version++;
-      listeners.forEach((l) => l());
+      listeners.forEach((l) => {
+        l();
+      });
     },
     reset: () => {
       values = {
@@ -116,7 +118,9 @@ const createHudStore = (): HudStore => {
         inRunCurrency: 0,
       };
       version++;
-      listeners.forEach((l) => l());
+      listeners.forEach((l) => {
+        l();
+      });
     },
   };
 };
@@ -1072,7 +1076,6 @@ export const useTowerDefense = (userId?: string) => {
         error: error instanceof Error ? error.message : "Failed to start run",
       }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initiateSessionMutation, initiateGuestSessionMutation, userId, resetGameRefs]);
 
   /**
@@ -1146,7 +1149,6 @@ export const useTowerDefense = (userId?: string) => {
         error: error instanceof Error ? error.message : "Failed to resume run",
       }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.existingSession, userId, resetGameRefs]);
 
   /**

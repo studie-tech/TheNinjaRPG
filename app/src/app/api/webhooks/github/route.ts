@@ -1,10 +1,10 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { createHmac, timingSafeEqual } from "crypto";
-import { drizzleDB } from "@/server/db";
 import { supportTicket } from "@/drizzle/schema";
 import { createSupportTicketActivity } from "@/server/api/routers/support";
+import { drizzleDB } from "@/server/db";
 
 // GitHub webhook payload types
 interface GitHubWebhookPayload {

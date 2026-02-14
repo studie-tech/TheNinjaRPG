@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
-import dynamic from "next/dynamic";
 import data from "@emoji-mart/data";
+import dynamic from "next/dynamic";
+import type React from "react";
 
 export interface AppEmojiPickerProps {
   onSelect: (native: string) => void;

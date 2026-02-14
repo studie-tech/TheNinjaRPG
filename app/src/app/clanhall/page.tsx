@@ -1,31 +1,33 @@
 "use client";
 
-import Loader from "@/layout/Loader";
-import ContentBox from "@/layout/ContentBox";
-import Confirm2 from "@/layout/Confirm2";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { ShieldPlus } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
-  FormLabel,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { api } from "@/app/_trpc/client";
-import { hasRequiredRank } from "@/libs/train";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { showMutationToast } from "@/libs/toast";
-import { ShieldPlus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { clanCreateSchema } from "@/validators/clan";
-import { ClansOverview, ClanProfile } from "@/layout/Clan";
-import { CLAN_CREATE_PRESTIGE_REQUIREMENT } from "@/drizzle/constants";
-import { CLAN_CREATE_RYO_COST } from "@/drizzle/constants";
-import { CLAN_RANK_REQUIREMENT } from "@/drizzle/constants";
+import {
+  CLAN_CREATE_PRESTIGE_REQUIREMENT,
+  CLAN_CREATE_RYO_COST,
+  CLAN_RANK_REQUIREMENT,
+} from "@/drizzle/constants";
+import { ClanProfile, ClansOverview } from "@/layout/Clan";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import { showMutationToast } from "@/libs/toast";
+import { hasRequiredRank } from "@/libs/train";
 import { useRequireInVillage } from "@/utils/UserContext";
 import type { ClanCreateSchema } from "@/validators/clan";
+import { clanCreateSchema } from "@/validators/clan";
 
 export default function Clans() {
   // Must be in allied village
@@ -89,60 +91,59 @@ export default function Clans() {
         defaultBackHref="/village"
         padding={false}
         topRightContent={
-          <>
-            {hasRequiredRank(userData.rank, CLAN_RANK_REQUIREMENT) && !inClan && (
-              <Confirm2
-                title={`Create new ${groupLabel}`}
-                proceed_label={proceedLabel}
-                button={
-                  <Button id="create-clan" className="w-full">
-                    <ShieldPlus className="mr-2 h-5 w-5" />
-                    Create
-                  </Button>
-                }
-                confirmClassName={
-                  canCreate
-                    ? "bg-blue-600 text-white hover:bg-blue-700"
-                    : "bg-red-600 text-white hover:bg-red-700"
-                }
-                isValid={createForm.formState.isValid}
-                onAccept={canCreate ? onSubmit : undefined}
-              >
-                Create a {groupLabel.toLowerCase()} requires at least{" "}
-                {CLAN_CREATE_PRESTIGE_REQUIREMENT} {prestigeLabel}, and costs{" "}
-                {CLAN_CREATE_RYO_COST} Ryo. You currently have{" "}
-                {userData.villagePrestige} {prestigeLabel} and {userData.money} Ryo.
-                {canCreate && (
-                  <Form {...createForm}>
-                    <form className="space-y-2" onSubmit={onSubmit}>
-                      <FormField
-                        control={createForm.control}
-                        name="name"
-                        render={({ field }) => {
-                          return (
-                            <FormItem>
-                              <FormLabel>Title</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder={`Name of the new ${groupLabel.toLowerCase()}`}
-                                  {...field}
-                                />
-                              </FormControl>
-                              {createForm?.formState?.errors?.name?.message && (
-                                <FormMessage>
-                                  {createForm.formState.errors.name.message}
-                                </FormMessage>
-                              )}
-                            </FormItem>
-                          );
-                        }}
-                      />
-                    </form>
-                  </Form>
-                )}
-              </Confirm2>
-            )}
-          </>
+          hasRequiredRank(userData.rank, CLAN_RANK_REQUIREMENT) &&
+          !inClan && (
+            <Confirm2
+              title={`Create new ${groupLabel}`}
+              proceed_label={proceedLabel}
+              button={
+                <Button id="create-clan" className="w-full">
+                  <ShieldPlus className="mr-2 h-5 w-5" />
+                  Create
+                </Button>
+              }
+              confirmClassName={
+                canCreate
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-red-600 text-white hover:bg-red-700"
+              }
+              isValid={createForm.formState.isValid}
+              onAccept={canCreate ? onSubmit : undefined}
+            >
+              Create a {groupLabel.toLowerCase()} requires at least{" "}
+              {CLAN_CREATE_PRESTIGE_REQUIREMENT} {prestigeLabel}, and costs{" "}
+              {CLAN_CREATE_RYO_COST} Ryo. You currently have {userData.villagePrestige}{" "}
+              {prestigeLabel} and {userData.money} Ryo.
+              {canCreate && (
+                <Form {...createForm}>
+                  <form className="space-y-2" onSubmit={onSubmit}>
+                    <FormField
+                      control={createForm.control}
+                      name="name"
+                      render={({ field }) => {
+                        return (
+                          <FormItem>
+                            <FormLabel>Title</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder={`Name of the new ${groupLabel.toLowerCase()}`}
+                                {...field}
+                              />
+                            </FormControl>
+                            {createForm?.formState?.errors?.name?.message && (
+                              <FormMessage>
+                                {createForm.formState.errors.name.message}
+                              </FormMessage>
+                            )}
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  </form>
+                </Form>
+              )}
+            </Confirm2>
+          )
         }
       >
         <ClansOverview />

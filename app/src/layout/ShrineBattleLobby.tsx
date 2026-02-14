@@ -1,27 +1,27 @@
 "use client";
 
-import React from "react";
+import type { inferRouterOutputs } from "@trpc/server";
+import { CirclePlay, DoorOpen, Loader2, Shield, Swords, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
+import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { showMutationToast } from "@/libs/toast";
-import { secondsFromDate } from "@/utils/time";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { showUserRank } from "@/libs/profile";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  SHRINE_BATTLE_LOBBY_SECONDS,
+  SHRINE_BATTLE_MAX_USERS_PER_SIDE,
+  SHRINE_BATTLE_MIN_ATTACKERS,
+} from "@/drizzle/constants";
+import type { UserRank } from "@/drizzle/schema";
 import AvatarImage from "@/layout/Avatar";
 import Countdown from "@/layout/Countdown";
 import Loader from "@/layout/Loader";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DoorOpen, CirclePlay, Swords, Users, Shield, Loader2 } from "lucide-react";
-import { cn } from "src/libs/shadui";
-import {
-  SHRINE_BATTLE_MIN_ATTACKERS,
-  SHRINE_BATTLE_MAX_USERS_PER_SIDE,
-  SHRINE_BATTLE_LOBBY_SECONDS,
-} from "@/drizzle/constants";
-import type { UserRank } from "@/drizzle/schema";
-import type { inferRouterOutputs } from "@trpc/server";
+import { showUserRank } from "@/libs/profile";
+import { cn } from "@/libs/shadui";
+import { showMutationToast } from "@/libs/toast";
 import type { AppRouter } from "@/server/api/root";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { secondsFromDate } from "@/utils/time";
 
 type ShrineBattleData =
   inferRouterOutputs<AppRouter>["shrine"]["getShrineBattles"][number];
@@ -204,7 +204,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {/* Attackers Section */}
         <div className="flex-1">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+          <div className="mb-2 flex items-center gap-2 font-semibold text-sm">
             <Swords className="h-4 w-4 text-red-500" />
             Attackers ({attackers.length}/{SHRINE_BATTLE_MAX_USERS_PER_SIDE})
           </div>
@@ -212,11 +212,12 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
             {attackers.map((q) => (
               <UserSlot key={q.userId} user={q.user} />
             ))}
-            {Array.from({
-              length: SHRINE_BATTLE_MAX_USERS_PER_SIDE - attackers.length,
-            }).map((_, i) => (
+            {Array.from(
+              { length: SHRINE_BATTLE_MAX_USERS_PER_SIDE - attackers.length },
+              (_, idx) => `attacker-empty-${idx}`,
+            ).map((key) => (
               <EmptySlot
-                key={`attacker-empty-${i}`}
+                key={key}
                 canJoin={canJoinAsAttacker}
                 onJoin={() => onJoin("ATTACKER")}
               />
@@ -226,12 +227,12 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
 
         {/* VS Divider */}
         <div className="flex items-center justify-center px-4">
-          <span className="text-lg font-bold text-muted-foreground">VS</span>
+          <span className="font-bold text-lg text-muted-foreground">VS</span>
         </div>
 
         {/* Defenders Section */}
         <div className="flex-1">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+          <div className="mb-2 flex items-center gap-2 font-semibold text-sm">
             <Shield className="h-4 w-4 text-blue-500" />
             Defenders ({defenders.length}/{SHRINE_BATTLE_MAX_USERS_PER_SIDE})
           </div>
@@ -239,18 +240,19 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
             {defenders.map((q) => (
               <UserSlot key={q.userId} user={q.user} />
             ))}
-            {Array.from({
-              length: SHRINE_BATTLE_MAX_USERS_PER_SIDE - defenders.length,
-            }).map((_, i) => (
+            {Array.from(
+              { length: SHRINE_BATTLE_MAX_USERS_PER_SIDE - defenders.length },
+              (_, idx) => `defender-empty-${idx}`,
+            ).map((key) => (
               <EmptySlot
-                key={`defender-empty-${i}`}
+                key={key}
                 canJoin={canJoinAsDefender}
                 onJoin={() => onJoin("DEFENDER")}
               />
             ))}
           </div>
           {defenders.length === 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-muted-foreground text-xs">
               AI defenders will be used if no players join
             </p>
           )}
@@ -259,7 +261,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
 
       {/* Action Buttons & Timer */}
       <div className="mt-4 flex flex-col items-center gap-2 border-t pt-4 sm:flex-row sm:justify-between">
-        <div className="text-sm text-muted-foreground">
+        <div className="text-muted-foreground text-sm">
           <Countdown
             targetDate={startTime}
             timeDiff={0}
@@ -352,7 +354,7 @@ const UserSlot: React.FC<UserSlotProps> = ({ user }) => {
   return (
     <Popover>
       <PopoverTrigger>
-        <div className="flex flex-col items-center w-10">
+        <div className="flex w-10 flex-col items-center">
           <AvatarImage
             href={user.avatar}
             alt={user.username}
@@ -365,7 +367,7 @@ const UserSlot: React.FC<UserSlotProps> = ({ user }) => {
       <PopoverContent className="w-auto p-2">
         <div className="text-center">
           <p className="font-bold">{user.username}</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Lvl. {user.level} {capitalizeFirstLetter(showUserRank(user))}
           </p>
         </div>
@@ -381,16 +383,18 @@ interface EmptySlotProps {
 
 const EmptySlot: React.FC<EmptySlotProps> = ({ canJoin, onJoin }) => {
   return (
-    <div
+    <button
+      type="button"
       className={cn(
-        "flex h-9 w-9 items-center justify-center rounded-full border-2 border-dashed border-gray-300 text-gray-400 text-sm",
+        "flex h-9 w-9 items-center justify-center rounded-full border-2 border-gray-300 border-dashed text-gray-400 text-sm",
         canJoin &&
           "cursor-pointer hover:border-orange-500 hover:bg-orange-50 hover:text-orange-500",
       )}
       onClick={canJoin ? onJoin : undefined}
+      disabled={!canJoin}
     >
       ?
-    </div>
+    </button>
   );
 };
 

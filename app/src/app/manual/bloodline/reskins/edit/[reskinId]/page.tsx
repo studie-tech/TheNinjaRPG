@@ -1,21 +1,21 @@
 "use client";
 
-import React, { use } from "react";
-import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { EditContent, type FormEntry } from "@/layout/EditContent";
+import { useRouter } from "next/navigation";
+import React, { use } from "react";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import ContentBox from "@/layout/ContentBox";
+import { EditContent, type FormEntry } from "@/layout/EditContent";
+import Loader from "@/layout/Loader";
+import { showMutationToast } from "@/libs/toast";
 import { canModerateReskin } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
-  bloodlineReskinUpdateSchema,
   type BloodlineReskinUpdateSchema,
+  bloodlineReskinUpdateSchema,
 } from "@/validators/bloodline";
 
 export default function BloodlineReskinEdit(props: {
@@ -96,7 +96,12 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
       type: "richinput",
       label: "Custom Description",
     },
-    { id: "reason", type: "richinput", label: "Reason for update", doubleWidth: true },
+    {
+      id: "reason",
+      type: "richinput",
+      label: "Reason for update",
+      doubleWidth: true,
+    },
   ];
 
   const onAccept = async () => {
@@ -105,39 +110,35 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
   };
 
   return (
-    <>
-      <ContentBox
-        title="Edit Bloodline Reskin"
-        subtitle="Modify reskin information"
-        defaultBackHref="/manual/bloodline/reskins"
-      >
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="original-bloodline">Original Bloodline</Label>
-            <Input
-              id="original-bloodline"
-              value={
-                reskin && !("success" in reskin) ? reskin.bloodline?.name || "" : ""
-              }
-              disabled
-              className="mt-1"
-            />
-          </div>
-
-          <EditContent
-            schema={bloodlineReskinUpdateSchema}
-            form={form}
-            formData={formData}
-            showSubmit={true}
-            buttonTxt="Save Changes"
-            allowImageUpload={true}
-            relationId={reskinData?.id || reskinId}
-            type="bloodline_reskin"
-            onAccept={onAccept}
-            submitDisabled={!form.formState.isValid || isUpdating}
+    <ContentBox
+      title="Edit Bloodline Reskin"
+      subtitle="Modify reskin information"
+      defaultBackHref="/manual/bloodline/reskins"
+    >
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="original-bloodline">Original Bloodline</Label>
+          <Input
+            id="original-bloodline"
+            value={reskin && !("success" in reskin) ? reskin.bloodline?.name || "" : ""}
+            disabled
+            className="mt-1"
           />
         </div>
-      </ContentBox>
-    </>
+
+        <EditContent
+          schema={bloodlineReskinUpdateSchema}
+          form={form}
+          formData={formData}
+          showSubmit={true}
+          buttonTxt="Save Changes"
+          allowImageUpload={true}
+          relationId={reskinData?.id || reskinId}
+          type="bloodline_reskin"
+          onAccept={onAccept}
+          submitDisabled={!form.formState.isValid || isUpdating}
+        />
+      </div>
+    </ContentBox>
   );
 }

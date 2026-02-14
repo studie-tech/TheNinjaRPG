@@ -6,83 +6,32 @@
  * Ensure that queries are only run when needed.
  */
 
-import React, { useEffect, useState, useRef } from "react";
-import { Input } from "@/components/ui/input";
-import { useForm, useWatch } from "react-hook-form";
-import { z } from "zod";
-import UserSearchSelect from "@/layout/UserSearchSelect";
-import { getSearchValidator } from "@/validators/register";
-import { showUserRank } from "@/libs/profile";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import RichInput from "@/layout/RichInput";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Medal } from "lucide-react";
-import { parseHtml } from "@/utils/parse";
-import { awardSchema } from "@/validators/reputation";
-import { publicUserText } from "@/layout/seoTexts";
-import Link from "next/link";
-import Image from "@/layout/Image";
-import StatusBar from "@/layout/StatusBar";
-import AvatarImage from "@/layout/Avatar";
-import ContentBox from "@/layout/ContentBox";
-import Confirm2 from "@/layout/Confirm2";
-import Modal2 from "@/layout/Modal2";
-import Loader from "@/layout/Loader";
-import ReportUser from "@/layout/Report";
-import Post from "@/layout/Post";
-import ActionLogs from "@/layout/ActionLog";
-import GraphCombatLog from "@/layout/GraphCombatLog";
-import DeleteUserButton from "@/layout/DeleteUserButton";
-import { ActionSelector } from "@/layout/CombatActions";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { TrainingSpeeds, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import GlowingBorder from "./GlowingBorder";
-import { TransactionHistory } from "src/app/points/page";
-import { EditContent } from "@/layout/EditContent";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import {
-  Flag,
-  CopyCheck,
-  Settings,
-  RefreshCcwDot,
-  Trash2,
-  Plus,
-  PersonStanding,
-  MessageCircle,
-  IdCard,
-  Award,
-} from "lucide-react";
-import { updateUserSchema } from "@/validators/user";
-import { canSeeSecretData, canSeeIps } from "@/utils/permissions";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
-import { useUserEditForm } from "@/hooks/profile";
 import { Chart as ChartJS } from "chart.js/auto";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
-import type { UpdateUserSchema } from "@/validators/user";
-import { groupBy } from "@/utils/grouping";
-import { Waypoints } from "lucide-react";
+import {
+  Award,
+  CopyCheck,
+  Flag,
+  IdCard,
+  Medal,
+  MessageCircle,
+  PersonStanding,
+  Plus,
+  RefreshCcwDot,
+  Settings,
+  Trash2,
+  Waypoints,
+} from "lucide-react";
+import Link from "next/link";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import type { UseFormReturn } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
+import { NewConversationPrompt } from "@/app/inbox/page";
+import { TransactionHistory } from "@/app/points/page";
 import { Button } from "@/components/ui/button";
-import ActionLogFiltering, {
-  useFiltering,
-  getFilter,
-} from "@/layout/ActionLogFiltering";
 import {
   Dialog,
   DialogContent,
@@ -92,38 +41,97 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { canCloneUser } from "@/utils/permissions";
-import type { Jutsu, UserBadge, Badge, UserRank } from "@/drizzle/schema";
-import { NewConversationPrompt } from "@/app/inbox/page";
-import Table from "@/layout/Table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  canModifyUserBadges,
-  canUnstuckVillage,
-  canAwardReputation,
-  canSeeActivityEvents,
-  canEditUsername,
-  canEditCustomTitle,
-  canEditBloodline,
-  canEditVillage,
-  canEditRank,
-  canEditJutsus,
-  canEditItems,
-  canEditStaffAccountFlag,
-  canClearUserNindo,
-  canEditQuests,
-  canDeleteReferral,
-  canChangeUserRolesTo,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  type BattleType,
+  BattleTypes,
+  IMG_AVATAR_DEFAULT,
+  TrainingSpeeds,
+} from "@/drizzle/constants";
+import type { Badge, Jutsu, UserBadge, UserRank } from "@/drizzle/schema";
+import { safeLocalStorageGetItem } from "@/hooks/localstorage";
+import { useUserEditForm } from "@/hooks/profile";
+import ActionLogs from "@/layout/ActionLog";
+import ActionLogFiltering, {
+  getFilter,
+  useFiltering,
+} from "@/layout/ActionLogFiltering";
+import AvatarImage from "@/layout/Avatar";
+import { ActionSelector } from "@/layout/CombatActions";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import DeleteUserButton from "@/layout/DeleteUserButton";
+import { EditContent } from "@/layout/EditContent";
+import GraphCombatLog from "@/layout/GraphCombatLog";
+import Image from "@/layout/Image";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import Post from "@/layout/Post";
+import ReportUser from "@/layout/Report";
+import RichInput from "@/layout/RichInput";
+import StatusBar from "@/layout/StatusBar";
+import { publicUserText } from "@/layout/seoTexts";
+import Table from "@/layout/Table";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { showUserRank } from "@/libs/profile";
+import { showMutationToast } from "@/libs/toast";
+import { groupBy } from "@/utils/grouping";
+import { parseHtml } from "@/utils/parse";
+import {
   canAwardExperience,
+  canAwardReputation,
+  canChangeUserRolesTo,
+  canClearUserNindo,
+  canCloneUser,
+  canDeleteReferral,
+  canEditBloodline,
+  canEditCustomTitle,
+  canEditItems,
+  canEditJutsus,
+  canEditQuests,
+  canEditRank,
   canEditRankedLp,
+  canEditStaffAccountFlag,
+  canEditUsername,
+  canEditVillage,
+  canModifyUserBadges,
+  canSeeActivityEvents,
+  canSeeIps,
+  canSeeSecretData,
+  canUnstuckVillage,
   canViewOtherUsersBattleLogs,
 } from "@/utils/permissions";
-import { BattleTypes, type BattleType } from "@/drizzle/constants";
+import { useUserData } from "@/utils/UserContext";
+import { type ExperienceAwardSchema, experienceAwardSchema } from "@/validators/misc";
+import { getSearchValidator } from "@/validators/register";
+import { awardSchema } from "@/validators/reputation";
+import type { UpdateUserSchema } from "@/validators/user";
+import { updateUserSchema } from "@/validators/user";
+import GlowingBorder from "./GlowingBorder";
 
 interface PublicUserComponentProps {
   userId: string;
@@ -193,7 +201,11 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     api.profile.getPublicUser.useQuery({ userId: userId }, { enabled: !!userId });
 
   // Forms
-  const form = useForm<z.infer<typeof awardSchema>>({
+  const form = useForm<
+    z.input<typeof awardSchema>,
+    unknown,
+    z.output<typeof awardSchema>
+  >({
     resolver: zodResolver(awardSchema),
     defaultValues: {
       reputationAmount: 0,
@@ -206,7 +218,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const userSearchSchema = getSearchValidator({ max: 10 });
   const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
     resolver: zodResolver(userSearchSchema),
-    defaultValues: { users: [] },
+    defaultValues: { username: "", users: [] },
   });
   const watchedUsers = useWatch({
     control: userSearchMethods.control,
@@ -215,8 +227,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   });
 
   // Experience award form
-  const experienceForm = useForm<{ amount: number }>({
-    resolver: zodResolver(z.object({ amount: z.number().min(1).max(100000) })),
+  const experienceForm = useForm<ExperienceAwardSchema>({
+    resolver: zodResolver(experienceAwardSchema),
     defaultValues: { amount: 100 },
   });
 
@@ -501,6 +513,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                               step="any"
                               placeholder="Enter reputation amount"
                               {...field}
+                              value={field.value as number}
                             />
                           </FormControl>
                           <FormMessage />
@@ -520,6 +533,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                               step="1"
                               placeholder="Enter money amount"
                               {...field}
+                              value={field.value as number}
                             />
                           </FormControl>
                           <FormMessage />
@@ -570,7 +584,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 to ALL users. Feature abuse for personal gain will result in severe
                 consequences.
                 <Form {...experienceForm}>
-                  <form className="space-y-4 mt-4">
+                  <form className="mt-4 space-y-4">
                     <FormField
                       control={experienceForm.control}
                       name="amount"
@@ -583,7 +597,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                               placeholder="Enter experience amount"
                               {...field}
                               onChange={(e) =>
-                                field.onChange(parseInt(e.target.value) || 0)
+                                field.onChange(parseInt(e.target.value, 10) || 0)
                               }
                               min="1"
                               max="100000"
@@ -667,11 +681,11 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               {profile.bloodline ? (
                 <Popover>
                   <PopoverTrigger asChild>
-                    <span className="font-bold cursor-pointer hover:text-orange-500">
+                    <span className="cursor-pointer font-bold hover:text-orange-500">
                       {profile.bloodline.name}
                     </span>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[500px] max-w-[90vw] ">
+                  <PopoverContent className="w-[500px] max-w-[90vw]">
                     <ItemWithEffects item={profile.bloodline} />
                   </PopoverContent>
                 </Popover>
@@ -713,7 +727,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 {canSeeIps(userData.role) && (
                   <Link
                     href={`/users/ipsearch/${profile.lastIp}`}
-                    className="hover:text-orange-500 hover:cursor-pointer"
+                    className="hover:cursor-pointer hover:text-orange-500"
                   >
                     Last IP: {profile.lastIp}
                   </Link>
@@ -747,7 +761,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   <Confirm2
                     title="Confirm Deletion"
                     button={
-                      <RefreshCcwDot className="absolute right-[13%] top-[3%] h-9 w-9 cursor-pointer z-10 rounded-full bg-slate-300 p-1 hover:text-orange-500" />
+                      <RefreshCcwDot className="absolute top-[3%] right-[13%] z-10 h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
                     }
                     onAccept={(e) => {
                       e.preventDefault();
@@ -818,7 +832,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         enableCombatHistory) && (
         <Tabs
           defaultValue={showActive}
-          className="flex flex-col items-center justify-center mt-3"
+          className="mt-3 flex flex-col items-center justify-center"
           onValueChange={(value) => setShowActive(value)}
         >
           {userData && (
@@ -900,18 +914,18 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 subtitle={`PvP Activity`}
                 initialBreak={true}
               >
-                <p className="italic pb-3">
+                <p className="pb-3 italic">
                   The battle graph gives an overview of all users fought the last 60
                   days, as well as which users these opponents have faced.
                 </p>
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button type="submit" className="w-full">
-                      <Waypoints className="h-5 w-5 mr-2" /> Show Battle Graph
+                      <Waypoints className="mr-2 h-5 w-5" /> Show Battle Graph
                     </Button>
                   </DialogTrigger>
                   <DialogContent
-                    className="min-w-[99%] min-h-[99%]"
+                    className="min-h-[99%] min-w-[99%]"
                     aria-describedby="pvp-overview"
                   >
                     <DialogHeader>
@@ -1056,7 +1070,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           isValid={forceAwakeReason.trim().length >= 10}
         >
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               You are about to force <strong>{profile.username}</strong> to awake
               status. This action will be logged and should only be used to fix users
               stuck in a particular state.
@@ -1070,7 +1084,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 onChange={(e) => setForceAwakeReason(e.target.value)}
                 placeholder="Enter reason for forcing awake status (minimum 10 characters)..."
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 This reason will be logged in the action log. Minimum 10 characters
                 required.
               </p>
@@ -1226,7 +1240,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
       className="flex flex-col items-center justify-center"
       onValueChange={(value) => setShowActive(value)}
     >
-      <TabsList className="text-center mt-3">
+      <TabsList className="mt-3 text-center">
         <TabsTrigger value="userData">Main Data</TabsTrigger>
         {hasJutsus && <TabsTrigger value="jutsus">Jutsus Specifics</TabsTrigger>}
         {perms.canEditQuests && <TabsTrigger value="quests">Quests</TabsTrigger>}
@@ -1234,7 +1248,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
       <TabsContent value="userData">
         <EditContent
           schema={updateUserSchema}
-          form={form}
+          form={form as unknown as UseFormReturn<UpdateUserSchema>}
           formData={formData}
           showSubmit={true}
           buttonTxt="Save to Database"
@@ -1255,7 +1269,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
               emptyText="No jutsus assigned to this user"
               gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
               onClick={(id) => {
-                if (id == jutsu?.id) {
+                if (id === jutsu?.id) {
                   setJutsu(undefined);
                 } else {
                   setJutsu(allJutsus?.find((jutsu) => jutsu.id === id));
@@ -1280,7 +1294,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
                         });
                       }
                     })}
-                    className="flex items-center justify-between w-full gap-2"
+                    className="flex w-full items-center justify-between gap-2"
                   >
                     <div className="flex items-end gap-2">
                       <FormField
@@ -1298,7 +1312,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
                                 {...field}
                                 onChange={(e) => {
                                   const value = e.target.value;
-                                  field.onChange(value ? parseInt(value) : 0);
+                                  field.onChange(value ? parseInt(value, 10) : 0);
                                 }}
                               />
                             </FormControl>
@@ -1346,17 +1360,17 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
       {perms.canEditQuests && (
         <TabsContent value="quests">
           <div className="mt-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-white">User Quests</h3>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-bold text-lg text-white">User Quests</h3>
               {questTypes.length > 0 && (
                 <select
-                  className="bg-card text-foreground border border-border rounded-md px-3 py-1"
+                  className="rounded-md border border-border bg-card px-3 py-1 text-foreground"
                   value={selectedQuestType}
                   onChange={(e) => setSelectedQuestType(e.target.value)}
                 >
                   <option value="all">All Quest Types</option>
-                  {questTypes.map((type) => (
-                    <option key={type} value={type}>
+                  {questTypes.map((type, i) => (
+                    <option key={`${type}-${i}`} value={type}>
                       {type}
                     </option>
                   ))}
@@ -1368,19 +1382,19 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
                 {filteredQuests.map((userQuest) => (
                   <div
                     key={userQuest.id}
-                    className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
+                    className="flex items-center justify-between rounded-lg border-2 border-border bg-card p-3"
                   >
                     <div>
                       <h4 className="font-semibold text-foreground">
                         {userQuest.quest.name}
                       </h4>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Started: {userQuest.startedAt.toLocaleString()}
                         {userQuest.endAt &&
                           ` • Completed: ${userQuest.endAt.toLocaleString()}`}
                       </p>
                       {userQuest.quest.questType && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                           Type: {userQuest.quest.questType}
                         </p>
                       )}
@@ -1560,10 +1574,9 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
             },
             tooltip: {
               callbacks: {
-                title: function (tooltipItems) {
-                  return `Training at hour ${tooltipItems?.[0]?.label || "unknown"}`;
-                },
-                label: function (tooltipItems) {
+                title: (tooltipItems) =>
+                  `Training at hour ${tooltipItems?.[0]?.label || "unknown"}`,
+                label: (tooltipItems) => {
                   const raw = tooltipItems?.raw as {
                     entries: { trainingFinishedAt: string }[];
                   };
@@ -1588,7 +1601,6 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
         myChart.destroy();
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasets]);
 
   return (
@@ -1637,7 +1649,7 @@ const ReportsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
             hover_effect={true}
             align_middle={true}
             image={
-              <div className="m-3 w-16 ">
+              <div className="m-3 w-16">
                 {report.reporterUser?.avatar && (
                   <Image
                     src={report.reporterUser.avatar}
@@ -1679,21 +1691,21 @@ const HistoricalIpsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => 
       {historicalIps?.length === 0 && <p>No historical IP records found</p>}
       {historicalIps && historicalIps.length > 0 && (
         <div className="space-y-2">
-          {historicalIps.map((ip, i) => (
+          {historicalIps.map((ip) => (
             <div
-              key={`ip-${i}`}
-              className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
+              key={ip.ip}
+              className="flex items-center justify-between rounded-lg border-2 border-border bg-card p-3"
             >
               <div>
                 <h4 className="font-semibold text-foreground">
                   <Link
                     href={`/users/ipsearch/${ip.ip}`}
-                    className="hover:text-orange-500 hover:cursor-pointer"
+                    className="hover:cursor-pointer hover:text-orange-500"
                   >
                     {ip.ip}
                   </Link>
                 </h4>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   Last used: {ip.usedAt.toLocaleString()}
                 </p>
               </div>
@@ -1726,16 +1738,16 @@ const ActivityEventsTab: React.FC<TabComponentProps> = ({ userId, isActive }) =>
       {activityEvents?.length === 0 && <p>No activity events found</p>}
       {activityEvents && activityEvents.length > 0 && (
         <div className="space-y-2">
-          {activityEvents.map((event, i) => (
+          {activityEvents.map((event) => (
             <div
-              key={`event-${i}`}
-              className="p-3 border-2 border-border rounded-lg bg-card"
+              key={event.id}
+              className="rounded-lg border-2 border-border bg-card p-3"
             >
               <h4 className="font-semibold text-foreground">
                 Activity Event #{event.id}
               </h4>
-              <p className="text-sm text-muted-foreground">Streak: {event.streak}</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-sm">Streak: {event.streak}</p>
+              <p className="text-muted-foreground text-sm">
                 Created: {event.createdAt.toLocaleString()}
               </p>
             </div>
@@ -1803,11 +1815,11 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ students }) => {
       {(!students || students.length === 0) && <p>No students found</p>}
       {students && students.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-          {students.map((user, i) => (
+          {students.map((user) => (
             <Link
               href={`/username/${user.username}`}
               className="text-center"
-              key={`student-${i}`}
+              key={user.userId}
             >
               <AvatarImage
                 href={user.avatar || ""}
@@ -1852,11 +1864,11 @@ const MarriagesTab: React.FC<MarriagesTabProps> = ({ userId, username, isActive 
       {(!marriages || marriages.length === 0) && <p>No married users found</p>}
       {marriages && marriages.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-          {marriages.map((user, i) => (
+          {marriages.map((user) => (
             <Link
               href={`/username/${user.username}`}
               className="text-center"
-              key={`marriage-${i}`}
+              key={user.userId}
             >
               <AvatarImage
                 href={user.avatar}
@@ -1921,42 +1933,40 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
       subtitle={`Badges earned by ${username}`}
       initialBreak={true}
       topRightContent={
-        <>
-          {canModify && (
-            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button className="w-full">
-                  <Plus className="h-6 w-6 mr-2" /> New
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-96">
-                <ActionSelector
-                  items={
-                    allBadges
-                      ? allBadges.filter(
-                          (b) => !currentBadges.some((ub) => ub.badgeId === b.id),
-                        )
-                      : []
-                  }
-                  labelSingles={true}
-                  onClick={(id) => insertUserBadge.mutate({ userId, badgeId: id })}
-                  showBgColor={false}
-                  roundFull={true}
-                  hideBorder={true}
-                  gridClassNameOverwrite="grid grid-cols-5 md:grid-cols-6"
-                  showLabels={true}
-                  emptyText="No badges exist yet."
-                />
-              </PopoverContent>
-            </Popover>
-          )}
-        </>
+        canModify && (
+          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button className="w-full">
+                <Plus className="mr-2 h-6 w-6" /> New
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-96">
+              <ActionSelector
+                items={
+                  allBadges
+                    ? allBadges.filter(
+                        (b) => !currentBadges.some((ub) => ub.badgeId === b.id),
+                      )
+                    : []
+                }
+                labelSingles={true}
+                onClick={(id) => insertUserBadge.mutate({ userId, badgeId: id })}
+                showBgColor={false}
+                roundFull={true}
+                hideBorder={true}
+                gridClassNameOverwrite="grid grid-cols-5 md:grid-cols-6"
+                showLabels={true}
+                emptyText="No badges exist yet."
+              />
+            </PopoverContent>
+          </Popover>
+        )
       }
     >
       {currentBadges.length === 0 && <p>No badges found</p>}
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-        {currentBadges.map((userbadge, i) => (
-          <div key={`badge-${i}`} className="text-center relative">
+        {currentBadges.map((userbadge) => (
+          <div key={userbadge.badge.id} className="relative text-center">
             <Image
               src={userbadge.badge.image}
               alt={userbadge.badge.name}
@@ -1968,7 +1978,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
             </div>
             {canModify && (
               <Trash2
-                className="absolute right-[8%] top-0 h-9 w-9 border-2 border-black cursor-pointer rounded-full bg-amber-100 fill-slate-500 p-1 hover:fill-orange-500"
+                className="absolute top-0 right-[8%] h-9 w-9 cursor-pointer rounded-full border-2 border-black bg-amber-100 fill-slate-500 p-1 hover:fill-orange-500"
                 onClick={() => removeUserBadge.mutate(userbadge)}
               />
             )}
@@ -2020,8 +2030,8 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
       {(!recruits || recruits.length === 0) && <p>No recruits found</p>}
       {recruits && recruits.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-          {recruits.map((user, i) => (
-            <div key={`recruited-${i}`} className="text-center relative">
+          {recruits.map((user) => (
+            <div key={user.userId} className="relative text-center">
               <Link href={`/username/${user.username}`} className="block">
                 <AvatarImage
                   href={user.avatar || ""}
@@ -2043,7 +2053,7 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
                   title="Delete Referral"
                   proceed_label="Delete"
                   button={
-                    <Trash2 className="absolute right-[8%] top-0 h-9 w-9 border-2 border-black cursor-pointer rounded-full bg-red-100 fill-slate-500 p-1 hover:fill-red-500" />
+                    <Trash2 className="absolute top-0 right-[8%] h-9 w-9 cursor-pointer rounded-full border-2 border-black bg-red-100 fill-slate-500 p-1 hover:fill-red-500" />
                   }
                   onAccept={() => deleteReferral.mutate({ userId: user.userId })}
                 >
@@ -2154,8 +2164,8 @@ const CombatHistoryTab: React.FC<TabComponentProps> = ({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
-            {BattleTypes.map((type) => (
-              <SelectItem key={type} value={type}>
+            {BattleTypes.map((type, i) => (
+              <SelectItem key={`${type}-${i}`} value={type}>
                 {type.replace(/_/g, " ")}
               </SelectItem>
             ))}

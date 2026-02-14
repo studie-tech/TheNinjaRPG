@@ -1,4 +1,4 @@
-import { cn } from "src/libs/shadui";
+import { cn } from "@/libs/shadui";
 
 function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (

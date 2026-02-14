@@ -1,31 +1,37 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import ChatInputField from "@/layout/ChatInputField";
+import type { Core, ElementDefinition, EventObject, EventObjectNode } from "cytoscape";
+import { Copy, FileMinus, FilePlus } from "lucide-react";
 import { nanoid } from "nanoid";
-import { api } from "@/app/_trpc/client";
-import { useEffect, use, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { EditContent } from "@/layout/EditContent";
-import { ObjectiveFormWrapper } from "@/layout/EditContent";
-import { FilePlus, FileMinus, Copy } from "lucide-react";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
-import { allObjectiveTasks } from "@/validators/objectives";
-import { useQuestEditForm } from "@/hooks/quest";
-import { QuestFormRawSchema } from "@/validators/objectives";
-import { SimpleObjective } from "@/validators/objectives";
-import { getObjectiveSchema } from "@/validators/objectives";
-import type { ZodQuestType, AllObjectivesType } from "@/validators/objectives";
-import type { Quest } from "@/drizzle/schema";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
+import type { UseFormReturn } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import type { Quest } from "@/drizzle/schema";
+import { useQuestEditForm } from "@/hooks/quest";
+import ChatInputField from "@/layout/ChatInputField";
+import ContentBox from "@/layout/ContentBox";
 import { QuestHelper } from "@/layout/ContentHelp";
+import { EditContent, ObjectiveFormWrapper } from "@/layout/EditContent";
+import Loader from "@/layout/Loader";
 import { RaidThresholdEditor } from "@/layout/RaidThresholdEditor";
-import type { ElementDefinition, Core, EventObjectNode, EventObject } from "cytoscape";
-import { getObjectiveImage, buildObjectiveEdges } from "@/libs/objectives";
+import { buildObjectiveEdges, getObjectiveImage } from "@/libs/objectives";
 import { verifyQuestObjectiveFlow } from "@/libs/quest";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { canChangeContent } from "@/utils/permissions";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type {
+  AllObjectivesType,
+  ZodQuestFormType,
+  ZodQuestType,
+} from "@/validators/objectives";
+import {
+  allObjectiveTasks,
+  getObjectiveSchema,
+  QuestFormRawSchema,
+  SimpleObjective,
+} from "@/validators/objectives";
 
 export default function ManualBloodlineEdit(props: {
   params: Promise<{ questid: string }>;
@@ -47,7 +53,6 @@ export default function ManualBloodlineEdit(props: {
     if (userData && !canChangeContent(userData.role)) {
       void router.push("/profile");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData]);
 
   // Prevent unauthorized access
@@ -210,7 +215,6 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
                         "image",
                       ].includes(key)
                     ) {
-                      continue;
                     } else if (key === "content") {
                       const newObjectives: AllObjectivesType[] | undefined =
                         data.content?.objectives?.map((objective) => {
@@ -238,15 +242,15 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
       >
         {!props.quest && <p>Could not find this item</p>}
         {props.quest && (
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold">Edit Quest</h1>
+          <div className="mb-4 flex items-center justify-between">
+            <h1 className="font-bold text-2xl">Edit Quest</h1>
           </div>
         )}
 
         {props.quest && (
           <EditContent
             schema={QuestFormRawSchema}
-            form={form}
+            form={form as UseFormReturn<ZodQuestFormType>}
             formData={formData}
             showSubmit={true}
             buttonTxt="Save to Database"
@@ -477,7 +481,6 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
     cy.on("mouseout", "node", () => {
       setTooltipData(null);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consecutiveObjectives, objectives]);
 
   return (
@@ -487,7 +490,7 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
       initialBreak={true}
       topRightContent={<div className="flex flex-row">{addObjectiveIcon}</div>}
     >
-      <div ref={containerRef} className="w-full aspect-square relative">
+      <div ref={containerRef} className="relative aspect-square w-full">
         <CytoscapeComponent
           cy={(cy) => {
             cyRef.current = cy;
@@ -551,7 +554,7 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
         />
         {tooltipData && (
           <div
-            className="absolute z-50 pointer-events-none bg-gray-900 bg-opacity-80 text-white text-xs rounded px-2 py-1"
+            className="pointer-events-none absolute z-50 rounded bg-gray-900 bg-opacity-80 px-2 py-1 text-white text-xs"
             style={{
               top: tooltipData.y,
               left: tooltipData.x,

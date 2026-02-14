@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { rewardFields } from "./rewards";
 import { ActivityStreakTypes } from "@/drizzle/constants";
+import { rewardFields } from "./rewards";
 
 // Reward schema - reuse from objectives
 export const streakRewardSchema = z.object(rewardFields);
@@ -10,7 +10,7 @@ export type StreakRewardType = z.infer<typeof streakRewardSchema>;
 export const streakDayRewardSchema = z.object({
   dayNumber: z.coerce.number().min(1).max(28),
   rewards: streakRewardSchema,
-  image: z.string().url().optional().nullable(),
+  image: z.url().optional().nullable(),
 });
 export type StreakDayRewardType = z.infer<typeof streakDayRewardSchema>;
 
@@ -18,13 +18,13 @@ export type StreakDayRewardType = z.infer<typeof streakDayRewardSchema>;
 const activityStreakConfigBaseSchema = z.object({
   name: z.string().min(1, "Name is required").max(191),
   description: z.string().max(5000).optional().nullable(),
-  image: z.string().url().optional().nullable(),
-  totalDays: z.coerce.number().min(1).max(28).default(14),
-  streakType: z.enum(ActivityStreakTypes).default("RECURRING"),
-  isActive: z.boolean().default(true),
-  ryoCost: z.coerce.number().min(0).default(0),
-  repsCost: z.coerce.number().min(0).default(0),
-  seichiSilverCost: z.coerce.number().min(0).default(0),
+  image: z.url().optional().nullable(),
+  totalDays: z.coerce.number().min(1).max(28).prefault(14),
+  streakType: z.enum(ActivityStreakTypes).prefault("RECURRING"),
+  isActive: z.boolean().prefault(true),
+  ryoCost: z.coerce.number().min(0).prefault(0),
+  repsCost: z.coerce.number().min(0).prefault(0),
+  seichiSilverCost: z.coerce.number().min(0).prefault(0),
   startDate: z.coerce.date().optional().nullable(),
   endDate: z.coerce.date().optional().nullable(),
   rewards: z.array(streakDayRewardSchema).min(1).max(28),
@@ -41,7 +41,7 @@ const activityStreakConfigRefinement = (
   // Check for duplicate day numbers
   if (uniqueDayNumbers.size !== dayNumbers.length) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: "Rewards contain duplicate day numbers",
       path: ["rewards"],
     });
@@ -51,7 +51,7 @@ const activityStreakConfigRefinement = (
   const outOfRange = dayNumbers.find((d) => d > val.totalDays);
   if (outOfRange) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: `Reward dayNumber ${outOfRange} exceeds totalDays (${val.totalDays})`,
       path: ["rewards"],
     });
@@ -60,7 +60,7 @@ const activityStreakConfigRefinement = (
   // Validate date range if both are provided
   if (val.startDate && val.endDate && val.startDate > val.endDate) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: "Start date must be before end date",
       path: ["endDate"],
     });
@@ -91,9 +91,9 @@ export type PurchaseEventPassInput = z.infer<typeof purchaseEventPassSchema>;
 export const claimStreakDaySchema = z.object({
   configId: z.string(),
   // If true, user pays rep to continue streak instead of resetting
-  payCatchUp: z.boolean().optional().default(false),
+  payCatchUp: z.boolean().optional().prefault(false),
   // If true, user explicitly wants to reset streak to day 1
-  reset: z.boolean().optional().default(false),
+  reset: z.boolean().optional().prefault(false),
 });
 export type ClaimStreakDayInput = z.infer<typeof claimStreakDaySchema>;
 
@@ -101,13 +101,13 @@ export type ClaimStreakDayInput = z.infer<typeof claimStreakDaySchema>;
 export const activityStreakFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(191),
   description: z.string().max(5000).optional().nullable(),
-  image: z.string().url().optional().nullable(),
-  totalDays: z.coerce.number().min(1).max(28).default(14),
-  streakType: z.enum(ActivityStreakTypes).default("RECURRING"),
-  isActive: z.boolean().default(true),
-  ryoCost: z.coerce.number().min(0).default(0),
-  repsCost: z.coerce.number().min(0).default(0),
-  seichiSilverCost: z.coerce.number().min(0).default(0),
+  image: z.url().optional().nullable(),
+  totalDays: z.coerce.number().min(1).max(28).prefault(14),
+  streakType: z.enum(ActivityStreakTypes).prefault("RECURRING"),
+  isActive: z.boolean().prefault(true),
+  ryoCost: z.coerce.number().min(0).prefault(0),
+  repsCost: z.coerce.number().min(0).prefault(0),
+  seichiSilverCost: z.coerce.number().min(0).prefault(0),
   startDate: z.coerce.date().optional().nullable(),
   endDate: z.coerce.date().optional().nullable(),
 });

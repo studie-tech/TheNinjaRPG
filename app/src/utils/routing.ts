@@ -1,6 +1,5 @@
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { usePathname } from "next/navigation";
 import type { UserWithRelations } from "../server/api/routers/profile";
 
 export const useAwake = (userData: UserWithRelations) => {
@@ -25,5 +24,5 @@ export const useAwake = (userData: UserWithRelations) => {
       void router.push("/home");
     }
   }, [pathname, userStatus, router]);
-  return userStatus === "AWAKE" ? true : false;
+  return userStatus === "AWAKE";
 };

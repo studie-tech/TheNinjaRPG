@@ -1,11 +1,11 @@
 "use client";
 
+import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { api } from "@/app/_trpc/client";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import { useRequiredUserData } from "@/utils/UserContext";
 import type { ArrayElement } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Reports() {
   const { data: userData } = useRequiredUserData();

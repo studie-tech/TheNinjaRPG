@@ -1,11 +1,11 @@
-import { useUserData } from "@/utils/UserContext";
-import { canSeeIps } from "@/utils/permissions";
 import {
-  ContentFiltering,
-  useContentFiltering,
   buildFilter,
+  ContentFiltering,
   defineFilteringSchema,
+  useContentFiltering,
 } from "@/layout/ContentFiltering";
+import { canSeeIps } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 import { effectFilters } from "@/validators/combat";
 
 interface UserFilteringProps {

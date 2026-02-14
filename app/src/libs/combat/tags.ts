@@ -1,31 +1,46 @@
-import { scaleUserStats } from "@/libs/profile";
+import { noCase } from "change-case";
 import { nanoid } from "nanoid";
+import type {
+  BattleType,
+  ElementName,
+  GeneralType,
+  PoolType,
+  StatType,
+} from "@/drizzle/constants";
+import type { Battle } from "@/drizzle/schema";
+import type { CombatAction } from "@/libs/combat/types";
 import {
-  isPositiveUserEffect,
-  isNegativeUserEffect,
-  IncreaseRangeTag,
-  IncreaseCooldownTag,
+  getEffectStage,
+  getPoolsAffected,
+  getPreventTypeName,
+  isEffectActive,
+} from "@/libs/combat/util";
+import { scaleUserStats } from "@/libs/profile";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import type {
+  PreventTagType,
+  ShieldTagType,
+  WeaknessTagType,
+} from "@/validators/combat";
+import {
   DecreaseCooldownTag,
   HealTag,
+  IncreaseCooldownTag,
+  IncreaseRangeTag,
+  isNegativeUserEffect,
+  isPositiveUserEffect,
 } from "@/validators/combat";
-import { isEffectActive, getPreventTypeName } from "@/libs/combat/util";
-import type { BattleUserState, Consequence, ReturnedUserState } from "./types";
-import type { GroundEffect, UserEffect, ActionEffect } from "./types";
-import type { StatNames, GenNames, DmgConfig } from "./constants";
+import type { DmgConfig, GenName, GenNames, StatNames } from "./constants";
 import type {
-  WeaknessTagType,
-  ShieldTagType,
-  ImmunityTagType,
-  PreventTagType,
-} from "@/validators/combat";
-import type { CombatAction } from "@/libs/combat/types";
-import type { GeneralType } from "@/drizzle/constants";
-import type { BattleType } from "@/drizzle/constants";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
-import type { BattleEffect } from "./types";
-import type { ReturnedBattle } from "./types";
-import type { Battle } from "@/drizzle/schema";
-import { noCase } from "change-case";
+  ActionEffect,
+  BattleEffect,
+  BattleUserState,
+  Consequence,
+  GroundEffect,
+  ReturnedBattle,
+  ReturnedUserState,
+  UserEffect,
+} from "./types";
 
 /**
  * Minimal user type for realizeTag - only includes fields actually used
@@ -118,7 +133,7 @@ export const absorb = (
           const convert = Math.ceil(absorbAmount * ratio);
 
           // Apply absorption to each pool
-          pools.map((pool) => {
+          pools.forEach((pool: PoolType) => {
             switch (pool) {
               case "Health":
                 // Add to existing absorb value instead of overwriting
@@ -419,7 +434,7 @@ export const debuffPrevent = (
 export const getAffected = (effect: UserEffect, type?: "offence" | "defence") => {
   const stats: string[] = [];
   if ("statTypes" in effect && effect.statTypes) {
-    effect.statTypes.forEach((stat) => {
+    effect.statTypes.forEach((stat: StatType) => {
       if (stat === "Highest") {
         const highestOffence = effect.highestOffence;
         if (highestOffence && (!type || type === "offence")) {
@@ -435,10 +450,10 @@ export const getAffected = (effect: UserEffect, type?: "offence" | "defence") =>
     });
   }
   if ("generalTypes" in effect && effect.generalTypes) {
-    effect.generalTypes.forEach((general) => {
+    effect.generalTypes.forEach((general: GeneralType) => {
       if (general === "Highest") {
         const highestGenerals = effect.highestGenerals;
-        highestGenerals?.forEach((gen) => {
+        highestGenerals?.forEach((gen: (typeof GenNames)[number]) => {
           stats.push(capitalizeFirstLetter(gen));
         });
       } else {
@@ -472,7 +487,8 @@ const applyPercentageStatModifier = (
     target.baseStatsForModifiers[statName] = target[statName] as number;
   }
   // Use base stat for percentage calculation to ensure additive stacking
-  const baseStat = target.baseStatsForModifiers[statName]!;
+  const baseStat =
+    target.baseStatsForModifiers[statName] ?? (target[statName] as number);
   const change = (power / 100) * baseStat;
   (target[statName] as number) = (target[statName] as number) + change;
 };
@@ -483,7 +499,7 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
   const affected = getAffected(effect);
   if ("statTypes" in effect || "generalTypes" in effect) {
     if (!effect.isNew && !effect.castThisRound) {
-      effect.statTypes?.forEach((stat) => {
+      effect.statTypes?.forEach((stat: StatType) => {
         if (stat === "Highest") {
           if (effect.calculation === "static") {
             if (effect.direction === "offence" || effect.direction === "both") {
@@ -597,15 +613,15 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
           }
         }
       });
-      effect.generalTypes?.forEach((general) => {
+      effect.generalTypes?.forEach((general: GeneralType) => {
         if (general === "Highest") {
           if (effect.calculation === "static") {
-            target.highestGenerals.forEach((gen) => {
+            target.highestGenerals.forEach((gen: (typeof GenNames)[number]) => {
               target[gen] += power;
             });
           } else if (effect.calculation === "percentage") {
             // Percentage calculation - use additive stacking
-            target.highestGenerals.forEach((gen) => {
+            target.highestGenerals.forEach((gen: (typeof GenNames)[number]) => {
               applyPercentageStatModifier(target, gen, power);
             });
           }
@@ -781,9 +797,16 @@ export const adjustDamageGiven = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
-          // Use baseDamageForModifiers for percentage calculations to ensure additive stacking
-          // This prevents multiplicative behavior when multiple modifiers are applied
-          const baseDamage = consequence.baseDamageForModifiers ?? consequence.damage;
+          // Use staged base damage for percentage calculations
+          // Stage 1 (equipment/pre-battle): use original baseDamageForModifiers
+          // Stage 2 (in-battle): use baseDamageAfterStage1 (post-equipment damage)
+          const effectStage = getEffectStage(effect);
+          const baseDamage =
+            effectStage === 1
+              ? (consequence.baseDamageForModifiers ?? consequence.damage)
+              : (consequence.baseDamageAfterStage1 ??
+                consequence.baseDamageForModifiers ??
+                consequence.damage);
           const change =
             effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           if (effect.fromType === "bloodline") {
@@ -851,9 +874,16 @@ export const adjustDamageTaken = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
-          // Use baseDamageForModifiers for percentage calculations to ensure additive stacking
-          // This prevents multiplicative behavior when multiple modifiers are applied
-          const baseDamage = consequence.baseDamageForModifiers ?? consequence.damage;
+          // Use staged base damage for percentage calculations
+          // Stage 1 (equipment/pre-battle): use original baseDamageForModifiers
+          // Stage 2 (in-battle): use baseDamageAfterStage1 (post-equipment damage)
+          const effectStage = getEffectStage(effect);
+          const baseDamage =
+            effectStage === 1
+              ? (consequence.baseDamageForModifiers ?? consequence.damage)
+              : (consequence.baseDamageAfterStage1 ??
+                consequence.baseDamageForModifiers ??
+                consequence.damage);
           const change =
             effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           consequence.damage = consequence.damage + change * ratio;
@@ -1004,7 +1034,7 @@ const removeEffects = (
       .filter((e) => e.fromType !== "skill")
       .filter((e) => e.fromType !== "ranked")
       .filter(type === "positive" ? isPositiveUserEffect : isNegativeUserEffect)
-      .map((e) => {
+      .forEach((e) => {
         e.rounds = 0;
       });
 
@@ -1017,7 +1047,7 @@ const removeEffects = (
       .filter(isGroundEffect)
       .filter((e) => e.longitude === target.longitude && e.latitude === target.latitude)
       .filter(type === "positive" ? isPositiveUserEffect : isNegativeUserEffect)
-      .map((e) => {
+      .forEach((e) => {
         e.rounds = 0;
       });
 
@@ -1124,7 +1154,7 @@ export const updateStatUsage = (
   inverse = false,
 ) => {
   if ("statTypes" in effect && "direction" in effect) {
-    effect.statTypes?.forEach((statType) => {
+    effect.statTypes?.forEach((statType: StatType) => {
       if (
         (effect.direction === "offence" && !inverse) ||
         (effect.direction === "defence" && inverse)
@@ -1168,13 +1198,13 @@ export const updateStatUsage = (
     });
   }
   if ("generalTypes" in effect) {
-    effect.generalTypes?.forEach((general) => {
+    effect.generalTypes?.forEach((general: GeneralType) => {
       if (general === "Highest") {
-        user.highestGenerals.forEach((gen) => {
+        user.highestGenerals.forEach((gen: GenName) => {
           user.usedGenerals[gen] += 1;
         });
       } else {
-        user.usedGenerals[general.toLowerCase() as Lowercase<typeof general>] += 1;
+        user.usedGenerals[general.toLowerCase() as GenName] += 1;
       }
     });
   }
@@ -1187,9 +1217,8 @@ const powerEffect = (
   avg_exp: number,
   config: DmgConfig,
 ) => {
-  const statRatio =
-    Math.pow(attack, config.atk_scaling) / Math.pow(defence, config.def_scaling);
-  return config.dmg_base + statRatio * Math.pow(avg_exp, config.exp_scaling);
+  const statRatio = attack ** config.atk_scaling / defence ** config.def_scaling;
+  return config.dmg_base + statRatio * avg_exp ** config.exp_scaling;
 };
 
 /** Base damage calculation formula */
@@ -1204,7 +1233,7 @@ export const damageCalc = (
   // Run battle formula to get list of calculations for each stat
   if (effect.calculation === "formula") {
     const dir = "offensive";
-    effect.statTypes?.forEach((statType) => {
+    effect.statTypes?.forEach((statType: StatType) => {
       let a = "";
       let b = "";
       if (statType === "Highest" && effect.highestOffence && effect.highestDefence) {
@@ -1267,9 +1296,15 @@ export const calcDmgModifier = (
     .filter((e) => {
       const check1 = e.jutsus.includes(dmgEffect.actionId);
       const check2 = e.items.includes(dmgEffect.actionId);
-      const check3 = e.elements.some((we) => dmgEffect?.elements?.includes(we));
-      const check4 = e.statTypes.some((we) => dmgEffect?.statTypes?.includes(we));
-      const check5 = e.generalTypes.some((we) => dmgEffect?.generalTypes?.includes(we));
+      const check3 = e.elements.some((we: ElementName) =>
+        dmgEffect?.elements?.includes(we),
+      );
+      const check4 = e.statTypes.some((we: StatType) =>
+        dmgEffect?.statTypes?.includes(we),
+      );
+      const check5 = e.generalTypes.some((we: GeneralType) =>
+        dmgEffect?.generalTypes?.includes(we),
+      );
       return check1 || check2 || check3 || check4 || check5;
     })
     .sort((a, v) => v.power - a.power);
@@ -1357,11 +1392,7 @@ export const damageBarrier = (
     groundEffects.splice(idx, 1);
   }
   const info: ActionEffect = {
-    txt: `Barrier takes ${damage.toFixed(2)} damage ${
-      barrier.curHealth <= 0
-        ? "and is destroyed."
-        : `and has ${barrier.curHealth.toFixed(2)} health left.`
-    }`,
+    txt: `Barrier takes ${damage.toFixed(2)} damage ${barrier.curHealth <= 0 ? "and is destroyed." : `and has ${barrier.curHealth.toFixed(2)} health left.`}`,
     color: "red",
   };
   return { info, barrier };
@@ -1508,7 +1539,7 @@ export const pooladjust = (effect: UserEffect, target: BattleUserState) => {
   const { adverb, qualifier } = getPower(effect);
   if ("poolsAffected" in effect) {
     const affected: string[] = [];
-    effect.poolsAffected?.forEach((pool) => {
+    effect.poolsAffected?.forEach((pool: PoolType) => {
       affected.push(pool);
     });
     return getInfo(
@@ -1567,7 +1598,7 @@ export const reflect = (
 /** Apply wound damage over multiple turns based on damage dealt */
 export const wound = (
   effect: UserEffect,
-  usersEffects: UserEffect[],
+  _usersEffects: UserEffect[],
   consequences: Map<string, Consequence>,
   target: BattleUserState,
 ) => {
@@ -1788,7 +1819,7 @@ export const drain = (
     };
 
     // Calculate drain amount for each pool
-    pools.forEach((pool) => {
+    pools.forEach((pool: PoolType) => {
       const poolValue =
         pool === "Health"
           ? target.maxHealth
@@ -1823,6 +1854,58 @@ export const drain = (
     `will be drained ${qualifier} of ${pools.join(", ")} for ${effect.rounds} rounds`,
   );
 };
+
+/**
+ * Increase or decrease maximum pool values.
+ * This effect is purely declarative - it goes on the effect stack and the actual
+ * pool values are calculated dynamically using getEffectiveMaxPool/getEffectiveCurPool.
+ * No mutation of base pool values occurs.
+ */
+const adjustMaxPools = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+  isIncrease: boolean,
+) => {
+  const preventType = isIncrease ? "buffprevent" : "debuffprevent";
+  const { pass } = preventCheck(usersEffects, preventType, target, effect);
+  if (!pass) {
+    return preventResponse(
+      effect,
+      target,
+      `cannot be ${isIncrease ? "buffed" : "debuffed"}`,
+    );
+  }
+
+  // Only show message on first application (when effect is new)
+  if (!effect.isNew) {
+    return undefined;
+  }
+
+  const pools = getPoolsAffected(effect);
+  const { qualifier } = getPower(effect);
+  const action = isIncrease ? "increased" : "decreased";
+
+  return getInfo(
+    target,
+    effect,
+    `maximum and current ${pools.join(", ")} ${action} by ${qualifier}`,
+  );
+};
+
+/** Increase maximum and current pool values */
+export const increaseMaxPools = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+) => adjustMaxPools(effect, usersEffects, target, true);
+
+/** Decrease maximum and current pool values */
+export const decreaseMaxPools = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+) => adjustMaxPools(effect, usersEffects, target, false);
 
 /** Deals damage based on chakra and stamina usage */
 export const poison = (
@@ -1889,7 +1972,7 @@ export const shield = (effect: UserEffect, target: BattleUserState) => {
   const { power } = getPower(effect);
   const primaryCheck = Math.random() < power / 100;
   const shieldEffect = effect as ShieldTagType;
-  let info: ActionEffect | undefined = undefined;
+  let info: ActionEffect | undefined;
   if (effect.isNew && effect.rounds) {
     if (primaryCheck) {
       effect.power = shieldEffect.health;
@@ -1908,9 +1991,9 @@ export const shield = (effect: UserEffect, target: BattleUserState) => {
 
 /** Blocks prevent effects from being applied to the target */
 export const immunity = (effect: UserEffect, target: BattleUserState) => {
-  const immunityEffect = effect as ImmunityTagType;
+  if (effect.type !== "immunity") return undefined;
   if (effect.isNew && effect.rounds) {
-    const preventType = getPreventTypeName(immunityEffect.blocks);
+    const preventType = getPreventTypeName(effect.blocks);
     return getInfo(target, effect, `has immunity to ${preventType} prevention`);
   }
   return undefined;
@@ -1920,7 +2003,7 @@ export const immunity = (effect: UserEffect, target: BattleUserState) => {
 export const finalStand = (effect: UserEffect, target: BattleUserState) => {
   const { power } = getPower(effect);
   const primaryCheck = Math.random() < power / 100;
-  let info: ActionEffect | undefined = undefined;
+  let info: ActionEffect | undefined;
   if (primaryCheck) {
     info = getInfo(
       target,
@@ -1950,7 +2033,7 @@ export const move = (
   groundEffects: GroundEffect[],
 ) => {
   const user = usersState.find((u) => u.userId === effect.creatorId);
-  let info: ActionEffect | undefined = undefined;
+  let info: ActionEffect | undefined;
   if (user) {
     // Prevent?
     const { pass } = preventCheck(usersEffects, "moveprevent", user);
@@ -2024,7 +2107,7 @@ export const onehitkill = (
   // Apply
   const { power } = getPower(effect);
   const primaryCheck = Math.random() < power / 100;
-  let info: ActionEffect | undefined = undefined;
+  let info: ActionEffect | undefined;
   if (primaryCheck) {
     target.curHealth = 0;
     info = { txt: `${target.username} was killed in one hit`, color: "red" };
@@ -2200,7 +2283,7 @@ export const seal = (
   // Apply
   const { power } = getPower(effect);
   const primaryCheck = Math.random() < power / 100;
-  let info: ActionEffect | undefined = undefined;
+  let info: ActionEffect | undefined;
   if (effect.isNew) {
     if (primaryCheck) {
       info = getInfo(target, effect, "bloodline is sealed");
@@ -2290,7 +2373,7 @@ export const stun = (
   // Apply
   const { power } = getPower(effect);
   const primaryCheck = Math.random() < power / 100;
-  let info: ActionEffect | undefined = undefined;
+  let info: ActionEffect | undefined;
   if (effect.isNew && effect.rounds) {
     if (!("apReduction" in effect)) {
       effect.rounds = 0;
@@ -2962,13 +3045,13 @@ const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) => {
   const getTags = (e: UserEffect) => {
     const tags: string[] = [];
     if ("statTypes" in e) {
-      e.statTypes?.forEach((statType) =>
+      e.statTypes?.forEach((statType: StatType) => {
         tags.push(
           statType === "Highest" && e.highestOffence
             ? getStatTypeFromStat(e.highestOffence)
             : statType,
-        ),
-      );
+        );
+      });
     }
     if ("generalTypes" in e) {
       tags.push(...getLowerGenerals(e.generalTypes, e.highestGenerals));
@@ -3004,7 +3087,7 @@ const preventCheck = (
   effect?: UserEffect, // Add optional effect parameter to check creation time
 ) => {
   const preventTag = usersEffects.find(
-    (e) => e.type == type && e.targetId === target.userId && !e.castThisRound,
+    (e) => e.type === type && e.targetId === target.userId && !e.castThisRound,
   );
 
   if (preventTag && (preventTag.rounds === undefined || preventTag.rounds > 0)) {

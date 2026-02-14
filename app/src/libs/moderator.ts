@@ -1,18 +1,24 @@
-import OpenAI from "openai";
-import { generateObject } from "ai";
-import { z } from "zod";
 import { openai as openaiSdk } from "@ai-sdk/openai";
-import { eq, lt, and, sql, desc } from "drizzle-orm";
-import { conversationComment, forumPost, userReportComment } from "@/drizzle/schema";
-import { userData } from "@/drizzle/schema";
-import { generateText } from "ai";
-import { insertUserReport } from "@/routers/reports";
-import { insertAutomatedModeration } from "@/routers/reports";
-import { TERR_BOT_ID, REPORT_CONTEXT_WINDOW, BanStates } from "@/drizzle/constants";
-import { OPENAI_MODERATION_MODEL } from "@/drizzle/constants";
-import type { UserReport } from "@/drizzle/schema";
-import type { DrizzleClient } from "@/server/db";
+import { generateObject, generateText } from "ai";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
+import OpenAI from "openai";
+import { z } from "zod";
 import type { AutomoderationCategory } from "@/drizzle/constants";
+import {
+  BanStates,
+  OPENAI_MODERATION_MODEL,
+  REPORT_CONTEXT_WINDOW,
+  TERR_BOT_ID,
+} from "@/drizzle/constants";
+import type { UserReport } from "@/drizzle/schema";
+import {
+  conversationComment,
+  forumPost,
+  userData,
+  userReportComment,
+} from "@/drizzle/schema";
+import { insertAutomatedModeration, insertUserReport } from "@/routers/reports";
+import type { DrizzleClient } from "@/server/db";
 import type { AdditionalContext } from "@/validators/reports";
 
 // OpenAI client
@@ -387,21 +393,25 @@ export const generateModerationDecision = async (
   client: DrizzleClient,
   content: string,
   context?: AdditionalContext[],
-) => {
+): Promise<{
+  decision: { createReport: (typeof BanStates)[number]; reasoning: string };
+  aiInterpretation: string;
+}> => {
   // Step 1: Generate summary of the content
   const aiInterpretation = await generateAiSummary({ content, context });
   // Step 2: Fetch related userReport using full text search
   const prevReports = await getRelatedReports(client, aiInterpretation);
   // Step 3: Create decision with AI based on summary and related reports
+  const decisionSchema = z.object({
+    createReport: z.enum(BanStates),
+    reasoning: z.string(),
+  });
   const { object } = await generateObject({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
-    schema: z.object({
-      createReport: z.enum(BanStates),
-      reasoning: z.string(),
-    }),
+    schema: decisionSchema,
     prompt: getSystemPrompt(content, aiInterpretation, prevReports),
   });
-  return { decision: object, aiInterpretation };
+  return { decision: object as z.infer<typeof decisionSchema>, aiInterpretation };
 };
 
 /**
@@ -443,16 +453,20 @@ const updateReportedStatus = async (
  * @param reason - The reason for the update
  * @returns The validation result
  */
-export const validateUserUpdateReason = async (update: string, reason: string) => {
+export const validateUserUpdateReason = async (
+  update: string,
+  reason: string,
+): Promise<{ allowUpdate: boolean; comment: string }> => {
+  const validationSchema = z.object({ allowUpdate: z.boolean(), comment: z.string() });
   const { object } = await generateObject({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
-    schema: z.object({ allowUpdate: z.boolean(), comment: z.string() }),
+    schema: validationSchema,
     prompt: `
-      The following reason/explanation is supplied by a content member to update a piece of game content 
-      Please determine if the reason is descriptive and if the update should be allowed. 
+      The following reason/explanation is supplied by a content member to update a piece of game content
+      Please determine if the reason is descriptive and if the update should be allowed.
       Content members are tasked with testing things, helping users, etc, and thus the reasons serves mostly as a way to provide transparency to the end users as for why a given update was made.
-      You are not to judge the validity of the update, only verify that it explains the update in a way that reason is clear. 
-      
+      You are not to judge the validity of the update, only verify that it explains the update in a way that reason is clear.
+
       - The main purpose of the reason is to give a bit of context, and not just be a empty string or randomly filled letters.
       - The reason must not be offensive.
       - Ignore spelling errors, this is not important to the moderation process.
@@ -468,5 +482,5 @@ export const validateUserUpdateReason = async (update: string, reason: string) =
       </update>
     `,
   });
-  return object;
+  return object as z.infer<typeof validationSchema>;
 };

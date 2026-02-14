@@ -1,20 +1,19 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { LogbookEntry } from "@/layout/Logbook";
-import { showMutationToast } from "@/libs/toast";
+import { Gamepad2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Gamepad2 } from "lucide-react";
-import Accordion from "@/layout/Accordion";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import { useTutorialStep } from "@/hooks/tutorial";
-import { useCheckRewards } from "@/layout/Logbook";
-import { getActiveObjective } from "@/libs/objectives";
-import { useState, useEffect } from "react";
-import { useRequiredUserData } from "@/utils/UserContext";
 import type { QuestType } from "@/drizzle/constants";
+import { useTutorialStep } from "@/hooks/tutorial";
+import Accordion from "@/layout/Accordion";
+import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import { LogbookEntry, useCheckRewards } from "@/layout/Logbook";
+import { getActiveObjective } from "@/libs/objectives";
+import { showMutationToast } from "@/libs/toast";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 interface QuestPickerProps {
   questType: QuestType;
@@ -97,7 +96,6 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, userData, quests]);
 
   // Default active tab
@@ -120,7 +118,6 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
         setActiveElement(quests[0].name);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData, activeElement, props.questType, quests]);
 
   // Filter for story quests only
@@ -135,7 +132,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
       defaultBackHref={props.defaultBackHref}
     >
       {props.introduction && (
-        <p className="text-center text-xl font-bold mb-4 px-3 pt-3">
+        <p className="mb-4 px-3 pt-3 text-center font-bold text-xl">
           {props.introduction}
         </p>
       )}
@@ -144,13 +141,13 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
       {!isPending && userData && (
         <div className="bg-popover">
           {availableQuests.length === 0 && (
-            <p className="font-bold p-3">
+            <p className="p-3 font-bold">
               {props.unavailableText
                 ? props.unavailableText
                 : `No current ${props.questType} quests available`}
             </p>
           )}
-          {availableQuests.map((quest, i) => {
+          {availableQuests.map((quest) => {
             const currentQuest = userData?.userQuests?.find(
               (uq) => uq.quest.id === quest.id && !uq.endAt,
             );
@@ -158,7 +155,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
             const active = currentQuest && currentTracker;
 
             return (
-              <div key={i}>
+              <div key={quest.id}>
                 <Accordion
                   title={quest.name}
                   selectedTitle={activeElement}

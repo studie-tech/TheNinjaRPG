@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { UserWithRelations } from "@/api/routers/profile";
+import { api } from "@/app/_trpc/client";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { showMutationToast } from "@/libs/toast";
 import {
-  initIframeMuteObserver,
   getIframeMuteObserver,
+  initIframeMuteObserver,
   setIframeMuteState,
 } from "@/utils/audio";
 import { useUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
-import type { UserWithRelations } from "@/api/routers/profile";
 
 interface UseIframeMuteReturn {
   isIframesMuted: boolean;

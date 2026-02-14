@@ -1,27 +1,31 @@
-import { calculateContentDiff } from "@/utils/diff";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { QuestFormSchema } from "@/validators/objectives";
-import {
-  LetterRanks,
-  QuestTypes,
-  UserRanks,
-  RetryQuestDelays,
-  MEDNIN_RANKS,
-  HUNTING_RANKS,
-  GATHERING_RANKS,
-  STARTER_VILLAGES,
-  QuestTypesWithMaxAttempts,
-} from "@/drizzle/constants";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { IMG_AVATAR_DEFAULT, IMG_BADGE_DIALOG } from "@/drizzle/constants";
-import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
-import { canAwardReputation } from "@/utils/permissions";
-import type { AllObjectivesType } from "@/validators/objectives";
+import {
+  GATHERING_RANKS,
+  HUNTING_RANKS,
+  IMG_AVATAR_DEFAULT,
+  IMG_BADGE_DIALOG,
+  LetterRanks,
+  MEDNIN_RANKS,
+  QuestTypes,
+  QuestTypesWithMaxAttempts,
+  RetryQuestDelays,
+  STARTER_VILLAGES,
+  UserRanks,
+} from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
-import type { QuestContentType, ZodQuestFormType } from "@/validators/objectives";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { calculateContentDiff } from "@/utils/diff";
+import { canAwardReputation } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
+import type {
+  AllObjectivesType,
+  ZodQuestFormInput,
+  ZodQuestFormType,
+} from "@/validators/objectives";
+import { QuestFormSchema } from "@/validators/objectives";
 
 // A merged type for quest with its rewards, so that we can show both in the same form
 export type ZodCombinedQuest = ZodQuestFormType;
@@ -53,11 +57,11 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   const parsedStart = schema.safeParse(initialData);
   const start = parsedStart.success ? parsedStart.data : initialData;
 
-  const form = useForm<ZodCombinedQuest>({
+  const form = useForm<ZodQuestFormInput, unknown, ZodCombinedQuest>({
     mode: "all",
     criteriaMode: "all",
-    values: start,
-    defaultValues: start,
+    values: start as ZodQuestFormInput,
+    defaultValues: start as ZodQuestFormInput,
     resolver: zodResolver(schema),
   });
 
@@ -171,16 +175,21 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     control: form.control,
     name: "content",
   });
-  const objectives = content.objectives ?? [];
+  // Cast to output type - z.coerce fields have unknown in input type but proper types in output
+  const objectives = (content.objectives ?? []) as AllObjectivesType[];
 
-  // Watch the entire thing
+  // Watch the entire thing - cast to output type for proper typing with z.coerce fields
   const currentValues = useWatch({
     control: form.control,
-  });
+  }) as ZodCombinedQuest;
 
   // Handle updating of effects
   const setObjectives = (values: AllObjectivesType[]) => {
-    const newContent: QuestContentType = { ...content, objectives: values };
+    // Cast content to output type for proper typing
+    const newContent = {
+      ...(content as ZodCombinedQuest["content"]),
+      objectives: values,
+    };
     form.setValue("content", newContent, { shouldDirty: true });
   };
 

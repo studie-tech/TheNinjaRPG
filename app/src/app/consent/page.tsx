@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import Loader from "@/layout/Loader";
 import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
 
 export const CookieConsentSkeleton: React.FC = () => {
   return (
-    <Skeleton className="h-[2000px] w-full items-start justify-center flex">
+    <Skeleton className="flex h-[2000px] w-full items-start justify-center">
       <Loader explanation="Loading consent data" />
     </Skeleton>
   );
@@ -42,7 +42,7 @@ export default function CookieConsent() {
 
     // Mutation observer
     const config = { attributes: true, childList: true, subtree: true };
-    const observer = new MutationObserver((mutationList, observer) => {
+    const observer = new MutationObserver((_mutationList, observer) => {
       if (hasMeaningfulContent()) {
         // Add a small delay to ensure content is fully rendered
         timeoutRef.current = setTimeout(() => {

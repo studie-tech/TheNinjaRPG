@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Image from "@/layout/Image";
-import { ArrowRight, Loader2, X, Sparkles, Settings2 } from "lucide-react";
-import { useUserData } from "@/utils/UserContext";
+import * as Sentry from "@sentry/nextjs";
+import { ArrowRight, Loader2, Settings2, Sparkles, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { parseHtml } from "@/utils/parse";
 import {
   Dialog,
   DialogContent,
@@ -14,35 +13,39 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getMobileOperatingSystem } from "@/utils/hardware";
+import type { SortableItem } from "@/components/ui/sortable-list";
+import { SortableList } from "@/components/ui/sortable-list";
+import type { QuestType } from "@/drizzle/constants";
 import {
   IMG_URL_ASSISTANT,
-  IMG_URL_HANDPOINTER,
   IMG_URL_ASSISTANT_2,
+  IMG_URL_HANDPOINTER,
   OrderedQuestTypesInTutorial,
   TUTORIAL_STEPS_COUNT,
 } from "@/drizzle/constants";
+import type { UserQuest } from "@/drizzle/schema";
+import { useLocalStorage } from "@/hooks/localstorage";
+import type { TutorialStepConfig } from "@/hooks/tutorial";
 import {
-  TUTORIAL_STEPS,
   TUTORIAL_HOSPITALIZED_STEP,
+  TUTORIAL_STEPS,
   useTutorialStep,
 } from "@/hooks/tutorial";
-import { cn } from "src/libs/shadui";
-import * as Sentry from "@sentry/nextjs";
-import type { TutorialStepConfig } from "@/hooks/tutorial";
-import { getActiveObjective, isQuestObjectiveAvailable } from "@/libs/objectives";
-import { useCheckRewards } from "@/layout/Logbook";
-import { api } from "@/app/_trpc/client";
 import { useAbVariant } from "@/hooks/useAbVariant";
-import type { UserQuest } from "@/drizzle/schema";
-import type { QuestTrackerType } from "@/validators/objectives";
-import { isQuestComplete } from "@/libs/objectives";
+import Image from "@/layout/Image";
+import { useCheckRewards } from "@/layout/Logbook";
 import { Objective } from "@/layout/Objective";
-import { useLocalStorage } from "@/hooks/localstorage";
-import { SortableList } from "@/components/ui/sortable-list";
-import type { SortableItem } from "@/components/ui/sortable-list";
+import {
+  getActiveObjective,
+  isQuestComplete,
+  isQuestObjectiveAvailable,
+} from "@/libs/objectives";
+import { cn } from "@/libs/shadui";
+import { getMobileOperatingSystem } from "@/utils/hardware";
+import { parseHtml } from "@/utils/parse";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import type { QuestType } from "@/drizzle/constants";
+import { useUserData } from "@/utils/UserContext";
+import type { QuestTrackerType } from "@/validators/objectives";
 
 /**
  * Reusable assistant portrait with correct styling
@@ -56,10 +59,10 @@ const AssistantPortrait: React.FC<{ characterImage?: string }> = ({
   const defaultImage =
     variant === "treatment" ? IMG_URL_ASSISTANT_2 : IMG_URL_ASSISTANT;
   const className = cn(
-    "absolute right-0 w-auto object-contain drop-shadow-2xl select-none pointer-events-none z-0",
+    "pointer-events-none absolute right-0 z-0 w-auto select-none object-contain drop-shadow-2xl",
     variant === "treatment"
-      ? "h-[14rem] md:h-96 scale-x-[-1] -top-[10rem] md:-top-70"
-      : "h-[9.5rem] md:h-48 -top-[9.5rem] md:-top-48",
+      ? "-top-[10rem] h-[14rem] scale-x-[-1] md:-top-70 md:h-96"
+      : "-top-[9.5rem] h-[9.5rem] md:-top-48 md:h-48",
   );
   return (
     <Image
@@ -97,18 +100,18 @@ const AssistantDialog: React.FC<{
   onOpenOrderingDialog,
   showOrderingButton,
 }) => (
-  <div className="fixed bottom-24 right-4 md:bottom-4 md:right-4 z-[60] pointer-events-auto">
+  <div className="pointer-events-auto fixed right-4 bottom-24 z-[60] md:right-4 md:bottom-4">
     <div className="relative">
       {/* Assistant portrait positioned behind and above the dialog (top-right) */}
       <AssistantPortrait characterImage={characterImage} />
       {/* Foreground content */}
       <div className="relative z-10">
         {/* Nameplate */}
-        <div className="absolute -top-6 left-8 px-4 py-1 rounded-md bg-primary text-primary-foreground shadow-lg uppercase tracking-wider text-xs md:text-sm">
+        <div className="absolute -top-6 left-8 rounded-md bg-primary px-4 py-1 text-primary-foreground text-xs uppercase tracking-wider shadow-lg md:text-sm">
           {title}
         </div>
         {/* Speech panel */}
-        <div className="bg-card text-foreground rounded-xl border-2 border-primary shadow-2xl w-[80vw] md:w-[560px] p-4 md:p-5">
+        <div className="w-[80vw] rounded-xl border-2 border-primary bg-card p-4 text-foreground shadow-2xl md:w-[560px] md:p-5">
           {onOpenDisableModal && (
             <Button
               variant="ghost"
@@ -138,7 +141,7 @@ const AssistantDialog: React.FC<{
                 className="opacity-50 hover:opacity-100"
                 title="Sort quest priorities"
               >
-                <Settings2 className="h-4 w-4 mr-1" />
+                <Settings2 className="mr-1 h-4 w-4" />
                 <span className="text-xs">Priority</span>
               </Button>
             </div>
@@ -164,7 +167,7 @@ const CancelTutorialConfirmDialog: React.FC<{
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md z-[70] overflow-hidden pb-0">
+      <DialogContent className="z-[70] overflow-hidden pb-0 sm:max-w-md">
         <div className="flex gap-4">
           <div className="flex-1">
             <DialogHeader>
@@ -178,7 +181,7 @@ const CancelTutorialConfirmDialog: React.FC<{
                 re-enable the tutorial.
               </DialogDescription>
             </DialogHeader>
-            <div className="flex justify-start gap-2 mt-4 pb-4">
+            <div className="mt-4 flex justify-start gap-2 pb-4">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Keep Tutorial
               </Button>
@@ -370,7 +373,6 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
         setIsAssistantVisible(false);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData, pathname, router, updateTutorialStep, rightSideBarOpen, isMobile]);
 
   // Start Sentry replay on the first tutorial step
@@ -428,7 +430,6 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       console.log("Assigning stats but no stats available, proceeding to next step");
       void handleNextStepAsync();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, userData]);
 
   // Update highlight position based on current step and element
@@ -502,7 +503,6 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       window.removeEventListener("resize", handleResize);
       observer.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, isAssistantVisible, pathname, userData?.status]);
 
   // Update game menu highlight position when showing game menu tutorial
@@ -853,15 +853,17 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               height: gameMenuHighlight.height + 20,
             }}
           >
-            <div className="absolute inset-0 border-[3px] border-amber-400 rounded-md animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.7)] z-[1]">
+            <div className="absolute inset-0 z-[1] animate-pulse rounded-md border-[3px] border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.7)]">
               {/* Allow clicking to open the menu */}
-              <div
-                className="absolute inset-0 cursor-pointer z-[2] pointer-events-auto"
+              <button
+                type="button"
+                className="pointer-events-auto absolute inset-0 z-[2] cursor-pointer"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   setRightSideBarOpen(true);
                 }}
+                aria-label="Open game menu"
               />
             </div>
           </div>
@@ -870,7 +872,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
           <Image
             src={IMG_URL_HANDPOINTER}
             alt="Tap here"
-            className="absolute w-[4.5rem] h-[4.5rem] animate-bounce"
+            className="absolute h-[4.5rem] w-[4.5rem] animate-bounce"
             width={80}
             height={80}
             style={{
@@ -893,13 +895,13 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               }
             }}
           >
-            <p className="text-sm md:text-base leading-relaxed">
+            <p className="text-sm leading-relaxed md:text-base">
               Click the highlighted button to open the game menu and continue the
               tutorial.
             </p>
-            <div className="mt-3 md:mt-4 flex justify-end gap-2">
+            <div className="mt-3 flex justify-end gap-2 md:mt-4">
               <Button size="lg" onClick={() => setRightSideBarOpen(true)}>
-                Open Menu <ArrowRight className="ml-2 h-4 md:h-5 w-4 md:w-5" />
+                Open Menu <ArrowRight className="ml-2 h-4 w-4 md:h-5 md:w-5" />
               </Button>
             </div>
           </AssistantDialog>
@@ -910,7 +912,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     // Fallback dialog if button not found
     return (
       <Dialog open={true}>
-        <DialogContent className="sm:max-w-md z-[60]">
+        <DialogContent className="z-[60] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Continue the Tutorial</DialogTitle>
             <DialogDescription>
@@ -918,7 +920,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               game menu and continue the tutorial.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-between mt-4">
+          <div className="mt-4 flex justify-between">
             <Button onClick={() => setRightSideBarOpen(true)}>Open Menu</Button>
           </div>
         </DialogContent>
@@ -961,7 +963,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     <>
       {highlight && !showCancelConfirmDialog && (
         <div className={cn("fixed inset-0 z-[60]", pointerEvents)}>
-          <div className="absolute inset-0 bg-black/30 min-h-[2000px]" />
+          <div className="absolute inset-0 min-h-[2000px] bg-black/30" />
 
           <div
             className={cn(
@@ -975,10 +977,10 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               height: highlight.height + 20,
             }}
           >
-            <div className="absolute inset-0 border-[3px] border-amber-400 rounded-md animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.7)] z-[1]">
-              <div
-                className={cn("absolute inset-0 cursor-pointer z-[2]", pointerEvents)}
-                role="button"
+            <div className="absolute inset-0 z-[1] animate-pulse rounded-md border-[3px] border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.7)]">
+              <button
+                type="button"
+                className={cn("absolute inset-0 z-[2] cursor-pointer", pointerEvents)}
                 aria-label="Continue tutorial"
                 onPointerDown={(e) => {
                   if (currentTutorialStep.proceedOnHighlightClick) {
@@ -1012,7 +1014,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
           <Image
             src={IMG_URL_HANDPOINTER}
             alt="Tap here"
-            className="absolute w-18 h-18 animate-bounce"
+            className="absolute h-18 w-18 animate-bounce"
             width={80}
             height={80}
             style={{
@@ -1044,11 +1046,11 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
             showOrderingButton={showPostTutorialQuest}
           >
             {typeof currentTutorialStep.description === "string" ? (
-              <p className="text-sm md:text-base leading-relaxed">
+              <p className="text-sm leading-relaxed md:text-base">
                 {parseHtml(currentTutorialStep.description)}
               </p>
             ) : (
-              <div className="text-sm md:text-base leading-relaxed">
+              <div className="text-sm leading-relaxed md:text-base">
                 {currentTutorialStep.description}
               </div>
             )}
@@ -1068,7 +1070,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
             )}
             {dialogOptions && (
               <div className="mt-3 md:mt-4">
-                <h3 className="text-sm font-semibold mb-2">Dialog Options</h3>
+                <h3 className="mb-2 font-semibold text-sm">Dialog Options</h3>
                 <div className="flex flex-wrap gap-2">
                   {dialogOptions.options.map((entry) => (
                     <Button
@@ -1086,7 +1088,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                           });
                         }
                       }}
-                      className="flex-1 min-w-[120px]"
+                      className="min-w-[120px] flex-1"
                     >
                       {isCheckingRewards ? (
                         <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -1102,10 +1104,10 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               postTutorialQuest && (
                 <>
                   <div
-                    className={cn("mt-3 md:mt-4 grid grid-cols-1 gap-4 grid-cols-2")}
+                    className={cn("mt-3 grid grid-cols-1 grid-cols-2 gap-4 md:mt-4")}
                   >
                     {postTutorialQuest.userQuest.quest.content.objectives.map(
-                      (objective, i) => {
+                      (objective, objectiveIndex) => {
                         if (!postTutorialQuest) return null;
                         const quest = postTutorialQuest.userQuest.quest;
                         const tracker = postTutorialQuest.tracker;
@@ -1121,11 +1123,15 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                             objective={objective}
                             tracker={tracker}
                             checkRewards={() => checkRewards({ questId: quest.id })}
-                            key={i}
+                            key={objective.id}
                             titlePrefix={
-                              quest.consecutiveObjectives ? "Objective: " : `${i + 1}. `
+                              quest.consecutiveObjectives
+                                ? "Objective: "
+                                : `${objectiveIndex + 1}. `
                             }
-                            grayedOut={!isQuestObjectiveAvailable(quest, tracker, i)}
+                            grayedOut={
+                              !isQuestObjectiveAvailable(quest, tracker, objectiveIndex)
+                            }
                             hideIfNoRewards={hideIfNoRewards}
                           />
                         );
@@ -1147,7 +1153,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                           }}
                           className="w-full"
                         >
-                          <Sparkles className="h-5 w-5 mr-2" />
+                          <Sparkles className="mr-2 h-5 w-5" />
                           Collect Reward
                         </Button>
                       </div>
@@ -1155,7 +1161,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                 </>
               )}
             {currentTutorialStep?.showNextButton && (
-              <div className="mt-3 md:mt-4 flex justify-end gap-2">
+              <div className="mt-3 flex justify-end gap-2 md:mt-4">
                 <Button
                   size="lg"
                   onClick={(e) => {
@@ -1178,7 +1184,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                   }}
                 >
                   {currentStepNumber === TUTORIAL_STEPS.length - 1 ? "Finish" : "Next"}
-                  <ArrowRight className="ml-2 h-4 md:h-5 w-4 md:w-5" />
+                  <ArrowRight className="ml-2 h-4 w-4 md:h-5 md:w-5" />
                 </Button>
               </div>
             )}
@@ -1187,7 +1193,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
 
       {/* Quest Type Ordering Dialog */}
       <Dialog open={showOrderingDialog} onOpenChange={setShowOrderingDialog}>
-        <DialogContent className="sm:max-w-md z-[70]">
+        <DialogContent className="z-[70] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Quest Priority Order</DialogTitle>
             <DialogDescription>
@@ -1204,7 +1210,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
             }}
             className="max-h-[60vh] overflow-y-auto"
           />
-          <div className="flex justify-between mt-4">
+          <div className="mt-4 flex justify-between">
             <Button
               variant="outline"
               onClick={() => {

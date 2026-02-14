@@ -1,19 +1,19 @@
+import { Slot } from "@radix-ui/react-slot";
+import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
-import Image from "@/layout/Image";
-import Loader from "@/layout/Loader";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Slot } from "@radix-ui/react-slot";
-import { cva, type VariantProps } from "class-variance-authority";
 import { IMG_LAYOUT_BUTTONDECOR } from "@/drizzle/constants";
-import { cn } from "src/libs/shadui";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import { cn } from "@/libs/shadui";
 
 const buttonVariants = cva(
-  "relative inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
+  "relative inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-md font-medium text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
   {
     variants: {
       variant: {
@@ -22,7 +22,7 @@ const buttonVariants = cva(
           "bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90",
         info: "bg-blue-600 text-destructive-foreground shadow-xs hover:bg-destructive/90",
         outline:
-          "border border-input bg-white shadow-xs hover:bg-slate-100 hover:text-accent-foreground text-black",
+          "border border-input bg-white text-black shadow-xs hover:bg-slate-100 hover:text-accent-foreground",
         secondary:
           "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
@@ -115,7 +115,7 @@ const Button = ({
           {children}
           {loading && <Loader size={20} />}
           {count !== undefined && count > 0 && (
-            <div className="absolute top-0 right-[-3] flex items-center justify-center text-xs text-orange-100 bg-orange-500 rounded-full w-5 h-5 z-50">
+            <div className="absolute top-0 right-[-3] z-50 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-xs">
               {count}
             </div>
           )}
@@ -141,18 +141,18 @@ const Button = ({
     <div
       className={cn("relative z-0 inline-block", widthClassesFromUser)}
       style={
-        isGlow ? ({ ["--tnr-glow"]: glowBaseColor } as React.CSSProperties) : undefined
+        isGlow ? ({ "--tnr-glow": glowBaseColor } as React.CSSProperties) : undefined
       }
     >
       {isGlow && (
         <div
           aria-hidden
           className={cn(
-            "pointer-events-none absolute -inset-[2px] rounded-md blur-md z-0",
+            "pointer-events-none absolute -inset-[2px] z-0 rounded-md blur-md",
             // Gradient based on the button's own color via CSS var
             "tnr-glow-bg",
             // Animate gradient movement
-            "bg-[600%_auto] background-animate [animation-duration:5s] [animation-timing-function:linear]",
+            "background-animate bg-[600%_auto] [animation-duration:5s] [animation-timing-function:linear]",
           )}
         />
       )}
@@ -161,22 +161,22 @@ const Button = ({
         <div
           aria-hidden
           className={cn(
-            "pointer-events-none absolute inset-0 rounded-md z-[15] tnr-shine",
-            "bg-[200%_100%] background-animate [animation-duration:2.5s] [animation-timing-function:linear]",
+            "tnr-shine pointer-events-none absolute inset-0 z-[15] rounded-md",
+            "background-animate bg-[200%_100%] [animation-duration:2.5s] [animation-timing-function:linear]",
           )}
         />
       )}
       {decoration === "gold" && (
         <>
           <Image
-            className="absolute top-[-1px] left-[-3px] scale-x-[-1] h-full w-auto z-[20]"
+            className="absolute top-[-1px] left-[-3px] z-[20] h-full w-auto scale-x-[-1]"
             src={IMG_LAYOUT_BUTTONDECOR}
             alt="signup-decor-left"
             width={8}
             height={25}
           ></Image>
           <Image
-            className="absolute top-[-1px] right-[-3px] bottom-[0px] h-full w-auto z-[20]"
+            className="absolute top-[-1px] right-[-3px] bottom-[0px] z-[20] h-full w-auto"
             src={IMG_LAYOUT_BUTTONDECOR}
             alt="signup-decor-right"
             width={8}

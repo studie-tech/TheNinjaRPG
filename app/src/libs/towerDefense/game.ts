@@ -6,7 +6,7 @@
  */
 
 import type { TDEnemyDirection } from "@/drizzle/constants";
-import type { SpriteDirection, HexPosition } from "@/validators/towerDefense";
+import type { HexPosition, SpriteDirection } from "@/validators/towerDefense";
 
 /**
  * Calculate axial distance between two hexes.
@@ -113,5 +113,5 @@ export const calculateUpgradeCost = (
   costMultiplier: number,
   currentLevel: number,
 ): number => {
-  return Math.floor(baseCost * Math.pow(costMultiplier, currentLevel));
+  return Math.floor(baseCost * costMultiplier ** currentLevel);
 };

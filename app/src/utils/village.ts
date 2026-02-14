@@ -1,17 +1,21 @@
-import { findVillageUserRelationship } from "@/utils/alliance";
-import { calcIsInVillage } from "@/libs/travel";
-import type { UserWithRelations } from "@/routers/profile";
-import type { Village, VillageStructure, VillageAlliance } from "@/drizzle/schema";
-import type { StructureRoute, SHRINE_BOOST_TYPE } from "@/drizzle/constants";
-import { getUserFederalStatus } from "@/utils/paypal";
+import type { SHRINE_BOOST_TYPE, StructureRoute } from "@/drizzle/constants";
 import {
+  FED_GOLD_BANK_INTEREST,
   FED_NORMAL_BANK_INTEREST,
   FED_SILVER_BANK_INTEREST,
-  FED_GOLD_BANK_INTEREST,
   SHRINE_BOOST_BASE_PERC,
   SHRINE_BOOST_PER_SHRINE_PERC,
 } from "@/drizzle/constants";
-import type { UserData } from "@/drizzle/schema";
+import type {
+  UserData,
+  Village,
+  VillageAlliance,
+  VillageStructure,
+} from "@/drizzle/schema";
+import { calcIsInVillage } from "@/libs/travel";
+import type { UserWithRelations } from "@/routers/profile";
+import { findVillageUserRelationship } from "@/utils/alliance";
+import { getUserFederalStatus } from "@/utils/paypal";
 
 /**
  * Checks if a user can access a specific structure in a village.

@@ -1,13 +1,13 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
-import Image from "@/layout/Image";
-import { api } from "@/app/_trpc/client";
-import { useUserData } from "@/utils/UserContext";
-import { showMutationToast } from "@/libs/toast";
 import { ExternalLink, ImageOff } from "lucide-react";
+import Link from "next/link";
+import type React from "react";
+import { api } from "@/app/_trpc/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import Image from "@/layout/Image";
+import { showMutationToast } from "@/libs/toast";
+import { useUserData } from "@/utils/UserContext";
 
 interface EmbeddedConceptArtProps {
   imageId: string;
@@ -82,9 +82,9 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
   return (
     <div className="my-2 inline-block max-w-[256px] overflow-hidden rounded-lg border border-slate-600 bg-slate-800/50">
       <div className="relative">
-        {hasVideo ? (
+        {hasVideo && image.video ? (
           <video
-            src={image.video!}
+            src={image.video}
             width={256}
             height={384}
             className="block w-full"
@@ -111,11 +111,10 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
       {/* Voting bar and info */}
       <div className="flex items-center justify-between bg-slate-900/80 px-2 py-1.5">
         {/* Voting buttons */}
-        <div className="flex items-center gap-1 text-xs text-white">
+        <div className="flex items-center gap-1 text-white text-xs">
           <button
-            className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 ${
-              hasLike ? "bg-slate-700" : ""
-            }`}
+            type="button"
+            className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 ${hasLike ? "bg-slate-700" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -125,9 +124,8 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
             ❤️ {image.n_likes}
           </button>
           <button
-            className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 ${
-              hasLove ? "bg-slate-700" : ""
-            }`}
+            type="button"
+            className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 ${hasLove ? "bg-slate-700" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -137,9 +135,8 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
             👍 {image.n_loves}
           </button>
           <button
-            className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 ${
-              hasLaugh ? "bg-slate-700" : ""
-            }`}
+            type="button"
+            className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 ${hasLaugh ? "bg-slate-700" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();

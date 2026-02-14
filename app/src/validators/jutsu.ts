@@ -1,12 +1,14 @@
 import { z } from "zod";
-import { UserRanks } from "@/drizzle/constants";
+import {
+  AttackMethods,
+  AttackTargets,
+  BattleUsageTypes,
+  JutsuTypes,
+  LetterRanks,
+  StatTypes,
+  UserRanks,
+} from "@/drizzle/constants";
 import { statFilters } from "@/libs/train";
-import { LetterRanks } from "@/drizzle/constants";
-import { StatTypes } from "@/drizzle/constants";
-import { AttackMethods } from "@/drizzle/constants";
-import { AttackTargets } from "@/drizzle/constants";
-import { JutsuTypes } from "@/drizzle/constants";
-import { BattleUsageTypes } from "@/drizzle/constants";
 
 // Basic name/level search
 export const searchJutsuSchema = z.object({

@@ -1,11 +1,11 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
 import ActionLogs from "@/layout/ActionLog";
 import ActionLogFiltering, {
-  useFiltering,
   getFilter,
+  useFiltering,
 } from "@/layout/ActionLogFiltering";
+import ContentBox from "@/layout/ContentBox";
 import { changelogText } from "@/layout/seoTexts";
 import { useUserData } from "@/utils/UserContext";
 

@@ -1,13 +1,13 @@
-import { calculateContentDiff } from "@/utils/diff";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { gameAssetValidator } from "@/validators/asset";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import { GameAssetTypes } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
-import type { ZodGameAssetType } from "@/validators/asset";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { calculateContentDiff } from "@/utils/diff";
+import type { ZodGameAssetInput, ZodGameAssetType } from "@/validators/asset";
+import { gameAssetValidator } from "@/validators/asset";
 
 /**
  * Hook used when creating frontend forms for editing assets
@@ -15,11 +15,11 @@ import type { ZodGameAssetType } from "@/validators/asset";
  */
 export const useAssetEditForm = (asset: GameAsset, refetch: () => void) => {
   // Form handling
-  const form = useForm<ZodGameAssetType>({
+  const form = useForm<ZodGameAssetInput, unknown, ZodGameAssetType>({
     mode: "all",
     criteriaMode: "all",
-    values: asset,
-    defaultValues: asset,
+    values: asset as ZodGameAssetInput,
+    defaultValues: asset as ZodGameAssetInput,
     resolver: zodResolver(gameAssetValidator),
   });
 

@@ -1,16 +1,35 @@
-import { type ReactNode } from "react";
-import Image from "@/layout/Image";
-import { Atom, Bug, User, Globe2, BookOpenText } from "lucide-react";
-import { Paintbrush, MessagesSquare, Newspaper, Scale, Receipt } from "lucide-react";
-import { Inbox, Flag, ShieldHalf, Briefcase, LifeBuoy, Gavel } from "lucide-react";
-import { Clock, AlertCircle, CheckCircle, XCircle, MessageSquare } from "lucide-react";
-import { calcIsInVillage } from "@/libs/travel";
-import { api } from "@/app/_trpc/client";
-import { findVillageUserRelationship } from "@/utils/alliance";
-import type { UserWithRelations } from "@/routers/profile";
+import {
+  AlertCircle,
+  Atom,
+  BookOpenText,
+  Briefcase,
+  Bug,
+  CheckCircle,
+  Clock,
+  Flag,
+  Gavel,
+  Globe2,
+  Inbox,
+  LifeBuoy,
+  MessageSquare,
+  MessagesSquare,
+  Newspaper,
+  Paintbrush,
+  Receipt,
+  Scale,
+  ShieldHalf,
+  User,
+  XCircle,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useUserData } from "@/utils/UserContext";
+import type { ReactNode } from "react";
+import { api } from "@/app/_trpc/client";
 import type { SupportTicketStatus } from "@/drizzle/constants";
+import Image from "@/layout/Image";
+import { calcIsInVillage } from "@/libs/travel";
+import type { UserWithRelations } from "@/routers/profile";
+import { findVillageUserRelationship } from "@/utils/alliance";
+import { useUserData } from "@/utils/UserContext";
 
 export interface NavBarDropdownLink {
   id?: string;
@@ -191,7 +210,7 @@ export const useGameMenu = (userData: UserWithRelations) => {
   }
 
   // Pre-defined location as undefined
-  let location: NavBarDropdownLink | undefined = undefined;
+  let location: NavBarDropdownLink | undefined;
   if (userData && sector) {
     // Check if user is in own village, or in
     const userVillage = userData.villageId ?? "syndicate";

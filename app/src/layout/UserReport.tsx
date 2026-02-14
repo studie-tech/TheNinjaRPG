@@ -1,20 +1,20 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Ban,
+  EarOff,
+  Eraser,
+  MessagesSquare,
+  Repeat,
+  Rocket,
+  ShieldAlert,
+} from "lucide-react";
 import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { parseHtml } from "@/utils/parse";
-import { MessagesSquare, Rocket, ShieldAlert } from "lucide-react";
-import { EarOff, Ban, Eraser, Repeat } from "lucide-react";
-import ContentBox from "@/layout/ContentBox";
-import Confirm2 from "@/layout/Confirm2";
-import Countdown from "@/layout/Countdown";
-import RichInput from "@/layout/RichInput";
-import SliderField from "@/layout/SliderField";
-import Post from "@/layout/Post";
-import ParsedReportJson from "@/layout/ReportReason";
-import Loader from "@/layout/Loader";
+import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -22,27 +22,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { CommentOnReport } from "@/layout/Comment";
-import { api } from "@/app/_trpc/client";
-import { reportCommentSchema } from "@/validators/reports";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { reportCommentColor } from "@/utils/reports";
-import { reportCommentExplain } from "@/utils/reports";
-import { showMutationToast } from "@/libs/toast";
-import { canPostReportComment } from "@/utils/permissions";
-import { canModerateReports } from "@/utils/permissions";
-import { canBanUsers } from "@/utils/permissions";
-import { canSilenceUsers } from "@/utils/permissions";
-import { canWarnUsers } from "@/utils/permissions";
-import { canEscalateBan } from "@/utils/permissions";
-import { canClearReport } from "@/utils/permissions";
-import { TimeUnits, REPORT_CONTEXT_WINDOW, TERR_BOT_ID } from "@/drizzle/constants";
-import type { ReportCommentSchema } from "@/validators/reports";
-import type { TimeUnit } from "@/drizzle/constants";
-import type { BaseServerResponse } from "@/server/api/trpc";
+import type { FederalStatus, TimeUnit, UserRank, UserRole } from "@/drizzle/constants";
+import { REPORT_CONTEXT_WINDOW, TERR_BOT_ID, TimeUnits } from "@/drizzle/constants";
 import type { UserReport } from "@/drizzle/schema";
-import type { UserRole, UserRank, FederalStatus } from "@/drizzle/constants";
+import { CommentOnReport } from "@/layout/Comment";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import Loader from "@/layout/Loader";
+import Post from "@/layout/Post";
+import ParsedReportJson from "@/layout/ReportReason";
+import RichInput from "@/layout/RichInput";
+import SliderField from "@/layout/SliderField";
+import { showMutationToast } from "@/libs/toast";
+import type { BaseServerResponse } from "@/server/api/trpc";
+import { parseHtml } from "@/utils/parse";
+import {
+  canBanUsers,
+  canClearReport,
+  canEscalateBan,
+  canModerateReports,
+  canPostReportComment,
+  canSilenceUsers,
+  canWarnUsers,
+} from "@/utils/permissions";
+import { reportCommentColor, reportCommentExplain } from "@/utils/reports";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type { ReportCommentSchema } from "@/validators/reports";
+import { reportCommentSchema } from "@/validators/reports";
 
 interface UserReportProps {
   report: UserReport & {
@@ -84,7 +91,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
       placeholderData: (previousData) => previousData,
     },
   );
-  const allComments = comments?.pages.map((page) => page.data).flat();
+  const allComments = comments?.pages.flatMap((page) => page.data);
 
   // Form handling
   const {
@@ -151,7 +158,6 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
         setValue("comment", report.reason);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAi, report, setValue]);
 
   const handleSubmitComment = handleSubmit(
@@ -212,25 +218,23 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
         initialBreak={props.initialBreak}
       >
         {report.reportedUser && (
-          <>
-            <Post user={report.reportedUser} hover_effect={true}>
-              {report.banEnd && (
-                <div className="mb-3">
-                  <b>Ban countdown:</b>{" "}
-                  <Countdown targetDate={report.banEnd} timeDiff={timeDiff} />
-                  <hr />
-                </div>
-              )}
-              <ParsedReportJson report={report} viewer={userData} />
-              {report.reporterUser?.username && (
-                <div>
-                  <b>Report by</b> {report.reporterUser?.username}
-                  <br />
-                </div>
-              )}
-              <b>Current status:</b> {report.status}
-            </Post>
-          </>
+          <Post user={report.reportedUser} hover_effect={true}>
+            {report.banEnd && (
+              <div className="mb-3">
+                <b>Ban countdown:</b>{" "}
+                <Countdown targetDate={report.banEnd} timeDiff={timeDiff} />
+                <hr />
+              </div>
+            )}
+            <ParsedReportJson report={report} viewer={userData} />
+            {report.reporterUser?.username && (
+              <div>
+                <b>Report by</b> {report.reporterUser?.username}
+                <br />
+              </div>
+            )}
+            <b>Current status:</b> {report.status}
+          </Post>
         )}
       </ContentBox>
 
@@ -258,12 +262,12 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                   defaultValue={watchedUnit}
                   value={watchedUnit}
                 >
-                  <SelectTrigger className="basis-1/4 m-1">
+                  <SelectTrigger className="m-1 basis-1/4">
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                   <SelectContent>
-                    {TimeUnits.map((value) => (
-                      <SelectItem key={value} value={value}>
+                    {TimeUnits.map((value, i) => (
+                      <SelectItem key={`${value}-${i}`} value={value}>
                         {value}
                       </SelectItem>
                     ))}
@@ -283,7 +287,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
               />
             )}
             {canWrite && report.reportedUserId !== userData.userId && (
-              <div className="p-2 flex flex-row gap-2">
+              <div className="flex flex-row gap-2 p-2">
                 {isAi && (
                   <Badge
                     className="bg-slate-500"
@@ -302,7 +306,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
             )}
             {isPending && <Loader explanation="Executing action..." />}
             {!isPending && (
-              <div className="flex flex-row-reverse gap-1 mt-2">
+              <div className="mt-2 flex flex-row-reverse gap-1">
                 {canComment && (
                   <Confirm2
                     title="Confirm Posting Comment"
@@ -447,20 +451,23 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
       {report.additionalContext.length > 0 && (
         <ContentBox
           title="Conversation Context"
-          subtitle={`Latest ${Math.min(
-            REPORT_CONTEXT_WINDOW,
-            report.additionalContext.length,
-          )} messages leading up to report`}
+          subtitle={`Latest ${Math.min(REPORT_CONTEXT_WINDOW, report.additionalContext.length)} messages leading up to report`}
           initialBreak
         >
-          {report.additionalContext.map((context, i) => (
-            <Post key={`context-${i}`} user={context}>
-              {context.content}
-              <p className="absolute bottom-0 right-2 italic text-xs text-gray-600">
-                @{context.createdAt.toLocaleString()}
-              </p>
-            </Post>
-          ))}
+          {report.additionalContext.map((context) => {
+            const createdAt = new Date(context.createdAt);
+            return (
+              <Post
+                key={`context-${context.userId}-${createdAt.getTime()}`}
+                user={context}
+              >
+                {context.content}
+                <p className="absolute right-2 bottom-0 text-gray-600 text-xs italic">
+                  @{createdAt.toLocaleString()}
+                </p>
+              </Post>
+            );
+          })}
         </ContentBox>
       )}
     </>

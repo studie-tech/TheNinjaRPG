@@ -1,10 +1,11 @@
-import React, { useEffect, useCallback } from "react";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { Check, Minus, X } from "lucide-react";
+import type React from "react";
+import { useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Check, X, Minus } from "lucide-react";
-import { cn } from "src/libs/shadui";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { cn } from "@/libs/shadui";
 
 interface ToggleProps {
   id?: string;
@@ -37,7 +38,7 @@ const Toggle: React.FC<ToggleProps> = (props) => {
   useEffect(() => {
     if (value === undefined && id) {
       const select = safeLocalStorageGetItem(id) || "true";
-      const newValue = select === "true" ? true : false;
+      const newValue = select === "true";
       setState(newValue);
     }
   }, [id, value, setState]);
@@ -98,9 +99,9 @@ const TriStateToggle: React.FC<TriStateToggleProps> = (props) => {
   };
 
   const getIcon = () => {
-    if (value === undefined) return <Minus className="w-3 h-3" />;
-    if (value === true) return <Check className="w-3 h-3" />;
-    return <X className="w-3 h-3" />;
+    if (value === undefined) return <Minus className="h-3 w-3" />;
+    if (value === true) return <Check className="h-3 w-3" />;
+    return <X className="h-3 w-3" />;
   };
 
   const getButtonStyle = () => {
@@ -110,18 +111,18 @@ const TriStateToggle: React.FC<TriStateToggleProps> = (props) => {
     if (value === undefined) {
       return cn(
         baseClasses,
-        "bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-300 hover:border-gray-400",
+        "border border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400 hover:bg-gray-200",
       );
     }
     if (value === true) {
       return cn(
         baseClasses,
-        "bg-green-500 hover:bg-green-600 text-white border border-green-500 hover:border-green-600 shadow-sm",
+        "border border-green-500 bg-green-500 text-white shadow-sm hover:border-green-600 hover:bg-green-600",
       );
     }
     return cn(
       baseClasses,
-      "bg-red-500 hover:bg-red-600 text-white border border-red-500 hover:border-red-600 shadow-sm",
+      "border border-red-500 bg-red-500 text-white shadow-sm hover:border-red-600 hover:bg-red-600",
     );
   };
 

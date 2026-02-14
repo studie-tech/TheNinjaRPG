@@ -1,5 +1,5 @@
-import ConceptBox_ConceptImage from "./conceptimage";
 import type { Metadata } from "next";
+import ConceptBox_ConceptImage from "./conceptimage";
 
 type Props = { params: Promise<{ imageid: string }> };
 

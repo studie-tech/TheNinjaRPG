@@ -1,8 +1,7 @@
 "use client";
 import { use } from "react";
-
-import Loader from "@/layout/Loader";
 import { ClanProfile } from "@/layout/Clan";
+import Loader from "@/layout/Loader";
 import { useRequireInVillage } from "@/utils/UserContext";
 
 export default function ClanInfo(props: { params: Promise<{ clanid: string }> }) {

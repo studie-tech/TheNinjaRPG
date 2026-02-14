@@ -1,13 +1,17 @@
-import { calculateContentDiff } from "@/utils/diff";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { SkillTreeValidator } from "@/validators/combat";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
+import { SkillTreeEntryTypes, SkillTreeTargets } from "@/drizzle/constants";
 import type { SkillTree } from "@/drizzle/schema";
-import type { ZodAllTags, ZodSkillTreeType } from "@/validators/combat";
-import { SkillTreeTargets, SkillTreeEntryTypes } from "@/drizzle/constants";
 import type { FormEntry } from "@/layout/EditContent";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { calculateContentDiff } from "@/utils/diff";
+import type {
+  ZodAllTags,
+  ZodSkillTreeInput,
+  ZodSkillTreeType,
+} from "@/validators/combat";
+import { SkillTreeValidator } from "@/validators/combat";
 
 /**
  * Hook used when creating frontend forms for editing skills
@@ -21,11 +25,11 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
   const skillTree = { ...data, effects: data.effects };
 
   // Form handling
-  const form = useForm<ZodSkillTreeType>({
+  const form = useForm<ZodSkillTreeInput, unknown, ZodSkillTreeType>({
     mode: "all",
     criteriaMode: "all",
-    values: skillTree as ZodSkillTreeType,
-    defaultValues: skillTree as ZodSkillTreeType,
+    values: skillTree as ZodSkillTreeInput,
+    defaultValues: skillTree as ZodSkillTreeInput,
     resolver: zodResolver(SkillTreeValidator),
   });
 
@@ -36,6 +40,12 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
       refetchOnWindowFocus: false,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
     },
+  );
+
+  // Query for all folders for folder selection
+  const { data: allFolders, isPending: l3 } = api.skillTree.getAllFolders.useQuery(
+    { includeHidden: true },
+    { refetchOnWindowFocus: false },
   );
 
   // Mutation for updating skill
@@ -73,7 +83,7 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
   };
 
   // Are we loading data
-  const loading = l1 || l2;
+  const loading = l1 || l2 || l3;
 
   // Watch for changes to avatar
   const imageUrl = useWatch({
@@ -84,7 +94,7 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
   // Get available prerequisite skills (lower tier than current)
   const allSkillsFlat = allSkills?.pages.flatMap((p) => p.data) ?? [];
   const availablePrereqSkills = allSkillsFlat.filter(
-    (s) => s.id !== skillTree.id && s.tier < form.watch("tier"),
+    (s) => s.id !== skillTree.id && s.tier < (form.watch("tier") as number),
   );
 
   // Object for form values
@@ -96,6 +106,13 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
     { id: "costSkillPoints", type: "number", label: "Skill Points Cost" },
     { id: "hidden", type: "boolean" },
     { id: "skillType", type: "str_array", values: SkillTreeEntryTypes },
+    {
+      id: "folderId",
+      type: "db_values",
+      values: allFolders?.map((f) => ({ id: f.id, name: f.name })) || [],
+      label: "Folder",
+      multiple: false,
+    },
     { id: "description", type: "richinput", doubleWidth: true },
     {
       id: "requiredSkillIds",

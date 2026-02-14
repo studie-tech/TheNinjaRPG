@@ -1,22 +1,20 @@
 "use client";
+import { Trash2 } from "lucide-react";
 import { use } from "react";
-
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
-import { jutsuText } from "@/layout/seoTexts";
-import { useUserData } from "@/utils/UserContext";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { UsageStats, LevelStats } from "@/layout/UsageStatistics";
 import StatisticsFiltering, {
-  useFiltering as useStatisticsFiltering,
   getFilter as getStatisticsFilter,
+  useFiltering as useStatisticsFiltering,
 } from "@/layout/StatisticsFiltering";
-import { Trash2 } from "lucide-react";
-import { canChangeContent } from "@/utils/permissions";
-import Confirm2 from "@/layout/Confirm2";
+import { jutsuText } from "@/layout/seoTexts";
+import { LevelStats, UsageStats } from "@/layout/UsageStatistics";
 import { showMutationToast } from "@/libs/toast";
+import { canChangeContent } from "@/utils/permissions";
+import { useRequiredUserData, useUserData } from "@/utils/UserContext";
 
 export default function JutsuStatistics(props: {
   params: Promise<{ jutsuid: string }>;

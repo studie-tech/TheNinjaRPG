@@ -1,12 +1,14 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and, lte, isNotNull, isNull } from "drizzle-orm";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
+import { and, eq, isNotNull, isNull, lte } from "drizzle-orm";
+import { cookies } from "next/headers";
+import { paypalSubscription, userData } from "@/drizzle/schema";
+import {
+  getPaypalAccessToken,
+  getPaypalSubscription,
+} from "@/server/api/routers/paypal";
 import { drizzleDB } from "@/server/db";
 import { plan2FedStatus } from "@/utils/paypal";
-import { getPaypalAccessToken } from "@/server/api/routers/paypal";
-import { getPaypalSubscription } from "@/server/api/routers/paypal";
-import { paypalSubscription, userData } from "@/drizzle/schema";
-import { getHTTPStatusCodeFromError } from "@trpc/server/http";
-import { cookies } from "next/headers";
 
 export async function GET() {
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)

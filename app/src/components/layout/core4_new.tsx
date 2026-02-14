@@ -5,17 +5,11 @@
 
 "use client";
 
-import ReactDOM from "react-dom";
-import Image from "@/layout/Image";
-import Link from "next/link";
-import React from "react";
-import { getImageSet } from "@/components/layout/core4_default";
 import { LogIn, Menu, Music } from "lucide-react";
-import { getMainNavbarLinks } from "@/libs/menus";
-import { GlobalAudioProvider } from "@/layout/GameSettings";
-import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
-import { useUserData } from "@/utils/UserContext";
-import { cn } from "src/libs/shadui";
+import Link from "next/link";
+import type React from "react";
+import ReactDOM from "react-dom";
+import { getImageSet } from "@/components/layout/core4_default";
 import {
   Menubar,
   MenubarContent,
@@ -23,6 +17,12 @@ import {
   MenubarMenu,
   MenubarTrigger,
 } from "@/components/ui/menubar";
+import { GlobalAudioProvider } from "@/layout/GameSettings";
+import Image from "@/layout/Image";
+import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
+import { getMainNavbarLinks } from "@/libs/menus";
+import { cn } from "@/libs/shadui";
+import { useUserData } from "@/utils/UserContext";
 
 export interface LayoutProps {
   children: React.ReactNode;
@@ -54,7 +54,7 @@ const LayoutCore4New: React.FC<LayoutProps> = (props) => {
       <div className="">
         {/* WALLPAPER BACKGROUND */}
         <Image
-          className="fixed top-0 left-0 w-full h-full object-cover z-[-1] select-none"
+          className="fixed top-0 left-0 z-[-1] h-full w-full select-none object-cover"
           src={imageset.wallpaper}
           width={1600}
           height={800}
@@ -70,7 +70,7 @@ const LayoutCore4New: React.FC<LayoutProps> = (props) => {
           by moving the fixed positioning to the wrapping div instead of to a child of the trigger.
         */}
         <div className="fixed top-8 left-4 z-[99]">
-          <Menubar className="border-0 p-0 bg-transparent shadow-none">
+          <Menubar className="border-0 bg-transparent p-0 shadow-none">
             <MenubarMenu>
               <MenubarTrigger
                 className={cn(
@@ -83,12 +83,17 @@ const LayoutCore4New: React.FC<LayoutProps> = (props) => {
               <MenubarContent
                 align="start"
                 side="bottom"
-                className="z-[99] min-w-[12rem] p-1 ml-0"
+                className="z-[99] ml-0 min-w-[12rem] p-1"
               >
-                {navbarMenuItems.map((item, i) => {
+                {navbarMenuItems.map((item) => {
                   const count = item.notificationCount ?? 0;
                   return (
-                    <Link key={i} href={item.href} prefetch={false} tabIndex={-1}>
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      prefetch={false}
+                      tabIndex={-1}
+                    >
                       <MenubarItem
                         onClick={async () => {
                           if (item.onClick) await item.onClick();
@@ -98,7 +103,7 @@ const LayoutCore4New: React.FC<LayoutProps> = (props) => {
                         {item.icon}
                         {item.name}
                         {count > 0 && (
-                          <span className="ml-auto flex items-center justify-center text-xs text-orange-100 bg-orange-500 rounded-full w-5 h-5">
+                          <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-xs">
                             {count}
                           </span>
                         )}

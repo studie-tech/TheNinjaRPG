@@ -1,66 +1,69 @@
-import React, { useRef, useEffect, useState, useMemo } from "react";
-import Link from "next/link";
-import Image from "@/layout/Image";
 import alea from "alea";
-import { Vector2, OrthographicCamera, Group, Clock } from "three";
-import Countdown from "./Countdown";
-import WebGlError from "@/layout/WebGLError";
+import type { Grid } from "honeycomb-grid";
+import { useSetAtom } from "jotai";
+import { Check, HelpCircle } from "lucide-react";
+import Link from "next/link";
+import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Clock, Group, OrthographicCamera, Vector2 } from "three";
+import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { HelpCircle } from "lucide-react";
+import {
+  HEX_ASPECT_RATIO,
+  HEX_STACKING_DISPLACEMENT,
+  IMG_INITIATIVE_D20,
+  PvpBattleTypes,
+} from "@/drizzle/constants";
+import type { CombatPreferences } from "@/hooks/combat";
+import { useBattleMaps } from "@/hooks/combat";
+import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
+import { usePerformanceMonitor } from "@/hooks/performance-monitor";
+import { useTutorialStep } from "@/hooks/tutorial";
+import Image from "@/layout/Image";
+import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
+import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
+import { LogbookEntry } from "@/layout/Logbook";
+import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
+import Modal2 from "@/layout/Modal2";
+import WebGlError from "@/layout/WebGLError";
+import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
+import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
+import type {
+  BattleState,
+  CachedIntersections,
+  CombatAction,
+  ReturnedBattle,
+} from "@/libs/combat/types";
+import type { TerrainHex } from "@/libs/hexgrid";
+import { getBackgroundColor } from "@/libs/threejs/biome";
 import {
   drawCombatBackground,
   drawCombatEffects,
-  validateActionTarget,
+  drawCombatUsers,
+  highlightTiles,
+  highlightTileTooltips,
+  highlightTooltips,
+  highlightUsers,
   resetCombatCaches,
+  validateActionTarget,
 } from "@/libs/threejs/combat";
 import { OrbitControls } from "@/libs/threejs/OrbitControls";
-import { COMBAT_SECONDS, COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
 import { SpriteMixer } from "@/libs/threejs/SpriteMixer";
+import { updateWaveAnimation, updateWindAnimation } from "@/libs/threejs/shaders";
 import {
   cleanUp,
-  setupScene,
-  setRaycasterFromMouse,
-  smoothCameraFollow,
+  preloadTextures,
   profiler,
+  setRaycasterFromMouse,
+  setupScene,
+  smoothCameraFollow,
 } from "@/libs/threejs/util";
-import { getBackgroundColor } from "@/libs/threejs/biome";
-import { highlightTiles } from "@/libs/threejs/combat";
-import { highlightTooltips, highlightTileTooltips } from "@/libs/threejs/combat";
-import { highlightUsers } from "@/libs/threejs/combat";
-import { calcActiveUser, availableUserActions } from "@/libs/combat/actions";
-import { drawCombatUsers } from "@/libs/threejs/combat";
-import { updateWindAnimation, updateWaveAnimation } from "@/libs/threejs/shaders";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
-import { secondsFromNow } from "@/utils/time";
 import { showMutationToast } from "@/libs/toast";
-import { useSetAtom } from "jotai";
-import { userBattleAtom } from "@/utils/UserContext";
-import { Check } from "lucide-react";
-import { PvpBattleTypes } from "@/drizzle/constants";
-import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
-import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
-import {
-  IMG_INITIATIVE_D20,
-  HEX_STACKING_DISPLACEMENT,
-  HEX_ASPECT_RATIO,
-} from "@/drizzle/constants";
-import type { Grid } from "honeycomb-grid";
-import type { StatSchemaType } from "@/validators/combat";
-import type { ReturnedBattle, CachedIntersections } from "@/libs/combat/types";
-import type { CombatAction } from "@/libs/combat/types";
-import type { BattleState } from "@/libs/combat/types";
-import type { TerrainHex } from "@/libs/hexgrid";
-import { useLocalStorage, safeLocalStorageGetItem } from "@/hooks/localstorage";
-import { useBattleMaps } from "@/hooks/combat";
-import type { CombatPreferences } from "@/hooks/combat";
-import { usePerformanceMonitor } from "@/hooks/performance-monitor";
-import Modal2 from "@/layout/Modal2";
-import { useTutorialStep } from "@/hooks/tutorial";
-import { LogbookEntry } from "@/layout/Logbook";
-import { preloadTextures } from "@/libs/threejs/util";
 import { preloadAudioBuffers } from "@/utils/audio";
-import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
+import { secondsFromNow } from "@/utils/time";
+import { useRequiredUserData, userBattleAtom } from "@/utils/UserContext";
+import type { StatSchemaType } from "@/validators/combat";
+import Countdown from "./Countdown";
 
 interface CombatProps {
   action?: CombatAction | undefined;
@@ -140,7 +143,6 @@ const Combat: React.FC<CombatProps> = (props) => {
       return availableUserActions(battleRef.current, suid);
     }
     return [] as CombatAction[];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battleRef.current?.version, suid]);
 
   // Precompute maps for ground effects, user effects, and user positions
@@ -237,9 +239,9 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Mutation for starting a fight
   const { mutate: battleArenaHealAndGo } = api.combat.battleArenaHeal.useMutation({
     onSuccess: (data) => {
-      if (data.success) {
+      if (data.success && arenaOpponentId) {
         startArenaBattle({
-          aiId: arenaOpponentId!,
+          aiId: arenaOpponentId,
           stats:
             battleRef.current?.battleType === "TRAINING" ? statDistribution : undefined,
         });
@@ -415,7 +417,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update mouse position on mouse move
@@ -492,7 +493,6 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
     }, 1000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPending, timeDiff, result, suid]);
 
   useEffect(() => {
@@ -513,7 +513,6 @@ const Combat: React.FC<CombatProps> = (props) => {
           : []),
       ]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props]);
 
   useEffect(() => {
@@ -528,7 +527,6 @@ const Combat: React.FC<CombatProps> = (props) => {
         pusher.unsubscribe(battleId);
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battleId]);
 
   // Lobby for non-arena battles, letting both oppoenents join
@@ -785,6 +783,8 @@ const Combat: React.FC<CombatProps> = (props) => {
           const endDrawUsers = profiler?.mark("animate_draw_users") ?? (() => {});
           const isAnyUserMoving = drawCombatUsers({
             group_users: group_users,
+            users: battleRef.current.usersState,
+            usersEffects: battleRef.current.usersEffects,
             grid: gridRef.current,
             playerId: suid,
             userData: userData,
@@ -991,7 +991,6 @@ const Combat: React.FC<CombatProps> = (props) => {
         cleanUp(scene, renderer);
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battleId, gameAssets, userData?.sfxOn]);
 
   // Update visibility when showGridNumbers flag changes
@@ -1044,7 +1043,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       {/* Effect hover tooltip (can show both user and ground effects) */}
       {hoveredEffect && hoveredEffects && (
         <div
-          className="fixed z-50 bg-black/90 text-white p-3 rounded-lg shadow-xl pointer-events-none max-w-xs flex flex-col gap-3"
+          className="pointer-events-none fixed z-50 flex max-w-xs flex-col gap-3 rounded-lg bg-black/90 p-3 text-white shadow-xl"
           style={{
             left: `${hoveredEffect.position.x + 15}px`,
             top: `${hoveredEffect.position.y - 10}px`,
@@ -1068,8 +1067,8 @@ const Combat: React.FC<CombatProps> = (props) => {
       {isInLobby &&
         battleRef.current &&
         PvpBattleTypes.includes(battleRef.current.battleType) && (
-          <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto bg-black opacity-90">
-            <div className="flex flex-col items-center justify-center text-white h-full">
+          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-90">
+            <div className="flex h-full flex-col items-center justify-center text-white">
               <p className="text-3xl">Waiting for opponent</p>
               <p className="text-xl">
                 Time Left:{" "}
@@ -1078,10 +1077,10 @@ const Combat: React.FC<CombatProps> = (props) => {
                   timeDiff={timeDiff}
                 />
               </p>
-              <p className="text-lg mb-2 flex flex-row">
+              <p className="mb-2 flex flex-row text-lg">
                 Initiative Winner: {initiveWinner?.username}{" "}
                 <Link href="/manual/combat">
-                  <HelpCircle className="ml-2 h6 w-6 hover:text-orange-500" />
+                  <HelpCircle className="h6 ml-2 w-6 hover:text-orange-500" />
                 </Link>
               </p>
               <div className="flex flex-row gap-4">
@@ -1091,7 +1090,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                     return (
                       <div
                         key={`${u.userId}-initiative-${u.initiative}`}
-                        className="flex flex-col items-center relative font-bold"
+                        className="relative flex flex-col items-center font-bold"
                       >
                         <Image
                           alt={`roll-${u.userId}`}
@@ -1099,7 +1098,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                           height={60}
                           width={60}
                         ></Image>
-                        <p className="absolute text-md top-7">
+                        <p className="absolute top-7 text-md">
                           {Math.floor(u.initiative)}
                         </p>
                         <p>
@@ -1109,7 +1108,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                     );
                   })}
               </div>
-              <div className="flex flex-row gap-4 items-center mt-3">
+              <div className="mt-3 flex flex-row items-center gap-4">
                 <ItemLoadoutSelector
                   size="small"
                   label="Item Loadout"
@@ -1153,10 +1152,10 @@ const Combat: React.FC<CombatProps> = (props) => {
         )}
       {/* FINAL DONE SCREEN */}
       {result && (
-        <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto bg-black opacity-90">
+        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-90">
           <div className="text-center text-white">
             <p className="p-5 pb-2 text-3xl">You {result.outcome}</p>
-            <div className=" grid grid-cols-2">
+            <div className="grid grid-cols-2">
               {result.lpDiff !== 0 && (
                 <div>
                   {result.lpDiff > 0 ? (
@@ -1217,9 +1216,9 @@ const Combat: React.FC<CombatProps> = (props) => {
               {result.strength > 0 && <p>Strength: {result.strength.toFixed(2)}</p>}
               {result.willpower > 0 && <p>Willpower: {result.willpower.toFixed(2)}</p>}
               {result.speed > 0 && <p>Speed: {result.speed.toFixed(2)}</p>}
-              {result.bountiesClaimed.map((bounty, i) => {
+              {result.bountiesClaimed.map((bounty) => {
                 return (
-                  <p key={`bounty-${i}`}>
+                  <p key={bounty.bountyId}>
                     Bounty claimed: {bounty.amountRyo.toFixed(2)} Ryo
                   </p>
                 );
@@ -1240,6 +1239,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                       </p>
                     );
                   }
+                  return null;
                 })}
               {result.shrineInfo &&
                 Object.entries(result.shrineInfo).map(([sectorId, change]) => {
@@ -1257,6 +1257,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                       </p>
                     );
                   }
+                  return null;
                 })}
               {result.villageWarShrineDisplay &&
                 Object.entries(result.villageWarShrineDisplay).map(
@@ -1275,6 +1276,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                         </p>
                       );
                     }
+                    return null;
                   },
                 )}
               {result.droppedItems &&
@@ -1286,17 +1288,17 @@ const Combat: React.FC<CombatProps> = (props) => {
                 ))}
             </div>
 
-            <div className="p-5 flex flex-row justify-center gap-2 ">
+            <div className="flex flex-row justify-center gap-2 p-5">
               <Link
                 href={toHospital ? "/hospital" : "/profile"}
-                className={`${showNextMatch || showTravelBtn || showShrineAgain ? "basis-1/2" : "basis-1/1"} w-full `}
+                className={`${showNextMatch || showTravelBtn || showShrineAgain ? "basis-1/2" : "basis-1/1"} w-full`}
               >
                 <Button id="return" className="w-full">
                   Return to {toHospital ? "Hospital" : "Profile"}
                 </Button>
               </Link>
               {showShrineAgain && (
-                <Link href="/shrine" className="basis-1/2 w-full ">
+                <Link href="/shrine" className="w-full basis-1/2">
                   <Button id="return" className="w-full">
                     Back to Shrine
                   </Button>
@@ -1308,7 +1310,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                   <div>
                     <Button
                       id="return"
-                      className="basis-1/2 w-full"
+                      className="w-full basis-1/2"
                       onClick={() =>
                         startArenaBattle({
                           aiId: arenaOpponentId,
@@ -1324,7 +1326,7 @@ const Combat: React.FC<CombatProps> = (props) => {
 
                     <Button
                       id="heal-return"
-                      className="basis-1/2 w-full mt-1"
+                      className="mt-1 w-full basis-1/2"
                       onClick={() => battleArenaHealAndGo()}
                     >
                       Heal and Go Again (-500 Ryo)
@@ -1351,14 +1353,14 @@ const Combat: React.FC<CombatProps> = (props) => {
       )}
       {/* FINAL DONE SCREEN */}
       {!hasFocus && (
-        <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex justify-center items-center bg-black">
-          <div className="text-center text-white relative m-auto flex flex-col items-center">
-            <p className="p-5  pb-2 text-3xl">Not in Focus</p>
-            <p className="italic pb-2">
+        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex items-center justify-center bg-black">
+          <div className="relative m-auto flex flex-col items-center text-center text-white">
+            <p className="p-5 pb-2 text-3xl">Not in Focus</p>
+            <p className="pb-2 italic">
               Battle data can only be streamed to one browser tab at once
             </p>
             <Button size="xl" onClick={() => location.reload()}>
-              <Check className="w-8 h-8 mr-3" />
+              <Check className="mr-3 h-8 w-8" />
               Activate this Tab
             </Button>
           </div>

@@ -1,18 +1,18 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import ChatInputField from "@/layout/ChatInputField";
 import { useRouter } from "next/navigation";
+import { use, useEffect } from "react";
 import { api } from "@/app/_trpc/client";
-import { useEffect, use } from "react";
-import { EditContent } from "@/layout/EditContent";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
-import { useBadgeEditForm } from "@/libs/badge";
-import { BadgeValidator } from "@/validators/badge";
-import type { ZodBadgeType } from "@/validators/badge";
 import type { Badge } from "@/drizzle/schema";
+import ChatInputField from "@/layout/ChatInputField";
+import ContentBox from "@/layout/ContentBox";
+import { EditContent } from "@/layout/EditContent";
+import Loader from "@/layout/Loader";
+import { useBadgeEditForm } from "@/libs/badge";
+import { canChangeContent } from "@/utils/permissions";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type { ZodBadgeType } from "@/validators/badge";
+import { BadgeValidator } from "@/validators/badge";
 
 export default function BadgeEdit(props: { params: Promise<{ badgeid: string }> }) {
   const params = use(props.params);
@@ -31,7 +31,6 @@ export default function BadgeEdit(props: { params: Promise<{ badgeid: string }> 
     if (userData && !canChangeContent(userData.role)) {
       router.push("/profile");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData]);
 
   // Prevent unauthorized access

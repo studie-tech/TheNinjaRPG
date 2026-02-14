@@ -1,12 +1,12 @@
-import { z } from "zod";
-import { calculateContentDiff } from "@/utils/diff";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import { TowerDefenseUpgradeTypes } from "@/drizzle/constants";
 import type { TowerDefenseUpgrade } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { calculateContentDiff } from "@/utils/diff";
 
 // Schema for editing tower defense upgrades
 export const updateTowerDefenseUpgradeSchema = z.object({
@@ -18,7 +18,12 @@ export const updateTowerDefenseUpgradeSchema = z.object({
   upgradeType: z.enum(TowerDefenseUpgradeTypes),
   effectValue: z.coerce.number().min(0),
 });
-type UpdateTowerDefenseUpgrade = z.infer<typeof updateTowerDefenseUpgradeSchema>;
+export type UpdateTowerDefenseUpgrade = z.output<
+  typeof updateTowerDefenseUpgradeSchema
+>;
+export type UpdateTowerDefenseUpgradeInput = z.input<
+  typeof updateTowerDefenseUpgradeSchema
+>;
 
 /**
  * Hook used when creating frontend forms for editing Tower Defense upgrades
@@ -28,11 +33,15 @@ export const useTowerDefenseUpgradeEditForm = (
   refetch: () => void,
 ) => {
   // Form handling
-  const form = useForm<UpdateTowerDefenseUpgrade>({
+  const form = useForm<
+    UpdateTowerDefenseUpgradeInput,
+    unknown,
+    UpdateTowerDefenseUpgrade
+  >({
     mode: "all",
     criteriaMode: "all",
-    values: upgrade,
-    defaultValues: upgrade,
+    values: upgrade as UpdateTowerDefenseUpgradeInput,
+    defaultValues: upgrade as UpdateTowerDefenseUpgradeInput,
     resolver: zodResolver(updateTowerDefenseUpgradeSchema),
   });
 

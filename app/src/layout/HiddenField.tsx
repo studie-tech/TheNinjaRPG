@@ -1,4 +1,4 @@
-import { type UseFormRegister } from "react-hook-form";
+import type { UseFormRegister } from "react-hook-form";
 
 interface HiddenFieldProps {
   id: string;

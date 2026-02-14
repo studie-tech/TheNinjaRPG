@@ -1,11 +1,12 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
-import ExportGraph from "@/layout/ExportGraph";
 import { Chart as ChartJS } from "chart.js/auto";
-import { groupBy } from "@/utils/grouping";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import type { BattleType } from "@/drizzle/constants";
+import ExportGraph from "@/layout/ExportGraph";
+import { groupBy } from "@/utils/grouping";
 import type { DeviceType } from "@/utils/hardware";
 
 interface LevelStatsProps {
@@ -467,9 +468,12 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
       // If in dropoff mode, convert counts to dropoffs
       if (mode === "dropoff") {
         for (let i = 0; i < mobileData.length - 1; i++) {
-          mobileData[i] = mobileData[i]! - mobileData[i + 1]!;
-          desktopData[i] = desktopData[i]! - desktopData[i + 1]!;
-          unknownData[i] = unknownData[i]! - unknownData[i + 1]!;
+          const mobileNext = mobileData[i + 1] ?? 0;
+          const desktopNext = desktopData[i + 1] ?? 0;
+          const unknownNext = unknownData[i + 1] ?? 0;
+          mobileData[i] = (mobileData[i] ?? 0) - mobileNext;
+          desktopData[i] = (desktopData[i] ?? 0) - desktopNext;
+          unknownData[i] = (unknownData[i] ?? 0) - unknownNext;
         }
         // Last step has no dropoff (no next step to compare to)
         mobileData[mobileData.length - 1] = 0;
@@ -505,7 +509,7 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
         options: {
           maintainAspectRatio: false,
           responsive: true,
-          onClick: (event, elements) => {
+          onClick: (_event, elements) => {
             if (elements.length > 0 && elements[0]) {
               const dataIndex = elements[0].index;
               setSelectedStep({
@@ -572,7 +576,8 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
       // If in dropoff mode, convert counts to dropoffs
       if (mode === "dropoff") {
         for (let i = 0; i < values.length - 1; i++) {
-          values[i] = values[i]! - values[i + 1]!;
+          const nextValue = values[i + 1] ?? 0;
+          values[i] = (values[i] ?? 0) - nextValue;
         }
         // Last step has no dropoff (no next step to compare to)
         values[values.length - 1] = 0;
@@ -597,7 +602,7 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
         options: {
           maintainAspectRatio: false,
           responsive: true,
-          onClick: (event, elements) => {
+          onClick: (_event, elements) => {
             if (elements.length > 0 && elements[0]) {
               const dataIndex = elements[0].index;
               setSelectedStep({
@@ -647,9 +652,9 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
 
   return (
     <Card>
-      <CardHeader className="pb-0 pt-2">
+      <CardHeader className="pt-2 pb-0">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <CardTitle className="font-medium text-sm">{title}</CardTitle>
           <div className="flex items-center gap-4">
             {extraControls}
             <div className="flex items-center gap-2">
@@ -670,15 +675,16 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
           <canvas ref={chartRef} id="questFunnel"></canvas>
         </div>
         {selectedStep && (
-          <div className="mt-4 p-3 border border-border rounded-md bg-card">
-            <div className="flex items-center justify-between mb-2">
+          <div className="mt-4 rounded-md border border-border bg-card p-3">
+            <div className="mb-2 flex items-center justify-between">
               <h4 className="font-semibold text-sm">
                 Step {selectedStep.step}
                 {selectedStep.description && `: ${selectedStep.description}`}
               </h4>
               <button
+                type="button"
                 onClick={() => setSelectedStep(null)}
-                className="text-xs text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground text-xs hover:text-foreground"
               >
                 Clear
               </button>
@@ -689,37 +695,37 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
               <div className="space-y-3">
                 {selectedStep.usernames.mobile.length > 0 && (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">
+                    <p className="mb-1 text-muted-foreground text-xs">
                       📱 Mobile users ({selectedStep.usernames.mobile.length}):
                     </p>
-                    <p className="text-sm font-mono select-all bg-muted p-2 rounded">
+                    <p className="select-all rounded bg-muted p-2 font-mono text-sm">
                       {selectedStep.usernames.mobile.join(", ")}
                     </p>
                   </div>
                 )}
                 {selectedStep.usernames.desktop.length > 0 && (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">
+                    <p className="mb-1 text-muted-foreground text-xs">
                       💻 Desktop users ({selectedStep.usernames.desktop.length}):
                     </p>
-                    <p className="text-sm font-mono select-all bg-muted p-2 rounded">
+                    <p className="select-all rounded bg-muted p-2 font-mono text-sm">
                       {selectedStep.usernames.desktop.join(", ")}
                     </p>
                   </div>
                 )}
                 {selectedStep.usernames.unknown.length > 0 && (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">
+                    <p className="mb-1 text-muted-foreground text-xs">
                       ❓ Unknown device ({selectedStep.usernames.unknown.length}):
                     </p>
-                    <p className="text-sm font-mono select-all bg-muted p-2 rounded">
+                    <p className="select-all rounded bg-muted p-2 font-mono text-sm">
                       {selectedStep.usernames.unknown.join(", ")}
                     </p>
                   </div>
                 )}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 No users currently at this step
               </p>
             )}
@@ -738,8 +744,8 @@ interface UsageStatsProps {
   }[];
 }
 type UsageDataset = { data: number[]; label: string };
-type Label = string | null | (string | null)[];
-type Groups = Map<Label, { battleWon: number; count: number }[]>;
+type ChartLabel = string | null | (string | null)[];
+type Groups = Map<ChartLabel, { battleWon: number; count: number }[]>;
 
 export const UsageStats: React.FC<UsageStatsProps> = (props) => {
   const { usage } = props;
@@ -771,7 +777,7 @@ export const UsageStats: React.FC<UsageStatsProps> = (props) => {
 export const getUsageChart = (
   ctx: CanvasRenderingContext2D,
   groups: Groups,
-  labels: Label[],
+  labels: ChartLabel[],
 ) => {
   // Calculate the statistics
   const won: UsageDataset = { data: [], label: "Won" };

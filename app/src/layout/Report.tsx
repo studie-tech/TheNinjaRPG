@@ -1,20 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { parseHtml } from "@/utils/parse";
-
-import Modal2 from "./Modal2";
-import RichInput from "./RichInput";
-import Post from "./Post";
-
-import { type UserReportSchema, type systems } from "../validators/reports";
-import { userReportSchema } from "../validators/reports";
-import { useUserData } from "@/utils/UserContext";
+import type React from "react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import type { FederalStatus, UserRank, UserRole } from "@/drizzle/constants";
 import { showMutationToast } from "@/libs/toast";
-import type { UserRank, UserRole, FederalStatus } from "@/drizzle/constants";
+import { parseHtml } from "@/utils/parse";
+import { useUserData } from "@/utils/UserContext";
+import {
+  type systems,
+  type UserReportSchema,
+  userReportSchema,
+} from "../validators/reports";
+import Modal2 from "./Modal2";
+import Post from "./Post";
+import RichInput from "./RichInput";
 
 interface ReportUserProps {
   button: React.ReactNode;
@@ -124,15 +126,17 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
     );
   } else {
     return (
-      <div
+      <button
+        type="button"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
           setShowModal(true);
         }}
+        className="cursor-pointer"
       >
         {props.button}
-      </div>
+      </button>
     );
   }
 };

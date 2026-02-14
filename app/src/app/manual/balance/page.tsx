@@ -1,10 +1,10 @@
 "use client";
 
+import { SquareArrowOutUpRight } from "lucide-react";
+import Link from "next/link";
 import ContentBox from "@/layout/ContentBox";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
-import { SquareArrowOutUpRight } from "lucide-react";
-import Link from "next/link";
 
 export default function ManualCombat() {
   const data = [
@@ -143,23 +143,21 @@ export default function ManualCombat() {
   ];
 
   return (
-    <>
-      <ContentBox
-        title="Balance"
-        subtitle="Links to Balance Data"
-        defaultBackHref="/manual"
-        padding={false}
-      >
-        <p className="p-3">
-          We believe the bath to getting the best balanced game is to be as data driven
-          as possible. This page is a collection of links to the various data sources
-          that we use to balance the game. Feel free to browse the data and see if you
-          can find any interesting patterns, which may help us improve the game. Also,
-          if you believe certain data visualizations would help us further in balancing
-          efforts, please write us a suggestion, e.g. in a ticket or on github.
-        </p>
-        <Table data={data} columns={columns} />
-      </ContentBox>
-    </>
+    <ContentBox
+      title="Balance"
+      subtitle="Links to Balance Data"
+      defaultBackHref="/manual"
+      padding={false}
+    >
+      <p className="p-3">
+        We believe the bath to getting the best balanced game is to be as data driven as
+        possible. This page is a collection of links to the various data sources that we
+        use to balance the game. Feel free to browse the data and see if you can find
+        any interesting patterns, which may help us improve the game. Also, if you
+        believe certain data visualizations would help us further in balancing efforts,
+        please write us a suggestion, e.g. in a ticket or on github.
+      </p>
+      <Table data={data} columns={columns} />
+    </ContentBox>
   );
 }

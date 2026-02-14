@@ -1,7 +1,7 @@
+import type React from "react";
 import { useEffect } from "react";
-import React from "react";
-import { cn } from "src/libs/shadui";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { cn } from "@/libs/shadui";
 
 interface NavTabsProps {
   id?: string;
@@ -27,7 +27,6 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
         safeLocalStorageSetItem(id, select);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, current, options, setValue]);
 
   // Derived features
@@ -36,28 +35,27 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
   // Render
   return (
     <div
-      className={`text-center ${fontSize} font-medium text-foreground flex flex-row justify-center`}
+      className={`text-center ${fontSize} flex flex-row justify-center font-medium text-foreground`}
     >
       <ul className="-mb-px flex flex-row">
-        {options.map((option) => (
-          <li className="mr-2" key={option} id={`tutorial-${option}`}>
-            <a
-              href="#"
+        {options.map((option, i) => (
+          <li className="mr-2" key={`${option}-${i}`} id={`tutorial-${option}`}>
+            <button
+              type="button"
               className={cn(
                 option === current
-                  ? "active inline-block rounded-t-lg border-b-2 border-foreground/50 pb-2 pt-2 pl-1 pr-1 text-foreground/50"
-                  : "border-gray-700 inline-block rounded-t-lg border-b-2 border-transparent pb-2 pt-2 pl-1 pr-1 hover:border-gray-300 hover:text-gray-600",
+                  ? "active inline-block rounded-t-lg border-foreground/50 border-b-2 pt-2 pr-1 pb-2 pl-1 text-foreground/50"
+                  : "inline-block rounded-t-lg border-gray-700 border-transparent border-b-2 pt-2 pr-1 pb-2 pl-1 hover:border-gray-300 hover:text-gray-600",
                 props.className,
               )}
-              onClick={(e) => {
-                e.preventDefault();
+              onClick={() => {
                 if (setValue) setValue(option);
                 if (onChange) onChange(option);
                 if (id) safeLocalStorageSetItem(id, option);
               }}
             >
               {option}
-            </a>
+            </button>
           </li>
         ))}
       </ul>

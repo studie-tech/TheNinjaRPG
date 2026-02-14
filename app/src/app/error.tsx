@@ -1,11 +1,11 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
-import { useEffect } from "react";
-import ContentBox from "@/layout/ContentBox";
-import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCw, Home } from "lucide-react";
+import { AlertTriangle, Home, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import ContentBox from "@/layout/ContentBox";
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
@@ -22,12 +22,12 @@ const ErrorBoundary: React.FC<ErrorBoundaryProps> = ({ error, reset }) => {
     <ContentBox title="Something Went Wrong" defaultBackHref="/">
       <div className="flex flex-col items-center justify-center space-y-6 p-8">
         <div className="relative">
-          <div className="absolute inset-0 bg-red-500/20 rounded-full blur-xl animate-pulse" />
-          <AlertTriangle className="relative w-24 h-24 text-red-500" />
+          <div className="absolute inset-0 animate-pulse rounded-full bg-red-500/20 blur-xl" />
+          <AlertTriangle className="relative h-24 w-24 text-red-500" />
         </div>
 
-        <div className="text-center space-y-3 max-w-md">
-          <h2 className="text-xl font-bold text-red-500">
+        <div className="max-w-md space-y-3 text-center">
+          <h2 className="font-bold text-red-500 text-xl">
             Oops! An unexpected error occurred
           </h2>
           <p className="text-muted-foreground">
@@ -35,30 +35,30 @@ const ErrorBoundary: React.FC<ErrorBoundaryProps> = ({ error, reset }) => {
             you can try refreshing the page or returning to the home page.
           </p>
           {error.digest && (
-            <p className="text-xs text-muted-foreground/70 font-mono">
+            <p className="font-mono text-muted-foreground/70 text-xs">
               Error ID: {error.digest}
             </p>
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
           <Button onClick={reset} variant="default" size="lg" className="gap-2">
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="h-4 w-4" />
             Try Again
           </Button>
           <Link href="/">
             <Button variant="outline" size="lg" className="gap-2">
-              <Home className="w-4 h-4" />
+              <Home className="h-4 w-4" />
               Go Home
             </Button>
           </Link>
         </div>
 
-        <details className="w-full  mt-4">
-          <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <details className="mt-4 w-full">
+          <summary className="cursor-pointer text-muted-foreground text-sm transition-colors hover:text-foreground">
             Technical details
           </summary>
-          <pre className="mt-2 p-4 bg-popover rounded-md text-xs overflow-auto max-h-40 border">
+          <pre className="mt-2 max-h-40 overflow-auto rounded-md border bg-popover p-4 text-xs">
             {error.message}
             {error.stack && `\n\n${error.stack}`}
           </pre>

@@ -1,65 +1,91 @@
-import { z } from "zod";
-import { nanoid } from "nanoid";
-import { randomInt } from "crypto";
+import { randomInt } from "node:crypto";
 import {
+  and,
+  desc,
   eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
   or,
   sql,
-  gte,
-  and,
-  inArray,
-  isNull,
-  isNotNull,
-  like,
-  desc,
 } from "drizzle-orm";
-import { userData } from "@/drizzle/schema";
-import { bloodline, bloodlineRolls, actionLog } from "@/drizzle/schema";
-import { bloodlineReskin } from "@/drizzle/schema";
-import { userJutsu, jutsu } from "@/drizzle/schema";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/api/trpc";
-import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
-import { fetchUser, fetchUpdatedUser } from "@/routers/profile";
-import { BloodlineValidator } from "@/validators/combat";
-import { getRandomElement } from "@/utils/array";
-import { canChangeContent } from "@/utils/permissions";
-import { callDiscordContent } from "@/libs/socials";
-import { ROLL_CHANCE, REMOVAL_COST, BLOODLINE_COST } from "@/drizzle/constants";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { calculateContentDiff } from "@/utils/diff";
-import { bloodlineFilteringSchema } from "@/validators/bloodline";
+import { nanoid } from "nanoid";
+import { z } from "zod";
 import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/api/trpc";
+import {
+  BLOODLINE_COST,
+  BLOODLINE_SWAP_COOLDOWN_HOURS,
+  BLOODLINE_SWAP_FREE_DAYS,
+  COST_SWAP_BLOODLINE,
+  IMG_AVATAR_DEFAULT,
+  LetterRanks,
+  PITY_SYSTEM_ENABLED,
+  REMOVAL_COST,
+  ROLL_CHANCE,
+} from "@/drizzle/constants";
+import type { Bloodline, BloodlineRank, UserData } from "@/drizzle/schema";
+import {
+  actionLog,
+  bloodline,
+  bloodlineReskin,
+  bloodlineRolls,
+  jutsu,
+  userData,
+  userJutsu,
+} from "@/drizzle/schema";
+import {
+  filterRollableBloodlines,
+  getFreeBloodlineSwaps,
+  getPityRolls,
+} from "@/libs/bloodline";
+import { validateUserUpdateReason } from "@/libs/moderator";
+import { callDiscordContent } from "@/libs/socials";
+import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import type { DrizzleClient } from "@/server/db";
+import { getRandomElement } from "@/utils/array";
+import { calculateContentDiff } from "@/utils/diff";
+import { getUnique } from "@/utils/grouping";
+import { getUserFederalStatus } from "@/utils/paypal";
+import { canChangeContent, canSwapBloodline } from "@/utils/permissions";
+import {
+  DAY_S,
+  getDaysHoursMinutesSeconds,
+  getTimeLeftStr,
+  secondsFromDate,
+  secondsPassed,
+} from "@/utils/time";
+import { setEmptyStringsToNulls } from "@/utils/typeutils";
+import type { BloodlineFilteringSchema } from "@/validators/bloodline";
+import {
+  bloodlineFilteringSchema,
   bloodlineReskinCreateSchema,
   bloodlineReskinUpdateSchema,
 } from "@/validators/bloodline";
-import { validateUserUpdateReason } from "@/libs/moderator";
-import { filterRollableBloodlines, getPityRolls } from "@/libs/bloodline";
-import { LetterRanks, PITY_SYSTEM_ENABLED } from "@/drizzle/constants";
-import { COST_SWAP_BLOODLINE } from "@/drizzle/constants";
-import {
-  BLOODLINE_SWAP_COOLDOWN_HOURS,
-  BLOODLINE_SWAP_FREE_DAYS,
-} from "@/drizzle/constants";
-import { getUnique } from "@/utils/grouping";
-import { canSwapBloodline } from "@/utils/permissions";
-import { getUserFederalStatus } from "@/utils/paypal";
-import { getFreeBloodlineSwaps } from "@/libs/bloodline";
-import { secondsFromDate, secondsPassed, DAY_S } from "@/utils/time";
-import { getTimeLeftStr, getDaysHoursMinutesSeconds } from "@/utils/time";
-import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import type { ZodAllTags } from "@/validators/combat";
-import type { BloodlineRank, Bloodline, UserData } from "@/drizzle/schema";
-import type { DrizzleClient } from "@/server/db";
-import type { BloodlineFilteringSchema } from "@/validators/bloodline";
+import { BloodlineValidator } from "@/validators/combat";
 
 export const bloodlineRouter = createTRPCRouter({
-  getAllNames: publicProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle.query.bloodline.findMany({
-      columns: { id: true, name: true, image: true },
-      orderBy: (table, { asc }) => [asc(table.name)],
-    });
-  }),
+  getAllNames: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all bloodline names and images" } })
+    .query(async ({ ctx }) => {
+      return await ctx.drizzle.query.bloodline.findMany({
+        columns: { id: true, name: true, image: true },
+        orderBy: (table, { asc }) => [asc(table.name)],
+      });
+    }),
   getAll: publicProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get paginated bloodlines with filters" },
+    })
     .input(
       bloodlineFilteringSchema.extend({
         cursor: z.number().nullish(),
@@ -87,6 +113,7 @@ export const bloodlineRouter = createTRPCRouter({
     }),
   // Get a specific bloodline
   get: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get a specific bloodline by ID" } })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await fetchBloodline(ctx.drizzle, input.id);
@@ -117,39 +144,51 @@ export const bloodlineRouter = createTRPCRouter({
     }
   }),
   // Get all bloodlines a user has ever had
-  getUserHistoricBloodlines: protectedProcedure.query(async ({ ctx }) => {
-    return await fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId);
-  }),
+  getUserHistoricBloodlines: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user's historic bloodlines" } })
+    .query(async ({ ctx }) => {
+      return await fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId);
+    }),
   // Get bloodline swap info
-  getSwapInfo: protectedProcedure.query(async ({ ctx }) => {
-    // Query
-    const [{ user }, recentSwaps] = await Promise.all([
-      fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      }),
-      fetchMonthlyBloodlineSwaps(ctx.drizzle, ctx.userId),
-    ]);
-    // Guard
-    if (!user)
-      return {
-        isFree: false,
-        freeSwapsUsed: 0,
-        freeSwapsRemaining: 0,
-        recentSwaps: [],
-      };
-    // Derived
-    const federalStatus = getUserFederalStatus(user);
-    const freeSwaps = getFreeBloodlineSwaps(federalStatus);
-    const freeSwapsUsed = recentSwaps.length;
-    const rawRemaining = freeSwaps - freeSwapsUsed;
-    const freeSwapsRemaining = Math.max(0, rawRemaining);
-    const isFree = freeSwapsRemaining > 0;
-    // Return
-    return { isFree, freeSwapsUsed, freeSwapsRemaining, recentSwaps };
-  }),
+  getSwapInfo: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Get bloodline swap availability and cost info",
+      },
+    })
+    .query(async ({ ctx }) => {
+      // Query
+      const [{ user }, recentSwaps] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        fetchMonthlyBloodlineSwaps(ctx.drizzle, ctx.userId),
+      ]);
+      // Guard
+      if (!user)
+        return {
+          isFree: false,
+          freeSwapsUsed: 0,
+          freeSwapsRemaining: 0,
+          recentSwaps: [],
+        };
+      // Derived
+      const federalStatus = getUserFederalStatus(user);
+      const freeSwaps = getFreeBloodlineSwaps(federalStatus);
+      const freeSwapsUsed = recentSwaps.length;
+      const rawRemaining = freeSwaps - freeSwapsUsed;
+      const freeSwapsRemaining = Math.max(0, rawRemaining);
+      const isFree = freeSwapsRemaining > 0;
+      // Return
+      return { isFree, freeSwapsUsed, freeSwapsRemaining, recentSwaps };
+    }),
   // Swap bloodline of session user
   swapBloodline: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Swap to a previously owned bloodline" },
+    })
     .input(z.object({ bloodlineId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -232,9 +271,7 @@ export const bloodlineRouter = createTRPCRouter({
 
       return {
         success: true,
-        message: `Bloodline swapped${
-          isFreeSwap ? ` (Free for ${federalStatus} supporter)` : ""
-        }`,
+        message: `Bloodline swapped${isFreeSwap ? ` (Free for ${federalStatus} supporter)` : ""}`,
       };
     }),
   // Bloodline reskins (staff-only creation & moderation)
@@ -395,12 +432,14 @@ export const bloodlineRouter = createTRPCRouter({
       return { success: true, message: "Bloodline reskin deleted" };
     }),
   getReskin: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get a specific bloodline reskin" } })
     .input(z.object({ reskinId: z.string() }))
     .query(async ({ ctx, input }) => {
       const res = await fetchBloodlineReskin(ctx.drizzle, input.reskinId);
       return res ?? errorResponse("Reskin not found");
     }),
   getReskinsForBloodline: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get all reskins for a bloodline" } })
     .input(z.object({ bloodlineId: z.string() }))
     .query(async ({ ctx, input }) => {
       const rows = await ctx.drizzle.query.bloodlineReskin.findMany({
@@ -410,6 +449,7 @@ export const bloodlineRouter = createTRPCRouter({
       return rows;
     }),
   getAllReskins: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get paginated bloodline reskins" } })
     .input(
       bloodlineFilteringSchema.extend({
         cursor: z.number().nullish(),
@@ -545,134 +585,148 @@ export const bloodlineRouter = createTRPCRouter({
       }
     }),
   // Get bloodline roll of a specific user
-  getNaturalRolls: protectedProcedure.query(async ({ ctx }) => {
-    return (await fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId)) ?? null;
-  }),
-  getItemRolls: protectedProcedure.query(async ({ ctx }) => {
-    return await fetchItemBloodlineRolls(ctx.drizzle, ctx.userId);
-  }),
+  getNaturalRolls: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user's natural bloodline roll" } })
+    .query(async ({ ctx }) => {
+      return (await fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId)) ?? null;
+    }),
+  getItemRolls: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user's item bloodline rolls" } })
+    .query(async ({ ctx }) => {
+      return await fetchItemBloodlineRolls(ctx.drizzle, ctx.userId);
+    }),
   // Get statistics about natural bloodline rolls grouped by rank
-  getNaturalRollStatistics: publicProcedure.query(async ({ ctx }) => {
-    const stats = await ctx.drizzle
-      .select({
-        rank: bloodline.rank,
-        count: sql<number>`count(${bloodlineRolls.id})`,
-      })
-      .from(bloodlineRolls)
-      .leftJoin(bloodline, eq(bloodlineRolls.bloodlineId, bloodline.id))
-      .where(eq(bloodlineRolls.type, "NATURAL"))
-      .groupBy(bloodline.rank);
+  getNaturalRollStatistics: publicProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get bloodline roll statistics by rank" },
+    })
+    .query(async ({ ctx }) => {
+      const stats = await ctx.drizzle
+        .select({
+          rank: bloodline.rank,
+          count: sql<number>`count(${bloodlineRolls.id})`,
+        })
+        .from(bloodlineRolls)
+        .leftJoin(bloodline, eq(bloodlineRolls.bloodlineId, bloodline.id))
+        .where(eq(bloodlineRolls.type, "NATURAL"))
+        .groupBy(bloodline.rank);
 
-    // Create a complete result with all ranks, even those with zero counts
-    const result: Record<BloodlineRank, number> = {
-      D: 0,
-      C: 0,
-      B: 0,
-      A: 0,
-      S: 0,
-      H: 0,
-    };
-
-    // Fill in the actual counts from the query
-    stats.forEach((stat) => {
-      if (stat.rank) {
-        result[stat.rank] = stat.count;
-      }
-    });
-
-    // Also count rolls with no bloodline (null bloodlineId)
-    const noBloodlineCount = await ctx.drizzle
-      .select({
-        count: sql<number>`count(${bloodlineRolls.id})`,
-      })
-      .from(bloodlineRolls)
-      .where(
-        and(eq(bloodlineRolls.type, "NATURAL"), isNull(bloodlineRolls.bloodlineId)),
-      );
-
-    return {
-      ...result,
-      none: noBloodlineCount[0]?.count || 0,
-    };
-  }),
-  // Roll a bloodline
-  roll: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
-    // Query
-    const [user, prevRoll, allBloodlines] = await Promise.all([
-      fetchUser(ctx.drizzle, ctx.userId),
-      fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
-      fetchBloodlines(ctx.drizzle), // Fetch all bloodlines
-    ]);
-    // Guard
-    if (prevRoll) return errorResponse("You have already rolled a bloodline");
-    if (user.status !== "AWAKE") {
-      return errorResponse(`Cannot roll bloodline while ${user.status.toLowerCase()}`);
-    }
-    if (user.rank === "STUDENT") {
-      return errorResponse(
-        "Academy students cannot roll for bloodlines. You must graduate first.",
-      );
-    }
-    /**
-     * Roll a bloodline. Defined like this to make testing of many rolls easier
-     * @returns {Promise<{success: boolean, message: string}>}
-     */
-    const doRoll = async () => {
-      const rand = randomInt(0, 1_000_000) / 1_000_000;
-      let bloodlineRank: BloodlineRank | undefined = undefined;
-      if (rand < ROLL_CHANCE.S) {
-        bloodlineRank = "S";
-      } else if (rand < ROLL_CHANCE.A) {
-        bloodlineRank = "A";
-      } else if (rand < ROLL_CHANCE.B) {
-        bloodlineRank = "B";
-      } else if (rand < ROLL_CHANCE.C) {
-        bloodlineRank = "C";
-      }
-      // If a rank was determined, use filterRollableBloodlines to select a bloodline
-      if (bloodlineRank) {
-        const bloodlinePool = filterRollableBloodlines({
-          bloodlines: allBloodlines,
-          rank: bloodlineRank,
-          user,
-          previousRolls: [], // No previous rolls to consider for this standard roll
-        });
-        const randomBloodline = getRandomElement(bloodlinePool);
-        if (randomBloodline) {
-          await Promise.all([
-            ctx.drizzle
-              .update(userData)
-              .set({ bloodlineId: randomBloodline.id })
-              .where(eq(userData.userId, ctx.userId)),
-            ctx.drizzle.insert(bloodlineRolls).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              used: 0,
-              bloodlineId: randomBloodline.id,
-            }),
-          ]);
-          return {
-            success: true,
-            message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
-          };
-        }
-      }
-      // If no bloodline was found, proceed with the normal "no bloodline" case
-      await ctx.drizzle.insert(bloodlineRolls).values({
-        id: nanoid(),
-        used: 0,
-        userId: ctx.userId,
-      });
-      return {
-        success: false,
-        message:
-          "After thorough examination, the doctors conclude you have no bloodline",
+      // Create a complete result with all ranks, even those with zero counts
+      const result: Record<BloodlineRank, number> = {
+        D: 0,
+        C: 0,
+        B: 0,
+        A: 0,
+        S: 0,
+        H: 0,
       };
-    };
-    return doRoll();
-  }),
+
+      // Fill in the actual counts from the query
+      stats.forEach((stat) => {
+        if (stat.rank) {
+          result[stat.rank] = stat.count;
+        }
+      });
+
+      // Also count rolls with no bloodline (null bloodlineId)
+      const noBloodlineCount = await ctx.drizzle
+        .select({
+          count: sql<number>`count(${bloodlineRolls.id})`,
+        })
+        .from(bloodlineRolls)
+        .where(
+          and(eq(bloodlineRolls.type, "NATURAL"), isNull(bloodlineRolls.bloodlineId)),
+        );
+
+      return {
+        ...result,
+        none: noBloodlineCount[0]?.count || 0,
+      };
+    }),
+  // Roll a bloodline
+  roll: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Roll for a natural bloodline" } })
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Query
+      const [user, prevRoll, allBloodlines] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
+        fetchBloodlines(ctx.drizzle), // Fetch all bloodlines
+      ]);
+      // Guard
+      if (prevRoll) return errorResponse("You have already rolled a bloodline");
+      if (user.status !== "AWAKE") {
+        return errorResponse(
+          `Cannot roll bloodline while ${user.status.toLowerCase()}`,
+        );
+      }
+      if (user.rank === "STUDENT") {
+        return errorResponse(
+          "Academy students cannot roll for bloodlines. You must graduate first.",
+        );
+      }
+      /**
+       * Roll a bloodline. Defined like this to make testing of many rolls easier
+       * @returns {Promise<{success: boolean, message: string}>}
+       */
+      const doRoll = async () => {
+        const rand = randomInt(0, 1_000_000) / 1_000_000;
+        let bloodlineRank: BloodlineRank | undefined;
+        if (rand < ROLL_CHANCE.S) {
+          bloodlineRank = "S";
+        } else if (rand < ROLL_CHANCE.A) {
+          bloodlineRank = "A";
+        } else if (rand < ROLL_CHANCE.B) {
+          bloodlineRank = "B";
+        } else if (rand < ROLL_CHANCE.C) {
+          bloodlineRank = "C";
+        }
+        // If a rank was determined, use filterRollableBloodlines to select a bloodline
+        if (bloodlineRank) {
+          const bloodlinePool = filterRollableBloodlines({
+            bloodlines: allBloodlines,
+            rank: bloodlineRank,
+            user,
+            previousRolls: [], // No previous rolls to consider for this standard roll
+          });
+          const randomBloodline = getRandomElement(bloodlinePool);
+          if (randomBloodline) {
+            await Promise.all([
+              ctx.drizzle
+                .update(userData)
+                .set({ bloodlineId: randomBloodline.id })
+                .where(eq(userData.userId, ctx.userId)),
+              ctx.drizzle.insert(bloodlineRolls).values({
+                id: nanoid(),
+                userId: ctx.userId,
+                used: 0,
+                bloodlineId: randomBloodline.id,
+              }),
+            ]);
+            return {
+              success: true,
+              message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
+            };
+          }
+        }
+        // If no bloodline was found, proceed with the normal "no bloodline" case
+        await ctx.drizzle.insert(bloodlineRolls).values({
+          id: nanoid(),
+          used: 0,
+          userId: ctx.userId,
+        });
+        return {
+          success: false,
+          message:
+            "After thorough examination, the doctors conclude you have no bloodline",
+        };
+      };
+      return doRoll();
+    }),
   // Pity Roll a bloodline
   pityRoll: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Use pity roll for a bloodline" } })
     .input(z.object({ rank: z.enum(LetterRanks).optional().nullish() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -731,6 +785,7 @@ export const bloodlineRouter = createTRPCRouter({
     }),
   // Remove a bloodline from session user
   removeBloodline: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Remove current bloodline" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
@@ -761,6 +816,9 @@ export const bloodlineRouter = createTRPCRouter({
     }),
   // Purchase a bloodline for session user
   purchaseBloodline: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Purchase a bloodline with reputation" },
+    })
     .input(z.object({ bloodlineId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -927,8 +985,11 @@ export const fetchUserHistoricBloodlines = async (
     with: { bloodline: { with: { village: true } } },
   });
   const userBloodlines = getUnique(userRolls, "bloodlineId")
-    .filter((roll) => roll.bloodline)
-    .map((roll) => roll.bloodline!);
+    .filter(
+      (roll): roll is typeof roll & { bloodline: NonNullable<typeof roll.bloodline> } =>
+        !!roll.bloodline,
+    )
+    .map((roll) => roll.bloodline);
   // Return array of bloodline objects
   return userBloodlines;
 };

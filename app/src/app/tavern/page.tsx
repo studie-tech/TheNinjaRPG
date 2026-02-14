@@ -1,14 +1,10 @@
 "use client";
 
+import { UserRoundX } from "lucide-react";
 import { useEffect, useMemo } from "react";
-import { useLocalStorage } from "@/hooks/localstorage";
-import NavTabs from "@/layout/NavTabs";
-import Conversation, { ConversationSkeleton } from "@/layout/Conversation";
-import BanInfo from "@/layout/BanInfo";
-import UserBlacklistControl from "@/layout/UserBlacklistControl";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { UserRoundX } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -16,7 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { api } from "@/app/_trpc/client";
+import { useLocalStorage } from "@/hooks/localstorage";
+import BanInfo from "@/layout/BanInfo";
+import Conversation, { ConversationSkeleton } from "@/layout/Conversation";
+import NavTabs from "@/layout/NavTabs";
+import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -70,7 +70,9 @@ export default function Tavern() {
       ?.filter((v) => ["OUTLAW", "VILLAGE"].includes(v.type))
       .map((v) => v.name)
       .filter((v) => !availTaverns.includes(v))
-      .forEach((v) => availTaverns.push(v));
+      .forEach((v) => {
+        availTaverns.push(v);
+      });
   }
 
   // If no tavern defined, set the tavern
@@ -78,7 +80,6 @@ export default function Tavern() {
     if (userData && !activeTab) {
       setActiveTab(canAccessGlobal ? "Global" : localTavern);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData, localTavern, canAccessGlobal]);
 
   // Redirect to village tavern if global is disabled and user is on Global (only for USER role)
@@ -91,14 +92,13 @@ export default function Tavern() {
     ) {
       setActiveTab(localTavern);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData, globalTavernEnabled, activeTab, localTavern]);
 
   // Derived
   const conversation = activeTab ?? (canAccessGlobal ? "Global" : localTavern);
   const convoProps = {
     refreshKey: 0,
-    title: conversation + " Tavern",
+    title: `${conversation} Tavern`,
     initialBreak: false,
     subtitle: conversation === "Global" ? "Global chat" : "Village chat",
   };
@@ -117,8 +117,8 @@ export default function Tavern() {
           <SelectValue placeholder={activeTab} />
         </SelectTrigger>
         <SelectContent>
-          {availTaverns?.map((village) => (
-            <SelectItem key={village} value={village}>
+          {availTaverns?.map((village, i) => (
+            <SelectItem key={`${village}-${i}`} value={village}>
               {village}
             </SelectItem>
           ))}
@@ -146,7 +146,7 @@ export default function Tavern() {
                 <UserRoundX className="h-6 w-6 hover:text-orange-500" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0 overflow-hidden">
+            <PopoverContent className="w-[300px] overflow-hidden p-0">
               <UserBlacklistControl />
             </PopoverContent>
           </Popover>

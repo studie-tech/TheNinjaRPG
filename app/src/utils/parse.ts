@@ -1,12 +1,12 @@
-import ReactHtmlParser from "react-html-parser";
-import type { Transform } from "react-html-parser";
-import { randomString } from "@/libs/random";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import React from "react";
-import { Quote } from "@/components/ui/quote";
 import { nanoid } from "nanoid";
-import { isAllowedIframeUrl } from "@/utils/audio";
+import React from "react";
+import type { Transform } from "react-html-parser";
+import ReactHtmlParser from "react-html-parser";
+import { Quote } from "@/components/ui/quote";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import EmbeddedConceptArt from "@/layout/EmbeddedConceptArt";
+import { randomString } from "@/libs/random";
+import { isAllowedIframeUrl } from "@/utils/audio";
 
 interface HtmlNode {
   type: string;
@@ -125,7 +125,7 @@ export const parseHtml = (html: string) => {
         Object.entries(props).filter(([_, value]) => value !== undefined),
       ) as React.ImgHTMLAttributes<HTMLImageElement>;
 
-      return React.createElement("img", cleanProps);
+      return React.createElement("img", { ...cleanProps, key: nanoid() });
     } else if (node.type === "tag" && node.name === "h1") {
       node.name = "h2";
     } else if (node.type === "tag" && node.name === "blockquote") {
@@ -174,7 +174,7 @@ export const parseHtml = (html: string) => {
 
       // Only allow iframes from approved providers; otherwise return empty element
       if (!src || !isAllowedIframeUrl(src)) {
-        return React.createElement("div", {});
+        return React.createElement("div", { key: nanoid() });
       }
 
       let parsedStyle: React.CSSProperties | undefined;
@@ -221,7 +221,7 @@ export const parseHtml = (html: string) => {
         Object.entries(props).filter(([_, value]) => value !== undefined),
       ) as React.IframeHTMLAttributes<HTMLIFrameElement>;
 
-      return React.createElement("iframe", cleanProps);
+      return React.createElement("iframe", { ...cleanProps, key: nanoid() });
     }
     return undefined;
   };

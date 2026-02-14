@@ -1,27 +1,27 @@
 "use client";
 
+import { Shield, Swords, Users } from "lucide-react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { useRequiredUserData } from "@/utils/UserContext";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { Swords, Users, Shield } from "lucide-react";
-import Image from "@/layout/Image";
-import StatusBar from "@/layout/StatusBar";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  WAR_SHRINE_IMAGE,
-  VILLAGE_SYNDICATE_ID,
   MAP_RESERVED_SECTORS,
+  VILLAGE_SYNDICATE_ID,
+  WAR_SHRINE_IMAGE,
 } from "@/drizzle/constants";
+import type { War } from "@/drizzle/schema";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import RaidBrowser from "@/layout/RaidBrowser";
 import RamenShop from "@/layout/RamenShop";
 import ShrineBattleLobby from "@/layout/ShrineBattleLobby";
-import RaidBrowser from "@/layout/RaidBrowser";
+import StatusBar from "@/layout/StatusBar";
 import { isRaidCurrentlyActive } from "@/libs/raids";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { type War } from "@/drizzle/schema";
+import { showMutationToast } from "@/libs/toast";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Shrine() {
   // Data from database
@@ -69,6 +69,9 @@ export default function Shrine() {
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!sectorData) return <Loader explanation="Loading sector data" />;
   if (!userData.villageId) return <Loader explanation="No village found" />;
+
+  // After the guard, villageId is guaranteed to be non-null
+  const userVillageId: string = userData.villageId;
 
   // Check if there's an active war in this sector
   // For SECTOR_WAR: check war.sector
@@ -235,7 +238,7 @@ export default function Shrine() {
             subtitle={`Sector ${userData.sector}`}
             defaultBackHref="/travel"
           >
-            <div className="text-center space-y-4">
+            <div className="space-y-4 text-center">
               <Image
                 src={WAR_SHRINE_IMAGE}
                 alt="War Shrine"
@@ -243,7 +246,7 @@ export default function Shrine() {
                 height={200}
                 className="mx-auto opacity-50 grayscale"
               />
-              <h3 className="text-2xl font-bold">Victory!</h3>
+              <h3 className="font-bold text-2xl">Victory!</h3>
               <p>
                 The shrine has been defeated! Return to your village&apos;s Town Hall to
                 finalize the war and claim the sector.
@@ -281,24 +284,24 @@ export default function Shrine() {
               </TabsList>
               <TabsContent value="team" className="mt-4">
                 {userIsOwner ? (
-                  <div className="mb-4 text-sm text-muted-foreground">
+                  <div className="mb-4 text-muted-foreground text-sm">
                     Your village owns this sector. You can join as a defender if an
                     attack party is formed against this shrine.
                   </div>
                 ) : isProtected ? (
-                  <div className="mb-4 text-sm text-amber-600 font-semibold">
+                  <div className="mb-4 font-semibold text-amber-600 text-sm">
                     {isReserved
                       ? "This sector is reserved and cannot be attacked."
                       : "This is a village home sector and its shrine cannot be attacked."}
                   </div>
                 ) : canShowMpvpOption ? (
-                  <div className="mb-4 text-sm text-muted-foreground">
+                  <div className="mb-4 text-muted-foreground text-sm">
                     Form a team to attack this shrine together! Up to 3 attackers can
                     join the assault, and defenders from the owning village can queue to
                     defend.
                   </div>
                 ) : isUserQueuedForThisSector ? (
-                  <div className="mb-4 text-sm text-muted-foreground">
+                  <div className="mb-4 text-muted-foreground text-sm">
                     You are queued for a shrine battle. You can view your queue status
                     or leave the queue below.
                   </div>
@@ -364,7 +367,7 @@ export default function Shrine() {
                 </p>
               )}
               {isProtected && (
-                <p className="mt-2 text-amber-600 font-semibold">
+                <p className="mt-2 font-semibold text-amber-600">
                   {isReserved
                     ? "This sector is reserved and cannot be attacked."
                     : "This is a village home sector and its shrine cannot be attacked."}
@@ -382,7 +385,7 @@ export default function Shrine() {
           defaultBackHref="/travel"
         >
           <Tabs defaultValue="solo" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsList className="mb-4 grid w-full grid-cols-2">
               <TabsTrigger value="solo">
                 <Swords className="mr-2 h-4 w-4" />
                 Solo Battle
@@ -393,12 +396,12 @@ export default function Shrine() {
               </TabsTrigger>
             </TabsList>
             <TabsContent value="solo">
-              <div className="divide-y border rounded-lg">
+              <div className="divide-y rounded-lg border">
                 {userWars.map((war) => (
                   <WarCard
                     key={war.id}
                     war={war}
-                    villageId={userData.villageId!}
+                    villageId={userVillageId}
                     sector={userData.sector}
                     onAttack={() => attack({ sector: userData.sector })}
                     isAttacking={isAttacking}
@@ -410,12 +413,12 @@ export default function Shrine() {
             </TabsContent>
             <TabsContent value="team">
               {userWars.length > 0 && (
-                <div className="mb-6 divide-y border rounded-lg">
+                <div className="mb-6 divide-y rounded-lg border">
                   {userWars.map((war) => (
                     <WarCard
                       key={war.id}
                       war={war}
-                      villageId={userData.villageId!}
+                      villageId={userVillageId}
                       sector={userData.sector}
                       onAttack={() => {}}
                       isAttacking={false}
@@ -429,13 +432,13 @@ export default function Shrine() {
               {userIsAttacker ? (
                 <>
                   {isProtected ? (
-                    <div className="mb-4 text-sm text-amber-600 font-semibold">
+                    <div className="mb-4 font-semibold text-amber-600 text-sm">
                       {isReserved
                         ? "This sector is reserved and cannot be attacked."
                         : "This is a village home sector and its shrine cannot be attacked."}
                     </div>
                   ) : (
-                    <div className="mb-4 text-sm text-muted-foreground">
+                    <div className="mb-4 text-muted-foreground text-sm">
                       Form a team to attack this shrine together! Up to 3 attackers can
                       join the assault, and defenders from the owning village can queue
                       to defend.
@@ -451,7 +454,7 @@ export default function Shrine() {
                 </>
               ) : userIsDefender ? (
                 <>
-                  <div className="mb-4 text-sm text-muted-foreground">
+                  <div className="mb-4 text-muted-foreground text-sm">
                     Your village is defending this shrine. You can join as a defender
                     when attackers start a team battle.
                   </div>
@@ -483,7 +486,7 @@ export default function Shrine() {
               <WarCard
                 key={war.id}
                 war={war}
-                villageId={userData.villageId!}
+                villageId={userVillageId}
                 sector={userData.sector}
                 onAttack={() => attack({ sector: userData.sector })}
                 isAttacking={isAttacking}
@@ -630,14 +633,14 @@ const WarCard = ({
       <div className="flex w-full items-center justify-between gap-4">
         {/* Attacker Village */}
         <div className="flex flex-col items-center">
-          <div className="text-sm font-bold mb-2">Attacker</div>
+          <div className="mb-2 font-bold text-sm">Attacker</div>
           <Image
             src={war.attackerVillage.villageGraphic}
             alt={war.attackerVillage.name}
             width={100}
             height={100}
           />
-          <p className="mt-2 text-sm font-medium">{war.attackerVillage.name}</p>
+          <p className="mt-2 font-medium text-sm">{war.attackerVillage.name}</p>
         </div>
 
         {/* Shrine */}
@@ -651,15 +654,15 @@ const WarCard = ({
           />
           <div className="w-full max-w-md space-y-4">
             <div>
-              <p className="text-sm font-medium">
+              <p className="font-medium text-sm">
                 Shrine - Sector {displaySector}
                 <span
-                  className={`ml-2 text-xs px-2 py-0.5 rounded ${statusBadge.className}`}
+                  className={`ml-2 rounded px-2 py-0.5 text-xs ${statusBadge.className}`}
                 >
                   {statusBadge.text}
                 </span>
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 {isVillageWar
                   ? atAttackerVillage
                     ? `${war.attackerVillage.name}'s shrine`
@@ -686,14 +689,14 @@ const WarCard = ({
 
         {/* Defender Village */}
         <div className="flex flex-col items-center">
-          <div className="text-sm font-bold mb-2">Defender</div>
+          <div className="mb-2 font-bold text-sm">Defender</div>
           <Image
             src={war.defenderVillage.villageGraphic}
             alt={war.defenderVillage.name}
             width={100}
             height={100}
           />
-          <p className="mt-2 text-sm font-medium">
+          <p className="mt-2 font-medium text-sm">
             {war.defenderVillageId === VILLAGE_SYNDICATE_ID
               ? "Neutral Territory"
               : war.defenderVillage.name}
@@ -708,24 +711,24 @@ const WarCard = ({
               size="xl"
               decoration="gold"
               animation="pulse"
-              className="italic text-2xl w-full"
+              className="w-full text-2xl italic"
               onClick={onAttack}
             >
               {canDefend ? (
                 <>
-                  <Shield className="h-10 w-10 mr-4" />
+                  <Shield className="mr-4 h-10 w-10" />
                   Defend shrine
                 </>
               ) : (
                 <>
-                  <Swords className="h-10 w-10 mr-4" />
+                  <Swords className="mr-4 h-10 w-10" />
                   Attack shrine
                 </>
               )}
             </Button>
           ) : (
             <div className="min-h-64">
-              <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
+              <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
                 <div className="m-auto text-white">
                   <p className="text-5xl">
                     {canDefend ? "Defending" : "Attacking"} the Shrine
@@ -736,8 +739,8 @@ const WarCard = ({
             </div>
           ))}
         {isShrineDefeated && (
-          <div className="text-center space-y-4 mt-4">
-            <h3 className="text-2xl font-bold">Shrine Captured!</h3>
+          <div className="mt-4 space-y-4 text-center">
+            <h3 className="font-bold text-2xl">Shrine Captured!</h3>
             {isVillageWar ? (
               atDefenderVillage ? (
                 isUserAttacker ? (
@@ -797,7 +800,7 @@ const WarCard = ({
           </div>
         )}
         {(canAttack || canDefend) && (
-          <div className="space-y-4 mt-4 text-muted-foreground">
+          <div className="mt-4 space-y-4 text-muted-foreground">
             {canDefend
               ? "Defend your shrine by winning battles against the AI defenders. Victories will restore shrine HP."
               : "Attack the enemy shrine by engaging its AI defenders. Victories will reduce shrine HP."}

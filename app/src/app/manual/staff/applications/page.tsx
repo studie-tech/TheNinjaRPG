@@ -1,19 +1,31 @@
 "use client";
 
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { api } from "@/app/_trpc/client";
-import { useUserData } from "@/utils/UserContext";
-import Table from "@/layout/Table";
+import type { ReactNode } from "react";
 import { useState } from "react";
-import { useInfinitePagination } from "@/libs/pagination";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import ApplicationsFiltering, {
   getApplicationsFilter,
   useApplicationsFiltering,
 } from "@/layout/ApplicationsFiltering";
-import { canDeleteStaffApplication } from "@/utils/permissions";
 import Confirm2 from "@/layout/Confirm2";
-import { Button } from "@/components/ui/button";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Table from "@/layout/Table";
+import { useInfinitePagination } from "@/libs/pagination";
+import { canDeleteStaffApplication } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
+
+type ApplicationRow = {
+  id: string;
+  avatar: string;
+  info: ReactNode;
+  createdAt: Date;
+  myVote: string;
+  motivation?: string | null;
+  motivationPreview: string;
+  actions: ReactNode;
+};
 
 export default function ApplicationsPage() {
   const { data: me } = useUserData();
@@ -34,7 +46,7 @@ export default function ApplicationsPage() {
       staleTime: 1000 * 60 * 5,
     },
   );
-  const apps = appsPages?.pages.map((p) => p.data).flat();
+  const apps = appsPages?.pages.flatMap((p) => p.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
   const utils = api.useUtils();
   const deleteMutation = api.applications.delete.useMutation({
@@ -59,8 +71,10 @@ export default function ApplicationsPage() {
     );
   }
 
-  const rows = (apps || []).map((a) => ({
-    ...a,
+  const rows: ApplicationRow[] = (apps || []).map((a) => ({
+    id: a.id,
+    createdAt: a.createdAt,
+    motivation: a.motivation,
     avatar: a.applicant?.avatar || "",
     info: (
       <div>
@@ -131,22 +145,22 @@ export default function ApplicationsPage() {
       {isPending && <Loader explanation="Loading applications" />}
       {!isPending && rows.length === 0 && <p className="p-3">No applications found</p>}
       {!isPending && rows.length > 0 && (
-        <Table
+        <Table<ApplicationRow, keyof ApplicationRow>
           data={rows}
           linkPrefix="/manual/staff/applications/"
           linkColumn={"id"}
           columns={[
-            { key: "avatar", header: "", type: "avatar" } as any,
-            { key: "info", header: "Info", type: "jsx" } as any,
+            { key: "avatar", header: "", type: "avatar" },
+            { key: "info", header: "Info", type: "jsx" },
             { key: "createdAt", header: "Created", type: "date" },
             { key: "myVote", header: "Your Vote", type: "string" },
             {
               key: "motivationPreview",
               header: "Motivation",
               type: "string",
-              tooltip: (row) => (row as { motivation?: string }).motivation || "",
+              tooltip: (row) => row.motivation || "",
             },
-            { key: "actions", header: "Actions", type: "jsx" } as any,
+            { key: "actions", header: "Actions", type: "jsx" },
           ]}
           setLastElement={setLastElement}
         />

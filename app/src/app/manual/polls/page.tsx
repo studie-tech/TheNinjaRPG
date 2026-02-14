@@ -1,42 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { Plus, X, Vote, Eye, User, Type, Trash2, Pencil } from "lucide-react";
-import { useUserData } from "@/utils/UserContext";
+import { Eye, Pencil, Plus, Trash2, Type, User, Vote, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import RichInput from "@/layout/RichInput";
-import Accordion from "@/layout/Accordion";
-import UserSearchSelect from "@/layout/UserSearchSelect";
-import AvatarImage from "@/layout/Avatar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  createPollSchema,
-  updatePollSchema,
-  type PollOptionSchema,
-  type UpdatePollSchema,
-  type AddPollOptionSchema,
-} from "@/validators/poll";
-import type { Poll, PollOption } from "@/drizzle/schema";
-import type { PollOptionType } from "@/drizzle/constants";
-import {
-  canAddNonCustomPollOptions,
-  canClosePolls,
-  canCreatePolls,
-  canDeletePollOptions,
-  canEditPolls,
-} from "@/utils/permissions";
 import { Card, CardContent } from "@/components/ui/card";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { showMutationToast } from "@/libs/toast";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -45,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { toast } from "@/components/ui/use-toast";
 import {
   Form,
   FormControl,
@@ -54,9 +26,37 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { getSearchValidator } from "@/validators/register";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/use-toast";
+import type { PollOptionType } from "@/drizzle/constants";
+import type { Poll, PollOption } from "@/drizzle/schema";
+import Accordion from "@/layout/Accordion";
+import AvatarImage from "@/layout/Avatar";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import RichInput from "@/layout/RichInput";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
-import type { z } from "zod";
+import {
+  canAddNonCustomPollOptions,
+  canClosePolls,
+  canCreatePolls,
+  canDeletePollOptions,
+  canEditPolls,
+} from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
+import {
+  type AddPollOptionSchema,
+  createPollSchema,
+  type PollOptionSchema,
+  type UpdatePollSchema,
+  updatePollSchema,
+} from "@/validators/poll";
+import { getSearchValidator } from "@/validators/register";
 
 type PollUser = {
   userId: string;
@@ -78,14 +78,9 @@ interface PollWithRelations extends Poll {
   totalVotes: number;
 }
 
-// Form type for the poll creation form
-type PollFormValues = {
-  title: string;
-  description: string;
-  options: PollOptionSchema[];
-  allowCustomOptions: boolean;
-  endDate?: Date;
-};
+// Form types for the poll creation form - using z.input/z.output for proper Zod v4 handling
+type CreatePollInput = z.input<typeof createPollSchema>;
+type CreatePollOutput = z.output<typeof createPollSchema>;
 
 export default function PollsPage() {
   const { data: userData } = useUserData();
@@ -176,8 +171,8 @@ export default function PollsPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <p className="text-lg font-semibold">No active polls available</p>
+              <div className="py-8 text-center">
+                <p className="font-semibold text-lg">No active polls available</p>
                 <p className="text-muted-foreground">
                   {userCanCreatePolls
                     ? "Create a new poll by clicking the 'Create Poll' tab."
@@ -203,8 +198,8 @@ export default function PollsPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <p className="text-lg font-semibold">No closed polls available</p>
+              <div className="py-8 text-center">
+                <p className="font-semibold text-lg">No closed polls available</p>
                 <p className="text-muted-foreground">
                   Closed polls will appear here after they have been completed.
                 </p>
@@ -457,7 +452,7 @@ function PollContent({
       if (option.targetUser) {
         return (
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6">
+            <div className="h-6 w-6">
               <AvatarImage
                 href={option.targetUser.avatar}
                 userId={option.targetUser.userId}
@@ -473,7 +468,7 @@ function PollContent({
       // Fallback to just showing the text (which should be the username)
       return (
         <div className="flex items-center gap-2">
-          <User className="h-4 w-4 mr-1" />
+          <User className="mr-1 h-4 w-4" />
           <span>{option.text}</span>
         </div>
       );
@@ -485,19 +480,19 @@ function PollContent({
   return (
     <div className="mt-4 space-y-4">
       <Card className="bg-muted/50">
-        <CardContent className="p-4 bg-popover rounded-xl">
+        <CardContent className="rounded-xl bg-popover p-4">
           <div className="prose max-w-none">
             <p className="text-sm">{parseHtml(poll.description)}</p>
           </div>
         </CardContent>
       </Card>
 
-      <div className="text-sm text-muted-foreground">
+      <div className="text-muted-foreground text-sm">
         Created on: {format(new Date(poll.createdAt), "PPP")}
       </div>
 
       {poll.endDate && (
-        <div className="text-sm text-muted-foreground">
+        <div className="text-muted-foreground text-sm">
           Ends on: {format(new Date(poll.endDate), "PPP")}
         </div>
       )}
@@ -529,18 +524,16 @@ function PollContent({
                     )}
                   </div>
                 </div>
-                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
                   <div
-                    className={`h-full ${
-                      userVote?.optionId === option.id ? "bg-primary" : "bg-primary/60"
-                    }`}
+                    className={`h-full ${userVote?.optionId === option.id ? "bg-primary" : "bg-primary/60"}`}
                     style={{ width: `${option.percentage}%` }}
                   />
                 </div>
               </div>
             ))}
 
-            <div className="flex flex-wrap gap-2 mt-4 mb-4">
+            <div className="mt-4 mb-4 flex flex-wrap gap-2">
               {userLoggedIn && poll.isActive && (
                 <Button
                   variant="outline"
@@ -595,11 +588,11 @@ function PollContent({
 
             {/* Custom option input */}
             {(poll.allowCustomOptions || userCanAddOptions) && (
-              <Card className="mt-4 bg-popover rounded-xl">
+              <Card className="mt-4 rounded-xl bg-popover">
                 <CardContent className="pt-6">
                   <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <div className="text-sm font-medium">Add Option</div>
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium text-sm">Add Option</div>
                       <RadioGroup
                         defaultValue="text"
                         className="flex flex-row space-x-2"
@@ -611,18 +604,18 @@ function PollContent({
                           <RadioGroupItem value="text" id="add-text" />
                           <label
                             htmlFor="add-text"
-                            className="flex items-center text-sm font-medium"
+                            className="flex items-center font-medium text-sm"
                           >
-                            <Type className="h-4 w-4 mr-1" /> Text
+                            <Type className="mr-1 h-4 w-4" /> Text
                           </label>
                         </div>
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="user" id="add-user" />
                           <label
                             htmlFor="add-user"
-                            className="flex items-center text-sm font-medium"
+                            className="flex items-center font-medium text-sm"
                           >
-                            <User className="h-4 w-4 mr-1" /> User
+                            <User className="mr-1 h-4 w-4" /> User
                           </label>
                         </div>
                       </RadioGroup>
@@ -670,7 +663,7 @@ function PollContent({
               </Card>
             )}
 
-            <div className="flex flex-wrap gap-2 mt-4 mb-4">
+            <div className="mt-4 mb-4 flex flex-wrap gap-2">
               {/* View results button */}
               <Button size="sm" onClick={() => setShowResults(true)}>
                 <Eye className="mr-2 h-4 w-4" />
@@ -716,7 +709,7 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
     { type: "text", text: "" },
   ]);
 
-  const form = useForm<PollFormValues>({
+  const form = useForm<CreatePollInput, unknown, CreatePollOutput>({
     resolver: zodResolver(createPollSchema),
     defaultValues: {
       title: "",
@@ -811,7 +804,7 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
     form.setValue("options", options);
   }, [options, form]);
 
-  const onSubmit = (data: PollFormValues) => {
+  const onSubmit = (data: CreatePollOutput) => {
     // Filter out empty options and ensure all options have the required fields
     const filteredOptions = options
       .filter((option) => {
@@ -891,7 +884,7 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
         />
 
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex items-center justify-between">
             <FormLabel>Options</FormLabel>
             <RadioGroup
               defaultValue="text"
@@ -901,13 +894,13 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="text" id="text" />
                 <FormLabel htmlFor="text" className="flex items-center">
-                  <Type className="h-4 w-4 mr-1" /> Text
+                  <Type className="mr-1 h-4 w-4" /> Text
                 </FormLabel>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="user" id="user" />
                 <FormLabel htmlFor="user" className="flex items-center">
-                  <User className="h-4 w-4 mr-1" /> User
+                  <User className="mr-1 h-4 w-4" /> User
                 </FormLabel>
               </div>
             </RadioGroup>
@@ -920,7 +913,7 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
                 .filter((opt) => opt.type === "text")
                 .map((option, index) => {
                   // Find the actual index in the full options array
-                  const actualIndex = options.findIndex((opt) => opt === option);
+                  const actualIndex = options.indexOf(option);
                   // After filtering, we know this is a text option
                   const textOption = option as { type: "text"; text: string };
                   return (

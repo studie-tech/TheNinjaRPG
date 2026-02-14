@@ -1,30 +1,39 @@
-import { z } from "zod";
+import { and, eq, gt, inArray, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
-import { serverError, baseServerResponse } from "@/server/api/trpc";
-import { eq, or, and, gt, inArray } from "drizzle-orm";
-import { SPAR_EXPIRY_SECONDS } from "@/libs/combat/constants";
-import { secondsFromNow } from "@/utils/time";
-import { userRequest, rankedLoadout } from "@/drizzle/schema";
-import { getServerPusher } from "@/libs/pusher";
-import { fetchUser } from "@/routers/profile";
-import { initiateBattle } from "@/routers/combat";
-import { RANKED_PVP_STATS } from "@/drizzle/constants";
+import { z } from "zod";
 import type { UserRequestState, UserRequestType } from "@/drizzle/constants";
+import { RANKED_PVP_STATS } from "@/drizzle/constants";
+import type { RankedLoadout } from "@/drizzle/schema";
+import { rankedLoadout, userRequest } from "@/drizzle/schema";
+import { SPAR_EXPIRY_SECONDS } from "@/libs/combat/constants";
+import { getServerPusher } from "@/libs/pusher";
+import { initiateBattle } from "@/routers/combat";
+import { fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { secondsFromNow } from "@/utils/time";
 
 const pusher = getServerPusher();
 
 export const sparringRouter = createTRPCRouter({
-  getUserChallenges: protectedProcedure.query(async ({ ctx }) => {
-    return fetchRequests(ctx.drizzle, ["SPAR"], SPAR_EXPIRY_SECONDS * 2, ctx.userId);
-  }),
+  getUserChallenges: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get pending sparring challenges" } })
+    .query(async ({ ctx }) => {
+      return fetchRequests(ctx.drizzle, ["SPAR"], SPAR_EXPIRY_SECONDS * 2, ctx.userId);
+    }),
   createChallenge: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Challenge another user to spar" } })
     .input(
       z.object({
         targetId: z.string(),
-        useRankedRules: z.boolean().optional().default(false),
-        spectatable: z.boolean().optional().default(false),
+        useRankedRules: z.boolean().optional().prefault(false),
+        spectatable: z.boolean().optional().prefault(false),
       }),
     )
     .output(baseServerResponse)
@@ -59,6 +68,7 @@ export const sparringRouter = createTRPCRouter({
       return { success: true, message: "Challenge created" };
     }),
   acceptChallenge: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Accept a sparring challenge" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -80,7 +90,7 @@ export const sparringRouter = createTRPCRouter({
       const battleType = useRankedRules ? "RANKED_SPARRING" : "SPARRING";
 
       // Get ranked loadouts if using ranked rules
-      let forceLoadouts = undefined;
+      let forceLoadouts: RankedLoadout[] | undefined;
       if (useRankedRules) {
         const [senderLoadout, receiverLoadout] = await Promise.all([
           ctx.drizzle.query.rankedLoadout.findFirst({
@@ -150,6 +160,7 @@ export const sparringRouter = createTRPCRouter({
       return result;
     }),
   rejectChallenge: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Reject a sparring challenge" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -169,6 +180,7 @@ export const sparringRouter = createTRPCRouter({
       return await updateRequestState(ctx.drizzle, input.id, "REJECTED", "SPAR");
     }),
   cancelChallenge: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Cancel your sparring challenge" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

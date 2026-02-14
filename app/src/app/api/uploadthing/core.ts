@@ -1,17 +1,17 @@
 import { currentUser } from "@clerk/nextjs/server";
+import { and, eq, gt, isNotNull, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import type { FileRouter } from "uploadthing/next";
 import { createUploadthing } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
-import { eq, sql, gt, and, isNotNull } from "drizzle-orm";
+import { z } from "zod";
+import type { FederalStatuses } from "@/drizzle/constants";
 import { historicalAvatar, userData, userUpload } from "@/drizzle/schema";
+import { createThumbnail } from "@/libs/replicate";
+import { insertHistoricalSoundEffect } from "@/server/api/routers/audio";
 import { drizzleDB } from "@/server/db";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { createThumbnail } from "@/libs/replicate";
-import type { FileRouter } from "uploadthing/next";
-import type { FederalStatuses } from "@/drizzle/constants";
 import { canChangeContent } from "@/utils/permissions";
-import { nanoid } from "nanoid";
-import { insertHistoricalSoundEffect } from "@/server/api/routers/audio";
-import { z } from "zod";
 
 const f = createUploadthing({
   errorFormatter: (err) => {
@@ -164,7 +164,9 @@ export const ourFileRouter = {
       };
     }),
   // Tower Defense individual frame uploader (for batch uploading extracted frames)
-  towerDefenseFrameUploader: f({ image: { maxFileSize: "256KB", maxFileCount: 100 } })
+  towerDefenseFrameUploader: f({
+    image: { maxFileSize: "256KB", maxFileCount: 100 },
+  })
     .middleware(adminMiddleware)
     .onUploadComplete(({ file }) => {
       return { fileUrl: file.ufsUrl };
@@ -189,7 +191,7 @@ const avatarMiddleware = async (fedRequirement?: (typeof FederalStatuses)[number
   if (user.isBanned) throw new UploadThingError("You are banned");
   // Limit
   const avatars = await drizzleDB
-    .select({ count: sql<number>`count(*)`.mapWith(Number) })
+    .select({ count: sql`count(*)`.mapWith(Number) })
     .from(historicalAvatar)
     .where(
       and(

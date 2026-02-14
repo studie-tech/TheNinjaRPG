@@ -1,7 +1,9 @@
-import React from "react";
-import { useState, useEffect } from "react";
-import AvatarImage from "./Avatar";
-import { Input } from "@/components/ui/input";
+import { X } from "lucide-react";
+import type React from "react";
+import { useEffect, useState } from "react";
+import type { UseFormReturn } from "react-hook-form";
+import { useWatch } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
 import {
   Form,
   FormControl,
@@ -9,11 +11,9 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import { X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { getUnique } from "@/utils/grouping";
-import { api } from "@/app/_trpc/client";
-import type { UseFormReturn } from "react-hook-form";
-import { useWatch } from "react-hook-form";
+import AvatarImage from "./Avatar";
 
 type SelectedClan = {
   name: string;
@@ -68,7 +68,7 @@ const ClanSearchSelect: React.FC<ClanSearchSelectProps> = (props) => {
   const selectedVisual = watchClans.map((clan) => (
     <span
       key={clan.id}
-      className="mr-2 inline-flex items-center rounded-lg border  border-amber-900 bg-gray-100 px-2 text-sm font-medium text-gray-800"
+      className="mr-2 inline-flex items-center rounded-lg border border-amber-900 bg-gray-100 px-2 font-medium text-gray-800 text-sm"
     >
       <div className="m-1 w-8">
         <AvatarImage href={clan.image} alt={clan.name} size={100} priority />
@@ -89,14 +89,14 @@ const ClanSearchSelect: React.FC<ClanSearchSelectProps> = (props) => {
   ));
 
   return (
-    <div className="flex flex-col w-full items-center">
-      <div className="flex flex-row w-full items-center">
+    <div className="flex w-full flex-col items-center">
+      <div className="flex w-full flex-row items-center">
         <Form {...form}>
           <FormField
             control={form.control}
             name="name"
             render={({ field }) => (
-              <FormItem className="mx-1 w-full flex flex-col">
+              <FormItem className="mx-1 flex w-full flex-col">
                 <FormControl>
                   <Input
                     id="name"
@@ -112,15 +112,16 @@ const ClanSearchSelect: React.FC<ClanSearchSelectProps> = (props) => {
         {props.inline && selectedVisual}
       </div>
       {!props.inline && (
-        <div className="flex flex-row mt-1 ml-1 w-full">{selectedVisual}</div>
+        <div className="mt-1 ml-1 flex w-full flex-row">{selectedVisual}</div>
       )}
       {searchResults && watchName && (
         <div className="mt-1 w-full rounded-lg border-2 border-slate-500 bg-slate-100">
           {searchResults
             ?.filter((c) => props.showOwn || c.id !== props.userClanId)
             .map((clan) => (
-              <div
-                className="flex flex-row items-center p-2.5 hover:bg-slate-200"
+              <button
+                type="button"
+                className="flex w-full flex-row items-center p-2.5 text-left hover:bg-slate-200"
                 key={clan.id}
                 onClick={(e) => {
                   e.preventDefault();
@@ -138,7 +139,7 @@ const ClanSearchSelect: React.FC<ClanSearchSelectProps> = (props) => {
                 <div className="ml-2">
                   <p>{clan.name}</p>
                 </div>
-              </div>
+              </button>
             ))}
           {searchResults.length === 0 && <div className="p-2.5">No clans found</div>}
         </div>

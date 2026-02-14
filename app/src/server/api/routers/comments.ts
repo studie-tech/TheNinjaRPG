@@ -1,47 +1,54 @@
+import { format } from "date-fns";
+import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { eq, or, and, sql, desc, asc, inArray, isNull, notInArray } from "drizzle-orm";
-import { alias } from "drizzle-orm/mysql-core";
-import { format } from "date-fns";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import {
-  village,
-  userBlackList,
   conversation,
-  userReportComment,
+  conversationComment,
   forumPost,
   forumThread,
+  user2conversation,
+  userBlackList,
   userData,
+  userReportComment,
+  village,
 } from "@/drizzle/schema";
-import { user2conversation, conversationComment } from "@/drizzle/schema";
+import { resolveSenderId } from "@/libs/comments";
+import { moderateContent } from "@/libs/moderator";
+import { getServerPusher } from "@/libs/pusher";
+import { fetchThread } from "@/routers/forum";
+import { fetchUser } from "@/routers/profile";
+import { fetchUserReport } from "@/routers/reports";
 import {
+  baseServerResponse,
   createTRPCRouter,
+  errorResponse,
+  hasUserMiddleware,
   protectedProcedure,
   publicProcedure,
   ratelimitMiddleware,
-  hasUserMiddleware,
+  serverError,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import { getNewReactions, processMentions } from "@/utils/chat";
-import { serverError, baseServerResponse, errorResponse } from "@/server/api/trpc";
-import { mutateCommentSchema } from "@/validators/comments";
-import { reportCommentSchema } from "@/validators/reports";
-import { deleteCommentSchema } from "@/validators/comments";
-import { canPostReportComment } from "@/utils/permissions";
-import { canSeeReport } from "@/utils/permissions";
-import { canDeleteComment } from "@/utils/permissions";
-import { canModerateRoles } from "@/utils/permissions";
-import { canSeeSecretData } from "@/utils/permissions";
-import { createConversationSchema } from "@/validators/comments";
-import { getServerPusher } from "@/libs/pusher";
-import { fetchUserReport } from "@/routers/reports";
-import { fetchThread } from "@/routers/forum";
-import { fetchUser } from "@/routers/profile";
-import { canViewConversation } from "@/utils/permissions";
-import { moderateContent } from "@/libs/moderator";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import {
+  canDeleteComment,
+  canModerateRoles,
+  canPostReportComment,
+  canSeeReport,
+  canSeeSecretData,
+  canViewConversation,
+} from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize from "@/utils/sanitize";
-import { resolveSenderId } from "@/libs/comments";
-import type { DrizzleClient } from "@/server/db";
+import {
+  createConversationSchema,
+  deleteCommentSchema,
+  mutateCommentSchema,
+} from "@/validators/comments";
+import { reportCommentSchema } from "@/validators/reports";
 
 export const commentsRouter = createTRPCRouter({
   /**
@@ -49,6 +56,7 @@ export const commentsRouter = createTRPCRouter({
    * Creating, editing, deleting and getting comments on user reports
    */
   getReportComments: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get comments on a user report" } })
     .input(
       z.object({
         id: z.string(),
@@ -106,6 +114,7 @@ export const commentsRouter = createTRPCRouter({
       };
     }),
   createReportComment: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Add a comment to a user report" } })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .output(baseServerResponse)
@@ -133,6 +142,7 @@ export const commentsRouter = createTRPCRouter({
    * Creating, editing, deleting and getting comments on forum threads
    */
   getForumComments: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get comments on a forum thread" } })
     .input(
       z.object({
         thread_id: z.string(),
@@ -166,7 +176,7 @@ export const commentsRouter = createTRPCRouter({
           orderBy: [asc(forumPost.createdAt)],
         }),
         ctx.drizzle
-          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .select({ count: sql`count(*)`.mapWith(Number) })
           .from(forumPost)
           .where(eq(forumPost.threadId, input.thread_id)),
       ]);
@@ -181,6 +191,7 @@ export const commentsRouter = createTRPCRouter({
       };
     }),
   createForumComment: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Post a comment on a forum thread" } })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(mutateCommentSchema)
@@ -229,6 +240,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Comment posted" };
     }),
   editForumComment: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Edit your forum comment" } })
     .input(mutateCommentSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -266,6 +278,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Comment edited" };
     }),
   deleteForumComment: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Delete your forum comment" } })
     .input(deleteCommentSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -292,6 +305,7 @@ export const commentsRouter = createTRPCRouter({
    * Creating, editing, deleting and getting comments on forum threads
    */
   getUserConversations: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user's conversations" } })
     .input(z.object({ selectedConvo: z.string().nullish().optional() }))
     .query(async ({ ctx }) => {
       // Query
@@ -344,13 +358,14 @@ export const commentsRouter = createTRPCRouter({
         )
         .map((c) => ({
           ...c.conversation,
-          users: c.conversation!.users.filter((u) => u.userData),
+          users: c.conversation?.users.filter((u) => u.userData),
         }))
         .sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
       // Return filtered conversations
       return filteredConverations;
     }),
   createConversation: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Create a new private conversation" } })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(createConversationSchema)
@@ -377,6 +392,7 @@ export const commentsRouter = createTRPCRouter({
       return { conversationId: convoId };
     }),
   exitConversation: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Leave a conversation" } })
     .input(z.object({ convo_id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -411,6 +427,9 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Conversation exited" };
     }),
   fetchConversationComment: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Fetch a single conversation comment" },
+    })
     .input(z.object({ commentId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const posterUser = alias(userData, "posterUser");
@@ -472,6 +491,7 @@ export const commentsRouter = createTRPCRouter({
       return comment?.[0] || null;
     }),
   getConversationComments: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get messages in a conversation" } })
     .input(
       z
         .object({
@@ -620,6 +640,7 @@ export const commentsRouter = createTRPCRouter({
       };
     }),
   createConversationComment: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Send a message in a conversation" } })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(mutateCommentSchema)
@@ -768,6 +789,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Comment posted", commentId: commentId };
     }),
   reactConversationComment: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Add emoji reaction to a message" } })
     .input(z.object({ commentId: z.string(), emoji: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -810,6 +832,9 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Reaction added" };
     }),
   sendTypingIndicator: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Send typing indicator to conversation" },
+    })
     .input(z.object({ conversationId: z.string() }))
     .use(ratelimitMiddleware)
     .mutation(async ({ ctx, input }) => {
@@ -824,6 +849,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true };
     }),
   editConversationComment: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Edit your conversation message" } })
     .input(mutateCommentSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -861,6 +887,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Comment edited" };
     }),
   deleteConversationComment: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Delete your conversation message" } })
     .input(deleteCommentSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

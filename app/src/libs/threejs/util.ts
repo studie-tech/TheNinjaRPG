@@ -1,24 +1,24 @@
-import {
-  TextureLoader,
-  Texture,
-  SRGBColorSpace,
-  Scene,
-  WebGLRenderer,
-  Raycaster,
-  Vector2,
-  SpriteMaterial,
-  Sprite,
-  LinearFilter,
-} from "three";
 import type { RefObject } from "react";
 import type {
-  Vector3,
-  OrthographicCamera,
-  PerspectiveCamera,
-  Material,
   BufferGeometry,
   Group,
+  Material,
+  OrthographicCamera,
+  PerspectiveCamera,
+  Vector3,
   WebGLInfo,
+} from "three";
+import {
+  LinearFilter,
+  Raycaster,
+  Scene,
+  Sprite,
+  SpriteMaterial,
+  SRGBColorSpace,
+  Texture,
+  TextureLoader,
+  Vector2,
+  WebGLRenderer,
 } from "three";
 
 // Simple in-memory cache for textures to avoid re-fetching
@@ -119,7 +119,8 @@ export const preloadTextures = async (paths: string[]) => {
   const results = await Promise.allSettled(
     uniquePaths.map((path) => {
       // Already cached → nothing to do
-      if (textureCache.has(path)) return Promise.resolve(textureCache.get(path)!);
+      const cached = textureCache.get(path);
+      if (cached) return Promise.resolve(cached);
       // Already loading → reuse promise
       const existing = pendingLoads.get(path);
       if (existing) return existing;
@@ -330,8 +331,8 @@ export const updateStatusBar = (name: string, userSpriteGroup: Group, perc: numb
   }
 };
 
-import type { SpriteMixer } from "@/libs/threejs/SpriteMixer";
 import type { GameAsset } from "@/drizzle/schema";
+import type { SpriteMixer } from "@/libs/threejs/SpriteMixer";
 
 /**
  * Show animation on the hex
@@ -386,7 +387,7 @@ export const showAnimation = (info: {
  * Cleanup three.js scene and renderer, removing all objects, materials and geometries
  */
 export const cleanUp = (scene: Scene, renderer: WebGLRenderer) => {
-  scene.traverse(function (object) {
+  scene.traverse((object) => {
     if ("isMesh" in object || "isSprite" in object || "isLine" in object) {
       if ("material" in object) (object.material as Material).dispose();
       if ("geometry" in object) (object.geometry as BufferGeometry).dispose();
@@ -590,7 +591,7 @@ export const profiler = {
                 "Avg (ms)": avgMs.toFixed(3),
                 "Min (ms)": value.min.toFixed(3),
                 "Max (ms)": value.max.toFixed(3),
-                "% Budget": budgetPercent.toFixed(1) + "%",
+                "% Budget": `${budgetPercent.toFixed(1)}%`,
                 Calls: value.count,
               };
             })

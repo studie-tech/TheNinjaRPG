@@ -104,7 +104,7 @@ flowchart TD
 | /code-review | Review code for quality and guideline compliance | 13 sub-reviews (Task, parallel) | review-pr, implement-issue, implement-review-loop |
 | /code-review-guidelines | Reviews code for CLAUDE.md compliance | - | code-review |
 | /code-review-tests | Runs test suite | - | code-review |
-| /code-review-lint | Runs ESLint | - | code-review |
+| /code-review-lint | Runs Biome linting | - | code-review |
 | /code-review-typecheck | Runs TypeScript type checking | - | code-review |
 | /code-review-security | Reviews code for security vulnerabilities | - | code-review |
 | /code-review-trpc | Reviews tRPC routers for performance and patterns | - | code-review |

@@ -16,8 +16,8 @@ export const createAuctionListingSchema = z
     buyerId: z.string().optional(), // For direct sales
     targetUserId: z.string().optional(), // For direct auctions to specific users
     durationHours: z.number().min(1).max(168), // 1 hour to 7 days
-    currencyType: z.enum(TRADEABLE_CURRENCY_TYPES).default("MONEY"),
-    quantity: z.number().int().min(1).optional(), // Quantity to auction from stack
+    currencyType: z.enum(TRADEABLE_CURRENCY_TYPES).prefault("MONEY"),
+    quantity: z.int().min(1).optional(), // Quantity to auction from stack
   })
   .refine(
     (data) => {
@@ -54,13 +54,13 @@ export const createAuctionListingSchema = z
       return true;
     },
     {
-      message: "Buyout price must be higher than the starting price",
       path: ["buyoutPrice"],
+      error: "Buyout price must be higher than the starting price",
     },
   );
 
 export const getAuctionListingsSchema = z.object({
-  limit: z.number().min(1).max(100).default(10),
+  limit: z.number().min(1).max(100).prefault(10),
   cursor: z.number().nullish(),
   itemName: z.string().optional(),
   minPrice: z.number().min(0).optional(),
@@ -73,3 +73,11 @@ export const getAuctionListingsSchema = z.object({
 // Type exports
 export type CreateAuctionListingSchema = z.infer<typeof createAuctionListingSchema>;
 export type GetAuctionListingsSchema = z.infer<typeof getAuctionListingsSchema>;
+
+// Black market offer schema
+export const blackMarketOfferSchema = z.object({
+  reps: z.coerce.number().int().min(1),
+  ryo: z.coerce.number().int().min(1),
+});
+export type BlackMarketOfferSchemaInput = z.input<typeof blackMarketOfferSchema>;
+export type BlackMarketOfferSchema = z.infer<typeof blackMarketOfferSchema>;

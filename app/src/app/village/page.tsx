@@ -1,39 +1,44 @@
 "use client";
 
-import { parseHtml } from "@/utils/parse";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Bot,
+  BrickWall,
+  DoorOpen,
+  MapPinHouse,
+  Pencil,
+  ReceiptJapaneseYen,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import Confirm2 from "@/layout/Confirm2";
-import RichInput from "@/layout/RichInput";
+import { useForm } from "react-hook-form";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
-import { prettyNumber } from "@/utils/string";
-import { mutateContentSchema } from "@/validators/comments";
-import { DoorOpen, Pencil, MapPinHouse } from "lucide-react";
-import { Users, BrickWall, Bot, ReceiptJapaneseYen } from "lucide-react";
-import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { useRequireInVillage } from "@/utils/UserContext";
-import { hasRequiredRank } from "@/libs/train";
-
 import {
-  VILLAGE_REDUCED_GAINS_DAYS,
   VILLAGE_LEAVE_REQUIRED_RANK,
-  WAR_VILLAGE_MAX_SECTORS,
+  VILLAGE_REDUCED_GAINS_DAYS,
   WAR_FACTION_MAX_SECTORS,
+  WAR_VILLAGE_MAX_SECTORS,
 } from "@/drizzle/constants";
-
-import Building, { StructureRewardEntries } from "@/layout/Building";
 import { useTutorialStep } from "@/hooks/tutorial";
+import Building, { StructureRewardEntries } from "@/layout/Building";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import RichInput from "@/layout/RichInput";
+import { showMutationToast } from "@/libs/toast";
+import { hasRequiredRank } from "@/libs/train";
+import { parseHtml } from "@/utils/parse";
+import { prettyNumber } from "@/utils/string";
+import { useRequireInVillage } from "@/utils/UserContext";
 import type { MutateContentSchema } from "@/validators/comments";
+import { mutateContentSchema } from "@/validators/comments";
 
 export default function VillageOverview() {
   // State
@@ -142,7 +147,7 @@ export default function VillageOverview() {
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="flex flex-row">
-                      <MapPinHouse className="w-6 h-6 mr-2" />
+                      <MapPinHouse className="mr-2 h-6 w-6" />
                       {data?.sectorCount ?? "?"} / {maxSectors}
                     </div>
                   </TooltipTrigger>
@@ -154,7 +159,7 @@ export default function VillageOverview() {
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="flex flex-row">
-                      <BrickWall className="w-6 h-6 mr-2" /> lvl. {walls?.level}
+                      <BrickWall className="mr-2 h-6 w-6" /> lvl. {walls?.level}
                     </div>
                   </TooltipTrigger>
                   {walls && (
@@ -165,7 +170,7 @@ export default function VillageOverview() {
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="flex flex-row">
-                      <Bot className="w-6 h-6 mr-2" /> lvl. {protectors?.level}
+                      <Bot className="mr-2 h-6 w-6" /> lvl. {protectors?.level}
                     </div>
                   </TooltipTrigger>
                   {protectors && (
@@ -178,8 +183,8 @@ export default function VillageOverview() {
                 <Tooltip>
                   <TooltipTrigger>
                     <Link href={href}>
-                      <div className="flex flex-row hover:text-orange-500 hover:cursor-pointer">
-                        <Users className="w-6 h-6 mr-2" />
+                      <div className="flex flex-row hover:cursor-pointer hover:text-orange-500">
+                        <Users className="mr-2 h-6 w-6" />
                         {prettyNumber(villageData?.populationCount ?? 0)}
                       </div>
                     </Link>
@@ -192,7 +197,7 @@ export default function VillageOverview() {
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="flex flex-row">
-                      <ReceiptJapaneseYen className="w-6 h-6 mr-2" />
+                      <ReceiptJapaneseYen className="mr-2 h-6 w-6" />
                       {prettyNumber(villageData?.tokens ?? 0)}
                     </div>
                   </TooltipTrigger>
@@ -227,16 +232,15 @@ export default function VillageOverview() {
         }
       >
         <div className="grid grid-cols-3 items-center sm:grid-cols-4">
-          {shownStructures?.map((structure, i) => (
+          {shownStructures?.map((structure) => (
             <div
-              key={i}
+              key={structure.id}
               className="p-2"
               id={`tutorial-${structure.route.replace("/", "")}`}
             >
               <Building
                 structure={structure}
                 village={villageData}
-                key={structure.id}
                 textPosition="bottom"
                 showBar
                 showUpgrade
@@ -250,9 +254,7 @@ export default function VillageOverview() {
       {["OUTLAW", "VILLAGE"].includes(sectorVillage?.type || "unknown") && (
         <ContentBox
           title="Notice Board"
-          subtitle={`Information from ${
-            sectorVillage?.type === "OUTLAW" ? "Leader" : "Kage"
-          }`}
+          subtitle={`Information from ${sectorVillage?.type === "OUTLAW" ? "Leader" : "Kage"}`}
           initialBreak={true}
           topRightContent={
             isKage && (

@@ -1,19 +1,25 @@
+import type { UserRank } from "@/drizzle/constants";
+import {
+  CLAN_BOOST_MAX_LEVEL,
+  CLAN_BOOST_PERCENT_PER_LEVEL,
+  CP_PER_LVL,
+  getUserCaps,
+  HomeTypeDetails,
+  HP_PER_LVL,
+  SP_PER_LVL,
+} from "@/drizzle/constants";
 import type {
-  UserData,
   Bloodline,
+  Clan,
+  GameSetting,
+  UserData,
   Village,
   VillageStructure,
-  GameSetting,
-  Clan,
 } from "@/drizzle/schema";
-import { HP_PER_LVL, SP_PER_LVL, CP_PER_LVL } from "@/drizzle/constants";
-import { CLAN_MAX_REGEN_BOOST, getUserCaps } from "@/drizzle/constants";
+import { getGameSettingBoost } from "@/libs/gamesettings";
+import { getReducedGainsDays } from "@/libs/train";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { getStrucBoost } from "@/utils/village";
-import { getReducedGainsDays } from "@/libs/train";
-import { getGameSettingBoost } from "@/libs/gamesettings";
-import { HomeTypeDetails } from "@/drizzle/constants";
-import type { UserRank } from "@/drizzle/constants";
 import type { StatSchemaType } from "@/validators/combat";
 
 /**
@@ -254,11 +260,13 @@ export const calcActiveUserRegen = (
     regeneration = regeneration + user.bloodline.regenIncrease;
   }
 
-  // Clan boost (in percentage)
+  // Clan boost (in percentage) - only apply for real clans, not outlaw factions/towns
+  const maxRegenBoost = CLAN_BOOST_MAX_LEVEL * CLAN_BOOST_PERCENT_PER_LEVEL;
   if (
+    !user.isOutlaw &&
     user.clan?.regenBoost &&
     user.clan?.regenBoost > 0 &&
-    user.clan?.regenBoost <= CLAN_MAX_REGEN_BOOST
+    user.clan?.regenBoost <= maxRegenBoost
   ) {
     regeneration *= (100 + user.clan.regenBoost) / 100;
   }

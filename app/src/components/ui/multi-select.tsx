@@ -1,9 +1,7 @@
+import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
 import * as React from "react";
-import { cn } from "src/libs/shadui";
-
-import { Check, X, ChevronsUpDown, Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Command,
   CommandEmpty,
@@ -11,8 +9,9 @@ import {
   CommandInput,
   CommandItem,
 } from "@/components/ui/command";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/libs/shadui";
 
 export type OptionType = {
   label: string;
@@ -69,17 +68,23 @@ function MultiSelect({
   return (
     <Popover open={open} onOpenChange={setOpen} {...props}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
+        <div
           role="combobox"
           aria-expanded={open}
+          tabIndex={0}
           className={cn(
-            "w-full justify-between h-max",
+            "flex h-max w-full cursor-pointer items-center justify-between rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             isDirty ? "border-orange-300" : "border-input",
           )}
           onClick={() => setOpen(!open)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setOpen(!open);
+            }
+          }}
         >
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex flex-wrap gap-1">
             {sortedSelected.length > 0 ? (
               sortedSelected.map((item, i) => {
                 const option = options.find((o) => o.value === item);
@@ -91,21 +96,18 @@ function MultiSelect({
                     onClick={() => handleUnselect(item)}
                   >
                     {option?.label ?? item}
-                    <div
-                      className="ml-1 ring-offset-background rounded-full outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleUnselect(item);
-                        }
-                      }}
+                    <button
+                      type="button"
+                      className="ml-1 rounded-full outline-hidden ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                       }}
                       onClick={() => handleUnselect(item)}
+                      aria-label={`Remove ${option?.label ?? item}`}
                     >
                       <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                    </div>
+                    </button>
                   </Badge>
                 );
               })
@@ -116,7 +118,7 @@ function MultiSelect({
             )}
           </div>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-        </Button>
+        </div>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0">
         <Command className={className}>
@@ -148,7 +150,7 @@ function MultiSelect({
             ))}
           </CommandGroup>
           {allowAddNew && (
-            <div className="p-2 border-t">
+            <div className="border-t p-2">
               <div className="flex items-center space-x-2">
                 <Input
                   placeholder="Add new option..."

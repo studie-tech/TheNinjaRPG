@@ -1,22 +1,23 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef } from "react";
-import ContentBox from "@/layout/ContentBox";
-import { api } from "@/app/_trpc/client";
-import Loader from "@/layout/Loader";
 import { Chart as ChartJS } from "chart.js/auto";
+import type React from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { api } from "@/app/_trpc/client";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import VisitorFiltering, {
+  getFilter as getVisitorFilter,
+  useFiltering as useVisitorFiltering,
+} from "@/layout/VisitorFiltering";
 import {
-  betaPosterior,
   betaPdf,
+  betaPosterior,
   kde,
   mean,
   quantile,
   sampleBeta,
 } from "@/libs/statistics";
-import VisitorFiltering, {
-  useFiltering as useVisitorFiltering,
-  getFilter as getVisitorFilter,
-} from "@/layout/VisitorFiltering";
 
 type VariantAgg = { variant: string; loaded: number; register: number };
 type ExperimentAgg = { experiment: string; variants: VariantAgg[] };
@@ -41,9 +42,9 @@ const inferControlTreatment = (
       (/(^|\b)variant\s*b(\b|$)/i.test(s) ? 5 : 0);
     return score(rx) - score(ry) || rx.localeCompare(ry);
   });
-  if (byHeuristic.length < 2) return { a: undefined, b: undefined, ambiguous: true };
-  const aVar = byHeuristic[0]!;
-  const bVar = byHeuristic[1]!;
+  const aVar = byHeuristic[0];
+  const bVar = byHeuristic[1];
+  if (!aVar || !bVar) return { a: undefined, b: undefined, ambiguous: true };
   const ambiguous = !/(^|\b)(control|baseline|original|variant\s*a)(\b|$)/i.test(
     aVar.variant,
   );
@@ -117,7 +118,6 @@ const DistributionChart: React.FC<{
       },
     });
     return () => chart.destroy();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [labels, datasets, title, yTitle, xZoomMax]);
   return (
     <div className="w-full" style={{ height: 260 }}>
@@ -244,25 +244,25 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
   const moreThanTwo = exp.variants.length > 2;
 
   return (
-    <div className="rounded-md border p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 gap-3 rounded-md border p-3 md:grid-cols-2">
       {!haveTwo && (
-        <div className="md:col-span-2 text-xs rounded-md border border-red-200 bg-red-50 p-2 text-red-900">
+        <div className="rounded-md border border-red-200 bg-red-50 p-2 text-red-900 text-xs md:col-span-2">
           Need at least two variants to compare. Showing placeholders.
         </div>
       )}
       {moreThanTwo && (
-        <div className="md:col-span-2 text-xs rounded-md border border-blue-200 bg-blue-50 p-2 text-blue-900">
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-2 text-blue-900 text-xs md:col-span-2">
           More than two variants detected. Showing a pairwise comparison. Consider
           running pairwise comparisons across all variants for full insight.
         </div>
       )}
       {ambiguous && (
-        <div className="md:col-span-2 text-xs rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-900">
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-900 text-xs md:col-span-2">
           Control/Treatment naming is ambiguous; ordering may be arbitrary.
         </div>
       )}
       {hasWarnings && (
-        <div className="md:col-span-2 text-xs rounded-md border border-yellow-200 bg-yellow-50 p-2 text-yellow-900">
+        <div className="rounded-md border border-yellow-200 bg-yellow-50 p-2 text-xs text-yellow-900 md:col-span-2">
           Preliminary results — recommended guardrails not met:
           <ul className="list-disc pl-5">
             {insufficientConversions && (
@@ -287,7 +287,7 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
         </div>
       )}
       <div className="flex flex-col gap-2">
-        <div className="text-sm font-semibold">
+        <div className="font-semibold text-sm">
           Conversion Rate Distributions (Beta posterior)
         </div>
         <DistributionChart
@@ -308,7 +308,7 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
         />
       </div>
       <div className="flex flex-col gap-2">
-        <div className="text-sm font-semibold">
+        <div className="font-semibold text-sm">
           Improvement Distribution (Treatment − Control)
         </div>
         <DistributionChart
@@ -341,9 +341,9 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
           ]}
         />
       </div>
-      <div className="md:col-span-2 text-sm">
+      <div className="text-sm md:col-span-2">
         <div className="font-semibold">Executive Summary</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <div>
             <div>
               What happened so far (raw data): out of every 100 visitors — {aV.variant}
@@ -398,7 +398,7 @@ export const AbTestResults: React.FC = () => {
         <div className="flex flex-col gap-4">
           {data.map((exp) => (
             <div key={exp.experiment} className="flex flex-col gap-2">
-              <div className="text-lg font-bold">{exp.experiment}</div>
+              <div className="font-bold text-lg">{exp.experiment}</div>
               <ExperimentRow exp={exp} />
             </div>
           ))}

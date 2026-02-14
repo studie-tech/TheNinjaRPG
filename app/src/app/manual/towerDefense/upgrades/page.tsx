@@ -1,15 +1,15 @@
 "use client";
 
+import Link from "next/link";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { TowerDefenseUpgradeCategories } from "@/drizzle/constants";
+import type { TowerDefenseUpgrade } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
-import { api } from "@/app/_trpc/client";
+import { getUpgradeColor, getUpgradeIcon } from "@/libs/towerDefense/upgrades";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import Link from "next/link";
-import { TowerDefenseUpgradeCategories } from "@/drizzle/constants";
-import { getUpgradeIcon, getUpgradeColor } from "@/libs/towerDefense/upgrades";
-import type { TowerDefenseUpgrade } from "@/drizzle/schema";
 
 export default function ManualTowerDefenseUpgrades() {
   const { data: userData } = useUserData();
@@ -39,7 +39,7 @@ export default function ManualTowerDefenseUpgrades() {
           can be purchased by players with points earned from completed runs. Each
           upgrade has multiple levels with increasing costs and effects.
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           Note: Upgrades can only be created/deleted by coding admins as they are
           tightly coupled with game code.
         </p>
@@ -60,10 +60,10 @@ export default function ManualTowerDefenseUpgrades() {
               ({ category, upgrades: categoryUpgrades }) =>
                 categoryUpgrades.length > 0 && (
                   <div key={category}>
-                    <h3 className="text-lg font-semibold mb-3 capitalize">
+                    <h3 className="mb-3 font-semibold text-lg capitalize">
                       {category.toLowerCase()} Upgrades
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                       {categoryUpgrades.map((upgrade) => (
                         <UpgradeCard
                           key={upgrade.id}
@@ -89,17 +89,17 @@ interface UpgradeCardProps {
 
 const UpgradeCard: React.FC<UpgradeCardProps> = ({ upgrade, canEdit }) => {
   return (
-    <div className="border rounded-lg p-4 bg-card">
+    <div className="rounded-lg border bg-card p-4">
       <div className="flex items-start gap-3">
         <div
-          className={`rounded-lg p-3 bg-muted ${getUpgradeColor(upgrade.upgradeType)}`}
+          className={`rounded-lg bg-muted p-3 ${getUpgradeColor(upgrade.upgradeType)}`}
         >
           {getUpgradeIcon(upgrade.upgradeType, "h-8 w-8")}
         </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold truncate">{upgrade.name}</h3>
-          <p className="text-xs text-muted-foreground">{upgrade.upgradeType}</p>
-          <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-semibold">{upgrade.name}</h3>
+          <p className="text-muted-foreground text-xs">{upgrade.upgradeType}</p>
+          <p className="mt-1 line-clamp-2 text-muted-foreground text-sm">
             {upgrade.description || "No description"}
           </p>
         </div>

@@ -1,167 +1,193 @@
 import * as Sentry from "@sentry/nextjs";
-import { z } from "zod";
-import { nanoid } from "nanoid";
 import {
-  createTRPCRouter,
-  protectedProcedure,
-  ratelimitMiddleware,
-  hasUserMiddleware,
-} from "@/api/trpc";
-import { serverError, baseServerResponse, errorResponse } from "@/api/trpc";
-import {
-  eq,
-  or,
   and,
-  sql,
+  desc,
+  eq,
   gt,
-  ne,
+  gte,
+  inArray,
   isNotNull,
   isNull,
-  inArray,
+  lt,
+  ne,
   notInArray,
-  gte,
+  or,
+  sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { desc, lt } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { z } from "zod";
 import {
-  COMBAT_BORDER_LEFT,
-  COMBAT_BORDER_RIGHT,
-  COMBAT_BORDER_TOP,
-  COMBAT_BORDER_BOTTOM,
-} from "@/libs/combat/constants";
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  hasUserMiddleware,
+  protectedProcedure,
+  ratelimitMiddleware,
+  serverError,
+} from "@/api/trpc";
+import * as mapData from "@/data/hexasphere.json";
+import type { BattleType } from "@/drizzle/constants";
 import {
-  SECTOR_HEIGHT,
-  SECTOR_WIDTH,
-  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
-} from "@/drizzle/constants";
-import { COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
-import {
-  RANKS_RESTRICTED_FROM_PVP,
   AutoBattleTypes,
+  BATTLE_ARENA_DAILY_LIMIT,
+  BattleTypes,
+  type CombatBiome,
+  DURABILITY_USABILITY_THR,
+  GeneralTypes,
+  HEXTILE_BIOMES,
+  ID_ANIMATION_HEAL,
+  ID_ANIMATION_HIT,
+  ID_ANIMATION_SMOKE,
+  ID_SFX_CLEANSE,
+  ID_SFX_CLEAR,
+  ID_SFX_HEAL,
+  ID_SFX_HIT,
+  ID_SFX_MOVE,
+  ID_SFX_SMOKE,
+  MAP_RESERVED_SECTORS,
+  MAP_WAKE_ISLAND_SECTOR,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  NonActionItemTypes,
   PvpBattleTypes,
   QuestBattleTypes,
+  RANKS_RESTRICTED_FROM_PVP,
+  REGEN_SECONDS,
+  SECTOR_HEIGHT,
+  SECTOR_WIDTH,
+  StatTypes,
+  VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
-import { NonActionItemTypes, DURABILITY_USABILITY_THR } from "@/drizzle/constants";
-import { secondsFromDate, secondsFromNow } from "@/utils/time";
-import { rollStealthKeep } from "@/libs/stealth";
-import {
-  calcBattleResult,
-  maskBattle,
-  maskBattleDynamic,
-  alignBattle,
-} from "@/libs/combat/util";
-import { createAction, saveUsage } from "@/libs/combat/database";
-import { fetchUserSkills } from "@/server/api/routers/skillTree";
-import { updateUser, updateBattle, updateRaidProgress } from "@/libs/combat/database";
-import { calcHP, calcSP, calcCP, calcLevelRequirements } from "@/libs/profile";
-import { controlShownQuestLocationInformation } from "@/libs/quest";
-import { getReskinnedBloodline } from "@/libs/bloodline";
-import { getDefaultBattleSizes } from "@/libs/combat/util";
-import {
-  selectJutsuLoadout,
-  fetchJutsuLoadouts,
-  fetchUserJutsus,
-} from "@/server/api/routers/jutsu";
-import {
-  selectItemLoadout,
-  fetchItemLoadouts,
-  fetchUserItems,
-} from "@/server/api/routers/item";
-import {
-  updateVillageAnbuClan,
-  updateKage,
-  updateClanLeaders,
-  updateTournament,
-  updateWars,
-} from "@/libs/combat/database";
-import { fetchUpdatedUser, fetchUser } from "./profile";
-import { performAIaction } from "@/libs/combat/ai_v2";
-import { userData, questHistory, quest, gameSetting, jutsu } from "@/drizzle/schema";
+import type {
+  AiProfile,
+  GameSetting,
+  RankedLoadout,
+  Village,
+  VillageAlliance,
+} from "@/drizzle/schema";
 import {
   battle,
   battleAction,
   battleHistory,
-  war,
+  bounty,
+  gameAsset,
+  gameSetting,
   item,
+  jutsu,
+  quest,
+  questHistory,
   raidParticipation,
+  sector,
+  tournamentMatch,
+  userData,
+  village,
+  villageAlliance,
+  war,
 } from "@/drizzle/schema";
-import { villageAlliance, village, tournamentMatch, bounty } from "@/drizzle/schema";
-import { sector, gameAsset } from "@/drizzle/schema";
-import { performActionSchema, statSchema, BarrierTag } from "@/validators/combat";
-import { performBattleAction, stillInBattle } from "@/libs/combat/actions";
-import { availableUserActions } from "@/libs/combat/actions";
-import { fetchGameAssets } from "@/routers/misc";
-import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
-import { getRandomElement } from "@/utils/array";
+import { getReskinnedBloodline } from "@/libs/bloodline";
+import {
+  availableUserActions,
+  getDefaultBasicActions,
+  performBattleAction,
+  stillInBattle,
+} from "@/libs/combat/actions";
+import { performAIaction } from "@/libs/combat/ai_v2";
+import {
+  COMBAT_BORDER_BOTTOM,
+  COMBAT_BORDER_LEFT,
+  COMBAT_BORDER_RIGHT,
+  COMBAT_BORDER_TOP,
+  COMBAT_LOBBY_SECONDS,
+} from "@/libs/combat/constants";
+import {
+  createAction,
+  saveUsage,
+  updateBattle,
+  updateClanLeaders,
+  updateKage,
+  updateRaidProgress,
+  updateTournament,
+  updateUser,
+  updateVillageAnbuClan,
+  updateWars,
+} from "@/libs/combat/database";
 import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
-import { manuallyAssignUserStats, scaleUserStats } from "@/libs/profile";
-import { capUserStats } from "@/libs/profile";
-import { mockAchievementHistoryEntries } from "@/libs/quest";
-import { canAccessStructure } from "@/utils/village";
-import { fetchSectorVillage } from "@/routers/village";
-import { fetchAiProfileById } from "@/routers/ai";
-import { fetchActiveWars } from "@/routers/war";
-import { getBattleGrid } from "@/libs/combat/util";
-import { BATTLE_ARENA_DAILY_LIMIT } from "@/drizzle/constants";
-import { REGEN_SECONDS } from "@/drizzle/constants";
-import {
-  VILLAGE_SYNDICATE_ID,
-  MAP_WAKE_ISLAND_SECTOR,
-  MAP_RESERVED_SECTORS,
-} from "@/drizzle/constants";
-import { StatTypes, GeneralTypes } from "@/drizzle/constants";
-import { BattleTypes } from "@/drizzle/constants";
-import { calcActiveUserRegen } from "@/libs/profile";
-import { secondsPassed } from "@/utils/time";
-import { randomInt } from "@/utils/math";
-import { calcLevel } from "@/libs/profile";
-import { calcIsInVillage } from "@/libs/travel";
-import { getStrucBoost } from "@/utils/village";
-import { DecreaseDamageTakenTag } from "@/validators/combat";
 import { realizeTag } from "@/libs/combat/tags";
-import { rollInitiative } from "@/libs/combat/util";
-import { findRelationship } from "@/utils/alliance";
-import { getDefaultBasicActions } from "@/libs/combat/actions";
-import { canTrainJutsu, checkJutsuItems } from "@/libs/train";
-import { toOffenceStat, toDefenceStat } from "@/libs/stats";
-import {
-  ID_ANIMATION_SMOKE,
-  ID_ANIMATION_HIT,
-  ID_ANIMATION_HEAL,
-  ID_SFX_SMOKE,
-  ID_SFX_HIT,
-  ID_SFX_HEAL,
-  ID_SFX_MOVE,
-  ID_SFX_CLEANSE,
-  ID_SFX_CLEAR,
-  HEXTILE_BIOMES,
-} from "@/drizzle/constants";
-import { getBiomeFromGlobalTile } from "@/libs/travel";
-import * as mapData from "@/data/hexasphere.json";
-import type { RankedLoadout } from "@/drizzle/schema";
-import type { BattleType } from "@/drizzle/constants";
-import type { StatSchemaType } from "@/validators/combat";
-import type { BattleUserState } from "@/libs/combat/types";
-import type { BattleUserItem, BattleUserJutsu } from "@/libs/combat/types";
-import type { GroundEffect, UserEffect, ExtraState } from "@/libs/combat/types";
-import type { ActionEffect } from "@/libs/combat/types";
-import type { CompleteBattle } from "@/libs/combat/types";
 import type {
+  ActionEffect,
+  BattleUserItem,
+  BattleUserJutsu,
+  BattleUserState,
+  BattleWar,
   CombatQueryUser,
+  CompleteBattle,
+  ExtraState,
+  GroundEffect,
   ProcessedItem,
   ProcessingBattleUser,
+  UserEffect,
 } from "@/libs/combat/types";
-import type { DrizzleClient } from "@/server/db";
-import { type CombatBiome } from "@/drizzle/constants";
-import type {
-  VillageAlliance,
-  Village,
-  GameSetting,
-  AiProfile,
-} from "@/drizzle/schema";
-import type { BattleWar } from "@/libs/combat/types";
+import {
+  alignBattle,
+  applyPoolAdjustmentsToBase,
+  calcBattleResult,
+  getBattleGrid,
+  getDefaultBattleSizes,
+  isEffectActive,
+  maskBattle,
+  maskBattleDynamic,
+  rollInitiative,
+} from "@/libs/combat/util";
+import {
+  calcActiveUserRegen,
+  calcCP,
+  calcHP,
+  calcLevel,
+  calcLevelRequirements,
+  calcSP,
+  capUserStats,
+  manuallyAssignUserStats,
+  scaleUserStats,
+} from "@/libs/profile";
+import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
+import {
+  controlShownQuestLocationInformation,
+  mockAchievementHistoryEntries,
+} from "@/libs/quest";
+import { toDefenceStat, toOffenceStat } from "@/libs/stats";
+import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
+import { canTrainJutsu, checkJutsuItems } from "@/libs/train";
+import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
 import { findWarsWithUser } from "@/libs/war";
+import { fetchAiProfileById } from "@/routers/ai";
+import { fetchSectorVillage } from "@/routers/village";
+import { fetchActiveWars } from "@/routers/war";
+import {
+  fetchItemLoadouts,
+  fetchUserItems,
+  selectItemLoadout,
+} from "@/server/api/routers/item";
+import {
+  fetchJutsuLoadouts,
+  fetchUserJutsus,
+  selectJutsuLoadout,
+} from "@/server/api/routers/jutsu";
+import { fetchUserSkills } from "@/server/api/routers/skillTree";
+import type { DrizzleClient } from "@/server/db";
+import { findRelationship } from "@/utils/alliance";
+import { getRandomElement } from "@/utils/array";
+import { randomInt } from "@/utils/math";
+import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
+import { canAccessStructure, getStrucBoost } from "@/utils/village";
+import type { StatSchemaType } from "@/validators/combat";
+import {
+  BarrierTag,
+  DecreaseDamageTakenTag,
+  performActionSchema,
+  statSchema,
+} from "@/validators/combat";
+import { fetchUpdatedUser, fetchUser } from "./profile";
 
 // Debug flag when testing battle
 const debug = false;
@@ -171,6 +197,7 @@ const pusher = getServerPusher();
 
 export const combatRouter = createTRPCRouter({
   getBattle: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get current battle state" } })
     .input(z.object({ battleId: z.string().optional().nullable() }))
     .query(async ({ ctx, input }) => {
       // No battle ID
@@ -300,6 +327,7 @@ export const combatRouter = createTRPCRouter({
       }
     }),
   getBattleEntries: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get battle action log entries" } })
     .input(
       z.object({
         battleId: z.string(),
@@ -350,6 +378,7 @@ export const combatRouter = createTRPCRouter({
       return entries;
     }),
   getGraph: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get battle history graph data" } })
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
       const attacker = alias(userData, "attacker");
@@ -419,6 +448,7 @@ export const combatRouter = createTRPCRouter({
       return topFights;
     }),
   getBattleHistoryEntry: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get specific battle history entry" } })
     .input(z.object({ battleId: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await ctx.drizzle.query.battleHistory.findFirst({
@@ -453,6 +483,7 @@ export const combatRouter = createTRPCRouter({
       return result ?? null;
     }),
   getBattleHistory: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get user battle history" } })
     .input(
       z.object({
         userId: z.string().optional(),
@@ -485,6 +516,7 @@ export const combatRouter = createTRPCRouter({
     }),
 
   performAction: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Perform action in battle" } })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(performActionSchema)
@@ -554,8 +586,8 @@ export const combatRouter = createTRPCRouter({
           // If userId, actionID, and position specified, perform user action
           const battleDescriptions: string[] = [];
           const actionEffects: ActionEffect[] = [];
-          let performedActionId: string | undefined = undefined;
-          let performedByUserId: string | undefined = undefined;
+          let performedActionId: string | undefined;
+          let performedByUserId: string | undefined;
           if (
             !isAITurn &&
             isUserTurn &&
@@ -729,6 +761,7 @@ export const combatRouter = createTRPCRouter({
       }
     }),
   battleArenaHeal: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Heal in battle arena for ryo" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
@@ -753,6 +786,9 @@ export const combatRouter = createTRPCRouter({
       }
     }),
   startArenaBattle: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Start battle arena fight against AI" },
+    })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(z.object({ aiId: z.string(), stats: statSchema.nullish() }))
@@ -802,21 +838,22 @@ export const combatRouter = createTRPCRouter({
       }
     }),
   attackUser: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Attack another user to initiate combat" },
+    })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(
       z.object({
         longitude: z
-          .number()
           .int()
           .min(0)
           .max(SECTOR_WIDTH - 1),
         latitude: z
-          .number()
           .int()
           .min(0)
           .max(SECTOR_HEIGHT - 1),
-        sector: z.number().int(),
+        sector: z.int(),
         userId: z.string(),
         asset: z.enum(HEXTILE_BIOMES).optional(),
       }),
@@ -837,6 +874,9 @@ export const combatRouter = createTRPCRouter({
       );
     }),
   updateCombatLoadout: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Update jutsu/item loadout in combat lobby" },
+    })
     .input(
       z.object({
         battleId: z.string(),
@@ -928,8 +968,10 @@ export const combatRouter = createTRPCRouter({
         (e) => e.creatorId !== ctx.userId,
       );
 
-      // Preserve original initiative to avoid changing it when updating loadouts
+      // Preserve original initiative and direction to avoid changing them when updating loadouts
+      // Direction is important for RAID battles where friendly fire is determined by direction
       const originalInitiative = user.initiative;
+      const originalDirection = user.direction;
 
       // Hydrate jutsus and items from extraState if not using new loadouts
       // We reconstruct CombatQueryUser format from BattleUserState refs + extraState
@@ -989,7 +1031,7 @@ export const combatRouter = createTRPCRouter({
       const aiProfile =
         user.aiProfileId && user.aiProfileId !== "Default"
           ? userBattle.extraState.aiProfiles?.[user.aiProfileId]
-          : userBattle.extraState.aiProfiles?.["Default"];
+          : userBattle.extraState.aiProfiles?.Default;
       // Build rawUserForProcessing from BattleUserState + extraState data
       // The jutsus/items are reconstructed from refs + static data with all required fields
       const rawUserForProcessing = {
@@ -1023,9 +1065,10 @@ export const combatRouter = createTRPCRouter({
         },
       );
 
-      // Restore original initiative
+      // Restore original initiative and direction
       if (usersState[0]) {
         usersState[0].initiative = originalInitiative;
+        usersState[0].direction = originalDirection;
       }
 
       // Merge the user's state with the other user's state
@@ -1076,6 +1119,7 @@ export const combatRouter = createTRPCRouter({
       }
     }),
   iAmHere: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Mark ready in combat lobby" } })
     .input(z.object({ battleId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       // Maximum number of retry attempts
@@ -1152,17 +1196,15 @@ export const combatRouter = createTRPCRouter({
             // If the version hasn't changed or battle no longer exists, don't retry
             return { success: false, message: "Battle state could not be updated" };
           }
-
-          // Continue to next retry attempt if version has changed
-          continue;
         }
       }
       return errorResponse("Failed to update battle state after multiple attempts");
     }),
   startShrineBattle: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Start battle at war shrine" } })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
-    .input(z.object({ sector: z.number().int() }))
+    .input(z.object({ sector: z.int() }))
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information (use fetchActiveWars to get village relations with sectors)
@@ -1292,9 +1334,9 @@ export const combatRouter = createTRPCRouter({
   listOngoingBattles: protectedProcedure
     .input(
       z.object({
-        battleType: z.enum(BattleTypes).default("RANKED_PVP"),
-        limit: z.number().min(1).max(100).default(20),
-        offset: z.number().min(0).default(0),
+        battleType: z.enum(BattleTypes).prefault("RANKED_PVP"),
+        limit: z.number().min(1).max(100).prefault(20),
+        offset: z.number().min(0).prefault(0),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -1392,12 +1434,12 @@ export const initiateBattle = async (
 
   // Pre-process loadouts if they exist
   const jutsusIds = [
-    ...new Set(info.forceLoadouts?.map((l) => l.loadout.jutsuIds).flat() || []),
+    ...new Set(info.forceLoadouts?.flatMap((l) => l.loadout.jutsuIds) || []),
   ];
   const itemIds = [
     ...new Set([
-      ...(info.forceLoadouts?.map((l) => l.loadout.weaponIds).flat() || []),
-      ...(info.forceLoadouts?.map((l) => l.loadout.consumableIds).flat() || []),
+      ...(info.forceLoadouts?.flatMap((l) => l.loadout.weaponIds) || []),
+      ...(info.forceLoadouts?.flatMap((l) => l.loadout.consumableIds) || []),
     ]),
   ];
 
@@ -1490,7 +1532,7 @@ export const initiateBattle = async (
     }),
     PvpBattleTypes.includes(battleType)
       ? client
-          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .select({ count: sql`count(*)`.mapWith(Number) })
           .from(battleHistory)
           .where(
             and(
@@ -1603,11 +1645,11 @@ export const initiateBattle = async (
     .filter((u): u is NonNullable<typeof u> => u !== undefined);
 
   // Hide some information from quests
-  users.forEach((user) =>
-    user.userQuests?.forEach((q) =>
-      controlShownQuestLocationInformation(q.quest, user),
-    ),
-  );
+  users.forEach((user) => {
+    user.userQuests?.forEach((q) => {
+      controlShownQuestLocationInformation(q.quest, user);
+    });
+  });
   // Place attackers first
   users.sort((a) => (userIds.includes(a.userId) ? -1 : 1));
 
@@ -1820,6 +1862,19 @@ export const initiateBattle = async (
       isSummon: false,
     });
 
+  // Apply pool adjustments to base values for all users with pool effects at battle start
+  usersState.forEach((user) => {
+    const hasPoolEffects = userEffects.some(
+      (e) =>
+        e.targetId === user.userId &&
+        (e.type === "increasemaxpools" || e.type === "decreasemaxpools") &&
+        isEffectActive(e),
+    );
+    if (hasPoolEffects) {
+      applyPoolAdjustmentsToBase(user, userEffects);
+    }
+  });
+
   // Set attacker to be the agressor
   if (usersState[0]) usersState[0].isAggressor = true;
 
@@ -2007,9 +2062,8 @@ export const initiateBattle = async (
         initialDurability: initialDurability,
         raidQuestId: info.raidQuestId,
         raidInitialBossHp: raidInitialBossHp,
-        raidStartBattleCount: raidParticipations.reduce(
-          (acc, p) => ({ ...acc, [p.userId]: p.battleCount }),
-          {} as Record<string, number>,
+        raidStartBattleCount: Object.fromEntries(
+          raidParticipations.map((p) => [p.userId, p.battleCount]),
         ),
         sectorExclusiveRaids: sectorExclusiveRaids,
       },
@@ -2192,15 +2246,15 @@ export const processUsersForBattle = async (
   const takenLocations: { x: number; y: number }[] = [];
 
   // Loop through users and transform to ProcessingBattleUser
-  const usersState: ProcessingBattleUser[] = users.map((inputUser, i) => {
+  const usersState: ProcessingBattleUser[] = users.map((inputUser) => {
     // Build the processing user object with all required fields
     const user: ProcessingBattleUser = {
       ...inputUser,
       // Set controllerID and mark this user as the original
       controllerId: inputUser.userId,
       userId: inputUser.isAi ? nanoid() : inputUser.userId,
-      // Set direction
-      direction: i % 2 === 0 ? "right" : "left",
+      // Set direction based on team membership (leftSideUserIds determines left team)
+      direction: leftSideUserIds?.includes(inputUser.userId) ? "left" : "right",
       // Set the updated at to now, so that action bar starts at 0
       updatedAt: new Date(),
       // If no village, set to syndicate
@@ -2368,13 +2422,15 @@ export const processUsersForBattle = async (
       if (user.preferredGeneral1) {
         // If first general is set, find the highest from remaining
         const firstGenLower = user.preferredGeneral1.toLowerCase() as generalKey;
-        const secondGeneral = sortedStats.find((stat) => stat !== firstGenLower);
-        user.highestGenerals = [firstGenLower, secondGeneral!];
+        const secondGeneral =
+          sortedStats.find((stat) => stat !== firstGenLower) ?? sortedStats[0];
+        user.highestGenerals = [firstGenLower, secondGeneral ?? firstGenLower];
       } else if (user.preferredGeneral2) {
         // If second general is set, find the highest from remaining
         const secondGenLower = user.preferredGeneral2.toLowerCase() as generalKey;
-        const firstGeneral = sortedStats.find((stat) => stat !== secondGenLower);
-        user.highestGenerals = [firstGeneral!, secondGenLower];
+        const firstGeneral =
+          sortedStats.find((stat) => stat !== secondGenLower) ?? sortedStats[0];
+        user.highestGenerals = [firstGeneral ?? secondGenLower, secondGenLower];
       } else {
         // If no generals are set, take the two highest
         user.highestGenerals = sortedStats.slice(0, 2);
@@ -2593,7 +2649,9 @@ export const processUsersForBattle = async (
         const effects = userjutsu.jutsu.effects as UserEffect[];
         effects
           .filter((e) => e.type === "summon")
-          .forEach((e) => "aiId" in e && allSummons.push(e.aiId));
+          .forEach((e) => {
+            if ("aiId" in e) allSummons.push(e.aiId);
+          });
         // Not if not the right bloodline
         return (
           userjutsu.jutsu.bloodlineId === "" ||
@@ -2654,9 +2712,9 @@ export const processUsersForBattle = async (
       })
       .forEach((ui) => {
         // Add any imbuement effects to the item effects
-        const imbuementEffects = ui.imbuements
-          ?.map((imbuement) => imbuement.item.effects as UserEffect[])
-          .flat();
+        const imbuementEffects = ui.imbuements?.flatMap(
+          (imbuement) => imbuement.item.effects as UserEffect[],
+        );
         // Parse item
         const effects = [...(ui.item.effects as UserEffect[]), ...imbuementEffects];
         const itemType = ui.item.itemType;
@@ -2665,7 +2723,9 @@ export const processUsersForBattle = async (
         // Parse the effects
         effects
           .filter((e) => e.type === "summon")
-          .forEach((e) => "aiId" in e && allSummons.push(e.aiId));
+          .forEach((e) => {
+            if ("aiId" in e) allSummons.push(e.aiId);
+          });
         // Add item effects to user
         if (
           itemType === "ARMOR" ||
@@ -2811,7 +2871,9 @@ export const processUsersForBattle = async (
         hide: true,
         isSummon: true,
       });
-      summonState.forEach((u) => (u.iAmHere = true));
+      summonState.forEach((u) => {
+        u.iAmHere = true;
+      });
       userEffects.push(...summonEffects);
       summonUsersState = summonState;
       summonExtraState = summonSD;
@@ -2823,7 +2885,7 @@ export const processUsersForBattle = async (
     for (const pending of pendingSkillEffects) {
       const creator = usersState.find((u) => u.userId === pending.creatorId);
       if (!creator) continue;
-      const targets = usersState.filter(stillInBattle);
+      const targets = usersState.filter((u) => stillInBattle(u));
       for (const target of targets) {
         for (const effect of pending.effects) {
           const realized = realizeTag({
@@ -2876,10 +2938,11 @@ export const processUsersForBattle = async (
   const initialDurability: Record<string, Record<string, number>> = {};
   usersState.forEach((user) => {
     initialDurability[user.userId] = {};
+    const userDurability = initialDurability[user.userId];
     user.items.forEach(
       (item: { id: string; durability: number; item?: { maxDurability?: number } }) => {
-        if (item.item && item.item.maxDurability && item.item.maxDurability > 0) {
-          initialDurability[user.userId]![item.id] = item.durability;
+        if (item.item?.maxDurability && item.item.maxDurability > 0 && userDurability) {
+          userDurability[item.id] = item.durability;
         }
       },
     );
@@ -2920,7 +2983,7 @@ export const processUsersForBattle = async (
   }
 
   // Add default AI profile
-  extraState.aiProfiles["Default"] = info.defaultProfile;
+  extraState.aiProfiles.Default = info.defaultProfile;
 
   // Process each user to extract static data
   for (const user of usersState) {
@@ -3057,22 +3120,6 @@ export const processUsersForBattle = async (
       activeReskin: _activeReskin,
       ...rest
     } = user;
-    // Suppress unused variable warnings
-    void _jutsus,
-      _items,
-      _village,
-      _anbuSquad,
-      _clan,
-      _bloodline,
-      _userSkills,
-      _relations,
-      _wars,
-      _userQuests,
-      _completedQuests,
-      _questData,
-      _bounties,
-      _bountySignups,
-      _activeReskin;
 
     // Construct BattleUserState with slim references
     const battleUserState: BattleUserState = {

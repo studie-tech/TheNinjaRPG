@@ -1,28 +1,37 @@
-import { getUserFederalStatus } from "@/utils/paypal";
-import { ElementNames, LetterRanks } from "@/drizzle/constants";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { FED_NORMAL_JUTSU_SLOTS } from "@/drizzle/constants";
-import { FED_SILVER_JUTSU_SLOTS } from "@/drizzle/constants";
-import { FED_GOLD_JUTSU_SLOTS } from "@/drizzle/constants";
-import { MAX_JUTSU_TRAIN_TIME_MS } from "@/drizzle/constants";
-import {
-  SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
-  SENSEI_MAX_STUDENT_LEVEL,
-  SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC,
+import type {
+  BattleType,
+  ElementName,
+  LetterRank,
+  TrainingSpeed,
 } from "@/drizzle/constants";
-import { VILLAGE_REDUCED_GAINS_DAYS } from "@/drizzle/constants";
-import { MAX_EXTRA_JUTSU_SLOTS } from "@/drizzle/constants";
-import { VILLAGE_LEAVE_REQUIRED_RANK } from "@/drizzle/constants";
+import {
+  ElementNames,
+  FED_GOLD_JUTSU_SLOTS,
+  FED_NORMAL_JUTSU_SLOTS,
+  FED_SILVER_JUTSU_SLOTS,
+  LetterRanks,
+  MAX_EXTRA_JUTSU_SLOTS,
+  MAX_JUTSU_TRAIN_TIME_MS,
+  SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
+  SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC,
+  SENSEI_MAX_STUDENT_LEVEL,
+  VILLAGE_LEAVE_REQUIRED_RANK,
+  VILLAGE_REDUCED_GAINS_DAYS,
+  VILLAGE_SYNDICATE_ID,
+} from "@/drizzle/constants";
+import type {
+  GameSetting,
+  Jutsu,
+  JutsuRank,
+  UserData,
+  UserItem,
+  UserItemWithItem,
+  UserRank,
+} from "@/drizzle/schema";
+import type { UserWithRelations } from "@/routers/profile";
+import { getUserFederalStatus } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
 import { getUserElements } from "@/validators/user";
-import type { UserWithRelations } from "@/routers/profile";
-import type { LetterRank } from "@/drizzle/constants";
-import type { TrainingSpeed, BattleType } from "@/drizzle/constants";
-import type { UserItem } from "@/drizzle/schema";
-import type { UserItemWithItem, Jutsu, JutsuRank } from "@/drizzle/schema";
-import type { UserData, UserRank } from "@/drizzle/schema";
-import type { ElementName } from "@/drizzle/constants";
-import type { GameSetting } from "@/drizzle/schema";
 
 export const availableJutsuLetterRanks = (userrank: UserRank): LetterRank[] => {
   switch (userrank) {
@@ -148,7 +157,7 @@ export const checkJutsuBloodline = (jutsu: Jutsu | undefined, userdata: UserData
 
 export const checkJutsuElements = (jutsu: Jutsu, userElements: Set<ElementName>) => {
   const jutsuElements: ElementName[] = [];
-  jutsu.effects.map((effect) => {
+  jutsu.effects.forEach((effect) => {
     if ("elements" in effect && effect.elements) {
       jutsuElements.push(...effect.elements);
     }
@@ -301,7 +310,7 @@ export const calcJutsuTrainCost = (
     base = 250;
   }
   base += jutsu.extraBaseCost || 0;
-  let cost = Math.floor(Math.pow(base, 1 + level / 20));
+  let cost = Math.floor(base ** (1 + level / 20));
   // Convenience checks
   const isStudent =
     userdata && !!userdata.senseiId && userdata.level <= SENSEI_MAX_STUDENT_LEVEL;

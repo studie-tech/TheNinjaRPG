@@ -30,9 +30,9 @@ export type RetractBountySchema = z.infer<typeof retractBountySchema>;
 
 export const bountyBoardFilterSchema = z.object({
   cursor: z.number().nullish(),
-  limit: z.number().min(1).max(100).default(30),
-  showCompleted: z.boolean().default(false),
-  status: z.enum(["OPEN", "CLAIMED", "EXPIRED", "CANCELLED", "all"]).default("OPEN"),
+  limit: z.number().min(1).max(100).prefault(30),
+  showCompleted: z.boolean().prefault(false),
+  status: z.enum(["OPEN", "CLAIMED", "EXPIRED", "CANCELLED", "all"]).prefault("OPEN"),
 });
 
 export const collectBountySchema = z.object({

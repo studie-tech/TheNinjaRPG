@@ -1,10 +1,10 @@
 "use client";
 
+import type { Dispatch, SetStateAction } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useLocalStorage } from "@/hooks/localstorage";
 import Modal2 from "@/layout/Modal2";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import type { Dispatch, SetStateAction } from "react";
 
 interface AutoAttackModalProps {
   isOpen: boolean;
@@ -40,37 +40,42 @@ export default function AutoAttackModal({
     >
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2">
+          <label
+            htmlFor="auto-attack-min-level"
+            className="mb-2 block font-medium text-sm"
+          >
             Minimum Level to Attack
           </label>
           <Input
+            id="auto-attack-min-level"
             type="number"
             min="1"
             max="100"
             value={autoAttackMinLevel}
-            onChange={(e) => setAutoAttackMinLevel(parseInt(e.target.value) || 1)}
+            onChange={(e) => setAutoAttackMinLevel(parseInt(e.target.value, 10) || 1)}
             className="w-full"
             placeholder="1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="mt-1 text-muted-foreground text-xs">
             Only attack enemies at or above this level
           </p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">
+          <label htmlFor="auto-attack-delay" className="mb-2 block font-medium text-sm">
             Attack Delay (seconds)
           </label>
           <Input
+            id="auto-attack-delay"
             type="number"
             min="1"
             max="60"
             value={autoAttackDelay}
-            onChange={(e) => setAutoAttackDelay(parseInt(e.target.value) || 5)}
+            onChange={(e) => setAutoAttackDelay(parseInt(e.target.value, 10) || 5)}
             className="w-full"
             placeholder="5"
           />
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="mt-1 text-muted-foreground text-xs">
             Wait this many seconds between attacks
           </p>
         </div>

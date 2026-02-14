@@ -1,19 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Image from "@/layout/Image";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { sendGTMEvent } from "@next/third-parties/google";
+import {
+  CheckCheck,
+  DoorOpen,
+  Eye,
+  Fingerprint,
+  Handshake,
+  Search,
+  ShieldAlert,
+  Swords,
+  Timer,
+  UserRoundCheck,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import Modal2 from "@/layout/Modal2";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import Countdown from "@/layout/Countdown";
-import NavTabs from "@/layout/NavTabs";
-import Confirm2 from "@/layout/Confirm2";
-import AvatarImage from "@/layout/Avatar";
-import UserSearchSelect from "@/layout/UserSearchSelect";
-import PublicUserComponent from "@/layout/PublicUser";
-import UserRequestSystem from "@/layout/UserRequestSystem";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -23,74 +30,74 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { getSearchValidator } from "@/validators/register";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import JutsuFiltering, { useFiltering, getFilter } from "@/layout/JutsuFiltering";
-import { Button } from "@/components/ui/button";
-import { trainingSpeedSeconds } from "@/libs/train";
-import { trainEfficiency } from "@/libs/train";
-import { JUTSU_LEVEL_CAP } from "@/drizzle/constants";
-import { MAX_DAILY_TRAININGS } from "@/drizzle/constants";
-import { showTrainingCapcha } from "@/libs/captcha";
-import { canTrainJutsu } from "@/libs/train";
-import { useTutorialStep } from "@/hooks/tutorial";
-import { ActionSelector } from "@/layout/CombatActions";
-import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
-import { secondsFromDate } from "@/utils/time";
-import { calcJutsuTrainTime, calcJutsuTrainCost } from "@/libs/train";
-import { checkJutsuRank, checkJutsuVillage, checkJutsuBloodline } from "@/libs/train";
-import { useInfinitePagination } from "@/libs/pagination";
-import { useRequireInVillage } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { sendGTMEvent } from "@next/third-parties/google";
-import { showMutationToast } from "@/libs/toast";
-import {
-  Swords,
-  ShieldAlert,
-  XCircle,
-  Fingerprint,
-  Eye,
-  Search,
-  Timer,
-} from "lucide-react";
-import { CheckCheck, DoorOpen } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { UserStatNames } from "@/drizzle/constants";
+import type { TrainingSpeed, UserStatName } from "@/drizzle/constants";
 import {
+  getUserCaps,
+  IMG_TRAIN_BUKI_DEF,
+  IMG_TRAIN_BUKI_OFF,
+  IMG_TRAIN_GEN_DEF,
+  IMG_TRAIN_GEN_OFF,
+  IMG_TRAIN_INTELLIGENCE,
+  IMG_TRAIN_NIN_DEF,
+  IMG_TRAIN_NIN_OFF,
+  IMG_TRAIN_SPEED,
+  IMG_TRAIN_STRENGTH,
+  IMG_TRAIN_TAI_DEF,
+  IMG_TRAIN_TAI_OFF,
+  IMG_TRAIN_WILLPOWER,
+  JUTSU_LEVEL_CAP,
+  MAX_DAILY_TRAININGS,
+  SENSEI_RANKS,
   STEALTH_SENSORY_CAP,
   STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
+  TrainingSpeeds,
+  UserStatNames,
 } from "@/drizzle/constants";
-import { getStealthStatus } from "@/libs/stealth";
-import { TrainingSpeeds } from "@/drizzle/constants";
-import { Handshake, UserRoundCheck } from "lucide-react";
-import { SENSEI_RANKS } from "@/drizzle/constants";
-import {
-  IMG_TRAIN_INTELLIGENCE,
-  IMG_TRAIN_WILLPOWER,
-  IMG_TRAIN_STRENGTH,
-  IMG_TRAIN_SPEED,
-  IMG_TRAIN_GEN_OFF,
-  IMG_TRAIN_GEN_DEF,
-  IMG_TRAIN_TAI_DEF,
-  IMG_TRAIN_TAI_OFF,
-  IMG_TRAIN_BUKI_OFF,
-  IMG_TRAIN_BUKI_DEF,
-  IMG_TRAIN_NIN_OFF,
-  IMG_TRAIN_NIN_DEF,
-} from "@/drizzle/constants";
-import { getUserCaps } from "@/drizzle/constants";
-import { cn } from "src/libs/shadui";
-import { availableRanks } from "@/libs/train";
-import { captchaVerifySchema } from "@/validators/misc";
-import type { UserStatName } from "@/drizzle/constants";
-import type { CaptchaVerifySchema } from "@/validators/misc";
-import type { z } from "zod";
-import type { TrainingSpeed } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
+import { useTutorialStep } from "@/hooks/tutorial";
+import AvatarImage from "@/layout/Avatar";
+import { ActionSelector } from "@/layout/CombatActions";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import Image from "@/layout/Image";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import NavTabs from "@/layout/NavTabs";
+import PublicUserComponent from "@/layout/PublicUser";
+import UserRequestSystem from "@/layout/UserRequestSystem";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import { showTrainingCapcha } from "@/libs/captcha";
+import { useInfinitePagination } from "@/libs/pagination";
+import { cn } from "@/libs/shadui";
+import { getStealthStatus } from "@/libs/stealth";
+import { showMutationToast } from "@/libs/toast";
+import {
+  availableRanks,
+  calcJutsuTrainCost,
+  calcJutsuTrainTime,
+  canTrainJutsu,
+  checkJutsuBloodline,
+  checkJutsuRank,
+  checkJutsuVillage,
+  trainEfficiency,
+  trainingSpeedSeconds,
+} from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import {
+  getDaysHoursMinutesSeconds,
+  getTimeLeftStr,
+  secondsFromDate,
+} from "@/utils/time";
+import { useRequireInVillage } from "@/utils/UserContext";
+import type { CaptchaVerifySchema } from "@/validators/misc";
+import { captchaVerifySchema } from "@/validators/misc";
+import { getSearchValidator } from "@/validators/register";
 
 export default function Training() {
   // Ensure user is in village
@@ -140,6 +147,7 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
   const userSearchSchema = getSearchValidator({ max: maxUsers });
   const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
     resolver: zodResolver(userSearchSchema),
+    defaultValues: { username: "", users: [] },
   });
   const targetUser = useWatch({
     control: userSearchMethods.control,
@@ -254,8 +262,8 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
       {showStudents && (
         <ContentBox title="Students" subtitle={`Past and present`} initialBreak={true}>
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-            {students.map((user, i) => (
-              <div className="relative" key={i}>
+            {students.map((user) => (
+              <div className="relative" key={user.userId}>
                 <Link href={`/userid/${user.userId}`} className="text-center">
                   <AvatarImage
                     href={user.avatar}
@@ -269,7 +277,7 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
                     <Confirm2
                       title="Remove Student"
                       button={
-                        <XCircle className="absolute right-[13%] top-[3%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
+                        <XCircle className="absolute top-[3%] right-[13%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
                       }
                       onAccept={(e) => {
                         e.preventDefault();
@@ -296,7 +304,7 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
         <div className="flex flex-col gap-2">
           <PublicUserComponent initialBreak userId={showSensei} title="Your Sensei" />
           <Button onClick={() => leaveSensei()}>
-            <DoorOpen className="w-6 h-6 mr-2" />
+            <DoorOpen className="mr-2 h-6 w-6" />
             Leave Sensei
           </Button>
         </div>
@@ -326,7 +334,7 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
                 className="mt-2 w-full"
                 onClick={() => create({ targetId: targetUser.userId })}
               >
-                <Handshake className="h-5 w-5 mr-2" />
+                <Handshake className="mr-2 h-5 w-5" />
                 Send Request
               </Button>
             )}
@@ -496,9 +504,10 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           );
 
           return (
-            <div
+            <button
+              type="button"
               id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
-              key={i}
+              key={`${stat}-${i}`}
               onClick={() =>
                 overCap
                   ? showMutationToast({ success: false, message: "Already capped" })
@@ -509,7 +518,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               <div
                 className={cn(
                   trainItemClassName,
-                  overCap ? "grayscale opacity-50" : "",
+                  overCap ? "opacity-50 grayscale" : "",
                 )}
               >
                 <Image src={getImage(stat)} alt={label} width={256} height={256} />
@@ -517,16 +526,16 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
                 {label}
               </div>
               {overCap && (
-                <UserRoundCheck className="w-10 h-10 text-slate-100 absolute left-[50%] translate-x-[-50%] top-[50%] translate-y-[-50%] hover:cursor-pointer" />
+                <UserRoundCheck className="absolute top-[50%] left-[50%] h-10 w-10 translate-x-[-50%] translate-y-[-50%] text-slate-100 hover:cursor-pointer" />
               )}
-            </div>
+            </button>
           );
         })}
       </div>
       {userData.currentlyTraining && (
-        <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto bg-black opacity-95">
-          <div className="m-auto text-center text-white flex flex-col items-center">
-            <p className="p-5  text-2xl">Training {userData.currentlyTraining}</p>
+        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-95">
+          <div className="m-auto flex flex-col items-center text-center text-white">
+            <p className="p-5 text-2xl">Training {userData.currentlyTraining}</p>
             <Image
               src={getImage(userData.currentlyTraining)}
               alt={userData.currentlyTraining}
@@ -549,7 +558,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               {!showCaptcha && (
                 <XCircle
                   id="tutorial-traininggrounds-stopTraining"
-                  className="absolute top-4 right-4 w-10 h-10 fill-red-500 cursor-pointer hover:text-orange-500 z-30"
+                  className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
                   onClick={() => stopTraining({ villageId: userData.villageId })}
                 />
               )}
@@ -557,11 +566,11 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               {showCaptcha && captcha && (
                 <Popover>
                   <PopoverTrigger>
-                    <XCircle className="absolute top-4 right-4 w-10 h-10 fill-red-500 cursor-pointer hover:text-orange-500 z-30" />
+                    <XCircle className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500" />
                   </PopoverTrigger>
                   <PopoverContent>
                     <p className="font-bold text-lg">Verify Humanity</p>
-                    {/* eslint-disable-next-line */}
+                    {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element for data URI */}
                     <img
                       alt="captcha"
                       className="mb-2"
@@ -619,7 +628,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Set the default selected ranks
   useEffect(() => {
     state.setRank(availableRanks(userData.rank));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData.rank]);
 
   // Jutsus
@@ -704,8 +712,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   // Filtering jutsus
   const alljutsus = jutsus?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .filter((j) => canTrainJutsu(j, userData))
     .filter((j) => {
       const userJutsu = userJutsus?.find((uj) => uj.jutsuId === j.id);
@@ -739,7 +746,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const canTrain = okRank && okVillage && okBloodline && !isCapped && canAfford;
 
   // Label for proceed button
-  let proceed_label: string | undefined = undefined;
+  let proceed_label: string | undefined;
   if (!isPending && !isCapped) {
     if (!canAfford) {
       proceed_label = `Need ${cost - userData.money} more ryo`;
@@ -757,106 +764,100 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   }
 
   return (
-    <>
-      <ContentBox
-        title="Techniques"
-        subtitle="Jutsu Techniques"
-        defaultBackHref="/village"
-        initialBreak={true}
-        topRightContent={
-          <JutsuFiltering state={state} fixedBloodline={userData.bloodlineId} />
-        }
-      >
-        {userData && (
-          <div className="max-h-[320px] overflow-y-scroll">
-            <ActionSelector
-              items={alljutsus}
-              counts={userJutsuCounts}
-              selectedId={jutsu?.id}
-              labelSingles={true}
-              emptyText="No jutsu available for your rank"
-              onClick={(id) => {
-                if (id == jutsu?.id) {
-                  setJutsu(undefined);
-                  setIsOpen(false);
+    <ContentBox
+      title="Techniques"
+      subtitle="Jutsu Techniques"
+      defaultBackHref="/village"
+      initialBreak={true}
+      topRightContent={
+        <JutsuFiltering state={state} fixedBloodline={userData.bloodlineId} />
+      }
+    >
+      {userData && (
+        <div className="max-h-[320px] overflow-y-scroll">
+          <ActionSelector
+            items={alljutsus}
+            counts={userJutsuCounts}
+            selectedId={jutsu?.id}
+            labelSingles={true}
+            emptyText="No jutsu available for your rank"
+            onClick={(id) => {
+              if (id === jutsu?.id) {
+                setJutsu(undefined);
+                setIsOpen(false);
+              } else {
+                setJutsu(alljutsus?.find((jutsu) => jutsu.id === id));
+                setIsOpen(true);
+              }
+            }}
+            showBgColor={false}
+            showLabels={true}
+            lastElement={lastElement}
+            setLastElement={setLastElement}
+          />
+          {isOpen && jutsu && (
+            <Modal2
+              id="tutorial-traininggrounds-trainJutsu"
+              title="Confirm Purchase"
+              proceed_label={proceed_label}
+              isOpen={isOpen}
+              setIsOpen={setIsOpen}
+              isValid={false}
+              onAccept={() => {
+                if (canTrain && !isPending) {
+                  train({ jutsuId: jutsu.id });
                 } else {
-                  setJutsu(alljutsus?.find((jutsu) => jutsu.id === id));
-                  setIsOpen(true);
+                  setIsOpen(false);
                 }
               }}
-              showBgColor={false}
-              showLabels={true}
-              lastElement={lastElement}
-              setLastElement={setLastElement}
-            />
-            {isOpen && jutsu && (
-              <Modal2
-                id="tutorial-traininggrounds-trainJutsu"
-                title="Confirm Purchase"
-                proceed_label={proceed_label}
-                isOpen={isOpen}
-                setIsOpen={setIsOpen}
-                isValid={false}
-                onAccept={() => {
-                  if (canTrain && !isPending) {
-                    train({ jutsuId: jutsu.id });
-                  } else {
-                    setIsOpen(false);
-                  }
-                }}
-                confirmClassName={
-                  canTrain
-                    ? "bg-blue-600 text-white hover:bg-blue-700"
-                    : "bg-red-600 text-white hover:bg-red-700"
-                }
-              >
-                <div className="relative">
-                  <p className="pb-3">
-                    You have {userData.money.toLocaleString()} ryo in your pocket
-                  </p>
-                  {!isPending && (
-                    <ItemWithEffects
-                      item={jutsu}
-                      key={jutsu.id}
-                      showStatistic="jutsu"
-                    />
-                  )}
-                  {isPending && <Loader explanation={`Training ${jutsu.name}`} />}
-                </div>
-              </Modal2>
-            )}
-          </div>
-        )}
-        {isFetching && <Loader explanation="Loading jutsu" />}
-        {finishTrainingAt?.finishTraining && (
-          <div className="min-h-36">
-            <div className="absolute bottom-0 left-0 right-0 top-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
-              <div className="m-auto text-center text-white">
-                <p className="p-5  text-3xl">Training</p>
-                <p className="text-2xl">
-                  Time Left:{" "}
-                  <Countdown
-                    targetDate={finishTrainingAt.finishTraining}
-                    timeDiff={timeDiff}
-                    onFinish={async () => {
-                      await utils.jutsu.getUserJutsus.invalidate();
-                    }}
-                  />
+              confirmClassName={
+                canTrain
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-red-600 text-white hover:bg-red-700"
+              }
+            >
+              <div className="relative">
+                <p className="pb-3">
+                  You have {userData.money.toLocaleString()} ryo in your pocket
                 </p>
-                {!isRefetchingUserJutsu && (
-                  <XCircle
-                    className="absolute top-4 right-4 w-10 h-10 fill-red-500 cursor-pointer hover:text-orange-500 z-30"
-                    onClick={() => {
-                      cancel();
-                    }}
-                  />
+                {!isPending && (
+                  <ItemWithEffects item={jutsu} key={jutsu.id} showStatistic="jutsu" />
                 )}
+                {isPending && <Loader explanation={`Training ${jutsu.name}`} />}
               </div>
+            </Modal2>
+          )}
+        </div>
+      )}
+      {isFetching && <Loader explanation="Loading jutsu" />}
+      {finishTrainingAt?.finishTraining && (
+        <div className="min-h-36">
+          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
+            <div className="m-auto text-center text-white">
+              <p className="p-5 text-3xl">Training</p>
+              <p className="text-2xl">
+                Time Left:{" "}
+                <Countdown
+                  targetDate={finishTrainingAt.finishTraining}
+                  timeDiff={timeDiff}
+                  onFinish={async () => {
+                    await utils.jutsu.getUserJutsus.invalidate();
+                  }}
+                />
+              </p>
+              {!isRefetchingUserJutsu && (
+                <XCircle
+                  className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
+                  onClick={() => {
+                    cancel();
+                  }}
+                />
+              )}
             </div>
           </div>
-        )}
-      </ContentBox>
-    </>
+        </div>
+      )}
+    </ContentBox>
   );
 };
 
@@ -951,16 +952,16 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
       <div className="space-y-6">
         {/* Training Overlay - shown when training is in progress */}
         {isTraining && trainingFinishAt && (
-          <div className="relative border rounded-lg p-6 bg-background">
-            <div className="flex flex-col items-center justify-center text-center space-y-4">
-              <div className="text-lg font-semibold">
+          <div className="relative rounded-lg border bg-background p-6">
+            <div className="flex flex-col items-center justify-center space-y-4 text-center">
+              <div className="font-semibold text-lg">
                 Training {trainingType === "stealth" ? "Stealth" : "Sensory"}
               </div>
-              <div className="text-3xl font-bold">
+              <div className="font-bold text-3xl">
                 <Countdown targetDate={trainingFinishAt} timeDiff={timeDiff} />
               </div>
               {trainingGain && (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground text-sm">
                   Expected gain: +{trainingGain.toFixed(0)} points
                 </div>
               )}
@@ -973,7 +974,7 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
                   onClick={() => cancelTraining()}
                   disabled={isCancellingTraining}
                 >
-                  <XCircle className="h-4 w-4 mr-1" />
+                  <XCircle className="mr-1 h-4 w-4" />
                   {isCancellingTraining ? "Cancelling..." : "Cancel"}
                 </Button>
               </div>
@@ -983,16 +984,16 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
 
         {/* Stealth Section - hidden when training */}
         {!isTraining && (
-          <div className="border rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
+          <div className="rounded-lg border p-4">
+            <div className="mb-3 flex items-center gap-2">
               <Eye className="h-5 w-5 text-purple-600" />
               <h3 className="font-bold text-lg">Stealth</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <div className="flex justify-between mb-1">
+                <div className="mb-1 flex justify-between">
                   <span className="text-sm">Progress</span>
-                  <span className="text-sm font-medium">
+                  <span className="font-medium text-sm">
                     {Math.floor(
                       stealthStatus?.stealth ?? STEALTH_SENSORY_DEFAULT,
                     ).toLocaleString()}{" "}
@@ -1000,7 +1001,7 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
                   </span>
                 </div>
                 <Progress value={stealthProgress} className="h-2" />
-                <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                <div className="mt-3 space-y-1 text-muted-foreground text-sm">
                   <p>
                     Duration:{" "}
                     {Math.floor((stealthStatus?.stealthDurationMax ?? 60) / 60)} min
@@ -1016,7 +1017,7 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
                   disabled={isTrainingCovert || stealthProgress >= 100}
                   className="w-full"
                 >
-                  <Timer className="h-4 w-4 mr-1" />
+                  <Timer className="mr-1 h-4 w-4" />
                   {isTrainingCovert ? "Starting..." : "Train 10 min"}
                 </Button>
                 <Button
@@ -1024,7 +1025,7 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
                   disabled={isTrainingCovert || stealthProgress >= 100}
                   className="w-full"
                 >
-                  <Timer className="h-4 w-4 mr-1" />
+                  <Timer className="mr-1 h-4 w-4" />
                   {isTrainingCovert ? "Starting..." : "Train 30 min"}
                 </Button>
               </div>
@@ -1034,16 +1035,16 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
 
         {/* Sensory Section - hidden when training */}
         {!isTraining && (
-          <div className="border rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
+          <div className="rounded-lg border p-4">
+            <div className="mb-3 flex items-center gap-2">
               <Search className="h-5 w-5 text-blue-600" />
               <h3 className="font-bold text-lg">Sensory</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <div className="flex justify-between mb-1">
+                <div className="mb-1 flex justify-between">
                   <span className="text-sm">Progress</span>
-                  <span className="text-sm font-medium">
+                  <span className="font-medium text-sm">
                     {Math.floor(
                       stealthStatus?.sensory ?? STEALTH_SENSORY_DEFAULT,
                     ).toLocaleString()}{" "}
@@ -1051,7 +1052,7 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
                   </span>
                 </div>
                 <Progress value={sensoryProgress} className="h-2" />
-                <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                <div className="mt-3 space-y-1 text-muted-foreground text-sm">
                   <p>
                     Detection Chance:{" "}
                     {(stealthStatus?.sensoryDetectChance ?? 5).toFixed(1)}%
@@ -1067,7 +1068,7 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
                   disabled={isTrainingCovert || sensoryProgress >= 100}
                   className="w-full"
                 >
-                  <Timer className="h-4 w-4 mr-1" />
+                  <Timer className="mr-1 h-4 w-4" />
                   {isTrainingCovert ? "Starting..." : "Train 10 min"}
                 </Button>
                 <Button
@@ -1075,7 +1076,7 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
                   disabled={isTrainingCovert || sensoryProgress >= 100}
                   className="w-full"
                 >
-                  <Timer className="h-4 w-4 mr-1" />
+                  <Timer className="mr-1 h-4 w-4" />
                   {isTrainingCovert ? "Starting..." : "Train 30 min"}
                 </Button>
               </div>
@@ -1084,9 +1085,9 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
         )}
 
         {/* Info Box */}
-        <div className="bg-muted border border-border rounded-lg p-4 text-sm">
-          <h4 className="font-bold mb-2">How Covert Operations Work</h4>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+        <div className="rounded-lg border border-border bg-muted p-4 text-sm">
+          <h4 className="mb-2 font-bold">How Covert Operations Work</h4>
+          <ul className="list-inside list-disc space-y-1 text-muted-foreground">
             <li>
               <b>Stealth:</b> Go undetected in enemy territory. Higher stat = longer
               duration and better chance to stay hidden when performing actions.

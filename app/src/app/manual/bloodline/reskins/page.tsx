@@ -1,13 +1,12 @@
 "use client";
 
+import { FilePlus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import BloodFiltering, { useFiltering, getFilter } from "@/layout/BloodlineFiltering";
-import { useInfinitePagination } from "@/libs/pagination";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -15,13 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { FilePlus } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useRouter } from "next/navigation";
-import { useUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
+import BloodFiltering, { getFilter, useFiltering } from "@/layout/BloodlineFiltering";
+import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 export default function ManualBloodlineReskins() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
@@ -46,7 +46,7 @@ export default function ManualBloodlineReskins() {
       placeholderData: (previousData) => previousData,
     },
   );
-  const allReskins = reskins?.pages.map((page) => page.data).flat();
+  const allReskins = reskins?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Transform reskins to ItemWithEffects-friendly shape (overlay on base)
@@ -70,8 +70,9 @@ export default function ManualBloodlineReskins() {
   });
   // Initialize selection when list loads
   useEffect(() => {
-    if (!selectedBloodlineId && bloodlines && bloodlines.length > 0) {
-      setSelectedBloodlineId(bloodlines[0]!.id);
+    const firstBloodlineId = bloodlines?.[0]?.id;
+    if (!selectedBloodlineId && firstBloodlineId) {
+      setSelectedBloodlineId(firstBloodlineId);
     }
   }, [bloodlines, selectedBloodlineId]);
 
@@ -103,7 +104,7 @@ export default function ManualBloodlineReskins() {
         subtitle="All bloodline reskins"
         initialBreak={true}
         topRightContent={
-          <div className="flex flex-row gap-1 items-center">
+          <div className="flex flex-row items-center gap-1">
             {canEdit && (
               <Popover>
                 <PopoverTrigger asChild>
@@ -155,14 +156,10 @@ export default function ManualBloodlineReskins() {
         {totalLoading && <Loader explanation="Loading data" />}
         {transformedReskins?.map((reskin, i) => (
           <div
-            key={i}
+            key={reskin.id}
             ref={i === transformedReskins.length - 1 ? setLastElement : null}
           >
-            <ItemWithEffects
-              item={reskin}
-              key={reskin.id}
-              showEdit="bloodline/reskins"
-            />
+            <ItemWithEffects item={reskin} showEdit="bloodline/reskins" />
           </div>
         ))}
         {!totalLoading && transformedReskins?.length === 0 && (

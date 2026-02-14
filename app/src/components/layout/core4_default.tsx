@@ -1,95 +1,98 @@
 "use client";
 
-import ReactDOM from "react-dom";
-import { Suspense } from "react";
-import Image from "@/layout/Image";
-import Link from "next/link";
-import React, { useEffect, useState } from "react";
-import MenuBoxProfile from "@/layout/MenuBoxProfile";
-import MenuBoxCombat from "@/layout/MenuBoxCombat";
-import Footer from "@/layout/Footer";
-import Loader from "@/layout/Loader";
-import AvatarImage from "@/layout/Avatar";
-import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import {
-  CircleUserRound,
-  MessagesSquare,
-  CircleHelp,
-  Compass,
-  LogIn,
-  Menu,
-  Cog,
-  Milk,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { SignedIn, SignedOut, UserButton, useUser } from "@clerk/nextjs";
+import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
   Bell,
-  Info,
-  ShieldAlert,
-  ShieldCheck,
-  Eclipse,
   ChevronDown,
   ChevronRight,
+  CircleHelp,
+  Compass,
+  Earth,
+  Eclipse,
+  Eye,
+  EyeOff,
+  House,
+  Info,
+  Link2,
+  LogIn,
+  Menu,
+  MessageCircleWarning,
+  Music,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
-import { Earth, House, MessageCircleWarning, Inbox } from "lucide-react";
-import { Link2, Music } from "lucide-react";
-import { useGameMenu, getMainNavbarLinks } from "@/libs/menus";
-import { GameSettingsPopover, GlobalAudioProvider } from "@/layout/GameSettings";
-import { useUserData } from "@/utils/UserContext";
-import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import React, { Suspense, useEffect, useState } from "react";
+import ReactDOM from "react-dom";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Sheet,
   SheetContent,
-  SheetTitle,
   SheetHeader,
+  SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { SiGithub, SiDiscord } from "@icons-pack/react-simple-icons";
-import { api } from "@/app/_trpc/client";
-import { useUser } from "@clerk/nextjs";
-import { groupBy } from "@/utils/grouping";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { getCurrentSeason } from "@/utils/time";
-import TutorialAssistant from "@/layout/TutorialAssistant";
-import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DISCORD_INVITE_URL,
+  IMG_ICON_DISCORD,
+  IMG_ICON_FACEBOOK,
+  IMG_ICON_GITHUB,
+  IMG_ICON_GOOGLE,
+  IMG_LAYOUT_HANDSIGN,
+  IMG_LAYOUT_HANDSIGN_HALLOWEEN,
+  IMG_LAYOUT_MOBILE_TOP,
+  IMG_LAYOUT_NAVBAR,
+  IMG_LAYOUT_NAVBAR_HALLOWEEN,
+  IMG_LAYOUT_SCROLLBOTTOM_DECOR,
+  IMG_LAYOUT_SIDESCROLL,
+  IMG_LAYOUT_SIDETOPBANNER_BOTTOM,
+  IMG_LAYOUT_SIDETOPBANNER_CONTENT,
+  IMG_LAYOUT_USERBANNER_MIDDLE,
+  IMG_LAYOUT_USERSBANNER_BOTTOM,
+  IMG_LAYOUT_USERSBANNER_TOP,
+  IMG_LOGO_FULL,
+  IMG_LOGO_SHORT,
+  IMG_WALLPAPER_FALL,
+  IMG_WALLPAPER_SPRING,
+  IMG_WALLPAPER_SUMMER,
+  IMG_WALLPAPER_WINTER,
+} from "@/drizzle/constants";
 import {
   safeLocalStorageGetItem,
   safeLocalStorageSetItem,
   useLocalStorage,
 } from "@/hooks/localstorage";
-import {
-  IMG_WALLPAPER_WINTER,
-  IMG_WALLPAPER_SPRING,
-  IMG_WALLPAPER_SUMMER,
-  IMG_WALLPAPER_FALL,
-  IMG_LOGO_FULL,
-  IMG_LOGO_SHORT,
-  IMG_ICON_DISCORD,
-  IMG_ICON_FACEBOOK,
-  IMG_ICON_GITHUB,
-  IMG_ICON_GOOGLE,
-  IMG_LAYOUT_NAVBAR,
-  IMG_LAYOUT_MOBILE_TOP,
-  IMG_LAYOUT_NAVBAR_HALLOWEEN,
-  IMG_LAYOUT_HANDSIGN,
-  IMG_LAYOUT_HANDSIGN_HALLOWEEN,
-  IMG_LAYOUT_USERBANNER_MIDDLE,
-  IMG_LAYOUT_SIDESCROLL,
-  IMG_LAYOUT_SIDETOPBANNER_CONTENT,
-  IMG_LAYOUT_SIDETOPBANNER_BOTTOM,
-  IMG_LAYOUT_SCROLLBOTTOM_DECOR,
-  IMG_LAYOUT_USERSBANNER_TOP,
-  IMG_LAYOUT_USERSBANNER_BOTTOM,
-  DISCORD_INVITE_URL,
-} from "@/drizzle/constants";
+import AvatarImage from "@/layout/Avatar";
+import Footer from "@/layout/Footer";
+import { GameSettingsPopover, GlobalAudioProvider } from "@/layout/GameSettings";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
+import MenuBoxCombat from "@/layout/MenuBoxCombat";
+import MenuBoxProfile from "@/layout/MenuBoxProfile";
+import TutorialAssistant from "@/layout/TutorialAssistant";
 import type { NavBarDropdownLink } from "@/libs/menus";
+import { getMainNavbarLinks, useGameMenu } from "@/libs/menus";
+import {
+  DEFAULT_MOBILE_NAV_CONFIG,
+  getMobileNavIcon,
+  getNavOptionById,
+  MOBILE_NAV_STORAGE_KEY,
+  type MobileNavConfig,
+  normalizeMobileNavConfig,
+} from "@/libs/mobileNavConfig";
+import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
-import { usePathname } from "next/navigation";
-import { cn } from "src/libs/shadui";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { groupBy } from "@/utils/grouping";
+import { getCurrentSeason } from "@/utils/time";
+import { useUserData } from "@/utils/UserContext";
 
 export interface LayoutProps {
   children: React.ReactNode;
@@ -182,7 +185,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           <SideBannerTitle>
             <Link
               href={`/userid/${userData.userId}`}
-              className="inline-block hover:text-orange-500 flex flex-row"
+              className="inline-block flex flex-row hover:text-orange-500"
             >
               {userData.username} <Link2 className="inline-block h-5 w-5" />
             </Link>
@@ -199,7 +202,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           >
             <SiGithub
               size={60}
-              className="dark:text-white text-black md:text-white p-2"
+              className="p-2 text-black md:text-white dark:text-white"
             />
           </Link>
           <Link
@@ -208,14 +211,14 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           >
             <SiDiscord
               size={60}
-              className="dark:text-white text-black md:text-white p-2"
+              className="p-2 text-black md:text-white dark:text-white"
             />
           </Link>
         </div>
       </SignedOut>
       {!isClerkLoaded && (
         <div>
-          <Skeleton className="h-6 w-full bg-muted/70 mt-6" />
+          <Skeleton className="mt-6 h-6 w-full bg-muted/70" />
           <div className="flex flex-row gap-4 pt-4">
             <Skeleton className="h-16 w-full bg-muted/70" />
             <Skeleton className="h-16 w-full bg-muted/70" />
@@ -241,32 +244,32 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
       </SignedIn>
       <SignedOut>
         <SideBannerTitle>Welcome</SideBannerTitle>
-        <p className="hidden md:block text-orange-100 italic px-1">Socials Login</p>
-        <p className="block md:hidden text-foreground italic px-1">Socials Login</p>
+        <p className="hidden px-1 text-orange-100 italic md:block">Socials Login</p>
+        <p className="block px-1 text-foreground italic md:hidden">Socials Login</p>
         <div className="grid grid-cols-4">
           <Image
-            className="grayscale my-4 w-full"
+            className="my-4 w-full grayscale"
             src={IMG_ICON_DISCORD}
             alt="DiscordProvider"
             width={50}
             height={50}
           ></Image>
           <Image
-            className="grayscale my-4 w-full"
+            className="my-4 w-full grayscale"
             src={IMG_ICON_FACEBOOK}
             alt="FacebookProvider"
             width={50}
             height={50}
           ></Image>
           <Image
-            className="grayscale my-4 w-full"
+            className="my-4 w-full grayscale"
             src={IMG_ICON_GOOGLE}
             alt="GoogleProvider"
             width={50}
             height={50}
           ></Image>
           <Image
-            className="grayscale my-4 w-full"
+            className="my-4 w-full grayscale"
             src={IMG_ICON_GITHUB}
             alt="GithubProvider"
             width={50}
@@ -291,11 +294,11 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
             <Skeleton className="aspect-square w-full bg-muted/70" />
             <Skeleton className="aspect-square w-full bg-muted/70" />
           </div>
-          <Skeleton className="h-8 w-full bg-muted/70 mt-3" />
+          <Skeleton className="mt-3 h-8 w-full bg-muted/70" />
         </div>
       )}
 
-      <div className="pl-2 pt-6 flex align-center justify-center">
+      <div className="flex justify-center pt-6 pl-2 align-center">
         <iframe
           src="https://ghbtns.com/github-btn.html?user=studie-tech&repo=TheNinjaRPG&type=star&count=true"
           width="90"
@@ -323,11 +326,11 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
         onClick={() => setLeftSideBarOpen(false)}
         aria-label="Event Notifications"
       >
-        <Bell className="h-6 w-6 xl:h-7 xl:w-7 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 rounded-full mx-1 ml-2 p-1" />
+        <Bell className="mx-1 ml-2 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
       </Link>
       <GameSettingsPopover userData={userData} updateUser={updateUser} />
       <Eclipse
-        className={`hover:cursor-pointer h-6 w-6 xl:h-7 xl:w-7 min-w-6 min-h-6 xl:min-w-7 xl:min-h-7 hover:text-black hover:bg-blue-300 text-slate-700 bg-blue-100 bg-opacity-80 rounded-full mx-1 p-1 bg-yellow-100 dark:bg-blue-100`}
+        className={`mx-1 h-6 min-h-6 w-6 min-w-6 rounded-full bg-blue-100 bg-yellow-100 bg-opacity-80 p-1 text-slate-700 hover:cursor-pointer hover:bg-blue-300 hover:text-black xl:h-7 xl:min-h-7 xl:w-7 xl:min-w-7 dark:bg-blue-100`}
         onClick={() => {
           if (!theme || theme === "light") {
             safeLocalStorageSetItem("theme", "dark");
@@ -347,11 +350,11 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
   const leftSideBarMainMenu = (
     <>
       <SideBannerTitle>Main Menu</SideBannerTitle>
-      <div className="mt-1 grid gap-3 grid-cols-2">
-        {navbarMenuItems.map((system, i) => {
+      <div className="mt-1 grid grid-cols-2 gap-3">
+        {navbarMenuItems.map((system) => {
           return (
             <Link
-              key={i}
+              key={system.href}
               href={system.href}
               onClick={() => setLeftSideBarOpen(false)}
               className={system.className ? system.className : ""}
@@ -368,11 +371,38 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
     </>
   );
 
+  // Mobile navigation config from localStorage
+  const [rawMobileNavConfig] = useLocalStorage<MobileNavConfig>(
+    MOBILE_NAV_STORAGE_KEY,
+    DEFAULT_MOBILE_NAV_CONFIG,
+  );
+  const mobileNavConfig = normalizeMobileNavConfig(rawMobileNavConfig);
+
   // Styling for yellow buttons
   const yellowButtonStyle =
     "h-14 w-14 sm:h-15 sm:w-15 md:h-16 md:w-16 bg-yellow-500 hover:bg-yellow-300 transition-colors text-orange-100 rounded-full p-3 shadow-md shadow-black border-2 stroke-3";
   const mobileNavbarButtonStyle =
     "h-16 w-16  hover:text-red-300 transition-colors text-orange-100 bg-opacity-50 p-2";
+
+  // Helper to render a mobile nav button from config.
+  // When outside village (!location), skip rendering "travel" since the center button shows Travel.
+  // Returns null to hide the button but the grid wrapper div is still rendered to maintain layout.
+  const renderMobileNavButton = (optionId: string) => {
+    // Skip rendering travel button when outside village (center button shows Travel instead)
+    if (optionId === "travel" && !location) return null;
+    const option = getNavOptionById(optionId);
+    if (!option) return null;
+    const Icon = getMobileNavIcon(optionId);
+    return (
+      <Link
+        href={option.href}
+        className="relative -top-2 flex justify-center"
+        prefetch={true}
+      >
+        <Icon className={mobileNavbarButtonStyle} />
+      </Link>
+    );
+  };
 
   return (
     <GlobalAudioProvider userData={userData}>
@@ -381,8 +411,8 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
         setRightSideBarOpen={setRightSideBarOpen}
         rightSideBarRef={rightSideBarRef}
       />
-      <div className="w-full absolute top-0 bottom-0 md:relative">
-        <div className="fixed right-1 bottom-1 md:right-5 md:bottom-5 z-50 bg-slate-500 rounded-full">
+      <div className="absolute top-0 bottom-0 w-full md:relative">
+        <div className="fixed right-1 bottom-1 z-50 rounded-full bg-slate-500 md:right-5 md:bottom-5">
           <LowerRightHelpBtn className="hidden md:block">
             {userData ? (
               <MessageCircleWarning className={cn(yellowButtonStyle)} />
@@ -393,7 +423,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
         </div>
         {/* WALLPAPER BACKGROUND */}
         <Image
-          className="fixed md:top-0 md:left-0 md:w-full md:h-full md:object-cover object-contain z-[-1] select-none"
+          className="fixed z-[-1] select-none object-contain md:top-0 md:left-0 md:h-full md:w-full md:object-cover"
           src={imageset.wallpaper}
           width={1600}
           height={800}
@@ -402,9 +432,9 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           priority
           unoptimized
         />
-        <div className="max-w-[1280px] ml-auto mr-auto w-full relative top-0 bottom-0 md:relative">
+        <div className="relative top-0 bottom-0 mr-auto ml-auto w-full max-w-[1280px] md:relative">
           {/* LOGO WITH TOGGLE */}
-          <div className="relative z-2 top-3 w-full flex justify-center select-none z-50">
+          <div className="relative top-3 z-2 z-50 flex w-full select-none justify-center">
             {!lightLayout && (
               <Link href="/">
                 <Image
@@ -421,7 +451,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
             {/* Mobile logo (always visible) */}
             <Link href="/">
               <Image
-                className="block md:hidden absolute top-0 left-[42%] translate-x-[-50%] w-1/2 max-w-[220px]"
+                className="absolute top-0 left-[42%] block w-1/2 max-w-[220px] translate-x-[-50%] md:hidden"
                 id="tutorial-logo-mobile"
                 src={IMG_LOGO_SHORT}
                 width={250}
@@ -432,9 +462,10 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
             </Link>
             {/* Toggle button (desktop only) */}
             <button
+              type="button"
               aria-label={lightLayout ? "Show Layout" : "Hide Layout"}
               onClick={toggleLightLayout}
-              className="hidden md:flex items-center justify-center absolute top-0 right-2 h-8 w-8 bg-slate-700/70 hover:bg-slate-600 text-white rounded-full"
+              className="absolute top-0 right-2 hidden h-8 w-8 items-center justify-center rounded-full bg-slate-700/70 text-white hover:bg-slate-600 md:flex"
             >
               {lightLayout ? (
                 <Eye className="h-6 w-6" />
@@ -445,7 +476,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           </div>
           {/* DESKTOP NAVBAR */}
           {!lightLayout && (
-            <div className="hidden md:block z-1 relative top-[-10px] left-[50%] translate-x-[-50%] text-orange-100 font-bold text-lg lg:text-2xl">
+            <div className="relative top-[-10px] left-[50%] z-1 hidden translate-x-[-50%] font-bold text-lg text-orange-100 md:block lg:text-2xl">
               <Image
                 className="select-none"
                 src={imageset.navbar}
@@ -454,13 +485,13 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                 alt="navbar"
                 loading="lazy"
               />
-              <div className="absolute top-6 grid grid-cols-3 w-1/2 px-24 lg:px-36">
+              <div className="absolute top-6 grid w-1/2 grid-cols-3 px-24 lg:px-36">
                 {navbarMenuItemsLeft.map((link) => {
                   const count = link.notificationCount ?? 0;
                   return (
                     <Link
                       key={link.name}
-                      className="relative hover:text-orange-500 flex flex-row gap-1 z-10 items-center justify-center hover:cursor-pointer"
+                      className="relative z-10 flex flex-row items-center justify-center gap-1 hover:cursor-pointer hover:text-orange-500"
                       href={link.href}
                       onClick={async () => {
                         if (link.onClick) {
@@ -472,7 +503,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                       {link.icon}
                       {link.name}
                       {count > 0 && (
-                        <div className="absolute top-0 right-2 flex items-center justify-center text-sm text-orange-100 bg-orange-500 rounded-full w-5 h-5 z-50">
+                        <div className="absolute top-0 right-2 z-50 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-sm">
                           {count}
                         </div>
                       )}
@@ -480,11 +511,11 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                   );
                 })}
               </div>
-              <div className="absolute top-6 right-0 grid grid-cols-3 w-1/2 px-24 lg:px-36">
+              <div className="absolute top-6 right-0 grid w-1/2 grid-cols-3 px-24 lg:px-36">
                 {navbarMenuItemsRight.map((link) => (
                   <Link
                     key={link.name}
-                    className="hover:text-orange-500 flex flex-row gap-1 z-10 items-center justify-center"
+                    className="z-10 flex flex-row items-center justify-center gap-1 hover:text-orange-500"
                     href={link.href}
                     onClick={async () => {
                       if (link.onClick) await link.onClick();
@@ -501,7 +532,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           )}
           {/* DESKTOP HANDSIGN */}
           <Image
-            className="hidden md:block z-10 relative top-[-120px] left-[50%] translate-x-[-50%] select-none"
+            className="relative top-[-120px] left-[50%] z-10 hidden translate-x-[-50%] select-none md:block"
             src={imageset.handsign}
             width={127}
             height={112}
@@ -521,7 +552,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           ></div>
           <div
             className={cn(
-              "relative md:top-[-122px] flex flex-row z-10 h-full",
+              "relative z-10 flex h-full flex-row md:top-[-122px]",
               shownNotifications &&
                 shownNotifications.length > 0 &&
                 pathname !== "/combat"
@@ -530,10 +561,10 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
             )}
           >
             {/* LEFT SIDEBANNER DESKTOP */}
-            <div className="hidden md:block relative w-[200px] lg:w-[250px] shrink-0">
+            <div className="relative hidden w-[200px] shrink-0 md:block lg:w-[250px]">
               <div className="relative">
                 <Image
-                  className="left-0 absolute -z-10 select-none"
+                  className="absolute left-0 -z-10 select-none"
                   src={IMG_LAYOUT_SIDETOPBANNER_CONTENT}
                   width={250}
                   height={235}
@@ -541,10 +572,10 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                   alt="leftbanner"
                   loading="lazy"
                 ></Image>
-                <div className="text-white z-10 pl-20 pr-4 pt-4">{leftSideBar}</div>
+                <div className="z-10 pt-4 pr-4 pl-20 text-white">{leftSideBar}</div>
               </div>
               <Image
-                className="left-0 relative select-none"
+                className="relative left-0 select-none"
                 src={IMG_LAYOUT_SIDETOPBANNER_BOTTOM}
                 width={250}
                 height={68}
@@ -554,28 +585,28 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
               <StrongestUsersBanner />
             </div>
             {/* MAIN CONTENT */}
-            <div className="w-full flex-1 min-w-0 flex flex-col ">
-              <div className="w-full flex flex-row min-h-screen md:min-h-0">
+            <div className="flex w-full min-w-0 flex-1 flex-col">
+              <div className="flex min-h-screen w-full flex-row md:min-h-0">
                 <div
-                  className={`w-12 shrink-0 bg-fill bg-repeat-y hidden lg:block`}
+                  className={`hidden w-12 shrink-0 bg-fill bg-repeat-y lg:block`}
                   style={{ backgroundImage: `url(${IMG_LAYOUT_SIDESCROLL})` }}
                 ></div>
-                <div className="w-full bg-background grow flex flex-col overflow-x-scroll min-h-[200px]">
+                <div className="flex min-h-[200px] w-full grow flex-col overflow-x-scroll bg-background">
                   <div className="p-3 pb-28 md:pb-3">{props.children}</div>
                 </div>
                 <div
-                  className={`w-12 shrink-0 bg-fill bg-repeat-y hidden lg:block`}
+                  className={`hidden w-12 shrink-0 bg-fill bg-repeat-y lg:block`}
                   style={{ backgroundImage: `url(${IMG_LAYOUT_SIDESCROLL})` }}
                 ></div>
               </div>
-              <div className="h-20 max-h-28 flex flex-col fixed bottom-0  w-full md:relative">
-                <div className="absolute top-0 left-[-20px] right-0 md:right-[-20px] -z-30">
+              <div className="fixed bottom-0 flex h-20 max-h-28 w-full flex-col md:relative">
+                <div className="absolute top-0 right-0 left-[-20px] -z-30 md:right-[-20px]">
                   <div className="h-5 bg-linear-to-b from-rose-950 to-rose-800"></div>
                   <div className="h-8 bg-rose-800"></div>
                   <div className="h-7 bg-linear-to-b from-rose-800 to-rose-950"></div>
                 </div>
                 <Image
-                  className="left-[-120px] top-[-195px] absolute select-none -z-20 hidden md:block"
+                  className="absolute top-[-195px] left-[-120px] -z-20 hidden select-none md:block"
                   src={IMG_LAYOUT_SCROLLBOTTOM_DECOR}
                   width={143}
                   height={272}
@@ -583,100 +614,62 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                   loading="lazy"
                 ></Image>
                 <Image
-                  className="right-[-120px] top-[-195px] absolute select-none scale-x-[-1] -z-20 hidden md:block"
+                  className="absolute top-[-195px] right-[-120px] -z-20 hidden scale-x-[-1] select-none md:block"
                   src={IMG_LAYOUT_SCROLLBOTTOM_DECOR}
                   width={143}
                   height={272}
                   alt="rightbottomdecor"
                   loading="lazy"
                 ></Image>
-                <div className="absolute top-2 left-0 right-0 hidden md:block">
+                <div className="absolute top-2 right-0 left-0 hidden md:block">
                   <Footer />
                 </div>
                 {userData ? (
-                  <div className="absolute top-0 left-0 right-0 bottom-0 md:hidden grid grid-cols-7 items-center justify-center">
+                  <div className="absolute top-0 right-0 bottom-0 left-0 grid grid-cols-7 items-center justify-center md:hidden">
                     <div></div>
-                    <Link
-                      href="/profile"
-                      className="flex justify-center -top-2 relative"
-                      prefetch={true}
-                    >
-                      <CircleUserRound className={mobileNavbarButtonStyle} />
-                    </Link>
-                    <Link
-                      href="/inbox"
-                      className="flex justify-center -top-2 relative"
-                      prefetch={true}
-                    >
-                      <Inbox className={mobileNavbarButtonStyle} />
-                    </Link>
+                    {/* Left buttons from config */}
+                    {mobileNavConfig.left.map((optionId) => (
+                      <div key={optionId}>{renderMobileNavButton(optionId)}</div>
+                    ))}
+                    {/* CENTER button - unchanged conditional logic */}
                     {location ? (
-                      <>
-                        <Link
-                          href="/village"
-                          className="flex justify-center -top-8 relative"
-                          prefetch={true}
-                        >
-                          <div className="p-4 bg-linear-to-b from-black/5 to-black/50 rounded-full">
-                            <House className={cn(yellowButtonStyle)} />
-                          </div>
-                        </Link>
-                        <Link
-                          href="/travel"
-                          className="flex justify-center -top-2 relative"
-                          prefetch={true}
-                        >
-                          <Compass className={mobileNavbarButtonStyle} />
-                        </Link>
-                      </>
+                      <Link
+                        href="/village"
+                        className="relative -top-8 flex justify-center"
+                        prefetch={true}
+                      >
+                        <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
+                          <House className={cn(yellowButtonStyle)} />
+                        </div>
+                      </Link>
                     ) : (
-                      <>
-                        <Link
-                          href="/travel"
-                          className="flex justify-center -top-8 relative"
-                          prefetch={true}
-                        >
-                          <div className="p-4 bg-linear-to-b from-black/5 to-black/50 rounded-full">
-                            <Compass className={mobileNavbarButtonStyle} />
-                          </div>
-                        </Link>
-                        <Link
-                          href="/items"
-                          className="flex justify-center -top-2 relative"
-                          prefetch={true}
-                        >
-                          <Milk className={mobileNavbarButtonStyle} />
-                        </Link>
-                      </>
+                      <Link
+                        href="/travel"
+                        className="relative -top-8 flex justify-center"
+                        prefetch={true}
+                      >
+                        <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
+                          <Compass className={mobileNavbarButtonStyle} />
+                        </div>
+                      </Link>
                     )}
-
-                    <Link
-                      href="/tavern"
-                      className="flex justify-center -top-2 relative"
-                      prefetch={true}
-                    >
-                      <MessagesSquare className={mobileNavbarButtonStyle} />
-                    </Link>
-                    <Link
-                      href="/profile/edit"
-                      className="flex justify-center -top-2 relative"
-                      prefetch={true}
-                    >
-                      <Cog className={mobileNavbarButtonStyle} />
-                    </Link>
+                    {/* Right buttons from config */}
+                    {mobileNavConfig.right.map((optionId) => (
+                      <div key={optionId}>{renderMobileNavButton(optionId)}</div>
+                    ))}
                   </div>
                 ) : (
-                  <div className="absolute top-4 left-0 right-0 block md:hidden">
+                  <div className="absolute top-4 right-0 left-0 block md:hidden">
                     <Footer />
                   </div>
                 )}
               </div>
             </div>
             {/* RIGHT SIDEBANNER DESKTOP */}
-            <div className="hidden md:block relative w-[200px] lg:w-[250px] shrink-0">
+            <div className="relative hidden w-[200px] shrink-0 md:block lg:w-[250px]">
               <div className="relative">
                 <Image
-                  className="right-0 absolute -z-10 scale-x-[-1] select-none"
+                  className="absolute right-0 -z-10 scale-x-[-1] select-none"
                   src={IMG_LAYOUT_SIDETOPBANNER_CONTENT}
                   width={250}
                   height={235}
@@ -684,10 +677,10 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                   alt="rightbanner"
                   loading="lazy"
                 ></Image>
-                <div className="text-white p-2 pl-4 pr-20">{rightSideBar}</div>
+                <div className="p-2 pr-20 pl-4 text-white">{rightSideBar}</div>
               </div>
               <Image
-                className="left-0 relative select-none scale-x-[-1]"
+                className="relative left-0 scale-x-[-1] select-none"
                 src={IMG_LAYOUT_SIDETOPBANNER_BOTTOM}
                 width={250}
                 height={68}
@@ -731,7 +724,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           </Sheet>
 
           {/* RIGHT SIDEBAR MOBILE */}
-          <div className="grid grid-cols-2 gap-2 absolute top-4 right-4 block md:hidden">
+          <div className="absolute top-4 right-4 block grid grid-cols-2 gap-2 md:hidden">
             <div className="flex justify-center">
               <LowerRightHelpBtn className="block md:hidden">
                 {userData ? (
@@ -755,6 +748,8 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
                 </VisuallyHidden.Root>
                 <Suspense fallback={<Loader explanation="Loading..." />}>
                   <SheetHeader>
+                    {/* biome-ignore lint/a11y/useKeyWithClickEvents: Sheet panel - clicking outside content closes it, keyboard handled by Sheet component */}
+                    {/* biome-ignore lint/a11y/noStaticElementInteractions: Sheet panel uses click to close when clicking non-interactive areas */}
                     <div
                       ref={rightSideBarRef}
                       onClick={(e) => {
@@ -801,7 +796,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
           </div>
 
           {/* MOBILE NOTIFICATIONS */}
-          <div className="absolute top-[75px] right-0 left-0 flex flex-row justify-end md:hidden p-1 gap-2">
+          <div className="absolute top-[75px] right-0 left-0 flex flex-row justify-end gap-2 p-1 md:hidden">
             {pathname !== "/combat" && (
               <CollapsibleNotifications
                 notifications={shownNotifications}
@@ -860,27 +855,23 @@ const NotificationList: React.FC<NotificationListProps> = ({
   ) => (
     <Link key={key} href={notification.href} id={notification.id}>
       <div
-        className={`flex flex-row items-center rounded-lg border-2 border-slate-800 hover:opacity-70 ${
-          layout === "mobile"
-            ? "text-xs py-[1px] px-3"
-            : "text-xs lg:text-base py-[1px] pl-3"
-        } ${notification.color ? notificationColorMap[notification.color] : "bg-slate-500"} ${
-          isInPopover ? "border border-slate-600 py-2 px-3" : ""
+        className={`flex flex-row items-center rounded-lg border-2 border-slate-800 hover:opacity-70 ${layout === "mobile" ? "px-3 py-[1px] text-xs" : "py-[1px] pl-3 text-xs lg:text-base"} ${notification.color ? notificationColorMap[notification.color] : "bg-slate-500"} ${
+          isInPopover ? "border border-slate-600 px-3 py-2" : ""
         }`}
       >
         {notification.color === "red" && (
           <ShieldAlert
-            className={`text-white mr-1 ${isInPopover ? "h-4 w-4 mr-2" : "h-5 w-5"}`}
+            className={`mr-1 text-white ${isInPopover ? "mr-2 h-4 w-4" : "h-5 w-5"}`}
           />
         )}
         {notification.color === "blue" && (
           <Info
-            className={`text-white mr-1 ${isInPopover ? "h-4 w-4 mr-2" : "h-5 w-5"}`}
+            className={`mr-1 text-white ${isInPopover ? "mr-2 h-4 w-4" : "h-5 w-5"}`}
           />
         )}
         {notification.color === "green" && (
           <ShieldCheck
-            className={`text-white mr-1 ${isInPopover ? "h-4 w-4 mr-2" : "h-5 w-5"}`}
+            className={`mr-1 text-white ${isInPopover ? "mr-2 h-4 w-4" : "h-5 w-5"}`}
           />
         )}
         <span className="text-white">{notification.name}</span>
@@ -906,11 +897,7 @@ const NotificationList: React.FC<NotificationListProps> = ({
         <Popover key={`group-${group}`}>
           <PopoverTrigger asChild>
             <div
-              className={`flex flex-row text-xs lg:text-base items-center rounded-lg border-2 border-slate-800 py-[1px] pl-3 hover:opacity-70 cursor-pointer ${
-                firstNotification.color
-                  ? `bg-${firstNotification.color}-600`
-                  : "bg-slate-500"
-              }`}
+              className={`flex cursor-pointer flex-row items-center rounded-lg border-2 border-slate-800 py-[1px] pl-3 text-xs hover:opacity-70 lg:text-base ${firstNotification.color ? `bg-${firstNotification.color}-600` : "bg-slate-500"}`}
             >
               {firstNotification.color === "red" && (
                 <ShieldAlert className="mr-1 h-5 w-5" />
@@ -924,7 +911,7 @@ const NotificationList: React.FC<NotificationListProps> = ({
           </PopoverTrigger>
           <PopoverContent className="w-96 p-0">
             <div className="p-4">
-              <h4 className="font-semibold text-sm mb-3">{group}</h4>
+              <h4 className="mb-3 font-semibold text-sm">{group}</h4>
               <div className="flex flex-col gap-1">
                 {groupNotifications.map((notification, i) =>
                   renderNotification(notification, `${group}-${i}`, true),
@@ -983,28 +970,30 @@ const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
         {/* Toggle button - different structure for collapsed vs expanded */}
         {isCollapsed ? (
           <button
+            type="button"
             onClick={() => setIsCollapsed(false)}
-            className="flex items-stretch rounded-lg border-2 border-slate-800 overflow-hidden hover:opacity-70 transition-opacity duration-200"
+            className="flex items-stretch overflow-hidden rounded-lg border-2 border-slate-800 transition-opacity duration-200 hover:opacity-70"
             aria-label={`Show ${count} notifications`}
             aria-expanded={false}
           >
-            <span className="flex items-center justify-center px-2 py-[1px] bg-slate-700">
+            <span className="flex items-center justify-center bg-slate-700 px-2 py-[1px]">
               <Bell className="h-5 w-5 text-white" />
             </span>
             <span
-              className={`flex items-center justify-center px-2 py-[1px] text-xs font-bold ${badgeClass}`}
+              className={`flex items-center justify-center px-2 py-[1px] font-bold text-xs ${badgeClass}`}
             >
               {count}
             </span>
           </button>
         ) : (
           <button
+            type="button"
             onClick={() => setIsCollapsed(true)}
-            className="flex items-center justify-center rounded-lg border-2 border-slate-800 bg-slate-700 hover:opacity-70 transition-opacity duration-200 aspect-square"
+            className="flex aspect-square items-center justify-center rounded-lg border-2 border-slate-800 bg-slate-700 transition-opacity duration-200 hover:opacity-70"
             aria-label="Hide notifications"
             aria-expanded={true}
           >
-            <ChevronRight className="h-5 w-5 text-white m-[1px]" />
+            <ChevronRight className="m-[1px] h-5 w-5 text-white" />
           </button>
         )}
         {/* Animated notification list container */}
@@ -1015,9 +1004,7 @@ const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
           }}
         >
           <div
-            className={`overflow-hidden flex flex-row flex-nowrap items-start gap-2 transition-opacity duration-300 ${
-              isCollapsed ? "opacity-0" : "opacity-100"
-            }`}
+            className={`flex flex-row flex-nowrap items-start gap-2 overflow-hidden transition-opacity duration-300 ${isCollapsed ? "opacity-0" : "opacity-100"}`}
           >
             <NotificationList
               notifications={notifications}
@@ -1035,8 +1022,9 @@ const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
     <div>
       {/* Header button - always visible */}
       <button
+        type="button"
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="w-full flex items-center justify-between text-xl font-bold text-orange-100 px-1 pt-2 hover:text-orange-300 transition-colors duration-200 cursor-pointer"
+        className="flex w-full cursor-pointer items-center justify-between px-1 pt-2 font-bold text-orange-100 text-xl transition-colors duration-200 hover:text-orange-300"
         aria-label={isCollapsed ? `Show ${count} notifications` : "Hide notifications"}
         aria-expanded={!isCollapsed}
       >
@@ -1045,18 +1033,14 @@ const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> = ({
           {/* Badge only shown when collapsed */}
           <span
             aria-hidden="true"
-            className={`flex items-center justify-center min-w-[24px] h-[24px] text-sm font-bold rounded-full px-2 transition-all duration-300 ${badgeClass} ${
-              isCollapsed ? "opacity-100 scale-100" : "opacity-0 scale-75"
-            }`}
+            className={`flex h-[24px] min-w-[24px] items-center justify-center rounded-full px-2 font-bold text-sm transition-all duration-300 ${badgeClass} ${isCollapsed ? "scale-100 opacity-100" : "scale-75 opacity-0"}`}
           >
             {count}
           </span>
         </span>
         {/* Animated chevron */}
         <ChevronDown
-          className={`h-5 w-5 transition-transform duration-300 ${
-            isCollapsed ? "rotate-0" : "rotate-180"
-          }`}
+          className={`h-5 w-5 transition-transform duration-300 ${isCollapsed ? "rotate-0" : "rotate-180"}`}
         />
       </button>
       {/* Animated notification list using grid for height animation */}
@@ -1098,7 +1082,7 @@ const StrongestUsersBanner: React.FC = () => {
   return (
     <div className="relative top-[-30px]">
       <Image
-        className="left-0 relative -z-10 select-none w-[200px] lg:w-[260px] max-w-[200px] lg:max-w-[260px]"
+        className="relative left-0 -z-10 w-[200px] max-w-[200px] select-none lg:w-[260px] lg:max-w-[260px]"
         src={IMG_LAYOUT_USERSBANNER_TOP}
         width={260}
         height={138}
@@ -1106,11 +1090,11 @@ const StrongestUsersBanner: React.FC = () => {
         loading="lazy"
       ></Image>
       <div
-        className="text-orange-100 relative left-0 w-[200px] lg:w-[260px] max-w-[200px] lg:max-w-[260px] bg-contain bg-repeat-y"
+        className="relative left-0 w-[200px] max-w-[200px] bg-contain bg-repeat-y text-orange-100 lg:w-[260px] lg:max-w-[260px]"
         style={{ backgroundImage: `url(${IMG_LAYOUT_USERBANNER_MIDDLE})` }}
       >
         <div className="relative top-[-40px]">
-          <div className="relative left-10 lg:left-14 w-[140px] max-w-[140px] lg:w-[178px] lg:max-w-[178px]">
+          <div className="relative left-10 w-[140px] max-w-[140px] lg:left-14 lg:w-[178px] lg:max-w-[178px]">
             <Link href={userData ? "/battlearena#PVP%20Rank" : "/login"}>
               <Button decoration="gold" className="w-full" animation="pulse">
                 Join Ranked PvP
@@ -1120,13 +1104,11 @@ const StrongestUsersBanner: React.FC = () => {
           {users?.map((user, i) => (
             <Link
               href={`/username/${user.username}`}
-              key={i}
+              key={user.userId}
               className="hover:opacity-50"
             >
               <div
-                className={`py-1 grid grid-cols-12 items-center justify-center relative top-2 left-8 lg:left-10 w-[154px] max-w-[154px] lg:w-[200px] lg:max-w-[200px] ${
-                  i % 2 == 0 ? "bg-pink-900" : ""
-                } bg-opacity-50 text-xs lg:text-base`}
+                className={`relative top-2 left-8 grid w-[154px] max-w-[154px] grid-cols-12 items-center justify-center py-1 lg:left-10 lg:w-[200px] lg:max-w-[200px] ${i % 2 === 0 ? "bg-pink-900" : ""} bg-opacity-50 text-xs lg:text-base`}
               >
                 <p className="pl-2">{i + 1}</p>
                 <div className="col-span-2">
@@ -1143,19 +1125,21 @@ const StrongestUsersBanner: React.FC = () => {
             </Link>
           ))}
           {isPending && (
-            <div className="flex flex-col gap-1 items-center pb-4">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <Skeleton
-                  className="h-9 lg:h-10 w-full w-[154px] max-w-[154px] lg:w-[200px] lg:max-w-[200px] bg-muted/70"
-                  key={i}
-                />
-              ))}
+            <div className="flex flex-col items-center gap-1 pb-4">
+              {Array.from({ length: 10 }, (_, idx) => `menu-skeleton-${idx}`).map(
+                (key) => (
+                  <Skeleton
+                    key={key}
+                    className="h-9 w-[154px] w-full max-w-[154px] bg-muted/70 lg:h-10 lg:w-[200px] lg:max-w-[200px]"
+                  />
+                ),
+              )}
             </div>
           )}
         </div>
       </div>
       <Image
-        className="left-0 top-[-10px] relative -z-10 select-none w-[200px] lg:w-[260px] max-w-[200px] lg:max-w-[260px]"
+        className="relative top-[-10px] left-0 -z-10 w-[200px] max-w-[200px] select-none lg:w-[260px] lg:max-w-[260px]"
         src={IMG_LAYOUT_USERSBANNER_BOTTOM}
         width={260}
         height={138}
@@ -1179,10 +1163,10 @@ export const SideBannerTitle: React.FC<{
   return (
     <>
       {props.break && <br />}
-      <p className="hidden md:block text-xl font-bold text-orange-100 px-1 pt-2">
+      <p className="hidden px-1 pt-2 font-bold text-orange-100 text-xl md:block">
         {props.children}
       </p>
-      <p className="block md:hidden text-xl font-bold text-foreground px-1 pt-2">
+      <p className="block px-1 pt-2 font-bold text-foreground text-xl md:hidden">
         {props.children}
       </p>
     </>
@@ -1224,12 +1208,12 @@ const RightSideBar: React.FC<{
       <SideBannerTitle break={userData && notifications && notifications.length > 0}>
         Main Menu
       </SideBannerTitle>
-      <div className="mt-1 grid gap-3 grid-cols-2">
-        {systems.map((system, i) => {
+      <div className="mt-1 grid grid-cols-2 gap-3">
+        {systems.map((system) => {
           const disabled = system.requireAwake && userData?.status !== "AWAKE";
           return (
             <Link
-              key={i}
+              key={system.href}
               href={system.href}
               className={system.className ? system.className : ""}
               id={system.id}
@@ -1252,7 +1236,7 @@ const RightSideBar: React.FC<{
           <div className={inBattle && location.requireAwake ? "opacity-30" : ""}>
             <Link
               href={inBattle && location.requireAwake ? "/combat" : location.href}
-              className="text-center flex flex-row justify-center"
+              className="flex flex-row justify-center text-center"
               id={location.id}
             >
               {location.icon}
@@ -1271,7 +1255,7 @@ const RightSideBar: React.FC<{
         <TabsContent value="battle">
           <MenuBoxCombat />
         </TabsContent>
-        <TabsList className="w-full  border-2">
+        <TabsList className="w-full border-2">
           <TabsTrigger value="menu">Menu</TabsTrigger>
           <TabsTrigger value="battle">Battle</TabsTrigger>
         </TabsList>

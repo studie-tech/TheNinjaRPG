@@ -1,8 +1,8 @@
-import React from "react";
-import Loader from "@/layout/Loader";
-import ContentBox from "@/layout/ContentBox";
-import DisplayUserReport from "@/layout/UserReport";
+import type React from "react";
 import { api } from "@/app/_trpc/client";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import DisplayUserReport from "@/layout/UserReport";
 
 interface BanInfoProps {
   placeholder?: string;

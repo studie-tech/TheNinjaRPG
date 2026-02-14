@@ -1,46 +1,55 @@
-import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
-import { createTRPCRouter, protectedProcedure, errorResponse } from "@/server/api/trpc";
-import { userData, userItem, item, userItemImbuement } from "@/drizzle/schema";
-import { fetchUser, fetchUpdatedUser } from "@/server/api/routers/profile";
-import { getShrineBoost } from "@/utils/village";
+import { nanoid } from "nanoid";
+import { z } from "zod";
+import {
+  CLAN_BOOST_MAX_LEVEL,
+  CLAN_BOOST_PERCENT_PER_LEVEL,
+  CONSUMABLE_CRAFTING_TIMES_MINS,
+  CRAFTING_TIMES_MINS,
+  OCCUPATION_CHANGE_COOLDOWN_DAYS,
+  OCCUPATIONS,
+} from "@/drizzle/constants";
+import { item, userData, userItem, userItemImbuement } from "@/drizzle/schema";
+import {
+  calculateItemConsumption,
+  getCraftingRank,
+  getEffectiveMaxImbuements,
+  getTotalItemQuantity,
+} from "@/libs/crafting";
+import { getNewTrackers } from "@/libs/quest";
 import {
   fetchItemWithCraftingRequirements,
   fetchUserItems,
 } from "@/server/api/routers/item";
+import { fetchUpdatedUser, fetchUser } from "@/server/api/routers/profile";
 import {
-  OCCUPATIONS,
-  OCCUPATION_CHANGE_COOLDOWN_DAYS,
-  CRAFTING_TIMES_MINS,
-  CONSUMABLE_CRAFTING_TIMES_MINS,
-} from "@/drizzle/constants";
-import {
-  getCraftingRank,
-  getTotalItemQuantity,
-  calculateItemConsumption,
-  getEffectiveMaxImbuements,
-} from "@/libs/crafting";
-import { nanoid } from "nanoid";
-import { baseServerResponse } from "@/server/api/trpc";
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import { canChangeContent } from "@/utils/permissions";
-import { getNewTrackers } from "@/libs/quest";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
+import { getShrineBoost } from "@/utils/village";
 
 export const occupationRouter = createTRPCRouter({
-  getCraftableItems: protectedProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle.query.item.findMany({
-      where: sql`${item.canBeCrafted} = true AND ${item.hidden} = false`,
-      with: {
-        craftingRequirements: {
-          with: {
-            requirementItem: true,
+  getCraftableItems: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get all craftable items" } })
+    .query(async ({ ctx }) => {
+      return await ctx.drizzle.query.item.findMany({
+        where: sql`${item.canBeCrafted} = true AND ${item.hidden} = false`,
+        with: {
+          craftingRequirements: {
+            with: {
+              requirementItem: true,
+            },
           },
         },
-      },
-    });
-  }),
+      });
+    }),
 
   selectOccupation: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Select a crafting occupation" } })
     .input(z.object({ occupation: z.enum(OCCUPATIONS) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -74,10 +83,11 @@ export const occupationRouter = createTRPCRouter({
     }),
 
   craftItem: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Craft an item using materials" } })
     .input(
       z.object({
         itemId: z.string(),
-        quantity: z.number().int().min(1).max(10).default(1),
+        quantity: z.int().min(1).max(10).prefault(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -159,8 +169,17 @@ export const occupationRouter = createTRPCRouter({
       const sectors = user.village?.sectors?.length || 0;
       const shrineBoost = getShrineBoost(sectors, "Crafting", user.village);
       const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
+      // Clan crafting time reduction (percentage stored in clan object)
+      // Max boost is 20% (10 levels × 2%), clamp as safety guard
+      // Only apply for real clans, not outlaw factions/towns
+      const clanCraftingTimeBoostCap =
+        (CLAN_BOOST_MAX_LEVEL * CLAN_BOOST_PERCENT_PER_LEVEL) / 100;
+      const clanCraftingTimeBoost = user.isOutlaw
+        ? 0
+        : Math.min((user.clan?.craftingTimeBoost ?? 0) / 100, clanCraftingTimeBoostCap);
+      const clanCraftingTimeFactor = 1 - clanCraftingTimeBoost;
       const craftSeconds = Math.round(
-        craftingTime * 60 * shrineBoostFactor * input.quantity,
+        craftingTime * 60 * shrineBoostFactor * clanCraftingTimeFactor * input.quantity,
       );
 
       // Calculate crafting finish time
@@ -235,7 +254,11 @@ export const occupationRouter = createTRPCRouter({
       }
 
       // Award crafting experience (from item config, or 0 if not set)
-      const expGain = (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
+      // Apply clan crafting experience boost (only for real clans, not outlaw factions/towns)
+      const clanCraftingExpBoost = user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100;
+      const baseExpGain =
+        (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
+      const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
       // Update trackers with crafting experience gained
       const { trackers } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },
@@ -258,6 +281,7 @@ export const occupationRouter = createTRPCRouter({
     }),
 
   imbueItem: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Imbue an item with a crystal" } })
     .input(
       z.object({
         userItemId: z.string(),
@@ -368,7 +392,10 @@ export const occupationRouter = createTRPCRouter({
       });
 
       // Award small amount of crafting experience (half of crystal's crafting experience, or 0 if not set)
-      const expGain = Math.floor((crystalItem.craftingExperience ?? 0) / 2);
+      // Apply clan crafting experience boost (only for real clans, not outlaw factions/towns)
+      const clanCraftingExpBoost = user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100;
+      const baseExpGain = Math.floor((crystalItem.craftingExperience ?? 0) / 2);
+      const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
       // Update trackers with crafting experience gained
       const { trackers } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },
@@ -470,6 +497,7 @@ export const occupationRouter = createTRPCRouter({
     }),
 
   removeImbuement: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Remove an imbuement from an item" } })
     .input(z.object({ userItemImbuementId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

@@ -1,22 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import JutsuFiltering, { useFiltering, getFilter } from "@/layout/JutsuFiltering";
-import { Button } from "@/components/ui/button";
 import {
-  FilePlus,
   ChartCandlestick,
   ChartPie,
+  FilePlus,
   ListChecks,
   Palette,
 } from "lucide-react";
-import { useInfinitePagination } from "@/libs/pagination";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import ContentBox from "@/layout/ContentBox";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
+import Loader from "@/layout/Loader";
+import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
@@ -46,7 +46,7 @@ export default function ManualJutsus() {
       placeholderData: (previousData) => previousData,
     },
   );
-  const alljutsus = jutsus?.pages.map((page) => page.data).flat();
+  const alljutsus = jutsus?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Mutations
@@ -109,7 +109,7 @@ export default function ManualJutsus() {
         subtitle="All known jutsu"
         initialBreak={true}
         topRightContent={
-          <div className="flex flex-row gap-1 items-center">
+          <div className="flex flex-row items-center gap-1">
             {userData && canChangeContent(userData.role) && (
               <>
                 <Button id="create-jutsu" onClick={() => create()} hoverText="New">
@@ -133,10 +133,9 @@ export default function ManualJutsus() {
       >
         {totalLoading && <Loader explanation="Loading data" />}
         {alljutsus?.map((jutsu, i) => (
-          <div key={i} ref={i === alljutsus.length - 1 ? setLastElement : null}>
+          <div key={jutsu.id} ref={i === alljutsus.length - 1 ? setLastElement : null}>
             <ItemWithEffects
               item={jutsu}
-              key={jutsu.id}
               onDelete={(id: string) => remove({ id })}
               showEdit="jutsu"
               showStatistic="jutsu"

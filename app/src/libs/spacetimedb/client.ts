@@ -11,13 +11,13 @@
  * - Tick rate increased to 150ms with client-side interpolation
  */
 
-import { DbConnection, type ErrorContext, type SubscriptionHandle } from "./bindings";
 import type { Infer } from "spacetimedb/sdk";
-import type GameSessionType from "./bindings/game_session_type";
-import type SessionStateType from "./bindings/session_state_type";
-import type EnemyType from "./bindings/enemy_type";
-import type ProjectileType from "./bindings/projectile_type";
+import { DbConnection, type ErrorContext, type SubscriptionHandle } from "./bindings";
 import type CompletedRunType from "./bindings/completed_run_type";
+import type EnemyType from "./bindings/enemy_type";
+import type GameSessionType from "./bindings/game_session_type";
+import type ProjectileType from "./bindings/projectile_type";
+import type SessionStateType from "./bindings/session_state_type";
 import type SessionUpgradeType from "./bindings/session_upgrade_type";
 
 // Re-export types from bindings for use in useTowerDefense hook
@@ -129,10 +129,8 @@ export class SpacetimeDBConnection {
   private identity: string | null = null;
   private currentSessionId: bigint | null = null;
   private currentUserId: string | null = null;
-  // For guests, we use the seed to subscribe to a specific session (more efficient than all guest sessions)
-  private pendingGuestSeed: string | null = null;
   // Track if the WebSocket is fully ready for sending (fixes InvalidStateError: Still in CONNECTING state)
-  private wsReady: boolean = false;
+  private wsReady = false;
 
   constructor(config: SpacetimeDBConfig) {
     this.config = config;
@@ -241,7 +239,7 @@ export class SpacetimeDBConnection {
             this.wsReady = true;
           }, 100);
         })
-        .onDisconnect((ctx, error) => {
+        .onDisconnect((_ctx, error) => {
           if (DEBUG) {
             console.log("[SpacetimeDB] Disconnected", error);
           }
@@ -249,7 +247,7 @@ export class SpacetimeDBConnection {
           this.wsReady = false;
           this.emit({ type: "connection_state", state: "disconnected" });
         })
-        .onConnectError((ctx, error) => {
+        .onConnectError((_ctx, error) => {
           console.error("[SpacetimeDB] Connection error:", error);
           this.connectionState = "error";
           this.emit({ type: "connection_state", state: "error" });
@@ -323,8 +321,6 @@ export class SpacetimeDBConnection {
       this.globalSubscription.unsubscribe();
       this.globalSubscription = null;
     }
-
-    this.pendingGuestSeed = seed;
 
     // Subscribe to the specific session by seed (unique per session)
     // This ensures we only receive events for OUR session, not all guests
@@ -410,7 +406,7 @@ export class SpacetimeDBConnection {
     const db = this.connection.db;
 
     // Game session events
-    db.gameSession.onInsert((ctx, row) => {
+    db.gameSession.onInsert((_ctx, row) => {
       if (DEBUG) {
         console.log("[SpacetimeDB] Session inserted:", row.id);
       }
@@ -418,14 +414,14 @@ export class SpacetimeDBConnection {
       this.emit({ type: "session_update", session: row as GameSession });
     });
 
-    db.gameSession.onUpdate((ctx, oldRow, newRow) => {
+    db.gameSession.onUpdate((_ctx, _oldRow, newRow) => {
       if (DEBUG) {
         console.log("[SpacetimeDB] Session updated:", newRow.id);
       }
       this.emit({ type: "session_update", session: newRow as GameSession });
     });
 
-    db.gameSession.onDelete((ctx, row) => {
+    db.gameSession.onDelete((_ctx, row) => {
       if (DEBUG) {
         console.log("[SpacetimeDB] Session deleted:", row.id);
       }
@@ -436,15 +432,15 @@ export class SpacetimeDBConnection {
     });
 
     // Session state events
-    db.sessionState.onInsert((ctx, row) => {
+    db.sessionState.onInsert((_ctx, row) => {
       this.emit({ type: "session_state_update", state: row as SessionState });
     });
 
-    db.sessionState.onUpdate((ctx, oldRow, newRow) => {
+    db.sessionState.onUpdate((_ctx, _oldRow, newRow) => {
       this.emit({ type: "session_state_update", state: newRow as SessionState });
     });
 
-    db.sessionState.onDelete((ctx, row) => {
+    db.sessionState.onDelete((_ctx, row) => {
       this.emit({ type: "session_state_delete", sessionId: row.sessionId });
     });
 
@@ -456,14 +452,14 @@ export class SpacetimeDBConnection {
         onDelete: (cb: (ctx: unknown, row: EnemySpawn) => void) => void;
       };
 
-      enemySpawnTable.onInsert((ctx, row) => {
+      enemySpawnTable.onInsert((_ctx, row) => {
         if (DEBUG) {
           console.log("[SpacetimeDB] EnemySpawn inserted:", row.enemyId);
         }
         this.emit({ type: "enemy_spawn_insert", spawn: row });
       });
 
-      enemySpawnTable.onDelete((ctx, row) => {
+      enemySpawnTable.onDelete((_ctx, row) => {
         if (DEBUG) {
           console.log("[SpacetimeDB] EnemySpawn deleted:", row.enemyId);
         }
@@ -472,33 +468,33 @@ export class SpacetimeDBConnection {
     }
 
     // Enemy events (volatile data only, no path)
-    db.enemy.onInsert((ctx, row) => {
+    db.enemy.onInsert((_ctx, row) => {
       this.emit({ type: "enemy_insert", enemy: row as Enemy });
     });
 
-    db.enemy.onUpdate((ctx, oldRow, newRow) => {
+    db.enemy.onUpdate((_ctx, _oldRow, newRow) => {
       this.emit({ type: "enemy_update", enemy: newRow as Enemy });
     });
 
-    db.enemy.onDelete((ctx, row) => {
+    db.enemy.onDelete((_ctx, row) => {
       this.emit({ type: "enemy_delete", enemyId: row.id });
     });
 
     // Projectile events
     // COST OPTIMIZATION: No more projectile_update events - progress computed client-side
-    db.projectile.onInsert((ctx, row) => {
+    db.projectile.onInsert((_ctx, row) => {
       this.emit({ type: "projectile_insert", projectile: row as Projectile });
     });
 
     // Note: projectile_update removed - server no longer sends progress updates
     // Client computes progress from spawned_at timestamp
 
-    db.projectile.onDelete((ctx, row) => {
+    db.projectile.onDelete((_ctx, row) => {
       this.emit({ type: "projectile_delete", projectileId: row.id });
     });
 
     // Completed run events
-    db.completedRun.onInsert((ctx, row) => {
+    db.completedRun.onInsert((_ctx, row) => {
       if (DEBUG) {
         console.log("[SpacetimeDB] Completed run:", row.id);
       }
@@ -506,21 +502,21 @@ export class SpacetimeDBConnection {
     });
 
     // Session upgrade events
-    db.sessionUpgrade.onInsert((ctx, row) => {
+    db.sessionUpgrade.onInsert((_ctx, row) => {
       if (DEBUG) {
         console.log("[SpacetimeDB] Session upgrade inserted:", row.upgradeId);
       }
       this.emit({ type: "session_upgrade_insert", upgrade: row as SessionUpgrade });
     });
 
-    db.sessionUpgrade.onUpdate((ctx, oldRow, newRow) => {
+    db.sessionUpgrade.onUpdate((_ctx, _oldRow, newRow) => {
       if (DEBUG) {
         console.log("[SpacetimeDB] Session upgrade updated:", newRow.upgradeId);
       }
       this.emit({ type: "session_upgrade_update", upgrade: newRow as SessionUpgrade });
     });
 
-    db.sessionUpgrade.onDelete((ctx, row) => {
+    db.sessionUpgrade.onDelete((_ctx, row) => {
       if (DEBUG) {
         console.log("[SpacetimeDB] Session upgrade deleted:", row.id);
       }
@@ -595,7 +591,9 @@ export class SpacetimeDBConnection {
    * Emit an event to all subscribers
    */
   private emit(event: SpacetimeDBEvent): void {
-    this.eventHandlers.forEach((handler) => handler(event));
+    this.eventHandlers.forEach((handler) => {
+      handler(event);
+    });
   }
 
   // ============================================

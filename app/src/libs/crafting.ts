@@ -1,10 +1,10 @@
+import type { CRAFTING_RANK } from "@/drizzle/constants";
 import {
-  CRAFTING_REQUIRED_EXP,
   CRAFTING_MAX_IMBUED_ITEMS,
   CRAFTING_RANKS,
+  CRAFTING_REQUIRED_EXP,
 } from "@/drizzle/constants";
-import type { CRAFTING_RANK } from "@/drizzle/constants";
-import type { UserData, UserItem, Item } from "@/drizzle/schema";
+import type { Item, UserData, UserItem } from "@/drizzle/schema";
 
 /**
  * Get the crafting rank based on the experience

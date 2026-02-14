@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback, use } from "react";
-import dynamic from "next/dynamic";
-import { api } from "@/app/_trpc/client";
-import { useRequiredUserData } from "@/utils/UserContext";
-import ActionTimer from "@/layout/ActionTimer";
-import ContentBox from "@/layout/ContentBox";
-import CombatHistory from "@/layout/CombatHistory";
-import type { BattleState } from "@/libs/combat/types";
-import { useCombatPreferences, type CombatLayoutComponentId } from "@/hooks/combat";
-import { UserCombatSettings } from "@/layout/UserCombatSettings";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import ReportUser from "@/layout/Report";
 import { Flag } from "lucide-react";
+import dynamic from "next/dynamic";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { type CombatLayoutComponentId, useCombatPreferences } from "@/hooks/combat";
+import ActionTimer from "@/layout/ActionTimer";
+import CombatHistory from "@/layout/CombatHistory";
+import ContentBox from "@/layout/ContentBox";
+import ReportUser from "@/layout/Report";
+import { UserCombatSettings } from "@/layout/UserCombatSettings";
+import type { BattleState } from "@/libs/combat/types";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 const Combat = dynamic(() => import("@/layout/Combat"), { ssr: false });
 
@@ -45,7 +45,11 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
   useEffect(() => {
     if (data?.battle && userData) {
       setUserId(userData.userId);
-      setBattleState({ battle: data?.battle, result: undefined, isPending: false });
+      setBattleState({
+        battle: data?.battle,
+        result: undefined,
+        isPending: false,
+      });
     }
   }, [userData, data]);
 
@@ -63,7 +67,6 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
         />
       )
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [versionId, userId, config.showGridNumbers]);
 
   // Render functions for layout components
@@ -85,7 +88,7 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
                 <TooltipProvider delayDuration={50}>
                   <ReportUser
                     button={
-                      <div className="flex h-10 w-10 min-h-10 min-w-10 items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+                      <div className="flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground">
                         <Flag className="h-6 w-6" />
                       </div>
                     }
@@ -110,7 +113,7 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
 
   const renderBattlefield = useCallback(() => {
     return (
-      <div className="relative rounded-lg border bg-card shadow-lg text-card-foreground overflow-hidden">
+      <div className="relative overflow-hidden rounded-lg border bg-card text-card-foreground shadow-lg">
         {combat}
       </div>
     );

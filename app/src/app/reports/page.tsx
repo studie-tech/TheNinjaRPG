@@ -1,23 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { Bot, Eraser, Presentation } from "lucide-react";
 import Link from "next/link";
-import ContentBox from "@/layout/ContentBox";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { TERR_BOT_ID } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
-import Post from "@/layout/Post";
+import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Loader from "@/layout/Loader";
+import Post from "@/layout/Post";
+import ReportFiltering, { getFilter, useFiltering } from "@/layout/ReportFiltering";
 import ParsedReportJson from "@/layout/ReportReason";
-import { Presentation, Eraser, Bot } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { showMutationToast } from "@/libs/toast";
-import { api } from "@/app/_trpc/client";
 import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
+import { reportCommentColor, reportCommentExplain } from "@/utils/reports";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { reportCommentExplain } from "@/utils/reports";
-import { reportCommentColor } from "@/utils/reports";
-import ReportFiltering, { useFiltering, getFilter } from "@/layout/ReportFiltering";
-import { TERR_BOT_ID } from "@/drizzle/constants";
 
 export default function Reports() {
   // State
@@ -47,7 +46,7 @@ export default function Reports() {
       enabled: userData !== undefined,
     },
   );
-  const allReports = reports?.pages.map((page) => page.data).flat();
+  const allReports = reports?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Mutation
@@ -68,7 +67,7 @@ export default function Reports() {
         <div>
           <div className="flex flex-col items-start">
             {userData?.role !== "USER" && (
-              <div className="w-full flex flex-row items-center gap-1">
+              <div className="flex w-full flex-row items-center gap-1">
                 <Link href="/reports/statistics">
                   <Button id="report-statistics" hoverText="Staff Activity Overview">
                     <Presentation className="h-6 w-6" />
@@ -102,7 +101,7 @@ export default function Reports() {
                   key={report.id}
                   ref={i === allReports.length - 1 ? setLastElement : null}
                 >
-                  <Link href={"/reports/" + report.id}>
+                  <Link href={`/reports/${report.id}`}>
                     <Post
                       title={reportCommentExplain(report.status)}
                       color={reportCommentColor(report.status)}

@@ -1,32 +1,34 @@
 "use client";
 
-import { z } from "zod";
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import Confirm2 from "@/layout/Confirm2";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import Accordion from "@/layout/Accordion";
-import AvatarImage from "@/layout/Avatar";
-import Modal2 from "@/layout/Modal2";
-import UserBlacklistControl from "@/layout/UserBlacklistControl";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import NindoChange from "@/layout/NindoChange";
-import AiProfileEdit from "@/layout/AiProfileEdit";
-import DistributeStatsForm from "@/layout/StatsDistributionForm";
-import { round } from "@/utils/math";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Ban,
+  ChevronsLeft,
+  ChevronsRight,
+  SendHorizontal,
+  ShieldOff,
+  SwitchCamera,
+  Trash2,
+  Zap,
+} from "lucide-react";
+import Link from "next/link";
+import type React from "react";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
-  FormDescription,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -34,63 +36,91 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { getUserFederalStatus } from "@/utils/paypal";
-import { ActionSelector } from "@/layout/CombatActions";
-import {
-  ChevronsRight,
-  ChevronsLeft,
-  SwitchCamera,
-  Trash2,
-  SendHorizontal,
-  Ban,
-  ShieldOff,
-  Zap,
-} from "lucide-react";
-import { attributes, getSearchValidator } from "@/validators/register";
-import { colors, skin_colors } from "@/validators/register";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { api } from "@/app/_trpc/client";
-import { useUserSearch } from "@/utils/search";
-import { showMutationToast } from "@/libs/toast";
-import Countdown from "@/layout/Countdown";
-import { secondsFromNow, secondsFromDate, DAY_S } from "@/utils/time";
-import { COST_CHANGE_USERNAME } from "@/drizzle/constants";
-import { COST_CUSTOM_TITLE } from "@/drizzle/constants";
-import { COST_RESET_STATS } from "@/drizzle/constants";
-import { COST_SWAP_BLOODLINE, BLOODLINE_SWAP_FREE_DAYS } from "@/drizzle/constants";
-import { COST_SWAP_VILLAGE } from "@/drizzle/constants";
-import { COST_REROLL_ELEMENT } from "@/drizzle/constants";
-import { COST_CHANGE_GENDER } from "@/drizzle/constants";
-import { COST_SKILL_RESET } from "@/drizzle/constants";
-import { genders } from "@/validators/register";
-import { updateUserPreferencesSchema } from "@/validators/user";
-import { UploadButton } from "@/utils/uploadthing";
-import { getUserElements } from "@/validators/user";
-import { canSwapBloodline } from "@/utils/permissions";
-import { canSwapVillage, canUnequipAllUsers } from "@/utils/permissions";
-import { canClearSectors } from "@/utils/permissions";
-import { canAwardExperience } from "@/utils/permissions";
-import { canEnableGlobalTavern } from "@/utils/permissions";
-import { canChangeContent } from "@/utils/permissions";
-import { useInfinitePagination } from "@/libs/pagination";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
-import UserSearchSelect from "@/layout/UserSearchSelect";
-import UserRequestSystem from "@/layout/UserRequestSystem";
-import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
-import type { Gender } from "@/validators/register";
-import type { BaseServerResponse } from "@/server/api/trpc";
-import type { Bloodline, Village } from "@/drizzle/schema";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
-import type { UserWithRelations } from "@/routers/profile";
 import {
+  BLOODLINE_SWAP_FREE_DAYS,
+  COST_CHANGE_GENDER,
+  COST_CHANGE_USERNAME,
+  COST_CUSTOM_TITLE,
+  COST_REROLL_ELEMENT,
+  COST_RESET_STATS,
+  COST_SKILL_RESET,
+  COST_SWAP_BLOODLINE,
+  COST_SWAP_VILLAGE,
+} from "@/drizzle/constants";
+import type { Bloodline, Village } from "@/drizzle/schema";
+import { useLocalStorage } from "@/hooks/localstorage";
+import Accordion from "@/layout/Accordion";
+import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
+import AiProfileEdit from "@/layout/AiProfileEdit";
+import AvatarImage from "@/layout/Avatar";
+import { ActionSelector } from "@/layout/CombatActions";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import NindoChange from "@/layout/NindoChange";
+import DistributeStatsForm from "@/layout/StatsDistributionForm";
+import UserBlacklistControl from "@/layout/UserBlacklistControl";
+import UserRequestSystem from "@/layout/UserRequestSystem";
+import UserSearchSelect from "@/layout/UserSearchSelect";
+import {
+  DEFAULT_MOBILE_NAV_CONFIG,
+  getMobileNavIcon,
+  getNavOptionById,
+  MOBILE_NAV_OPTIONS,
+  MOBILE_NAV_STORAGE_KEY,
+  type MobileNavConfig,
+  normalizeMobileNavConfig,
+} from "@/libs/mobileNavConfig";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
+import type { UserWithRelations } from "@/routers/profile";
+import type { BaseServerResponse } from "@/server/api/trpc";
+import { round } from "@/utils/math";
+import { getUserFederalStatus } from "@/utils/paypal";
+import {
+  canAwardExperience,
+  canChangeContent,
+  canClearSectors,
+  canEnableGlobalTavern,
+  canSwapBloodline,
+  canSwapVillage,
+  canUnequipAllUsers,
+} from "@/utils/permissions";
+import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { useUserSearch } from "@/utils/search";
+import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
+import { useRequiredUserData } from "@/utils/UserContext";
+import { UploadButton } from "@/utils/uploadthing";
+import {
+  ActionMoveTowardsOpponent,
   AiRule,
   ConditionDistanceHigherThan,
-  ActionMoveTowardsOpponent,
 } from "@/validators/ai";
+import {
+  type Attribute,
+  attributes,
+  type Color,
+  colors,
+  type Gender,
+  genders,
+  getSearchValidator,
+  type SkinColor,
+  skin_colors,
+} from "@/validators/register";
+import {
+  type GenderChangeSchema,
+  genderChangeSchema,
+  getUserElements,
+  type TitleChangeSchema,
+  titleChangeSchema,
+  updateUserPreferencesSchema,
+} from "@/validators/user";
 
 export default function EditProfile() {
   // State
@@ -213,9 +243,7 @@ export default function EditProfile() {
           selectedTitle={activeElement}
           unselectedSubtitle="Redistribute your experience points"
           selectedSubtitle={`You can redistribute your stats for ${COST_RESET_STATS} reputation points. You
-          have ${userData.reputationPoints} reputation points. You have ${
-            userData.experience + 120
-          } experience points to distribute.`}
+          have ${userData.reputationPoints} reputation points. You have ${userData.experience + 120} experience points to distribute.`}
           onClick={setActiveElement}
         >
           <ResetStats />
@@ -285,6 +313,15 @@ export default function EditProfile() {
         >
           <BattleSettingsEdit userId={userData.userId} />
         </Accordion>
+        <Accordion
+          title="Mobile Navigation"
+          selectedTitle={activeElement}
+          unselectedSubtitle="Customize mobile navigation bar buttons"
+          selectedSubtitle="Choose which shortcuts appear on mobile"
+          onClick={setActiveElement}
+        >
+          <MobileNavSettings />
+        </Accordion>
         {canSwapBloodline(userData.role) && (
           <Accordion
             title="Swap Bloodline"
@@ -331,19 +368,19 @@ const EmailReminderSettings: React.FC<{
   const emailSettingsUrl = `/emailsettings?email=${encodeURIComponent(emailReminder.email)}&secret=${encodeURIComponent(emailReminder.secret)}`;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="space-y-4 p-4">
       <div className="space-y-2 pb-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           You have email reminders set up for:{" "}
           <span className="font-medium">{emailReminder.email}</span>
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           Click the button below to manage your email notification preferences.
         </p>
       </div>
 
       <Link href={emailSettingsUrl} passHref>
-        <Button className="flex items-center gap-2 ">
+        <Button className="flex items-center gap-2">
           <SendHorizontal className="h-4 w-4" />
           Manage Email Settings
         </Button>
@@ -426,10 +463,10 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   // Render
   return (
     <div className="pb-3">
-      <div className="flex items-center space-x-2 m-2 mb-4">
+      <div className="m-2 mb-4 flex items-center space-x-2">
         <Tabs
           defaultValue={showActive}
-          className="flex flex-col items-center justify-center w-full"
+          className="flex w-full flex-col items-center justify-center"
           onValueChange={(value) => setShowActive(value)}
         >
           <TabsList className="text-center">
@@ -441,7 +478,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
-                className="p-4 grid grid-cols-4 gap-3 w-full items-end"
+                className="grid w-full grid-cols-4 items-end gap-3 p-4"
               >
                 <FormField
                   control={form.control}
@@ -450,8 +487,10 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                     <FormItem>
                       <FormLabel>Offense</FormLabel>
                       <Select
-                        onValueChange={(value) => field.onChange(value ? value : null)}
-                        value={field.value || undefined}
+                        onValueChange={(value) =>
+                          field.onChange(value === "__highest__" ? null : value)
+                        }
+                        value={field.value ?? "__highest__"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -459,7 +498,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value={null!}>Highest</SelectItem>
+                          <SelectItem value="__highest__">Highest</SelectItem>
                           <SelectItem value="Ninjutsu">Ninjutsu</SelectItem>
                           <SelectItem value="Genjutsu">Genjutsu</SelectItem>
                           <SelectItem value="Taijutsu">Taijutsu</SelectItem>
@@ -478,8 +517,10 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                     <FormItem>
                       <FormLabel>General 1</FormLabel>
                       <Select
-                        onValueChange={(value) => field.onChange(value ? value : null)}
-                        value={field.value || undefined}
+                        onValueChange={(value) =>
+                          field.onChange(value === "__highest__" ? null : value)
+                        }
+                        value={field.value ?? "__highest__"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -487,7 +528,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value={null!}>Highest</SelectItem>
+                          <SelectItem value="__highest__">Highest</SelectItem>
                           <SelectItem value="Strength">Strength</SelectItem>
                           <SelectItem value="Intelligence">Intelligence</SelectItem>
                           <SelectItem value="Willpower">Willpower</SelectItem>
@@ -506,8 +547,10 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                     <FormItem>
                       <FormLabel>General 2</FormLabel>
                       <Select
-                        onValueChange={(value) => field.onChange(value ? value : null)}
-                        value={field.value || undefined}
+                        onValueChange={(value) =>
+                          field.onChange(value === "__highest__" ? null : value)
+                        }
+                        value={field.value ?? "__highest__"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -515,7 +558,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value={null!}>Highest</SelectItem>
+                          <SelectItem value="__highest__">Highest</SelectItem>
                           <SelectItem value="Strength">Strength</SelectItem>
                           <SelectItem value="Intelligence">Intelligence</SelectItem>
                           <SelectItem value="Willpower">Willpower</SelectItem>
@@ -650,11 +693,11 @@ const Marriage: React.FC = () => {
     <>
       <Label className="pt-2">Users who are married to you</Label>
       <div className="grid grid-cols-6">
-        {marriages?.map((user, i) => {
+        {marriages?.map((user) => {
           return (
             <div
-              key={`marriage-${i}`}
-              className="flex flex-col items-center relative text-xs"
+              key={user.userId}
+              className="relative flex flex-col items-center text-xs"
             >
               <AvatarImage
                 href={user.avatar}
@@ -665,7 +708,7 @@ const Marriage: React.FC = () => {
               />
               {user.username}
               <Ban
-                className="h-8 w-8 absolute top-0 right-0 bg-red-500 rounded-full p-1 hover:text-orange-500 hover:cursor-pointer"
+                className="absolute top-0 right-0 h-8 w-8 rounded-full bg-red-500 p-1 hover:cursor-pointer hover:text-orange-500"
                 onClick={() => divorce({ userId: user.userId })}
               />
             </div>
@@ -695,18 +738,18 @@ const Marriage: React.FC = () => {
             className="mt-2 w-full"
             onClick={() => create({ userId: targetUser?.userId || "" })}
           >
-            <SendHorizontal className="h-5 w-5 mr-2" />
+            <SendHorizontal className="mr-2 h-5 w-5" />
             Send Proposal
           </Button>
         </div>
         {shownRequests.length === 0 && (
           <p className="p-2 italic">No current proposals</p>
         )}
-        {shownRequests.length > 0 && (
+        {shownRequests.length > 0 && userData && (
           <UserRequestSystem
             isLoading={isCreating || isAccepting || isRejecting || isCancelling}
             requests={shownRequests}
-            userId={userData!.userId}
+            userId={userData.userId}
             onAccept={accept}
             onReject={reject}
             onCancel={cancel}
@@ -772,7 +815,7 @@ const NewAiAvatar: React.FC = () => {
               title="Confirm Avatar Change"
               button={
                 <Button id="create" className="w-full">
-                  <SwitchCamera className="h-5 w-5 mr-2" />
+                  <SwitchCamera className="mr-2 h-5 w-5" />
                   New Avatar
                 </Button>
               }
@@ -809,7 +852,7 @@ interface HistoricalAiAvatarProps {
 
 export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => {
   // Queries & mutations
-  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
+  const [lastElement, setLastElement] = useState<HTMLButtonElement | null>(null);
   const { data: userData } = useRequiredUserData();
   const { size = "square" } = props;
 
@@ -831,7 +874,7 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
       placeholderData: (previousData) => previousData,
     },
   );
-  const pageAvatars = historicalAvatars?.pages.map((page) => page.data).flat();
+  const pageAvatars = historicalAvatars?.pages.flatMap((page) => page.data);
 
   useInfinitePagination({
     fetchNextPage,
@@ -870,9 +913,10 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
       {pageAvatars && (
         <div className="flex flex-wrap">
           {pageAvatars.map((avatar, i) => (
-            <div
+            <button
+              type="button"
               key={avatar.id}
-              className=" my-2 basis-1/6 relative"
+              className="relative my-2 basis-1/6"
               onClick={() =>
                 updateAvatar.mutate({ avatar: avatar.id, type: props.contentType })
               }
@@ -888,7 +932,7 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
               <Confirm2
                 title="Confirm Deletion"
                 button={
-                  <Trash2 className="absolute right-[8%] top-0 h-9 w-9 border-2 border-black cursor-pointer rounded-full bg-amber-100 fill-slate-500 p-1 hover:text-orange-500" />
+                  <Trash2 className="absolute top-0 right-[8%] h-9 w-9 cursor-pointer rounded-full border-2 border-black bg-amber-100 fill-slate-500 p-1 hover:text-orange-500" />
                 }
                 onAccept={(e) => {
                   e.preventDefault();
@@ -899,7 +943,7 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
                 You are about to delete an avatar. Note that this action is permanent.
                 Are you sure?
               </Confirm2>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -960,7 +1004,7 @@ const SwapVillage: React.FC = () => {
           showBgColor={false}
           showLabels={true}
           onClick={(id) => {
-            if (id == village?.id) {
+            if (id === village?.id) {
               setVillage(undefined);
               setIsOpen(false);
             } else {
@@ -1084,13 +1128,13 @@ const SwapBloodline: React.FC = () => {
     <div className="mt-2 space-y-2">
       {/* Free Swap Timer */}
       {hasFreeSwapEligibility && swapInfo && !swapInfo.isFree && freeSwapResetTime && (
-        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4 mb-4">
-          <div className="text-center space-y-2">
-            <p className="text-sm text-muted-foreground">
+        <div className="mb-4 rounded-lg bg-slate-100 p-4 dark:bg-slate-800">
+          <div className="space-y-2 text-center">
+            <p className="text-muted-foreground text-sm">
               You have used your free bloodline swap. You must wait for the{" "}
               {BLOODLINE_SWAP_FREE_DAYS}-day reset or pay reputation points.
             </p>
-            <p className="text-lg font-semibold">
+            <p className="font-semibold text-lg">
               Next free bloodline swap available:{" "}
               <Countdown targetDate={freeSwapResetTime} />
             </p>
@@ -1103,7 +1147,7 @@ const SwapBloodline: React.FC = () => {
           showBgColor={false}
           showLabels={true}
           onClick={(id) => {
-            if (id == bloodline?.id) {
+            if (id === bloodline?.id) {
               setBloodline(undefined);
               setIsOpen(false);
             } else {
@@ -1209,7 +1253,7 @@ const ResetStats: React.FC = () => {
         reputation points.
       </p>
       {!canAfford && (
-        <p className="text-red-500 font-bold">
+        <p className="font-bold text-red-500">
           You need {cost - userData.reputationPoints} more reputation points to reset
           your stats.
         </p>
@@ -1279,7 +1323,7 @@ const AvatarChange: React.FC = () => {
   } else {
     return (
       <Link href="/points">
-        <Button id="create" className="w-full my-3">
+        <Button id="create" className="my-3 w-full">
           Purchase Federal Support
         </Button>
       </Link>
@@ -1292,15 +1336,13 @@ const AvatarChange: React.FC = () => {
  */
 const AttributeChange: React.FC = () => {
   // State
-  const [hairColor, setHairColor] = useState<(typeof colors)[number]>("Black");
-  const [eyeColor, setEyeColor] = useState<(typeof colors)[number]>("Black");
-  const [skinColor, setSkinColor] = useState<(typeof skin_colors)[number]>("Light");
+  const [hairColor, setHairColor] = useState<Color>("Black");
+  const [eyeColor, setEyeColor] = useState<Color>("Black");
+  const [skinColor, setSkinColor] = useState<SkinColor>("Light");
 
   // Queries
   const { data, refetch } = api.profile.getUserAttributes.useQuery(undefined);
-  const selectedAttributes = data
-    ? data.map((a) => a.attribute as (typeof attributes)[number])
-    : [];
+  const selectedAttributes = data ? data.map((a) => a.attribute as Attribute) : [];
 
   // Mutations
   const { mutate: insertAttr } = api.profile.insertAttribute.useMutation({
@@ -1323,43 +1365,45 @@ const AttributeChange: React.FC = () => {
 
   return (
     <div className="grid grid-cols-2 pt-2">
-      <div className="bg-popover m-3 rounded-md p-3">
+      <div className="m-3 rounded-md bg-popover p-3">
         <p className="font-bold">Current </p>
-        {selectedAttributes.map((attribute, i) => (
-          <div
-            key={i}
-            className="flex flex-row items-center hover:text-orange-500 hover:cursor-pointer"
+        {selectedAttributes.map((attribute) => (
+          <button
+            type="button"
+            key={attribute}
+            className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               deleteAttr({ attribute });
             }}
           >
-            <p> - {attribute}</p> <ChevronsRight className="h-5 w-5 ml-1" />
-          </div>
+            <p> - {attribute}</p> <ChevronsRight className="ml-1 h-5 w-5" />
+          </button>
         ))}
       </div>
-      <div className="bg-popover m-3 rounded-md p-3">
+      <div className="m-3 rounded-md bg-popover p-3">
         <p className="font-bold">Available </p>
         {attributes
           .filter((a) => !selectedAttributes.includes(a))
-          .map((attribute, i) => (
-            <div
-              key={i}
-              className="flex flex-row items-center hover:text-orange-500 hover:cursor-pointer"
+          .map((attribute) => (
+            <button
+              type="button"
+              key={attribute}
+              className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 insertAttr({ attribute });
               }}
             >
-              <ChevronsLeft className="h-5 w-5 mr-1" />
+              <ChevronsLeft className="mr-1 h-5 w-5" />
               <p> {attribute} </p>
-            </div>
+            </button>
           ))}
-        <div className="mt-3 relative">
+        <div className="relative mt-3">
           <Select
-            onValueChange={(e) => setEyeColor(e as (typeof colors)[number])}
+            onValueChange={(e) => setEyeColor(e as Color)}
             defaultValue={eyeColor}
             value={eyeColor}
           >
@@ -1369,7 +1413,7 @@ const AttributeChange: React.FC = () => {
             </SelectTrigger>
             <SelectContent id="eye_color">
               {colors.map((color, i) => (
-                <SelectItem key={i} value={color}>
+                <SelectItem key={`${color}-${i}`} value={color}>
                   {color}
                 </SelectItem>
               ))}
@@ -1379,12 +1423,12 @@ const AttributeChange: React.FC = () => {
             onClick={() => insertAttr({ attribute: "Eyes", color: eyeColor })}
             className="absolute right-0 bottom-0"
           >
-            <ChevronsLeft className="h-5 w-5 mr-1" />
+            <ChevronsLeft className="mr-1 h-5 w-5" />
           </Button>
         </div>
-        <div className="mt-3 relative">
+        <div className="relative mt-3">
           <Select
-            onValueChange={(e) => setSkinColor(e as (typeof skin_colors)[number])}
+            onValueChange={(e) => setSkinColor(e as SkinColor)}
             defaultValue={skinColor}
             value={skinColor}
           >
@@ -1394,7 +1438,7 @@ const AttributeChange: React.FC = () => {
             </SelectTrigger>
             <SelectContent id="skin_color">
               {skin_colors.map((color, i) => (
-                <SelectItem key={i} value={color}>
+                <SelectItem key={`${color}-${i}`} value={color}>
                   {color}
                 </SelectItem>
               ))}
@@ -1404,12 +1448,12 @@ const AttributeChange: React.FC = () => {
             onClick={() => insertAttr({ attribute: "Skin", color: skinColor })}
             className="absolute right-0 bottom-0"
           >
-            <ChevronsLeft className="h-5 w-5 mr-1" />
+            <ChevronsLeft className="mr-1 h-5 w-5" />
           </Button>
         </div>
-        <div className="mt-3 relative">
+        <div className="relative mt-3">
           <Select
-            onValueChange={(e) => setHairColor(e as (typeof colors)[number])}
+            onValueChange={(e) => setHairColor(e as Color)}
             defaultValue={hairColor}
             value={hairColor}
           >
@@ -1419,7 +1463,7 @@ const AttributeChange: React.FC = () => {
             </SelectTrigger>
             <SelectContent id="hair_color">
               {colors.map((color, i) => (
-                <SelectItem key={i} value={color}>
+                <SelectItem key={`${color}-${i}`} value={color}>
                   {color}
                 </SelectItem>
               ))}
@@ -1429,7 +1473,7 @@ const AttributeChange: React.FC = () => {
             onClick={() => insertAttr({ attribute: "Hair", color: hairColor })}
             className="absolute right-0 bottom-0"
           >
-            <ChevronsLeft className="h-5 w-5 mr-1" />
+            <ChevronsLeft className="mr-1 h-5 w-5" />
           </Button>
         </div>
       </div>
@@ -1614,7 +1658,7 @@ const NameChange: React.FC = () => {
               <Button
                 id="create"
                 type="submit"
-                className="w-full my-3"
+                className="my-3 w-full"
                 disabled={!canBuyUsername || searchTerm === "" || error !== undefined}
               >
                 {canBuyUsername ? "Update Username" : "Not enough points"}
@@ -1653,10 +1697,8 @@ const CustomTitle: React.FC = () => {
   });
 
   // Title form
-  const FormSchema = z.object({ title: z.string().min(1).max(15) });
-  type FormSchemaType = z.infer<typeof FormSchema>;
-  const form = useForm<FormSchemaType>({
-    resolver: zodResolver(FormSchema),
+  const form = useForm<TitleChangeSchema>({
+    resolver: zodResolver(titleChangeSchema),
     defaultValues: { title: "" },
   });
   const curTitle = useWatch({ control: form.control, name: "title" });
@@ -1696,7 +1738,7 @@ const CustomTitle: React.FC = () => {
               <Button
                 id="create"
                 type="submit"
-                className="w-full my-3"
+                className="my-3 w-full"
                 disabled={disabled}
               >
                 {canBuyUsername ? "Set custom title" : "Not enough points"}
@@ -1731,11 +1773,10 @@ const ChangeGender: React.FC = () => {
     },
   });
 
-  // Title form
-  const FormSchema = z.object({ gender: z.enum(genders) });
-  type FormSchemaType = z.infer<typeof FormSchema>;
-  const form = useForm<FormSchemaType>({
-    resolver: zodResolver(FormSchema),
+  // Gender form
+  const form = useForm<GenderChangeSchema>({
+    resolver: zodResolver(genderChangeSchema),
+    defaultValues: { gender: userData?.gender as Gender | undefined },
   });
   const watchGender = useWatch({ control: form.control, name: "gender" });
 
@@ -1744,7 +1785,6 @@ const ChangeGender: React.FC = () => {
     if (userData?.gender) {
       form.setValue("gender", userData.gender as Gender);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData]);
 
   // Form handlers
@@ -1766,7 +1806,7 @@ const ChangeGender: React.FC = () => {
             control={form.control}
             name="gender"
             render={({ field }) => (
-              <div className="flex flex-row items-center w-full">
+              <div className="flex w-full flex-row items-center">
                 <FormItem className="w-full">
                   <FormLabel>Select gender</FormLabel>
                   <Select
@@ -1775,13 +1815,13 @@ const ChangeGender: React.FC = () => {
                     value={field.value}
                   >
                     <FormControl>
-                      <SelectTrigger className="h-14 text-3xl ">
+                      <SelectTrigger className="h-14 text-3xl">
                         <SelectValue placeholder={userData.gender} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {genders.map((gender, index) => (
-                        <SelectItem key={index} value={gender}>
+                      {genders.map((gender, i) => (
+                        <SelectItem key={`${gender}-${i}`} value={gender}>
                           {gender}
                         </SelectItem>
                       ))}
@@ -1795,12 +1835,10 @@ const ChangeGender: React.FC = () => {
                   </div>
                 </FormItem>
                 <div>
-                  <div className="text-7xl basis-full flex-row">
-                    {watchGender === "Male" && <p className="text-blue-500 p-2">♂</p>}
-                    {watchGender === "Female" && (
-                      <p className="text-pink-500 p-2">♀</p>
-                    )}
-                    {watchGender === "Other" && <p className="text-slate-500 p-2">⚥</p>}
+                  <div className="basis-full flex-row text-7xl">
+                    {watchGender === "Male" && <p className="p-2 text-blue-500">♂</p>}
+                    {watchGender === "Female" && <p className="p-2 text-pink-500">♀</p>}
+                    {watchGender === "Other" && <p className="p-2 text-slate-500">⚥</p>}
                   </div>
                 </div>
               </div>
@@ -1813,7 +1851,7 @@ const ChangeGender: React.FC = () => {
               <Button
                 id="create"
                 type="submit"
-                className="w-full my-3"
+                className="my-3 w-full"
                 disabled={!canBuyUsername}
               >
                 {canBuyUsername ? "Set new gender" : "Not enough points"}
@@ -1930,7 +1968,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
                 <Loader size={5} />
               ) : (
                 <>
-                  <ShieldOff className="h-4 w-4 mr-2" />
+                  <ShieldOff className="mr-2 h-4 w-4" />
                   Unequip All Gear
                 </>
               )}
@@ -1958,7 +1996,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
                 <Loader size={5} />
               ) : (
                 <>
-                  <ShieldOff className="h-4 w-4 mr-2" />
+                  <ShieldOff className="mr-2 h-4 w-4" />
                   Unequip All Jutsus
                 </>
               )}
@@ -1986,7 +2024,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
                 <Loader size={5} />
               ) : (
                 <>
-                  <Trash2 className="h-4 w-4 mr-2" />
+                  <Trash2 className="mr-2 h-4 w-4" />
                   Reset All Skill Trees
                 </>
               )}
@@ -2014,7 +2052,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
                 <Loader size={5} />
               ) : (
                 <>
-                  <Zap className="h-4 w-4 mr-2" />
+                  <Zap className="mr-2 h-4 w-4" />
                   Award Experience to All
                 </>
               )}
@@ -2034,7 +2072,9 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
                 min={1}
                 max={100000}
                 value={experienceAmount}
-                onChange={(e) => setExperienceAmount(parseInt(e.target.value) || 100)}
+                onChange={(e) =>
+                  setExperienceAmount(parseInt(e.target.value, 10) || 100)
+                }
                 className="w-32"
               />
             </div>
@@ -2058,7 +2098,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
                 <Loader size={5} />
               ) : (
                 <>
-                  <Trash2 className="h-4 w-4 mr-2" />
+                  <Trash2 className="mr-2 h-4 w-4" />
                   Clear Sector
                 </>
               )}
@@ -2077,7 +2117,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
                 type="number"
                 min={1}
                 value={sectorNumber}
-                onChange={(e) => setSectorNumber(parseInt(e.target.value) || 1)}
+                onChange={(e) => setSectorNumber(parseInt(e.target.value, 10) || 1)}
                 className="w-20"
               />
             </div>
@@ -2089,12 +2129,12 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         </Confirm2>
       )}
       {canEnableGlobalTavern(user.role) && (
-        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md bg-popover border">
-          <Label htmlFor="globalTavernToggle" className="text-sm font-medium">
+        <div className="flex items-center justify-between gap-2 rounded-md border bg-popover px-3 py-2">
+          <Label htmlFor="globalTavernToggle" className="font-medium text-sm">
             Global Tavern
           </Label>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
+            <span className="text-muted-foreground text-xs">
               {globalTavernEnabled ? "Enabled" : "Disabled"}
             </span>
             <Switch
@@ -2159,17 +2199,17 @@ const ResetSkills: React.FC = () => {
   const skillResetResetTime = secondsFromNow(secondsUntilNextMonth);
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="space-y-4 p-4">
       {/* Skill Reset Timer */}
       {resetInfo && !resetInfo.isFree && (
-        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4 mb-4">
-          <div className="text-center space-y-2">
-            <p className="text-sm text-muted-foreground">
+        <div className="mb-4 rounded-lg bg-slate-100 p-4 dark:bg-slate-800">
+          <div className="space-y-2 text-center">
+            <p className="text-muted-foreground text-sm">
               You have used {resetInfo.freeResetsUsed} free skill resets this month.
               {resetInfo.freeResetsRemaining === 0 &&
                 " You must wait for monthly reset or pay reputation points."}
             </p>
-            <p className="text-lg font-semibold">
+            <p className="font-semibold text-lg">
               Next free skill reset available:{" "}
               <Countdown targetDate={skillResetResetTime} />
             </p>
@@ -2178,7 +2218,7 @@ const ResetSkills: React.FC = () => {
       )}
 
       <div className="space-y-2 pb-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           This will reset all your skill tree investments and refund all spent skill
           points.
         </p>
@@ -2223,6 +2263,116 @@ const ResetSkills: React.FC = () => {
           : ` for ${COST_SKILL_RESET} reputation points`}
         . This action cannot be undone. Are you sure you want to continue?
       </Confirm2>
+    </div>
+  );
+};
+
+/**
+ * Mobile Navigation Settings component
+ */
+const MobileNavSettings: React.FC = () => {
+  const [config, setConfig] = useLocalStorage<MobileNavConfig>(
+    MOBILE_NAV_STORAGE_KEY,
+    DEFAULT_MOBILE_NAV_CONFIG,
+  );
+
+  const normalizedConfig = normalizeMobileNavConfig(config);
+
+  // Get all selected IDs to filter duplicates
+  const selectedIds = [...normalizedConfig.left, ...normalizedConfig.right];
+
+  const handleLeftChange = (index: number, newId: string) => {
+    const newLeft = [...normalizedConfig.left];
+    newLeft[index] = newId;
+    setConfig({ ...normalizedConfig, left: newLeft });
+  };
+
+  const handleRightChange = (index: number, newId: string) => {
+    const newRight = [...normalizedConfig.right];
+    newRight[index] = newId;
+    setConfig({ ...normalizedConfig, right: newRight });
+  };
+
+  const handleReset = () => {
+    setConfig(DEFAULT_MOBILE_NAV_CONFIG);
+  };
+
+  const renderSlotSelector = (
+    currentId: string,
+    onChange: (newId: string) => void,
+    label: string,
+  ) => {
+    const Icon = getMobileNavIcon(currentId);
+    return (
+      <div className="flex items-center gap-2">
+        <Label className="w-16 text-sm">{label}</Label>
+        <Select value={currentId} onValueChange={onChange}>
+          <SelectTrigger className="w-full">
+            <SelectValue>
+              <div className="flex items-center gap-2">
+                <Icon className="h-4 w-4" />
+                <span>{getNavOptionById(currentId)?.name}</span>
+              </div>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {MOBILE_NAV_OPTIONS.map((option) => {
+              const OptionIcon = getMobileNavIcon(option.id);
+              const isDisabled =
+                selectedIds.includes(option.id) && option.id !== currentId;
+              return (
+                <SelectItem key={option.id} value={option.id} disabled={isDisabled}>
+                  <div className="flex items-center gap-2">
+                    <OptionIcon className="h-4 w-4" />
+                    <span>{option.name}</span>
+                  </div>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4 p-3">
+      <p className="text-muted-foreground text-sm">
+        Customize the 5 buttons shown in your mobile navigation bar. The center button
+        automatically shows Village or Travel based on your location. Note: If you
+        configure Travel in a slot, it will be hidden when outside the village (since
+        the center button already shows Travel in that case).
+      </p>
+
+      <div className="space-y-3">
+        <div className="font-semibold text-sm">Left Side (2 buttons)</div>
+        {normalizedConfig.left.map((id, index) => (
+          <div key={`left-${index}`}>
+            {renderSlotSelector(
+              id,
+              (newId) => handleLeftChange(index, newId),
+              `Slot ${index + 1}`,
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <div className="font-semibold text-sm">Right Side (3 buttons)</div>
+        {normalizedConfig.right.map((id, index) => (
+          <div key={`right-${index}`}>
+            {renderSlotSelector(
+              id,
+              (newId) => handleRightChange(index, newId),
+              `Slot ${index + 1}`,
+            )}
+          </div>
+        ))}
+      </div>
+
+      <Button variant="outline" size="sm" onClick={handleReset}>
+        Reset to Default
+      </Button>
     </div>
   );
 };

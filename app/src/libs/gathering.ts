@@ -1,10 +1,9 @@
+import type { GATHERING_RANK, ItemRarity } from "@/drizzle/constants";
 import {
   GATHERING_ITEM_DROP_CHANCES,
   GATHERING_RANKS,
   GATHERING_REQUIRED_EXP,
 } from "@/drizzle/constants";
-import type { GATHERING_RANK } from "@/drizzle/constants";
-import type { ItemRarity } from "@/drizzle/constants";
 
 /**
  * Get the gathering rank based on the experience

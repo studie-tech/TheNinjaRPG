@@ -1,10 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2, StopCircle } from "lucide-react";
+import { format } from "date-fns";
+import { Pencil, Plus, StopCircle, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import SeasonForm from "./SeasonForm";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -19,24 +32,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { format } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
-import { Badge } from "@/components/ui/badge";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
+import SeasonForm from "./SeasonForm";
 
 export function SeasonManager() {
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
@@ -115,7 +115,7 @@ export function SeasonManager() {
                   <Plus className="h-4 w-4" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+              <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create New Season</DialogTitle>
                 </DialogHeader>
@@ -131,7 +131,7 @@ export function SeasonManager() {
                       <Pencil className="h-4 w-4" />
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+                  <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Edit Season</DialogTitle>
                     </DialogHeader>
@@ -223,39 +223,39 @@ export function SeasonManager() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h3 className="text-sm font-medium">Description</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <h3 className="font-medium text-sm">Description</h3>
+              <p className="mt-1 text-muted-foreground text-sm">
                 {selectedSeason.description}
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <h3 className="text-sm font-medium">Start Date</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <h3 className="font-medium text-sm">Start Date</h3>
+                <p className="mt-1 text-muted-foreground text-sm">
                   {format(new Date(selectedSeason.startDate), "PPP")}
                 </p>
               </div>
               <div>
-                <h3 className="text-sm font-medium">End Date</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <h3 className="font-medium text-sm">End Date</h3>
+                <p className="mt-1 text-muted-foreground text-sm">
                   {format(new Date(selectedSeason.endDate), "PPP")}
                 </p>
               </div>
             </div>
 
             <div>
-              <h3 className="text-sm font-medium">Division Rewards</h3>
+              <h3 className="font-medium text-sm">Division Rewards</h3>
               <div className="mt-2 space-y-1">
-                {selectedSeason.rewards.map((division, index) => {
+                {selectedSeason.rewards.map((division) => {
                   const rewardSummary = getRewardArray(division.rewards).join(" • ");
                   return (
                     <div
-                      key={index}
+                      key={division.division}
                       className="grid grid-cols-4 items-center justify-between rounded-md border bg-muted/50 px-3 py-2"
                     >
                       <span className="font-medium">{division.division}</span>
-                      <span className="text-sm text-muted-foreground col-span-3">
+                      <span className="col-span-3 text-muted-foreground text-sm">
                         {rewardSummary}
                       </span>
                     </div>

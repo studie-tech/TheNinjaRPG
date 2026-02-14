@@ -84,10 +84,9 @@ export const resizeImage = async (
           outputMimeType = "image/png";
           outputExtension = ".png";
           break;
-        case "original":
         default:
           outputMimeType = file.type;
-          outputExtension = "." + file.name.split(".").pop();
+          outputExtension = `.${file.name.split(".").pop()}`;
       }
 
       // Convert to blob with compression

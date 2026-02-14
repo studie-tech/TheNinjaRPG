@@ -1,20 +1,20 @@
 "use client";
 
+import { RefreshCw, RotateCcw, Settings2 } from "lucide-react";
 import React from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Switch } from "@/components/ui/switch";
-import { Settings2, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useGameSettings } from "@/layout/GameSettings";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SortableList } from "@/components/ui/sortable-list";
-import { safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { Switch } from "@/components/ui/switch";
+import type { CombatPreferences } from "@/hooks/combat";
 import {
   COMBAT_LAYOUT_COMPONENTS,
-  DEFAULT_LAYOUT_ORDER,
   type CombatLayoutComponentId,
+  DEFAULT_LAYOUT_ORDER,
 } from "@/hooks/combat";
+import { safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { useGameSettings } from "@/layout/GameSettings";
 import type { UserWithRelations } from "@/routers/profile";
-import type { CombatPreferences } from "@/hooks/combat";
 
 interface UserCombatSettingsProps {
   config: CombatPreferences;
@@ -63,22 +63,23 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <div
+        <button
+          type="button"
           aria-label="Open combat settings"
-          className="flex h-10 w-10 min-h-10 min-w-10 items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         >
           <Settings2 className="h-6 w-6" />
-        </div>
+        </button>
       </PopoverTrigger>
       <PopoverContent className="w-80 space-y-5" sideOffset={8}>
         <section className="space-y-3 rounded-lg border p-3">
-          <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+          <p className="font-semibold text-[10px] text-muted-foreground uppercase">
             Battle visuals
           </p>
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
-              <p className="text-sm font-semibold">Grid numbers</p>
-              <p className="text-xs text-muted-foreground">Toggle coordinate labels</p>
+              <p className="font-semibold text-sm">Grid numbers</p>
+              <p className="text-muted-foreground text-xs">Toggle coordinate labels</p>
             </div>
             <Switch
               checked={config.showGridNumbers}
@@ -88,8 +89,8 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </div>
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
-              <p className="text-sm font-semibold">Light layout</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="font-semibold text-sm">Light layout</p>
+              <p className="text-muted-foreground text-xs">
                 {lightLayout ? "Enabled" : "Disabled"}
               </p>
             </div>
@@ -102,13 +103,13 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
         </section>
 
         <section className="space-y-3 rounded-lg border p-3">
-          <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+          <p className="font-semibold text-[10px] text-muted-foreground uppercase">
             Interface
           </p>
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
-              <p className="text-sm font-semibold">Small action icons</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="font-semibold text-sm">Small action icons</p>
+              <p className="text-muted-foreground text-xs">
                 Hide labels and fit more per row
               </p>
             </div>
@@ -120,8 +121,8 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </div>
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
-              <p className="text-sm font-semibold">Show battle log</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="font-semibold text-sm">Show battle log</p>
+              <p className="text-muted-foreground text-xs">
                 Display combat history below the field
               </p>
             </div>
@@ -133,8 +134,8 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </div>
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
-              <p className="text-sm font-semibold">Show timeline</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="font-semibold text-sm">Show timeline</p>
+              <p className="text-muted-foreground text-xs">
                 Display recent actions timeline
               </p>
             </div>
@@ -146,8 +147,8 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </div>
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
-              <p className="text-sm font-semibold">Show basic actions</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="font-semibold text-sm">Show basic actions</p>
+              <p className="text-muted-foreground text-xs">
                 Include basic actions in timeline
               </p>
             </div>
@@ -160,13 +161,13 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
         </section>
 
         <section className="space-y-3 rounded-lg border p-3">
-          <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+          <p className="font-semibold text-[10px] text-muted-foreground uppercase">
             Audio
           </p>
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
-              <p className="text-sm font-semibold">Sound SFX</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="font-semibold text-sm">Sound SFX</p>
+              <p className="text-muted-foreground text-xs">
                 {sfxOn ? "Enabled" : "Disabled"}
               </p>
             </div>
@@ -180,7 +181,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
 
         <section className="space-y-3 rounded-lg border p-3">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+            <p className="font-semibold text-[10px] text-muted-foreground uppercase">
               Layout Order
             </p>
             {JSON.stringify(config.layoutOrder) !==
@@ -221,10 +222,10 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
             }}
             itemClassName="py-1.5"
           />
-          <div className="flex items-center justify-between gap-3 pt-2 border-t">
+          <div className="flex items-center justify-between gap-3 border-t pt-2">
             <div className="flex flex-col">
-              <p className="text-sm font-semibold">Use tabs</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="font-semibold text-sm">Use tabs</p>
+              <p className="text-muted-foreground text-xs">
                 Group actions, timeline & log in tabs
               </p>
             </div>

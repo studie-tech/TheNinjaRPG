@@ -1,41 +1,41 @@
 "use client";
 
-import { useState } from "react";
-import Image from "@/layout/Image";
-import Link from "next/link";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import BanInfo from "@/layout/BanInfo";
-import Modal2 from "@/layout/Modal2";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import { ActionSelector } from "@/layout/CombatActions";
 import {
-  IMG_HOME_TRAIN,
-  IMG_HOME_EAT,
-  IMG_HOME_SLEEP,
-  IMG_HOME_AWAKE,
-  HomeTypeDetails,
-} from "@/drizzle/constants";
-import { api } from "@/app/_trpc/client";
-import { getStrucBoost } from "@/utils/village";
-import { showMutationToast } from "@/libs/toast";
-import { useRequireInVillage } from "@/utils/UserContext";
-import { useSleepToggle } from "@/hooks/sleep";
-import { calcMaxHouseMaterials } from "@/libs/item";
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  BadgePlus,
   BadgeMinus,
+  BadgePlus,
+  Hammer,
   Home,
+  MinusCircle,
   Package,
   PlusCircle,
-  MinusCircle,
   ShoppingBag,
-  Hammer,
 } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  HomeTypeDetails,
+  IMG_HOME_AWAKE,
+  IMG_HOME_EAT,
+  IMG_HOME_SLEEP,
+  IMG_HOME_TRAIN,
+} from "@/drizzle/constants";
 import type { UserItemWithItem } from "@/drizzle/schema";
+import { useSleepToggle } from "@/hooks/sleep";
+import BanInfo from "@/layout/BanInfo";
+import { ActionSelector } from "@/layout/CombatActions";
+import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import { calcMaxHouseMaterials } from "@/libs/item";
+import { showMutationToast } from "@/libs/toast";
+import { useRequireInVillage } from "@/utils/UserContext";
+import { getStrucBoost } from "@/utils/village";
 
 export default function HomePage() {
   const { userData, sectorVillage, access, ownVillage } = useRequireInVillage("/home");
@@ -145,7 +145,7 @@ export default function HomePage() {
         subtitle={`Train, eat, sleep. +${boost}% regen sleeping.`}
         defaultBackHref="/village"
       >
-        <div className="grid grid-cols-3 text-center font-bold italic items-center justify-center">
+        <div className="grid grid-cols-3 items-center justify-center text-center font-bold italic">
           <Link href="/traininggrounds">
             <Image
               className="hover:opacity-30"
@@ -168,11 +168,15 @@ export default function HomePage() {
           </Link>
           {isTogglingSleep && <Loader explanation="Toggling sleep status" />}
           {!isTogglingSleep && (
-            <div className="cursor-pointer" onClick={() => toggleSleep()}>
+            <button
+              type="button"
+              className="cursor-pointer"
+              onClick={() => toggleSleep()}
+            >
               {userData.status === "ASLEEP" ? (
                 <>
                   <Image
-                    className="hover:opacity-30 animate-pulse"
+                    className="animate-pulse hover:opacity-30"
                     alt="sleeping"
                     src={IMG_HOME_SLEEP}
                     width={256}
@@ -192,7 +196,7 @@ export default function HomePage() {
                   Go to Sleep
                 </>
               )}
-            </div>
+            </button>
           )}
         </div>
       </ContentBox>
@@ -244,14 +248,14 @@ export default function HomePage() {
 
                   <TabsContent value="upgrades">
                     {upgrades.length === 0 ? (
-                      <div className="text-center p-4">
+                      <div className="p-4 text-center">
                         You already have the best home available!
                       </div>
                     ) : (
                       <div className="h-64 overflow-y-auto pr-1">
                         <div className="space-y-2 p-1">
-                          {upgrades.map((upgrade) => (
-                            <Card key={upgrade.type} className="mb-2">
+                          {upgrades.map((upgrade, i) => (
+                            <Card key={`${upgrade.type}-${i}`} className="mb-2">
                               <CardHeader className="pb-2">
                                 <CardTitle>
                                   <div className="flex justify-between">
@@ -259,7 +263,7 @@ export default function HomePage() {
                                       <span className="font-semibold text-lg">
                                         {upgrade.name}
                                       </span>
-                                      <div className="flex flex-col sm:flex-row sm:gap-3 font-normal text-muted-foreground italic">
+                                      <div className="flex flex-col font-normal text-muted-foreground italic sm:flex-row sm:gap-3">
                                         {upgrade.regen > 0 && (
                                           <span>+{upgrade.regen} Regen</span>
                                         )}
@@ -268,7 +272,7 @@ export default function HomePage() {
                                         )}
                                       </div>
                                     </div>
-                                    <div className="flex flex-col items-center ">
+                                    <div className="flex flex-col items-center">
                                       <span className="font-semibold text-lg">
                                         {upgrade.upgradeCost > 0
                                           ? `${upgrade.upgradeCost.toLocaleString()} Ryo`
@@ -276,7 +280,9 @@ export default function HomePage() {
                                       </span>
                                       <Button
                                         onClick={() =>
-                                          upgradeHome({ homeType: upgrade.type })
+                                          upgradeHome({
+                                            homeType: upgrade.type,
+                                          })
                                         }
                                         disabled={
                                           isUpgrading ||
@@ -299,7 +305,7 @@ export default function HomePage() {
 
                   <TabsContent value="downgrades">
                     {downgrades.length === 0 ? (
-                      <div className="text-center p-4">
+                      <div className="p-4 text-center">
                         You already have the lowest tier home!
                       </div>
                     ) : (
@@ -314,7 +320,7 @@ export default function HomePage() {
                                       <span className="font-semibold text-lg">
                                         {downgrade.name}
                                       </span>
-                                      <div className="flex flex-col sm:flex-row sm:gap-3 font-normal text-muted-foreground italic">
+                                      <div className="flex flex-col font-normal text-muted-foreground italic sm:flex-row sm:gap-3">
                                         {downgrade.regen > 0 && (
                                           <span>+{downgrade.regen} Regen</span>
                                         )}
@@ -323,7 +329,7 @@ export default function HomePage() {
                                         )}
                                       </div>
                                     </div>
-                                    <div className="flex flex-col items-center ">
+                                    <div className="flex flex-col items-center">
                                       <span className="font-semibold text-lg text-muted-foreground">
                                         {downgrade.downgradeRefund > 0
                                           ? `${downgrade.downgradeRefund.toLocaleString()} Ryo back (75%)`
@@ -331,7 +337,9 @@ export default function HomePage() {
                                       </span>
                                       <Button
                                         onClick={() =>
-                                          upgradeHome({ homeType: downgrade.type })
+                                          upgradeHome({
+                                            homeType: downgrade.type,
+                                          })
                                         }
                                         disabled={isUpgrading}
                                         size="sm"
@@ -362,7 +370,7 @@ export default function HomePage() {
             {isHomeLoading || isItemsLoading ? (
               <Loader explanation="Loading item storage data" />
             ) : homeData?.homeType === "NONE" ? (
-              <div className="text-center p-4">
+              <div className="p-4 text-center">
                 You need to upgrade your home to store items.
               </div>
             ) : (
@@ -381,7 +389,7 @@ export default function HomePage() {
 
                 <TabsContent value="stored">
                   {totalStoredItems === 0 ? (
-                    <div className="text-center p-4">
+                    <div className="p-4 text-center">
                       You don&apos;t have any items stored in your home.
                     </div>
                   ) : (
@@ -418,9 +426,9 @@ export default function HomePage() {
                 <TabsContent value="materials">
                   <div className="space-y-4">
                     <div>
-                      <h4 className="font-semibold mb-2">Stored Materials</h4>
+                      <h4 className="mb-2 font-semibold">Stored Materials</h4>
                       {storedMaterials.length === 0 ? (
-                        <div className="text-center p-4 text-muted-foreground">
+                        <div className="p-4 text-center text-muted-foreground">
                           No materials stored in your home.
                         </div>
                       ) : (
@@ -460,14 +468,14 @@ export default function HomePage() {
 
                 <TabsContent value="inventory">
                   {nonStoredItems.length === 0 && nonStoredMaterials.length === 0 ? (
-                    <div className="text-center p-4">
+                    <div className="p-4 text-center">
                       You don&apos;t have any items in your inventory.
                     </div>
                   ) : (
                     <div className="p-3">
                       {nonStoredItems.length > 0 && (
                         <div className="mb-4">
-                          <h4 className="font-semibold mb-2">Items</h4>
+                          <h4 className="mb-2 font-semibold">Items</h4>
                           <ActionSelector
                             items={nonStoredItems?.map((useritem) => ({
                               ...useritem.item,
@@ -503,7 +511,7 @@ export default function HomePage() {
 
                       {nonStoredMaterials.length > 0 && (
                         <div>
-                          <h4 className="font-semibold mb-2">Materials</h4>
+                          <h4 className="mb-2 font-semibold">Materials</h4>
                           <ActionSelector
                             items={nonStoredMaterials?.map((useritem) => ({
                               ...useritem.item,

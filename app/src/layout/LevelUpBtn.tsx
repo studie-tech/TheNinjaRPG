@@ -1,20 +1,19 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import Image from "@/layout/Image";
-import Modal2 from "@/layout/Modal2";
-import Loader from "@/layout/Loader";
-import { GraduationCap } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { sendGTMEvent } from "@next/third-parties/google";
+import { GraduationCap } from "lucide-react";
+import type React from "react";
+import { useEffect, useState } from "react";
 import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
-import { calcHP, calcSP, calcCP } from "@/libs/profile";
-import { calcLevelRequirements } from "@/libs/profile";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { showMutationToast } from "@/libs/toast";
-import { triggerConfetti } from "@/libs/toast";
+import { Button } from "@/components/ui/button";
 import { IMG_PROFILE_LEVELUPGUY } from "@/drizzle/constants";
 import { useTutorialStep } from "@/hooks/tutorial";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import { calcCP, calcHP, calcLevelRequirements, calcSP } from "@/libs/profile";
+import { showMutationToast, triggerConfetti } from "@/libs/toast";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 interface LevelUpBtnProps {
   id?: string;
@@ -91,7 +90,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
               setShowModal(true);
             }}
           >
-            <GraduationCap className="h-6 w-6 mr-2" />
+            <GraduationCap className="mr-2 h-6 w-6" />
             Level up!
           </Button>
         </div>
@@ -109,7 +108,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
             levelUp();
           }}
         >
-          <div className="basis-1/2 absolute top-0 right-0 opacity-20">
+          <div className="absolute top-0 right-0 basis-1/2 opacity-20">
             <Image
               alt="Level up graphic"
               src={IMG_PROFILE_LEVELUPGUY}

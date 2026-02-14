@@ -1,21 +1,20 @@
-import { z } from "zod";
+import { and, desc, eq, getTableColumns, inArray, like, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { serverError, baseServerResponse } from "@/api/trpc";
-import { getTableColumns, eq, ne, desc, like, and, inArray, sql } from "drizzle-orm";
-import { gameAsset, gameAssetTag } from "@/drizzle/schema";
-import { actionLog, contentTag } from "@/drizzle/schema";
-import { gameAssetValidator } from "@/validators/asset";
-import { fetchUser } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
-import { callDiscordContent } from "@/libs/socials";
-import { calculateContentDiff } from "@/utils/diff";
+import { z } from "zod";
+import { baseServerResponse, serverError } from "@/api/trpc";
 import { GameAssetTypes, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { gameAssetSchema } from "@/validators/asset";
+import { actionLog, contentTag, gameAsset, gameAssetTag } from "@/drizzle/schema";
+import { callDiscordContent } from "@/libs/socials";
+import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { calculateContentDiff } from "@/utils/diff";
+import { canChangeContent } from "@/utils/permissions";
+import { gameAssetSchema, gameAssetValidator } from "@/validators/asset";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
 export const gameAssetRouter = createTRPCRouter({
   getNameTags: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get game asset name tags" } })
     .input(
       z.object({
         type: z.enum(GameAssetTypes).optional(),
@@ -49,6 +48,7 @@ export const gameAssetRouter = createTRPCRouter({
       return { tags };
     }),
   getAllNames: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all game asset names" } })
     .input(
       z.object({
         type: z.enum(GameAssetTypes).optional(),
@@ -70,25 +70,32 @@ export const gameAssetRouter = createTRPCRouter({
       // Return
       return assets;
     }),
-  getAllGameAssetContentTagNames: publicProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle
-      .selectDistinct({ name: contentTag.name })
-      .from(gameAssetTag)
-      .innerJoin(contentTag, eq(gameAssetTag.tagId, contentTag.id));
-  }),
-  getAllFolders: publicProcedure.query(async ({ ctx }) => {
-    // Return unique folders with counts
-    return await ctx.drizzle
-      .select({
-        folder: gameAsset.folder,
-        count: sql<number>`count(*)`.mapWith(Number),
-      })
-      .from(gameAsset)
-      .where(sql`${gameAsset.folder} != ''`)
-      .groupBy(gameAsset.folder)
-      .orderBy(gameAsset.folder);
-  }),
+  getAllGameAssetContentTagNames: publicProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get all game asset content tag names" },
+    })
+    .query(async ({ ctx }) => {
+      return await ctx.drizzle
+        .selectDistinct({ name: contentTag.name })
+        .from(gameAssetTag)
+        .innerJoin(contentTag, eq(gameAssetTag.tagId, contentTag.id));
+    }),
+  getAllFolders: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all game asset folders" } })
+    .query(async ({ ctx }) => {
+      // Return unique folders with counts
+      return await ctx.drizzle
+        .select({
+          folder: gameAsset.folder,
+          count: sql`count(*)`.mapWith(Number),
+        })
+        .from(gameAsset)
+        .where(sql`${gameAsset.folder} != ''`)
+        .groupBy(gameAsset.folder)
+        .orderBy(gameAsset.folder);
+    }),
   getAll: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get all game assets with filtering" } })
     .input(
       gameAssetSchema.extend({
         cursor: z.number().nullish(),
@@ -130,6 +137,7 @@ export const gameAssetRouter = createTRPCRouter({
       };
     }),
   getSceneAssets: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get scene assets by IDs" } })
     .input(z.object({ assetIds: z.array(z.string()) }))
     .query(async ({ ctx, input }) => {
       return await ctx.drizzle.query.gameAsset.findMany({
@@ -137,6 +145,7 @@ export const gameAssetRouter = createTRPCRouter({
       });
     }),
   get: publicProcedure
+    .meta({ mcp: { enabled: true, description: "Get a game asset by ID" } })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await fetchgameAsset(ctx.drizzle, input.id);

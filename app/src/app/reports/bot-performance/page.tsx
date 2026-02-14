@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import { Chart as ChartJS } from "chart.js/auto";
+import { useEffect, useRef, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import Toggle from "@/components/control/Toggle";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import Toggle from "@/components/control/Toggle";
-import { api } from "@/app/_trpc/client";
 import { groupBy } from "@/utils/grouping";
-import { Chart as ChartJS } from "chart.js/auto";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function BotPerformance() {

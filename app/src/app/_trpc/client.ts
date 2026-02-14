@@ -2,12 +2,12 @@
  * This is the client-side entrypoint for your tRPC API.
  */
 
+import { useUser } from "@clerk/nextjs";
 import { TRPCClientError } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
+import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@/api/root";
 import { toast } from "@/components/ui/use-toast";
-import { useUser } from "@clerk/nextjs";
-import { type AppRouter } from "@/api/root";
-import { type inferRouterInputs, type inferRouterOutputs } from "@trpc/server";
 
 /** A set of type-safe react-query hooks for your tRPC API. */
 export const api = createTRPCReact<AppRouter>({

@@ -1,21 +1,13 @@
 "use client";
 
-import { useEffect, use, useState, useCallback } from "react";
+import { Image as ImageIcon, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { EditContent } from "@/layout/EditContent";
+import { use, useCallback, useEffect, useState } from "react";
+import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
-import { useTowerDefenseCharacterEditForm } from "@/hooks/towerDefenseCharacter";
-import { insertTowerDefenseCharacterSchema } from "@/validators/towerDefense";
-import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { showMutationToast } from "@/libs/toast";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -23,11 +15,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Upload, Image as ImageIcon } from "lucide-react";
-import { useUploadThing } from "@/utils/uploadthing";
-import Image from "@/layout/Image";
+import { Switch } from "@/components/ui/switch";
 import type { TowerDefenseCharacterDb } from "@/drizzle/schema";
-import type { CharacterAnimationState } from "@/validators/towerDefense";
+import { useTowerDefenseCharacterEditForm } from "@/hooks/towerDefenseCharacter";
+import ContentBox from "@/layout/ContentBox";
+import { EditContent } from "@/layout/EditContent";
+import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
+import { showMutationToast } from "@/libs/toast";
+import { canChangeContent } from "@/utils/permissions";
+import { setNullsToEmptyStrings } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
+import { useUploadThing } from "@/utils/uploadthing";
+import type {
+  CharacterAnimationState,
+  CharacterAssetConfig,
+  InsertTowerDefenseCharacter,
+} from "@/validators/towerDefense";
+import { insertTowerDefenseCharacterSchema } from "@/validators/towerDefense";
 
 export default function TowerDefenseCharacterEdit(props: {
   params: Promise<{ characterid: string }>;
@@ -94,7 +99,7 @@ const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
       >
         <EditContent
           schema={insertTowerDefenseCharacterSchema}
-          form={form}
+          form={form as unknown as UseFormReturn<InsertTowerDefenseCharacter, unknown>}
           formData={formData}
           showSubmit={true}
           buttonTxt="Save to Database"
@@ -112,7 +117,7 @@ const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
       >
         <CharacterAssetManager
           characterId={character.id}
-          assetConfig={assetConfig}
+          assetConfig={assetConfig as CharacterAssetConfig | null}
           setAssetConfig={setAssetConfig}
           updateAnimationState={updateAnimationState}
           updateAnimationSettings={updateAnimationSettings}
@@ -199,13 +204,13 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
   return (
     <div className="space-y-6">
       {/* Upload Section */}
-      <div className="border rounded-lg p-4 bg-muted/30">
-        <h4 className="font-medium mb-2">Upload Character Animation Pack</h4>
-        <p className="text-sm text-muted-foreground mb-4">
+      <div className="rounded-lg border bg-muted/30 p-4">
+        <h4 className="mb-2 font-medium">Upload Character Animation Pack</h4>
+        <p className="mb-4 text-muted-foreground text-sm">
           Upload a ZIP file containing character sprites with a metadata.json file. The
           ZIP should have the structure:
         </p>
-        <pre className="text-xs bg-muted p-2 rounded mb-4 overflow-x-auto">
+        <pre className="mb-4 overflow-x-auto rounded bg-muted p-2 text-xs">
           {`├── metadata.json
 ├── rotations/
 │   ├── north.png, south.png, ...
@@ -237,7 +242,7 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
           {isLoading && <Loader explanation="Processing..." />}
         </div>
 
-        {uploadError && <p className="text-destructive text-sm mt-2">{uploadError}</p>}
+        {uploadError && <p className="mt-2 text-destructive text-sm">{uploadError}</p>}
       </div>
 
       {/* Asset Config Display */}
@@ -245,11 +250,11 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
         <div className="space-y-4">
           {/* Rotations Preview */}
           <div>
-            <h4 className="font-medium mb-2">Static Rotations</h4>
-            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-              {Object.entries(assetConfig.rotations).map(([direction, url]) => (
-                <div key={direction} className="text-center">
-                  <div className="aspect-square bg-muted rounded flex items-center justify-center overflow-hidden">
+            <h4 className="mb-2 font-medium">Static Rotations</h4>
+            <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
+              {Object.entries(assetConfig.rotations).map(([direction, url], i) => (
+                <div key={`${direction}-${i}`} className="text-center">
+                  <div className="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted">
                     {url ? (
                       <Image
                         src={url}
@@ -262,7 +267,7 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
                       <ImageIcon className="h-6 w-6 text-muted-foreground" />
                     )}
                   </div>
-                  <span className="text-xs text-muted-foreground">{direction}</span>
+                  <span className="text-muted-foreground text-xs">{direction}</span>
                 </div>
               ))}
             </div>
@@ -270,14 +275,14 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
 
           {/* Animations Configuration */}
           <div>
-            <h4 className="font-medium mb-2">Animations</h4>
+            <h4 className="mb-2 font-medium">Animations</h4>
             <div className="space-y-4">
               {assetConfig.animations.map((anim, index) => (
-                <div key={anim.name} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-3">
+                <div key={anim.name} className="rounded-lg border p-4">
+                  <div className="mb-3 flex items-start justify-between">
                     <div>
                       <h5 className="font-medium">{anim.name}</h5>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-muted-foreground text-xs">
                         {Object.values(anim.frames)[0]?.length ?? 0} frames per
                         direction
                       </p>
@@ -297,8 +302,8 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {characterAnimationStates.map((state) => (
-                              <SelectItem key={state} value={state}>
+                            {characterAnimationStates.map((state, i) => (
+                              <SelectItem key={`${state}-${i}`} value={state}>
                                 {state}
                               </SelectItem>
                             ))}
@@ -319,7 +324,7 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
                         value={anim.frameDurationMs}
                         onChange={(e) =>
                           updateAnimationSettings(index, {
-                            frameDurationMs: parseInt(e.target.value) || 100,
+                            frameDurationMs: parseInt(e.target.value, 10) || 100,
                           })
                         }
                         className="w-24"
@@ -341,21 +346,21 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
 
                   {/* Frame preview */}
                   <div className="mt-3">
-                    <p className="text-xs text-muted-foreground mb-1">
+                    <p className="mb-1 text-muted-foreground text-xs">
                       Preview (south):
                     </p>
                     <div className="flex gap-1 overflow-x-auto pb-2">
                       {(anim.frames.south || []).slice(0, 8).map((url, frameIdx) => (
                         <div
-                          key={frameIdx}
-                          className="w-12 h-12 flex-shrink-0 bg-muted rounded overflow-hidden"
+                          key={url}
+                          className="h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-muted"
                         >
                           <Image
                             src={url}
                             alt={`Frame ${frameIdx}`}
                             width={48}
                             height={48}
-                            className="object-contain w-full h-full"
+                            className="h-full w-full object-contain"
                           />
                         </div>
                       ))}
@@ -372,8 +377,8 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
           </Button>
         </div>
       ) : (
-        <div className="text-center py-8 text-muted-foreground">
-          <ImageIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+        <div className="py-8 text-center text-muted-foreground">
+          <ImageIcon className="mx-auto mb-2 h-12 w-12 opacity-50" />
           <p>No character assets configured yet.</p>
           <p className="text-sm">Upload a ZIP file to get started.</p>
         </div>

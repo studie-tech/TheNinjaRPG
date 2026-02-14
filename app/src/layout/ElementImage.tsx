@@ -1,58 +1,62 @@
-import React from "react";
-import Image from "@/layout/Image";
-import { isInArray } from "@/utils/array";
-import { Grab, Swords, HeartPulse, Eraser, Sparkles, Rabbit } from "lucide-react";
-import { Zap } from "lucide-react";
-import { BrainCog } from "lucide-react";
-import { Sword } from "lucide-react";
-import { LoaderPinwheel } from "lucide-react";
-import { SquarePlus } from "lucide-react";
-import { BicepsFlexed } from "lucide-react";
-import { Brain } from "lucide-react";
-import { Flame } from "lucide-react";
-import { Footprints } from "lucide-react";
-import { Heart } from "lucide-react";
-import { BatteryMedium } from "lucide-react";
-import { Atom } from "lucide-react";
-import { cn } from "src/libs/shadui";
 import {
-  IMG_ELEMENT_YINYANG,
-  IMG_ELEMENT_SHADOW,
-  IMG_ELEMENT_NONE,
-  IMG_ELEMENT_EXPLOSION,
-  IMG_ELEMENT_WIND,
-  IMG_ELEMENT_WATER,
-  IMG_ELEMENT_LAVA,
-  IMG_ELEMENT_ICE,
-  IMG_ELEMENT_WOOD,
-  IMG_ELEMENT_STORM,
-  IMG_ELEMENT_CRYSTAL,
-  IMG_ELEMENT_MAGNET,
-  IMG_ELEMENT_FIRE,
-  IMG_ELEMENT_LIGHT,
-  IMG_ELEMENT_EARTH,
-  IMG_ELEMENT_SCORCH,
-  IMG_ELEMENT_DUST,
-  IMG_ELEMENT_SAND,
-  IMG_ELEMENT_LIGHTNING,
-  IMG_ELEMENT_BOIL,
-  IMG_ELEMENT_METAL,
-} from "@/drizzle/constants";
-
-import {
-  GeneralTypes,
-  StatTypes,
-  PoolTypes,
-  ElementNames,
-  AdjustableBasicActions,
-} from "@/drizzle/constants";
+  Atom,
+  BatteryMedium,
+  BicepsFlexed,
+  Brain,
+  BrainCog,
+  Eraser,
+  Flame,
+  Footprints,
+  Grab,
+  Heart,
+  HeartPulse,
+  LoaderPinwheel,
+  Rabbit,
+  Sparkles,
+  SquarePlus,
+  Sword,
+  Swords,
+  Zap,
+} from "lucide-react";
+import type React from "react";
 import type {
-  GeneralType,
-  StatType,
-  PoolType,
-  ElementName,
   AdjustableBasicAction,
+  ElementName,
+  GeneralType,
+  PoolType,
+  StatType,
 } from "@/drizzle/constants";
+import {
+  AdjustableBasicActions,
+  ElementNames,
+  GeneralTypes,
+  IMG_ELEMENT_BOIL,
+  IMG_ELEMENT_CRYSTAL,
+  IMG_ELEMENT_DUST,
+  IMG_ELEMENT_EARTH,
+  IMG_ELEMENT_EXPLOSION,
+  IMG_ELEMENT_FIRE,
+  IMG_ELEMENT_ICE,
+  IMG_ELEMENT_LAVA,
+  IMG_ELEMENT_LIGHT,
+  IMG_ELEMENT_LIGHTNING,
+  IMG_ELEMENT_MAGNET,
+  IMG_ELEMENT_METAL,
+  IMG_ELEMENT_NONE,
+  IMG_ELEMENT_SAND,
+  IMG_ELEMENT_SCORCH,
+  IMG_ELEMENT_SHADOW,
+  IMG_ELEMENT_STORM,
+  IMG_ELEMENT_WATER,
+  IMG_ELEMENT_WIND,
+  IMG_ELEMENT_WOOD,
+  IMG_ELEMENT_YINYANG,
+  PoolTypes,
+  StatTypes,
+} from "@/drizzle/constants";
+import Image from "@/layout/Image";
+import { cn } from "@/libs/shadui";
+import { isInArray } from "@/utils/array";
 import type { ZodAllTags } from "@/validators/combat";
 
 interface ElementImageProps {
@@ -197,7 +201,6 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
             className={cn(base, props.className, "bg-stone-500")}
           />
         );
-        break;
       case "Taijutsu":
         image = (
           <Grab strokeWidth={3} className={cn(base, props.className, "bg-green-600")} />
@@ -271,7 +274,7 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
       case "All":
         image = (
           <LoaderPinwheel
-            className={cn(props.className, "bg-gray-600 rounded-full p-1 text-white")}
+            className={cn(props.className, "rounded-full bg-gray-600 p-1 text-white")}
           />
         );
         break;
@@ -281,7 +284,7 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
   return (
     <div key={element} className="relative">
       {image}
-      <span className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 rounded-md bg-gray-800 p-2 text-sm font-bold text-gray-100 opacity-0 transition-opacity hover:opacity-100 whitespace-nowrap">
+      <span className="absolute top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 transform whitespace-nowrap rounded-md bg-gray-800 p-2 font-bold text-gray-100 text-sm opacity-0 transition-opacity hover:opacity-100">
         {hoverText || element}
       </span>
     </div>

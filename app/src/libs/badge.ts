@@ -1,12 +1,12 @@
-import { calculateContentDiff } from "@/utils/diff";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { BadgeValidator } from "@/validators/badge";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
 import type { Badge } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { calculateContentDiff } from "@/utils/diff";
 import type { ZodBadgeType } from "@/validators/badge";
+import { BadgeValidator } from "@/validators/badge";
 
 /**
  * Hook used when creating frontend forms for editing badges

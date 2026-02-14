@@ -1,16 +1,16 @@
 "use client";
 
-import React from "react";
-import Image from "@/layout/Image";
-import AvatarImage from "@/layout/Avatar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
+import type React from "react";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { calcChakraToPools } from "@/libs/hospital";
-import { calcCurrent } from "@/layout/StatusBar";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { IMG_ICON_HEAL } from "@/drizzle/constants";
+import AvatarImage from "@/layout/Avatar";
+import Image from "@/layout/Image";
+import { calcCurrent } from "@/layout/StatusBar";
+import { calcChakraToPools } from "@/libs/hospital";
 import type { SectorUser } from "@/libs/threejs/types";
+import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 
 /**
@@ -137,10 +137,10 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
               priority
             />
             <p className="mt-2 font-semibold">{targetUser.username}</p>
-            <p className="text-sm text-gray-600">
+            <p className="text-gray-600 text-sm">
               Health: {Math.floor(targetUser.curHealth)}/{targetUser.maxHealth}
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-gray-600 text-sm">
               Your max heal capacity: {Math.floor(maxHeal)} HP
             </p>
           </div>
@@ -200,7 +200,7 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
 
           {isHealing && (
             <div className="text-center">
-              <p className="text-sm text-gray-600">Healing in progress...</p>
+              <p className="text-gray-600 text-sm">Healing in progress...</p>
             </div>
           )}
         </div>

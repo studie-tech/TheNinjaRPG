@@ -1,18 +1,18 @@
 "use client";
 
-import React from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Ban, UserPlus } from "lucide-react";
+import type React from "react";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
-import UserSearchSelect from "@/layout/UserSearchSelect";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import AvatarImage from "@/layout/Avatar";
 import Loader from "@/layout/Loader";
-import { Ban, UserPlus } from "lucide-react";
-import { Label } from "src/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { getSearchValidator } from "@/validators/register";
+import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
-import type { z } from "zod";
+import { getSearchValidator } from "@/validators/register";
 
 const UserBlacklistControl: React.FC = () => {
   // Get react query utility
@@ -61,28 +61,28 @@ const UserBlacklistControl: React.FC = () => {
           maxUsers={maxUsers}
         />
         <Button
-          className="w-full "
+          className="w-full"
           type="submit"
           onClick={() => toggleEntry({ userId: targetUser?.userId || "" })}
         >
-          <UserPlus className="h-5 w-5 mr-2" />
+          <UserPlus className="mr-2 h-5 w-5" />
           Add to blacklist
         </Button>
         {isPending && <Loader explanation="Updating blacklist" />}
         {!isPending && data && data.length > 0 && (
           <>
             <Label className="pt-2">Blacklisted members</Label>
-            <p className="text-xs italic pb-1">
+            <p className="pb-1 text-xs italic">
               Hide their messages, do not show your messages to them
             </p>
             <div className="grid grid-cols-6">
               {data
                 ?.filter((u) => u.target)
-                .map((user, i) => {
+                .map((user) => {
                   return (
                     <div
-                      key={`blacklist-${i}`}
-                      className="flex flex-col items-center relative text-xs"
+                      key={`blacklist-${user.target.userId}`}
+                      className="relative flex flex-col items-center text-xs"
                     >
                       <AvatarImage
                         href={user.target.avatar}
@@ -93,7 +93,7 @@ const UserBlacklistControl: React.FC = () => {
                       />
                       {user.target.username}
                       <Ban
-                        className="h-8 w-8 absolute top-0 right-0 bg-red-500 rounded-full p-1 hover:text-orange-500 hover:cursor-pointer"
+                        className="absolute top-0 right-0 h-8 w-8 rounded-full bg-red-500 p-1 hover:cursor-pointer hover:text-orange-500"
                         onClick={() =>
                           toggleEntry({ userId: user.target.userId || "" })
                         }

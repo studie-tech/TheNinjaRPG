@@ -1,34 +1,34 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { OctagonX, Star } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import BanInfo from "@/layout/BanInfo";
-import { useRequireInVillage } from "@/utils/UserContext";
-import { showMutationToast } from "@/libs/toast";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import Modal2 from "@/layout/Modal2";
-import { ActionSelector } from "@/layout/CombatActions";
-import JutsuFiltering, { useFiltering, getFilter } from "@/layout/JutsuFiltering";
-import type { Jutsu, Item } from "@/drizzle/schema";
-import { OctagonX, Star } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  RANKED_LOADOUT_MAX_JUTSUS,
-  RANKED_LOADOUT_MAX_WEAPONS,
+  RANKED_DIVISIONS,
+  RANKED_ENTRY_COST,
   RANKED_LOADOUT_MAX_CONSUMABLES,
-  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
-  RANKED_LOADOUT_MAX_POISON_ITEMS,
-  RANKED_LOADOUT_MAX_POISON_JUTSUS,
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
   RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
-  RANKED_ENTRY_COST,
-  RANKED_DIVISIONS,
+  RANKED_LOADOUT_MAX_JUTSUS,
+  RANKED_LOADOUT_MAX_POISON_ITEMS,
+  RANKED_LOADOUT_MAX_POISON_JUTSUS,
+  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
+  RANKED_LOADOUT_MAX_WEAPONS,
 } from "@/drizzle/constants";
-import { validateJutsuLoadout, validateItemLoadout } from "@/libs/ranked_pvp";
+import type { Item, Jutsu } from "@/drizzle/schema";
+import BanInfo from "@/layout/BanInfo";
+import { ActionSelector } from "@/layout/CombatActions";
+import ContentBox from "@/layout/ContentBox";
 import { QueueTimer } from "@/layout/Countdown";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import { validateItemLoadout, validateJutsuLoadout } from "@/libs/ranked_pvp";
+import { showMutationToast } from "@/libs/toast";
+import { useRequireInVillage } from "@/utils/UserContext";
 
 /**
  * Main ranked arena component for entering/leaving the arena
@@ -134,10 +134,10 @@ export const RankedArenaMain: React.FC = () => {
     return (
       <div className="flex flex-col items-center gap-4 p-3">
         <div className="text-center">
-          <p className="text-lg font-semibold text-destructive mb-2">
+          <p className="mb-2 font-semibold text-destructive text-lg">
             Ranked Season Paused
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             The current ranked season &quot;{currentSeason.name}&quot; is currently
             paused. Ranked battles are temporarily unavailable.
           </p>
@@ -153,17 +153,17 @@ export const RankedArenaMain: React.FC = () => {
     return (
       <div className="flex flex-col items-center gap-4 p-3">
         <div className="text-center">
-          <p className="text-lg font-semibold mb-2">Enter Ranked Season</p>
-          <p className="text-sm text-muted-foreground mb-4">
+          <p className="mb-2 font-semibold text-lg">Enter Ranked Season</p>
+          <p className="mb-4 text-muted-foreground text-sm">
             To participate in ranked PvP battles, you must first enter the ranked
             season. This requires {RANKED_ENTRY_COST.toLocaleString()} village prestige
             points.
           </p>
-          <p className="text-sm text-muted-foreground mb-4">
+          <p className="mb-4 text-muted-foreground text-sm">
             Your village prestige: <b>{userData.villagePrestige.toLocaleString()}</b>
           </p>
           {!hasEnoughPrestige && (
-            <p className="text-sm text-destructive mb-4">
+            <p className="mb-4 text-destructive text-sm">
               You need {RANKED_ENTRY_COST.toLocaleString()} village prestige to enter
               the ranked season.
             </p>
@@ -187,11 +187,11 @@ export const RankedArenaMain: React.FC = () => {
 
   return (
     <div className="flex flex-col items-center gap-4 p-3">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-muted-foreground text-sm">
         Queue for ranked PvP battles! You will be matched with players of similar LP.
         All battles are fought with level 100 characters with max stats.
       </p>
-      <div className="text-sm text-muted-foreground">
+      <div className="text-muted-foreground text-sm">
         <p className="mb-1 font-medium">Rank Requirements:</p>
         <div className="flex flex-col gap-y-1">
           {RANKED_DIVISIONS.filter((d) => d.name !== "Unranked").map((division) => (
@@ -206,11 +206,11 @@ export const RankedArenaMain: React.FC = () => {
           ))}
         </div>
       </div>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-muted-foreground text-sm">
         Current LP: <b>{userData.rankedLp}</b> | Players in queue:{" "}
         <b>{queueData?.queueCount ?? 0}</b>
       </p>
-      <p className="text-sm font-medium">
+      <p className="font-medium text-sm">
         Selected Jutsu: {equippedJutsu}/{RANKED_LOADOUT_MAX_JUTSUS} | Weapons:{" "}
         {equippedWeapons}/{RANKED_LOADOUT_MAX_WEAPONS} | Consumables:{" "}
         {equippedConsumables}/{RANKED_LOADOUT_MAX_CONSUMABLES}
@@ -581,7 +581,7 @@ export const RankedLoadoutSelector: React.FC = () => {
         bottomRightContent={
           activeTab === "jutsu" ? (
             <Button onClick={() => handleUnequipAll()}>
-              <OctagonX className="h-6 w-6 mr-2" />
+              <OctagonX className="mr-2 h-6 w-6" />
               Unequip All
             </Button>
           ) : undefined
@@ -694,15 +694,7 @@ export const RankedLoadoutSelector: React.FC = () => {
                 className="flex items-center gap-2"
               >
                 <Star
-                  className={`h-4 w-4 ${
-                    (
-                      selectedItem.itemType === "WEAPON"
-                        ? favoriteWeapons.includes(selectedItem.id)
-                        : favoriteConsumables.includes(selectedItem.id)
-                    )
-                      ? "fill-yellow-400 text-yellow-400"
-                      : "text-gray-400"
-                  }`}
+                  className={`h-4 w-4 ${(selectedItem.itemType === "WEAPON" ? favoriteWeapons.includes(selectedItem.id) : favoriteConsumables.includes(selectedItem.id)) ? "fill-yellow-400 text-yellow-400" : "text-gray-400"}`}
                 />
                 {(
                   selectedItem.itemType === "WEAPON"
@@ -715,7 +707,7 @@ export const RankedLoadoutSelector: React.FC = () => {
             </div>
             {!equippedItems.includes(selectedItem.id) &&
               selectedItem.effects.some((e) => e.type === "poison") && (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground text-sm">
                   <p>
                     ⚠️ This is a poison item. You can equip up to{" "}
                     {RANKED_LOADOUT_MAX_POISON_ITEMS} poison item in ranked PvP.
@@ -724,7 +716,7 @@ export const RankedLoadoutSelector: React.FC = () => {
               )}
             {!equippedItems.includes(selectedItem.id) &&
               selectedItem.effects.some((e) => e.type === "increasepoolcost") && (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground text-sm">
                   <p>
                     ⚠️ This is an increasecost item. You can equip up to{" "}
                     {RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} increasecost item in ranked
@@ -759,11 +751,7 @@ export const RankedLoadoutSelector: React.FC = () => {
                 className="flex items-center gap-2"
               >
                 <Star
-                  className={`h-4 w-4 ${
-                    favoriteJutsus.includes(selectedJutsu.id)
-                      ? "fill-yellow-400 text-yellow-400"
-                      : "text-gray-400"
-                  }`}
+                  className={`h-4 w-4 ${favoriteJutsus.includes(selectedJutsu.id) ? "fill-yellow-400 text-yellow-400" : "text-gray-400"}`}
                 />
                 {favoriteJutsus.includes(selectedJutsu.id) ? "Unfavorite" : "Favorite"}
               </Button>
@@ -772,7 +760,7 @@ export const RankedLoadoutSelector: React.FC = () => {
               selectedJutsu.effects.some(
                 (e) => "residualModifier" in e && e.residualModifier,
               ) && (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground text-sm">
                   <p>
                     ⚠️ This is a residual jutsu. You can equip up to{" "}
                     {RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS} residual jutsu in ranked PvP.
@@ -781,7 +769,7 @@ export const RankedLoadoutSelector: React.FC = () => {
               )}
             {!loadoutJutsus.includes(selectedJutsu.id) &&
               selectedJutsu.effects.some((e) => e.type === "poison") && (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground text-sm">
                   <p>
                     ⚠️ This is a poison jutsu. You can equip up to{" "}
                     {RANKED_LOADOUT_MAX_POISON_JUTSUS} poison jutsu in ranked PvP.
@@ -790,7 +778,7 @@ export const RankedLoadoutSelector: React.FC = () => {
               )}
             {!loadoutJutsus.includes(selectedJutsu.id) &&
               selectedJutsu.effects.some((e) => e.type === "increasepoolcost") && (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground text-sm">
                   <p>
                     ⚠️ This is an increasecost jutsu. You can equip up to{" "}
                     {RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS} increasecost jutsu in

@@ -1,7 +1,4 @@
-import React from "react";
-import Image from "@/layout/Image";
-import { cn } from "src/libs/shadui";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type React from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,6 +10,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import Image from "@/layout/Image";
+import { cn } from "@/libs/shadui";
 
 interface MissionPickerProps {
   setting: {
@@ -60,7 +60,7 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
       <PopoverTrigger asChild>
         <div
           className={cn(
-            disabled ? "filter grayscale" : "hover:cursor-pointer hover:opacity-30",
+            disabled ? "grayscale filter" : "hover:cursor-pointer hover:opacity-30",
           )}
         >
           <Image alt="small" src={setting.image} width={256} height={256} />
@@ -70,11 +70,11 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
       </PopoverTrigger>
       <PopoverContent>
         <div className="grid grid-cols-3 gap-2">
-          {missions.map((mission, i) => (
-            <AlertDialog key={`specific-mission-${i}`}>
+          {missions.map((mission) => (
+            <AlertDialog key={mission.id}>
               <AlertDialogTrigger asChild>
-                <div className="hover:opacity-70 hover:cursor-pointer">
-                  <div className="flex flex-col justify-center items-center">
+                <div className="hover:cursor-pointer hover:opacity-70">
+                  <div className="flex flex-col items-center justify-center">
                     <Image
                       alt="small"
                       className="rounded-lg"
@@ -82,7 +82,7 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
                       width={128}
                       height={128}
                     />
-                    <p className="font-bold text-xs text-center">{mission.name}</p>
+                    <p className="text-center font-bold text-xs">{mission.name}</p>
                     {additionalContent?.(mission)}
                   </div>
                 </div>

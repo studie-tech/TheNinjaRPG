@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { TimeUnits } from "@/drizzle/constants";
-import { BanStates } from "@/drizzle/constants";
-import type { UserRank, UserRole, FederalStatus } from "@/drizzle/constants";
+import type { FederalStatus, UserRank, UserRole } from "@/drizzle/constants";
+import { BanStates, TimeUnits } from "@/drizzle/constants";
 
 export const systems = [
   "forum_comment",

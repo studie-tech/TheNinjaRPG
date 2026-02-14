@@ -20,7 +20,7 @@ export const createPollSchema = z.object({
   title: z.string().min(3).max(255),
   description: z.string().min(3).max(10000),
   options: z.array(pollOptionSchema).min(2),
-  allowCustomOptions: z.boolean().default(false),
+  allowCustomOptions: z.boolean().prefault(false),
   endDate: z.date().optional(),
 });
 
@@ -66,8 +66,8 @@ export type AddPollOptionSchema = z.infer<typeof addPollOptionSchema>;
 // Schema for getting polls with pagination
 export const getPollsSchema = z.object({
   cursor: z.number().nullish(),
-  limit: z.number().min(1).max(100).default(10),
-  includeInactive: z.boolean().default(false),
+  limit: z.number().min(1).max(100).prefault(10),
+  includeInactive: z.boolean().prefault(false),
 });
 
 export type GetPollsSchema = z.infer<typeof getPollsSchema>;

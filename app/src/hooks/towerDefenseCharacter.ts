@@ -1,17 +1,18 @@
-import { calculateContentDiff } from "@/utils/diff";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast, showFormErrorsToast } from "@/libs/toast";
-import {
-  insertTowerDefenseCharacterSchema,
-  characterAnimationStates,
-  type InsertTowerDefenseCharacter,
-  type CharacterAssetConfig,
-  type CharacterAnimationState,
-} from "@/validators/towerDefense";
 import type { TowerDefenseCharacterDb } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { calculateContentDiff } from "@/utils/diff";
+import {
+  type CharacterAnimationState,
+  type CharacterAssetConfig,
+  characterAnimationStates,
+  type InsertTowerDefenseCharacter,
+  type InsertTowerDefenseCharacterInput,
+  insertTowerDefenseCharacterSchema,
+} from "@/validators/towerDefense";
 
 /**
  * Hook used when creating frontend forms for editing Tower Defense characters
@@ -21,11 +22,15 @@ export const useTowerDefenseCharacterEditForm = (
   refetch: () => void,
 ) => {
   // Form handling
-  const form = useForm<InsertTowerDefenseCharacter>({
+  const form = useForm<
+    InsertTowerDefenseCharacterInput,
+    unknown,
+    InsertTowerDefenseCharacter
+  >({
     mode: "all",
     criteriaMode: "all",
-    values: character,
-    defaultValues: character,
+    values: character as InsertTowerDefenseCharacterInput,
+    defaultValues: character as InsertTowerDefenseCharacterInput,
     resolver: zodResolver(insertTowerDefenseCharacterSchema),
   });
 
@@ -78,12 +83,13 @@ export const useTowerDefenseCharacterEditForm = (
     newState: CharacterAnimationState,
   ) => {
     if (!assetConfig) return;
+    const config = assetConfig as CharacterAssetConfig;
 
-    const updatedAnimations = [...assetConfig.animations];
+    const updatedAnimations = [...config.animations];
     const anim = updatedAnimations[animIndex];
     if (anim) {
       updatedAnimations[animIndex] = { ...anim, state: newState };
-      setAssetConfig({ ...assetConfig, animations: updatedAnimations });
+      setAssetConfig({ ...config, animations: updatedAnimations });
     }
   };
 
@@ -93,12 +99,13 @@ export const useTowerDefenseCharacterEditForm = (
     settings: { frameDurationMs?: number; loop?: boolean },
   ) => {
     if (!assetConfig) return;
+    const config = assetConfig as CharacterAssetConfig;
 
-    const updatedAnimations = [...assetConfig.animations];
+    const updatedAnimations = [...config.animations];
     const anim = updatedAnimations[animIndex];
     if (anim) {
       updatedAnimations[animIndex] = { ...anim, ...settings };
-      setAssetConfig({ ...assetConfig, animations: updatedAnimations });
+      setAssetConfig({ ...config, animations: updatedAnimations });
     }
   };
 

@@ -1,13 +1,13 @@
-import React from "react";
+import { sendGTMEvent } from "@next/third-parties/google";
+import { Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import type React from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import Confirm2 from "@/layout/Confirm2";
 import Countdown from "@/layout/Countdown";
-import { api } from "@/app/_trpc/client";
-import { Trash2, Loader2 } from "lucide-react";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { Button } from "@/components/ui/button";
-import { sendGTMEvent } from "@next/third-parties/google";
 
 interface DeleteUserButtonProps {
   userData: {
@@ -74,9 +74,7 @@ const DeleteUserButton: React.FC<DeleteUserButtonProps> = (props) => {
       title="Confirm Deletion"
       button={
         <Trash2
-          className={`h-6 w-6 cursor-pointer hover:text-orange-500 ${
-            userData.deletionAt ? "text-red-500 animate-pulse" : ""
-          }`}
+          className={`h-6 w-6 cursor-pointer hover:text-orange-500 ${userData.deletionAt ? "animate-pulse text-red-500" : ""}`}
         />
       }
       proceed_label={
@@ -100,7 +98,7 @@ const DeleteUserButton: React.FC<DeleteUserButtonProps> = (props) => {
         feature enables a timer of 2 days, after which you will be able to delete the
         character - this is to ensure no un-intentional character deletion.
         {userData.isBanned && (
-          <p className="font-bold py-3">
+          <p className="py-3 font-bold">
             NOTE: Account is banned, and cannot delete the account until the ban is
             over!
           </p>
@@ -109,7 +107,7 @@ const DeleteUserButton: React.FC<DeleteUserButtonProps> = (props) => {
           <Button
             id="create"
             disabled={userData.deletionAt > new Date() || userData.isBanned}
-            className="w-full mt-3"
+            className="mt-3 w-full"
             variant="destructive"
             onClick={(e) => {
               e.preventDefault();

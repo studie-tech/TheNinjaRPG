@@ -1,11 +1,11 @@
-import { useUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
 import {
-  ContentFiltering,
-  useContentFiltering,
   buildFilter,
+  ContentFiltering,
   defineFilteringSchema,
+  useContentFiltering,
 } from "@/layout/ContentFiltering";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 import { effectFilters } from "@/validators/combat";
 
 interface SkillTreeFilteringProps {

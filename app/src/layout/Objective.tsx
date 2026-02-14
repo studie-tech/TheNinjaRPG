@@ -1,24 +1,22 @@
-import React, { useState } from "react";
-import Image from "@/layout/Image";
-import StatusBar from "@/layout/StatusBar";
-import Countdown from "@/layout/Countdown";
-import Modal2 from "@/layout/Modal2";
-import { CircleHelp, RotateCcw } from "lucide-react";
-import { getObjectiveImage } from "@/libs/objectives";
-import { X, Check, Gift, Loader2 } from "lucide-react";
-import { hasReward } from "@/validators/rewards";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { getObjectiveSchema } from "@/validators/objectives";
-import { isObjectiveComplete } from "@/libs/objectives";
+import { Check, CircleHelp, Gift, Loader2, RotateCcw, X } from "lucide-react";
+import type React from "react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { showMutationToast } from "@/libs/toast";
-import { secondsFromDate } from "@/utils/time";
-
 import { Button } from "@/components/ui/button";
 import type { Quest } from "@/drizzle/schema";
-import type { AllObjectivesType } from "@/validators/objectives";
+import Countdown from "@/layout/Countdown";
+import Image from "@/layout/Image";
+import Modal2 from "@/layout/Modal2";
+import StatusBar from "@/layout/StatusBar";
+import { getObjectiveImage, isObjectiveComplete } from "@/libs/objectives";
+import { showMutationToast } from "@/libs/toast";
+import { parseHtml } from "@/utils/parse";
+import { secondsFromDate } from "@/utils/time";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
+import { getObjectiveSchema } from "@/validators/objectives";
 import type { ObjectiveRewardType } from "@/validators/rewards";
-import type { QuestTrackerType } from "@/validators/objectives";
+import { hasReward } from "@/validators/rewards";
 
 interface ObjectiveProps {
   titlePrefix?: string | number;
@@ -82,7 +80,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
   const indicatorIcons = (
     <div className="flex flex-col items-center gap-1">
       {!parseResult.success && userData?.role !== "USER" && (
-        <div className="text-red-500 text-xs font-bold border-2 border-red-500 p-1 rounded-md text-center">
+        <div className="rounded-md border-2 border-red-500 p-1 text-center font-bold text-red-500 text-xs">
           Invalid
           <br />
           Objective!
@@ -115,10 +113,10 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
 
   // Show the objective
   return (
-    <div className={`flex flex-row ${props.grayedOut ? "grayscale opacity-30" : ""}`}>
-      <div className="basis-1/4 flex items-center justify-center">
+    <div className={`flex flex-row ${props.grayedOut ? "opacity-30 grayscale" : ""}`}>
+      <div className="flex basis-1/4 items-center justify-center">
         <Image
-          className="self-start max-w-30 w-full"
+          className="w-full max-w-30 self-start"
           alt={parsed.task}
           src={image}
           width={60}
@@ -127,14 +125,14 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
       </div>
       <div className="basis-3/4">
         <div className="flex flex-row">
-          <p className="font-bold pl-2 grow">
+          <p className="grow pl-2 font-bold">
             {titlePrefix}
             {title}
           </p>
           {objective.description && objective.description !== "" && (
             <>
               <CircleHelp
-                className="h-5 w-5 hover:text-orange-500 hover:cursor-pointer"
+                className="h-5 w-5 hover:cursor-pointer hover:text-orange-500"
                 onClick={() => setModalOpen(true)}
               />
               {modalOpen && (
@@ -143,10 +141,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                   setIsOpen={() => setModalOpen(false)}
                   isOpen={modalOpen}
                 >
-                  <div
-                    // eslint-disable-next-line @eslint-react/dom/no-dangerously-set-innerhtml
-                    dangerouslySetInnerHTML={{ __html: objective.description }}
-                  />
+                  {parseHtml(objective.description)}
                 </Modal2>
               )}
             </>
@@ -155,7 +150,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
         <hr className="my-0" />
         <div className="pl-2">
           {"value" in parsed && (
-            <div className="pr-3 flex flex-row items-center">
+            <div className="flex flex-row items-center pr-3">
               <div className="grow">
                 <StatusBar
                   key={`${tracker.id}-${objective.id}-${value}`}
@@ -200,7 +195,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
           )}
           {/* Retry button for start_battle objectives with recentlyDied flag */}
           {isStartBattleWithRecentlyDied && (
-            <div className="flex flex-row items-center justify-end mt-2">
+            <div className="mt-2 flex flex-row items-center justify-end">
               <Button
                 size="sm"
                 variant="outline"
@@ -277,7 +272,7 @@ export const Reward: React.FC<RewardProps> = (props) => {
           {rewardMultiplier && rewardMultiplier !== 1.0 && (
             <>
               <br />
-              <span className="text-sm text-red-500">
+              <span className="text-red-500 text-sm">
                 Will only give {rewardMultiplier * 100}% Rewards
               </span>
             </>
@@ -297,7 +292,7 @@ export const EventTimer: React.FC<EventTimerProps> = (props) => {
   const { quest } = props;
 
   // If the quest is permanent
-  if (!quest.endsAt && !quest.startsAt) return <></>;
+  if (!quest.endsAt && !quest.startsAt) return null;
 
   const now = new Date();
   const startDate = quest.startsAt ? new Date(quest.startsAt) : null;

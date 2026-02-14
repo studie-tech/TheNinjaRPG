@@ -1,70 +1,69 @@
+import { Grid, Orientation, rectangle } from "honeycomb-grid";
 import { nanoid } from "nanoid";
+import { createNoise2D } from "simplex-noise";
 import {
-  Vector3,
-  LineBasicMaterial,
-  LinearFilter,
-  SpriteMaterial,
-  Sprite,
+  type BufferGeometry,
+  EdgesGeometry,
   Group,
+  Line,
+  LinearFilter,
+  LineBasicMaterial,
+  LineSegments,
   Mesh,
   MeshBasicMaterial,
-  Line,
-  LineSegments,
-  EdgesGeometry,
   type Raycaster,
-  type BufferGeometry,
+  Sprite,
+  SpriteMaterial,
+  Vector3,
 } from "three";
-import { loadTexture, createTexture, profiler } from "@/libs/threejs/util";
-import { applyBlurShader, applyWaveShader } from "@/libs/threejs/shaders";
-import { createNoise2D } from "simplex-noise";
-import { Grid, rectangle, Orientation } from "honeycomb-grid";
-import { SECTOR_HEIGHT, SECTOR_WIDTH } from "@/drizzle/constants";
-import { getTileInfo, generateWallPlacements } from "@/libs/threejs/biome";
-import { groupBy } from "@/utils/grouping";
-import { defineHex, findHex } from "../hexgrid";
-import { getActiveObjectives } from "@/libs/quest";
-import { findVillageUserRelationship } from "@/utils/alliance";
 import {
-  getHexPoints,
-  calculateHexUVCoordinates,
-  calculateTileOffset,
-  createGroundCorners,
-  createTileGeometry,
-  createGroundGeometry,
-  createGroundEdges,
-  mergeBufferGeometries,
-} from "@/libs/threejs/hexgrid";
-import {
-  IMG_AVATAR_DEFAULT,
-  MEDNIN_MIN_RANK,
-  RANKS_RESTRICTED_FROM_PVP,
-  HEX_STACKING_DISPLACEMENT,
+  ASSETS_LAYER,
+  DIRT_LAYER,
   HEX_ASPECT_RATIO,
-} from "@/drizzle/constants";
-import {
-  IMG_SECTOR_INFO,
+  HEX_STACKING_DISPLACEMENT,
+  IMG_AVATAR_DEFAULT,
+  IMG_ICON_HEAL,
   IMG_SECTOR_ATTACK,
+  IMG_SECTOR_INFO,
   IMG_SECTOR_USER_MARKER,
   IMG_SECTOR_USER_SPRITE_MASK,
   IMG_SECTOR_USERSPRITE_LEFT,
   IMG_SECTOR_USERSPRITE_RIGHT,
   IMG_SECTOR_VS_ICON,
   IMG_SECTOR_WALL_STONE_TOWER,
-  IMG_ICON_HEAL,
+  MEDNIN_MIN_RANK,
+  RANKS_RESTRICTED_FROM_PVP,
+  SECTOR_HEIGHT,
+  SECTOR_WIDTH,
+  STATUS_LAYER,
   STRUCTURE_ADJACENTS,
   TILES_LAYER,
   USER_LAYER,
-  DIRT_LAYER,
-  ASSETS_LAYER,
-  STATUS_LAYER,
 } from "@/drizzle/constants";
-import { hasRequiredRank } from "@/libs/train";
-import type { ComplexObjectiveFields } from "@/validators/objectives";
-import type { UserWithRelations } from "@/routers/profile";
-import type { TerrainHex, PathCalculator, HexagonalFaceMesh } from "../hexgrid";
-import type { SectorUser, GlobalTile } from "@/libs/threejs/types";
-import type { SectorVillage } from "@/routers/travel";
 import type { VillageStructure } from "@/drizzle/schema";
+import { getActiveObjectives } from "@/libs/quest";
+import { generateWallPlacements, getTileInfo } from "@/libs/threejs/biome";
+import {
+  calculateHexUVCoordinates,
+  calculateTileOffset,
+  createGroundCorners,
+  createGroundEdges,
+  createGroundGeometry,
+  createTileGeometry,
+  getHexPoints,
+  mergeBufferGeometries,
+} from "@/libs/threejs/hexgrid";
+import { applyBlurShader, applyWaveShader } from "@/libs/threejs/shaders";
+import type { GlobalTile, SectorUser } from "@/libs/threejs/types";
+import { createTexture, loadTexture, profiler } from "@/libs/threejs/util";
+import { hasRequiredRank } from "@/libs/train";
+import type { UserWithRelations } from "@/routers/profile";
+import type { SectorVillage } from "@/routers/travel";
+import { findVillageUserRelationship } from "@/utils/alliance";
+import { groupBy } from "@/utils/grouping";
+import type { ComplexObjectiveFields } from "@/validators/objectives";
+import type { HexagonalFaceMesh, PathCalculator, TerrainHex } from "../hexgrid";
+import { defineHex, findHex } from "../hexgrid";
 
 // Cache for meshes to avoid getObjectByName every frame
 const meshCache = new Map<string, Group>();
@@ -192,8 +191,7 @@ export const drawSector = (
     .filter((tile) => {
       try {
         return tile.width !== 0;
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (e) {
+      } catch (_e) {
         return false;
       }
     })
@@ -279,7 +277,9 @@ export const drawSector = (
       tile.asset = asset;
 
       if (sprites && sprites.length > 0 && !tile.hasStructure && !lightLayout) {
-        sprites.forEach((sprite) => group_assets.add(sprite));
+        sprites.forEach((sprite) => {
+          group_assets.add(sprite);
+        });
       }
 
       // Corners of the tile and the below ground
@@ -319,7 +319,8 @@ export const drawSector = (
             oceanMaterialPool[variantIndex] = variantMaterial;
             animatedMaterials.add(variantMaterial);
           }
-          materialToUse = oceanMaterialPool[variantIndex]!;
+          materialToUse = oceanMaterialPool[variantIndex] ?? oceanMaterialPool[0];
+          if (!materialToUse) return;
         }
 
         const group = materialGroups.get(materialToUse) || [];
@@ -455,10 +456,10 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
   });
   const highlightColor =
     userData.allianceStatus === "ALLY"
-      ? parseInt("008000", 16)
+      ? 0x008000
       : userData.allianceStatus === "NEUTRAL"
-        ? parseInt("2986CC", 16)
-        : parseInt("FF0000", 16);
+        ? 0x2986cc
+        : 0xff0000;
   const highlightSprite = new Sprite(highlightMaterial);
   highlightSprite.userData.type = "marker";
   highlightSprite.scale.set(h * 1.1, h * 1.3, 1);
@@ -555,7 +556,7 @@ export const createCombatSprite = (
     map: highlightTexture,
     alphaMap: highlightTexture,
   });
-  const highlightColor = parseInt("FF0000", 16);
+  const highlightColor = 0xff0000;
   const highlightSprite = new Sprite(highlightMaterial);
   highlightSprite.userData.type = "marker";
   highlightSprite.scale.set(h * 1.1, h * 1.3, 1);
@@ -694,7 +695,7 @@ export const drawVillage = (
     const wall_tower_texture = loadTexture(IMG_SECTOR_WALL_STONE_TOWER);
     const wall_tower_material = new SpriteMaterial({ map: wall_tower_texture });
     let prevPos: TerrainHex | null = null;
-    wallPlacements.map((wall) => {
+    for (const wall of wallPlacements) {
       const pos = grid.getHex({ col: wall.x, row: wall.y });
       if (pos) {
         const { height: h, x, y } = pos;
@@ -724,43 +725,41 @@ export const drawVillage = (
         }
         prevPos = pos;
       }
-    });
+    }
   }
   // Village structures
-  structures
-    .filter((s) => s.hasPage !== 0)
-    .map((structure) => {
-      const pos = grid.getHex({ col: structure.longitude, row: structure.latitude });
-      if (pos) {
-        // Add a structure group
-        const { height: h, x, y } = pos;
-        //  Structure shadow in the top of the structure, with edges from the original structure
-        const shadow_texture2 = loadTexture(structure.image, 200);
-        const shadow_material2 = new SpriteMaterial({
-          map: shadow_texture2,
-          color: 0x000000,
-          opacity: 0.3,
-          depthWrite: false,
-          depthTest: false,
-        });
-        applyBlurShader(shadow_material2, 0.01);
-        const shadow_sprite2 = new Sprite(shadow_material2);
-        shadow_sprite2.scale.set(h * 3.3, h * 3.3, 1);
-        shadow_sprite2.position.set(x - 0.2 * h, y + h / 10 + 0.2 * h, ASSETS_LAYER);
-        group.add(shadow_sprite2);
-        // Structure
-        const texture = loadTexture(structure.image, 200);
-        const material = new SpriteMaterial({
-          map: texture,
-          depthWrite: false,
-          depthTest: false,
-        });
-        const sprite = new Sprite(material);
-        sprite.scale.set(h * 3.0, h * 3.0, 1);
-        sprite.position.set(x, y + h / 10, ASSETS_LAYER);
-        group.add(sprite);
-      }
-    });
+  for (const structure of structures.filter((s) => s.hasPage !== 0)) {
+    const pos = grid.getHex({ col: structure.longitude, row: structure.latitude });
+    if (pos) {
+      // Add a structure group
+      const { height: h, x, y } = pos;
+      //  Structure shadow in the top of the structure, with edges from the original structure
+      const shadow_texture2 = loadTexture(structure.image, 200);
+      const shadow_material2 = new SpriteMaterial({
+        map: shadow_texture2,
+        color: 0x000000,
+        opacity: 0.3,
+        depthWrite: false,
+        depthTest: false,
+      });
+      applyBlurShader(shadow_material2, 0.01);
+      const shadow_sprite2 = new Sprite(shadow_material2);
+      shadow_sprite2.scale.set(h * 3.3, h * 3.3, 1);
+      shadow_sprite2.position.set(x - 0.2 * h, y + h / 10 + 0.2 * h, ASSETS_LAYER);
+      group.add(shadow_sprite2);
+      // Structure
+      const texture = loadTexture(structure.image, 200);
+      const material = new SpriteMaterial({
+        map: texture,
+        depthWrite: false,
+        depthTest: false,
+      });
+      const sprite = new Sprite(material);
+      sprite.scale.set(h * 3.0, h * 3.0, 1);
+      sprite.position.set(x, y + h / 10, ASSETS_LAYER);
+      group.add(sprite);
+    }
+  }
 };
 
 // Cache for user/battle meshes to avoid getObjectByName every frame

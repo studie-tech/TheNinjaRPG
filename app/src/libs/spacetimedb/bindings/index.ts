@@ -3,46 +3,45 @@
 
 // This was generated using spacetimedb cli version 1.11.1 (commit bbfa851b45db7096aa2a69d7dbad84f52983559f).
 
-/* eslint-disable */
 /* tslint:disable */
 import {
-  DbConnectionBuilder as __DbConnectionBuilder,
-  DbConnectionImpl as __DbConnectionImpl,
-  SubscriptionBuilderImpl as __SubscriptionBuilderImpl,
-  TypeBuilder as __TypeBuilder,
   convertToAccessorMap as __convertToAccessorMap,
-  procedureSchema as __procedureSchema,
-  procedures as __procedures,
-  reducerSchema as __reducerSchema,
-  reducers as __reducers,
-  schema as __schema,
-  t as __t,
-  table as __table,
-  type AlgebraicTypeType as __AlgebraicTypeType,
+  DbConnectionBuilder as __DbConnectionBuilder,
   type DbConnectionConfig as __DbConnectionConfig,
+  DbConnectionImpl as __DbConnectionImpl,
   type ErrorContextInterface as __ErrorContextInterface,
-  type Event as __Event,
   type EventContextInterface as __EventContextInterface,
-  type Infer as __Infer,
+  procedures as __procedures,
   type ReducerEventContextInterface as __ReducerEventContextInterface,
   type RemoteModule as __RemoteModule,
+  reducerSchema as __reducerSchema,
+  reducers as __reducers,
+  SubscriptionBuilderImpl as __SubscriptionBuilderImpl,
   type SubscriptionEventContextInterface as __SubscriptionEventContextInterface,
   type SubscriptionHandleImpl as __SubscriptionHandleImpl,
+  schema as __schema,
+  table as __table,
 } from "spacetimedb";
 
 // Import and reexport all reducer arg types
 import AbandonSessionReducer from "./abandon_session_reducer";
 export { AbandonSessionReducer };
+
 import CreateSessionReducer from "./create_session_reducer";
 export { CreateSessionReducer };
+
 import DeleteCompletedRunReducer from "./delete_completed_run_reducer";
 export { DeleteCompletedRunReducer };
+
 import GameLoopReducer from "./game_loop_reducer";
 export { GameLoopReducer };
+
 import PurchaseUpgradeReducer from "./purchase_upgrade_reducer";
 export { PurchaseUpgradeReducer };
+
 import StartWaveReducer from "./start_wave_reducer";
 export { StartWaveReducer };
+
 import ThrowShurikenReducer from "./throw_shuriken_reducer";
 export { ThrowShurikenReducer };
 
@@ -51,42 +50,59 @@ export { ThrowShurikenReducer };
 // Import and reexport all table handle types
 import CompletedRunRow from "./completed_run_table";
 export { CompletedRunRow };
+
 import EnemyRow from "./enemy_table";
 export { EnemyRow };
+
 import EnemyQueuedRow from "./enemy_queued_table";
 export { EnemyQueuedRow };
+
 import EnemySpawnRow from "./enemy_spawn_table";
 export { EnemySpawnRow };
+
 import GameLoopScheduleRow from "./game_loop_schedule_table";
 export { GameLoopScheduleRow };
+
 import GameSessionRow from "./game_session_table";
 export { GameSessionRow };
+
 import ProjectileRow from "./projectile_table";
 export { ProjectileRow };
+
 import SessionStateRow from "./session_state_table";
 export { SessionStateRow };
+
 import SessionUpgradeRow from "./session_upgrade_table";
 export { SessionUpgradeRow };
 
 // Import and reexport all types
 import CompletedRun from "./completed_run_type";
 export { CompletedRun };
+
 import Enemy from "./enemy_type";
 export { Enemy };
+
 import EnemyQueued from "./enemy_queued_type";
 export { EnemyQueued };
+
 import EnemySpawn from "./enemy_spawn_type";
 export { EnemySpawn };
+
 import GameLoopSchedule from "./game_loop_schedule_type";
 export { GameLoopSchedule };
+
 import GameSession from "./game_session_type";
 export { GameSession };
+
 import HexPosition from "./hex_position_type";
 export { HexPosition };
+
 import Projectile from "./projectile_type";
 export { Projectile };
+
 import SessionState from "./session_state_type";
 export { SessionState };
+
 import SessionUpgrade from "./session_upgrade_type";
 export { SessionUpgrade };
 

@@ -1,21 +1,9 @@
 "use client";
 
 import React from "react";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
 import { api } from "@/app/_trpc/client";
-import { useUserData } from "@/utils/UserContext";
-import {
-  canViewRecruitmentAnalytics,
-  canViewRevenueAnalytics,
-} from "@/utils/permissions";
-
-import {
-  GroupedLevelStats,
-  DailyMeanStdChart,
-  DailyCountsBySourceChart,
-} from "@/layout/UsageStatistics";
-import { RevenueBySourceBar } from "@/layout/UsageStatistics";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -23,25 +11,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
-  RecruitmentMetrics,
   RECRUITMENT_GOALS,
   type RecruitmentMetric,
+  RecruitmentMetrics,
 } from "@/drizzle/constants";
-import RecruitmentFiltering, {
-  useFiltering as useRecruitmentFiltering,
-  getFilter as getRecruitmentFilter,
-} from "@/layout/RecruitmentFiltering";
-import VisitorFiltering, {
-  useFiltering as useVisitorFiltering,
-  getFilter as getVisitorFilter,
-} from "@/layout/VisitorFiltering";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import AbTestResults from "@/layout/AbTestResults";
-import { QuestFunnelBar } from "@/layout/UsageStatistics";
 import { TUTORIAL_STEPS } from "@/hooks/tutorial";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import AbTestResults from "@/layout/AbTestResults";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import RecruitmentFiltering, {
+  getFilter as getRecruitmentFilter,
+  useFiltering as useRecruitmentFiltering,
+} from "@/layout/RecruitmentFiltering";
+import {
+  DailyCountsBySourceChart,
+  DailyMeanStdChart,
+  GroupedLevelStats,
+  QuestFunnelBar,
+  RevenueBySourceBar,
+} from "@/layout/UsageStatistics";
+import VisitorFiltering, {
+  getFilter as getVisitorFilter,
+  useFiltering as useVisitorFiltering,
+} from "@/layout/VisitorFiltering";
+import {
+  canViewRecruitmentAnalytics,
+  canViewRevenueAnalytics,
+} from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 export default function ManualRecruitment() {
   const { data: currentUser } = useUserData();
@@ -141,10 +140,10 @@ export default function ManualRecruitment() {
         )}
 
         {allowed && (
-          <div className="grid grid-cols-2 gap-2 mt-3">
+          <div className="mt-3 grid grid-cols-2 gap-2">
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Signup Rate</CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Signup Rate</CardTitle>
               </CardHeader>
               <CardContent className="py-1">
                 {isFetchingMain ? (
@@ -152,28 +151,25 @@ export default function ManualRecruitment() {
                 ) : (
                   <>
                     <div
-                      className={`text-xl font-bold ${getColorClass(
-                        (mainMetrics?.signupRate ?? 0) * 100,
-                        goals.signupRate,
-                      )}`}
+                      className={`font-bold text-xl ${getColorClass((mainMetrics?.signupRate ?? 0) * 100, goals.signupRate)}`}
                     >
                       {((mainMetrics?.signupRate ?? 0) * 100).toFixed(1)}%
                     </div>
-                    <div className="text-xs text-foreground-muted">
+                    <div className="text-foreground-muted text-xs">
                       Goal: {goals.signupRate}%
                     </div>
                   </>
                 )}
                 {!isFetchingMain && mainMetrics && (
-                  <div className="text-xs text-foreground-muted">
+                  <div className="text-foreground-muted text-xs">
                     {mainMetrics.signups} / {mainMetrics.visitors}
                   </div>
                 )}
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">
                   Character Creation Rate
                 </CardTitle>
               </CardHeader>
@@ -183,26 +179,23 @@ export default function ManualRecruitment() {
                 ) : (
                   <>
                     <div
-                      className={`text-xl font-bold ${getColorClass(
-                        (mainMetrics?.characterCreationRate ?? 0) * 100,
-                        goals.signupRate,
-                      )}`}
+                      className={`font-bold text-xl ${getColorClass((mainMetrics?.characterCreationRate ?? 0) * 100, goals.signupRate)}`}
                     >
                       {((mainMetrics?.characterCreationRate ?? 0) * 100).toFixed(1)}%
                     </div>
-                    <div className="text-xs text-foreground-muted">
+                    <div className="text-foreground-muted text-xs">
                       Goal: {goals.signupRate}%
                     </div>
                   </>
                 )}
                 {!isFetchingMain && mainMetrics && (
                   <>
-                    <div className="text-xs text-foreground-muted">
+                    <div className="text-foreground-muted text-xs">
                       {mainMetrics.characterCreations} / {mainMetrics.visitors}
                     </div>
                     {mainMetrics.characterCreationsByDevice &&
                       mainMetrics.visitorsByDevice && (
-                        <div className="text-xs text-foreground-muted mt-1">
+                        <div className="mt-1 text-foreground-muted text-xs">
                           📱{" "}
                           {mainMetrics.visitorsByDevice.mobile > 0
                             ? (
@@ -235,8 +228,8 @@ export default function ManualRecruitment() {
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Finished Tutorial</CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Finished Tutorial</CardTitle>
               </CardHeader>
               <CardContent className="py-1">
                 {isFetchingMain ? (
@@ -244,14 +237,7 @@ export default function ManualRecruitment() {
                 ) : (
                   <>
                     <div
-                      className={`text-xl font-bold ${getColorClass(
-                        (mainMetrics?.signups ?? 0) > 0
-                          ? ((mainMetrics?.tutorialFinishedSignups ?? 0) /
-                              (mainMetrics?.signups ?? 1)) *
-                              100
-                          : 0,
-                        goals.tutorialRate,
-                      )}`}
+                      className={`font-bold text-xl ${getColorClass((mainMetrics?.signups ?? 0) > 0 ? ((mainMetrics?.tutorialFinishedSignups ?? 0) / (mainMetrics?.signups ?? 1)) * 100 : 0, goals.tutorialRate)}`}
                     >
                       {((mainMetrics?.signups ?? 0) > 0
                         ? ((mainMetrics?.tutorialFinishedSignups ?? 0) /
@@ -261,19 +247,19 @@ export default function ManualRecruitment() {
                       ).toFixed(1)}
                       %
                     </div>
-                    <div className="text-xs text-foreground-muted">
+                    <div className="text-foreground-muted text-xs">
                       Goal: {goals.tutorialRate}%
                     </div>
                   </>
                 )}
                 {!isFetchingMain && mainMetrics && (
                   <>
-                    <div className="text-xs text-foreground-muted">
+                    <div className="text-foreground-muted text-xs">
                       {mainMetrics.tutorialFinishedSignups} / {mainMetrics.signups}
                     </div>
                     {mainMetrics.tutorialFinishedByDevice &&
                       mainMetrics.signupsByDevice && (
-                        <div className="text-xs text-foreground-muted mt-1">
+                        <div className="mt-1 text-foreground-muted text-xs">
                           📱{" "}
                           {mainMetrics.signupsByDevice.mobile > 0
                             ? (
@@ -306,8 +292,8 @@ export default function ManualRecruitment() {
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Did PvP Fight</CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Did PvP Fight</CardTitle>
               </CardHeader>
               <CardContent className="py-1">
                 {isFetchingMain ? (
@@ -315,14 +301,7 @@ export default function ManualRecruitment() {
                 ) : (
                   <>
                     <div
-                      className={`text-xl font-bold ${getColorClass(
-                        (mainMetrics?.signups ?? 0) > 0
-                          ? ((mainMetrics?.pvpSignups ?? 0) /
-                              (mainMetrics?.signups ?? 1)) *
-                              100
-                          : 0,
-                        goals.pvpRate,
-                      )}`}
+                      className={`font-bold text-xl ${getColorClass((mainMetrics?.signups ?? 0) > 0 ? ((mainMetrics?.pvpSignups ?? 0) / (mainMetrics?.signups ?? 1)) * 100 : 0, goals.pvpRate)}`}
                     >
                       {((mainMetrics?.signups ?? 0) > 0
                         ? ((mainMetrics?.pvpSignups ?? 0) /
@@ -332,21 +311,21 @@ export default function ManualRecruitment() {
                       ).toFixed(1)}
                       %
                     </div>
-                    <div className="text-xs text-foreground-muted">
+                    <div className="text-foreground-muted text-xs">
                       Goal: {goals.pvpRate}%
                     </div>
                   </>
                 )}
                 {!isFetchingMain && mainMetrics && (
-                  <div className="text-xs text-foreground-muted">
+                  <div className="text-foreground-muted text-xs">
                     {mainMetrics.pvpSignups} / {mainMetrics.signups}
                   </div>
                 )}
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Student+</CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Student+</CardTitle>
               </CardHeader>
               <CardContent className="py-1">
                 {isFetchingMain ? (
@@ -354,14 +333,7 @@ export default function ManualRecruitment() {
                 ) : (
                   <>
                     <div
-                      className={`text-xl font-bold ${getColorClass(
-                        (mainMetrics?.signups ?? 0) > 0
-                          ? ((mainMetrics?.nonStudentSignups ?? 0) /
-                              (mainMetrics?.signups ?? 1)) *
-                              100
-                          : 0,
-                        goals.rankRate,
-                      )}`}
+                      className={`font-bold text-xl ${getColorClass((mainMetrics?.signups ?? 0) > 0 ? ((mainMetrics?.nonStudentSignups ?? 0) / (mainMetrics?.signups ?? 1)) * 100 : 0, goals.rankRate)}`}
                     >
                       {((mainMetrics?.signups ?? 0) > 0
                         ? ((mainMetrics?.nonStudentSignups ?? 0) /
@@ -371,21 +343,21 @@ export default function ManualRecruitment() {
                       ).toFixed(1)}
                       %
                     </div>
-                    <div className="text-xs text-foreground-muted">
+                    <div className="text-foreground-muted text-xs">
                       Goal: {goals.rankRate}%
                     </div>
                   </>
                 )}
                 {!isFetchingMain && mainMetrics && (
-                  <div className="text-xs text-foreground-muted">
+                  <div className="text-foreground-muted text-xs">
                     {mainMetrics.nonStudentSignups} / {mainMetrics.signups} signups
                   </div>
                 )}
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Genin+</CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Genin+</CardTitle>
               </CardHeader>
               <CardContent className="py-1">
                 {isFetchingMain ? (
@@ -393,14 +365,7 @@ export default function ManualRecruitment() {
                 ) : (
                   <>
                     <div
-                      className={`text-xl font-bold ${getColorClass(
-                        (mainMetrics?.signups ?? 0) > 0
-                          ? ((mainMetrics?.nonStudentGeninSignups ?? 0) /
-                              (mainMetrics?.signups ?? 1)) *
-                              100
-                          : 0,
-                        goals.rankRate,
-                      )}`}
+                      className={`font-bold text-xl ${getColorClass((mainMetrics?.signups ?? 0) > 0 ? ((mainMetrics?.nonStudentGeninSignups ?? 0) / (mainMetrics?.signups ?? 1)) * 100 : 0, goals.rankRate)}`}
                     >
                       {((mainMetrics?.signups ?? 0) > 0
                         ? ((mainMetrics?.nonStudentGeninSignups ?? 0) /
@@ -410,13 +375,13 @@ export default function ManualRecruitment() {
                       ).toFixed(1)}
                       %
                     </div>
-                    <div className="text-xs text-foreground-muted">
+                    <div className="text-foreground-muted text-xs">
                       Goal: {goals.rankRate}%
                     </div>
                   </>
                 )}
                 {!isFetchingMain && mainMetrics && (
-                  <div className="text-xs text-foreground-muted">
+                  <div className="text-foreground-muted text-xs">
                     {mainMetrics.nonStudentGeninSignups} / {mainMetrics.signups} signups
                   </div>
                 )}
@@ -424,8 +389,8 @@ export default function ManualRecruitment() {
             </Card>
 
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">
                   Signup Value (USD)
                 </CardTitle>
               </CardHeader>
@@ -434,14 +399,12 @@ export default function ManualRecruitment() {
                   <Loader explanation="Loading click value" />
                 ) : (
                   <div
-                    className={`text-xl font-bold ${getClickValueColor(
-                      Number(mainMetrics?.signupValueUsd ?? 0),
-                    )}`}
+                    className={`font-bold text-xl ${getClickValueColor(Number(mainMetrics?.signupValueUsd ?? 0))}`}
                   >
                     ${mainMetrics?.signupValueUsd?.toFixed(2) ?? "0.00"}
                   </div>
                 )}
-                <div className="text-xs text-foreground-muted">
+                <div className="text-foreground-muted text-xs">
                   Total revenue / Paid Signup (Goal: $
                   {RECRUITMENT_GOALS.SIGNUP_VALUE_USD.toFixed(2)})<br />
                   All-time (ignores time & device filters)
@@ -449,18 +412,18 @@ export default function ManualRecruitment() {
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-0 pt-2">
-                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <CardHeader className="pt-2 pb-0">
+                <CardTitle className="font-medium text-sm">Total Revenue</CardTitle>
               </CardHeader>
               <CardContent className="py-1">
                 {isFetchingMain ? (
                   <Loader explanation="Loading total revenue" />
                 ) : (
-                  <div className="text-xl font-bold text-green-600">
+                  <div className="font-bold text-green-600 text-xl">
                     ${mainMetrics?.totalRevenueUsd?.toFixed(2) ?? "0.00"}
                   </div>
                 )}
-                <div className="text-xs text-foreground-muted">
+                <div className="text-foreground-muted text-xs">
                   Total revenue from all transactions
                   <br />
                   All-time (ignores time & device filters)
@@ -557,8 +520,8 @@ export default function ManualRecruitment() {
                     <SelectValue placeholder="Metric" />
                   </SelectTrigger>
                   <SelectContent>
-                    {RecruitmentMetrics.map((m) => (
-                      <SelectItem key={m} value={m}>
+                    {RecruitmentMetrics.map((m, i) => (
+                      <SelectItem key={`${m}-${i}`} value={m}>
                         {m === "level"
                           ? "Level"
                           : m === "completedQuests"

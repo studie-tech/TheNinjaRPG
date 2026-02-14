@@ -1,6 +1,6 @@
-import { writeFile } from "fs/promises";
-import { tmpdir } from "os";
-import path from "path";
+import { writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { nanoid } from "nanoid";
 import fetch from "node-fetch";
 

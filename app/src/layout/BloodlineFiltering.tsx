@@ -1,15 +1,15 @@
-import { ElementNames, LetterRanks, StatTypes } from "@/drizzle/constants";
-import { statFilters } from "@/libs/train";
-import { effectFilters } from "@/validators/combat";
-import { useUserData } from "@/utils/UserContext";
-import { canChangeContent } from "@/utils/permissions";
-import {
-  ContentFiltering,
-  useContentFiltering,
-  buildFilter,
-  defineFilteringSchema,
-} from "@/layout/ContentFiltering";
 import type { LetterRank } from "@/drizzle/constants";
+import { ElementNames, LetterRanks, StatTypes } from "@/drizzle/constants";
+import {
+  buildFilter,
+  ContentFiltering,
+  defineFilteringSchema,
+  useContentFiltering,
+} from "@/layout/ContentFiltering";
+import { statFilters } from "@/libs/train";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
+import { effectFilters } from "@/validators/combat";
 
 // Inline schema
 const makeBloodlineFilteringSchema = (

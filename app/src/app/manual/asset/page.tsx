@@ -1,25 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import Modal2 from "@/layout/Modal2";
-import { Button } from "@/components/ui/button";
-import { api } from "@/app/_trpc/client";
 import { FilePlus, Folder as FolderIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import type { GameAsset } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
+import ContentBox from "@/layout/ContentBox";
+import GameAssetFiltering, {
+  getFilter,
+  useFiltering,
+} from "@/layout/GameAssetFiltering";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
+import NavTabs from "@/layout/NavTabs";
 import { useInfinitePagination } from "@/libs/pagination";
-import { useUserData } from "@/utils/UserContext";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import GameAssetFiltering, {
-  useFiltering,
-  getFilter,
-} from "@/layout/GameAssetFiltering";
-import type { GameAsset } from "@/drizzle/schema";
-import NavTabs from "@/layout/NavTabs";
+import { useUserData } from "@/utils/UserContext";
 
 export default function ManualAssets() {
   // Router and filtering
@@ -43,7 +43,7 @@ export default function ManualAssets() {
       subtitle="All assets"
       defaultBackHref="/manual"
       topRightContent={
-        <div className="flex flex-row gap-2 items-center">
+        <div className="flex flex-row items-center gap-2">
           <NavTabs
             id="manual-asset-tabs"
             current={activeTab}
@@ -91,7 +91,7 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
     },
   );
   // Derive folders and folderCounts from assets
-  const allAssets = assets?.pages.map((page) => page.data).flat() ?? [];
+  const allAssets = assets?.pages.flatMap((page) => page.data) ?? [];
   const folderCounts = allAssets.reduce((acc, asset) => {
     if (asset.folder && asset.folder !== "") {
       acc.set(asset.folder, (acc.get(asset.folder) ?? 0) + 1);
@@ -136,22 +136,23 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
         emptyText="No folders yet."
         aspectRatioClass=""
         renderItem={(item) => (
-          <div
-            className="flex flex-col items-center justify-start w-full cursor-pointer"
+          <button
+            type="button"
+            className="flex w-full cursor-pointer flex-col items-center justify-start"
             onClick={() => router.push(`/manual/asset/${encodeURIComponent(item.id)}`)}
           >
-            <div className="relative w-full aspect-square rounded-xl border bg-slate-100 flex items-center justify-center">
+            <div className="relative flex aspect-square w-full items-center justify-center rounded-xl border bg-slate-100">
               <FolderIcon className="h-1/3 w-1/3 text-slate-700" />
               {folderCounts.get(item.id) !== undefined && (
-                <div className="absolute -bottom-2 -right-2 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 text-black font-bold">
+                <div className="absolute -right-2 -bottom-2 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 font-bold text-black">
                   {folderCounts.get(item.id)}
                 </div>
               )}
             </div>
-            <div className="mt-1 text-center truncate w-full" title={item.name}>
+            <div className="mt-1 w-full truncate text-center" title={item.name}>
               {item.name}
             </div>
-          </div>
+          </button>
         )}
       />
       <div className="mt-4" />
@@ -218,7 +219,10 @@ const AnimationsContent: React.FC = () => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const { data: tagResp, isFetching: loadingTags } = api.gameAsset.getNameTags.useQuery(
-    { type: "ANIMATION", selected: selectedTags },
+    {
+      type: "ANIMATION",
+      selected: selectedTags,
+    },
   );
 
   const { data: assets } = api.gameAsset.getAll.useInfiniteQuery(
@@ -229,7 +233,7 @@ const AnimationsContent: React.FC = () => {
     },
   );
 
-  const allAnimations = assets?.pages.map((p) => p.data).flat();
+  const allAnimations = assets?.pages.flatMap((p) => p.data);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -243,13 +247,9 @@ const AnimationsContent: React.FC = () => {
         {loadingTags && <span className="text-sm opacity-70">Loading tags…</span>}
         {tagResp?.tags?.map((t) => (
           <button
+            type="button"
             key={t}
-            className={
-              "px-2 py-1 rounded border text-xs " +
-              (selectedTags.includes(t)
-                ? "bg-foreground text-background border-foreground"
-                : "bg-background border-muted-foreground/30")
-            }
+            className={`rounded border px-2 py-1 text-xs ${selectedTags.includes(t) ? "border-foreground bg-foreground text-background" : "border-muted-foreground/30 bg-background"}`}
             onClick={() => toggleTag(t)}
           >
             {t}
@@ -290,7 +290,7 @@ const SfxContent: React.FC = () => {
     },
   );
 
-  const allSfx = assets?.pages.map((p) => p.data).flat();
+  const allSfx = assets?.pages.flatMap((p) => p.data);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -304,13 +304,9 @@ const SfxContent: React.FC = () => {
         {loadingTags && <span className="text-sm opacity-70">Loading tags…</span>}
         {tagResp?.tags?.map((t) => (
           <button
+            type="button"
             key={t}
-            className={
-              "px-2 py-1 rounded border text-xs " +
-              (selectedTags.includes(t)
-                ? "bg-foreground text-background border-foreground"
-                : "bg-background border-muted-foreground/30")
-            }
+            className={`rounded border px-2 py-1 text-xs ${selectedTags.includes(t) ? "border-foreground bg-foreground text-background" : "border-muted-foreground/30 bg-background"}`}
             onClick={() => toggleTag(t)}
           >
             {t}

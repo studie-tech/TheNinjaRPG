@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronsLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
+import type React from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export interface ContentBoxProps {
   children: React.ReactNode;
@@ -44,7 +45,8 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
 
   // Title to be shown
   const title = props.defaultBackHref ? (
-    <div
+    <button
+      type="button"
       className="ml-1 flex cursor-pointer flex-row items-center hover:text-orange-700"
       onClick={() => {
         handleBack();
@@ -54,7 +56,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
     >
       <ChevronsLeft className="h-6 w-6" />
       {props.title}
-    </div>
+    </button>
   ) : (
     <div suppressHydrationWarning>{props.title}</div>
   );
@@ -64,36 +66,32 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
       {props.initialBreak && <div className="h-4"></div>}
       <div className="sm:container" id={props.id}>
         <div
-          className={`flex ${
-            props.topRightCorntentBreakpoint
-              ? `flex-col ${props.topRightCorntentBreakpoint}:flex-row ${props.topRightCorntentBreakpoint}:items-center`
-              : "flex-row items-center"
-          }`}
+          className={`flex ${props.topRightCorntentBreakpoint ? `flex-col ${props.topRightCorntentBreakpoint}:flex-row ${props.topRightCorntentBreakpoint}:items-center` : "flex-row items-center"}`}
         >
           {props.title && (
             <div className="self-start">
               {props.initialBreak || props.alreadyHasH1 ? (
-                <h2 className="text-2xl font-bold text-background-foreground">
+                <h2 className="font-bold text-2xl text-background-foreground">
                   {title}
                 </h2>
               ) : (
-                <h1 className="text-2xl font-bold text-background-foreground">
+                <h1 className="font-bold text-2xl text-background-foreground">
                   {title}
                 </h1>
               )}
               {props.subtitle && !props.initialBreak && !props.alreadyHasH1 && (
-                <h2 className=" text-background-foreground" suppressHydrationWarning>
+                <h2 className="text-background-foreground" suppressHydrationWarning>
                   {props.subtitle}
                 </h2>
               )}
               {props.subtitle && (props.initialBreak || props.alreadyHasH1) && (
-                <h3 className=" text-background-foreground" suppressHydrationWarning>
+                <h3 className="text-background-foreground" suppressHydrationWarning>
                   {props.subtitle}
                 </h3>
               )}
             </div>
           )}
-          <div className="flex flex-row grow">
+          <div className="flex grow flex-row">
             {!props.noRightAlign && <div className="grow"></div>}
             <div className={props.noRightAlign ? "grow" : ""}>
               {props.topRightContent}
@@ -102,9 +100,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
         </div>
 
         <div
-          className={`relative ${!props.noBorder ? "border-2 border-double" : ""} bg-card shadow-lg ${
-            props.padding === undefined || props.padding ? "p-3" : ""
-          } text-card-foreground`}
+          className={`relative ${!props.noBorder ? "border-2 border-double" : ""} bg-card shadow-lg ${props.padding === undefined || props.padding ? "p-3" : ""} text-card-foreground`}
         >
           {props.children}
         </div>

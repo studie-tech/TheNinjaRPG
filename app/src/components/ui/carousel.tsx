@@ -1,9 +1,9 @@
+import useEmblaCarousel, { type UseEmblaCarouselType } from "embla-carousel-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import * as React from "react";
 import { use } from "react";
-import useEmblaCarousel, { type UseEmblaCarouselType } from "embla-carousel-react";
-import { cn } from "src/libs/shadui";
-import { Button } from "src/components/ui/button";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/libs/shadui";
 
 type CarouselApi = UseEmblaCarouselType[1];
 type UseCarouselParameters = Parameters<typeof useEmblaCarousel>;
@@ -132,17 +132,15 @@ const Carousel = ({
         canScrollNext,
       }}
     >
-      <div
+      <section
         ref={ref}
         onKeyDownCapture={handleKeyDown}
         className={cn("relative", className)}
-        role="region"
-        aria-roledescription="carousel"
-        tabIndex={0}
+        aria-label="carousel"
         {...props}
       >
         {children}
-      </div>
+      </section>
     </CarouselContext>
   );
 };
@@ -165,9 +163,8 @@ CarouselContent.displayName = "CarouselContent";
 
 const CarouselItem = ({ ref, className, ...props }: CarouselContentProps) => {
   return (
-    <div
+    <article
       ref={ref}
-      role="group"
       aria-roledescription="slide"
       className={cn("min-w-0 shrink-0 grow-0 basis-full", className)}
       {...props}
@@ -195,8 +192,8 @@ const CarouselPrevious = ({
       variant={variant}
       size={size}
       className={cn(
-        "absolute  h-14 w-14 rounded-full",
-        "left-2 top-12 -translate-y-1/2",
+        "absolute h-14 w-14 rounded-full",
+        "top-12 left-2 -translate-y-1/2",
         !canScrollPrev && "hidden",
         className,
       )}
@@ -227,7 +224,7 @@ const CarouselNext = ({
       size={size}
       className={cn(
         "absolute h-14 w-14 rounded-full",
-        "right-2 top-12 -translate-y-1/2",
+        "top-12 right-2 -translate-y-1/2",
         !canScrollNext && "hidden",
         className,
       )}

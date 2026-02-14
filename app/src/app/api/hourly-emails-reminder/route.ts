@@ -1,12 +1,15 @@
-import { drizzleDB } from "@/server/db";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { lockWithHourlyTimer, handleEndpointError } from "@/libs/gamesettings";
-import { emailReminder, userData } from "@/drizzle/schema";
-import { cookies } from "next/headers";
-import { env } from "@/env/server.mjs";
-import { secondsFromNow, MONTH_S } from "@/utils/time";
-import { eq, and, lte, asc, isNull, or, sql } from "drizzle-orm";
 import sgMail from "@sendgrid/mail";
+import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { cookies } from "next/headers";
+import { emailReminder, userData } from "@/drizzle/schema";
+import { env } from "@/env/server.mjs";
+import {
+  handleEndpointError,
+  lockWithHourlyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
+import { drizzleDB } from "@/server/db";
+import { MONTH_S, secondsFromNow } from "@/utils/time";
 
 const ENDPOINT_NAME = "hourly-emails-reminder";
 
@@ -38,7 +41,7 @@ export async function GET() {
 
     // Send email for each reminder
     await Promise.all(
-      reminders.map(async (reminder) => {
+      reminders.map(async (reminder: (typeof reminders)[number]) => {
         const msg = {
           to: reminder.email,
           from: "contact@theninja-rpg.com",
@@ -86,6 +89,6 @@ export async function GET() {
     return Response.json(`OK. Send emails to ${reminders.length} users`);
   } catch (cause) {
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

@@ -1,20 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { ChartCandlestick, FilePlus } from "lucide-react";
 import Link from "next/link";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import { Button } from "@/components/ui/button";
-import { FilePlus, ChartCandlestick } from "lucide-react";
-import { useInfinitePagination } from "@/libs/pagination";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import ContentBox from "@/layout/ContentBox";
+import type { GenericObject } from "@/layout/ItemWithEffects";
+import ItemWithEffects from "@/layout/ItemWithEffects";
+import Loader from "@/layout/Loader";
+import UserFiltering, { getFilter, useFiltering } from "@/layout/UserFiltering";
+import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import UserFiltering, { useFiltering, getFilter } from "@/layout/UserFiltering";
-import type { GenericObject } from "@/layout/ItemWithEffects";
 
 export default function ManualAI() {
   // Settings
@@ -41,8 +41,7 @@ export default function ManualAI() {
     },
   );
   const allUsers = users?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .map((user) => {
       return {
         id: user.userId,
@@ -121,7 +120,7 @@ export default function ManualAI() {
       >
         {totalLoading && <Loader explanation="Loading data" />}
         {allUsers?.map((user, i) => (
-          <div key={i} ref={i === allUsers.length - 1 ? setLastElement : null}>
+          <div key={user.id} ref={i === allUsers.length - 1 ? setLastElement : null}>
             <ItemWithEffects
               item={user}
               onDelete={(id: string) => remove({ id })}

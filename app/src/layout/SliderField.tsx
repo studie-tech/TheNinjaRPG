@@ -1,6 +1,5 @@
-import { type UseFormSetValue } from "react-hook-form";
-import { type UseFormRegister } from "react-hook-form";
-import { PlusCircle, MinusCircle } from "lucide-react";
+import { MinusCircle, PlusCircle } from "lucide-react";
+import type { UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 
 interface SliderFieldProps {
@@ -45,7 +44,7 @@ const SliderField: React.FC<SliderFieldProps> = (props) => {
       </label>
       <div className="flex flex-row items-center">
         <MinusCircle
-          className="inline-block h-10 w-10 mr-2 fill-orange-100 text-orange-800 hover:fill-orange-600  hover:cursor-pointer"
+          className="mr-2 inline-block h-10 w-10 fill-orange-100 text-orange-800 hover:cursor-pointer hover:fill-orange-600"
           onClick={() =>
             props.watchedValue > props.min
               ? props.setValue(props.id, props.watchedValue - (props.step ?? 1))
@@ -59,11 +58,11 @@ const SliderField: React.FC<SliderFieldProps> = (props) => {
           max={props.max}
           step={props.step ?? 1}
           {...props?.register?.(props.id, { valueAsNumber: true })}
-          className="h-5 w-full cursor-pointer appearance-none  rounded-lg bg-orange-200 accent-orange-800"
+          className="h-5 w-full cursor-pointer appearance-none rounded-lg bg-orange-200 accent-orange-800"
           onChange={(e) => handleChange(props.id, Number(e.target.value))}
         />
         <PlusCircle
-          className="inline-block h-10 w-10 ml-2 fill-orange-100 text-orange-800 hover:fill-orange-600 hover:cursor-pointer"
+          className="ml-2 inline-block h-10 w-10 fill-orange-100 text-orange-800 hover:cursor-pointer hover:fill-orange-600"
           onClick={() =>
             props.watchedValue < props.max
               ? props.setValue(props.id, props.watchedValue + (props.step ?? 1))
@@ -71,7 +70,7 @@ const SliderField: React.FC<SliderFieldProps> = (props) => {
           }
         />
       </div>
-      {props.error && <p className="text-xs italic text-red-500"> {props.error}</p>}
+      {props.error && <p className="text-red-500 text-xs italic"> {props.error}</p>}
     </div>
   );
 };
@@ -96,7 +95,7 @@ export const UncontrolledSliderField: React.FC<UncontrolledSliderFieldProps> = (
       </label>
       <div className="flex flex-row items-center">
         <MinusCircle
-          className="inline-block mr-2 h-10 w-10 fill-orange-100 text-orange-800 hover:fill-orange-600 hover:cursor-pointer"
+          className="mr-2 inline-block h-10 w-10 fill-orange-100 text-orange-800 hover:cursor-pointer hover:fill-orange-600"
           onClick={() =>
             props.setValue(props.value > props.min ? props.value - 1 : props.value)
           }
@@ -107,11 +106,11 @@ export const UncontrolledSliderField: React.FC<UncontrolledSliderFieldProps> = (
           value={props.value}
           min={props.min}
           max={props.max}
-          onChange={(e) => props.setValue(parseInt(e.target.value))}
-          className="h-5 w-full cursor-pointer appearance-none  rounded-lg bg-orange-200 accent-orange-800"
+          onChange={(e) => props.setValue(parseInt(e.target.value, 10))}
+          className="h-5 w-full cursor-pointer appearance-none rounded-lg bg-orange-200 accent-orange-800"
         />
         <PlusCircle
-          className="inline-block ml-2 h-10 w-10 fill-orange-100 text-orange-800 hover:fill-orange-600 hover:cursor-pointer"
+          className="ml-2 inline-block h-10 w-10 fill-orange-100 text-orange-800 hover:cursor-pointer hover:fill-orange-600"
           onClick={() =>
             props.setValue(props.value < props.max ? props.value + 1 : props.value)
           }

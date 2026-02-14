@@ -4,14 +4,14 @@
  */
 
 import {
+  type Camera,
   EventDispatcher,
   MOUSE,
+  type OrthographicCamera,
+  type PerspectiveCamera,
   Quaternion,
   Vector2,
   Vector3,
-  type OrthographicCamera,
-  type PerspectiveCamera,
-  type Camera,
 } from "three";
 
 /* ------------------------------------------------------------------------- */

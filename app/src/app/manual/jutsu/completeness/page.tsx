@@ -1,22 +1,22 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import { Chart as ChartJS } from "chart.js/auto";
+import { BarChart3, CircleCheckBig, CircleMinus, InfoIcon, Pencil } from "lucide-react";
+import Link from "next/link";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
-import NavTabs from "@/layout/NavTabs";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import { api } from "@/app/_trpc/client";
+import Modal2 from "@/layout/Modal2";
+import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import WordCloud from "@/layout/Wordcloud";
-import { Chart as ChartJS } from "chart.js/auto";
-import type { ArrayElement } from "@/utils/typeutils";
-import { CircleMinus, CircleCheckBig } from "lucide-react";
-import Link from "next/link";
-import { BarChart3, InfoIcon, Pencil } from "lucide-react";
-import { useUserData } from "@/utils/UserContext";
 import { canChangeContent } from "@/utils/permissions";
-import Modal2 from "@/layout/Modal2";
-import ItemWithEffects from "@/layout/ItemWithEffects";
+import type { ArrayElement } from "@/utils/typeutils";
+import { useUserData } from "@/utils/UserContext";
 
 export default function ManualJutsuBalance() {
   // State

@@ -1,10 +1,9 @@
+import type { HUNTING_RANK, ItemRarity } from "@/drizzle/constants";
 import {
   HUNTING_ITEM_DROP_CHANCES,
   HUNTING_RANKS,
   HUNTING_REQUIRED_EXP,
 } from "@/drizzle/constants";
-import type { HUNTING_RANK } from "@/drizzle/constants";
-import type { ItemRarity } from "@/drizzle/constants";
 
 /**
  * Get the hunting rank based on the experience

@@ -1,21 +1,41 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  ImageIcon,
+  ImagePlus,
+  Loader2,
+  Sparkles,
+  Upload,
+  User,
+  Video,
+  X,
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import Link from "next/link";
-import ContentBox from "@/layout/ContentBox";
-import ConceptImage from "@/layout/ConceptImage";
-import Confirm2 from "@/layout/Confirm2";
+import type { z } from "zod";
+import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
-  FormLabel,
+  FormDescription,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -24,44 +44,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
-import { api } from "@/app/_trpc/client";
-import {
-  conceptArtPromptSchema,
-  conceptArtFilterSchema,
-  conceptVideoPromptSchema,
-} from "@/validators/art";
-import { sortOptions, timeFrame } from "@/validators/art";
-import {
-  User,
-  Sparkles,
-  Loader2,
-  Video,
-  ImageIcon,
-  X,
-  Upload,
-  ImagePlus,
-} from "lucide-react";
+import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
+import ConceptImage from "@/layout/ConceptImage";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
 import { UploadDropzone } from "@/utils/uploadthing";
-import Image from "next/image";
-import { showMutationToast } from "@/libs/toast";
-import { useInfinitePagination } from "@/libs/pagination";
-import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
-import type {
-  ConceptPromptType,
-  ConceptFilterType,
-  ConceptVideoPromptType,
+import {
+  conceptArtFilterSchema,
+  conceptArtPromptSchema,
+  conceptVideoPromptSchema,
+  type SortOption,
+  sortOptions,
+  type TimeFrame,
+  timeFrame,
 } from "@/validators/art";
 
 export default function ConceptArt() {
@@ -77,19 +76,31 @@ export default function ConceptArt() {
   const utils = api.useUtils();
 
   // Form handling - filter
-  const filterForm = useForm<ConceptFilterType>({
+  const filterForm = useForm<
+    z.input<typeof conceptArtFilterSchema>,
+    unknown,
+    z.infer<typeof conceptArtFilterSchema>
+  >({
     defaultValues: conceptArtFilterSchema.parse({}),
     resolver: zodResolver(conceptArtFilterSchema),
   });
 
   // Form handling - image prompt
-  const promptForm = useForm<ConceptPromptType>({
+  const promptForm = useForm<
+    z.input<typeof conceptArtPromptSchema>,
+    unknown,
+    z.infer<typeof conceptArtPromptSchema>
+  >({
     defaultValues: conceptArtPromptSchema.parse({}),
     resolver: zodResolver(conceptArtPromptSchema),
   });
 
   // Form handling - video prompt
-  const videoPromptForm = useForm<ConceptVideoPromptType>({
+  const videoPromptForm = useForm<
+    z.input<typeof conceptVideoPromptSchema>,
+    unknown,
+    z.infer<typeof conceptVideoPromptSchema>
+  >({
     defaultValues: {
       prompt: "",
       negative_prompt: "",
@@ -149,7 +160,10 @@ export default function ConceptArt() {
   // Filters
   const only_own = useWatch({ control: filterForm.control, name: "only_own" });
   const sort = useWatch({ control: filterForm.control, name: "sort" });
-  const time_frame = useWatch({ control: filterForm.control, name: "time_frame" });
+  const time_frame = useWatch({
+    control: filterForm.control,
+    name: "time_frame",
+  });
 
   // Fetch data
   const { data, fetchNextPage, hasNextPage } = api.conceptart.getAll.useInfiniteQuery(
@@ -160,8 +174,7 @@ export default function ConceptArt() {
     },
   );
   const allImage = data?.pages
-    .map((page) => page.data)
-    .flat()
+    .flatMap((page) => page.data)
     .sort((a, b) => {
       if (sort === "Most Recent") {
         return b.createdAt.getTime() - a.createdAt.getTime();
@@ -179,7 +192,10 @@ export default function ConceptArt() {
         if (userData.reputationPoints >= COST_CONCEPT_IMAGE) {
           if (!isPending) create(data);
         } else {
-          showMutationToast({ success: false, message: "No reputation points left." });
+          showMutationToast({
+            success: false,
+            message: "No reputation points left.",
+          });
         }
       }
     },
@@ -226,9 +242,7 @@ export default function ConceptArt() {
             />
           </div>
           <Select
-            onValueChange={(e) =>
-              filterForm.setValue("sort", e as (typeof sortOptions)[number])
-            }
+            onValueChange={(e) => filterForm.setValue("sort", e as SortOption)}
             defaultValue={sort}
             value={sort}
           >
@@ -236,17 +250,15 @@ export default function ConceptArt() {
               <SelectValue placeholder={`None`} />
             </SelectTrigger>
             <SelectContent>
-              {sortOptions.map((value) => (
-                <SelectItem key={value} value={value}>
+              {sortOptions.map((value, i) => (
+                <SelectItem key={`${value}-${i}`} value={value}>
                   {value}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select
-            onValueChange={(e) =>
-              filterForm.setValue("time_frame", e as (typeof timeFrame)[number])
-            }
+            onValueChange={(e) => filterForm.setValue("time_frame", e as TimeFrame)}
             defaultValue={time_frame}
             value={time_frame}
           >
@@ -254,8 +266,8 @@ export default function ConceptArt() {
               <SelectValue placeholder={`None`} />
             </SelectTrigger>
             <SelectContent>
-              {timeFrame.map((value) => (
-                <SelectItem key={value} value={value}>
+              {timeFrame.map((value, i) => (
+                <SelectItem key={`${value}-${i}`} value={value}>
                   {value}
                 </SelectItem>
               ))}
@@ -307,7 +319,7 @@ export default function ConceptArt() {
                     <VideoCreationForm form={videoPromptForm} />
                   </TabsContent>
                 </Tabs>
-                <p className="pt-3 text-xs text-muted-foreground">
+                <p className="pt-3 text-muted-foreground text-xs">
                   By creating concept art, you agree that it may be used for
                   advertisement purposes by TheNinja-RPG.
                 </p>
@@ -317,7 +329,7 @@ export default function ConceptArt() {
         </div>
       }
     >
-      <div className="relative grid w-full grow grid-cols-2 sm:grid-cols-3 md:grid-cols-4 ">
+      <div className="relative grid w-full grow grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
         {allImage?.map((image, i) => {
           return (
             <div
@@ -338,7 +350,13 @@ export default function ConceptArt() {
 
 /** Form component for creating images */
 const ImageCreationForm: React.FC<{
-  form: ReturnType<typeof useForm<ConceptPromptType>>;
+  form: ReturnType<
+    typeof useForm<
+      z.input<typeof conceptArtPromptSchema>,
+      unknown,
+      z.infer<typeof conceptArtPromptSchema>
+    >
+  >;
 }> = ({ form }) => (
   <Form {...form}>
     <div className="space-y-4">
@@ -349,7 +367,11 @@ const ImageCreationForm: React.FC<{
           <FormItem>
             <FormLabel>Prompt</FormLabel>
             <FormControl>
-              <Input placeholder="Describe your image..." {...field} />
+              <Input
+                placeholder="Describe your image..."
+                {...field}
+                value={field.value as string}
+              />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -365,7 +387,7 @@ const ImageCreationForm: React.FC<{
               <Input
                 placeholder="Seed value"
                 type="number"
-                value={field.value ?? ""}
+                value={(field.value as number) ?? ""}
                 onChange={(e) => {
                   const value = e.target.value;
                   field.onChange(value === "" ? undefined : Number(value));
@@ -386,7 +408,13 @@ const ImageCreationForm: React.FC<{
 
 /** Form component for creating videos */
 const VideoCreationForm: React.FC<{
-  form: ReturnType<typeof useForm<ConceptVideoPromptType>>;
+  form: ReturnType<
+    typeof useForm<
+      z.input<typeof conceptVideoPromptSchema>,
+      unknown,
+      z.infer<typeof conceptVideoPromptSchema>
+    >
+  >;
 }> = ({ form }) => (
   <Form {...form}>
     <div className="space-y-4">
@@ -401,6 +429,7 @@ const VideoCreationForm: React.FC<{
                 placeholder="Describe your video scene..."
                 className="min-h-[80px]"
                 {...field}
+                value={field.value as string}
               />
             </FormControl>
             <FormMessage />
@@ -414,7 +443,11 @@ const VideoCreationForm: React.FC<{
           <FormItem>
             <FormLabel>Negative Prompt (optional)</FormLabel>
             <FormControl>
-              <Input placeholder="What to avoid in the video..." {...field} />
+              <Input
+                placeholder="What to avoid in the video..."
+                {...field}
+                value={field.value as string}
+              />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -430,7 +463,7 @@ const VideoCreationForm: React.FC<{
               <Input
                 placeholder="Seed value"
                 type="number"
-                value={field.value ?? ""}
+                value={(field.value as number) ?? ""}
                 onChange={(e) => {
                   const value = e.target.value;
                   field.onChange(value === "" ? undefined : Number(value));
@@ -454,7 +487,7 @@ const VideoCreationForm: React.FC<{
               <FormLabel>Start Image (optional)</FormLabel>
               <FormControl>
                 <ConceptArtImageSelector
-                  value={field.value}
+                  value={field.value as string | undefined}
                   onChange={field.onChange}
                   label="First frame"
                 />
@@ -472,7 +505,7 @@ const VideoCreationForm: React.FC<{
               <FormLabel>Last Image (optional)</FormLabel>
               <FormControl>
                 <ConceptArtImageSelector
-                  value={field.value}
+                  value={field.value as string | undefined}
                   onChange={field.onChange}
                   label="Final frame"
                 />
@@ -524,7 +557,7 @@ const ConceptArtImageSelector: React.FC<{
           <button
             type="button"
             onClick={() => onChange("")}
-            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+            className="absolute top-1 right-1 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
           >
             <X className="h-3 w-3" />
           </button>
@@ -536,7 +569,7 @@ const ConceptArtImageSelector: React.FC<{
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="w-full h-24 border-dashed">
+        <Button variant="outline" className="h-24 w-full border-dashed">
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <ImagePlus className="h-8 w-8" />
             <span className="text-xs">Select {label}</span>
@@ -574,7 +607,7 @@ const ConceptArtImageSelector: React.FC<{
               onUploadError={(error: Error) => {
                 showMutationToast({ success: false, message: error.message });
               }}
-              className="ut-label:text-sm ut-allowed-content:text-xs ut-button:bg-primary"
+              className="ut-button:bg-primary ut-allowed-content:text-xs ut-label:text-sm"
             />
           </TabsContent>
           <TabsContent value="gallery" className="mt-4">
@@ -583,7 +616,7 @@ const ConceptArtImageSelector: React.FC<{
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             ) : imageOnlyArt.length === 0 ? (
-              <div className="text-center p-8 text-muted-foreground">
+              <div className="p-8 text-center text-muted-foreground">
                 <p>No concept art images found.</p>
                 <p className="text-sm">Create some images first!</p>
               </div>
@@ -595,7 +628,7 @@ const ConceptArtImageSelector: React.FC<{
                       key={img.id}
                       type="button"
                       onClick={() => img.image && handleSelectImage(img.image)}
-                      className="relative aspect-square rounded-md overflow-hidden hover:ring-2 hover:ring-primary transition-all"
+                      className="relative aspect-square overflow-hidden rounded-md transition-all hover:ring-2 hover:ring-primary"
                     >
                       {img.image && (
                         <Image

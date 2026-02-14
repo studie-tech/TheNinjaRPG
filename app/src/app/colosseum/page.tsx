@@ -2,18 +2,18 @@
 
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { BattleTypes, type BattleType } from "@/drizzle/constants";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { type BattleType, BattleTypes } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
 
 const battleTypeLabels: Record<BattleType, string> = {
@@ -54,23 +54,23 @@ export default function ColosseumPage() {
         battleType: battleTypeLabels[battle.battleType],
         createdAt: battle.createdAt,
         players: (
-          <div className="flex flex-row gap-2 items-center">
+          <div className="flex flex-row items-center gap-2">
             {users.length > 0 ? (
               users.map((u) => (
-                <div key={u.userId} className="flex flex-col items-center gap-1 w-20">
+                <div key={u.userId} className="flex w-20 flex-col items-center gap-1">
                   <AvatarImage
                     href={u.avatar}
                     alt={u.username || u.userId}
                     size={28}
                     className="border border-gray-400"
                   />
-                  <span className="truncate max-w-[80px] text-xs">
+                  <span className="max-w-[80px] truncate text-xs">
                     {u.username || u.userId}
                   </span>
                 </div>
               ))
             ) : (
-              <span className="text-xs text-muted-foreground">No players</span>
+              <span className="text-muted-foreground text-xs">No players</span>
             )}
           </div>
         ),
@@ -119,8 +119,8 @@ export default function ColosseumPage() {
                 "SPARRING",
                 "RANKED_SPARRING",
               ].includes(type),
-            ).map((type) => (
-              <SelectItem key={type} value={type}>
+            ).map((type, i) => (
+              <SelectItem key={`${type}-${i}`} value={type}>
                 {battleTypeLabels[type]}
               </SelectItem>
             ))}
@@ -131,7 +131,7 @@ export default function ColosseumPage() {
       <div>
         {isLoading && <Loader explanation="Loading battles..." />}
         {!isLoading && (!battles || battles.length === 0) && (
-          <div className="text-muted-foreground text-center p-4">
+          <div className="p-4 text-center text-muted-foreground">
             No ongoing battles found.
           </div>
         )}

@@ -1,23 +1,26 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useAtom, useSetAtom } from "jotai";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import Loader from "@/layout/Loader";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "@/app/_trpc/client";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { type CombatLayoutComponentId, useCombatPreferences } from "@/hooks/combat";
+import { useTutorialStep } from "@/hooks/tutorial";
 import ActionTimer from "@/layout/ActionTimer";
+import { ActionSelector } from "@/layout/CombatActions";
 import CombatHistory from "@/layout/CombatHistory";
 import CombatTimeline from "@/layout/CombatTimeline";
-import { availableUserActions } from "@/libs/combat/actions";
-import { ActionSelector } from "@/layout/CombatActions";
-import { api } from "@/app/_trpc/client";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { useSetAtom, useAtom } from "jotai";
-import { userBattleAtom, combatActionIdAtom } from "@/utils/UserContext";
-import type { BattleState } from "@/libs/combat/types";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useTutorialStep } from "@/hooks/tutorial";
+import Loader from "@/layout/Loader";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
-import { useCombatPreferences, type CombatLayoutComponentId } from "@/hooks/combat";
+import { availableUserActions } from "@/libs/combat/actions";
+import type { BattleState } from "@/libs/combat/types";
+import {
+  combatActionIdAtom,
+  useRequiredUserData,
+  userBattleAtom,
+} from "@/utils/UserContext";
 
 const Combat = dynamic(() => import("@/layout/Combat"), { ssr: false });
 
@@ -102,13 +105,11 @@ export default function CombatPage() {
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   // Collect all possible actions for action selector
   const actions = useMemo(() => {
     return availableUserActions(battleState?.battle, userData?.userId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [versionId]);
 
   // Battle scene
@@ -125,7 +126,6 @@ export default function CombatPage() {
         />
       )
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [versionId, actionId, userId, results, config.showGridNumbers]);
 
   // Handle key-presses
@@ -145,7 +145,6 @@ export default function CombatPage() {
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionId]);
 
   // Action click handler
@@ -191,7 +190,7 @@ export default function CombatPage() {
 
   const renderBattlefield = useCallback(() => {
     return (
-      <div className="relative rounded-lg border bg-card shadow-lg text-card-foreground overflow-hidden">
+      <div className="relative overflow-hidden rounded-lg border bg-card text-card-foreground shadow-lg">
         {!isLoading && combat}
         {!userData && <Loader explanation="Loading User Data" />}
         {isLoading && <Loader explanation="Loading Battle Data" />}
@@ -298,10 +297,10 @@ export default function CombatPage() {
             </TabsTrigger>
           )}
           {config.showBattleLog && (
-            <TabsTrigger value="history" className="flex-1 relative">
+            <TabsTrigger value="history" className="relative flex-1">
               History
               {unreadActions > 0 && activeTab !== "history" && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[1.25rem] h-5 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs">
                   {unreadActions}
                 </span>
               )}
@@ -340,7 +339,7 @@ export default function CombatPage() {
   const tabbedIds: CombatLayoutComponentId[] = ["actions", "timeline", "battlelog"];
 
   return (
-    <div className="sm:container flex flex-col gap-1">
+    <div className="flex flex-col gap-1 sm:container">
       {config.useTabs ? (
         // Tabs mode: render non-tabbed components in order, then tabs
         <>
@@ -353,11 +352,7 @@ export default function CombatPage() {
         </>
       ) : (
         // Non-tabs mode: render all components in order
-        <>
-          {config.layoutOrder.map((id) => (
-            <div key={id}>{renderComponent(id)}</div>
-          ))}
-        </>
+        config.layoutOrder.map((id) => <div key={id}>{renderComponent(id)}</div>)
       )}
 
       <div className="flex flex-row">

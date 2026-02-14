@@ -114,3 +114,32 @@ export const StatNames = [
 ] as const;
 
 export const GenNames = ["strength", "intelligence", "willpower", "speed"] as const;
+export type GenName = (typeof GenNames)[number];
+
+/**
+ * Damage modifier effect types that require staged processing
+ */
+export const damageModifierTypes: string[] = [
+  "decreasedamagetaken",
+  "decreasedamagegiven",
+  "increasedamagetaken",
+  "increasedamagegiven",
+];
+
+/**
+ * Post-pierce tags that must run AFTER pierce effects (per sortEffects ordering).
+ * These tags read damage consequences that pierce creates, so they must run after pierce.
+ * This constant is shared between process.ts and util.ts (sortEffects) to ensure consistency.
+ */
+export const POST_PIERCE_TAGS: string[] = [
+  "lifesteal",
+  "drain",
+  "poison",
+  "afterburn",
+  "absorb",
+  "recoil",
+  "reflect",
+  "wound",
+  "decreaseheal",
+  "increaseheal",
+];

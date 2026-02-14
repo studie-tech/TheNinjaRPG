@@ -1,15 +1,15 @@
-import { hasRequiredRank } from "@/libs/train";
-import { eq, and, gte, asc, inArray } from "drizzle-orm";
-import { actionLog } from "@/drizzle/schema";
-import type { DrizzleClient } from "@/server/db";
+import { and, asc, eq, gte, inArray } from "drizzle-orm";
 import {
+  KAGE_ELDER_MIN_DAYS,
+  KAGE_MIN_DAYS_IN_VILLAGE,
   KAGE_PRESTIGE_REQUIREMENT,
   KAGE_RANK_REQUIREMENT,
-  KAGE_MIN_DAYS_IN_VILLAGE,
-  KAGE_ELDER_MIN_DAYS,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
+import { actionLog } from "@/drizzle/schema";
+import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
+import type { DrizzleClient } from "@/server/db";
 
 /**
  * Calculate the total time (in seconds) that kage challenges have been locked for a user today.
@@ -111,7 +111,7 @@ const getDaysInVillage = (user: UserData) => {
   try {
     if (!user.joinedVillageAt) return 0;
     const joinDate = new Date(user.joinedVillageAt);
-    return Math.floor((new Date().getTime() - joinDate.getTime()) / (1000 * 3600 * 24));
+    return Math.floor((Date.now() - joinDate.getTime()) / (1000 * 3600 * 24));
   } catch {
     return 0;
   }

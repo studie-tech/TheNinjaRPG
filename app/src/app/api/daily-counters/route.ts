@@ -1,10 +1,13 @@
-import { sql, eq, inArray } from "drizzle-orm";
-import { drizzleDB } from "@/server/db";
-import { userData, village } from "@/drizzle/schema";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { KAGE_DAILY_PRESTIGE_LOSS } from "@/drizzle/constants";
-import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
+import { eq, inArray, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { KAGE_DAILY_PRESTIGE_LOSS } from "@/drizzle/constants";
+import { userData, village } from "@/drizzle/schema";
+import {
+  handleEndpointError,
+  lockWithDailyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
+import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "daily-counters";
 
@@ -21,7 +24,7 @@ export async function GET() {
     const kages = await drizzleDB.query.village.findMany({
       where: eq(village.type, "VILLAGE"),
     });
-    const kageIds = kages?.map((kage) => kage.kageId);
+    const kageIds = kages?.map((kage: (typeof kages)[number]) => kage.kageId);
 
     // For all users, increment villagePrestige by 1
     await drizzleDB.update(userData).set({
@@ -49,6 +52,6 @@ export async function GET() {
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

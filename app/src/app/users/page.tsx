@@ -1,22 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import ContentBox from "@/layout/ContentBox";
+import { BriefcaseBusiness, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { BriefcaseBusiness } from "lucide-react";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import Loader from "@/layout/Loader";
-import { canSeeIps } from "@/utils/permissions";
-import { ExternalLink } from "lucide-react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { useInfinitePagination } from "@/libs/pagination";
-import { showUserRank } from "@/libs/profile";
-import { useRequiredUserData } from "@/utils/UserContext";
-import UserFiltering, { useFiltering, getFilter } from "@/layout/UserFiltering";
-import { getRankedRank } from "@/libs/ranked_pvp";
-import { RANKED_SANNIN_TOP_PLAYERS } from "@/drizzle/constants";
-import type { ArrayElement } from "@/utils/typeutils";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -24,6 +12,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RANKED_SANNIN_TOP_PLAYERS } from "@/drizzle/constants";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import UserFiltering, { getFilter, useFiltering } from "@/layout/UserFiltering";
+import { useInfinitePagination } from "@/libs/pagination";
+import { showUserRank } from "@/libs/profile";
+import { getRankedRank } from "@/libs/ranked_pvp";
+import { canSeeIps } from "@/utils/permissions";
+import type { ArrayElement } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Users() {
   const { data: userData, isClerkLoaded } = useRequiredUserData();
@@ -78,7 +77,7 @@ export default function Users() {
   const userCountNow = onlineStats?.onlineNow || 0;
   const userCountDay = onlineStats?.onlineDay || 0;
   const maxOnline = onlineStats?.maxOnline || 0;
-  const flatUsers = users?.pages.map((page) => page.data).flat();
+  const flatUsers = users?.pages.flatMap((page) => page.data);
   const topPlayersLP =
     flatUsers?.slice(0, RANKED_SANNIN_TOP_PLAYERS).map((u) => u.rankedLp) || [];
   const allUsers = flatUsers?.map((user) => ({
@@ -173,8 +172,8 @@ export default function Users() {
               <SelectValue placeholder={activeTab} />
             </SelectTrigger>
             <SelectContent>
-              {tabNames.map((tab) => (
-                <SelectItem key={tab} value={tab}>
+              {tabNames.map((tab, i) => (
+                <SelectItem key={`${tab}-${i}`} value={tab}>
                   {tab}
                 </SelectItem>
               ))}
@@ -189,7 +188,7 @@ export default function Users() {
         </div>
       }
     >
-      <div className="p-2 grid grid-cols-3 text-center">
+      <div className="grid grid-cols-3 p-2 text-center">
         <p>
           <b>Online last 30min</b>
           <br /> {userCountNow} users

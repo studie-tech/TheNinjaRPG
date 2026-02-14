@@ -1,9 +1,12 @@
-import { drizzleDB } from "@/server/db";
-import { userVote } from "@/drizzle/schema";
-import { updateGameSetting } from "@/libs/gamesettings";
-import { ACTIVE_VOTING_SITES } from "@/drizzle/constants";
-import { lockWithDailyTimer, handleEndpointError } from "@/libs/gamesettings";
 import { cookies } from "next/headers";
+import { ACTIVE_VOTING_SITES } from "@/drizzle/constants";
+import { userVote } from "@/drizzle/schema";
+import {
+  handleEndpointError,
+  lockWithDailyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
+import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "daily-votes";
 
@@ -25,6 +28,6 @@ export async function GET() {
   } catch (cause) {
     // Rollback
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
-    return handleEndpointError(cause);
+    return await handleEndpointError(cause);
   }
 }

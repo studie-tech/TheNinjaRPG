@@ -3,7 +3,7 @@ import { CovertTrainingTypes } from "@/drizzle/constants";
 
 // Input schemas
 export const useSensoryInputSchema = z.object({
-  sector: z.number().int(),
+  sector: z.int(),
 });
 
 export const trainInputSchema = z.object({
@@ -17,6 +17,8 @@ export const detectedUserSchema = z.object({
   username: z.string(),
   longitude: z.number(),
   latitude: z.number(),
+  villageId: z.string().nullable(),
+  level: z.number(),
 });
 
 export const activateStealthDataSchema = z.object({

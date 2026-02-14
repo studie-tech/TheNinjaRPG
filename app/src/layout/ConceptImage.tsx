@@ -1,38 +1,39 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import Image from "@/layout/Image";
 import {
-  Trash2,
-  Flag,
-  Info,
-  Share2,
-  Copy,
   Check,
-  Loader2,
-  Video,
+  Copy,
+  Flag,
   ImageIcon,
+  Info,
+  Loader2,
+  Share2,
+  Trash2,
+  Video,
 } from "lucide-react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { useUserData } from "@/utils/UserContext";
-import { secondsPassed } from "@/utils/time";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import ReportUser from "@/layout/Report";
 import {
   IMG_ICON_FACEBOOK,
   IMG_ICON_REDDIT,
   IMG_ICON_TWITTER,
 } from "@/drizzle/constants";
+import Image from "@/layout/Image";
+import ReportUser from "@/layout/Report";
 import { showMutationToast } from "@/libs/toast";
 import type { ImageWithRelations } from "@/routers/conceptart";
+import { secondsPassed } from "@/utils/time";
+import { useUserData } from "@/utils/UserContext";
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   image: ImageWithRelations | undefined | null;
@@ -150,13 +151,13 @@ const ConceptImage: React.FC<InputProps> = (props) => {
         ? videoStatus.message
         : "Generating video...";
     return (
-      <div className="aspect-256/345 w-full rounded-xl p-4 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-purple-900 to-indigo-900 text-center text-white">
+      <div className="flex aspect-256/345 w-full flex-col items-center justify-center gap-3 rounded-xl bg-gradient-to-br from-purple-900 to-indigo-900 p-4 text-center text-white">
         <Video className="h-12 w-12 animate-pulse text-purple-300" />
-        <div className="text-sm font-medium">{statusMessage}</div>
+        <div className="font-medium text-sm">{statusMessage}</div>
         {videoProgress > 0 && (
           <div className="w-full max-w-[200px]">
             <Progress value={videoProgress} className="h-2" />
-            <div className="mt-1 text-xs text-purple-200">{videoProgress}%</div>
+            <div className="mt-1 text-purple-200 text-xs">{videoProgress}%</div>
           </div>
         )}
         <Loader2 className="h-6 w-6 animate-spin text-purple-300" />
@@ -173,7 +174,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
     }
 
     return (
-      <div className="aspect-256/345 w-full rounded-xl p-2 flex animate-pulse flex-row items-center justify-center bg-amber-500 text-center text-black">
+      <div className="flex aspect-256/345 w-full animate-pulse flex-row items-center justify-center rounded-xl bg-amber-500 p-2 text-center text-black">
         {status}
       </div>
     );
@@ -200,9 +201,9 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   return (
     <div>
       <div className="relative">
-        {showVideo ? (
+        {showVideo && image.video ? (
           <video
-            src={image.video!}
+            src={image.video}
             width={props.width || 512}
             height={props.height || 768}
             className="w-full cursor-pointer rounded-md"
@@ -226,25 +227,23 @@ const ConceptImage: React.FC<InputProps> = (props) => {
             />
             {/* Video badge for thumbnails on listing page */}
             {isVideo && !showDetails && (
-              <div className="absolute top-2 left-2 bg-black/70 rounded px-1.5 py-0.5 flex items-center gap-1">
+              <div className="absolute top-2 left-2 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5">
                 <Video className="h-3 w-3 text-white" />
-                <span className="text-xs text-white">Video</span>
+                <span className="text-white text-xs">Video</span>
               </div>
             )}
             {!isVideo && !showDetails && (
-              <div className="absolute top-2 left-2 bg-black/70 rounded px-1.5 py-0.5 flex items-center gap-1">
+              <div className="absolute top-2 left-2 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5">
                 <ImageIcon className="h-3 w-3 text-white" />
-                <span className="text-xs text-white">Image</span>
+                <span className="text-white text-xs">Image</span>
               </div>
             )}
           </div>
         )}
-        <div className="absolute right-2 top-2">
+        <div className="absolute top-2 right-2">
           {image.userId === user?.userId && (
             <Trash2
-              className={` cursor-pointer hover:fill-red-500 text-white ${
-                showDetails ? "h-6 w-6" : "h-4 w-4"
-              }`}
+              className={`cursor-pointer text-white hover:fill-red-500 ${showDetails ? "h-6 w-6" : "h-4 w-4"}`}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -262,23 +261,20 @@ const ConceptImage: React.FC<InputProps> = (props) => {
                   : "Purposefully inappropriate image",
                 content:
                   isVideo && image.video
-                    ? '<video src="' + image.video + '" width="200" controls />'
-                    : '<img src="' + image.image + '" width="200" />',
+                    ? `<video src="${image.video}" width="200" controls />`
+                    : `<img src="${image.image}" width="200" />`,
               }}
               system="concept_art"
-              button={<Flag className="h-6 w-6 hover:text-orange-500 text-white" />}
+              button={<Flag className="h-6 w-6 text-white hover:text-orange-500" />}
             />
           )}
         </div>
         <div
-          className={`absolute bottom-1 left-1 right-1 flex ${
-            showDetails ? "h-12 text-lg" : "h-6 text-xs"
-          } flex-row items-center rounded-md border border-slate-700 bg-slate-800 opacity-90 text-white`}
+          className={`absolute right-1 bottom-1 left-1 flex ${showDetails ? "h-12 text-lg" : "h-6 text-xs"} flex-row items-center rounded-md border border-slate-700 bg-slate-800 text-white opacity-90`}
         >
-          <div
-            className={`flex cursor-pointer flex-row ml-1 px-1 ${
-              hasLike ? "bg-slate-700" : ""
-            }`}
+          <button
+            type="button"
+            className={`ml-1 flex cursor-pointer flex-row px-1 ${hasLike ? "bg-slate-700" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -286,11 +282,10 @@ const ConceptImage: React.FC<InputProps> = (props) => {
             }}
           >
             ❤️ {image.n_likes}
-          </div>
-          <div
-            className={`flex cursor-pointer flex-row px-1 ${
-              hasLove ? "bg-slate-700" : ""
-            }`}
+          </button>
+          <button
+            type="button"
+            className={`flex cursor-pointer flex-row px-1 ${hasLove ? "bg-slate-700" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -298,11 +293,10 @@ const ConceptImage: React.FC<InputProps> = (props) => {
             }}
           >
             👍 {image.n_loves}
-          </div>
-          <div
-            className={`flex cursor-pointer flex-row px-1 ${
-              hasLaugh ? "bg-slate-700" : ""
-            }`}
+          </button>
+          <button
+            type="button"
+            className={`flex cursor-pointer flex-row px-1 ${hasLaugh ? "bg-slate-700" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -310,7 +304,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
             }}
           >
             🤣 {image.n_laugh}
-          </div>
+          </button>
           <div className="grow"></div>
           {showDetails && (
             <>
@@ -356,7 +350,10 @@ const ConceptImage: React.FC<InputProps> = (props) => {
 
               <Popover>
                 <PopoverTrigger asChild>
-                  <button className="mx-1 flex h-7 w-7 items-center justify-center rounded hover:bg-slate-700">
+                  <button
+                    type="button"
+                    className="mx-1 flex h-7 w-7 items-center justify-center rounded hover:bg-slate-700"
+                  >
                     <Share2 className="h-5 w-5 cursor-pointer hover:text-orange-500" />
                   </button>
                 </PopoverTrigger>
@@ -364,13 +361,13 @@ const ConceptImage: React.FC<InputProps> = (props) => {
                   <div className="space-y-3">
                     <div>
                       <h4 className="font-medium">Share to Chat</h4>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Copy this tag and paste it in any conversation to share your
                         art:
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <code className="flex-1 rounded bg-slate-200 px-2 py-1 text-sm font-mono text-black">
+                      <code className="flex-1 rounded bg-slate-200 px-2 py-1 font-mono text-black text-sm">
                         [conceptart:{image.id}]
                       </code>
                       <Button
@@ -393,7 +390,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
                         )}
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                       Others will see your art and can vote on it directly in the chat!
                     </p>
                   </div>
@@ -403,7 +400,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
               <TooltipProvider delayDuration={50}>
                 <Tooltip>
                   <TooltipTrigger>
-                    <Info className="h-8 w-8 mr-2 cursor-pointer hover:text-orange-500" />
+                    <Info className="mr-2 h-8 w-8 cursor-pointer hover:text-orange-500" />
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>

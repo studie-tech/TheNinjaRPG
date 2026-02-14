@@ -1,18 +1,19 @@
-import React, { useEffect, useRef } from "react";
 import { Chart as ChartJS } from "chart.js/auto";
-import ContentBox from "@/layout/ContentBox";
-import QueueLengthFiltering, {
-  useFiltering,
-  getFilter,
-} from "@/layout/QueueLengthFiltering";
+import { Trash2 } from "lucide-react";
+import type React from "react";
+import { useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import QueueLengthFiltering, {
+  getFilter,
+  useFiltering,
+} from "@/layout/QueueLengthFiltering";
+import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import Confirm2 from "@/layout/Confirm2";
-import Loader from "@/layout/Loader";
-import { showMutationToast } from "@/libs/toast";
 
 interface QueueLengthHistogramProps {
   title?: string;
@@ -61,7 +62,7 @@ export const QueueLengthHistogram: React.FC<QueueLengthHistogramProps> = ({
         if (!rankedRankGroups.has(item.rankedRank)) {
           rankedRankGroups.set(item.rankedRank, []);
         }
-        rankedRankGroups.get(item.rankedRank)!.push({
+        rankedRankGroups.get(item.rankedRank)?.push({
           ceiledMinutes: item.ceiledMinutes,
           count: item.count,
         });
@@ -69,7 +70,9 @@ export const QueueLengthHistogram: React.FC<QueueLengthHistogramProps> = ({
 
       // Get all unique minute values for labels
       const allMinutes = new Set<number>();
-      queueLengthData.forEach((item) => allMinutes.add(item.ceiledMinutes));
+      queueLengthData.forEach((item) => {
+        allMinutes.add(item.ceiledMinutes);
+      });
       const sortedMinutes = Array.from(allMinutes).sort((a, b) => a - b);
 
       // Create datasets for each ranked rank
@@ -97,7 +100,7 @@ export const QueueLengthHistogram: React.FC<QueueLengthHistogramProps> = ({
           return {
             label: rankedRank,
             data: data,
-            backgroundColor: colors[index % colors.length] + "80", // Add transparency
+            backgroundColor: `${colors[index % colors.length]}80`, // Add transparency
             borderColor: colors[index % colors.length],
             borderWidth: 1,
           };
@@ -196,11 +199,11 @@ export const QueueLengthHistogram: React.FC<QueueLengthHistogramProps> = ({
       padding={false}
     >
       {queueLengthData && queueLengthData.length > 0 ? (
-        <div className="relative w-full h-96">
+        <div className="relative h-96 w-full">
           <canvas ref={chartRef} id="queueLengthHistogram"></canvas>
         </div>
       ) : (
-        <p className="text-gray-500 text-center py-8">
+        <p className="py-8 text-center text-gray-500">
           No queue length data available.
         </p>
       )}

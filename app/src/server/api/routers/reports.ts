@@ -1,45 +1,71 @@
-import { z } from "zod";
-import { nanoid } from "nanoid";
+import {
+  and,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  like,
+  lte,
+  ne,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { getTableColumns, sql } from "drizzle-orm";
-import { eq, and, gte, ne, lte, like, inArray, desc } from "drizzle-orm";
-import { historicalAvatar, reportLog } from "@/drizzle/schema";
-import { forumPost, conversationComment, userNindo } from "@/drizzle/schema";
-import { userReport, userReportComment, userData, userReview } from "@/drizzle/schema";
-import { automatedModeration } from "@/drizzle/schema";
-import { battleAction } from "@/drizzle/schema";
-import { secondsFromNow } from "@/utils/time";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { serverError, baseServerResponse, errorResponse } from "../trpc";
-import { userReportSchema } from "@/validators/reports";
-import { reportCommentSchema } from "@/validators/reports";
-import { canModerateReports } from "@/utils/permissions";
-import { canBanUsers } from "@/utils/permissions";
-import { canSilenceUsers } from "@/utils/permissions";
-import { canWarnUsers } from "@/utils/permissions";
-import { canSeeReport } from "@/utils/permissions";
-import { canClearReport } from "@/utils/permissions";
-import { canEscalateBan } from "@/utils/permissions";
-import { canClearUserNindo } from "@/utils/permissions";
-import { fetchUser } from "./profile";
-import { fetchImage } from "./conceptart";
-import { canSeeSecretData } from "@/utils/permissions";
-import { getServerPusher } from "@/libs/pusher";
-import { userReviewSchema } from "@/validators/reports";
-import { getRelatedReports } from "@/libs/moderator";
-import { getMillisecondsFromTimeUnit } from "@/utils/time";
+import { nanoid } from "nanoid";
+import { z } from "zod";
+import type { AutomoderationCategory, BanState } from "@/drizzle/constants";
 import { TERR_BOT_ID } from "@/drizzle/constants";
-import { generateModerationDecision } from "@/libs/moderator";
-import { getAdditionalContext } from "@/libs/moderator";
-import sanitize from "@/utils/sanitize";
-import { canModerateRoles } from "@/utils/permissions";
-import { reportFilteringSchema } from "@/validators/reports";
+import {
+  automatedModeration,
+  battleAction,
+  conversationComment,
+  forumPost,
+  historicalAvatar,
+  reportLog,
+  userData,
+  userNindo,
+  userReport,
+  userReportComment,
+  userReview,
+} from "@/drizzle/schema";
+import {
+  generateModerationDecision,
+  getAdditionalContext,
+  getRelatedReports,
+} from "@/libs/moderator";
+import { getServerPusher } from "@/libs/pusher";
 import { createUserAvatar } from "@/routers/avatar";
-import type { AutomoderationCategory } from "@/drizzle/constants";
-import type { BanState } from "@/drizzle/constants";
-import type { ReportCommentSchema } from "@/validators/reports";
-import type { AdditionalContext } from "@/validators/reports";
+import {
+  canBanUsers,
+  canClearReport,
+  canClearUserNindo,
+  canEscalateBan,
+  canModerateReports,
+  canModerateRoles,
+  canSeeReport,
+  canSeeSecretData,
+  canSilenceUsers,
+  canWarnUsers,
+} from "@/utils/permissions";
+import sanitize from "@/utils/sanitize";
+import { getMillisecondsFromTimeUnit, secondsFromNow } from "@/utils/time";
+import type { AdditionalContext, ReportCommentSchema } from "@/validators/reports";
+import {
+  reportCommentSchema,
+  reportFilteringSchema,
+  userReportSchema,
+  userReviewSchema,
+} from "@/validators/reports";
 import type { DrizzleClient } from "../../db";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  serverError,
+} from "../trpc";
+import { fetchImage } from "./conceptart";
+import { fetchUser } from "./profile";
 
 const pusher = getServerPusher();
 
@@ -63,7 +89,7 @@ export const reportsRouter = createTRPCRouter({
       await ctx.drizzle
         .select({
           userId: userData.userId,
-          count: sql<number>`COUNT(${userReport.id})`.mapWith(Number),
+          count: sql`COUNT(${userReport.id})`.mapWith(Number),
         })
         .from(userReport)
         .innerJoin(userData, eq(userData.userId, userReport.reportedUserId))
@@ -71,7 +97,7 @@ export const reportsRouter = createTRPCRouter({
       await ctx.drizzle
         .select({
           userId: userData.userId,
-          count: sql<number>`COUNT(${userReport.id})`.mapWith(Number),
+          count: sql`COUNT(${userReport.id})`.mapWith(Number),
         })
         .from(userReport)
         .innerJoin(userData, eq(userData.userId, userReport.reporterUserId))
@@ -79,7 +105,7 @@ export const reportsRouter = createTRPCRouter({
       await ctx.drizzle
         .select({
           userId: userReportComment.userId,
-          count: sql<number>`COUNT(${userReportComment.id})`.mapWith(Number),
+          count: sql`COUNT(${userReportComment.id})`.mapWith(Number),
           decision: userReportComment.decision,
         })
         .from(userReportComment)
@@ -99,12 +125,12 @@ export const reportsRouter = createTRPCRouter({
           ? {
               year: sql<number>`YEAR(CAST(${userReport.createdAt} AS DATE))`,
               time: sql<number>`DAYOFYEAR(CAST(${userReport.createdAt} AS DATE))`,
-              count: sql<number>`COUNT(${userReport.id})`.mapWith(Number),
+              count: sql`COUNT(${userReport.id})`.mapWith(Number),
             }
           : {
               year: sql<number>`YEAR(CAST(${userReport.createdAt} AS DATE))`,
               time: sql<number>`WEEK(CAST(${userReport.createdAt} AS DATE))`,
-              count: sql<number>`COUNT(${userReport.id})`.mapWith(Number),
+              count: sql`COUNT(${userReport.id})`.mapWith(Number),
             };
       // Where clause
       const whereClause =
@@ -208,7 +234,6 @@ export const reportsRouter = createTRPCRouter({
       const reportedUser = alias(userData, "reportedUser");
       const reporterUser = alias(userData, "reporterUser");
       const staffUser = canModerateRoles.includes(user.role);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { reporterUserId, ...rest } = getTableColumns(userReport);
       const reports = await ctx.drizzle
         .select({
@@ -390,7 +415,7 @@ export const reportsRouter = createTRPCRouter({
       // Fetch
       const getInfraction = async (system: typeof input.system) => {
         switch (system) {
-          case "forum_comment":
+          case "forum_comment": {
             const forumPostData = await ctx.drizzle.query.forumPost.findFirst({
               where: eq(forumPost.id, input.system_id),
             });
@@ -405,7 +430,8 @@ export const reportsRouter = createTRPCRouter({
               .set({ isReported: true })
               .where(eq(forumPost.id, input.system_id));
             return { infraction: forumPostData, context: threadContext };
-          case "conversation_comment":
+          }
+          case "conversation_comment": {
             const commentData = await ctx.drizzle.query.conversationComment.findFirst({
               where: eq(conversationComment.id, input.system_id),
             });
@@ -420,6 +446,7 @@ export const reportsRouter = createTRPCRouter({
               .set({ isReported: true })
               .where(eq(conversationComment.id, input.system_id));
             return { infraction: commentData, context: convoContext };
+          }
           case "user_profile":
             return {
               infraction: await fetchUser(ctx.drizzle, input.system_id),
@@ -437,10 +464,7 @@ export const reportsRouter = createTRPCRouter({
               .where(eq(battleAction.id, input.system_id));
             return {
               infraction: {
-                content:
-                  '<br /><a href="/battlelog/' +
-                  input.system_id +
-                  '"><b>Link to Battle Log (available for 72h)<b></a>',
+                content: `<br /><a href="/battlelog/${input.system_id}"><b>Link to Battle Log (available for 72h)<b></a>`,
               },
               context: [],
             };
@@ -849,7 +873,7 @@ export const reportsRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle
           .select({
-            totalEntries: sql<number>`COUNT(*)`.mapWith(Number),
+            totalEntries: sql`COUNT(*)`.mapWith(Number),
             sexual:
               sql<number>`SUM(CASE WHEN ${automatedModeration.sexual} = true THEN 1 ELSE 0 END)`.mapWith(
                 Number,
@@ -1013,8 +1037,7 @@ export const fetchUserReport = async (
 export const getBanEndDate = (input: ReportCommentSchema) => {
   return input.banTime !== undefined && input.banTimeUnit !== undefined
     ? new Date(
-        new Date().getTime() +
-          input.banTime * getMillisecondsFromTimeUnit(input.banTimeUnit),
+        Date.now() + input.banTime * getMillisecondsFromTimeUnit(input.banTimeUnit),
       )
     : null;
 };

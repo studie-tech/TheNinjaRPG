@@ -1,10 +1,10 @@
 "use client";
 
+import { SignIn } from "@clerk/nextjs";
 import { useState } from "react";
+import { useWebGL2Detection } from "@/hooks/webgl";
 import ContentBox from "@/layout/ContentBox";
 import WebGL2Warning, { WebGL2WarningBanner } from "@/layout/WebGL2Warning";
-import { useWebGL2Detection } from "@/hooks/webgl";
-import { SignIn } from "@clerk/nextjs";
 
 export default function LoginUser() {
   const { webglError, isChecking } = useWebGL2Detection();

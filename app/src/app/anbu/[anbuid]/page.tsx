@@ -1,30 +1,22 @@
 "use client";
 
-import { useEffect, use, useState } from "react";
-import { parseHtml } from "@/utils/parse";
-import BanInfo from "@/layout/BanInfo";
-import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import Confirm2 from "@/layout/Confirm2";
-import UserRequestSystem from "@/layout/UserRequestSystem";
-import RichInput from "@/layout/RichInput";
-import AvatarImage from "@/layout/Avatar";
-import QuestPicker from "@/layout/QuestPicker";
-import { mutateContentSchema } from "@/validators/comments";
-import { Input } from "@/components/ui/input";
-import { useRouter } from "next/navigation";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  ArrowBigUpDash,
+  DoorOpen,
+  Eye,
+  FilePenLine,
+  SendHorizontal,
+  Trash2,
+  TrendingUp,
+  Zap,
+  ZapOff,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { use, useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -32,45 +24,61 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { showMutationToast } from "@/libs/toast";
-import { useRequireInVillage } from "@/utils/UserContext";
-import { SendHorizontal, DoorOpen, FilePenLine, TrendingUp, Eye } from "lucide-react";
-import { Trash2, ArrowBigUpDash } from "lucide-react";
 import {
   Form,
   FormControl,
   FormField,
-  FormLabel,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { UploadButton } from "@/utils/uploadthing";
-import { anbuRenameSchema } from "@/validators/anbu";
-import { hasRequiredRank } from "@/libs/train";
-import { ANBU_MEMBER_RANK_REQUIREMENT } from "@/drizzle/constants";
+import { Input } from "@/components/ui/input";
 import {
-  ANBU_MAX_ESPIONAGE_LEVEL,
-  ANBU_MAX_STEALTH_LEVEL,
-  ANBU_ESPIONAGE_UPGRADE_COST,
-  ANBU_STEALTH_UPGRADE_COST,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { UserRank } from "@/drizzle/constants";
+import {
   ANBU_ESPIONAGE_BASE_CHANCE_PERC,
   ANBU_ESPIONAGE_CHANGE_PER_LEVEL,
+  ANBU_ESPIONAGE_POINTS_COST,
+  ANBU_ESPIONAGE_PRESTIGE_COST,
+  ANBU_ESPIONAGE_UPGRADE_COST,
+  ANBU_MAX_ESPIONAGE_LEVEL,
+  ANBU_MAX_STEALTH_LEVEL,
+  ANBU_MEMBER_RANK_REQUIREMENT,
   ANBU_STEALTH_BASE_CHANCE_PERC,
   ANBU_STEALTH_CHANGE_PER_LEVEL,
-  ANBU_ESPIONAGE_PRESTIGE_COST,
-  ANBU_ESPIONAGE_POINTS_COST,
+  ANBU_STEALTH_UPGRADE_COST,
 } from "@/drizzle/constants";
-import { Zap, ZapOff } from "lucide-react";
+import type { UserNindo } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import AutoAttackModal from "@/layout/AutoAttackModal";
-import type { UserRank } from "@/drizzle/constants";
-import type { ArrayElement } from "@/utils/typeutils";
-import type { BaseServerResponse } from "@/server/api/trpc";
-import type { AnbuRenameSchema } from "@/validators/anbu";
-import type { MutateContentSchema } from "@/validators/comments";
-import type { UserNindo } from "@/drizzle/schema";
+import AvatarImage from "@/layout/Avatar";
+import BanInfo from "@/layout/BanInfo";
+import Confirm2 from "@/layout/Confirm2";
+import ContentBox from "@/layout/ContentBox";
+import Loader from "@/layout/Loader";
+import QuestPicker from "@/layout/QuestPicker";
+import RichInput from "@/layout/RichInput";
+import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import UserRequestSystem from "@/layout/UserRequestSystem";
+import { showMutationToast } from "@/libs/toast";
+import { hasRequiredRank } from "@/libs/train";
 import type { AnbuRouter } from "@/routers/anbu";
 import type { UserWithRelations } from "@/routers/profile";
+import type { BaseServerResponse } from "@/server/api/trpc";
+import { parseHtml } from "@/utils/parse";
+import type { ArrayElement } from "@/utils/typeutils";
+import { useRequireInVillage } from "@/utils/UserContext";
+import { UploadButton } from "@/utils/uploadthing";
+import type { AnbuRenameSchema } from "@/validators/anbu";
+import { anbuRenameSchema } from "@/validators/anbu";
+import type { MutateContentSchema } from "@/validators/comments";
+import { mutateContentSchema } from "@/validators/comments";
 
 export default function ANBUDetails(props: { params: Promise<{ anbuid: string }> }) {
   const params = use(props.params);
@@ -292,29 +300,26 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
       padding={false}
       topRightContent={
         <div className="flex flex-row items-center gap-1">
-          {userData?.anbuId && (
-            <>
-              {autoAttackMode ? (
-                <Button
-                  className="text-red-500"
-                  aria-label="Disable auto attack"
-                  hoverText="Auto Attack"
-                  onClick={() => setAutoAttackMode(false)}
-                >
-                  <Zap className="h-5 w-5" />
-                </Button>
-              ) : (
-                <Button
-                  className="hover:text-red-500"
-                  aria-label="Configure auto attack"
-                  hoverText="Auto Attack"
-                  onClick={() => setShowAutoAttackModal(true)}
-                >
-                  <ZapOff className="h-5 w-5" />
-                </Button>
-              )}
-            </>
-          )}
+          {userData?.anbuId &&
+            (autoAttackMode ? (
+              <Button
+                className="text-red-500"
+                aria-label="Disable auto attack"
+                hoverText="Auto Attack"
+                onClick={() => setAutoAttackMode(false)}
+              >
+                <Zap className="h-5 w-5" />
+              </Button>
+            ) : (
+              <Button
+                className="hover:text-red-500"
+                aria-label="Configure auto attack"
+                hoverText="Auto Attack"
+                onClick={() => setShowAutoAttackModal(true)}
+              >
+                <ZapOff className="h-5 w-5" />
+              </Button>
+            ))}
           {/* Auto Attack Configuration Modal */}
           <AutoAttackModal
             isOpen={showAutoAttackModal}
@@ -334,7 +339,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
               onAccept={onEdit}
             >
               <Form {...renameForm}>
-                <form className="space-y-2 grid grid-cols-2" onSubmit={onEdit}>
+                <form className="grid grid-cols-2 space-y-2" onSubmit={onEdit}>
                   <div>
                     <FormLabel>Squad Image</FormLabel>
                     <AvatarImage
@@ -355,7 +360,10 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                         }
                       }}
                       onUploadError={(error: Error) => {
-                        showMutationToast({ success: false, message: error.message });
+                        showMutationToast({
+                          success: false,
+                          message: error.message,
+                        });
                       }}
                     />
                   </div>
@@ -388,21 +396,21 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                   <DialogTitle>Squad Upgrades</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-muted-foreground text-sm">
                     Current Squad Points: {squad.points}
                   </div>
 
                   {/* Espionage Upgrade */}
-                  <div className="p-4 border rounded-lg">
-                    <h3 className="font-semibold mb-2">Espionage Level</h3>
-                    <p className="text-sm text-muted-foreground mb-2">
+                  <div className="rounded-lg border p-4">
+                    <h3 className="mb-2 font-semibold">Espionage Level</h3>
+                    <p className="mb-2 text-muted-foreground text-sm">
                       Improves intelligence gathering capabilities against enemy
                       villages during wars.
                     </p>
-                    <p className="text-sm text-muted-foreground mb-2">
+                    <p className="mb-2 text-muted-foreground text-sm">
                       Current Level: {squad.espionageLevel} / {ANBU_MAX_ESPIONAGE_LEVEL}
                     </p>
-                    <p className="text-sm text-muted-foreground mb-2">
+                    <p className="mb-2 text-muted-foreground text-sm">
                       Success Rate:{" "}
                       {ANBU_ESPIONAGE_BASE_CHANCE_PERC +
                         squad.espionageLevel * ANBU_ESPIONAGE_CHANGE_PER_LEVEL}
@@ -418,7 +426,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                         </span>
                       )}
                     </p>
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <p className="mb-4 text-muted-foreground text-sm">
                       Upgrade Cost: {ANBU_ESPIONAGE_UPGRADE_COST} points
                     </p>
                     <Button
@@ -435,16 +443,16 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                   </div>
 
                   {/* Stealth Upgrade */}
-                  <div className="p-4 border rounded-lg">
-                    <h3 className="font-semibold mb-2">Stealth Level</h3>
-                    <p className="text-sm text-muted-foreground mb-2">
+                  <div className="rounded-lg border p-4">
+                    <h3 className="mb-2 font-semibold">Stealth Level</h3>
+                    <p className="mb-2 text-muted-foreground text-sm">
                       Reduces the chance of being detected by guards when infiltrating
                       enemy villages.
                     </p>
-                    <p className="text-sm text-muted-foreground mb-2">
+                    <p className="mb-2 text-muted-foreground text-sm">
                       Current Level: {squad.stealthLevel} / {ANBU_MAX_STEALTH_LEVEL}
                     </p>
-                    <p className="text-sm text-muted-foreground mb-2">
+                    <p className="mb-2 text-muted-foreground text-sm">
                       Success Rate:{" "}
                       {ANBU_STEALTH_BASE_CHANCE_PERC +
                         squad.stealthLevel * ANBU_STEALTH_CHANGE_PER_LEVEL}
@@ -459,7 +467,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                         </span>
                       )}
                     </p>
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <p className="mb-4 text-muted-foreground text-sm">
                       Upgrade Cost: {ANBU_STEALTH_UPGRADE_COST} points
                     </p>
                     <Button
@@ -490,11 +498,11 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                   <DialogTitle>Perform Espionage</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-muted-foreground text-sm">
                     Select a village to gather intelligence on.
                   </div>
 
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-muted-foreground text-sm">
                     Success Rate:{" "}
                     {ANBU_ESPIONAGE_BASE_CHANCE_PERC +
                       squad.espionageLevel * ANBU_ESPIONAGE_CHANGE_PER_LEVEL}
@@ -502,15 +510,11 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                   </div>
 
                   {/* Cost Requirements */}
-                  <div className="space-y-2 p-3 bg-muted rounded-lg">
-                    <div className="text-sm font-medium">Mission Requirements:</div>
+                  <div className="space-y-2 rounded-lg bg-muted p-3">
+                    <div className="font-medium text-sm">Mission Requirements:</div>
                     <div className="space-y-1">
                       <div
-                        className={`text-sm flex items-center justify-between ${
-                          userData.villagePrestige >= ANBU_ESPIONAGE_PRESTIGE_COST
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
+                        className={`flex items-center justify-between text-sm ${userData.villagePrestige >= ANBU_ESPIONAGE_PRESTIGE_COST ? "text-green-600" : "text-red-600"}`}
                       >
                         <span>Village Prestige:</span>
                         <span>
@@ -522,11 +526,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                         </span>
                       </div>
                       <div
-                        className={`text-sm flex items-center justify-between ${
-                          squad.points >= ANBU_ESPIONAGE_POINTS_COST
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
+                        className={`flex items-center justify-between text-sm ${squad.points >= ANBU_ESPIONAGE_POINTS_COST ? "text-green-600" : "text-red-600"}`}
                       >
                         <span>Squad Points:</span>
                         <span>
@@ -538,7 +538,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Target Village:</label>
+                    <span className="font-medium text-sm">Target Village:</span>
                     <Select value={selectedVillage} onValueChange={setSelectedVillage}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a village to spy on" />
@@ -781,7 +781,7 @@ const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
         <div className="p-2">
           <p>Send a request to join this squad</p>
           <Button id="send" className="mt-2 w-full" onClick={() => create({ squadId })}>
-            <SendHorizontal className="h-5 w-5 mr-2" />
+            <SendHorizontal className="mr-2 h-5 w-5" />
             Send Request
           </Button>
         </div>

@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  ContentFiltering,
-  useContentFiltering,
   buildFilter,
+  ContentFiltering,
   defineFilteringSchema,
+  useContentFiltering,
 } from "@/layout/ContentFiltering";
 
 interface RankedRankDistributionFilteringProps {

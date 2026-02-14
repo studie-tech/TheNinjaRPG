@@ -1,9 +1,9 @@
-import { z } from "zod";
-import { useState, useEffect } from "react";
-import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { userSearchSchema } from "@/validators/register";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 import type { UserSearchSchema } from "@/validators/register";
+import { userSearchSchema } from "@/validators/register";
 
 /**
  * A hook which enables search in user names based on
