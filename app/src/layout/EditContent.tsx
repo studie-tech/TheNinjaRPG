@@ -1,20 +1,11 @@
-import { z } from "zod";
-import { calculateContentDiff } from "@/utils/diff";
-import { useForm, useWatch } from "react-hook-form";
-import Image from "@/layout/Image";
-import React, { Fragment, useEffect, useState, useMemo } from "react";
-import ContentImageSelector from "@/layout/ContentImageSelector";
-import RichInput from "@/layout/RichInput";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { objectKeys } from "@/utils/typeutils";
-import { getTagSchema } from "@/validators/combat";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
 import { nanoid } from "nanoid";
+import type React from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,20 +24,29 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentAudioSelector from "@/layout/ContentAudioSelector";
 import ContentImage from "@/layout/ContentImage";
+import ContentImageSelector from "@/layout/ContentImageSelector";
+import Image from "@/layout/Image";
 import Modal2 from "@/layout/Modal2";
+import RichInput from "@/layout/RichInput";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
+import { calculateContentDiff } from "@/utils/diff";
 import { canAwardReputation } from "@/utils/permissions";
 import type { DeepPartial } from "@/utils/typeutils";
+import { objectKeys } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
 import { UploadButton } from "@/utils/uploadthing";
 import type {
@@ -55,6 +55,7 @@ import type {
   ZodItemType,
   ZodJutsuType,
 } from "@/validators/combat";
+import { getTagSchema } from "@/validators/combat";
 import type { AllObjectivesType } from "@/validators/objectives";
 import {
   getObjectiveSchema,
@@ -600,8 +601,10 @@ export const EditContent = <
                         const displayValue = isArrayField
                           ? (field.value as string[]).join("\n")
                           : ((field.value ?? "") as string);
-                        
-                        const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+
+                        const handleChange = (
+                          e: React.ChangeEvent<HTMLTextAreaElement>,
+                        ) => {
                           if (isArrayField) {
                             // Convert newline-separated text to array
                             const arr = e.target.value
@@ -668,7 +671,11 @@ export const EditContent = <
                               <RichInput
                                 id={id}
                                 height="200"
-                                placeholder={field.value}
+                                placeholder={
+                                  typeof field.value === "string"
+                                    ? field.value
+                                    : undefined
+                                }
                                 label={formEntry.label ? formEntry.label : id}
                                 control={form.control}
                                 isDirty={fieldState.isDirty}
