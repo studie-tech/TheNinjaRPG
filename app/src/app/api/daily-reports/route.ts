@@ -26,6 +26,7 @@ export async function GET() {
         inArray(userReport.status, [
           "BAN_ACTIVATED",
           "SILENCE_ACTIVATED",
+          "TIMEOUT_ACTIVATED",
           "TRADE_BAN_ACTIVATED",
         ]),
         lt(userReport.banEnd, new Date()),
@@ -80,7 +81,10 @@ export async function GET() {
       // Track which type of report is expiring
       if (report.status === "BAN_ACTIVATED") {
         userBanReports.set(userId, true);
-      } else if (report.status === "SILENCE_ACTIVATED") {
+      } else if (
+        report.status === "SILENCE_ACTIVATED" ||
+        report.status === "TIMEOUT_ACTIVATED"
+      ) {
         userSilenceReports.set(userId, true);
       } else if (report.status === "TRADE_BAN_ACTIVATED") {
         userTradeBanReports.set(userId, true);
@@ -98,6 +102,7 @@ export async function GET() {
         inArray(userReport.status, [
           "BAN_ACTIVATED",
           "SILENCE_ACTIVATED",
+          "TIMEOUT_ACTIVATED",
           "TRADE_BAN_ACTIVATED",
         ]),
         gt(userReport.banEnd, new Date()),
@@ -114,7 +119,10 @@ export async function GET() {
 
       if (report.status === "BAN_ACTIVATED") {
         userHasActiveBan.set(report.reportedUserId, true);
-      } else if (report.status === "SILENCE_ACTIVATED") {
+      } else if (
+        report.status === "SILENCE_ACTIVATED" ||
+        report.status === "TIMEOUT_ACTIVATED"
+      ) {
         userHasActiveSilence.set(report.reportedUserId, true);
       } else if (report.status === "TRADE_BAN_ACTIVATED") {
         userHasActiveTradeBan.set(report.reportedUserId, true);

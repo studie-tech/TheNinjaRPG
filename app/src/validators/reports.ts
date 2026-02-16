@@ -29,6 +29,13 @@ export const reportCommentSchema = z.object({
 
 export type ReportCommentSchema = z.infer<typeof reportCommentSchema>;
 
+export const reportTimeoutSchema = z.object({
+  comment: z.string().min(10).max(5000),
+  object_id: z.string(),
+});
+
+export type ReportTimeoutSchema = z.infer<typeof reportTimeoutSchema>;
+
 export const userReviewSchema = z.object({
   staffUserId: z.string(),
   review: z.string(),

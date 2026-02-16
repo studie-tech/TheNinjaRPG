@@ -151,12 +151,12 @@ export default function Staff() {
         }
       >
         <div className="flex flex-col gap-2">
-          {/* Row 1: Coders */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="relative rounded-lg bg-slate-300 p-1 font-bold">
-              Code Admin & Owner
+          {/* Row 1: Owner, Code Admin, Coders (widths match Moderator, Content, Event below) */}
+          <div className="grid grid-cols-3 gap-2 text-center text-black">
+            <div className="relative rounded-lg bg-slate-400 p-1 font-bold">
+              Owner
               <UserList
-                users={users.filter((user) => user.role === "CODING-ADMIN")}
+                users={users.filter((user) => user.role === "OWNER")}
                 expectedLength={1}
                 columnCount={2}
               />
@@ -167,7 +167,22 @@ export default function Staff() {
                 game’s core codebase.
               </Information>
             </div>
-            <div className="col-span-2 rounded-lg bg-pink-300 p-1 font-bold">
+            <div className="relative rounded-lg bg-slate-300 p-1 font-bold">
+              Code Admin
+              <UserList
+                users={users.filter((user) => user.role === "CODING-ADMIN")}
+                expectedLength={1}
+                columnCount={2}
+              />
+              <Information hoverEffect="hover:fill-slate-500">
+                Main responsibility is to oversee day-to-day technical development and
+                coordinate the coding team's workflow. Works closely with the Owner to
+                prioritize features, organize tasks, and ensure timely delivery of
+                updates and fixes. Assists in reviewing code, maintains development
+                standards, and helps guide implementations from concept to release.
+              </Information>
+            </div>
+            <div className="rounded-lg bg-pink-300 p-1 font-bold">
               Coders
               <UserList
                 users={users.filter((user) => user.role === "CODER")}

@@ -29,6 +29,8 @@ export const reportCommentExplain = (status: ReportAction | null) => {
       return "User Silenced";
     case "SILENCE_ESCALATED":
       return "Silence Escalated to Admin";
+    case "TIMEOUT_ACTIVATED":
+      return "User Timed Out (1h)";
     case "OFFICIAL_WARNING":
       return "Official Warning";
     default:

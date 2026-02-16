@@ -235,6 +235,7 @@ export type AutomoderationCategory = (typeof AutomoderationCategories)[number];
 
 export const UserRoles = [
   "USER",
+  "OWNER",
   "CODING-ADMIN",
   "CONTENT-ADMIN",
   "EVENT-ADMIN",
@@ -335,6 +336,7 @@ export const BanStates = [
   "REPORT_CLEARED",
   "BAN_ACTIVATED",
   "SILENCE_ACTIVATED",
+  "TIMEOUT_ACTIVATED",
   "BAN_ESCALATED",
   "SILENCE_ESCALATED",
   "OFFICIAL_WARNING",

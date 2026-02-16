@@ -32,6 +32,8 @@ export default function Reports() {
         warnings: mDecisions.find((d) => d.decision === "OFFICIAL_WARNING")?.count || 0,
         silences:
           mDecisions.find((d) => d.decision === "SILENCE_ACTIVATED")?.count || 0,
+        timeouts:
+          mDecisions.find((d) => d.decision === "TIMEOUT_ACTIVATED")?.count || 0,
         bans: mDecisions.find((d) => d.decision === "BAN_ACTIVATED")?.count || 0,
         cleared: mDecisions.find((d) => d.decision === "REPORT_CLEARED")?.count || 0,
       };
@@ -47,6 +49,7 @@ export default function Reports() {
     { key: "timesReporting", header: "#Reports", type: "string" },
     { key: "warnings", header: "#Warnings", type: "string" },
     { key: "silences", header: "#Silences", type: "string" },
+    { key: "timeouts", header: "#Timeouts", type: "string" },
     { key: "bans", header: "#Bans", type: "string" },
     { key: "cleared", header: "#Clears", type: "string" },
   ];

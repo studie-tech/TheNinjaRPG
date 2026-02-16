@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Ban,
+  Clock,
   EarOff,
   Eraser,
   MessagesSquare,
@@ -44,6 +45,7 @@ import {
   canModerateReports,
   canPostReportComment,
   canSilenceUsers,
+  canTimeoutUsers,
   canWarnUsers,
 } from "@/utils/permissions";
 import { reportCommentColor, reportCommentExplain } from "@/utils/reports";
@@ -134,6 +136,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
   const createComment = api.comments.createReportComment.useMutation({ onSuccess });
   const escalateReport = api.reports.escalate.useMutation({ onSuccess });
   const silenceUser = api.reports.silence.useMutation({ onSuccess });
+  const timeoutUser = api.reports.timeout.useMutation({ onSuccess });
   const warnUser = api.reports.warn.useMutation({ onSuccess });
 
   const isPending =
@@ -143,6 +146,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
     createComment.isPending ||
     escalateReport.isPending ||
     silenceUser.isPending ||
+    timeoutUser.isPending ||
     warnUser.isPending;
 
   const isAi =
@@ -195,6 +199,11 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
     (errors) => console.error(errors),
   );
 
+  const handleSubmitTimeout = handleSubmit(
+    (data) => timeoutUser.mutate({ comment: data.comment, object_id: data.object_id }),
+    (errors) => console.error(errors),
+  );
+
   if (!userData || !report) {
     return <Loader explanation="Loading data..." />;
   }
@@ -206,6 +215,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
   const canModerate = canModerateReports(userData, report);
   const canBan = canBanUsers(userData);
   const canSilence = canSilenceUsers(userData);
+  const canTimeout = canTimeoutUsers(userData);
   const canWarn = canWarnUsers(userData);
   const canWrite = canComment || canEscalate || canClear || canModerate;
 
@@ -241,7 +251,8 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
       <ContentBox title="Further Input / Chat" initialBreak={true}>
         <form>
           <div className="mb-3">
-            {canModerate && (
+            {/* Duration slider only for roles that can silence; timeout-only users have no slider (fixed 1h) */}
+            {canModerate && canSilence ? (
               <div className="flex flex-row items-end">
                 <div className="grow">
                   <SliderField
@@ -274,7 +285,11 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                   </SelectContent>
                 </Select>
               </div>
-            )}
+            ) : canModerate && canTimeout ? (
+              <p className="mb-2 text-sm text-muted-foreground">
+                Timeout duration is fixed at 1 hour.
+              </p>
+            ) : null}
 
             {canWrite && (
               <RichInput
@@ -358,6 +373,25 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                     You are about to silence the user. Please note that the comment and
                     decision can not be edited or deleted. You can unsilence the person
                     by posting another comment and &rdquo;Clear&rdquo; the report.
+                  </Confirm2>
+                )}
+                {canModerate && canTimeout && (
+                  <Confirm2
+                    title="Confirm Timeout (1 hour)"
+                    button={
+                      <Button id="submit_timeout" variant="destructive">
+                        <Clock className="mr-2 h-5 w-5" />
+                        Timeout
+                      </Button>
+                    }
+                    onAccept={async () => {
+                      await handleSubmitTimeout();
+                    }}
+                  >
+                    You are about to timeout the user for 1 hour. This works like a
+                    silence. Please note that the comment and decision can not be edited
+                    or deleted. You can unsilence the person by posting another comment
+                    and &rdquo;Clear&rdquo; the report.
                   </Confirm2>
                 )}
                 {canModerate && canBan && (
