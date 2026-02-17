@@ -377,6 +377,26 @@ export const clanRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Get pending clan join requests" } })
     .input(z.object({ clanLeaderId: z.string() }))
     .query(async ({ ctx, input }) => {
+      // Main fetch for non clan user
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!user.clanId) {
+        return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, ctx.userId);
+      }
+      // Fetch for clan user with guards
+      const [fetchedClan, leader] = await Promise.all([
+        fetchClanByLeader(ctx.drizzle, input.clanLeaderId),
+        fetchUser(ctx.drizzle, input.clanLeaderId),
+      ]);
+      // Derived
+      const groupLabel = leader?.isOutlaw ? "faction" : "clan";
+      const isLeader = user.userId === fetchedClan?.leaderId;
+      const isColeader = checkCoLeader(user.userId, fetchedClan);
+      // Guards
+      if (!fetchedClan) return [];
+      if (!leader) return [];
+      if (!isLeader && !isColeader) {
+        return [];
+      }
       return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, input.clanLeaderId);
     }),
   searchClans: protectedProcedure
@@ -443,15 +463,20 @@ export const clanRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const request = await fetchRequest(ctx.drizzle, input.id, "CLAN");
       // Secondary fetches
-      const [fetchedClan, user] = await Promise.all([
+      const [fetchedClan, leader, user] = await Promise.all([
         fetchClanByLeader(ctx.drizzle, request.receiverId),
+        fetchUser(ctx.drizzle, request.receiverId),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Derived
+      const groupLabel = leader?.isOutlaw ? "faction" : "clan";
       const isLeader = user.userId === fetchedClan?.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
+      // Guards
+      if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
+      if (!leader) return errorResponse("Leader not found");
       if (!isLeader && !isColeader) {
-        return errorResponse("Only clan leaders can reject requests");
+        return errorResponse("Only clan leader or co-leaders can reject requests");
       }
       if (request.status !== "PENDING") {
         return errorResponse("You can only reject pending requests");
@@ -499,7 +524,7 @@ export const clanRouter = createTRPCRouter({
       if (!leader) return errorResponse("Leader not found");
       if (nMembers >= CLAN_MAX_MEMBERS) return errorResponse(`${groupLabel} is full`);
       if (!isLeader && !isColeader) {
-        return errorResponse("Only clan leaders can accept requests");
+        return errorResponse("Only clan leader or co-leaders can accept requests");
       }
       if (requester.clanId) {
         return errorResponse(`Requester already in a ${groupLabel}`);
