@@ -377,19 +377,20 @@ export const clanRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Get pending clan join requests" } })
     .input(z.object({ clanLeaderId: z.string() }))
     .query(async ({ ctx, input }) => {
-      // Main fetch for non clan user
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Fetch
+      const [user, fetchedClan] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchClanByLeader(ctx.drizzle, input.clanLeaderId),
+      ]);
+      // Early Return For Non Clan User
       if (!user.clanId) {
         return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, ctx.userId);
       }
-      // Fetch for clan user with guards
-      const fetchedClan = await fetchClanByLeader(ctx.drizzle, input.clanLeaderId);
       // Derived
       const isLeader = user.userId === fetchedClan?.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
       // Guards
-      if (!fetchedClan) return [];
-      if (!isLeader && !isColeader) {
+      if (!fetchedClan || (!isLeader && !isColeader)) {
         return [];
       }
       return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, input.clanLeaderId);
