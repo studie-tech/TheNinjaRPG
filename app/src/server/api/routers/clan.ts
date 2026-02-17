@@ -383,9 +383,7 @@ export const clanRouter = createTRPCRouter({
         return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, ctx.userId);
       }
       // Fetch for clan user with guards
-      const [fetchedClan] = await Promise.all([
-        fetchClanByLeader(ctx.drizzle, input.clanLeaderId),
-      ]);
+      const fetchedClan = await fetchClanByLeader(ctx.drizzle, input.clanLeaderId);
       // Derived
       const isLeader = user.userId === fetchedClan?.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
