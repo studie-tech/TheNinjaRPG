@@ -472,7 +472,9 @@ export const clanRouter = createTRPCRouter({
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (!leader) return errorResponse("Leader not found");
       if (!isLeader && !isColeader) {
-        return errorResponse("Only clan leader or co-leaders can reject requests");
+        return errorResponse(
+          `Only ${groupLabel} leader or co-leaders can reject requests`,
+        );
       }
       if (request.status !== "PENDING") {
         return errorResponse("You can only reject pending requests");
@@ -520,7 +522,9 @@ export const clanRouter = createTRPCRouter({
       if (!leader) return errorResponse("Leader not found");
       if (nMembers >= CLAN_MAX_MEMBERS) return errorResponse(`${groupLabel} is full`);
       if (!isLeader && !isColeader) {
-        return errorResponse("Only clan leader or co-leaders can accept requests");
+        return errorResponse(
+          `Only ${groupLabel} leader or co-leaders can accept requests`,
+        );
       }
       if (requester.clanId) {
         return errorResponse(`Requester already in a ${groupLabel}`);
