@@ -375,8 +375,9 @@ export const clanRouter = createTRPCRouter({
     }),
   getRequests: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get pending clan join requests" } })
-    .query(async ({ ctx }) => {
-      return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, ctx.userId);
+    .input(z.object({ clanLeaderId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, input.clanLeaderId);
     }),
   searchClans: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Search clans/factions by name" } })
@@ -441,8 +442,16 @@ export const clanRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const request = await fetchRequest(ctx.drizzle, input.id, "CLAN");
-      if (request.receiverId !== ctx.userId) {
-        return errorResponse("You can only reject requests for yourself");
+      // Secondary fetches
+      const [fetchedClan, user] = await Promise.all([
+        fetchClanByLeader(ctx.drizzle, request.receiverId),
+        fetchUser(ctx.drizzle, ctx.userId),
+      ]);
+      // Derived
+      const isLeader = user.userId === fetchedClan?.leaderId;
+      const isColeader = checkCoLeader(user.userId, fetchedClan);
+      if (!isLeader && !isColeader) {
+        return errorResponse("Only clan leaders can reject requests");
       }
       if (request.status !== "PENDING") {
         return errorResponse("You can only reject pending requests");
@@ -472,23 +481,25 @@ export const clanRouter = createTRPCRouter({
       // Fetch
       const request = await fetchRequest(ctx.drizzle, input.id, "CLAN");
       // Secondary fetches
-      const [fetchedClan, requester, leader] = await Promise.all([
+      const [fetchedClan, requester, leader, user] = await Promise.all([
         fetchClanByLeader(ctx.drizzle, request.receiverId),
         fetchUser(ctx.drizzle, request.senderId),
         fetchUser(ctx.drizzle, request.receiverId),
+        fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Derived
       const nMembers = fetchedClan?.members.length || 0;
       const groupLabel = leader?.isOutlaw ? "faction" : "clan";
       const locationLabel = leader?.isOutlaw ? "syndicate" : "village";
+      const isLeader = user.userId === fetchedClan?.leaderId;
+      const isColeader = checkCoLeader(user.userId, fetchedClan);
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (!requester) return errorResponse("Requester not found");
       if (!leader) return errorResponse("Leader not found");
       if (nMembers >= CLAN_MAX_MEMBERS) return errorResponse(`${groupLabel} is full`);
-      if (ctx.userId !== request.receiverId) return errorResponse("Not your request");
-      if (ctx.userId !== fetchedClan.leaderId) {
-        return errorResponse(`Not ${groupLabel} leader`);
+      if (!isLeader && !isColeader) {
+        return errorResponse("Only clan leaders can accept requests");
       }
       if (requester.clanId) {
         return errorResponse(`Requester already in a ${groupLabel}`);

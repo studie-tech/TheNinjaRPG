@@ -639,22 +639,26 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
  */
 interface ClanRequestsProps {
   clanId: string;
-  isLeader: boolean;
+  clanLeaderId: string;
+  isLeaderOrColeader: boolean;
 }
 
 export const ClanRequests: React.FC<ClanRequestsProps> = (props) => {
   // Destructure
   const { userData } = useRequireInVillage("/clanhall");
-  const { clanId, isLeader } = props;
+  const { clanId, clanLeaderId, isLeaderOrColeader } = props;
   const groupLabel = userData?.isOutlaw ? "faction" : "clan";
 
   // Get utils
   const utils = api.useUtils();
 
   // Query
-  const { data: requests } = api.clan.getRequests.useQuery(undefined, {
-    staleTime: 5000,
-  });
+  const { data: requests } = api.clan.getRequests.useQuery(
+    { clanLeaderId: clanLeaderId },
+    {
+      staleTime: 5000,
+    },
+  );
 
   // How to deal with success responses
   const onSuccess = async (data: BaseServerResponse) => {
@@ -684,8 +688,11 @@ export const ClanRequests: React.FC<ClanRequestsProps> = (props) => {
 
   // Derived
   const hasPending = requests?.some((req) => req.status === "PENDING");
-  const showRequestSystem = (isLeader && requests.length > 0) || !userData.clanId;
-  const shownRequests = requests.filter((r) => !isLeader || r.status === "PENDING");
+  const showRequestSystem =
+    (isLeaderOrColeader && requests.length > 0) || !userData.clanId;
+  const shownRequests = requests.filter(
+    (r) => !isLeaderOrColeader || r.status === "PENDING",
+  );
   const sufficientRank = hasRequiredRank(userData.rank, CLAN_RANK_REQUIREMENT);
 
   // Do not show?
@@ -714,7 +721,7 @@ export const ClanRequests: React.FC<ClanRequestsProps> = (props) => {
       {shownRequests.length > 0 && (
         <UserRequestSystem
           requests={shownRequests}
-          userId={userData.userId}
+          userId={isLeaderOrColeader ? clanLeaderId : userData.userId}
           isLoading={isCreating || isAccepting || isRejecting || isCancelling}
           onAccept={accept}
           onReject={reject}
@@ -1649,7 +1656,11 @@ export const ClanProfile: React.FC<ClanProfileProps> = (props) => {
             <ClanBattles clanId={clanData.id} canCreate={isLeader || isColeader} />
           </TabsContent>
           <TabsContent value="requests">
-            <ClanRequests clanId={clanData.id} isLeader={isLeader} />
+            <ClanRequests
+              clanId={clanData.id}
+              clanLeaderId={clanData.leaderId}
+              isLeaderOrColeader={isLeader || isColeader}
+            />
           </TabsContent>
           <TabsContent value="tournaments">
             <Tournament
