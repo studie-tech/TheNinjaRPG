@@ -39,6 +39,7 @@ import type { GenNames, publicState, StatNames } from "@/libs/combat/constants";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type { ZodAllTags } from "@/validators/combat";
 import type { QuestTrackerType } from "@/validators/objectives";
+import type { DmgConfig } from "./constants";
 
 export type BattleWar = War & {
   warAllies: { villageId: string; supportVillageId: string }[];
@@ -316,6 +317,7 @@ export type ExtraState = {
   bounties: Record<string, CombatQueryBounty[]>; // controllerId -> array of bounties on this user
   bountySignups: Record<string, CombatQueryBountySignup[]>; // controllerId -> array of bounty signups
   // Battle settings
+  dmgConfig?: DmgConfig;
   settings?: GameSetting[];
   textureAssets?: string[];
   sfxAssets?: string[];

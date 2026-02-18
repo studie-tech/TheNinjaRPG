@@ -3355,7 +3355,7 @@ export const gameSetting = mysqlTable(
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     name: varchar("name", { length: 191 }).notNull(),
     time: datetime("time", { mode: "date", fsp: 3 }).notNull(),
-    value: int("value").default(0).notNull(),
+    value: double("value").default(0).notNull(),
   },
   (table) => {
     return { name: index("name").on(table.name) };

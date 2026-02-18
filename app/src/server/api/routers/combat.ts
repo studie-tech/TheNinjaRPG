@@ -138,6 +138,7 @@ import {
   maskBattleDynamic,
   rollInitiative,
 } from "@/libs/combat/util";
+import { fetchDmgConfig } from "@/libs/gamesettings";
 import {
   calcActiveUserRegen,
   calcCP,
@@ -1445,7 +1446,7 @@ export const initiateBattle = async (
 
   // Use Promise.all to fetch all independent data in parallel
   const [
-    { defaultProfile, activeWars, settings, villages, relations },
+    { defaultProfile, activeWars, settings, villages, relations, dmgConfig },
     assets,
     achievements,
     fetchedUsers,
@@ -2056,6 +2057,7 @@ export const initiateBattle = async (
           ...extraState.jutsus,
           ...Object.fromEntries(injectableJutsus.map((j) => [j.id, j])),
         },
+        dmgConfig: dmgConfig,
         settings: settings,
         textureAssets: textureAssets,
         sfxAssets: sfxAssets,
@@ -3174,8 +3176,8 @@ export const processUsersForBattle = async (
  * @returns The essentials for a battle
  */
 export const fetchBattleEssentials = async (client: DrizzleClient) => {
-  const [defaultProfile, activeWars, settings, villages, relations] = await Promise.all(
-    [
+  const [defaultProfile, activeWars, settings, villages, relations, dmgConfig] =
+    await Promise.all([
       // Fetch default AI profile
       fetchAiProfileById(client, "Default"),
       // Fetch active wars
@@ -3198,7 +3200,8 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
       client.select().from(village),
       // Fetch village alliances
       client.select().from(villageAlliance),
-    ],
-  );
-  return { defaultProfile, activeWars, settings, villages, relations };
+      // Fetch damage formula config
+      fetchDmgConfig(client),
+    ]);
+  return { defaultProfile, activeWars, settings, villages, relations, dmgConfig };
 };

@@ -15,7 +15,7 @@ import {
   getPreventTypeName,
   isEffectActive,
 } from "@/libs/combat/util";
-import { scaleUserStats } from "@/libs/profile";
+import { calcHP, scaleUserStats } from "@/libs/profile";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import type {
   PreventTagType,
@@ -1210,15 +1210,33 @@ export const updateStatUsage = (
   }
 };
 
-/** Function used for scaling two attributes against each other, used e.g. in damage calculation */
+/** Function used for scaling damage based on stat advantage and HP-based world scaling */
 const powerEffect = (
-  attack: number,
-  defence: number,
-  avg_exp: number,
+  atkPower: number,
+  defPower: number,
+  attackerLevel: number,
+  effectPower: number,
   config: DmgConfig,
 ) => {
-  const statRatio = attack ** config.atk_scaling / defence ** config.def_scaling;
-  return config.dmg_base + statRatio * avg_exp ** config.exp_scaling;
+  // EP scaling (normalized around EP_NORMALIZATION as standard hit)
+  const epScale = effectPower / Math.max(Number.EPSILON, config.ep_normalization);
+
+  // World scale - HP divided by target hits to kill
+  const baseline = calcHP(attackerLevel) / Math.max(Number.EPSILON, config.base_hits);
+
+  // Advantage calculation - bypass for stat-less effects (both powers are 0)
+  let advantageMod = 1.0;
+  if (atkPower > 0 || defPower > 0) {
+    const advantageRatio = atkPower / Math.max(1, defPower);
+    const rawAdvantage =
+      1.0 + config.amplitude * (advantageRatio ** config.curve - 1.0);
+    advantageMod = Math.min(
+      config.advantage_max,
+      Math.max(config.advantage_min, rawAdvantage),
+    );
+  }
+
+  return baseline * epScale * advantageMod;
 };
 
 /** Base damage calculation formula */
@@ -1229,58 +1247,68 @@ export const damageCalc = (
   config: DmgConfig,
 ) => {
   const { power } = getPower(effect);
-  const calcs: number[] = [];
-  // Run battle formula to get list of calculations for each stat
-  if (effect.calculation === "formula") {
-    const dir = "offensive";
+
+  let dmg = power;
+
+  if (effect.calculation === "formula" && origin) {
+    // Accumulate attack and defense power from stat types
+    let atkPowerFromStats = 0;
+    let defPowerFromStats = 0;
+
     effect.statTypes?.forEach((statType: StatType) => {
       let a = "";
       let b = "";
-      if (statType === "Highest" && effect.highestOffence && effect.highestDefence) {
-        if (dir === "offensive") {
-          a = effect.highestOffence;
-          b = effect.highestOffence.replace("Offence", "Defence");
-        } else {
-          a = effect.highestDefence;
-          b = effect.highestDefence.replace("Defence", "Offence");
-        }
+      if (statType === "Highest") {
+        if (!effect.highestOffence || !effect.targetHighestDefence) return;
+        a = effect.highestOffence;
+        b = effect.targetHighestDefence;
       } else {
         const lower = statType.toLowerCase();
-        a = `${lower}${dir ? "Offence" : "Defence"}`;
-        b = `${lower}${dir ? "Defence" : "Offence"}`;
+        a = `${lower}Offence`;
+        b = `${lower}Defence`;
       }
-      if (origin && a in origin && b in target) {
+      if (a in origin && b in target) {
         const left = origin[a as keyof typeof origin] as number;
         const right = target[b as keyof typeof target] as number;
-        const avg_exp = (origin.experience + target.experience) / 2;
-        calcs.push(config.stats_scaling * powerEffect(left, right, avg_exp, config));
+        atkPowerFromStats += Math.sqrt(Math.max(0, left));
+        defPowerFromStats += Math.sqrt(Math.max(0, right));
       }
     });
-    // Apply an element of all these generals
+
+    // Accumulate attack and defense power from generals (weighted 2x per formula)
+    let atkPowerFromGens = 0;
+    let defPowerFromGens = 0;
+
     const generals = getLowerGenerals(effect.generalTypes, origin?.highestGenerals);
     generals.forEach((gen) => {
-      if (origin && gen in origin && gen in target) {
+      if (gen in origin && gen in target) {
         const left = origin[gen as keyof typeof origin] as number;
         const right = target[gen as keyof typeof target] as number;
-        const avg_exp = (origin.experience + target.experience) / 2;
-        calcs.push(config.gen_scaling * powerEffect(left, right, avg_exp, config));
+        atkPowerFromGens += Math.sqrt(Math.max(0, left));
+        defPowerFromGens += Math.sqrt(Math.max(0, right));
       }
     });
+
+    // Combine powers: stats use stats_scaling, generals use gen_weight
+    const totalAtkPower =
+      config.stats_scaling * atkPowerFromStats + config.gen_weight * atkPowerFromGens;
+    const totalDefPower =
+      config.stats_scaling * defPowerFromStats + config.gen_weight * defPowerFromGens;
+
+    // Calculate damage using new formula
+    dmg = powerEffect(totalAtkPower, totalDefPower, origin.level, power, config);
   }
-  // Calculate final damage
-  const calcSum = calcs.reduce((a, b) => a + b, 0);
-  const calcMean = calcSum / calcs.length;
-  const base = 1 + power * config.power_scaling;
-  let dmg =
-    calcSum > 0 ? base * calcMean * config.dmg_scaling + config.dmg_base : power;
-  // If residual
+
+  // Apply residual modifier if applicable
   if (!effect.castThisRound && "residualModifier" in effect) {
     if (effect.residualModifier) dmg *= effect.residualModifier;
   }
-  // Modify damage
+
+  // Apply damage modifier if applicable
   if ("dmgModifier" in effect) {
     if (effect.dmgModifier) dmg *= effect.dmgModifier;
   }
+
   return dmg;
 };
 

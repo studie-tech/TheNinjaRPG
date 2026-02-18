@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import {
   BATTLE_TAG_STACKING,
+  DMG_REDUCTION_CAP,
   DURABILITY_USABILITY_THR,
   ID_ANIMATION_SMOKE,
   NO_DURABILITY_LOSS_COMBATS,
@@ -8,7 +9,7 @@ import {
 } from "@/drizzle/constants";
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
-import { dmgConfig as config, damageModifierTypes } from "./constants";
+import { damageModifierTypes, dmgConfig as defaultDmgConfig } from "./constants";
 import {
   absorb,
   afterburn,
@@ -407,6 +408,17 @@ export const applyEffects = (
       effect,
       action,
     );
+  });
+
+  // Enforce damage reduction cap: damage cannot be reduced below (1 - DMG_REDUCTION_CAP) of base
+  consequences.forEach((consequence) => {
+    if (
+      consequence.damage !== undefined &&
+      consequence.baseDamageForModifiers !== undefined
+    ) {
+      const minDamage = consequence.baseDamageForModifiers * (1 - DMG_REDUCTION_CAP);
+      consequence.damage = Math.max(consequence.damage, minDamage);
+    }
   });
 
   // Apply pierce effects AFTER damage modifiers but BEFORE post-damage modifiers
@@ -855,6 +867,8 @@ export const applySingleEffect = (
   effect: UserEffect,
   action?: CombatAction,
 ) => {
+  // Derive damage config from battle state (with fallback for older battles)
+  const config = battle.extraState.dmgConfig ?? defaultDmgConfig;
   // Destructure
   const { usersState, usersEffects, round } = battle;
   // Get the round information for the effect

@@ -15,6 +15,13 @@
       "when": 1771214105334,
       "tag": "0001_sudden_surge",
       "breakpoints": false
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1771398851340,
+      "tag": "0002_fat_the_spike",
+      "breakpoints": false
     }
   ]
 }

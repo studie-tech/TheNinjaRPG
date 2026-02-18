@@ -3,7 +3,7 @@ import { and, desc, eq, gt, gte, inArray, like, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import TextToSVG from "text-to-svg";
 import { z } from "zod";
-import { Sentiment } from "@/drizzle/constants";
+import { DMG_SETTING_NAMES, Sentiment } from "@/drizzle/constants";
 import {
   abEvent,
   captcha,
@@ -17,7 +17,7 @@ import {
   userRewards,
   visitorLog,
 } from "@/drizzle/schema";
-import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
+import { fetchDmgConfig, getGameSetting, updateGameSetting } from "@/libs/gamesettings";
 import { randomString } from "@/libs/random";
 import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
@@ -28,6 +28,7 @@ import {
   canSubmitNotification,
 } from "@/utils/permissions";
 import { DAY_S, secondsFromNow } from "@/utils/time";
+import { confSchema } from "@/validators/combat";
 import { changeSettingSchema } from "@/validators/misc";
 import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
 import {
@@ -238,6 +239,39 @@ export const miscRouter = createTRPCRouter({
         secondsFromNow(input.days * 24 * 3600),
       );
       return { success: true, message: `Setting set to: ${input.multiplier}X` };
+    }),
+  getDmgConfig: publicProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get the current damage formula config" },
+    })
+    .query(async ({ ctx }) => {
+      return await fetchDmgConfig(ctx.drizzle);
+    }),
+  setDmgConfig: protectedProcedure
+    .input(confSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Guards
+      if (!canModifyEventGains(user.role)) return errorResponse("Not allowed");
+      // Update all DMG settings in parallel
+      const nameToValue: Record<string, number> = {
+        DMG_STATS_SCALING: input.stats_scaling,
+        DMG_BASE_HITS: input.base_hits,
+        DMG_CURVE: input.curve,
+        DMG_AMPLITUDE: input.amplitude,
+        DMG_EP_NORMALIZATION: input.ep_normalization,
+        DMG_GEN_WEIGHT: input.gen_weight,
+        DMG_ADVANTAGE_MIN: input.advantage_min,
+        DMG_ADVANTAGE_MAX: input.advantage_max,
+      };
+      await Promise.all(
+        DMG_SETTING_NAMES.map((name) =>
+          updateGameSetting(ctx.drizzle, name, nameToValue[name] ?? 0, new Date()),
+        ),
+      );
+      return { success: true, message: "Damage config updated" };
     }),
   awardReputation: protectedProcedure
     .input(awardSchema)

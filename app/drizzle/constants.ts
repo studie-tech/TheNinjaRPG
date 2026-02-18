@@ -2458,3 +2458,27 @@ export const STEALTH_TRAIN_GAIN_PER_MINUTE = 50; // Training gain per minute
 // Covert training types enum
 export const CovertTrainingTypes = ["stealth", "sensory"] as const;
 export type CovertTrainingType = (typeof CovertTrainingTypes)[number];
+
+// Damage formula constants
+export const DMG_STATS_SCALING = 1;
+export const DMG_BASE_HITS = 10; // Target time-to-kill in hits
+export const DMG_CURVE = 1.6; // Advantage curve sharpness
+export const DMG_AMPLITUDE = 0.75; // Advantage scaling amplitude
+export const DMG_EP_NORMALIZATION = 40; // Standard EP for normalization
+export const DMG_GEN_WEIGHT = 2.0; // Weight multiplier for general stats in advantage calc
+export const DMG_ADVANTAGE_MIN = 0.01; // Minimum advantage modifier (prevents zero damage)
+export const DMG_ADVANTAGE_MAX = 10.0; // Maximum advantage modifier (prevents extreme damage spikes)
+export const DMG_REDUCTION_CAP = 0.8; // Max fraction damage can be reduced by (80% cap, so 20% always gets through)
+
+// Map of DMG setting names to their default values (for gameSetting table storage)
+export const DMG_SETTING_DEFAULTS: Record<string, number> = {
+  DMG_STATS_SCALING,
+  DMG_BASE_HITS,
+  DMG_CURVE,
+  DMG_AMPLITUDE,
+  DMG_EP_NORMALIZATION,
+  DMG_GEN_WEIGHT,
+  DMG_ADVANTAGE_MIN,
+  DMG_ADVANTAGE_MAX,
+};
+export const DMG_SETTING_NAMES = Object.keys(DMG_SETTING_DEFAULTS);

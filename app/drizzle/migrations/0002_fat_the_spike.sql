@@ -1,0 +1,1 @@
+ALTER TABLE `GameSetting` MODIFY COLUMN `value` double NOT NULL;

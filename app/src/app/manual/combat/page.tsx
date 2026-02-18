@@ -2,15 +2,22 @@
 
 import { BattleLengthHistogram } from "@/layout/BattleLengthHistogram";
 import ContentBox from "@/layout/ContentBox";
+import { DmgConfigDialog } from "@/layout/DmgConfigDialog";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
+import { canModifyEventGains } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 export default function ManualCombat() {
+  const { data: userData } = useUserData();
+  const isAdmin = userData?.role ? canModifyEventGains(userData.role) : false;
+
   return (
     <>
       <ContentBox
         title="Combat"
         subtitle="Fighting for survival"
         defaultBackHref="/manual"
+        topRightContent={isAdmin ? <DmgConfigDialog /> : undefined}
       >
         Combat is based on a turn-based system, where each user gets to perform their
         action in turns of {COMBAT_SECONDS} seconds. The user with the highest

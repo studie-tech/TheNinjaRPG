@@ -1392,13 +1392,18 @@ export const actSchema = z.object({
   generalTypes: z.array(z.enum(GeneralTypes)).prefault(["Strength"]),
 });
 
-export const confSchema = z.object({
-  atk_scaling: z.coerce.number(),
-  def_scaling: z.coerce.number(),
-  exp_scaling: z.coerce.number(),
-  dmg_scaling: z.coerce.number(),
-  gen_scaling: z.coerce.number(),
-  stats_scaling: z.coerce.number(),
-  power_scaling: z.coerce.number(),
-  dmg_base: z.coerce.number(),
-});
+export const confSchema = z
+  .object({
+    stats_scaling: z.coerce.number().min(0),
+    base_hits: z.coerce.number().gt(0),
+    curve: z.coerce.number().gt(0),
+    amplitude: z.coerce.number().min(0),
+    ep_normalization: z.coerce.number().gt(0),
+    gen_weight: z.coerce.number().min(0),
+    advantage_min: z.coerce.number().min(0),
+    advantage_max: z.coerce.number().gt(0),
+  })
+  .refine((data) => data.advantage_min <= data.advantage_max, {
+    message: "advantage_min must be less than or equal to advantage_max",
+    path: ["advantage_min"],
+  });

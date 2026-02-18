@@ -24,6 +24,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { GeneralTypes, StatTypes } from "@/drizzle/constants";
 import type { DamageSimulation } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
+import { DmgConfigDialog } from "@/layout/DmgConfigDialog";
 import Loader from "@/layout/Loader";
 import { battleCalcText } from "@/layout/seoTexts";
 import { dmgConfig } from "@/libs/combat/constants";
@@ -31,6 +32,7 @@ import { damageUser } from "@/libs/combat/tags";
 import type { BattleUserState, Consequence, UserEffect } from "@/libs/combat/types";
 import { calcHP, calcLevel } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
+import { canModifyEventGains } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { actSchema, confSchema, statSchema } from "@/validators/combat";
 
@@ -50,6 +52,7 @@ export default function Simulator(props: {
   const params = use(props.params);
   // Fetch user data
   const { data: userData } = useUserData();
+  const isAdmin = userData?.role ? canModifyEventGains(userData.role) : false;
 
   // Colors for chart
   const colors = [
@@ -105,6 +108,14 @@ export default function Simulator(props: {
     mode: "all" as const,
     resolver: zodResolver(confSchema),
   });
+
+  // Fetch live DMG config from DB and reset the form to use it as defaults
+  const { data: liveDmgConfig } = api.misc.getDmgConfig.useQuery();
+  useEffect(() => {
+    if (liveDmgConfig) {
+      configForm.reset(confSchema.parse(liveDmgConfig));
+    }
+  }, [liveDmgConfig, configForm]);
 
   // Watch all the forms simultaneously
   const attValues = useWatch({ control: attForm.control }) as StatSchemaOutput;
@@ -167,13 +178,19 @@ export default function Simulator(props: {
     defValues: StatSchemaOutput,
     actValues: ActSchemaOutput,
   ) => {
+    const attackerExp = calcExperience(attValues);
+    const attackerLevel = calcLevel(attackerExp);
+    const defenderExp = calcExperience(defValues);
+    const defenderLevel = calcLevel(defenderExp);
     const attacker = {
       ...attValues,
-      experience: calcExperience(attValues),
+      level: attackerLevel,
+      experience: attackerExp,
     } as unknown as BattleUserState;
     const defender = {
       ...defValues,
-      experience: calcExperience(defValues),
+      level: defenderLevel,
+      experience: defenderExp,
     } as unknown as BattleUserState;
     const effect = {
       id: nanoid(),
@@ -314,13 +331,16 @@ export default function Simulator(props: {
         defaultBackHref={userData ? "/manual" : undefined}
         padding={false}
         topRightContent={
-          <Toggle
-            id="toggle-damage-simulator"
-            value={showAll}
-            setShowActive={setShowAll}
-            labelActive="Focus"
-            labelInactive="Focus"
-          />
+          <div className="flex flex-row items-center gap-2">
+            {isAdmin && <DmgConfigDialog />}
+            <Toggle
+              id="toggle-damage-simulator"
+              value={showAll}
+              setShowActive={setShowAll}
+              labelActive="Focus"
+              labelInactive="Focus"
+            />
+          </div>
         }
       >
         <div className="grid grid-cols-2">
@@ -424,71 +444,6 @@ export default function Simulator(props: {
             <Form {...configForm}>
               <FormField
                 control={configForm.control}
-                name="atk_scaling"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>atk_scaling</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="def_scaling"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>def_scaling</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="exp_scaling"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>exp_scaling</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="dmg_scaling"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>dmg_scaling</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="gen_scaling"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>gen_scaling</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
                 name="stats_scaling"
                 render={({ field }) => (
                   <FormItem>
@@ -502,10 +457,10 @@ export default function Simulator(props: {
               />
               <FormField
                 control={configForm.control}
-                name="power_scaling"
+                name="base_hits"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>power_scaling</FormLabel>
+                    <FormLabel>base_hits</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} value={field.value as number} />
                     </FormControl>
@@ -515,10 +470,75 @@ export default function Simulator(props: {
               />
               <FormField
                 control={configForm.control}
-                name="dmg_base"
+                name="curve"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>dmg_base</FormLabel>
+                    <FormLabel>curve</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} value={field.value as number} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={configForm.control}
+                name="amplitude"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>amplitude</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} value={field.value as number} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={configForm.control}
+                name="ep_normalization"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ep_normalization</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} value={field.value as number} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={configForm.control}
+                name="gen_weight"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>gen_weight</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} value={field.value as number} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={configForm.control}
+                name="advantage_min"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>advantage_min</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} value={field.value as number} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={configForm.control}
+                name="advantage_max"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>advantage_max</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} value={field.value as number} />
                     </FormControl>

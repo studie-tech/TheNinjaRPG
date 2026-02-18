@@ -1,10 +1,12 @@
 import * as Sentry from "@sentry/nextjs";
 import { TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { DMG_SETTING_DEFAULTS, DMG_SETTING_NAMES } from "@/drizzle/constants";
 import type { GameSetting } from "@/drizzle/schema";
 import { gameSetting } from "@/drizzle/schema";
+import type { DmgConfig } from "@/libs/combat/constants";
 import type { DrizzleClient } from "@/server/db";
 import { round } from "@/utils/math";
 import {
@@ -238,6 +240,47 @@ export const getGameSettingBoost = (settingName: string, settings: GameSetting[]
     }
   }
   return null;
+};
+
+/**
+ * Fetches the DMG config from the gameSetting table.
+ * If any settings are missing, inserts them with their default values.
+ * Returns a DmgConfig object ready for use in combat calculations.
+ */
+export const fetchDmgConfig = async (client: DrizzleClient): Promise<DmgConfig> => {
+  const settings = await client
+    .select()
+    .from(gameSetting)
+    .where(inArray(gameSetting.name, DMG_SETTING_NAMES));
+
+  // Find which settings are missing and insert them with defaults
+  const existingNames = new Set(settings.map((s) => s.name));
+  const missing = DMG_SETTING_NAMES.filter((n) => !existingNames.has(n));
+  if (missing.length > 0) {
+    const newSettings = missing.map((name) => ({
+      id: nanoid(),
+      name,
+      time: addDays(new Date(), -30),
+      value: DMG_SETTING_DEFAULTS[name] ?? 0,
+    }));
+    await client.insert(gameSetting).values(newSettings);
+    settings.push(...newSettings);
+  }
+
+  // Convert to DmgConfig, falling back to defaults for safety
+  const get = (name: string) =>
+    settings.find((s) => s.name === name)?.value ?? DMG_SETTING_DEFAULTS[name] ?? 0;
+
+  return {
+    stats_scaling: get("DMG_STATS_SCALING"),
+    base_hits: get("DMG_BASE_HITS"),
+    curve: get("DMG_CURVE"),
+    amplitude: get("DMG_AMPLITUDE"),
+    ep_normalization: get("DMG_EP_NORMALIZATION"),
+    gen_weight: get("DMG_GEN_WEIGHT"),
+    advantage_min: get("DMG_ADVANTAGE_MIN"),
+    advantage_max: get("DMG_ADVANTAGE_MAX"),
+  };
 };
 
 /**

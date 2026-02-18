@@ -1,3 +1,14 @@
+import {
+  DMG_ADVANTAGE_MAX,
+  DMG_ADVANTAGE_MIN,
+  DMG_AMPLITUDE,
+  DMG_BASE_HITS,
+  DMG_CURVE,
+  DMG_EP_NORMALIZATION,
+  DMG_GEN_WEIGHT,
+  DMG_STATS_SCALING,
+} from "@/drizzle/constants";
+
 export const COMBAT_BORDER_LEFT = 2;
 export const COMBAT_BORDER_RIGHT = 2;
 export const COMBAT_BORDER_TOP = 2;
@@ -7,27 +18,18 @@ export const COMBAT_LOBBY_SECONDS = 15;
 
 export const SPAR_EXPIRY_SECONDS = 120;
 
-export const ATK_SCALING = 0.5;
-export const DEF_SCALING = 0.5;
-export const EXP_SCALING = 0.5;
-export const DMG_SCALING = 0.12;
-export const GEN_SCALING = 0.5;
-export const STATS_SCALING = 2;
-export const POWER_SCALING = 0.05;
-export const DMG_BASE = 30;
-
 /**
  * Default damage configuration
  */
 export const dmgConfig = {
-  atk_scaling: ATK_SCALING,
-  def_scaling: DEF_SCALING,
-  exp_scaling: EXP_SCALING,
-  dmg_scaling: DMG_SCALING,
-  gen_scaling: GEN_SCALING,
-  stats_scaling: STATS_SCALING,
-  power_scaling: POWER_SCALING,
-  dmg_base: DMG_BASE,
+  stats_scaling: DMG_STATS_SCALING,
+  base_hits: DMG_BASE_HITS,
+  curve: DMG_CURVE,
+  amplitude: DMG_AMPLITUDE,
+  ep_normalization: DMG_EP_NORMALIZATION,
+  gen_weight: DMG_GEN_WEIGHT,
+  advantage_min: DMG_ADVANTAGE_MIN,
+  advantage_max: DMG_ADVANTAGE_MAX,
 };
 export type DmgConfig = typeof dmgConfig;
 
