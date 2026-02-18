@@ -1,6 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+
+// Number of forum threads to display per page on forum board pages
+const FORUM_BOARD_THREADS_PER_PAGE = 20;
+
 import { Bookmark, Instagram, Lock, Trash2, Unlock } from "lucide-react";
 import Link from "next/link";
 import { use, useState } from "react";
@@ -36,11 +40,11 @@ import { useUserData } from "@/utils/UserContext";
 import { type ForumBoardSchema, forumBoardSchema } from "@/validators/forum";
 import { getSearchValidator } from "@/validators/register";
 
-export default function Board(props: { params: Promise<{ boardid: string }> }) {
-  const params = use(props.params);
+const Board = (properties: { params: Promise<{ boardid: string }> }) => {
+  const params = use(properties.params);
   const { data: userData } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const board_id = params.boardid;
+  const boardIdentifier = params.boardid;
 
   const {
     data: threads,
@@ -48,9 +52,9 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
     hasNextPage,
     refetch,
   } = api.forum.getThreads.useInfiniteQuery(
-    { board_id: board_id, limit: 20 },
+    { boardId: boardIdentifier, limit: FORUM_BOARD_THREADS_PER_PAGE },
     {
-      enabled: board_id !== undefined,
+      enabled: boardIdentifier !== undefined,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },
@@ -66,7 +70,7 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
 
   const form = useForm<ForumBoardSchema>({
     defaultValues: {
-      board_id: board_id,
+      board_id: boardIdentifier,
       title: "",
       content: "",
       image: null,
@@ -78,8 +82,8 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
   const watchedImage = useWatch({ control: form.control, name: "image" });
 
   // User search for sender selection (AI posting)
-  const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
+  const maximumUsers = 1;
+  const userSearchSchema = getSearchValidator({ max: maximumUsers });
   const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
     resolver: zodResolver(userSearchSchema),
     defaultValues: { username: "", users: [] },
@@ -90,38 +94,42 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
     defaultValue: [],
   });
   const senderUser = watchedUsers?.[0];
-  const canPostAsAI = userData && canPostAsAi(userData.role);
+  const canPostAsArtificialIntelligence = userData && canPostAsAi(userData.role);
   const isNewsBoard = board?.name === "News";
   const canPostNews = userData && canCreateNews(userData.role);
 
-  const { mutate: createThread, isPending: l1 } = api.forum.createThread.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      await refetch();
-      form.reset();
-    },
-  });
+  const { mutate: createThread, isPending: isCreatingThread } =
+    api.forum.createThread.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await refetch();
+        form.reset();
+      },
+    });
 
-  const { mutate: pinThread, isPending: l2 } = api.forum.pinThread.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      await refetch();
-    },
-  });
+  const { mutate: pinThread, isPending: isPinningThread } =
+    api.forum.pinThread.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await refetch();
+      },
+    });
 
-  const { mutate: lockThread, isPending: l3 } = api.forum.lockThread.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      await refetch();
-    },
-  });
+  const { mutate: lockThread, isPending: isLockingThread } =
+    api.forum.lockThread.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await refetch();
+      },
+    });
 
-  const { mutate: deleteThread, isPending: l4 } = api.forum.deleteThread.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      await refetch();
-    },
-  });
+  const { mutate: deleteThread, isPending: isDeletingThread } =
+    api.forum.deleteThread.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await refetch();
+      },
+    });
 
   const onSubmit = form.handleSubmit((data) => {
     createThread({
@@ -133,7 +141,6 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
 
   if (!board) return <Loader explanation="Loading..."></Loader>;
 
-  const isPending = l1 || l2 || l3 || l4;
   const canEdit = userData && canModerate(userData.role);
 
   return (
@@ -149,103 +156,114 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
         initialBreak={!userData}
         subtitle={board.name}
         topRightContent={
-          <>
-            {isPending && <Loader></Loader>}
-            {userData && !userData.isBanned && !userData.isSilenced && !isPending && (
-              <div className="flex flex-row items-center">
-                <Confirm2
-                  title="Create a new thread"
-                  proceed_label="Submit"
-                  button={<Button id="create">New Thread</Button>}
-                  isValid={form.formState.isValid}
-                  onAccept={onSubmit}
-                >
-                  <Form {...form}>
-                    <form className="space-y-2" onSubmit={onSubmit}>
-                      {canPostAsAI && (
-                        <div>
-                          <FormLabel>Sender</FormLabel>
-                          <UserSearchSelect
-                            useFormMethods={userSearchMethods}
-                            label="Post as (leave empty to post as yourself)"
-                            selectedUsers={[]}
-                            showYourself={true}
-                            showAi={true}
-                            inline={true}
-                            maxUsers={maxUsers}
-                          />
-                        </div>
+          userData &&
+          !userData.isBanned &&
+          !userData.isSilenced && (
+            <div className="flex flex-row items-center">
+              <Confirm2
+                title="Create a new thread"
+                proceed_label="Submit"
+                button={
+                  <Button id="create" disabled={isCreatingThread}>
+                    {isCreatingThread ? <Loader /> : "New Thread"}
+                  </Button>
+                }
+                isValid={form.formState.isValid}
+                onAccept={onSubmit}
+              >
+                <Form {...form}>
+                  <form className="space-y-2" onSubmit={onSubmit}>
+                    {canPostAsArtificialIntelligence && (
+                      <div>
+                        <FormLabel>Sender</FormLabel>
+                        <UserSearchSelect
+                          useFormMethods={userSearchMethods}
+                          label="Post as (leave empty to post as yourself)"
+                          selectedUsers={[]}
+                          showYourself={true}
+                          showAi={true}
+                          inline={true}
+                          maxUsers={maximumUsers}
+                        />
+                      </div>
+                    )}
+                    <FormField
+                      control={form.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Title</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Title for your thread" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
-                      <FormField
-                        control={form.control}
-                        name="title"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Title</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Title for your thread" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <RichInput
-                        id="content"
-                        label="Contents of your thread"
-                        height="300"
-                        placeholder=""
-                        control={form.control}
-                        error={form.formState.errors.content?.message}
-                      />
-                      {isNewsBoard && canPostNews && (
-                        <div className="mt-4 space-y-3">
-                          <ContentImageSelector
-                            label="News Image (for Instagram)"
-                            imageUrl={watchedImage}
-                            id={board_id}
-                            prompt={form.getValues("title") || "News announcement"}
-                            allowImageUpload={true}
-                            type="ai"
-                            size="square"
-                            maxDim={1080}
-                            onUploadComplete={(url) => form.setValue("image", url)}
-                          />
-                          <Alert>
-                            <Instagram className="h-4 w-4" />
-                            <AlertTitle>Instagram Integration</AlertTitle>
-                            <AlertDescription>
-                              Adding an image will automatically post this news to
-                              Instagram. Without an image, news will only be posted to
-                              Discord and Facebook.
-                            </AlertDescription>
-                          </Alert>
-                        </div>
-                      )}
-                    </form>
-                  </Form>
-                </Confirm2>
-              </div>
-            )}
-          </>
+                    />
+                    <RichInput
+                      id="content"
+                      label="Contents of your thread"
+                      height="300"
+                      placeholder=""
+                      control={form.control}
+                      error={form.formState.errors.content?.message}
+                    />
+                    {isNewsBoard && canPostNews && (
+                      <div className="mt-4 space-y-3">
+                        <ContentImageSelector
+                          label="News Image (for Instagram)"
+                          imageUrl={watchedImage}
+                          id={boardIdentifier}
+                          prompt={form.getValues("title") || "News announcement"}
+                          allowImageUpload={true}
+                          type="ai"
+                          size="square"
+                          maxDim={1080}
+                          onUploadComplete={(url) => form.setValue("image", url)}
+                        />
+                        <Alert>
+                          <Instagram className="h-4 w-4" />
+                          <AlertTitle>Instagram Integration</AlertTitle>
+                          <AlertDescription>
+                            Adding an image will automatically post this news to
+                            Instagram. Without an image, news will only be posted to
+                            Discord and Facebook.
+                          </AlertDescription>
+                        </Alert>
+                      </div>
+                    )}
+                  </form>
+                </Form>
+              </Confirm2>
+            </div>
+          )
         }
       >
         {allThreads?.length === 0 && <div>No threads found</div>}
         {allThreads?.map((thread, i) => {
           // Icons, which have to be clickable for moderators+, but just shown otherwise
           const MyBookmark = (
-            <Bookmark
-              className={`mr-2 h-6 w-6 ${thread.isPinned ? "text-orange-500" : canEdit ? "hover:text-orange-500" : ""}`}
-            />
+            <div className={isPinningThread ? "opacity-50" : ""}>
+              <Bookmark
+                className={`mr-2 h-6 w-6 ${thread.isPinned ? "text-orange-500" : canEdit ? "hover:text-orange-500" : ""}`}
+              />
+            </div>
           );
           const MyLockIcon = thread.isLocked ? (
-            <Lock className="h-6 w-6 text-orange-500" />
+            <div className={isLockingThread ? "opacity-50" : ""}>
+              <Lock className="h-6 w-6 text-orange-500" />
+            </div>
           ) : (
-            <Unlock className={`h-6 w-6 ${canEdit ? "hover:text-orange-500" : ""}`} />
+            <div className={isLockingThread ? "opacity-50" : ""}>
+              <Unlock className={`h-6 w-6 ${canEdit ? "hover:text-orange-500" : ""}`} />
+            </div>
           );
           const MyDeleteIcon = (
-            <Trash2
-              className={`ml-2 h-6 w-6 ${canEdit ? "hover:text-orange-500" : ""}`}
-            />
+            <div className={isDeletingThread ? "opacity-50" : ""}>
+              <Trash2
+                className={`ml-2 h-6 w-6 ${canEdit ? "hover:text-orange-500" : ""}`}
+              />
+            </div>
           );
           // Dynamic Names
           const pinAction = thread.isPinned ? "unpin" : "pin";
@@ -287,6 +305,7 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
                             <Confirm2
                               title={`Confirm ${pinAction}ning thread`}
                               button={MyBookmark}
+                              disabled={isPinningThread}
                               onAccept={(e) => {
                                 e.preventDefault();
                                 pinThread({
@@ -300,6 +319,7 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
                             <Confirm2
                               title={`Confirm ${lockAction}ing thread`}
                               button={MyLockIcon}
+                              disabled={isLockingThread}
                               onAccept={(e) => {
                                 e.preventDefault();
                                 lockThread({
@@ -313,6 +333,7 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
                             <Confirm2
                               title={`Confirm deleting thread`}
                               button={MyDeleteIcon}
+                              disabled={isDeletingThread}
                               onAccept={(e) => {
                                 e.preventDefault();
                                 deleteThread({ thread_id: thread.id });
@@ -344,4 +365,6 @@ export default function Board(props: { params: Promise<{ boardid: string }> }) {
       </ContentBox>
     </>
   );
-}
+};
+
+export default Board;

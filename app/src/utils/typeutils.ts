@@ -11,9 +11,9 @@ export type JsonData =
   | Array<JsonData>;
 
 // Convert key null values to empty strings
-export const setValueOnObj = <T, K extends keyof T>(obj: T, key: K, value: T[K]) => {
-  obj[key] = value;
-  return obj;
+export const setValueOnObj = <T, K extends keyof T>(object: T, key: K, value: T[K]) => {
+  object[key] = value;
+  return object;
 };
 
 /**
@@ -21,12 +21,12 @@ export const setValueOnObj = <T, K extends keyof T>(obj: T, key: K, value: T[K])
  * for forms, where null does not exist, but needs to be empty strings instead
  */
 export const setNullsToEmptyStrings = (
-  obj: Record<string, unknown> | undefined | null,
+  object: Record<string, unknown> | undefined | null,
 ) => {
-  if (obj) {
-    let k: keyof typeof obj;
-    for (k in obj) {
-      if (obj[k] === null) setValueOnObj(obj, k, "");
+  if (object) {
+    let propertyKey: keyof typeof object;
+    for (propertyKey in object) {
+      if (object[propertyKey] === null) setValueOnObj(object, propertyKey, "");
     }
   }
 };
@@ -36,19 +36,19 @@ export const setNullsToEmptyStrings = (
  * for forms, where null does not exist, but needs to be empty strings instead
  */
 export const setEmptyStringsToNulls = (
-  obj: Record<string, unknown> | undefined | null,
+  object: Record<string, unknown> | undefined | null,
 ) => {
-  if (obj) {
-    let k: keyof typeof obj;
-    for (k in obj) {
-      if (obj[k] === "") setValueOnObj(obj, k, null);
+  if (object) {
+    let propertyKey: keyof typeof object;
+    for (propertyKey in object) {
+      if (object[propertyKey] === "") setValueOnObj(object, propertyKey, null);
     }
   }
 };
 
 /** Get object keys with their types */
-export const objectKeys = <T extends object>(obj: T) => {
-  return Object.keys(obj) as Array<keyof T>;
+export const objectKeys = <T extends object>(object: T) => {
+  return Object.keys(object) as Array<keyof T>;
 };
 
 /**
@@ -64,10 +64,17 @@ export type DeepPartial<T> = {
  * A promise that returns a database query result or void
  */
 export type DatabasePromiseReturn =
-  | ExecutedQuery<any[] | Record<string, any>>
+  | ExecutedQuery<unknown[] | Record<string, unknown>>
   | undefined;
 
 /**
  * A condition for a database query
  */
 export type QueryCondition = SQL<unknown> | undefined;
+
+/**
+ * Type guard to check if a value is a plain object (not null, not array).
+ */
+export const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};

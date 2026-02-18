@@ -1,8 +1,9 @@
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { forumBoard, forumPost, forumThread, userData } from "@/drizzle/schema";
+import { forumBoard, forumPost, forumThread } from "@/drizzle/schema";
 import { resolveSenderId } from "@/libs/comments";
+import { fetchBoard, getInfiniteThreads, readNews } from "@/libs/forum";
 import { moderateContent } from "@/libs/moderator";
 import {
   callDiscordNews,
@@ -36,17 +37,18 @@ export const forumRouter = createTRPCRouter({
   // The user read the news
   readNews: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Mark news as read for current user" } })
+    .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       await readNews(ctx.drizzle, ctx.userId);
-      return true;
+      return { success: true, message: "News marked as read" };
     }),
   // Get board in the system
   getThreads: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get threads for a forum board" } })
     .input(
       z.object({
-        board_id: z.string().optional(),
-        board_name: z.string().optional(),
+        boardId: z.string().optional(),
+        boardName: z.string().optional(),
         cursor: z.number().nullish(),
         limit: z.number().min(1).max(100),
       }),
@@ -54,8 +56,8 @@ export const forumRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       return await getInfiniteThreads({
         client: ctx.drizzle,
-        boardId: input.board_id,
-        boardName: input.board_name,
+        boardId: input.boardId,
+        boardName: input.boardName,
         cursor: input.cursor,
         limit: input.limit,
         highlightPinned: true,
@@ -86,24 +88,10 @@ export const forumRouter = createTRPCRouter({
       if (!board) {
         return errorResponse("Board does not exist");
       }
-      if (isNews) {
-        const socialPosts = [
-          callDiscordNews(user.username, input.title, input.content, user.avatar),
-          callFacebookNews(input.title, input.content),
-          callRedditNews(input.title, input.content),
-          callTwitterNews(input.title, input.content),
-        ];
-        // Only post to Instagram if an image is attached
-        if (input.image) {
-          socialPosts.push(callInstagramNews(input.title, input.content, input.image));
-        }
-        await Promise.all(socialPosts);
-      }
       // Mutate
       const sanitized = sanitize(input.content);
       const postId = nanoid();
-      await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const databaseMutations: Promise<unknown>[] = [
         moderateContent(ctx.drizzle, {
           content: sanitized,
           userId: ctx.userId,
@@ -128,14 +116,22 @@ export const forumRouter = createTRPCRouter({
           .update(forumBoard)
           .set({ nThreads: sql`nThreads + 1`, updatedAt: new Date() })
           .where(eq(forumBoard.id, input.board_id)),
-        ...(isNews
-          ? [
-              ctx.drizzle
-                .update(userData)
-                .set({ unreadNews: sql`LEAST(unreadNews + 1, 1000)` }),
-            ]
-          : []),
-      ]);
+      ];
+      if (isNews) {
+        databaseMutations.push(
+          callDiscordNews(input.title, input.content, user.avatar),
+          callFacebookNews(input.title, input.content),
+          callRedditNews(input.title, input.content),
+          callTwitterNews(input.title, input.content),
+        );
+        // Only post to Instagram if an image is attached
+        if (input.image) {
+          databaseMutations.push(
+            callInstagramNews(input.title, input.content, input.image),
+          );
+        }
+      }
+      await Promise.all(databaseMutations);
       return { success: true, message: "Thread created" };
     }),
   // Pin forum thread to be on top
@@ -208,77 +204,33 @@ export const forumRouter = createTRPCRouter({
         return errorResponse("Thread not found");
       }
       // Mutate
-      await ctx.drizzle.delete(forumThread).where(eq(forumThread.id, thread.id));
-      await ctx.drizzle.delete(forumPost).where(eq(forumPost.threadId, thread.id));
-      await ctx.drizzle
-        .update(forumBoard)
-        .set({ nThreads: sql`nThreads - 1` })
-        .where(eq(forumBoard.id, thread.boardId));
+      // Sequential deletion pattern: PlanetScale doesn't support transactions,
+      // and the schema lacks ON DELETE CASCADE for forumPost.threadId.
+      // We delete the thread first, then clean up related data only if deletion succeeded.
+      // This prevents orphaned posts if thread deletion fails.
+      const threadDelete = await ctx.drizzle
+        .delete(forumThread)
+        .where(eq(forumThread.id, thread.id));
+
+      if (threadDelete.rowsAffected > 0) {
+        await Promise.all([
+          ctx.drizzle
+            .update(forumBoard)
+            .set({ nThreads: sql`nThreads - 1` })
+            .where(eq(forumBoard.id, thread.boardId)),
+          ctx.drizzle.delete(forumPost).where(eq(forumPost.threadId, thread.id)),
+        ]);
+      }
       return { success: true, message: "Thread deleted" };
     }),
 });
 
-export const getInfiniteThreads = async (props: {
-  client: DrizzleClient;
-  limit: number;
-  highlightPinned?: boolean;
-  cursor?: number | null;
-  boardId?: string;
-  boardName?: string;
-}) => {
-  const { client, boardId, boardName, cursor, limit, highlightPinned } = props;
-  const board = await fetchBoard(client, boardId, boardName);
-  if (!board) throw new Error(`Board not found: ${boardId} ${boardName}`);
-  const currentCursor = cursor ? cursor : 0;
-  const skip = currentCursor * limit;
-  const threads = await client.query.forumThread.findMany({
-    offset: skip,
-    limit: limit,
-    where: eq(forumThread.boardId, board.id),
-    with: {
-      user: {
-        columns: { username: true },
-      },
-      posts: {
-        limit: 1,
-        orderBy: asc(forumPost.createdAt),
-      },
-    },
-    orderBy: highlightPinned
-      ? [desc(forumThread.isPinned), desc(forumThread.createdAt)]
-      : desc(forumThread.createdAt),
-  });
-  const nextCursor = threads.length < limit ? null : currentCursor + 1;
-  return { board, threads, nextCursor };
-};
-export type InfiniteThreads = ReturnType<typeof getInfiniteThreads>;
-
-export const fetchBoard = async (
-  client: DrizzleClient,
-  threadId?: string,
-  threadName?: string,
-) => {
-  if (!threadId && !threadName) {
-    throw new Error("No specific board requested");
-  }
-  const entry = await client.query.forumBoard.findFirst({
-    where: threadId
-      ? eq(forumBoard.id, threadId ?? "")
-      : eq(forumBoard.name, threadName ?? ""),
-  });
-  if (!entry) throw new Error(`Board not found: ${threadId} ${threadName}`);
-  return entry;
-};
-
+/**
+ * Internal convenience function to fetch a forum thread by ID.
+ * Used by this router and the comments router for thread management operations.
+ */
 export const fetchThread = async (client: DrizzleClient, threadId: string) => {
   return await client.query.forumThread.findFirst({
     where: eq(forumThread.id, threadId),
   });
-};
-
-export const readNews = async (client: DrizzleClient, userId: string) => {
-  await client
-    .update(userData)
-    .set({ unreadNews: 0 })
-    .where(eq(userData.userId, userId));
 };

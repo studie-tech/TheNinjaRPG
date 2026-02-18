@@ -1,4 +1,5 @@
 import type { ServerOptions } from "@modelcontextprotocol/sdk/server/index.js";
+import type { McpServer as ModelContextProtocolServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -10,6 +11,7 @@ import type {
   RouterRecord,
 } from "@trpc/server/unstable-core-do-not-import";
 import { createMcpHandler } from "mcp-handler";
+import { isPlainObject } from "@/utils/typeutils";
 import {
   buildToolRegistry,
   handleCallEndpoint,
@@ -21,7 +23,7 @@ import {
 } from "./meta-tools";
 import { extractToolsFromProcedures } from "./tools";
 
-type McpServerOptions = ServerOptions & {
+type ModelContextProtocolServerOptions = ServerOptions & {
   serverInfo?: {
     name: string;
     version: string;
@@ -31,7 +33,7 @@ type McpServerOptions = ServerOptions & {
 /**
  * Configuration for the MCP handler (from mcp-handler).
  */
-type McpHandlerConfig = {
+type ModelContextProtocolHandlerConfig = {
   redisUrl?: string;
   streamableHttpEndpoint?: string;
   sseEndpoint?: string;
@@ -42,9 +44,9 @@ type McpHandlerConfig = {
   disableSse?: boolean;
 };
 
-type McpHandlerOptions = {
-  config: McpHandlerConfig;
-  serverOptions?: McpServerOptions;
+type ModelContextProtocolHandlerOptions = {
+  config: ModelContextProtocolHandlerConfig;
+  serverOptions?: ModelContextProtocolServerOptions;
   /** Function to get current OAuth scopes for authorization checks */
   getScopes?: () => string[];
 };
@@ -65,10 +67,9 @@ type McpHandlerOptions = {
  * @param getScopes - Optional function to get current OAuth scopes for authorization
  */
 const setRequestHandler = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  server: any,
+  modelContextProtocolServer: ModelContextProtocolServer,
   tools: ReturnType<typeof extractToolsFromProcedures>,
-  createCaller: () => Promise<unknown>,
+  createTrpcCaller: () => Promise<unknown>,
   getScopes?: () => string[],
 ) => {
   // Build registry from all extracted tools
@@ -78,13 +79,16 @@ const setRequestHandler = (
     `[MCP] Built registry with ${registry.routers.size} routers and ${tools.length} total endpoints`,
   );
 
+  // Access the underlying Server instance for setRequestHandler
+  const underlyingServer = modelContextProtocolServer.server;
+
   // Return only the 4 meta-tools
-  server.setRequestHandler(ListToolsRequestSchema, () => ({
+  underlyingServer.setRequestHandler(ListToolsRequestSchema, () => ({
     tools: metaTools,
   }));
 
   // Handle meta-tool calls
-  server.setRequestHandler(
+  underlyingServer.setRequestHandler(
     CallToolRequestSchema,
     async (request: {
       params: { name: string; arguments?: Record<string, unknown> };
@@ -129,12 +133,24 @@ const setRequestHandler = (
             };
           }
           const filters = parseResponseFilters(procedureArguments);
+          // Validate input type guard: ensure input is an object if provided
+          const input = procedureArguments?.input;
+          if (input !== undefined && !isPlainObject(input)) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "Invalid input: expected an object or undefined",
+                },
+              ],
+            };
+          }
           return handleCallEndpoint(
             registry,
-            createCaller,
+            createTrpcCaller,
             endpointName,
-            procedureArguments?.input as Record<string, unknown> | undefined,
             getScopes,
+            input as Record<string, unknown> | undefined,
             filters,
           );
         }
@@ -152,17 +168,17 @@ const setRequestHandler = (
  * Creates an MCP handler that bridges tRPC procedures to MCP tools.
  *
  * @param appRouter - The tRPC router containing procedures to expose
- * @param ctx - The context or context factory for creating tRPC callers
+ * @param context - The context or context factory for creating tRPC callers
  * @param handlerOptions - Configuration options for the handler
  * @returns A request handler function compatible with Vercel/Next.js
  */
-export const trpcToMcpHandler = <
+export const trpcToModelContextProtocolHandler = <
   TRoot extends AnyRootTypes,
   TRecord extends RouterRecord,
 >(
   appRouter: Router<TRoot, TRecord>,
   context: TRoot["ctx"] | (() => MaybePromise<TRoot["ctx"]>),
-  handlerOptions: McpHandlerOptions,
+  handlerOptions: ModelContextProtocolHandlerOptions,
 ): ((request: Request) => Promise<Response>) => {
   const { serverOptions, config, getScopes } = handlerOptions;
 
@@ -171,7 +187,7 @@ export const trpcToMcpHandler = <
 
   // Create the caller factory - this will be called for each request
   // to ensure the context is resolved with current auth state
-  const createCaller = async () => {
+  const createTrpcCaller = async () => {
     const resolvedContext =
       typeof context === "function"
         ? await (context as () => MaybePromise<TRoot["ctx"]>)()
@@ -182,7 +198,7 @@ export const trpcToMcpHandler = <
   const handler = createMcpHandler(
     (server) => {
       // Pass the factory function, not a pre-created caller
-      setRequestHandler(server.server, tools, createCaller, getScopes);
+      setRequestHandler(server, tools, createTrpcCaller, getScopes);
     },
     {
       capabilities: {
@@ -196,4 +212,8 @@ export const trpcToMcpHandler = <
   return handler;
 };
 
-export type { McpHandlerConfig, McpServerOptions, McpHandlerOptions };
+export type {
+  ModelContextProtocolHandlerConfig,
+  ModelContextProtocolServerOptions,
+  ModelContextProtocolHandlerOptions,
+};

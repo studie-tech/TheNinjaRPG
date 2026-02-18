@@ -1,7 +1,48 @@
 import crypto from "node:crypto";
 import { NodeHtmlMarkdown } from "node-html-markdown";
 import type { UserData } from "@/drizzle/schema";
+import { truncateString } from "@/utils/string";
 import type { TicketType } from "@/validators/misc";
+
+// Shared NodeHtmlMarkdown instance for converting HTML to Markdown across all social media integrations
+const nodeHtmlMarkdown = new NodeHtmlMarkdown({}, undefined, undefined);
+
+// Twitter character limits and formatting constants
+const TWITTER_CHARACTER_LIMIT = 280;
+const TWITTER_FORMATTING_BUFFER = 5; // For "\n\n" and buffer
+
+/**
+ * Validates that a webhook URL is a legitimate Discord webhook.
+ * Prevents data exfiltration if environment variables are accidentally set to attacker-controlled URLs.
+ */
+const isValidDiscordWebhook = (url: string | undefined): boolean => {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    // Discord webhooks must be on discord.com or discordapp.com domains
+    // and must follow the /api/webhooks/{id}/{token} pattern
+    return (
+      (parsed.hostname === "discord.com" || parsed.hostname === "discordapp.com") &&
+      /^\/api\/webhooks\/\d+\/[\w-]+$/.test(parsed.pathname)
+    );
+  } catch (error) {
+    // Invalid URL strings (TypeError) are expected during validation
+    // Log unexpected errors that aren't standard URL parsing failures
+    if (error instanceof TypeError) {
+      // Only ignore TypeErrors that are actually from URL parsing by checking stack trace
+      const stack = error.stack ?? "";
+      const isUrlConstructorError =
+        error.message.includes("Invalid URL") &&
+        (stack.includes("URL") || stack.includes("node:internal/url"));
+      if (!isUrlConstructorError) {
+        console.error("[Discord] Unexpected TypeError (not URL parsing):", error);
+      }
+    } else {
+      console.error("[Discord] Unexpected error validating webhook URL:", error);
+    }
+    return false;
+  }
+};
 
 export const callDiscordContent = async (
   username: string,
@@ -9,7 +50,13 @@ export const callDiscordContent = async (
   diff: string[],
   image_url?: string | null,
 ) => {
-  return fetch(process.env.DISCORD_CONTENT_UPDATES, {
+  const webhookUrl = process.env.DISCORD_CONTENT_UPDATES;
+  if (!isValidDiscordWebhook(webhookUrl)) {
+    console.error("[Discord] Invalid webhook URL for content updates");
+    return;
+  }
+
+  return fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -20,18 +67,22 @@ export const callDiscordContent = async (
 };
 
 export const callDiscordNews = async (
-  _username: string,
   title: string,
   content: string,
   image_url?: string | null,
 ) => {
-  const nhm = new NodeHtmlMarkdown({}, undefined, undefined);
-  return fetch(process.env.DISCORD_NEWS_UPDATES, {
+  const webhookUrl = process.env.DISCORD_NEWS_UPDATES;
+  if (!isValidDiscordWebhook(webhookUrl)) {
+    console.error("[Discord] Invalid webhook URL for news updates");
+    return;
+  }
+
+  return fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       avatar_url: image_url?.includes("https") ? image_url : "",
-      content: nhm.translate(`**${title}**\n* ${content} @everyone`),
+      content: nodeHtmlMarkdown.translate(`**${title}**\n* ${content} @everyone`),
     }),
   });
 };
@@ -46,9 +97,9 @@ export const callFacebookNews = async (title: string, content: string) => {
     return;
   }
 
-  const nhm = new NodeHtmlMarkdown({}, undefined, undefined);
-  const message = nhm.translate(`${title}\n\n${content}`);
+  const message = nodeHtmlMarkdown.translate(`${title}\n\n${content}`);
 
+  // SECURITY: Do not log request bodies for this endpoint as they contain the access token in plaintext
   return fetch(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -78,8 +129,7 @@ export const callInstagramNews = async (
     return;
   }
 
-  const nhm = new NodeHtmlMarkdown({}, undefined, undefined);
-  const caption = nhm.translate(
+  const caption = nodeHtmlMarkdown.translate(
     `${title}\n\n${content}\n\n#TheNinjaRPG #BrowserGame #NinjaGame`,
   );
 
@@ -119,36 +169,48 @@ export const callInstagramNews = async (
  * Creates a text post (self post) in the configured subreddit.
  */
 export const callRedditNews = async (title: string, content: string) => {
-  const clientId = process.env.REDDIT_CLIENT_ID;
-  const clientSecret = process.env.REDDIT_CLIENT_SECRET;
-  const refreshToken = process.env.REDDIT_REFRESH_TOKEN;
+  const oauthClientIdentifier = process.env.REDDIT_CLIENT_ID;
+  const oauthClientSecret = process.env.REDDIT_CLIENT_SECRET;
+  const oauthRefreshToken = process.env.REDDIT_REFRESH_TOKEN;
   const subreddit = process.env.REDDIT_SUBREDDIT;
 
   // Skip if not configured
-  if (!clientId || !clientSecret || !refreshToken || !subreddit) {
+  if (
+    !oauthClientIdentifier ||
+    !oauthClientSecret ||
+    !oauthRefreshToken ||
+    !subreddit
+  ) {
     console.warn("Reddit credentials not configured, skipping Reddit post");
     return;
   }
 
-  const nhm = new NodeHtmlMarkdown({}, undefined, undefined);
-  const text = nhm.translate(content);
+  const postContent = nodeHtmlMarkdown.translate(content);
 
   // Step 1: Get access token using refresh token
+  // SECURITY: Do not log request headers for this endpoint as Authorization contains base64-encoded client secret
   const tokenResponse = await fetch("https://www.reddit.com/api/v1/access_token", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      Authorization: `Basic ${Buffer.from(`${oauthClientIdentifier}:${oauthClientSecret}`).toString("base64")}`,
     },
     body: new URLSearchParams({
       grant_type: "refresh_token",
-      refresh_token: refreshToken,
+      refresh_token: oauthRefreshToken,
     }),
   });
 
-  const tokenData = (await tokenResponse.json()) as { access_token?: string };
+  const tokenData = (await tokenResponse.json()) as {
+    access_token?: string;
+    error?: string;
+  };
   if (!tokenData.access_token) {
-    console.error("Failed to get Reddit access token:", tokenData);
+    // Log error without exposing the full response which may contain sensitive data
+    console.error(
+      "Failed to get Reddit access token:",
+      tokenData.error ?? "Unknown error",
+    );
     return;
   }
 
@@ -164,34 +226,55 @@ export const callRedditNews = async (title: string, content: string) => {
       sr: subreddit,
       kind: "self",
       title: title,
-      text: text,
+      text: postContent,
     }),
   });
 };
 
 /**
  * Generate OAuth 1.0a signature for Twitter API.
+ *
+ * OAuth 1.0a signature algorithm (HMAC-SHA1):
+ * 1. Sort all OAuth parameters alphabetically by key
+ * 2. URL-encode each key and value, then join with "=" and "&" to create parameter string
+ * 3. Create signature base string by joining (with "&"):
+ *    - HTTP method (uppercase)
+ *    - URL-encoded request URL
+ *    - URL-encoded parameter string from step 2
+ * 4. Create signing key by joining consumer secret and token secret with "&"
+ * 5. Generate HMAC-SHA1 hash of signature base string using signing key
+ * 6. Base64-encode the hash to get final signature
+ *
+ * NOTE: This implementation generates signatures for outgoing requests. If server-side signature
+ * verification is added in the future, use constant-time comparison to prevent timing attacks.
  */
 const generateOAuth1Signature = (
-  method: string,
-  url: string,
-  params: Record<string, string>,
-  consumerSecret: string,
-  tokenSecret: string,
+  httpMethod: string,
+  requestUrl: string,
+  oauthParameters: Record<string, string>,
+  oauthConsumerSecret: string,
+  oauthTokenSecret: string,
 ) => {
-  const sortedParams = Object.keys(params)
+  // Step 1-2: Sort parameters and create encoded parameter string
+  const sortedParams = Object.keys(oauthParameters)
     .sort()
-    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(params[key] ?? "")}`)
+    .map(
+      (key) =>
+        `${encodeURIComponent(key)}=${encodeURIComponent(oauthParameters[key] ?? "")}`,
+    )
     .join("&");
 
+  // Step 3: Create signature base string (method&url&params)
   const signatureBaseString = [
-    method.toUpperCase(),
-    encodeURIComponent(url),
+    httpMethod.toUpperCase(),
+    encodeURIComponent(requestUrl),
     encodeURIComponent(sortedParams),
   ].join("&");
 
-  const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
+  // Step 4: Create signing key (consumerSecret&tokenSecret)
+  const signingKey = `${encodeURIComponent(oauthConsumerSecret)}&${encodeURIComponent(oauthTokenSecret)}`;
 
+  // Step 5-6: Generate HMAC-SHA1 hash and base64-encode
   return crypto
     .createHmac("sha1", signingKey)
     .update(signatureBaseString)
@@ -214,21 +297,18 @@ export const callTwitterNews = async (title: string, content: string) => {
     return;
   }
 
-  const nhm = new NodeHtmlMarkdown({}, undefined, undefined);
-  const plainContent = nhm.translate(content);
+  const plainContent = nodeHtmlMarkdown.translate(content);
 
   // Twitter has 280 char limit - compose tweet with title and truncated content
   const newsUrl = "https://www.theninja-rpg.com/news";
   const suffix = `\n\n🔗 ${newsUrl}`;
-  const maxContentLength = 280 - title.length - suffix.length - 5; // 5 for "\n\n" and buffer
-  const truncatedContent =
-    plainContent.length > maxContentLength
-      ? `${plainContent.substring(0, maxContentLength - 3)}...`
-      : plainContent;
+  const maxContentLength =
+    TWITTER_CHARACTER_LIMIT - title.length - suffix.length - TWITTER_FORMATTING_BUFFER;
+  const truncatedContent = truncateString(plainContent, maxContentLength);
   const tweetText = `${title}\n\n${truncatedContent}${suffix}`;
 
   // OAuth 1.0a parameters
-  const oauthParams: Record<string, string> = {
+  const oauthParameters: Record<string, string> = {
     oauth_consumer_key: apiKey,
     oauth_nonce: crypto.randomBytes(16).toString("hex"),
     oauth_signature_method: "HMAC-SHA1",
@@ -242,20 +322,20 @@ export const callTwitterNews = async (title: string, content: string) => {
   const signature = generateOAuth1Signature(
     "POST",
     url,
-    oauthParams,
+    oauthParameters,
     apiSecret,
     accessSecret,
   );
-  oauthParams.oauth_signature = signature;
+  oauthParameters.oauth_signature = signature;
 
   // Build Authorization header
   const authHeader =
     "OAuth " +
-    Object.keys(oauthParams)
+    Object.keys(oauthParameters)
       .sort()
       .map(
         (key) =>
-          `${encodeURIComponent(key)}="${encodeURIComponent(oauthParams[key] ?? "")}"`,
+          `${encodeURIComponent(key)}="${encodeURIComponent(oauthParameters[key] ?? "")}"`,
       )
       .join(", ");
 
@@ -275,10 +355,15 @@ export const callDiscordTicket = async (
   type: TicketType,
   user: UserData,
 ) => {
-  const nhm = new NodeHtmlMarkdown({}, undefined, undefined);
+  const webhookUrl = process.env.DISCORD_TICKETS;
+  if (!isValidDiscordWebhook(webhookUrl)) {
+    console.error("[Discord] Invalid webhook URL for tickets");
+    return;
+  }
+
   const image_url = user.avatar;
-  const content = `*Report from TNR interface*\n\n**Username:** ${user.username}\n**Reason:** ${nhm.translate(reason)}\n${type === "bug_report" ? "<@&1131406837762244760>" : "<@&1086822053254017105>"}\n`;
-  return fetch(process.env.DISCORD_TICKETS, {
+  const content = `*Report from TNR interface*\n\n**Username:** ${user.username}\n**Reason:** ${nodeHtmlMarkdown.translate(reason)}\n${type === "bug_report" ? "<@&1131406837762244760>" : "<@&1086822053254017105>"}\n`;
+  return fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

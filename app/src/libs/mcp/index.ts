@@ -1,12 +1,20 @@
 // Types
 
-export type { McpHandlerConfig, McpHandlerOptions, McpServerOptions } from "./handler";
+export type {
+  ModelContextProtocolHandlerConfig,
+  ModelContextProtocolHandlerOptions,
+  ModelContextProtocolServerOptions,
+} from "./handler";
 // Handler
-export { trpcToMcpHandler } from "./handler";
+export { trpcToModelContextProtocolHandler } from "./handler";
 export type { EndpointInfo, RouterInfo, ToolRegistry } from "./meta-tools";
 
 // Meta-tools
 export { buildToolRegistry, metaTools } from "./meta-tools";
 // Tool extraction
 export { extractToolsFromProcedures, mergeInputs } from "./tools";
-export type { McpMeta, McpTool, TransformMcpProcedureFunction } from "./types";
+export type {
+  McpMeta,
+  McpTool as ModelContextProtocolTool,
+  TransformMcpProcedureFunction,
+} from "./types";

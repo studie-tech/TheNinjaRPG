@@ -21,7 +21,6 @@ import superjson from "superjson";
 import { ZodError, z } from "zod";
 import { userData } from "@/drizzle/schema";
 import type { McpMeta } from "@/libs/mcp";
-
 /**
  * 1. CONTEXT
  *
@@ -32,28 +31,30 @@ import type { McpMeta } from "@/libs/mcp";
  *
  */
 import { drizzleDB } from "@/server/db";
+import { getClientIp } from "@/utils/network";
 
 /**
  * This is the actual context you will use in your router. It will be used to process every request
  * that goes through your tRPC endpoint. This is for the app router.
  * @see https://trpc.io/docs/context
  */
-export const createAppTRPCContext = async (opts: {
+export const createAppTRPCContext = async (options: {
   req: NextRequest;
   readHeaders: ReadonlyHeaders;
   readCookies: ReadonlyRequestCookies;
 }) => {
   // Get user ID - SIMPLE
-  const sesh = await auth();
-  const userId = sesh.userId;
+  const session = await auth();
+  const userId = session.userId;
   // Get IP
-  const { readHeaders } = opts;
-  const ip = readHeaders.get("x-forwarded-for") ?? undefined;
-  const userIp = typeof ip === "string" ? ip.split(/, /)[0] : "unknown";
+  const { readHeaders } = options;
+  const userIp = getClientIp(readHeaders);
   // Get agent
   const userAgent = readHeaders.get("user-agent") ?? undefined;
   // AB testing cookies
-  const abLemuReplacementVariant = opts.readCookies.get("ab_lemu_replacement_2")?.value;
+  const abLemuReplacementVariant = options.readCookies.get(
+    "ab_lemu_replacement_2",
+  )?.value;
   return {
     drizzle: drizzleDB,
     userIp,
@@ -118,42 +119,50 @@ export const sentryMiddleware = t.middleware(
   }),
 );
 
-export const ratelimitMiddleware = t.middleware(async ({ ctx, path, next }) => {
-  if (!ctx.userId && !ctx.userIp) {
-    throw new TRPCError({
-      message: `No user ID or IP found for rate limit middleware`,
-      code: "UNAUTHORIZED",
-    });
-  }
-  const identifier = `${path}-${ctx.userId ?? ctx.userIp}`;
-  const { success } = await ratelimit.limit(identifier);
-  if (!success) {
-    if (ctx.userId) {
-      await ctx.drizzle
-        .update(userData)
-        .set({
-          movedTooFastCount: sql`${userData.movedTooFastCount} + 1`,
-          money: sql`${userData.money} * 0.99`,
-          bank: sql`${userData.bank} * 0.99`,
-        })
-        .where(eq(userData.userId, ctx.userId));
+export const ratelimitMiddleware = t.middleware(
+  async ({ ctx: context, path, next }) => {
+    if (!context.userId && !context.userIp) {
+      throw new TRPCError({
+        message: `No user ID or IP found for rate limit middleware`,
+        code: "UNAUTHORIZED",
+      });
     }
-    throw serverError(
-      "TOO_MANY_REQUESTS",
-      `You are acting too fast. Incident logged for review on path ${path}. 1% money reduced.`,
-    );
-  }
-  return next({ ctx: { userId: ctx.userId } });
-});
+    const identifier = `${path}-${context.userId ?? context.userIp}`;
+    const { success } = await ratelimit.limit(identifier);
+    if (!success) {
+      if (context.userId) {
+        const result = await context.drizzle
+          .update(userData)
+          .set({
+            movedTooFastCount: sql`${userData.movedTooFastCount} + 1`,
+            money: sql`GREATEST(${userData.money} * 0.99, 0)`,
+            bank: sql`GREATEST(${userData.bank} * 0.99, 0)`,
+          })
+          .where(eq(userData.userId, context.userId));
+        if (result.rowsAffected === 0) {
+          throw new TRPCError({
+            message: `User not found for rate limit penalty`,
+            code: "NOT_FOUND",
+          });
+        }
+      }
+      throw serverError(
+        "TOO_MANY_REQUESTS",
+        `You are acting too fast. Incident logged for review on path ${path}. 1% money reduced.`,
+      );
+    }
+    return next({ ctx: { userId: context.userId } });
+  },
+);
 
-export const hasUserMiddleware = t.middleware(async ({ ctx, path, next }) => {
-  if (!ctx.userId) {
+export const hasUserMiddleware = t.middleware(async ({ ctx: context, path, next }) => {
+  if (!context.userId) {
     throw new TRPCError({
       message: `No user ID found for path ${path}`,
       code: "UNAUTHORIZED",
     });
   }
-  return next({ ctx: { userId: ctx.userId } });
+  return next({ ctx: { userId: context.userId } });
 });
 
 /**
@@ -174,18 +183,20 @@ export const publicProcedure = t.procedure
   .use(ratelimitMiddleware)
   .use(sentryMiddleware);
 
-const enforceUserIsAuthed = t.middleware(async ({ ctx, path, getRawInput, next }) => {
-  // Check that the user is authed
-  if (!ctx.userId) {
-    const rawInput = await getRawInput();
-    throw new TRPCError({
-      message: `Unauthorized for tRPC endpoint. Path: ${path}. Data: ${JSON.stringify(rawInput)}`,
-      code: "UNAUTHORIZED",
-      cause: rawInput,
-    });
-  }
-  return next({ ctx: { userId: ctx.userId } });
-});
+const enforceUserIsAuthed = t.middleware(
+  async ({ ctx: context, path, getRawInput, next }) => {
+    // Check that the user is authed
+    if (!context.userId) {
+      const rawInput = await getRawInput();
+      throw new TRPCError({
+        message: `Unauthorized for tRPC endpoint. Path: ${path}. Data: ${JSON.stringify(rawInput)}`,
+        code: "UNAUTHORIZED",
+        cause: rawInput,
+      });
+    }
+    return next({ ctx: { userId: context.userId } });
+  },
+);
 
 export const protectedProcedure = t.procedure
   .use(enforceUserIsAuthed)

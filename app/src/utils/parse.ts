@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { nanoid } from "nanoid";
 import React from "react";
 import type { Transform } from "react-html-parser";
@@ -7,6 +8,10 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import EmbeddedConceptArt from "@/layout/EmbeddedConceptArt";
 import { randomString } from "@/libs/random";
 import { isAllowedIframeUrl } from "@/utils/audio";
+import { isPlainObject } from "@/utils/typeutils";
+
+// Default length for randomly generated alt text when images lack alt attributes
+const DEFAULT_ALT_TEXT_LENGTH = 10;
 
 interface HtmlNode {
   type: string;
@@ -17,7 +22,7 @@ interface HtmlNode {
 }
 
 const isValidStyle = (value: unknown): value is React.CSSProperties => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return isPlainObject(value);
 };
 
 // Whitelist of iframe allow tokens we consider safe
@@ -36,9 +41,9 @@ const DEFAULT_IFRAME_ALLOW = "autoplay; encrypted-media; picture-in-picture";
  * Sanitize the iframe allow attribute by keeping only whitelisted tokens.
  * Falls back to DEFAULT_IFRAME_ALLOW if nothing safe remains.
  */
-const sanitizeIframeAllow = (raw?: string): string => {
-  if (!raw) return DEFAULT_IFRAME_ALLOW;
-  const safeParts = raw
+const sanitizeIframeAllow = (allowAttribute?: string): string => {
+  if (!allowAttribute) return DEFAULT_IFRAME_ALLOW;
+  const allowedTokens = allowAttribute
     .split(";")
     .map((s) => s.trim())
     .filter(Boolean)
@@ -48,8 +53,8 @@ const sanitizeIframeAllow = (raw?: string): string => {
       return token && ALLOWED_IFRAME_ALLOW_TOKENS.has(token) ? token : undefined;
     })
     .filter((t): t is string => Boolean(t));
-  const unique = Array.from(new Set(safeParts));
-  return unique.length ? unique.join("; ") : DEFAULT_IFRAME_ALLOW;
+  const uniqueTokens = Array.from(new Set(allowedTokens));
+  return uniqueTokens.length ? uniqueTokens.join("; ") : DEFAULT_IFRAME_ALLOW;
 };
 
 /**
@@ -64,167 +69,211 @@ const preprocessHtml = (html: string): string => {
   );
 };
 
-/*
+/**
+ * Parse and sanitize style attribute from JSON string
+ */
+const parseStyleAttribute = (styleJson?: string): React.CSSProperties | undefined => {
+  if (!styleJson) return undefined;
+  try {
+    const parsedStyle = JSON.parse(styleJson) as unknown;
+    return isValidStyle(parsedStyle) ? parsedStyle : undefined;
+  } catch (error) {
+    // Expected: SyntaxError for malformed JSON
+    if (error instanceof SyntaxError) {
+      return undefined;
+    }
+    // Capture unexpected errors in Sentry for monitoring
+    Sentry.captureException(error, {
+      tags: { source: "parse-style-attribute" },
+      extra: { style: styleJson },
+    });
+    throw error;
+  }
+};
+
+/**
+ * Transform image nodes with error handling and fallback.
+ * Returns undefined if the node cannot be transformed (e.g., missing attributes).
+ */
+const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefined => {
+  if (!imageNode.attribs) return undefined;
+
+  const {
+    src: sourceUrl,
+    alt: alternativeText,
+    className,
+    id: imageIdentifier,
+    style,
+    width,
+    height,
+  } = imageNode.attribs;
+  const parsedStyle = parseStyleAttribute(style);
+
+  const imageAttributes: React.ImgHTMLAttributes<HTMLImageElement> = {
+    src: sourceUrl,
+    alt: alternativeText || randomString(DEFAULT_ALT_TEXT_LENGTH),
+    className,
+    id: imageIdentifier,
+    style: parsedStyle,
+    width,
+    height,
+    onError: (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const target = event.currentTarget;
+      target.onerror = null;
+      target.src = IMG_AVATAR_DEFAULT;
+    },
+  };
+
+  const filteredAttributes = Object.fromEntries(
+    Object.entries(imageAttributes).filter(([, value]) => value !== undefined),
+  ) as React.ImgHTMLAttributes<HTMLImageElement>;
+
+  return React.createElement("img", { ...filteredAttributes, key: nanoid() });
+};
+
+/**
+ * Transform blockquote nodes to Quote component
+ */
+const transformBlockquoteNode = (blockquoteNode: HtmlNode): React.ReactElement => {
+  const content = blockquoteNode.children?.reduce((acc, child) => {
+    if (child.type === "text") {
+      return acc + child.data;
+    }
+    return acc;
+  }, "");
+
+  return React.createElement(
+    Quote,
+    {
+      author: blockquoteNode.attribs?.author || undefined,
+      date: blockquoteNode.attribs?.date || undefined,
+      key: nanoid(),
+    },
+    content,
+  );
+};
+
+/**
+ * Transform concept art nodes to embedded component
+ */
+const transformConceptArtNode = (
+  conceptArtNode: HtmlNode,
+): React.ReactElement | null => {
+  if (!conceptArtNode.attribs) return null;
+  const imageId = conceptArtNode.attribs["data-id"];
+  if (!imageId) return null;
+
+  return React.createElement(EmbeddedConceptArt, {
+    imageId,
+    key: `conceptart-${imageId}-${nanoid()}`,
+  });
+};
+
+/**
+ * Transform iframe nodes with security restrictions
+ */
+const transformIframeNode = (iframeNode: HtmlNode): React.ReactElement | undefined => {
+  if (!iframeNode.attribs) return undefined;
+
+  const {
+    src: sourceUrl,
+    width,
+    height,
+    title,
+    className,
+    class: classAttribute,
+    id: elementIdentifier,
+    style,
+    allow: allowAttribute,
+    allowfullscreen,
+    frameborder: frameBorder,
+  } = iframeNode.attribs as Record<string, string> & { class?: string };
+
+  if (!sourceUrl || !isAllowedIframeUrl(sourceUrl)) {
+    return React.createElement("div", { key: nanoid() });
+  }
+
+  const parsedStyle = parseStyleAttribute(style);
+  const finalClassName = className ?? classAttribute;
+  const sanitizedAllowAttribute = sanitizeIframeAllow(allowAttribute);
+  const allowFullScreen =
+    typeof allowfullscreen !== "undefined" &&
+    allowfullscreen.toLowerCase() !== "false" &&
+    allowfullscreen !== "0";
+
+  const props: React.IframeHTMLAttributes<HTMLIFrameElement> & {
+    "data-user-iframe"?: string;
+  } = {
+    src: sourceUrl,
+    width,
+    height,
+    title,
+    className: finalClassName,
+    id: elementIdentifier,
+    style: parsedStyle,
+    allow: sanitizedAllowAttribute,
+    allowFullScreen,
+    frameBorder,
+    sandbox: "allow-scripts allow-same-origin",
+    referrerPolicy: "no-referrer",
+    "data-user-iframe": "true",
+  };
+
+  const filteredProperties = Object.fromEntries(
+    Object.entries(props).filter(([, value]) => value !== undefined),
+  ) as React.IframeHTMLAttributes<HTMLIFrameElement> & { "data-user-iframe"?: string };
+
+  return React.createElement("iframe", { ...filteredProperties, key: nanoid() });
+};
+
+/**
+ * Check if node should be filtered out during transformation
+ */
+const shouldFilterNode = (htmlNode: HtmlNode): boolean => {
+  return (
+    htmlNode.type === "directive" ||
+    htmlNode.type === "style" ||
+    htmlNode.type === "script" ||
+    (htmlNode.type === "tag" &&
+      (htmlNode.name === "body" ||
+        htmlNode.name === "html" ||
+        htmlNode.name === "meta" ||
+        htmlNode.name === "title" ||
+        htmlNode.name === "head"))
+  );
+};
+
+/**
  * Parse HTML string into React components
- * @param html - HTML string to parse
  */
 export const parseHtml = (html: string) => {
-  // Pre-process to handle special tags
-  const processedHtml = preprocessHtml(html);
+  const preprocessedHtml = preprocessHtml(html);
 
   const transform: Transform = (node: HtmlNode) => {
-    if (
-      node.type === "directive" ||
-      node.type === "style" ||
-      node.type === "script" ||
-      (node.type === "tag" && node.name === "body") ||
-      (node.type === "tag" && node.name === "html") ||
-      (node.type === "tag" && node.name === "meta") ||
-      (node.type === "tag" && node.name === "title") ||
-      (node.type === "tag" && node.name === "head")
-    ) {
+    if (shouldFilterNode(node)) {
       return null;
-    } else if (node.type === "tag" && node.name === "img" && node.attribs) {
-      const {
-        src,
-        alt: originalAlt,
-        className,
-        id,
-        style,
-        width,
-        height,
-      } = node.attribs;
-
-      let parsedStyle: React.CSSProperties | undefined;
-      if (style) {
-        try {
-          const parsed = JSON.parse(style) as unknown;
-          if (isValidStyle(parsed)) {
-            parsedStyle = parsed;
-          }
-        } catch {
-          // Invalid JSON style string, ignore it
-        }
-      }
-
-      const props: React.ImgHTMLAttributes<HTMLImageElement> = {
-        src,
-        alt: originalAlt || randomString(10),
-        className,
-        id,
-        style: parsedStyle,
-        width,
-        height,
-        onError: (e: React.SyntheticEvent<HTMLImageElement>) => {
-          const target = e.currentTarget;
-          target.onerror = null;
-          target.src = IMG_AVATAR_DEFAULT;
-        },
-      };
-      const cleanProps = Object.fromEntries(
-        Object.entries(props).filter(([_, value]) => value !== undefined),
-      ) as React.ImgHTMLAttributes<HTMLImageElement>;
-
-      return React.createElement("img", { ...cleanProps, key: nanoid() });
-    } else if (node.type === "tag" && node.name === "h1") {
-      node.name = "h2";
-    } else if (node.type === "tag" && node.name === "blockquote") {
-      // Process our quote markers      // Use our Quote component
-      const content = node.children?.reduce((acc, child) => {
-        if (child.type === "text") {
-          return acc + child.data;
-        }
-        return acc;
-      }, "");
-
-      return React.createElement(
-        Quote,
-        {
-          author: node.attribs?.author || undefined,
-          date: node.attribs?.date || undefined,
-          key: nanoid(),
-        },
-        content,
-      );
-    } else if (node.type === "tag" && node.name === "conceptart" && node.attribs) {
-      // Render embedded concept art for [conceptart:id] tags
-      const imageId = node.attribs["data-id"];
-      if (imageId) {
-        return React.createElement(EmbeddedConceptArt, {
-          imageId,
-          key: `conceptart-${imageId}-${nanoid()}`,
-        });
-      }
-      return null;
-    } else if (node.type === "tag" && node.name === "iframe" && node.attribs) {
-      const {
-        src,
-        width,
-        height,
-        title,
-        className,
-        // map html "class" to React className if provided
-        class: classAttr,
-        id,
-        style,
-        allow,
-        allowfullscreen,
-        frameborder,
-      } = node.attribs as Record<string, string> & { class?: string };
-
-      // Only allow iframes from approved providers; otherwise return empty element
-      if (!src || !isAllowedIframeUrl(src)) {
-        return React.createElement("div", { key: nanoid() });
-      }
-
-      let parsedStyle: React.CSSProperties | undefined;
-      if (style) {
-        try {
-          const parsed = JSON.parse(style) as unknown;
-          if (isValidStyle(parsed)) {
-            parsedStyle = parsed;
-          }
-        } catch {
-          // Invalid JSON style string, ignore it
-        }
-      }
-
-      // Identify user-embedded iframes (used for global mute capabilities)
-      const isUserEmbed = !!src;
-
-      const computedClassName = className ?? classAttr;
-      const sanitizedAllow = sanitizeIframeAllow(allow);
-      const allowFullScreen =
-        typeof allowfullscreen !== "undefined" &&
-        allowfullscreen.toLowerCase() !== "false" &&
-        allowfullscreen !== "0";
-
-      const props: React.IframeHTMLAttributes<HTMLIFrameElement> = {
-        src,
-        width,
-        height,
-        title,
-        className: computedClassName,
-        id,
-        style: parsedStyle,
-        allow: sanitizedAllow,
-        allowFullScreen,
-        frameBorder: frameborder,
-        // Conservative safe defaults
-        sandbox: "allow-scripts allow-same-origin",
-        referrerPolicy: "no-referrer",
-        // Mark as user iframe to enable mute management
-        ...(isUserEmbed && { "data-user-iframe": "true" }),
-      };
-
-      const cleanProps = Object.fromEntries(
-        Object.entries(props).filter(([_, value]) => value !== undefined),
-      ) as React.IframeHTMLAttributes<HTMLIFrameElement>;
-
-      return React.createElement("iframe", { ...cleanProps, key: nanoid() });
     }
+
+    if (node.type === "tag") {
+      switch (node.name) {
+        case "img":
+          return tryTransformImageNode(node);
+        case "h1":
+          node.name = "h2";
+          return undefined;
+        case "blockquote":
+          return transformBlockquoteNode(node);
+        case "conceptart":
+          return transformConceptArtNode(node);
+        case "iframe":
+          return transformIframeNode(node);
+        default:
+          return undefined;
+      }
+    }
+
     return undefined;
   };
 
-  return ReactHtmlParser(processedHtml, { transform });
+  return ReactHtmlParser(preprocessedHtml, { transform });
 };
