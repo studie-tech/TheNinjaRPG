@@ -107,7 +107,8 @@ export const metaTools = [
   },
   {
     name: "callEndpoint",
-    description: "Call a game API endpoint with the provided input data.",
+    description:
+      "Call a game API endpoint with the provided input data. Supports optional response filtering to reduce output size.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -118,6 +119,22 @@ export const metaTools = [
         input: {
           type: "object" as const,
           description: "Input data matching the endpoint schema",
+        },
+        select: {
+          type: "array" as const,
+          items: { type: "string" as const },
+          description:
+            "Dot-notation paths to extract from the response (e.g., ['userData.username', 'userData.level']). Use * as wildcard for array elements (e.g., 'usersState.*.curHealth'). Returns a flat key-value map of selected paths.",
+        },
+        search: {
+          type: "string" as const,
+          description:
+            "Case-insensitive text pattern to filter the response. Only returns parts of the response where keys or string values contain this pattern.",
+        },
+        maxLength: {
+          type: "number" as const,
+          description:
+            "Maximum character length of the JSON response. Response is truncated with an indicator if exceeded.",
         },
       },
       required: ["endpointName"],
@@ -217,6 +234,144 @@ export const handleGetSchema = (registry: ToolRegistry, endpointName: string) =>
   };
 };
 
+/**
+ * Optional filters applied to callEndpoint responses to reduce output size.
+ */
+export type ResponseFilters = {
+  select?: string[];
+  search?: string;
+  maxLength?: number;
+};
+
+/**
+ * Traverse a nested object/array following dot-notation path segments.
+ * The `*` wildcard maps over array elements (or object values).
+ */
+const getValueAtPath = (obj: unknown, parts: string[]): unknown => {
+  let current: unknown = obj;
+
+  for (let i = 0; i < parts.length; i++) {
+    if (current === null || current === undefined) return undefined;
+
+    const part = parts[i];
+    if (part === undefined) return undefined;
+
+    if (part === "*") {
+      const remaining = parts.slice(i + 1);
+      const items = Array.isArray(current)
+        ? current
+        : typeof current === "object" && current !== null
+          ? Object.values(current as Record<string, unknown>)
+          : undefined;
+      if (!items) return undefined;
+      if (remaining.length === 0) return items;
+      return items
+        .map((item) => getValueAtPath(item, remaining))
+        .filter((v) => v !== undefined);
+    }
+
+    if (typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+
+  return current;
+};
+
+/**
+ * Extract specific dot-notation paths from a response object.
+ * Returns a flat key-value map where keys are the requested paths.
+ */
+const selectFields = (obj: unknown, paths: string[]): Record<string, unknown> => {
+  const result: Record<string, unknown> = {};
+  for (const path of paths) {
+    const value = getValueAtPath(obj, path.split("."));
+    if (value !== undefined) {
+      result[path] = value;
+    }
+  }
+  return result;
+};
+
+/**
+ * Recursively filter a JSON value to only include subtrees where
+ * keys or string values contain the pattern (case-insensitive).
+ */
+const searchObject = (obj: unknown, pattern: string): unknown => {
+  if (obj === null || obj === undefined) return undefined;
+
+  const lowerPattern = pattern.toLowerCase();
+
+  if (typeof obj === "string") {
+    return obj.toLowerCase().includes(lowerPattern) ? obj : undefined;
+  }
+  if (typeof obj === "number" || typeof obj === "boolean") {
+    return String(obj).toLowerCase().includes(lowerPattern) ? obj : undefined;
+  }
+
+  if (Array.isArray(obj)) {
+    const filtered = obj
+      .map((item) => searchObject(item, pattern))
+      .filter((item) => item !== undefined);
+    return filtered.length > 0 ? filtered : undefined;
+  }
+
+  if (typeof obj === "object") {
+    const result: Record<string, unknown> = {};
+    let hasMatch = false;
+
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (key.toLowerCase().includes(lowerPattern)) {
+        result[key] = value;
+        hasMatch = true;
+        continue;
+      }
+      const filtered = searchObject(value, pattern);
+      if (filtered !== undefined) {
+        result[key] = filtered;
+        hasMatch = true;
+      }
+    }
+
+    return hasMatch ? result : undefined;
+  }
+
+  return undefined;
+};
+
+/**
+ * Truncate a string to maxLength, appending a truncation indicator.
+ */
+const truncateText = (text: string, maxLength: number): string => {
+  if (text.length <= maxLength) return text;
+  const remaining = text.length - maxLength;
+  return `${text.slice(0, maxLength)}...[truncated, ${remaining} more chars]`;
+};
+
+/**
+ * Apply response filters (select, search, maxLength) to a raw result
+ * and return the final JSON text.
+ */
+const applyFilters = (result: unknown, filters?: ResponseFilters): string => {
+  let data = result;
+
+  if (filters?.select && filters.select.length > 0) {
+    data = selectFields(data, filters.select);
+  }
+
+  if (filters?.search) {
+    const searched = searchObject(data, filters.search);
+    data = searched !== undefined ? searched : {};
+  }
+
+  let text = JSON.stringify(data);
+
+  if (filters?.maxLength && text.length > filters.maxLength) {
+    text = truncateText(text, filters.maxLength);
+  }
+
+  return text;
+};
+
 /** Explicit allowlist of scopes that authorize write operations */
 const WRITE_SCOPES = ["profile:write", "write"];
 
@@ -238,6 +393,7 @@ export const handleCallEndpoint = async (
   endpointName: string,
   input?: Record<string, unknown>,
   getScopes?: () => string[],
+  filters?: ResponseFilters,
 ) => {
   // Find the endpoint across all routers
   let foundEndpoint: EndpointData | undefined;
@@ -300,12 +456,28 @@ export const handleCallEndpoint = async (
     if (typeof foundEndpoint.transformMcpProcedure === "function") {
       const output = await procedure(input);
       const result = await foundEndpoint.transformMcpProcedure(output);
+
+      if (filters?.maxLength) {
+        return {
+          content: result.map((block) => {
+            if ("text" in block && typeof block.text === "string") {
+              return {
+                ...block,
+                text: truncateText(block.text, filters.maxLength ?? 0),
+              };
+            }
+            return block;
+          }),
+        };
+      }
+
       return { content: result };
     }
 
     const result = await procedure(input);
+    const text = applyFilters(result, filters);
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+      content: [{ type: "text" as const, text }],
     };
   } catch (error) {
     // Sanitize error messages to avoid leaking sensitive information

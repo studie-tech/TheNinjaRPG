@@ -17,6 +17,7 @@ import {
   handleListEndpoints,
   handleListRouters,
   metaTools,
+  type ResponseFilters,
 } from "./meta-tools";
 import { extractToolsFromProcedures } from "./tools";
 
@@ -127,13 +128,26 @@ const setRequestHandler = (
               ],
             };
           }
-          // Create a fresh caller for each request to get the current auth context
+          const filters: ResponseFilters = {};
+          if (Array.isArray(args?.select)) {
+            filters.select = args.select.filter(
+              (s): s is string => typeof s === "string",
+            );
+          }
+          if (typeof args?.search === "string" && args.search) {
+            filters.search = args.search;
+          }
+          if (typeof args?.maxLength === "number" && args.maxLength > 0) {
+            filters.maxLength = args.maxLength;
+          }
+          const hasFilters = filters.select || filters.search || filters.maxLength;
           return handleCallEndpoint(
             registry,
             createCaller,
             endpointName,
             args?.input as Record<string, unknown> | undefined,
             getScopes,
+            hasFilters ? filters : undefined,
           );
         }
 
