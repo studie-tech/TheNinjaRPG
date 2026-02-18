@@ -17,7 +17,7 @@ import {
   handleListEndpoints,
   handleListRouters,
   metaTools,
-  type ResponseFilters,
+  parseResponseFilters,
 } from "./meta-tools";
 import { extractToolsFromProcedures } from "./tools";
 
@@ -89,14 +89,14 @@ const setRequestHandler = (
     async (request: {
       params: { name: string; arguments?: Record<string, unknown> };
     }) => {
-      const { name, arguments: args } = request.params;
+      const { name, arguments: procedureArguments } = request.params;
 
       switch (name) {
         case "listGameRouters":
           return handleListRouters(registry);
 
         case "listRouterEndpoints": {
-          const routerName = args?.routerName;
+          const routerName = procedureArguments?.routerName;
           if (typeof routerName !== "string" || !routerName) {
             return {
               content: [
@@ -108,7 +108,7 @@ const setRequestHandler = (
         }
 
         case "getEndpointSchema": {
-          const endpointName = args?.endpointName;
+          const endpointName = procedureArguments?.endpointName;
           if (typeof endpointName !== "string" || !endpointName) {
             return {
               content: [
@@ -120,7 +120,7 @@ const setRequestHandler = (
         }
 
         case "callEndpoint": {
-          const endpointName = args?.endpointName;
+          const endpointName = procedureArguments?.endpointName;
           if (typeof endpointName !== "string" || !endpointName) {
             return {
               content: [
@@ -128,26 +128,14 @@ const setRequestHandler = (
               ],
             };
           }
-          const filters: ResponseFilters = {};
-          if (Array.isArray(args?.select)) {
-            filters.select = args.select.filter(
-              (s): s is string => typeof s === "string",
-            );
-          }
-          if (typeof args?.search === "string" && args.search) {
-            filters.search = args.search;
-          }
-          if (typeof args?.maxLength === "number" && args.maxLength > 0) {
-            filters.maxLength = args.maxLength;
-          }
-          const hasFilters = filters.select || filters.search || filters.maxLength;
+          const filters = parseResponseFilters(procedureArguments);
           return handleCallEndpoint(
             registry,
             createCaller,
             endpointName,
-            args?.input as Record<string, unknown> | undefined,
+            procedureArguments?.input as Record<string, unknown> | undefined,
             getScopes,
-            hasFilters ? filters : undefined,
+            filters,
           );
         }
 
@@ -173,7 +161,7 @@ export const trpcToMcpHandler = <
   TRecord extends RouterRecord,
 >(
   appRouter: Router<TRoot, TRecord>,
-  ctx: TRoot["ctx"] | (() => MaybePromise<TRoot["ctx"]>),
+  context: TRoot["ctx"] | (() => MaybePromise<TRoot["ctx"]>),
   handlerOptions: McpHandlerOptions,
 ): ((request: Request) => Promise<Response>) => {
   const { serverOptions, config, getScopes } = handlerOptions;
@@ -184,11 +172,11 @@ export const trpcToMcpHandler = <
   // Create the caller factory - this will be called for each request
   // to ensure the context is resolved with current auth state
   const createCaller = async () => {
-    const resolvedCtx =
-      typeof ctx === "function"
-        ? await (ctx as () => MaybePromise<TRoot["ctx"]>)()
-        : ctx;
-    return appRouter.createCaller(resolvedCtx);
+    const resolvedContext =
+      typeof context === "function"
+        ? await (context as () => MaybePromise<TRoot["ctx"]>)()
+        : context;
+    return appRouter.createCaller(resolvedContext);
   };
 
   const handler = createMcpHandler(

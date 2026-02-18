@@ -1,3 +1,5 @@
+import * as Sentry from "@sentry/nextjs";
+import { TRPCError } from "@trpc/server";
 import type { z } from "zod";
 import type { McpTool, TransformMcpProcedureFunction } from "./types";
 
@@ -244,34 +246,68 @@ export type ResponseFilters = {
 };
 
 /**
+ * Parse and validate response filters from raw arguments.
+ * Extracts select, search, and maxLength filters and returns undefined if none are present.
+ */
+export const parseResponseFilters = (
+  procedureArguments?: Record<string, unknown>,
+): ResponseFilters | undefined => {
+  const filters: ResponseFilters = {};
+
+  if (Array.isArray(procedureArguments?.select)) {
+    filters.select = procedureArguments.select.filter(
+      (s): s is string => typeof s === "string",
+    );
+  }
+
+  if (typeof procedureArguments?.search === "string" && procedureArguments.search) {
+    filters.search = procedureArguments.search;
+  }
+
+  if (
+    typeof procedureArguments?.maxLength === "number" &&
+    procedureArguments.maxLength > 0
+  ) {
+    filters.maxLength = procedureArguments.maxLength;
+  }
+
+  const hasFilters = filters.select || filters.search || filters.maxLength;
+  return hasFilters ? filters : undefined;
+};
+
+/**
  * Traverse a nested object/array following dot-notation path segments.
  * The `*` wildcard maps over array elements (or object values).
  */
-const getValueAtPath = (obj: unknown, parts: string[]): unknown => {
-  let current: unknown = obj;
+const getValueAtPath = (object: unknown, parts: string[]): unknown => {
+  let current: unknown = object;
 
-  for (let i = 0; i < parts.length; i++) {
+  for (let index = 0; index < parts.length; index++) {
     if (current === null || current === undefined) return undefined;
 
-    const part = parts[i];
-    if (part === undefined) return undefined;
+    const pathSegment = parts[index];
+    if (pathSegment === undefined) return undefined;
 
-    if (part === "*") {
-      const remaining = parts.slice(i + 1);
+    // Wildcard expansion: When encountering "*", expand it to map over array elements or object values.
+    // The remaining path segments are applied to each expanded item, and undefined results are filtered out.
+    if (pathSegment === "*") {
+      const remaining = parts.slice(index + 1);
       const items = Array.isArray(current)
         ? current
         : typeof current === "object" && current !== null
           ? Object.values(current as Record<string, unknown>)
           : undefined;
       if (!items) return undefined;
+      // If no remaining path, return the expanded items directly
       if (remaining.length === 0) return items;
+      // Otherwise, recursively apply remaining path to each item and filter out undefined results
       return items
-        .map((item) => getValueAtPath(item, remaining))
-        .filter((v) => v !== undefined);
+        .map((expandedItem) => getValueAtPath(expandedItem, remaining))
+        .filter((filteredValue) => filteredValue !== undefined);
     }
 
     if (typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[part];
+    current = (current as Record<string, unknown>)[pathSegment];
   }
 
   return current;
@@ -281,10 +317,10 @@ const getValueAtPath = (obj: unknown, parts: string[]): unknown => {
  * Extract specific dot-notation paths from a response object.
  * Returns a flat key-value map where keys are the requested paths.
  */
-const selectFields = (obj: unknown, paths: string[]): Record<string, unknown> => {
+const selectFields = (object: unknown, paths: string[]): Record<string, unknown> => {
   const result: Record<string, unknown> = {};
   for (const path of paths) {
-    const value = getValueAtPath(obj, path.split("."));
+    const value = getValueAtPath(object, path.split("."));
     if (value !== undefined) {
       result[path] = value;
     }
@@ -295,37 +331,45 @@ const selectFields = (obj: unknown, paths: string[]): Record<string, unknown> =>
 /**
  * Recursively filter a JSON value to only include subtrees where
  * keys or string values contain the pattern (case-insensitive).
+ *
+ * Filtering algorithm behavior:
+ * - For primitives (string/number/boolean): Include if the value contains the pattern
+ * - For arrays: Recursively filter each element and include the array if any elements match
+ * - For objects: Include a key-value pair if either:
+ *   1. The key name contains the pattern (includes the entire value regardless of nested matches)
+ *   2. The value contains matches when recursively filtered (only includes matching subtree)
+ * - Returns undefined if no matches found at any level, preserving the nested structure for matches
  */
-const searchObject = (obj: unknown, pattern: string): unknown => {
-  if (obj === null || obj === undefined) return undefined;
-
+const searchObject = (value: unknown, pattern: string): unknown => {
   const lowerPattern = pattern.toLowerCase();
 
-  if (typeof obj === "string") {
-    return obj.toLowerCase().includes(lowerPattern) ? obj : undefined;
+  if (value === null || value === undefined) return undefined;
+
+  if (typeof value === "string") {
+    return value.toLowerCase().includes(lowerPattern) ? value : undefined;
   }
-  if (typeof obj === "number" || typeof obj === "boolean") {
-    return String(obj).toLowerCase().includes(lowerPattern) ? obj : undefined;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value).toLowerCase().includes(lowerPattern) ? value : undefined;
   }
 
-  if (Array.isArray(obj)) {
-    const filtered = obj
-      .map((item) => searchObject(item, pattern))
-      .filter((item) => item !== undefined);
+  if (Array.isArray(value)) {
+    const filtered = value
+      .map((arrayElement) => searchObject(arrayElement, pattern))
+      .filter((filteredElement) => filteredElement !== undefined);
     return filtered.length > 0 ? filtered : undefined;
   }
 
-  if (typeof obj === "object") {
+  if (typeof value === "object") {
     const result: Record<string, unknown> = {};
     let hasMatch = false;
 
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
       if (key.toLowerCase().includes(lowerPattern)) {
-        result[key] = value;
+        result[key] = nestedValue;
         hasMatch = true;
         continue;
       }
-      const filtered = searchObject(value, pattern);
+      const filtered = searchObject(nestedValue, pattern);
       if (filtered !== undefined) {
         result[key] = filtered;
         hasMatch = true;
@@ -348,11 +392,34 @@ const truncateText = (text: string, maxLength: number): string => {
 };
 
 /**
+ * Apply maxLength truncation to content blocks with text fields.
+ */
+const truncateResultBlocks = (
+  blocks: Array<{ type: string; text?: string }>,
+  maxLength: number,
+): Array<{ type: string; text?: string }> => {
+  return blocks.map((block) => {
+    if ("text" in block && typeof block.text === "string") {
+      return {
+        ...block,
+        text: truncateText(block.text, maxLength),
+      };
+    }
+    return block;
+  });
+};
+
+/**
  * Apply response filters (select, search, maxLength) to a raw result
  * and return the final JSON text.
  */
 const applyFilters = (result: unknown, filters?: ResponseFilters): string => {
   let data = result;
+
+  // Normalize undefined to empty object to prevent JSON.stringify returning undefined
+  if (data === undefined) {
+    data = {};
+  }
 
   if (filters?.select && filters.select.length > 0) {
     data = selectFields(data, filters.select);
@@ -384,41 +451,31 @@ const hasWriteScope = (scopes: string[]): boolean => {
 };
 
 /**
- * Handle callEndpoint meta-tool call.
- * Creates a fresh caller for each request to ensure current auth context.
+ * Find endpoint in registry across all routers.
  */
-export const handleCallEndpoint = async (
+const findEndpoint = (
   registry: ToolRegistry,
-  createCaller: () => Promise<unknown>,
   endpointName: string,
-  input?: Record<string, unknown>,
-  getScopes?: () => string[],
-  filters?: ResponseFilters,
-) => {
-  // Find the endpoint across all routers
-  let foundEndpoint: EndpointData | undefined;
-
+): EndpointData | undefined => {
   for (const [, endpoints] of registry.routers) {
     const endpoint = endpoints.get(endpointName);
     if (endpoint) {
-      foundEndpoint = endpoint;
-      break;
+      return endpoint;
     }
   }
+  return undefined;
+};
 
-  if (!foundEndpoint) {
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: `Endpoint not found: ${endpointName}. Use listRouterEndpoints to see available endpoints.`,
-        },
-      ],
-    };
-  }
-
-  // Check scope requirements for mutations
-  if (foundEndpoint.isMutation && getScopes) {
+/**
+ * Check if user has required scope for the endpoint.
+ * Returns error response if unauthorized, undefined if authorized.
+ */
+const checkEndpointAuthorization = (
+  endpoint: EndpointData,
+  endpointName: string,
+  getScopes?: () => string[],
+) => {
+  if (endpoint.isMutation && getScopes) {
     const scopes = getScopes();
     if (!hasWriteScope(scopes)) {
       return {
@@ -431,15 +488,94 @@ export const handleCallEndpoint = async (
       };
     }
   }
+  return undefined;
+};
 
-  // Create a fresh caller for this request to get current auth context
-  const trpcCaller = await createCaller();
-
-  // Navigate the router to find the procedure
-  const procedure = foundEndpoint.pathInRouter.reduce<unknown>(
-    (acc, part) => (acc as Record<string, unknown>)?.[part],
+/**
+ * Resolve tRPC procedure from caller using endpoint path.
+ */
+const resolveProcedure = (trpcCaller: unknown, pathInRouter: string[]): unknown => {
+  return pathInRouter.reduce<unknown>(
+    (accumulator, routerSegment) =>
+      (accumulator as Record<string, unknown>)?.[routerSegment],
     trpcCaller,
   );
+};
+
+/**
+ * Handle transformed endpoint response with filters.
+ */
+const handleTransformedResponse = async (
+  output: unknown,
+  transformFunction: TransformMcpProcedureFunction,
+  filters?: ResponseFilters,
+) => {
+  const result = await transformFunction(output);
+
+  // Check if select/search filters are requested but can't be applied to transformed text content
+  const hasUnsupportedFilters =
+    (filters?.select && filters.select.length > 0) || filters?.search;
+
+  if (hasUnsupportedFilters) {
+    // Return warning about filter limitations for transformed endpoints
+    const warning = [
+      "Warning: select and search filters cannot be applied to transformed endpoint responses.",
+      "Only maxLength truncation is supported for these endpoints.",
+      "---",
+    ].join("\n");
+
+    const contentWithWarning = [{ type: "text" as const, text: warning }, ...result];
+
+    if (filters?.maxLength) {
+      return {
+        content: truncateResultBlocks(contentWithWarning, filters.maxLength),
+      };
+    }
+
+    return { content: contentWithWarning };
+  }
+
+  if (filters?.maxLength) {
+    return {
+      content: truncateResultBlocks(result, filters.maxLength),
+    };
+  }
+
+  return { content: result };
+};
+
+/**
+ * Handle callEndpoint meta-tool call.
+ * Creates a fresh caller for each request to ensure current auth context.
+ */
+export const handleCallEndpoint = async (
+  registry: ToolRegistry,
+  createCaller: () => Promise<unknown>,
+  endpointName: string,
+  input?: Record<string, unknown>,
+  getScopes?: () => string[],
+  filters?: ResponseFilters,
+) => {
+  const foundEndpoint = findEndpoint(registry, endpointName);
+
+  if (!foundEndpoint) {
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `Endpoint not found: ${endpointName}. Use listRouterEndpoints to see available endpoints.`,
+        },
+      ],
+    };
+  }
+
+  const authError = checkEndpointAuthorization(foundEndpoint, endpointName, getScopes);
+  if (authError) {
+    return authError;
+  }
+
+  const trpcCaller = await createCaller();
+  const procedure = resolveProcedure(trpcCaller, foundEndpoint.pathInRouter);
 
   if (typeof procedure !== "function") {
     return {
@@ -455,23 +591,11 @@ export const handleCallEndpoint = async (
   try {
     if (typeof foundEndpoint.transformMcpProcedure === "function") {
       const output = await procedure(input);
-      const result = await foundEndpoint.transformMcpProcedure(output);
-
-      if (filters?.maxLength) {
-        return {
-          content: result.map((block) => {
-            if ("text" in block && typeof block.text === "string") {
-              return {
-                ...block,
-                text: truncateText(block.text, filters.maxLength ?? 0),
-              };
-            }
-            return block;
-          }),
-        };
-      }
-
-      return { content: result };
+      return handleTransformedResponse(
+        output,
+        foundEndpoint.transformMcpProcedure,
+        filters,
+      );
     }
 
     const result = await procedure(input);
@@ -482,13 +606,17 @@ export const handleCallEndpoint = async (
   } catch (error) {
     // Sanitize error messages to avoid leaking sensitive information
     // Only expose tRPC error messages (which are user-facing) or generic errors
-    const isTRPCError =
-      error instanceof Error &&
-      "code" in error &&
-      typeof (error as { code: unknown }).code === "string";
+    const isTRPCError = error instanceof TRPCError;
     const message = isTRPCError
       ? (error as Error).message
       : "An error occurred while processing your request";
+
+    // Log non-tRPC errors to Sentry for debugging
+    if (!isTRPCError) {
+      Sentry.captureException(error, {
+        tags: { source: "mcp-tool", endpoint: endpointName },
+      });
+    }
 
     return {
       content: [
