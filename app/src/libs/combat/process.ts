@@ -419,6 +419,13 @@ export const applyEffects = (
       const minDamage = consequence.baseDamageForModifiers * (1 - DMG_REDUCTION_CAP);
       consequence.damage = Math.max(consequence.damage, minDamage);
     }
+    if (
+      consequence.residual !== undefined &&
+      consequence.baseDamageForModifiers !== undefined
+    ) {
+      const minResidual = consequence.baseDamageForModifiers * (1 - DMG_REDUCTION_CAP);
+      consequence.residual = Math.max(consequence.residual, minResidual);
+    }
   });
 
   // Apply pierce effects AFTER damage modifiers but BEFORE post-damage modifiers

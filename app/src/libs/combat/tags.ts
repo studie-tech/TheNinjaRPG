@@ -1219,10 +1219,10 @@ const powerEffect = (
   config: DmgConfig,
 ) => {
   // EP scaling (normalized around EP_NORMALIZATION as standard hit)
-  const epScale = effectPower / Math.max(Number.EPSILON, config.ep_normalization);
+  const epScale = effectPower / Math.max(1, config.ep_normalization);
 
   // World scale - HP divided by target hits to kill
-  const baseline = calcHP(attackerLevel) / Math.max(Number.EPSILON, config.base_hits);
+  const baseline = calcHP(attackerLevel) / Math.max(1, config.base_hits);
 
   // Advantage calculation - bypass for stat-less effects (both powers are 0)
   let advantageMod = 1.0;
