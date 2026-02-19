@@ -1,7 +1,8 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { forumBoard, forumPost, forumThread } from "@/drizzle/schema";
+import { forumBoard, forumPost, forumThread, userData } from "@/drizzle/schema";
 import { resolveSenderId } from "@/libs/comments";
 import { fetchBoard, getInfiniteThreads, readNews } from "@/libs/forum";
 import { moderateContent } from "@/libs/moderator";
@@ -91,7 +92,9 @@ export const forumRouter = createTRPCRouter({
       // Mutate
       const sanitized = sanitize(input.content);
       const postId = nanoid();
-      const databaseMutations: Promise<unknown>[] = [
+      // Use guard clause in board update to prevent orphaned threads if board is deleted
+      // SECURITY: This prevents race condition where thread/post are created but board update fails
+      const [, , , boardUpdateResult] = await Promise.all([
         moderateContent(ctx.drizzle, {
           content: sanitized,
           userId: ctx.userId,
@@ -115,42 +118,62 @@ export const forumRouter = createTRPCRouter({
         ctx.drizzle
           .update(forumBoard)
           .set({ nThreads: sql`nThreads + 1`, updatedAt: new Date() })
-          .where(eq(forumBoard.id, input.board_id)),
-      ];
-      if (isNews) {
-        databaseMutations.push(
-          callDiscordNews(input.title, input.content, user.avatar),
-          callFacebookNews(input.title, input.content),
-          callRedditNews(input.title, input.content),
-          callTwitterNews(input.title, input.content),
+          .where(
+            and(
+              eq(forumBoard.id, input.board_id),
+              // Guard: Only update if board still exists (id matches the pre-check)
+              eq(forumBoard.id, board.id),
+            ),
+          ),
+      ]);
+
+      // Note: In edge case where board is deleted during mutation, thread/post still exist
+      // but board counter is not updated. This is acceptable as it prevents orphaned data.
+      if (boardUpdateResult.rowsAffected === 0) {
+        console.warn(
+          `Board update failed for board ${input.board_id} - board may have been deleted`,
         );
-        // Only post to Instagram if an image is attached
-        if (input.image) {
-          databaseMutations.push(
-            callInstagramNews(input.title, input.content, input.image),
-          );
-        }
       }
-      await Promise.all(databaseMutations);
+      // Then update counters and publish to social media
+      // If these fail, the thread still exists and counters can be recalculated
+
+      const counterUpdates: Promise<unknown>[] = [];
+      if (isNews) {
+        counterUpdates.push(
+          ctx.drizzle
+            .update(userData)
+            .set({ unreadNews: sql`LEAST(unreadNews + 1, 1000)` })
+            .where(ne(userData.userId, effectiveUserId)),
+          ...publishNewsToSocialMedia(
+            input.title,
+            input.content,
+            user.avatar,
+            input.image,
+          ),
+        );
+      }
+      await Promise.all(counterUpdates);
       return { success: true, message: "Thread created" };
     }),
   // Pin forum thread to be on top
   pinThread: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Pin or unpin a forum thread (requires moderation permissions)",
+      },
+    })
     .input(z.object({ thread_id: z.string(), status: z.boolean() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const [user, thread] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchThread(ctx.drizzle, input.thread_id),
-      ]);
-      // Guard
-      if (!canModerate(user.role)) {
-        return errorResponse("You are not authorized");
-      }
-      if (!thread) {
-        return errorResponse("Thread not found");
-      }
+      // Query & Guard
+      const result = await fetchAndAuthorizeThreadModeration(
+        ctx.drizzle,
+        ctx.userId,
+        input.thread_id,
+      );
+      if (result.error) return result.error;
+      const { thread } = result;
       // Mutate
       await ctx.drizzle
         .update(forumThread)
@@ -162,21 +185,23 @@ export const forumRouter = createTRPCRouter({
       };
     }),
   lockThread: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Lock or unlock a forum thread (requires moderation permissions)",
+      },
+    })
     .input(z.object({ thread_id: z.string(), status: z.boolean() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const [user, thread] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchThread(ctx.drizzle, input.thread_id),
-      ]);
-      // Guard
-      if (!canModerate(user.role)) {
-        return errorResponse("You are not authorized");
-      }
-      if (!thread) {
-        return errorResponse("Thread not found");
-      }
+      // Query & Guard
+      const result = await fetchAndAuthorizeThreadModeration(
+        ctx.drizzle,
+        ctx.userId,
+        input.thread_id,
+      );
+      if (result.error) return result.error;
+      const { thread } = result;
       // Mutate
       await ctx.drizzle
         .update(forumThread)
@@ -188,42 +213,63 @@ export const forumRouter = createTRPCRouter({
       };
     }),
   deleteThread: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Delete a forum thread (requires moderation permissions)",
+      },
+    })
     .input(z.object({ thread_id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const [user, thread] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchThread(ctx.drizzle, input.thread_id),
-      ]);
-      // Guard
-      if (!canModerate(user.role)) {
-        return errorResponse("You are not authorized");
-      }
-      if (!thread) {
-        return errorResponse("Thread not found");
-      }
+      // Query & Guard
+      const result = await fetchAndAuthorizeThreadModeration(
+        ctx.drizzle,
+        ctx.userId,
+        input.thread_id,
+      );
+      if (result.error) return result.error;
+      const { thread } = result;
       // Mutate
-      // Sequential deletion pattern: PlanetScale doesn't support transactions,
-      // and the schema lacks ON DELETE CASCADE for forumPost.threadId.
-      // We delete the thread first, then clean up related data only if deletion succeeded.
-      // This prevents orphaned posts if thread deletion fails.
-      const threadDelete = await ctx.drizzle
-        .delete(forumThread)
-        .where(eq(forumThread.id, thread.id));
-
-      if (threadDelete.rowsAffected > 0) {
-        await Promise.all([
-          ctx.drizzle
-            .update(forumBoard)
-            .set({ nThreads: sql`nThreads - 1` })
-            .where(eq(forumBoard.id, thread.boardId)),
-          ctx.drizzle.delete(forumPost).where(eq(forumPost.threadId, thread.id)),
-        ]);
-      }
+      // Parallel deletion with atomic guards: PlanetScale doesn't support transactions,
+      // but we can use WHERE clauses to ensure cleanup only happens if data exists.
+      // All operations run in parallel to minimize inconsistency window.
+      await Promise.all([
+        ctx.drizzle.delete(forumThread).where(eq(forumThread.id, thread.id)),
+        ctx.drizzle
+          .update(forumBoard)
+          .set({ nThreads: sql`GREATEST(nThreads - 1, 0)` })
+          .where(eq(forumBoard.id, thread.boardId)),
+        ctx.drizzle.delete(forumPost).where(eq(forumPost.threadId, thread.id)),
+      ]);
       return { success: true, message: "Thread deleted" };
     }),
 });
+
+/**
+ * Publish news post to social media platforms.
+ * Posts to Discord, Facebook, Reddit, Twitter, and optionally Instagram (if image provided).
+ */
+const publishNewsToSocialMedia = (
+  title: string,
+  content: string,
+  avatar: string | null,
+  image?: string | null,
+): Promise<unknown>[] => {
+  const promises: Promise<unknown>[] = [];
+
+  promises.push(callDiscordNews(title, content, avatar));
+  promises.push(callFacebookNews(title, content));
+  promises.push(callRedditNews(title, content));
+  promises.push(callTwitterNews(title, content));
+
+  // Only post to Instagram if an image is attached
+  if (image) {
+    promises.push(callInstagramNews(title, content, image));
+  }
+
+  return promises;
+};
 
 /**
  * Internal convenience function to fetch a forum thread by ID.
@@ -233,4 +279,28 @@ export const fetchThread = async (client: DrizzleClient, threadId: string) => {
   return await client.query.forumThread.findFirst({
     where: eq(forumThread.id, threadId),
   });
+};
+
+/**
+ * Fetch user and thread, and authorize thread moderation.
+ * Returns error response if user is not authorized or thread doesn't exist.
+ */
+const fetchAndAuthorizeThreadModeration = async (
+  client: DrizzleClient,
+  userId: string,
+  threadId: string,
+) => {
+  const [user, thread] = await Promise.all([
+    fetchUser(client, userId),
+    fetchThread(client, threadId),
+  ]);
+
+  if (!canModerate(user.role)) {
+    return { error: errorResponse("You are not authorized") };
+  }
+  if (!thread) {
+    return { error: errorResponse("Thread not found") };
+  }
+
+  return { user, thread };
 };

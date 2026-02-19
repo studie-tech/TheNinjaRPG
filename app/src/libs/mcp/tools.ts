@@ -4,19 +4,19 @@ import type {
   RouterRecord,
 } from "@trpc/server/unstable-core-do-not-import";
 import { z } from "zod";
-import type { McpMeta, McpTool } from "./types";
+import type { McpMeta, ModelContextProtocolTool } from "./types";
 
 /**
  * Merges multiple Zod object schemas into a single schema.
  * Used when a tRPC procedure has multiple input validators.
  */
-export const mergeInputs = (
+export function mergeInputs(
   inputs: z.ZodObject<z.core.$ZodLooseShape>[],
-): z.ZodObject<z.core.$ZodLooseShape, z.core.$strip> => {
+): z.ZodObject<z.core.$ZodLooseShape, z.core.$strip> {
   return inputs.reduce((acc, input) => {
     return acc.extend(input.shape);
   }, z.object({}));
-};
+}
 
 /**
  * Extracts MCP tools from a tRPC router by iterating through all procedures
@@ -24,16 +24,16 @@ export const mergeInputs = (
  *
  * @param appRouter - The tRPC router to extract tools from
  * @param currentPath - Internal path tracking for nested routers
- * @returns Array of McpTool objects
+ * @returns Array of ModelContextProtocolTool objects
  */
-export const extractToolsFromProcedures = <
+export function extractToolsFromProcedures<
   TRoot extends AnyRootTypes,
   TRecord extends RouterRecord,
 >(
   appRouter: Router<TRoot, TRecord>,
   currentPath: string[] = [],
-): McpTool[] => {
-  const tools: McpTool[] = [];
+): ModelContextProtocolTool[] {
+  const tools: ModelContextProtocolTool[] = [];
   const procedures = Object.entries(appRouter._def.procedures);
 
   for (const [name, procedure] of procedures) {
@@ -63,7 +63,7 @@ export const extractToolsFromProcedures = <
           ? meta.mcp.isMutation
           : proc._def.type === "mutation" || proc._def.mutation === true;
 
-      const tool: McpTool = {
+      const tool: ModelContextProtocolTool = {
         name: meta.mcp.name ?? name.replace(/\./g, "_"),
         description: meta.mcp.description ?? "",
         pathInRouter,
@@ -96,4 +96,4 @@ export const extractToolsFromProcedures = <
   }
 
   return tools;
-};
+}

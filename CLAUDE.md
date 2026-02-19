@@ -161,7 +161,6 @@ const items = await fetchUserItems(userId); // Sequential!
 
 - Use TypeScript with strict mode
 - Functional and declarative patterns (avoid classes)
-- Prefer arrow functions over function declarations (e.g., `const fn = () => {}` instead of `function fn() {}`)
 - Prefer named exports for components
 - Use descriptive variable names with auxiliary verbs
 - Component file structure: exported component → subcomponents → helpers → types. When adding sub-components to a page or component file, always keep sub-components below the main exported component in the file ordering.

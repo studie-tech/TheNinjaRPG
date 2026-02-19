@@ -233,6 +233,9 @@ export const AutomoderationCategories = [
 ] as const;
 export type AutomoderationCategory = (typeof AutomoderationCategories)[number];
 
+// Forum pagination
+export const FORUM_BOARD_THREADS_PER_PAGE = 20;
+
 export const UserRoles = [
   "USER",
   "OWNER",

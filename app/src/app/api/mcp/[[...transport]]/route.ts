@@ -9,16 +9,30 @@ import { NextResponse } from "next/server";
 import { trpcToModelContextProtocolHandler } from "@/libs/mcp";
 import { appRouter } from "@/server/api/root";
 import { drizzleDB } from "@/server/db";
+import { isFetchOriginError } from "@/utils/error";
+import { fetchWithTimeout } from "@/utils/http";
 import { getClientIp } from "@/utils/network";
 
 const mcpEnabled = process.env.NEXT_PUBLIC_MCP_ENABLED === "true";
 
+// Timeout for OAuth userinfo endpoint (10s to prevent hanging requests while allowing for network latency)
+const OAUTH_USERINFO_TIMEOUT_MS = 10000;
+
 // Rate limiter for MCP endpoint - stricter than general tRPC (30 req/60s vs 60 req/60s)
+// IP-based rate limiter (applied before auth to prevent auth endpoint abuse)
 const ratelimit = new Ratelimit({
   redis: Redis.fromEnv(),
   limiter: Ratelimit.slidingWindow(30, "60 s"),
   analytics: true,
   prefix: "mcp-ratelimit",
+});
+
+// Per-user rate limiter (applied after auth to prevent authenticated abuse)
+const userRatelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(30, "60 s"),
+  analytics: true,
+  prefix: "mcp-user-ratelimit",
 });
 
 // Request-scoped storage for userId and request metadata to avoid race conditions
@@ -56,7 +70,7 @@ const createMcpContext = async () => {
  * 4. Remove trailing "$" character (Clerk's format marker)
  * 5. Prepend "https://" to create the full FAPI URL
  */
-const getClerkFapiUrl = (): string | null => {
+const getClerkFrontendApiUrl = (): string | null => {
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   if (!publishableKey) {
     console.error("[MCP] No Clerk publishable key configured");
@@ -64,30 +78,37 @@ const getClerkFapiUrl = (): string | null => {
   }
 
   // Step 1: Split by underscores (expected format: pk_environment_base64hostname)
-  const keyParts = publishableKey.split("_");
-  // Basic format validation - checks for minimum 3 parts (pk, environment, base64data)
+  const publishableKeySegments = publishableKey.split("_");
+  // Basic format validation - checks for minimum 3 segments (pk, environment, base64data)
   // Additional validation on the decoded domain is performed later to prevent malformed keys
-  if (keyParts.length < 3) {
+  if (publishableKeySegments.length < 3) {
     console.error("[MCP] Invalid publishable key format");
     return null;
   }
 
   // Step 2: Extract base64-encoded hostname (everything after pk_environment_)
-  const base64EncodedHostnamePart = keyParts.slice(2).join("_");
+  const base64HostnameSegment = publishableKeySegments.slice(2).join("_");
 
   // Step 3: Decode base64 to get FAPI hostname
-  let frontendApiHost = Buffer.from(base64EncodedHostnamePart, "base64").toString(
-    "utf-8",
-  );
+  const decodedHost = Buffer.from(base64HostnameSegment, "base64").toString("utf-8");
+
+  // Validate decoded string length to prevent DoS attacks (255 is the RFC 1035 DNS hostname maximum)
+  const MAX_HOSTNAME_LENGTH = 255;
+  if (decodedHost.length > MAX_HOSTNAME_LENGTH) {
+    console.error("[MCP] Decoded hostname exceeds maximum length");
+    return null;
+  }
 
   // Step 4: Remove Clerk's trailing "$" format marker
-  frontendApiHost = frontendApiHost.replace(/\$$/, "");
+  const frontendApiHost = decodedHost.replace(/\$$/, "");
 
   // Step 5: Validate the host matches expected Clerk domain pattern
   // This prevents token leakage if the publishable key is manipulated
+  // SECURITY: Properly anchor patterns and prevent consecutive dots
   const isValidClerkDomain =
-    /^[a-z0-9-]+\.clerk\.accounts(\.[a-z]+)?$/.test(frontendApiHost) || // Production: *.clerk.accounts.dev
-    /^clerk\.[a-z0-9-]+\.lcl\.dev$/.test(frontendApiHost); // Local development
+    /^[a-z0-9-]+\.clerk\.accounts(\.[a-z]+)?$/.test(frontendApiHost) || // Development: *.clerk.accounts.dev
+    /^clerk\.[a-z0-9-]+\.lcl\.dev$/.test(frontendApiHost) || // Local development
+    /^clerk\.[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+(-[a-z0-9]+)*)*$/.test(frontendApiHost); // Production custom domains (no consecutive dots)
 
   if (!isValidClerkDomain) {
     console.error("[MCP] Invalid Clerk FAPI domain:", frontendApiHost);
@@ -99,7 +120,7 @@ const getClerkFapiUrl = (): string | null => {
 };
 
 // Cache the FAPI URL since it doesn't change
-const clerkFrontendApiUrl = getClerkFapiUrl();
+const clerkFrontendApiUrl = getClerkFrontendApiUrl();
 
 /**
  * Parse and normalize OAuth scopes from token claims.
@@ -118,8 +139,162 @@ const parseAndNormalizeScopes = (
     : typeof oauthScopeClaim === "string"
       ? oauthScopeClaim.split(" ")
       : [];
+  // SECURITY: Normalize all scopes to lowercase and trim whitespace to prevent authorization bypass
+  const normalizedScopes = tokenScopes.map((s) => s.trim().toLowerCase());
   // All authenticated users get write scope to perform game mutations
-  return userId ? [...new Set([...tokenScopes, "write"])] : tokenScopes;
+  return userId ? [...new Set([...normalizedScopes, "write"])] : normalizedScopes;
+};
+
+/**
+ * Update request context with verified user information.
+ */
+const updateRequestContext = (userId: string | null, scopes: string[]): void => {
+  const requestData = requestContext.getStore();
+  if (requestData) {
+    requestData.userId = userId;
+    requestData.scopes = scopes;
+  }
+};
+
+/**
+ * Verify opaque access token via OAuth userinfo endpoint.
+ */
+const verifyOpaqueToken = async (
+  bearerToken: string,
+): Promise<AuthInfo | undefined> => {
+  if (!clerkFrontendApiUrl) {
+    return undefined;
+  }
+
+  // Call the OAuth userinfo endpoint with timeout to prevent hanging requests
+  const userInfoResponse = await fetchWithTimeout(
+    `${clerkFrontendApiUrl}/oauth/userinfo`,
+    {
+      headers: {
+        Authorization: `Bearer ${bearerToken}`,
+      },
+    },
+    OAUTH_USERINFO_TIMEOUT_MS,
+  );
+
+  if (!userInfoResponse.ok) {
+    const errorText = await userInfoResponse.text();
+    console.error(
+      "[MCP] Opaque token userinfo failed:",
+      userInfoResponse.status,
+      errorText,
+    );
+    return undefined;
+  }
+
+  const userInfo = (await userInfoResponse.json()) as {
+    user_id?: string;
+    sub?: string;
+    scope?: string;
+  };
+
+  const userId = userInfo.user_id ?? userInfo.sub ?? null;
+  const scopes = parseAndNormalizeScopes(userInfo.scope, userId);
+
+  updateRequestContext(userId, scopes);
+
+  return {
+    token: bearerToken,
+    clientId: "mcp-client",
+    scopes,
+    extra: { userId },
+  };
+};
+
+/**
+ * Verify JWT token using Clerk verification.
+ */
+const verifyJwtToken = async (bearerToken: string): Promise<AuthInfo | undefined> => {
+  const payload = await clerkVerifyToken(bearerToken, {
+    secretKey: process.env.CLERK_SECRET_KEY,
+    headerType: ["JWT", "at+jwt"],
+  });
+
+  const userId = payload.sub ?? null;
+
+  // OAuth tokens may include a scope claim as a string or array
+  const scopeClaim = (payload as { scope?: string | string[] }).scope;
+  const scopes = parseAndNormalizeScopes(scopeClaim, userId);
+
+  updateRequestContext(userId, scopes);
+
+  return {
+    token: bearerToken,
+    clientId: payload.azp ?? "mcp-client",
+    scopes,
+    extra: { userId: payload.sub },
+  };
+};
+
+/**
+ * Handle token verification errors with proper filtering and logging.
+ */
+const handleTokenVerificationError = (error: unknown): undefined => {
+  if (error instanceof Error) {
+    const stack = error.stack || "";
+    const errorMessage = error.message || "";
+
+    // First verify origin to prevent spoofing - check stack trace BEFORE error names
+    const isClerkError =
+      stack.includes("@clerk/") ||
+      stack.includes("clerk-sdk-node") ||
+      stack.includes("/clerk/");
+    const isFetchAbortError = error.name === "AbortError" && isFetchOriginError(error);
+
+    // Additional validation: Check error message contains Clerk-specific patterns
+    // Require explicit Clerk references to avoid false matches with other JWT libraries
+    const hasClerkReference =
+      errorMessage.includes("Clerk") || errorMessage.includes("clerk.com");
+    const hasClerkJWKPattern = errorMessage.includes("JWK") && hasClerkReference;
+    const hasClerkJWTPattern =
+      /JWT (expired|invalid|malformed)/i.test(errorMessage) && hasClerkReference;
+    const hasClerkSessionPattern =
+      /session.+token/i.test(errorMessage) && hasClerkReference;
+
+    const hasClerkContent =
+      hasClerkReference ||
+      hasClerkJWKPattern ||
+      hasClerkJWTPattern ||
+      hasClerkSessionPattern;
+
+    // Only check error types if from expected sources AND contains expected content
+    if (isClerkError && hasClerkContent) {
+      if (
+        error.name === "JWTExpired" ||
+        error.name === "JWTInvalid" ||
+        error.name === "ClerkAPIResponseError"
+      ) {
+        console.error("[MCP] Token verification failed:", error);
+        return undefined;
+      }
+    }
+
+    if (isFetchAbortError) {
+      console.error("[MCP] Token verification failed:", error);
+      return undefined;
+    }
+
+    // For any other errors, even if they contain token-related messages,
+    // capture to Sentry to ensure no unexpected errors are masked.
+    // This helps identify if Clerk throws new error types we should handle.
+    console.error("[MCP] Unexpected token verification error:", error);
+    Sentry.captureException(error, {
+      tags: { source: "mcp-token-verification" },
+    });
+    return undefined;
+  }
+
+  // Non-Error objects
+  console.error("[MCP] Unexpected non-Error thrown during token verification:", error);
+  Sentry.captureException(error, {
+    tags: { source: "mcp-token-verification" },
+  });
+  return undefined;
 };
 
 /**
@@ -127,7 +302,7 @@ const parseAndNormalizeScopes = (
  * Also updates the request-scoped context with the userId.
  */
 const verifyToken = async (
-  _serverRequestForTokenVerification: Request,
+  _serverRequest: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
   if (!bearerToken) return undefined;
@@ -135,124 +310,13 @@ const verifyToken = async (
   try {
     // Check if it's an opaque access token (oat_ prefix) vs JWT
     if (bearerToken.startsWith("oat_")) {
-      if (!clerkFrontendApiUrl) {
-        return undefined;
-      }
-
-      // Call the OAuth userinfo endpoint with timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-      const userInfoResponse = await fetch(`${clerkFrontendApiUrl}/oauth/userinfo`, {
-        headers: {
-          Authorization: `Bearer ${bearerToken}`,
-        },
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeoutId));
-
-      if (!userInfoResponse.ok) {
-        const errorText = await userInfoResponse.text();
-        console.error(
-          "[MCP] Opaque token userinfo failed:",
-          userInfoResponse.status,
-          errorText,
-        );
-        return undefined;
-      }
-
-      const userInfo = (await userInfoResponse.json()) as {
-        user_id?: string;
-        sub?: string;
-        scope?: string;
-      };
-
-      const userId = userInfo.user_id ?? userInfo.sub ?? null;
-      const scopes = parseAndNormalizeScopes(userInfo.scope, userId);
-
-      // Update the request-scoped context with the verified userId and scopes
-      const requestData = requestContext.getStore();
-      if (requestData) {
-        requestData.userId = userId;
-        requestData.scopes = scopes;
-      }
-
-      return {
-        token: bearerToken,
-        clientId: "mcp-client",
-        scopes,
-        extra: { userId },
-      };
+      return await verifyOpaqueToken(bearerToken);
     }
 
     // JWT token - verify directly
-    const payload = await clerkVerifyToken(bearerToken, {
-      secretKey: process.env.CLERK_SECRET_KEY,
-      headerType: ["JWT", "at+jwt"],
-    });
-
-    const userId = payload.sub ?? null;
-
-    // OAuth tokens may include a scope claim as a string or array
-    const scopeClaim = (payload as { scope?: string | string[] }).scope;
-    const scopes = parseAndNormalizeScopes(scopeClaim, userId);
-
-    // Update the request-scoped context with the verified userId and scopes
-    const requestData = requestContext.getStore();
-    if (requestData) {
-      requestData.userId = userId;
-      requestData.scopes = scopes;
-    }
-
-    return {
-      token: bearerToken,
-      clientId: payload.azp ?? "mcp-client",
-      scopes,
-      extra: { userId: payload.sub },
-    };
+    return await verifyJwtToken(bearerToken);
   } catch (error) {
-    // Expected errors during token verification
-    if (error instanceof Error) {
-      const stack = error.stack || "";
-
-      // Verify error origin to prevent spoofing
-      const isClerkError =
-        stack.includes("@clerk/") ||
-        stack.includes("clerk-sdk-node") ||
-        stack.includes("/clerk/");
-      const isFetchAbortError =
-        error.name === "AbortError" &&
-        (stack.includes("fetch") || stack.includes("abort"));
-
-      // Check for specific error types by name, but only if from expected sources
-      if (
-        (error.name === "AbortError" && isFetchAbortError) || // Timeout from fetch abort
-        (error.name === "JWTExpired" && isClerkError) ||
-        (error.name === "JWTInvalid" && isClerkError) ||
-        (error.name === "ClerkAPIResponseError" && isClerkError)
-      ) {
-        console.error("[MCP] Token verification failed:", error);
-        return undefined;
-      }
-
-      // For any other errors, even if they contain token-related messages,
-      // capture to Sentry to ensure no unexpected errors are masked.
-      // This helps identify if Clerk throws new error types we should handle.
-      console.error("[MCP] Unexpected token verification error:", error);
-      Sentry.captureException(error, {
-        tags: { source: "mcp-token-verification" },
-      });
-      return undefined;
-    }
-
-    // Non-Error objects
-    console.error(
-      "[MCP] Unexpected non-Error thrown during token verification:",
-      error,
-    );
-    Sentry.captureException(error, {
-      tags: { source: "mcp-token-verification" },
-    });
-    return undefined;
+    return handleTokenVerificationError(error);
   }
 };
 
@@ -276,7 +340,27 @@ const mcpHandler = trpcToModelContextProtocolHandler(appRouter, createMcpContext
   getScopes: () => requestContext.getStore()?.scopes ?? [],
 });
 
-const authenticatedHandler = withMcpAuth(mcpHandler, verifyToken, {
+// Wrapper around mcpHandler to add per-user rate limiting after auth
+const mcpHandlerWithUserRateLimit = async (request: Request) => {
+  // At this point, verifyToken has already been called by withMcpAuth
+  // and userId is populated in the request context
+  const requestData = requestContext.getStore();
+
+  // Apply per-user rate limiting for authenticated requests
+  if (requestData?.userId) {
+    const { success: userLimitSuccess } = await userRatelimit.limit(
+      `mcp-user-${requestData.userId}`,
+    );
+    if (!userLimitSuccess) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+  }
+
+  // Proceed to the actual MCP handler
+  return mcpHandler(request);
+};
+
+const authenticatedHandler = withMcpAuth(mcpHandlerWithUserRateLimit, verifyToken, {
   required: true,
   resourceMetadataPath: "/.well-known/oauth-protected-resource",
   // Explicitly set resourceUrl in development to avoid localhost vs 127.0.0.1 mismatch
@@ -291,8 +375,6 @@ const mcpRequestHandlerWithContext = async (req: Request) => {
   const userAgent = req.headers.get("user-agent") ?? "mcp-client";
 
   // Rate limit by IP before auth (prevents auth endpoint abuse)
-  // NOTE: IP-based rate limiting can be bypassed via proxy rotation. For authenticated requests,
-  // consider adding per-user rate limiting after authentication for additional protection.
   const { success } = await ratelimit.limit(`mcp-${userIp}`);
   if (!success) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });

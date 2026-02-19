@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isUrlAccessible } from "./route";
+import { isUrlAccessible } from "@/utils/url";
 
 describe("daily-link-cleaner", () => {
   it("should correctly identify accessible utfs.io URLs", async () => {

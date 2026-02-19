@@ -171,3 +171,21 @@ export const isRetryableTrpcError = (error: {
   const stackFrames = extractStackFramesFromError(error);
   return isRetryableError(error.message, stackFrames);
 };
+
+/**
+ * Checks if an error originated from a fetch operation by examining its stack trace.
+ * This helps verify error origin to prevent false matches with similarly-named errors.
+ *
+ * @param error - The error to check
+ * @returns true if the error stack trace contains fetch-related patterns
+ */
+export const isFetchOriginError = (error: Error): boolean => {
+  const stack = error.stack || "";
+  return (
+    /\bfetch\(/.test(stack) ||
+    /node:internal\/deps\/undici/.test(stack) ||
+    stack.includes("node:http") ||
+    /\babort\(\)/.test(stack) ||
+    stack.includes("AbortController")
+  );
+};

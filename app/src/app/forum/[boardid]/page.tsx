@@ -1,10 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-
-// Number of forum threads to display per page on forum board pages
-const FORUM_BOARD_THREADS_PER_PAGE = 20;
-
 import { Bookmark, Instagram, Lock, Trash2, Unlock } from "lucide-react";
 import Link from "next/link";
 import { use, useState } from "react";
@@ -22,7 +18,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { IMG_ICON_FORUM } from "@/drizzle/constants";
+import { FORUM_BOARD_THREADS_PER_PAGE, IMG_ICON_FORUM } from "@/drizzle/constants";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
@@ -40,11 +36,11 @@ import { useUserData } from "@/utils/UserContext";
 import { type ForumBoardSchema, forumBoardSchema } from "@/validators/forum";
 import { getSearchValidator } from "@/validators/register";
 
-const Board = (properties: { params: Promise<{ boardid: string }> }) => {
-  const params = use(properties.params);
+function Board(properties: { parameters: Promise<{ boardid: string }> }) {
+  const parameters = use(properties.parameters);
   const { data: userData } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const boardIdentifier = params.boardid;
+  const boardIdentifier = parameters.boardid;
 
   const {
     data: threads,
@@ -94,7 +90,7 @@ const Board = (properties: { params: Promise<{ boardid: string }> }) => {
     defaultValue: [],
   });
   const senderUser = watchedUsers?.[0];
-  const canPostAsArtificialIntelligence = userData && canPostAsAi(userData.role);
+  const canUserPostAsAi = userData && canPostAsAi(userData.role);
   const isNewsBoard = board?.name === "News";
   const canPostNews = userData && canCreateNews(userData.role);
 
@@ -165,7 +161,7 @@ const Board = (properties: { params: Promise<{ boardid: string }> }) => {
                 proceed_label="Submit"
                 button={
                   <Button id="create" disabled={isCreatingThread}>
-                    {isCreatingThread ? <Loader /> : "New Thread"}
+                    {isCreatingThread ? "Creating..." : "New Thread"}
                   </Button>
                 }
                 isValid={form.formState.isValid}
@@ -173,7 +169,7 @@ const Board = (properties: { params: Promise<{ boardid: string }> }) => {
               >
                 <Form {...form}>
                   <form className="space-y-2" onSubmit={onSubmit}>
-                    {canPostAsArtificialIntelligence && (
+                    {canUserPostAsAi && (
                       <div>
                         <FormLabel>Sender</FormLabel>
                         <UserSearchSelect
@@ -365,6 +361,6 @@ const Board = (properties: { params: Promise<{ boardid: string }> }) => {
       </ContentBox>
     </>
   );
-};
+}
 
 export default Board;

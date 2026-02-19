@@ -3,10 +3,7 @@ import { TRPCError } from "@trpc/server";
 import type { z } from "zod";
 import { truncateString } from "@/utils/string";
 import { isPlainObject } from "@/utils/typeutils";
-import type {
-  McpTool as ModelContextProtocolTool,
-  TransformMcpProcedureFunction,
-} from "./types";
+import type { ModelContextProtocolTool, TransformMcpProcedureFunction } from "./types";
 
 /**
  * Information about a router for discovery.
@@ -43,10 +40,43 @@ export type ToolRegistry = {
 };
 
 /**
+ * Explicit allowlist of scopes that authorize write operations.
+ * SECURITY: All values MUST be lowercase to match the normalization in hasWriteScope().
+ * Never add mixed-case values here - they will not match and could cause authorization bypass.
+ */
+const WRITE_SCOPES = ["profile:write", "write"];
+
+// Runtime check to ensure all WRITE_SCOPES values are lowercase
+WRITE_SCOPES.forEach((scope) => {
+  if (scope !== scope.toLowerCase()) {
+    throw new Error(`WRITE_SCOPES contains non-lowercase value: ${scope}`);
+  }
+});
+
+// Meta-tool description constants
+const META_TOOL_DESC_LIST_ROUTERS =
+  "List all available game API routers. Call this first to discover what's available.";
+const META_TOOL_DESC_LIST_ENDPOINTS =
+  "List all endpoints for a specific router with their descriptions.";
+const META_TOOL_DESC_GET_SCHEMA = "Get the input schema for a specific endpoint.";
+const META_TOOL_DESC_CALL_ENDPOINT =
+  "Call a game API endpoint with the provided input data. Supports optional response filtering to reduce output size.";
+const META_TOOL_DESC_ROUTER_NAME = "Name of the router (from listGameRouters)";
+const META_TOOL_DESC_ENDPOINT_NAME =
+  "Full endpoint name (e.g., 'profile.getPublicProfile')";
+const META_TOOL_DESC_INPUT = "Input data matching the endpoint schema";
+const META_TOOL_DESC_SELECT =
+  "Dot-notation paths to extract from the response (e.g., ['userData.username', 'userData.level']). Use * as wildcard for array elements (e.g., 'usersState.*.curHealth'). Returns a flat key-value map of selected paths.";
+const META_TOOL_DESC_SEARCH =
+  "Case-insensitive text pattern to filter the response. Only returns parts of the response where keys or string values contain this pattern.";
+const META_TOOL_DESC_MAX_LENGTH =
+  "Maximum character length of the total response. For multi-block responses, this is the combined character budget across all blocks. Response is truncated with an indicator if exceeded.";
+
+/**
  * Build a registry from extracted MCP tools.
  * Groups tools by router (first part of pathInRouter).
  */
-export const buildToolRegistry = (tools: ModelContextProtocolTool[]): ToolRegistry => {
+export function buildToolRegistry(tools: ModelContextProtocolTool[]): ToolRegistry {
   const routers = new Map<string, Map<string, EndpointData>>();
 
   for (const tool of tools) {
@@ -68,7 +98,7 @@ export const buildToolRegistry = (tools: ModelContextProtocolTool[]): ToolRegist
   }
 
   return { routers };
-};
+}
 
 /**
  * Meta-tool definitions for MCP discovery and invocation.
@@ -76,8 +106,7 @@ export const buildToolRegistry = (tools: ModelContextProtocolTool[]): ToolRegist
 export const metaTools = [
   {
     name: "listGameRouters",
-    description:
-      "List all available game API routers. Call this first to discover what's available.",
+    description: META_TOOL_DESC_LIST_ROUTERS,
     inputSchema: {
       type: "object" as const,
       properties: {},
@@ -86,13 +115,13 @@ export const metaTools = [
   },
   {
     name: "listRouterEndpoints",
-    description: "List all endpoints for a specific router with their descriptions.",
+    description: META_TOOL_DESC_LIST_ENDPOINTS,
     inputSchema: {
       type: "object" as const,
       properties: {
         routerName: {
           type: "string" as const,
-          description: "Name of the router (from listGameRouters)",
+          description: META_TOOL_DESC_ROUTER_NAME,
         },
       },
       required: ["routerName"],
@@ -100,13 +129,13 @@ export const metaTools = [
   },
   {
     name: "getEndpointSchema",
-    description: "Get the input schema for a specific endpoint.",
+    description: META_TOOL_DESC_GET_SCHEMA,
     inputSchema: {
       type: "object" as const,
       properties: {
         endpointName: {
           type: "string" as const,
-          description: "Full endpoint name (e.g., 'profile.getPublicProfile')",
+          description: META_TOOL_DESC_ENDPOINT_NAME,
         },
       },
       required: ["endpointName"],
@@ -114,34 +143,30 @@ export const metaTools = [
   },
   {
     name: "callEndpoint",
-    description:
-      "Call a game API endpoint with the provided input data. Supports optional response filtering to reduce output size.",
+    description: META_TOOL_DESC_CALL_ENDPOINT,
     inputSchema: {
       type: "object" as const,
       properties: {
         endpointName: {
           type: "string" as const,
-          description: "Full endpoint name (e.g., 'profile.getPublicProfile')",
+          description: META_TOOL_DESC_ENDPOINT_NAME,
         },
         input: {
           type: "object" as const,
-          description: "Input data matching the endpoint schema",
+          description: META_TOOL_DESC_INPUT,
         },
         select: {
           type: "array" as const,
           items: { type: "string" as const },
-          description:
-            "Dot-notation paths to extract from the response (e.g., ['userData.username', 'userData.level']). Use * as wildcard for array elements (e.g., 'usersState.*.curHealth'). Returns a flat key-value map of selected paths.",
+          description: META_TOOL_DESC_SELECT,
         },
         search: {
           type: "string" as const,
-          description:
-            "Case-insensitive text pattern to filter the response. Only returns parts of the response where keys or string values contain this pattern.",
+          description: META_TOOL_DESC_SEARCH,
         },
         maxLength: {
           type: "number" as const,
-          description:
-            "Maximum character length of the total response. For multi-block responses, this is the combined character budget across all blocks. Response is truncated with an indicator if exceeded.",
+          description: META_TOOL_DESC_MAX_LENGTH,
         },
       },
       required: ["endpointName"],
@@ -211,7 +236,7 @@ const findEndpoint = (
   registry: ToolRegistry,
   endpointName: string,
 ): EndpointData | undefined => {
-  for (const [_routerName, endpoints] of registry.routers) {
+  for (const [, endpoints] of registry.routers) {
     const endpoint = endpoints.get(endpointName);
     if (endpoint) {
       return endpoint;
@@ -264,8 +289,12 @@ export type ResponseFilters = {
   maxLength?: number;
 };
 
+// Prevent DoS attacks by limiting the number of select paths that can be processed
 const MAXIMUM_SELECT_PATHS = 100;
+// Cap response size at 1MB to prevent memory exhaustion and ensure reasonable network transfer times
 const MAXIMUM_RESPONSE_LENGTH = 1024 * 1024; // 1MB
+// Prevent DoS via extremely long individual path strings
+const MAXIMUM_PATH_STRING_LENGTH = 1000;
 
 /**
  * Parse and validate response filters from raw arguments.
@@ -279,7 +308,8 @@ export const parseResponseFilters = (
 
   if (Array.isArray(procedureArguments?.select)) {
     const validStrings = procedureArguments.select.filter(
-      (s): s is string => typeof s === "string",
+      (s): s is string =>
+        typeof s === "string" && s.length <= MAXIMUM_PATH_STRING_LENGTH,
     );
     if (validStrings.length > 0) {
       filters.select = validStrings.slice(0, MAXIMUM_SELECT_PATHS);
@@ -307,27 +337,85 @@ export const parseResponseFilters = (
 /**
  * Expand a wildcard segment by extracting array elements or object values.
  */
-const expandWildcard = (valueToExpand: unknown): unknown[] | undefined => {
-  if (Array.isArray(valueToExpand)) {
-    return valueToExpand;
+function expandWildcard(arrayOrObject: unknown): unknown[] | undefined {
+  if (Array.isArray(arrayOrObject)) {
+    return arrayOrObject;
   }
-  if (typeof valueToExpand === "object" && valueToExpand !== null) {
-    return Object.values(valueToExpand as Record<string, unknown>);
+  if (typeof arrayOrObject === "object" && arrayOrObject !== null) {
+    return Object.values(arrayOrObject as Record<string, unknown>);
   }
   return undefined;
-};
+}
 
 /**
  * Apply remaining path segments to each expanded item and filter out undefined results.
  */
-const applyRemainingPath = (
-  expandedElements: unknown[],
-  remainingPathSegments: string[],
-): unknown[] => {
-  return expandedElements
-    .map((item) => resolvePathWithWildcards(item, remainingPathSegments))
+function applyRemainingPath(
+  expandedItems: unknown[],
+  remainingSegments: string[],
+): unknown[] {
+  return expandedItems
+    .map((item) => resolvePathWithWildcards(item, remainingSegments))
     .filter((result) => result !== undefined);
-};
+}
+
+/**
+ * Security constants for path segment validation
+ */
+const DANGEROUS_PROPS = ["__proto__", "constructor", "prototype"];
+const SAFE_SEGMENT_PATTERN = /^([a-zA-Z0-9_-]+|\*)$/;
+const MAXIMUM_PATH_DEPTH = 20;
+
+/**
+ * Validate a path segment for security and safety.
+ * Returns the normalized segment or undefined if validation fails.
+ */
+function validatePathSegment(segment: string | undefined): string | undefined {
+  if (segment === undefined) return undefined;
+
+  // Normalize to prevent Unicode-based bypass attempts
+  const normalized = segment.normalize("NFC").trim();
+
+  // Guard against prototype pollution
+  if (DANGEROUS_PROPS.includes(normalized)) return undefined;
+
+  // Validate segment contains only safe characters
+  if (segment !== "*" && !SAFE_SEGMENT_PATTERN.test(normalized)) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+/**
+ * Handle wildcard expansion in a path.
+ * Returns the resolved value after applying the wildcard and remaining path segments.
+ */
+function handleWildcardSegment(current: unknown, remainingSegments: string[]): unknown {
+  const expandedArrayElements = expandWildcard(current);
+  if (!expandedArrayElements) return undefined;
+
+  // If no remaining path, return the expanded items directly
+  if (remainingSegments.length === 0) return expandedArrayElements;
+
+  // Otherwise, recursively apply remaining path to each item
+  return applyRemainingPath(expandedArrayElements, remainingSegments);
+}
+
+/**
+ * Safely access a property on an object.
+ * Returns the property value or undefined if not accessible.
+ */
+function accessObjectProperty(current: unknown, normalizedSegment: string): unknown {
+  if (typeof current !== "object" || current === null) return undefined;
+
+  // Safe property access using Object.hasOwn to prevent prototype chain vulnerabilities
+  if (Object.hasOwn(current as Record<string, unknown>, normalizedSegment)) {
+    return (current as Record<string, unknown>)[normalizedSegment];
+  }
+
+  return undefined;
+}
 
 /**
  * Traverse a nested object/array following dot-notation path segments with wildcard support.
@@ -337,72 +425,36 @@ const applyRemainingPath = (
  * internal properties. While this function prevents prototype pollution and validates path segments,
  * it allows arbitrary property access on the response object based on user-controlled paths. Only pass
  * objects that are safe for external consumption (e.g., tRPC router responses, not internal database rows).
- *
- * Algorithm flow:
- * 1. Enforce depth limit (max 20 segments) to prevent recursion attacks
- * 2. For each path segment:
- *    a. Check for null/undefined values and exit early
- *    b. Normalize segment to prevent Unicode-based bypass attempts
- *    c. Validate against dangerous properties (__proto__, constructor, prototype)
- *    d. Validate segment contains only safe characters (alphanumeric, underscore, hyphen, or wildcard)
- *    e. Handle wildcard (*) by expanding to array elements/object values and recursively applying remaining path
- *    f. For regular segments, safely access property using Object.hasOwn to prevent prototype chain vulnerabilities
- * 3. Return the final resolved value or undefined if path invalid
  */
 const resolvePathWithWildcards = (
-  objectToResolve: unknown,
-  pathParts: string[],
+  responseObject: unknown,
+  pathSegments: string[],
 ): unknown => {
-  // Step 1: Depth limit to prevent deep recursion attacks
-  const MAXIMUM_PATH_DEPTH = 20;
-  if (pathParts.length > MAXIMUM_PATH_DEPTH) return undefined;
+  // Enforce depth limit to prevent deep recursion attacks
+  if (pathSegments.length > MAXIMUM_PATH_DEPTH) return undefined;
 
-  let current: unknown = objectToResolve;
+  let current: unknown = responseObject;
 
-  // Security constants for validation
-  const DANGEROUS_PROPS = ["__proto__", "constructor", "prototype"];
-  const SAFE_SEGMENT_PATTERN = /^([a-zA-Z0-9_-]+|\*)$/;
-
-  // Step 2: Iterate through each path segment
-  for (const [segmentIndex, segment] of pathParts.entries()) {
-    // Step 2a: Early exit for null/undefined values
+  // Iterate through each path segment
+  for (const [segmentIndex, segment] of pathSegments.entries()) {
+    // Early exit for null/undefined values
     if (current === null || current === undefined) return undefined;
 
-    if (segment === undefined) return undefined;
+    // Validate and normalize the segment
+    const normalized = validatePathSegment(segment);
+    if (normalized === undefined) return undefined;
 
-    // Step 2b: Normalize to prevent Unicode-based bypass attempts
-    const normalized = segment.normalize("NFC").trim();
-
-    // Step 2c: Guard against prototype pollution
-    if (DANGEROUS_PROPS.includes(normalized)) return undefined;
-
-    // Step 2d: Validate segment contains only safe characters
-    if (segment !== "*" && !SAFE_SEGMENT_PATTERN.test(normalized)) {
-      return undefined;
-    }
-
-    // Step 2e: Wildcard expansion - map over array elements or object values
+    // Handle wildcard expansion
     if (segment === "*") {
-      const remainingPathSegments = pathParts.slice(segmentIndex + 1);
-      const expandedArrayElements = expandWildcard(current);
-      if (!expandedArrayElements) return undefined;
-      // If no remaining path, return the expanded items directly
-      if (remainingPathSegments.length === 0) return expandedArrayElements;
-      // Otherwise, recursively apply remaining path to each item and filter out undefined results
-      return applyRemainingPath(expandedArrayElements, remainingPathSegments);
+      const remainingSegments = pathSegments.slice(segmentIndex + 1);
+      return handleWildcardSegment(current, remainingSegments);
     }
 
-    if (typeof current !== "object") return undefined;
-
-    // Step 2f: Safe property access using Object.hasOwn to prevent prototype chain vulnerabilities
-    if (Object.hasOwn(current as Record<string, unknown>, normalized)) {
-      current = (current as Record<string, unknown>)[normalized];
-    } else {
-      return undefined;
-    }
+    // Access regular property
+    current = accessObjectProperty(current, normalized);
+    if (current === undefined) return undefined;
   }
 
-  // Step 3: Return final resolved value
   return current;
 };
 
@@ -410,10 +462,10 @@ const resolvePathWithWildcards = (
  * Extract specific dot-notation paths from a response object.
  * Returns a flat key-value map where keys are the requested paths.
  */
-const extractFieldsFromResponse = (
+function extractFieldsFromResponse(
   response: unknown,
   selectPaths: string[],
-): Record<string, unknown> => {
+): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const path of selectPaths) {
     const value = resolvePathWithWildcards(response, path.split("."));
@@ -422,47 +474,47 @@ const extractFieldsFromResponse = (
     }
   }
   return result;
-};
+}
 
 /**
  * Check if a primitive value matches the search pattern.
  */
-const matchesPrimitive = (value: unknown, lowercasePattern: string): boolean => {
+function matchesPrimitive(value: unknown, lowerCasePattern: string): boolean {
   if (typeof value === "string") {
-    return value.toLowerCase().includes(lowercasePattern);
+    return value.toLowerCase().includes(lowerCasePattern);
   }
   if (typeof value === "number" || typeof value === "boolean") {
-    return String(value).toLowerCase().includes(lowercasePattern);
+    return String(value).toLowerCase().includes(lowerCasePattern);
   }
   return false;
-};
+}
 
 /**
  * Filter an object's entries based on key or value matching the pattern.
  */
-const filterObjectEntries = (
-  object: Record<string, unknown>,
+function filterObjectEntries(
+  sourceObject: Record<string, unknown>,
   lowercasePattern: string,
   pattern: string,
-): { result: Record<string, unknown>; hasMatch: boolean } => {
-  const result: Record<string, unknown> = {};
+): { result: Record<string, unknown>; hasMatch: boolean } {
+  const matchingEntries: Record<string, unknown> = {};
   let hasMatch = false;
 
-  for (const [key, value] of Object.entries(object)) {
+  for (const [key, value] of Object.entries(sourceObject)) {
     if (key.toLowerCase().includes(lowercasePattern)) {
-      result[key] = value;
+      matchingEntries[key] = value;
       hasMatch = true;
       continue;
     }
     const filtered = searchObject(value, pattern);
     if (filtered !== undefined) {
-      result[key] = filtered;
+      matchingEntries[key] = filtered;
       hasMatch = true;
     }
   }
 
-  return { result, hasMatch };
-};
+  return { result: matchingEntries, hasMatch };
+}
 
 /**
  * Recursively filter a JSON value to only include subtrees where
@@ -476,12 +528,12 @@ const filterObjectEntries = (
  *   2. The value contains matches when recursively filtered (only includes matching subtree)
  * - Returns undefined if no matches found at any level, preserving the nested structure for matches
  */
-const searchObject = (value: unknown, pattern: string): unknown => {
-  const lowercasePattern = pattern.toLowerCase();
+function searchObject(value: unknown, pattern: string): unknown {
+  const lowerCasePattern = pattern.toLowerCase();
 
   if (value === null || value === undefined) return undefined;
 
-  if (matchesPrimitive(value, lowercasePattern)) {
+  if (matchesPrimitive(value, lowerCasePattern)) {
     return value;
   }
 
@@ -495,28 +547,28 @@ const searchObject = (value: unknown, pattern: string): unknown => {
   if (typeof value === "object") {
     const { result, hasMatch } = filterObjectEntries(
       value as Record<string, unknown>,
-      lowercasePattern,
+      lowerCasePattern,
       pattern,
     );
     return hasMatch ? result : undefined;
   }
 
   return undefined;
-};
+}
 
 /**
  * Apply maxLength truncation to content blocks with text fields.
  * Tracks a running character budget across all blocks to ensure the total
  * response size stays within maxLength.
  */
-const applyLengthBudgetToBlocks = (
-  contentBlocks: Array<{ type: string; text?: string }>,
+function applyLengthBudgetToBlocks(
+  responseBlocks: Array<{ type: string; text?: string }>,
   maxLength: number,
-): Array<{ type: string; text?: string }> => {
+): Array<{ type: string; text?: string }> {
   let remainingBudget = maxLength;
-  const result: Array<{ type: string; text?: string }> = [];
+  const truncatedBlocks: Array<{ type: string; text?: string }> = [];
 
-  for (const block of contentBlocks) {
+  for (const block of responseBlocks) {
     if (remainingBudget <= 0) {
       // Budget exhausted, skip remaining blocks
       break;
@@ -525,29 +577,29 @@ const applyLengthBudgetToBlocks = (
     if ("text" in block && typeof block.text === "string") {
       if (block.text.length <= remainingBudget) {
         // Block fits within budget
-        result.push(block);
+        truncatedBlocks.push(block);
         remainingBudget -= block.text.length;
       } else {
         // Block needs truncation
-        result.push({
+        truncatedBlocks.push({
           ...block,
           text: truncateString(block.text, remainingBudget, "...[truncated]"),
         });
         remainingBudget = 0;
       }
     } else {
-      result.push(block);
+      truncatedBlocks.push(block);
     }
   }
 
-  return result;
-};
+  return truncatedBlocks;
+}
 
 /**
  * Apply response filters (select, search, maxLength) to a raw result
  * and return the final JSON text.
  */
-const applyFilters = (result: unknown, filters?: ResponseFilters): string => {
+function applyFilters(result: unknown, filters?: ResponseFilters): string {
   let data = result;
 
   // Normalize undefined to empty object to prevent JSON.stringify returning undefined
@@ -571,30 +623,16 @@ const applyFilters = (result: unknown, filters?: ResponseFilters): string => {
   }
 
   return text;
-};
-
-/**
- * Explicit allowlist of scopes that authorize write operations.
- * SECURITY: All values MUST be lowercase to match the normalization in hasWriteScope().
- * Never add mixed-case values here - they will not match and could cause authorization bypass.
- */
-const WRITE_SCOPES = ["profile:write", "write"];
-
-// Runtime check to ensure all WRITE_SCOPES values are lowercase
-WRITE_SCOPES.forEach((scope) => {
-  if (scope !== scope.toLowerCase()) {
-    throw new Error(`WRITE_SCOPES contains non-lowercase value: ${scope}`);
-  }
-});
+}
 
 /**
  * Check if the provided scopes allow write operations.
  * Uses explicit allowlist matching only - no substring matching.
  * Normalizes scopes to prevent bypass via case/whitespace variations.
  */
-const hasWriteScope = (scopes: string[]): boolean => {
+function hasWriteScope(scopes: string[]): boolean {
   return scopes.some((scope) => WRITE_SCOPES.includes(scope.trim().toLowerCase()));
-};
+}
 
 /**
  * Check if user has required scope for the endpoint.
@@ -604,11 +642,11 @@ const hasWriteScope = (scopes: string[]): boolean => {
  * For production use, consider implementing endpoint-specific permission checks for sensitive operations
  * (e.g., require "profile:write" for profile mutations, "admin" scope for administrative operations).
  */
-const checkEndpointAuthorization = (
+function checkEndpointAuthorization(
   endpoint: EndpointData,
   endpointName: string,
   getScopes?: () => string[],
-) => {
+) {
   if (endpoint.isMutationEndpoint) {
     if (!getScopes) {
       return {
@@ -633,26 +671,26 @@ const checkEndpointAuthorization = (
     }
   }
   return undefined;
-};
+}
 
 /**
  * Resolve tRPC procedure from caller using endpoint path.
  */
-const resolveProcedure = (trpcCaller: unknown, pathInRouter: string[]): unknown => {
+function resolveProcedure(trpcCaller: unknown, pathInRouter: string[]): unknown {
   return pathInRouter.reduce<unknown>(
     (procedure, segment) => (procedure as Record<string, unknown>)?.[segment],
     trpcCaller,
   );
-};
+}
 
 /**
  * Handle transformed endpoint response with filters.
  */
-const handleTransformedResponse = async (
+async function handleTransformedResponse(
   output: unknown,
   transform: TransformMcpProcedureFunction,
   filters?: ResponseFilters,
-) => {
+) {
   const result = await transform(output);
 
   // Check if select/search filters are requested but can't be applied to transformed text content
@@ -687,17 +725,17 @@ const handleTransformedResponse = async (
   }
 
   return { content: result };
-};
+}
 
 /**
  * Validate input structure against endpoint schema.
  * Returns error response if validation fails, undefined if valid.
  */
-const validateEndpointInput = (
+function validateEndpointInput(
   input: Record<string, unknown> | undefined,
   schema: z.core.JSONSchema.JSONSchema | undefined,
   endpointName: string,
-) => {
+) {
   if (input === undefined || !schema) {
     return undefined;
   }
@@ -730,19 +768,19 @@ const validateEndpointInput = (
   }
 
   return undefined;
-};
+}
 
 /**
  * Execute a procedure and handle errors.
  * Returns formatted response content or throws on unexpected errors.
  */
-const executeProcedure = async (
+async function executeProcedure(
   procedure: unknown,
   input: Record<string, unknown> | undefined,
   endpoint: EndpointData,
   endpointName: string,
   filters?: ResponseFilters,
-) => {
+) {
   try {
     if (typeof endpoint.transformMcpProcedure === "function") {
       const output = await (procedure as (input?: unknown) => Promise<unknown>)(input);
@@ -777,7 +815,7 @@ const executeProcedure = async (
     });
     throw error;
   }
-};
+}
 
 /**
  * Handle callEndpoint meta-tool call.

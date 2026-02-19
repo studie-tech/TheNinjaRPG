@@ -34,7 +34,7 @@ export type McpMeta = {
 /**
  * Internal representation of an extracted MCP tool from a tRPC procedure.
  */
-export type McpTool = {
+export type ModelContextProtocolTool = {
   /** Tool name exposed to MCP clients */
   name: string;
   /** Tool description */
