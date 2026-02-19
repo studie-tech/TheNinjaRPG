@@ -36,8 +36,8 @@ import { useUserData } from "@/utils/UserContext";
 import { type ForumBoardSchema, forumBoardSchema } from "@/validators/forum";
 import { getSearchValidator } from "@/validators/register";
 
-function Board(properties: { parameters: Promise<{ boardid: string }> }) {
-  const parameters = use(properties.parameters);
+function Board(properties: { params: Promise<{ boardid: string }> }) {
+  const parameters = use(properties.params);
   const { data: userData } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const boardIdentifier = parameters.boardid;

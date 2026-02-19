@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -250,12 +249,12 @@ export const forumRouter = createTRPCRouter({
  * Publish news post to social media platforms.
  * Posts to Discord, Facebook, Reddit, Twitter, and optionally Instagram (if image provided).
  */
-const publishNewsToSocialMedia = (
+function publishNewsToSocialMedia(
   title: string,
   content: string,
   avatar: string | null,
   image?: string | null,
-): Promise<unknown>[] => {
+) {
   const promises: Promise<unknown>[] = [];
 
   promises.push(callDiscordNews(title, content, avatar));
@@ -269,7 +268,7 @@ const publishNewsToSocialMedia = (
   }
 
   return promises;
-};
+}
 
 /**
  * Internal convenience function to fetch a forum thread by ID.
@@ -285,11 +284,11 @@ export const fetchThread = async (client: DrizzleClient, threadId: string) => {
  * Fetch user and thread, and authorize thread moderation.
  * Returns error response if user is not authorized or thread doesn't exist.
  */
-const fetchAndAuthorizeThreadModeration = async (
+async function fetchAndAuthorizeThreadModeration(
   client: DrizzleClient,
   userId: string,
   threadId: string,
-) => {
+) {
   const [user, thread] = await Promise.all([
     fetchUser(client, userId),
     fetchThread(client, threadId),
@@ -303,4 +302,4 @@ const fetchAndAuthorizeThreadModeration = async (
   }
 
   return { user, thread };
-};
+}

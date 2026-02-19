@@ -19,11 +19,11 @@ interface UrlCheckResult {
   fullTag?: string;
 }
 
-const processContentUrls = async <T extends { id: string; content: string }>(
+function processContentUrls<T extends { id: string; content: string }>(
   items: T[],
   table: typeof userNindo | typeof forumPost,
   urlRegex: RegExp,
-) => {
+) {
   return Promise.all(
     items.map(async (item) => {
       // Extract all URLs from the content
@@ -42,11 +42,12 @@ const processContentUrls = async <T extends { id: string; content: string }>(
       let newContent = item.content;
       urlChecks.forEach(({ url, keep, isImg, fullTag }) => {
         if (!keep) {
+          // Always replace image tags first if present
           if (isImg && fullTag) {
             newContent = newContent.replace(fullTag, "[UNREACHABLE_IMG]");
-          } else {
-            newContent = newContent.replace(url, "[UNREACHABLE_URL]");
           }
+          // Then replace any remaining text occurrences of the URL
+          newContent = newContent.replace(url, "[UNREACHABLE_URL]");
         }
       });
 
@@ -59,7 +60,7 @@ const processContentUrls = async <T extends { id: string; content: string }>(
       }
     }),
   );
-};
+}
 
 export const GET = async (request: Request) => {
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
