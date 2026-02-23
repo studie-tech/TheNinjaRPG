@@ -1776,6 +1776,19 @@ export const toggleEquipItem = async (
       return errorResponse("You can only equip one item with a bloodline requirement");
     }
   }
+  // Check hand slot armor limit - only one armor item can be equipped in hand slots
+  if (doEquip && info.itemType === "ARMOR" && info.slot === "HAND") {
+    const equippedHandArmors = newUserItems.filter(
+      (ui) =>
+        ui.equipped !== "NONE" &&
+        ui.id !== useritem.id &&
+        (ui.equipped === "HAND_1" || ui.equipped === "HAND_2") &&
+        ui.item.itemType === "ARMOR",
+    );
+    if (equippedHandArmors.length > 0) {
+      return errorResponse("You can only equip one armor item in your hand slots");
+    }
+  }
   // Determine equipment slot (first empty slots, then any slot)
   let newEquipSlot = slot;
   if (newEquipSlot === undefined) {
