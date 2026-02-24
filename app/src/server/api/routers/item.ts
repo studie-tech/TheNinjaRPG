@@ -1352,8 +1352,20 @@ export const itemRouter = createTRPCRouter({
         (!info.bloodlineId || !hasBloodlineItemEquipped);
 
       if (canAutoEquip) {
+        // Check if hand armor restriction applies
+        const isHandArmor = info.itemType === "ARMOR" && info.slot === "HAND";
+        const hasHandArmorEquipped = useritems.some(
+          (ui) =>
+            (ui.equipped === "HAND_1" || ui.equipped === "HAND_2") &&
+            ui.item.itemType === "ARMOR",
+        );
+
         ItemSlots.forEach((slot) => {
           if (slot.includes(info.slot) && !useritems.find((i) => i.equipped === slot)) {
+            // Skip auto-equip for hand armors if one is already equipped
+            if (isHandArmor && hasHandArmorEquipped) {
+              return;
+            }
             equipped = slot;
           }
         });
