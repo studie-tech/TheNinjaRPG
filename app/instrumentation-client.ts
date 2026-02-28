@@ -75,6 +75,7 @@ Sentry.init({
     "TransformStream is not defined", // Older browser compatibility error (Firefox Mobile <102, some Android browsers) - AI chat feature uses @ai-sdk/react which requires TransformStream for SSE parsing. Users see fallback UX (chat unavailable).
     /No ack for postMessage .* in \d+ms/, // Third-party SDK postMessage timeout - occurs when Clerk or similar services fail to receive acknowledgment for cross-origin frame communication
     "Jsloader error", // Google Maps JS API loader error - occurs when the @googlemaps/js-api-loader script fails to load (network issues, ad blockers, or Google CDN outages). Users see map not loading but the rest of the app works normally.
+    "Attempt to use history.pushState() more than 100 times per 10 seconds", // Browser security limit on history API - occurs when third-party analytics scripts (Speed Insights, GTM, i18n pixel) exceed rate limit during rapid navigation. Users can navigate normally; only analytics logging is rate-limited.
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -132,6 +133,9 @@ Sentry.init({
     }
     if (isGoogleApiLoaderError(event)) {
       return null; // Drop Google Maps API loader errors (network/CDN failures)
+    }
+    if (isHistoryPushStateRateLimitError(event)) {
+      return null; // Drop history.pushState rate limit errors from third-party scripts
     }
     return event;
   },
@@ -797,6 +801,7 @@ const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolea
  *   jutsu actions. These scripts may have compatibility issues when page structure changes.
  */
 const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
   // Check if error originates from a userscript
@@ -812,6 +817,26 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
 
   if (!isFromUserscript) {
     return false;
+  }
+
+  // Check for userscript-internal error patterns that should always be filtered:
+  // 1. Single-letter variable errors (typical of minified userscripts) like "d is not defined"
+  // 2. Userscript-specific function patterns like window["__f__..."]
+  const isSingleLetterVarError = /^[a-z]( is not defined| is not a function|\.)/i.test(message);
+
+  const hasUserscriptFunctionPattern = stackFrames.some(
+    (frame) =>
+      // Minified function patterns like window["__f__mm6eqil6.gsn"]
+      frame.function?.includes('window["__f__') ||
+      frame.function?.includes("window['__f__") ||
+      // Anonymous or generated function names typical of bundled scripts
+      frame.function?.includes("<") || // e.g., "window[..."]/<"
+      frame.function === "?", // Anonymous
+  );
+
+  // If it's clearly a userscript-internal error, filter it regardless of mixed stack
+  if (isSingleLetterVarError || hasUserscriptFunctionPattern) {
+    return true;
   }
 
   // Additional safety check: If the error stack includes both userscript frames AND
@@ -889,6 +914,112 @@ const isGoogleApiLoaderError = (event: Sentry.ErrorEvent): boolean => {
   return false;
 };
 
+/**
+ * Check if an error is a browser history.pushState() rate limit error.
+ * These occur when multiple third-party analytics scripts (Vercel Speed Insights,
+ * Google Tag Manager, i18n tracking pixel) collectively exceed the browser's
+ * 100 calls per 10 seconds security limit during rapid user navigation.
+ *
+ * UX note: This error does not affect user experience:
+ * - Users can still navigate normally - only third-party logging is rate-limited
+ * - No user-visible error occurs - caught by Sentry's global handler
+ * - This is a browser security feature preventing history manipulation attacks
+ *
+ * Stack trace patterns show errors originating from:
+ * - app:///_vercel/speed-insights/script.js (Vercel Speed Insights)
+ * - app:///gtag/js (Google Tag Manager/Analytics)
+ * - app:///i18n/pixel/ (i18n tracking pixel)
+ * - node_modules/next/ (Next.js App Router internal navigation)
+ *
+ * THENINJARPG-2GA: Filter pushState rate limit errors from third-party analytics.
+ */
+const isHistoryPushStateRateLimitError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must be a SecurityError or DOMException with the specific rate limit message
+  if (errorType !== "SecurityError" && errorType !== "DOMException") return false;
+  if (!message.includes("Attempt to use history.pushState() more than 100 times per 10 seconds")) {
+    return false;
+  }
+
+  // Additional check: verify it's from third-party scripts or Next.js router (not our app code)
+  const isFromThirdPartyOrNextRouter = stackFrames.some(
+    (frame) =>
+      // Vercel Speed Insights
+      frame.filename?.includes("_vercel/speed-insights") ||
+      frame.abs_path?.includes("_vercel/speed-insights") ||
+      // Google Tag Manager / Analytics
+      frame.filename?.includes("gtag/js") ||
+      frame.abs_path?.includes("gtag/js") ||
+      // i18n tracking pixel
+      frame.filename?.includes("i18n/pixel") ||
+      frame.abs_path?.includes("i18n/pixel") ||
+      // Next.js app router (internal navigation handling)
+      frame.filename?.includes("node_modules/next/") ||
+      frame.abs_path?.includes("node_modules/next/"),
+  );
+
+  // If we can verify it's from third-party scripts or Next.js router, filter it
+  // If stack trace is empty (native code), also filter based on message alone
+  return isFromThirdPartyOrNextRouter || stackFrames.length === 0;
+};
+
+/**
+ * Check if a raw error object (not Sentry event) is from a userscript.
+ * This is used in the global unhandledrejection handler to filter errors before Sentry sees them.
+ *
+ * UX note: Users who install userscripts via Tampermonkey/Greasemonkey accept that these
+ * third-party scripts may break when the page structure changes. Filtering these errors
+ * prevents noise in Sentry for issues we cannot fix.
+ */
+const isUserscriptRawError = (err: unknown): boolean => {
+  if (!(err instanceof Error)) return false;
+
+  const errorMessage = err.message ?? "";
+  const errorStack = err.stack ?? "";
+
+  // Check if error originates from a userscript
+  // Userscripts use the app:/// URL scheme with /userscripts/ path
+  const isFromUserscript =
+    errorStack.includes("app:///userscripts/") ||
+    errorStack.includes(".user.js");
+
+  if (!isFromUserscript) {
+    return false;
+  }
+
+  // Check for userscript-internal error patterns that should always be filtered:
+  // 1. Single-letter variable errors (typical of minified userscripts) like "d is not defined"
+  // 2. Userscript-specific function patterns like window["__f__..."]
+  const isSingleLetterVarError = /^[a-z]( is not defined| is not a function|\.)/i.test(errorMessage);
+
+  const hasUserscriptFunctionPattern =
+    errorStack.includes('window["__f__') ||
+    errorStack.includes("window['__f__") ||
+    errorStack.includes("/<"); // e.g., "window[..."]/<"
+
+  // Additional evidence: Check for userscript-specific console log patterns in the error context
+  // Userscripts often log to console with identifiable prefixes like "[Persistent Keybinds]"
+  const hasUserscriptLogPattern =
+    errorStack.includes("[Persistent Keybinds]") ||
+    errorStack.includes("[Jutsu-Hotkeys]") ||
+    errorStack.includes("userscript");
+
+  // If it's clearly a userscript-internal error, filter it
+  if (isSingleLetterVarError || hasUserscriptFunctionPattern || hasUserscriptLogPattern) {
+    return true;
+  }
+
+  // Additional safety check: If the error stack includes our /_next/ compiled code,
+  // this might indicate the userscript is breaking our functionality
+  const hasAppCodeInStack = errorStack.includes("/_next/");
+
+  // Only filter if the error is purely from the userscript (no app code in stack)
+  return !hasAppCodeInStack;
+};
+
 const ensureBrowserErrorHandler = () => {
   if (typeof window === "undefined") return;
   if (window.__TNR_GLOBAL_REJECTION_HANDLER__) return;
@@ -923,6 +1054,13 @@ const ensureBrowserErrorHandler = () => {
     // Skip TRPC errors that are handled by react-query's error handlers
     // These might bubble up as unhandled rejections due to timing issues
     if (isTRPCError(event.reason)) {
+      event.preventDefault();
+      return;
+    }
+
+    // Skip userscript errors - these are from third-party browser extensions
+    // Users who install userscripts accept that these may break when page structure changes
+    if (isUserscriptRawError(event.reason)) {
       event.preventDefault();
       return;
     }
