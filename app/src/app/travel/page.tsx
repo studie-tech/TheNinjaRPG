@@ -146,7 +146,7 @@ export default function Travel() {
     enabled: !!userData,
   });
   const { data: sectorData } = api.travel.getSectorData.useQuery(
-    { sector: userData?.sector || -1 },
+    { sector: userData?.sector ?? -1 },
     { enabled: !!userData },
   );
   // Memoize villages to prevent re-creating array reference on every render
@@ -488,6 +488,7 @@ export default function Travel() {
       )
     );
   }, [
+    userData,
     currentTile,
     currentSector,
     targetPosition,

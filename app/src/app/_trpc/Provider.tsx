@@ -12,6 +12,7 @@ import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
+import { isRetryableError } from "@/utils/trpc-errors";
 import { api, useGlobalOnMutateProtect } from "./client";
 
 const getBaseUrl = () => {
@@ -61,39 +62,8 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
       links: [
         retryLink({
           retry(opts) {
-            // Retry network-level errors from aborted requests
-            const isNetworkError =
-              opts.error.message?.includes("Load failed") ||
-              opts.error.message?.includes("fetch");
-            if (isNetworkError && opts.op.type === "query") {
-              return opts.attempts <= 3;
-            }
-            // Retry on offline errors (browser returns "Offline" text instead of JSON)
-            const isOfflineError = opts.error.message?.includes(
-              '"Offline" is not valid JSON',
-            );
-            if (isOfflineError && opts.op.type === "query") {
-              return opts.attempts <= 3;
-            }
-            // Retry on Safari JSON parsing errors (Safari throws this when response is invalid/empty)
-            const isSafariJsonError = opts.error.message?.includes(
-              "The string did not match the expected pattern",
-            );
-            if (isSafariJsonError && opts.op.type === "query") {
-              return opts.attempts <= 3;
-            }
-            // Retry on proxy/CDN error pages (returns "An error occurred" text instead of JSON)
-            const isProxyError = opts.error.message?.includes(
-              '"An error o"... is not valid JSON',
-            );
-            if (isProxyError && opts.op.type === "query") {
-              return opts.attempts <= 3;
-            }
-            // Retry on HTML error pages (CDN/proxy returns HTML instead of JSON during outages)
-            const isHtmlResponseError = opts.error.message?.includes(
-              '"<!DOCTYPE "... is not valid JSON',
-            );
-            if (isHtmlResponseError && opts.op.type === "query") {
+            // Retry transient network/CDN errors (network failures, offline, invalid JSON responses)
+            if (isRetryableError(opts.error.message) && opts.op.type === "query") {
               return opts.attempts <= 3;
             }
             // Don't retry on non-500s
@@ -140,39 +110,8 @@ export const onError = (err: unknown) => {
   ) {
     return;
   }
-  // Ignore network-level errors from aborted requests (race condition between invalidations)
-  if (
-    err instanceof TRPCClientError &&
-    (err.message.includes("Load failed") || err.message.includes("fetch"))
-  ) {
-    return;
-  }
-  // Ignore offline errors (browser returns "Offline" text instead of JSON when user is offline)
-  if (
-    err instanceof TRPCClientError &&
-    err.message.includes('"Offline" is not valid JSON')
-  ) {
-    return;
-  }
-  // Ignore Safari JSON parsing errors (Safari throws this when response is invalid/empty, retries handle it)
-  if (
-    err instanceof TRPCClientError &&
-    err.message.includes("The string did not match the expected pattern")
-  ) {
-    return;
-  }
-  // Ignore proxy/CDN error pages (returns "An error occurred" text instead of JSON, retries handle it)
-  if (
-    err instanceof TRPCClientError &&
-    err.message.includes('"An error o"... is not valid JSON')
-  ) {
-    return;
-  }
-  // Ignore HTML error pages (CDN/proxy returns HTML instead of JSON during outages, retries handle it)
-  if (
-    err instanceof TRPCClientError &&
-    err.message.includes('"<!DOCTYPE "... is not valid JSON')
-  ) {
+  // Ignore transient network/CDN errors (retries handle these gracefully)
+  if (err instanceof TRPCClientError && isRetryableError(err.message)) {
     return;
   }
   // Ignore abort errors (user navigated away before request completed)

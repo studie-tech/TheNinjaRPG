@@ -373,14 +373,22 @@ const ConceptImage: React.FC<InputProps> = (props) => {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          void navigator.clipboard.writeText(
-                            `[conceptart:${image.id}]`,
-                          );
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 2000);
+                          try {
+                            await navigator.clipboard.writeText(
+                              `[conceptart:${image.id}]`,
+                            );
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2000);
+                          } catch (_error) {
+                            showMutationToast({
+                              success: false,
+                              message:
+                                "Could not copy to clipboard. Please copy the code manually.",
+                            });
+                          }
                         }}
                       >
                         {copied ? (

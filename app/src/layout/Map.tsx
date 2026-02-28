@@ -37,7 +37,13 @@ import {
 import { createUserAvatarSprite } from "@/libs/threejs/globe";
 import { TrackballControls } from "@/libs/threejs/TrackBallControls";
 import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/types";
-import { cleanUp, createTexture, loadTexture, setupScene } from "@/libs/threejs/util";
+import {
+  cleanUp,
+  clearTextureCaches,
+  createTexture,
+  loadTexture,
+  setupScene,
+} from "@/libs/threejs/util";
 import { useUserData } from "@/utils/UserContext";
 
 interface MapProps {
@@ -151,6 +157,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       const handleContextLost = (event: Event) => {
         event.preventDefault();
         isContextLost = true;
+
+        // Clear texture caches when context is lost to free memory
+        // This helps recover from low-memory situations
+        clearTextureCaches();
       };
       const handleContextRestored = () => {
         isContextLost = false;
@@ -423,7 +433,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       }
 
       if (props.userLocation && userData && !showOwnership) {
-        userData.userQuests.forEach((userquest) => {
+        userData.userQuests?.forEach((userquest) => {
           userquest.quest.content.objectives.forEach((objective) => {
             const isHidden = "hideLocation" in objective && objective.hideLocation;
             const isDialog = objective.task === "dialog";
@@ -645,15 +655,25 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         }
 
         // Safely remove renderer DOM element
+        // Defense-in-depth against THENINJARPG-2GX: Check parent relationship to prevent TOCTOU race condition
+        // during React reconciliation when rapid movements trigger multiple cleanup cycles
         try {
-          if (sceneRef.contains(renderer.domElement)) {
+          if (
+            renderer.domElement &&
+            renderer.domElement.parentNode === sceneRef &&
+            sceneRef.contains(renderer.domElement)
+          ) {
             sceneRef.removeChild(renderer.domElement);
           }
         } catch {
-          // Ignore errors if element is already removed
+          // Ignore errors if element is already removed by React reconciliation
         }
 
         cleanUp(scene, renderer);
+
+        // Clear texture caches to prevent memory leaks on low-memory devices
+        // This is a defense-in-depth measure for THENINJARPG-2HZ (Firefox OOM)
+        clearTextureCaches();
       };
     }
   }, [

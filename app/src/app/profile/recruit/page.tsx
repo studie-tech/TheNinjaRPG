@@ -259,8 +259,15 @@ const RecruitLinkTab: React.FC = () => {
         type="button"
         className={`flex w-full flex-row items-center rounded-lg border bg-card p-4 text-card-foreground italic hover:bg-popover ${!copied ? "cursor-copy" : "cursor-no-drop"}`}
         onClick={async () => {
-          await navigator.clipboard.writeText(recruitUrl);
-          setCopied(true);
+          try {
+            await navigator.clipboard.writeText(recruitUrl);
+            setCopied(true);
+          } catch (_error) {
+            showMutationToast({
+              success: false,
+              message: "Could not copy to clipboard. Please copy the link manually.",
+            });
+          }
         }}
       >
         <p className="grow">{recruitUrl}</p>

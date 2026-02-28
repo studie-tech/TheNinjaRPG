@@ -1,7 +1,6 @@
 import fetchRetry from "fetch-retry";
 import {
   BufferGeometry,
-  CanvasTexture,
   Group,
   LinearFilter,
   LineBasicMaterial,
@@ -17,7 +16,7 @@ import {
 } from "@/drizzle/constants";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import type { GlobalMapData, GlobalPoint } from "@/libs/threejs/types";
-import { loadTexture } from "@/libs/threejs/util";
+import { createBorderTexture, loadTexture } from "@/libs/threejs/util";
 
 const MAP_CACHE_KEY = "hexasphere_map_cache";
 const MAP_CACHE_VERSION = "v1"; // Increment to invalidate cache when map data changes
@@ -50,7 +49,13 @@ export const fetchMap = async () => {
       return 2 ** attempt * 1000; // 1000, 2000, 4000
     },
   });
-  const hexasphere = await response.json().then((data) => data as GlobalMapData);
+  // Clone response before reading body to prevent "body stream already read" errors.
+  // fetch-retry may consume the original response body during retry logic (THENINJARPG-2GY).
+  // response.clone() creates an independent body stream we can safely read.
+  const hexasphere = await response
+    .clone()
+    .json()
+    .then((data) => data as GlobalMapData);
 
   // Cache in localStorage for future use
   safeLocalStorageSetItem(
@@ -63,6 +68,10 @@ export const fetchMap = async () => {
 
 /**
  * Create a user avatar sprite for the global map
+ *
+ * MEMORY OPTIMIZATION: Border textures are cached in util.ts to prevent memory leaks.
+ * Previously, each call created a new canvas, causing OOM errors on Firefox (THENINJARPG-2HY).
+ * Now border textures are cached by color and disposed during component cleanup.
  */
 export const createUserAvatarSprite = (info: {
   userData: {
@@ -98,31 +107,8 @@ export const createUserAvatarSprite = (info: {
     group.add(line);
   }
 
-  // Create white circular border sprite
-  const borderCanvas = document.createElement("canvas");
-  const borderSize = 64; // Size in pixels
-  borderCanvas.width = borderSize;
-  borderCanvas.height = borderSize;
-  const borderContext = borderCanvas.getContext("2d");
-
-  if (borderContext) {
-    // Clear the canvas
-    borderContext.clearRect(0, 0, borderSize, borderSize);
-
-    // Draw white circle border
-    const centerX = borderSize / 2;
-    const centerY = borderSize / 2;
-    const radius = borderSize / 2 - 2; // Leave some padding for the border
-
-    borderContext.beginPath();
-    borderContext.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-    borderContext.fillStyle = borderColor;
-    borderContext.fill();
-  }
-
-  const borderTexture = new CanvasTexture(borderCanvas);
-  borderTexture.generateMipmaps = false;
-  borderTexture.minFilter = LinearFilter;
+  // Create circular border sprite using cached texture
+  const borderTexture = createBorderTexture(borderColor, 64);
 
   const borderMaterial = new SpriteMaterial({
     map: borderTexture,

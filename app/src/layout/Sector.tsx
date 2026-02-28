@@ -58,6 +58,7 @@ import { updateWaveAnimation, updateWindAnimation } from "@/libs/threejs/shaders
 import type { GlobalTile, SectorPoint, SectorUser } from "@/libs/threejs/types";
 import {
   cleanUp,
+  clearTextureCaches,
   profiler,
   setRaycasterFromMouse,
   setupScene,
@@ -723,6 +724,9 @@ const Sector: React.FC<SectorProps> = (props) => {
       const handleContextLost = (event: Event) => {
         event.preventDefault();
         isContextLost = true;
+
+        // Clear texture caches when context is lost to free memory
+        clearTextureCaches();
       };
       const handleContextRestored = () => {
         isContextLost = false;
@@ -1037,16 +1041,25 @@ const Sector: React.FC<SectorProps> = (props) => {
         }
 
         // Safely remove renderer DOM element
+        // Defense-in-depth against THENINJARPG-2GX: Check parent relationship to prevent TOCTOU race condition
+        // during React reconciliation when rapid movements trigger multiple cleanup cycles
         try {
-          if (sceneRef.contains(renderer.domElement)) {
+          if (
+            renderer.domElement &&
+            renderer.domElement.parentNode === sceneRef &&
+            sceneRef.contains(renderer.domElement)
+          ) {
             sceneRef.removeChild(renderer.domElement);
           }
         } catch {
-          // Ignore errors if element is already removed
+          // Ignore errors if element is already removed by React reconciliation
         }
 
         profiler.reset();
         cleanUp(scene, renderer);
+
+        // Clear texture caches to prevent memory leaks on low-memory devices
+        clearTextureCaches();
       };
     }
   }, [props.sector, isAttacking, fetchedUsers]);

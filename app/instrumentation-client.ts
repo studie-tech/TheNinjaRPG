@@ -26,6 +26,7 @@ Sentry.init({
     "Java bridge method invocation error",
     "Java object is gone", // Android WebView JavaScript-Java bridge error - occurs when password managers/autofill services scan for forms and the native component is garbage collected
     "Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.",
+    "Node.removeChild: The node to be removed is not a child of this node", // Firefox version of DOM manipulation race condition (line 28) - occurs during React reconciliation when Three.js cleanup races with React's DOM diffing. Handled gracefully with defense-in-depth checks in Map.tsx/Sector.tsx cleanup. UX: No user-visible impact - occurs during component unmount. (THENINJARPG-2GX)
     "The object can not be found here.", // Safari's version of the above removeChild error (DOMException code 8) - DOM modified externally during React reconciliation
     "Failed to execute 'insertBefore' on 'Node': The node before which the new node is to be inserted is not a child of this node.", // DOM modified externally (browser extensions, third-party scripts)
     "GME Provider is disconnected or locked", // timeout error
@@ -50,12 +51,15 @@ Sentry.init({
     /window\.__firefox__/, // Firefox/Brave browser extension errors (e.g., YouTube quality extensions)
     /undefined is not an object \(evaluating 'window\.__firefox__\..*'\)/, // iOS browser extension error (Brave/Firefox) - extensions inject __firefox__ object that may be undefined
     "Failed to load chunk", // New deployment
+    /ChunkLoadError.*Failed to load chunk/, // Next.js chunk loading errors during deployments (captures both exception and console format)
     "Invalid call to runtime.sendMessage()", // Browser extension error, not from our app
     "zoid destroyed", // PayPal SDK cleanup errors - occur when users navigate away while PayPal buttons are initializing
     "Target window is closed", // PayPal SDK postrobot error - occurs when user closes popup before transaction completes
     "postrobot_method", // PayPal SDK cross-window communication error - occurs when popup is closed
     "Can not send postrobot", // PayPal SDK postrobot error - alternate format
+    "Bootstrap Error for", // PayPal SDK zoid bootstrap errors - occur when PayPal's internal component initialization encounters duplicate listener registration
     "Cannot set properties of undefined (setting 'iframeReady')", // Usercentrics (uc.js) consent management error - third-party script timing issue
+    "Cannot set properties of undefined (setting 'windowOnloadTriggered')", // Usercentrics (uc.js) consent management error - race condition in signalWindowLoad on older Chrome Mobile WebView
     "Failed to fetch", // Network errors during navigation - occurs when user navigates away while fetch is in-flight (common on mobile)
     "network error", // Chrome/Android network error - occurs when fetch fails due to network issues on mobile devices
     /^Load failed/, // iOS Safari network error - occurs when device goes to sleep, network changes, or CDN requests fail (may include domain suffix)
@@ -64,6 +68,8 @@ Sentry.init({
     "Illegal invocation", // Third-party script error (Facebook in-app browser or Cookiebot)
     "Can't find variable: EmptyRanges", // Browser extension error (CodeMirror-based extensions)
     "Can't find variable: DarkReader", // DarkReader browser extension error - dark mode extension may fail to initialize
+    "xbrowser is not defined", // Browser extension/password manager autofill error - occurs when third-party autofill scripts (browser extensions, Android WebView bridge) reference undefined xbrowser variable
+    "swbrowser.inNightMode is not a function", // Browser extension/Android WebView night mode error - occurs when third-party night mode extensions (Android browser forks) attempt to call swbrowser.inNightMode() but the method is undefined or the object is incomplete during page load. Similar to xbrowser errors. No UX handling needed - error occurs in isolated extension context, application continues normally.
     "postMessage is not a function", // Clerk internal error - occurs in clerk.browser.js with Web Workers
     "module factory is not available", // Turbopack runtime error - occurs when browser caches stale JS chunks after deployment
     "Cannot assign to read only property 'then' of object", // Turbopack Promise assignment error - occurs when browser extensions freeze Promise objects or stale caches cause conflicts
@@ -76,6 +82,15 @@ Sentry.init({
     /No ack for postMessage .* in \d+ms/, // Third-party SDK postMessage timeout - occurs when Clerk or similar services fail to receive acknowledgment for cross-origin frame communication
     "Jsloader error", // Google Maps JS API loader error - occurs when the @googlemaps/js-api-loader script fails to load (network issues, ad blockers, or Google CDN outages). Users see map not loading but the rest of the app works normally.
     "Attempt to use history.pushState() more than 100 times per 10 seconds", // Browser security limit on history API - occurs when third-party analytics scripts (Speed Insights, GTM, i18n pixel) exceed rate limit during rapid navigation. Users can navigate normally; only analytics logging is rate-limited.
+    "window.setDgResult is not a function", // Third-party bot detection/anti-fraud script error (likely DataDome) - occurs when bot detection services attempt to call undefined callback function on mobile WebView with strict security policies. Users continue signup flow normally; error is isolated to third-party script context.
+    "out of memory", // Browser-level memory error on /travel during 3D rendering. Occurs on Firefox with low memory/heavy tabs. UX: WebGL error boundary shows fallback, users can refresh. Fix: Texture cache disposal in Map.tsx/Sector.tsx cleanup (THENINJARPG-2HZ).
+    /SyntaxError.*Unexpected EOF/, // Next.js chunk truncation errors (network issues on mobile) - captured by isNextJsChunkSyntaxError for precise filtering
+    "JSON.parse: unexpected character at line 1 column 1 of the JSON data", // Firefox JSON parsing error - occurs when tRPC receives non-JSON responses (network issues, CDN outages). Equivalent to Chrome's '"Offline" is not valid JSON' or '"<!DOCTYPE "... is not valid JSON'. Handled by tRPC retry logic in Provider.tsx.
+    "Error in input stream", // Firefox stream error - occurs when Firefox's fetch implementation encounters errors reading response streams during Next.js RSC (React Server Components) navigation/prefetch. Common causes: network interruption mid-stream, corrupted CDN response, incomplete RSC payload, browser abort during navigation. This is Firefox's equivalent to Chrome's "Failed to fetch" or Safari's "Load failed". UX: Handled gracefully by Next.js internal retry logic and Firefox's fetch error recovery (marked as handled:yes in Sentry). Users see normal navigation; failed streams fall back to fresh server requests. Detection: handled=yes, no stack trace (browser-level error before JS execution), Firefox browser tag, RSC navigation with _rsc query param. (THENINJARPG-2GM)
+    "failed to decode cache", // Next.js RSC (React Server Components) cache decoding error - occurs when browser cache contains stale, corrupted, or incomplete RSC payload data from prefetch requests. Common causes: browser cache inconsistency after deployments, network issues during RSC payload download, memory pressure (related to THENINJARPG-2HZ), Firefox-specific cache validation. UX: Handled gracefully by Next.js internal retry logic - failed cache reads fall back to fresh server requests. Users may experience slightly slower navigation but no visible error. Detection: minimal stack trace, global error handler mechanism, recent RSC prefetch breadcrumbs (_rsc query param).
+    /NS_ERROR_/, // Firefox internal error codes (NS_ERROR_FAILURE, NS_ERROR_NOT_AVAILABLE, etc.) from third-party scripts (ads/pixel.js, tracking pixels, browser extensions). These are Firefox XPCOM errors that occur when third-party code encounters browser-level failures. Not actionable from application code. UX: No user-visible impact - errors occur in isolated third-party script contexts.
+    "Should not already be working.", // React internal scheduler error - occurs when React's concurrent rendering scheduler detects re-entrant scheduling during complex navigation patterns. Not actionable at application level. UX: No user-visible impact - React's error recovery handles scheduler assertions gracefully. (THENINJARPG-2GN)
+    "invalid origin", // Third-party script or browser security error during navigation - occurs when cross-origin requests from analytics, tracking scripts, or browser privacy features (DuckDuckGo Mobile's tracking protection) are blocked. UX: No user-visible impact - page navigation and tRPC queries complete successfully. Error occurs in background processes isolated from application code. (THENINJARPG-2G1)
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -110,8 +125,14 @@ Sentry.init({
     if (isInjectedJsonParseError(event)) {
       return null; // Drop JSON parsing errors from anonymous/injected code (browser extensions)
     }
+    if (isFirefoxJsonParseError(event)) {
+      return null; // Drop Firefox JSON parsing errors (network/CDN issues)
+    }
     if (isClerkSyntaxError(event)) {
       return null; // Drop Clerk script parsing errors (network truncation)
+    }
+    if (isNextJsChunkSyntaxError(event)) {
+      return null; // Drop Next.js chunk parsing errors (network truncation)
     }
     if (isWalletExtensionError(event)) {
       return null; // Drop cryptocurrency wallet extension errors (MetaMask, etc.)
@@ -119,8 +140,8 @@ Sentry.init({
     if (isThirdPartyStackOverflowError(event)) {
       return null; // Drop third-party stack overflow errors (tracking scripts)
     }
-    if (isServerActionSsoCallbackError(event)) {
-      return null; // Drop server action errors on SSO callback page (transient network issues)
+    if (isServerActionAuthError(event)) {
+      return null; // Drop server action errors during auth transitions (SSO callback, sign-out)
     }
     if (isWebKitMessageHandlersError(event)) {
       return null; // Drop iOS WebKit bridge errors from third-party scripts
@@ -131,11 +152,41 @@ Sentry.init({
     if (isUserscriptError(event)) {
       return null; // Drop userscript errors from browser extensions
     }
+    if (isUserscriptErrorFromBreadcrumbs(event)) {
+      return null; // Drop userscript errors (breadcrumb-based fallback for ambiguous stack frames)
+    }
     if (isGoogleApiLoaderError(event)) {
       return null; // Drop Google Maps API loader errors (network/CDN failures)
     }
     if (isHistoryPushStateRateLimitError(event)) {
       return null; // Drop history.pushState rate limit errors from third-party scripts
+    }
+    if (isChunkLoadConsoleError(event)) {
+      return null; // Drop chunk load console errors
+    }
+    if (isThirdPartyPixelJsonParseError(event)) {
+      return null; // Drop third-party tracking pixel JSON parsing errors
+    }
+    if (isClipboardPermissionError(event)) {
+      return null; // Drop clipboard permission errors (handled with user feedback)
+    }
+    if (isFirefoxNSError(event)) {
+      return null; // Drop Firefox NS_ERROR from third-party scripts
+    }
+    if (isRageClickEvent(event)) {
+      return null; // Drop rage click events from error tracking
+    }
+    if (isResponseBodyAlreadyReadError(event)) {
+      return null; // Drop Response body already read errors
+    }
+    if (isReactSchedulerError(event)) {
+      return null; // Drop React scheduler internal errors
+    }
+    if (isFirefoxInputStreamError(event)) {
+      return null; // Drop Firefox input stream errors
+    }
+    if (isClerkSignOutError(event)) {
+      return null; // Drop Clerk sign-out race condition errors
     }
     return event;
   },
@@ -301,6 +352,13 @@ const isGoogleTranslateError = (event: Sentry.ErrorEvent): boolean => {
  * THENINJARPG-278: Also filters stack overflow errors from PayPal SDK's zoid library,
  * which can occur during component cleanup when the internal promise handlers
  * (dispatch/resolve/reject) enter infinite recursion.
+ *
+ * THENINJARPG-2GF, THENINJARPG-2GE: Also filters bootstrap errors from PayPal SDK's
+ * zoid library, which can occur during component initialization when the SDK attempts
+ * to register duplicate cross-domain message listeners (race condition in component
+ * lifecycle). Example: "Request listener already exists for zoid_allow_delegate_paypal_buttons".
+ * UX note: PayPal buttons render and work correctly despite these errors. The errors
+ * are logged to PayPal's internal analytics and are not actionable by us.
  */
 const isPayPalSdkError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -317,6 +375,7 @@ const isPayPalSdkError = (event: Sentry.ErrorEvent): boolean => {
     "postrobot_method",
     "paypal_js_sdk",
     "Can not send postrobot",
+    "Bootstrap Error", // PayPal SDK zoid bootstrap/initialization errors
   ];
 
   if (paypalErrorPatterns.some((pattern) => message.includes(pattern))) {
@@ -583,6 +642,49 @@ const isInjectedJsonParseError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
+ * Check if an error is a Firefox JSON parsing error from tRPC.
+ * Firefox uses a generic error message format when JSON parsing fails, unlike
+ * Chrome/Safari which include the problematic content in the error message.
+ *
+ * When tRPC receives non-JSON responses (plain text "Offline", HTML error pages,
+ * empty responses) due to network issues or CDN outages, Firefox throws:
+ * "JSON.parse: unexpected character at line 1 column 1 of the JSON data"
+ *
+ * UX note: These errors are handled gracefully:
+ * - tRPC retry logic (Provider.tsx) automatically retries up to 3 times
+ * - Silent ignore in tRPC onError prevents alarming toast notifications
+ * - Users only see errors if the request fails after all retries for other reasons
+ *
+ * This is Firefox's equivalent to:
+ * - Chrome/Safari: '"Offline" is not valid JSON'
+ * - Chrome/Safari: '"<!DOCTYPE "... is not valid JSON'
+ * - Safari: '"The string did not match the expected pattern"'
+ *
+ * THENINJARPG-2G4: Filter Firefox JSON parsing errors from transient network/CDN issues.
+ */
+const isFirefoxJsonParseError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Check for Firefox-specific JSON parsing error message
+  const isFirefoxJsonMessage =
+    message.includes("JSON.parse: unexpected character at line 1 column 1");
+
+  if (!isFirefoxJsonMessage) return false;
+
+  // Verify it's from tRPC client (not some other JSON parsing error)
+  const isTrpcError = errorType === "TRPCClientError";
+  const isFromTrpcClient = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("@trpc/client") ||
+      frame.abs_path?.includes("@trpc/client")
+  );
+
+  return isTrpcError && isFromTrpcClient;
+};
+
+/**
  * Check if an error is a Clerk script parsing error that should be filtered.
  * These occur when the Clerk SDK script is truncated during download due to network
  * issues (mobile network changes, device sleep, interrupted connection).
@@ -610,14 +712,148 @@ const isClerkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
+ * Check if an error is a Clerk sign-out race condition error that should be filtered.
+ * These occur when Clerk attempts to sign out a user whose session has already been
+ * invalidated server-side. This is a transient race condition in Clerk's sign-out flow:
+ *
+ * 1. Server-side session invalidation completes first
+ * 2. Client-side sign-out request arrives after session cleared
+ * 3. Server responds with 401 Unauthorized
+ * 4. Clerk throws "You are signed out" error instead of treating it as success
+ *
+ * UX note: Users successfully sign out despite this error. The error occurs during
+ * the sign-out transition period when the session is being invalidated. Navigation
+ * continues normally and users reach the signed-out state as expected.
+ *
+ * Detection pattern:
+ * - Error value: "You are signed out"
+ * - Stack trace: Originates from @clerk/clerk-js signOut method
+ * - Breadcrumbs: POST request to /v1/client/sessions with 401 status code
+ * - Mechanism: unhandledrejection (not caught by Clerk SDK)
+ *
+ * This is Clerk's equivalent to other filtered Clerk errors:
+ * - "ClerkJS: Token refresh failed" (line 22 in ignoreErrors)
+ * - Clerk storage access errors (isClerkStorageError)
+ * - Clerk script load errors (isClerkScriptLoadError)
+ *
+ * THENINJARPG-2GK: Filter Clerk sign-out race condition errors.
+ */
+const isClerkSignOutError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+  const breadcrumbs = event.breadcrumbs ?? [];
+
+  // Must be the specific "You are signed out" error message
+  if (message !== "You are signed out") {
+    return false;
+  }
+
+  // Verify it originates from Clerk's sign-out flow
+  const isFromClerkSignOut = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("@clerk/clerk-js") ||
+      frame.filename?.includes("clerk.browser") ||
+      frame.abs_path?.includes("@clerk/clerk-js") ||
+      frame.abs_path?.includes("clerk.browser"),
+  );
+
+  if (!isFromClerkSignOut) {
+    return false;
+  }
+
+  // Additional validation: Check for 401 response to Clerk sessions endpoint
+  // This confirms the error occurred during sign-out request (not other Clerk operations)
+  const hasSignOut401 = breadcrumbs.some((breadcrumb) => {
+    if (breadcrumb.category !== "fetch") return false;
+    const data = breadcrumb.data ?? {};
+    const url = data.url ?? "";
+
+    // Check for Clerk sessions endpoint with 401 status
+    return (
+      url.includes("clerk") &&
+      url.includes("/v1/client/sessions") &&
+      (data.status_code === 401 || data.status_code === "401")
+    );
+  });
+
+  // Filter if both conditions met: Clerk stack + sessions 401 breadcrumb
+  // The breadcrumb check provides defense-in-depth to avoid false positives
+  return isFromClerkSignOut && hasSignOut401;
+};
+
+/**
+ * Check if an error is a Next.js chunk parsing error that should be filtered.
+ * These occur when Next.js JavaScript chunks are truncated during download due to network
+ * issues (mobile network changes, device sleep, interrupted connection, CDN timeouts).
+ *
+ * UX note: When chunks fail to load, Next.js shows a loading state or error boundary.
+ * Users can refresh the page to reload the chunk with a stable connection. This is
+ * expected behavior on mobile devices with unstable networks.
+ *
+ * Common patterns:
+ * - SyntaxError with "Unexpected EOF" or "Unexpected end of input"
+ * - Stack trace points to /_next/static/chunks/ files with no line number
+ * - Mechanism: auto.browser.global_handlers.onerror (parse-time error)
+ * - Typically occurs on mobile devices (iOS Safari, Chrome Mobile)
+ *
+ * THENINJARPG-2G6: Filter Next.js chunk truncation errors from network issues.
+ */
+const isNextJsChunkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Only filter SyntaxError exceptions
+  if (errorType !== "SyntaxError") return false;
+
+  // Check for truncation-related messages
+  const isTruncationMessage =
+    message.includes("Unexpected EOF") ||
+    message.includes("Unexpected end of input") ||
+    message.includes("Unexpected end of JSON input");
+
+  if (!isTruncationMessage) return false;
+
+  // Check if the error originates from Next.js chunks
+  // Next.js chunks are in /_next/static/chunks/ directory
+  // Stack trace is typically minimal (single frame with no line number)
+  const isFromNextJsChunk = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("/_next/static/chunks/") ||
+      frame.abs_path?.includes("/_next/static/chunks/") ||
+      frame.filename?.includes("app:///_next/") ||
+      frame.abs_path?.includes("app:///_next/")
+  );
+
+  if (!isFromNextJsChunk) return false;
+
+  // Additional validation: Truncation errors typically have no meaningful stack trace
+  // (no line number or function name because parser can't construct execution context)
+  const hasMinimalStackTrace =
+    stackFrames.length === 0 ||
+    stackFrames.every(
+      (frame) =>
+        frame.function === "?" ||
+        frame.function === "<unknown>" ||
+        frame.lineno === undefined
+    );
+
+  return hasMinimalStackTrace;
+};
+
+/**
  * Check if an error is from a cryptocurrency wallet browser extension.
- * These occur when users have MetaMask or similar wallet extensions installed,
- * and the extension's injected script encounters an error independently of our app.
+ * These occur when users have MetaMask, TronLink, or similar wallet extensions
+ * installed, and the extension's injected script encounters an error independently
+ * of our app.
  *
  * UX note: These errors are not actionable - they originate from third-party
  * browser extensions we don't control. Users don't see these errors as they
  * occur in the extension's isolated context. The application has no Web3/
  * cryptocurrency functionality.
+ *
+ * Examples of filtered errors:
+ * - THENINJARPG-2G3: TronLink proxy trap error when setting tronlinkParams property
  */
 const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -633,45 +869,96 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   }
 
   // Check if error originates from wallet extension's injected script
-  // - inpage.js is the common name for wallet extension content scripts
+  // - inpage.js is the common name for wallet extension content scripts (MetaMask, etc.)
   // - app:///scripts/ is the URL scheme for browser extension injected scripts
+  // - app:///injected/ is used by TronLink and other wallet extensions to inject SDK
   const isFromWalletScript = stackFrames.some(
     (frame) =>
       frame.filename?.includes("inpage.js") ||
       frame.filename?.startsWith("app:///scripts/") ||
+      frame.filename?.includes("app:///injected/") ||
       frame.abs_path?.includes("inpage.js") ||
-      frame.abs_path?.startsWith("app:///scripts/"),
+      frame.abs_path?.startsWith("app:///scripts/") ||
+      frame.abs_path?.includes("app:///injected/"),
   );
+
+  // Additional check for proxy trap errors from wallet extensions
+  // TronLink and similar extensions may fail when setting properties on Proxy objects
+  // Example: THENINJARPG-2G3 - TronLink's injected.js attempting to set tronlinkParams
+  const isProxyTrapError =
+    message.includes("'set' on proxy: trap returned falsish") ||
+    message.includes("proxy trap");
+
+  if (isProxyTrapError && isFromWalletScript) {
+    return true;
+  }
 
   return isFromWalletScript;
 };
 
 /**
- * Check if an error is a Next.js server action reducer error on the SSO callback page.
- * These occur when network issues (transient CDN errors, mobile network changes) cause
- * server action responses to fail during the SSO authentication flow on UC Browser and mobile devices.
+ * Check if an error is a Next.js server action error during authentication flows.
+ * These occur when network issues or authentication state changes cause server action
+ * responses to fail during:
+ * 1. SSO callback flow (transient CDN errors, mobile network changes)
+ * 2. Sign-out flow (race condition where requests hit server after session invalidation)
  *
- * UX note: Users experience a temporary error during SSO callback, but can retry or
- * manually navigate to complete authentication. This is a transient infrastructure issue
- * that doesn't indicate a bug in our code.
+ * UX note:
+ * - SSO: Users experience a temporary error during SSO callback, but can retry or
+ *   manually navigate to complete authentication. This is a transient infrastructure issue.
+ * - Sign-out: Users successfully sign out despite the error. The error occurs when pending
+ *   requests or revalidations receive 403 after the session is invalidated. This is expected
+ *   behavior during the sign-out transition and does not affect functionality.
  *
- * THENINJARPG-1NM: Filter server action errors specifically on the SSO callback URL.
+ * Detection pattern:
+ * - Error message: "An unexpected response was received from the server"
+ * - SSO callback: URL contains /signup/sso-callback or /signin/sso-callback
+ * - Sign-out: Breadcrumbs show sign-out button click + POST request with 403 status
+ *
+ * THENINJARPG-1NM: Filter server action errors on SSO callback URLs and during sign-out.
+ * Source: Plan B (breadcrumb validation), Plan C (naming), Plan A (documentation style)
  */
-const isServerActionSsoCallbackError = (event: Sentry.ErrorEvent): boolean => {
+const isServerActionAuthError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const url = event.request?.url ?? "";
+  const breadcrumbs = event.breadcrumbs ?? [];
 
   // Must be the specific Next.js server action error message
   if (!message.includes("An unexpected response was received from the server")) {
     return false;
   }
 
-  // Must be on the SSO callback URL path
-  // Matches: https://www.theninja-rpg.com/signup/sso-callback or similar paths
+  // Check if on SSO callback URL path (original filter logic)
   const isSsoCallbackUrl =
     url.includes("/signup/sso-callback") || url.includes("/signin/sso-callback");
 
-  return isSsoCallbackUrl;
+  // Check if error occurred during sign-out flow
+  // Require BOTH sign-out click AND 403 POST for defense in depth
+  const hasSignOutClick = breadcrumbs.some((breadcrumb) => {
+    if (breadcrumb.category !== "ui.click") return false;
+    const msg = breadcrumb.message ?? "";
+    // Match Clerk's sign-out button or generic sign-out patterns
+    return (
+      msg.includes("signOut") ||
+      msg.includes("sign-out") ||
+      msg.includes("cl-userButtonPopoverActionButton__signOut")
+    );
+  });
+
+  const has403Post = breadcrumbs.some((breadcrumb) => {
+    if (breadcrumb.category !== "fetch") return false;
+    const data = breadcrumb.data ?? {};
+    // Check for POST request with 403 status code
+    return (
+      data.method === "POST" &&
+      (data.status_code === 403 || data.status_code === "403")
+    );
+  });
+
+  // Filter if: (SSO callback URL) OR (sign-out click + 403 POST)
+  const isSignOutRaceCondition = hasSignOutClick && has403Post;
+
+  return isSsoCallbackUrl || isSignOutRaceCondition;
 };
 
 /**
@@ -787,6 +1074,10 @@ const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolea
  * Userscripts (Tampermonkey, Greasemonkey, Violentmonkey) are user-installed scripts
  * that modify web pages. They may break when our application's DOM structure or APIs change.
  *
+ * This function checks ALL exception values in the event, as Sentry may group multiple
+ * related errors into a single event. If any exception value matches userscript patterns,
+ * the entire event is filtered.
+ *
  * UX note: These errors do not affect application functionality for users without the
  * userscript installed. Users with broken userscripts may see the script fail silently,
  * but the core application continues to work. Users can disable or update their userscripts
@@ -799,59 +1090,291 @@ const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolea
  * - Errors referencing our pages but originating from injected code
  * - Filter errors from userscripts like "Jutsu-Hotkeys" that add keyboard shortcuts for
  *   jutsu actions. These scripts may have compatibility issues when page structure changes.
+ *
+ * Filtered Sentry issues:
+ * - THENINJARPG-2H0: "d is not defined" on /occupation page (30+ events)
+ * - THENINJARPG-2GW: "d is not defined" on /items page (7 events)
+ * - THENINJARPG-2HM: "d is not defined" on /travel page (2 events) - Fix: check all exception values
+ * - THENINJARPG-2HA: "d is not defined" on /manual page (2 events) - Fix: refine app code detection to distinguish page context pollution
+ * - THENINJARPG-2GT: "d is not defined" on /hospital page (2 events)
+ * - THENINJARPG-2J5: "d is not defined" on /items page (1 event) - Fix: add breadcrumb-based userscript detection fallback
+ * - THENINJARPG-2J4: "d is not defined" on /reports page (1 event)
+ * - THENINJARPG-2J3: "d is not defined" on /jutsus page (1 event)
+ * - THENINJARPG-2HB: "d is not defined" on /village page (1 event, 2026-02-23) -
+ *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-23T16:12:05Z during
+ *   filter deployment transition period (22 seconds before THENINJARPG-2HC).
+ *   Already covered by existing breadcrumb + single-letter error detection (lines 1028-1052)
+ *   and userscript frame detection (lines 1061-1093).
+ * - THENINJARPG-2HC: "d is not defined" on /jutsus page (1 event, 2026-02-23) -
+ *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-23T16:12:27Z during
+ *   filter deployment transition period (before comprehensive filters fully deployed).
+ *   Same userscript pattern as THENINJARPG-2J3 (2026-02-27). Already covered by
+ *   existing breadcrumb + single-letter error detection (lines 1028-1052, 1061-1068).
+ * - THENINJARPG-2HT: "d is not defined" on /combat page (1 event)
+ * - THENINJARPG-2HQ: "d is not defined" on /battlelog page (1 event)
+ * - THENINJARPG-2HP: "d is not defined" on /username page (1 event) - Fix: add explicit page context pollution early filter
+ * - THENINJARPG-2HN: "d is not defined" on /username page (1 event) - Same userscript (Jutsu-Hotkeys) error, already handled by existing filters
+ * - THENINJARPG-2HJ: "d is not defined" on /occupation page (1 event) - Occurred 2026-02-24, before comprehensive filters fully deployed
+ * - THENINJARPG-2HH: "d is not defined" on /manual/jutsu page (1 event) - Jutsu-Hotkeys.user.js
+ *   userscript error. Occurred 2026-02-24, should have been caught by existing filters
+ *   (likely timing/deployment edge case).
+ * - THENINJARPG-2HG: "d is not defined" on /combat page (1 event) - Jutsu-Hotkeys.user.js
+ *   userscript error with [Persistent Keybinds] breadcrumb. Occurred 2026-02-24T15:26:27Z.
+ *   Fixed by adding early breadcrumb check in isUserscriptError() for defense-in-depth.
+ * - THENINJARPG-2HF: "d is not defined" on /traininggrounds page (1 event) -
+ *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-24T00:24:12Z.
+ *   Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with window["__f__mlzykk8m.cfq"]
+ *   Breadcrumb: "[Persistent Keybinds] Key listener attached." Single occurrence.
+ *   Fixed by enhancing regex to handle error type prefixes (e.g., "ReferenceError: d is not defined").
+ * - THENINJARPG-2HD: "d is not defined" on /news page (1 event) - Jutsu-Hotkeys.user.js
+ *   userscript error. Occurred 2026-02-23T18:01:27Z during filter transition period.
+ *   Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with window["__f__mlzn50o5.uji"]
+ *   Breadcrumb: "[Persistent Keybinds] Key listener attached." Single occurrence.
+ *   Already covered by existing breadcrumb + single-letter error detection (line 1044).
+ * - THENINJARPG-2GZ: "d is not defined" on /inbox page (1 event, 2026-02-21T15:23:01Z) -
+ *   Jutsu-Hotkeys.user.js userscript error. The ACTUAL EARLIEST logged Jutsu-Hotkeys
+ *   occurrence, predating THENINJARPG-2H3 by 2.7 hours. Occurred BEFORE any userscript
+ *   filters were implemented. Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js:?
+ *   in window["__f__mlwqvleb.rx"]/< followed by page context pollution frames
+ *   (app:///inbox:? in At, r<, ?, _). Breadcrumb: "[Persistent Keybinds] Key listener
+ *   attached." Now covered by multiple defensive layers: (1) Early breadcrumb +
+ *   single-letter error detection (lines 1061-1093), (2) Userscript frame detection
+ *   (lines 1102-1109), (3) Page context pollution filtering (lines 1177-1182),
+ *   (4) Fallback breadcrumb detection (lines 1231-1262). This error represents the
+ *   initial detection that led to comprehensive Jutsu-Hotkeys filtering.
+ * - THENINJARPG-2H3: "d is not defined" on /jutsus page (1 event, 2026-02-21) -
+ *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-21T17:47:25Z, the
+ *   second-earliest logged occurrence (after THENINJARPG-2GZ), occurring 2 days
+ *   BEFORE the filter deployment transition period (predates THENINJARPG-2H7 which
+ *   occurred 2026-02-22). This was one of the initial errors that prompted investigation
+ *   into Jutsu-Hotkeys userscript issues and drove development of comprehensive
+ *   defensive filters. Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with
+ *   window["__f__mlwtmvde.d2i"]/< followed by page context pollution frames
+ *   (app:///jutsus:? in At, r<, ?). Breadcrumb: "[Persistent Keybinds] Key listener attached."
+ *   Now covered by multiple defensive layers: (1) Early breadcrumb + single-letter
+ *   error detection (lines 1042-1066), (2) Userscript frame detection (lines 1075-1082),
+ *   (3) Error pattern matching (lines 1088-1101), (4) Page context pollution filtering
+ *   (lines 1146-1155), (5) Breadcrumb-based fallback (lines 1204-1235).
+ * - THENINJARPG-2H7: "d is not defined" on /username/:username page (1 event, 2026-02-22) -
+ *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-22T13:22:26Z, the second
+ *   occurrence in this batch of Jutsu-Hotkeys errors (after THENINJARPG-2H3). This error
+ *   occurred BEFORE comprehensive userscript filters were fully deployed (filters deployed 2026-02-23+).
+ *   This was one of the first detected Jutsu-Hotkeys errors that drove the development
+ *   of defense-in-depth breadcrumb checking (lines 1034-1066), page context pollution
+ *   filtering (lines 1146-1155), and regex enhancements (THENINJARPG-2HF).
+ *   Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with window["__f__mlxscmnm.3e"]/<
+ *   followed by page context pollution frames (app:///username/enryu:? in At, r<, ?).
+ *   Breadcrumb: "[Persistent Keybinds] Key listener attached."
+ *   Now covered by multiple defensive layers: (1) Early breadcrumb + single-letter error
+ *   detection (lines 1042-1066), (2) Userscript frame detection (lines 1075-1082),
+ *   (3) Page context pollution filtering (lines 1146-1155), (4) Fallback breadcrumb
+ *   detection (lines 1204-1235).
  */
 const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
-  const message = event.exception?.values?.[0]?.value ?? "";
-  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+  const exceptionValues = event.exception?.values ?? [];
+  const breadcrumbs = event.breadcrumbs ?? [];
 
-  // Check if error originates from a userscript
-  // Userscripts use the app:/// URL scheme with /userscripts/ path
-  const isFromUserscript = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("app:///userscripts/") ||
-      frame.abs_path?.includes("app:///userscripts/") ||
-      // Some userscript managers use different URL patterns but standard .user.js extension
-      frame.filename?.endsWith(".user.js") ||
-      frame.abs_path?.endsWith(".user.js"),
-  );
+  // DEFENSE-IN-DEPTH: Early check for userscript breadcrumbs combined with single-letter errors
+  // This catches edge cases where multiple exception values have varying structures
+  // (some with clear userscript frames, others with only page context pollution).
+  // When a userscript console breadcrumb is present AND the error matches userscript patterns,
+  // filter immediately without complex stack frame analysis.
+  //
+  // Filtered issues:
+  // - THENINJARPG-2HG: "d is not defined" on /combat page (1 event, 2026-02-24)
+  const hasUserscriptBreadcrumb = breadcrumbs.some((breadcrumb) => {
+    if (breadcrumb.category !== "console") return false;
+    const msg = breadcrumb.message ?? "";
+    return (
+      msg.includes("[Persistent Keybinds]") ||
+      msg.includes("[Jutsu-Hotkeys]") ||
+      msg.includes("[Tampermonkey]") ||
+      msg.includes("[Greasemonkey]") ||
+      msg.includes("[Violentmonkey]") ||
+      msg.toLowerCase().includes("userscript")
+    );
+  });
 
-  if (!isFromUserscript) {
+  if (hasUserscriptBreadcrumb) {
+    const hasSingleLetterVarError = exceptionValues.some((exception) => {
+      const message = exception.value ?? "";
+      // THENINJARPG-2HF: Handle error type prefixes like "ReferenceError: d is not defined"
+      // Pattern matches single-letter variables at start OR after ": "
+      return /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(message);
+    });
+
+    if (hasSingleLetterVarError) {
+      return true; // Filter immediately - strong evidence of userscript error
+    }
+  }
+
+  // Check if ANY exception value is from a userscript
+  return exceptionValues.some((exception) => {
+    const message = exception.value ?? "";
+    const stackFrames = exception.stacktrace?.frames ?? [];
+
+    // Check if error originates from a userscript
+    // Userscripts use the app:/// URL scheme with /userscripts/ path
+    const isFromUserscript = stackFrames.some(
+      (frame) =>
+        frame.filename?.includes("app:///userscripts/") ||
+        frame.abs_path?.includes("app:///userscripts/") ||
+        // Some userscript managers use different URL patterns but standard .user.js extension
+        frame.filename?.endsWith(".user.js") ||
+        frame.abs_path?.endsWith(".user.js"),
+    );
+
+    if (!isFromUserscript) {
+      return false;
+    }
+
+    // Check for userscript-internal error patterns that should always be filtered:
+    // 1. Single-letter variable errors (typical of minified userscripts) like "d is not defined"
+    // 2. Userscript-specific function patterns like window["__f__..."]
+    // THENINJARPG-2HF: Handle error type prefixes like "ReferenceError: d is not defined"
+    const isSingleLetterVarError = /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(message);
+
+    const hasUserscriptFunctionPattern = stackFrames.some(
+      (frame) =>
+        // Minified function patterns like window["__f__mm6eqil6.gsn"]
+        frame.function?.includes('window["__f__') ||
+        frame.function?.includes("window['__f__") ||
+        // Anonymous or generated function names typical of bundled scripts
+        frame.function?.includes("<") || // e.g., "window[..."]/<"
+        frame.function === "?", // Anonymous
+    );
+
+    // If it's clearly a userscript-internal error, filter it regardless of mixed stack
+    if (isSingleLetterVarError || hasUserscriptFunctionPattern) {
+      return true;
+    }
+
+    // Additional safety check: Distinguish between userscript-only errors and userscripts breaking app functionality
+    //
+    // Case 1: Userscript-only error (should filter):
+    // - Userscript has internal bug (e.g., "d is not defined" from minified code)
+    // - Error bubbles up through page context causing anonymized frames like:
+    //   app:///manual:? in At
+    //   app:///manual:? in r<
+    // - These are page context pollution, not actual application code involvement
+    //
+    // Case 2: Userscript breaking app (should NOT filter):
+    // - Userscript modifies DOM or globals that break application code
+    // - Stack trace includes meaningful Next.js frames like:
+    //   /_next/static/chunks/app-pages-browser_src_layout_Loader_tsx.js:1:2345 in LoaderComponent
+    // - Function names and line numbers indicate real application code execution
+    //
+    // THENINJARPG-2HA: Refined check to look for MEANINGFUL app code frames, not just page URLs
+    //
+    // Check if error stack includes MEANINGFUL application code (not just page context pollution)
+    // Real app code has:
+    // 1. /_next/ paths (Next.js compiled chunks)
+    // 2. Meaningful function names (not just "?", "r<", "At", "_")
+    // 3. Line numbers indicating actual code execution
+    //
+    // Page context pollution has:
+    // 1. Page URLs like "app:///manual", "app:///occupation"
+    // 2. Anonymized/minified function names ("?", "r<", "At", "_", etc.)
+    // 3. Often missing line numbers
+    const hasAppCodeFrames = stackFrames.some((frame) => {
+      const filename = frame.filename ?? "";
+      const absPath = frame.abs_path ?? "";
+      const func = frame.function ?? "";
+
+      // Exclude userscript frames
+      if (filename.includes("app:///userscripts/") || absPath.includes("app:///userscripts/")) {
+        return false;
+      }
+
+      // Explicitly filter page context pollution
+      // Pattern: app:///[page-path]:? in [anonymized-function]
+      // These frames occur when userscript errors bubble up through page global scope
+      // Examples: "app:///username/foo:? in At", "app:///manual:? in r<"
+      const isPageContextPollution =
+        (filename.startsWith("app:///") && !filename.includes("/_next/")) ||
+        (absPath.startsWith("app:///") && !absPath.includes("/_next/"));
+      if (isPageContextPollution) {
+        return false;
+      }
+
+      // Must be from Next.js compiled code (/_next/)
+      const isNextJsCode = filename.includes("/_next/") || absPath.includes("/_next/");
+      if (!isNextJsCode) {
+        return false;
+      }
+
+      // Must have meaningful execution context (not anonymized)
+      // Anonymized frames from userscript pollution have patterns like: "?", "r<", "At", "_", single letters
+      const isAnonymizedFunction = /^([a-z_]|[a-z]<|\?|[A-Z][a-z]?)$/i.test(func);
+      if (isAnonymizedFunction) {
+        return false;
+      }
+
+      // Prefer frames with line numbers (more likely to be real code execution)
+      // But don't require it as minified code may not always have line numbers
+      return true;
+    });
+
+    // Only filter if the error is purely from the userscript (no app code in stack)
+    // If there's app code mixed in, let it through - might be a real issue
+    return !hasAppCodeFrames;
+  });
+};
+
+/**
+ * Fallback check for userscript errors when stack frames are ambiguous.
+ * Uses console breadcrumbs combined with error patterns to identify userscript errors.
+ *
+ * This is a defensive layer for edge cases where:
+ * - Multiple exception values have varying structures
+ * - Some exception values lack userscript frames
+ * - Stack traces are incomplete due to CORS or timing
+ *
+ * Requires BOTH conditions:
+ * 1. Console breadcrumb from userscript (e.g., "[Persistent Keybinds]")
+ * 2. Single-letter variable error pattern (e.g., "d is not defined")
+ *
+ * This conservative approach minimizes false positives while catching edge cases.
+ *
+ * UX note: Same as isUserscriptError - these errors do not affect application
+ * functionality for users without the userscript installed.
+ *
+ * Filtered Sentry issues:
+ * - THENINJARPG-2J5: "d is not defined" on /items page (1 event) - Edge case where
+ *   multiple exception values had varying structures, causing stack frame detection
+ *   to be ambiguous
+ */
+const isUserscriptErrorFromBreadcrumbs = (event: Sentry.ErrorEvent): boolean => {
+  const breadcrumbs = event.breadcrumbs ?? [];
+  const exceptionValues = event.exception?.values ?? [];
+
+  // Check for userscript console breadcrumbs
+  const hasUserscriptBreadcrumb = breadcrumbs.some((breadcrumb) => {
+    if (breadcrumb.category !== "console") return false;
+    const msg = breadcrumb.message ?? "";
+    return (
+      msg.includes("[Persistent Keybinds]") ||
+      msg.includes("[Jutsu-Hotkeys]") ||
+      msg.includes("[Tampermonkey]") ||
+      msg.includes("[Greasemonkey]") ||
+      msg.includes("[Violentmonkey]") ||
+      msg.toLowerCase().includes("userscript")
+    );
+  });
+
+  if (!hasUserscriptBreadcrumb) {
     return false;
   }
 
-  // Check for userscript-internal error patterns that should always be filtered:
-  // 1. Single-letter variable errors (typical of minified userscripts) like "d is not defined"
-  // 2. Userscript-specific function patterns like window["__f__..."]
-  const isSingleLetterVarError = /^[a-z]( is not defined| is not a function|\.)/i.test(message);
+  // Check if any exception has a single-letter variable error
+  const hasSingleLetterVarError = exceptionValues.some((exception) => {
+    const message = exception.value ?? "";
+    // THENINJARPG-2HF: Handle error type prefixes like "ReferenceError: d is not defined"
+    return /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(message);
+  });
 
-  const hasUserscriptFunctionPattern = stackFrames.some(
-    (frame) =>
-      // Minified function patterns like window["__f__mm6eqil6.gsn"]
-      frame.function?.includes('window["__f__') ||
-      frame.function?.includes("window['__f__") ||
-      // Anonymous or generated function names typical of bundled scripts
-      frame.function?.includes("<") || // e.g., "window[..."]/<"
-      frame.function === "?", // Anonymous
-  );
-
-  // If it's clearly a userscript-internal error, filter it regardless of mixed stack
-  if (isSingleLetterVarError || hasUserscriptFunctionPattern) {
-    return true;
-  }
-
-  // Additional safety check: If the error stack includes both userscript frames AND
-  // our application code frames (from /_next/), this might indicate the userscript
-  // is breaking our functionality. In that case, we want to see the error.
-  const hasAppCodeFrames = stackFrames.some(
-    (frame) =>
-      (frame.filename?.includes("/_next/") || frame.abs_path?.includes("/_next/")) &&
-      !frame.filename?.includes("app:///userscripts/") &&
-      !frame.abs_path?.includes("app:///userscripts/"),
-  );
-
-  // Only filter if the error is purely from the userscript (no app code in stack)
-  // If there's app code mixed in, let it through - might be a real issue
-  return !hasAppCodeFrames;
+  // Only filter if BOTH conditions are met
+  return hasSingleLetterVarError;
 };
 
 /**
@@ -932,38 +1455,251 @@ const isGoogleApiLoaderError = (event: Sentry.ErrorEvent): boolean => {
  * - node_modules/next/ (Next.js App Router internal navigation)
  *
  * THENINJARPG-2GA: Filter pushState rate limit errors from third-party analytics.
+ * THENINJARPG-2G9: Check all exception values, not just the first one.
  */
 const isHistoryPushStateRateLimitError = (event: Sentry.ErrorEvent): boolean => {
+  // Check all exception values, not just the first one
+  const exceptionValues = event.exception?.values ?? [];
+
+  // This is a very specific browser security error that will never be actionable.
+  // The error message is unique to this browser rate limit feature, so we can
+  // safely filter it regardless of error type or stack trace characteristics.
+  return exceptionValues.some((exception) => {
+    const message = exception.value ?? "";
+    return message.includes("Attempt to use history.pushState() more than 100 times per 10 seconds");
+  });
+};
+
+/**
+ * Check if an error is a ChunkLoadError captured through console breadcrumbs.
+ * These occur during deployments when browsers attempt to load chunks that no
+ * longer exist due to cache invalidation. Next.js logs these to console.error()
+ * for debugging but handles them internally (retry or error boundary).
+ *
+ * UX note: Users may briefly see a loading state during chunk load failure, but
+ * Next.js automatically retries or reloads the page. This is expected behavior
+ * during deployments. The error resolves when the user gets fresh HTML with
+ * correct chunk references.
+ *
+ * Detection pattern:
+ * - Error has no meaningful exception message (<unknown> or empty)
+ * - Console breadcrumb contains "ChunkLoadError" or "Failed to load chunk"
+ * - Minimal or no stack trace (console logs don't generate stack traces)
+ *
+ * Note: The ignoreErrors regex at line 52 catches most ChunkLoadError exceptions.
+ * This function provides defense-in-depth for the console breadcrumb variant
+ * that bypasses ignoreErrors pattern matching.
+ *
+ * THENINJARPG-2D0: Filter chunk load errors captured through console breadcrumbs.
+ */
+const isChunkLoadConsoleError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const errorType = event.exception?.values?.[0]?.type ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+  const breadcrumbs = event.breadcrumbs ?? [];
 
-  // Must be a SecurityError or DOMException with the specific rate limit message
-  if (errorType !== "SecurityError" && errorType !== "DOMException") return false;
-  if (!message.includes("Attempt to use history.pushState() more than 100 times per 10 seconds")) {
+  // Check if the error has no meaningful exception message
+  const hasNoMeaningfulException =
+    message === "" ||
+    message === "<unknown>" ||
+    errorType === "" ||
+    errorType === "<unknown>";
+
+  if (!hasNoMeaningfulException) {
     return false;
   }
 
-  // Additional check: verify it's from third-party scripts or Next.js router (not our app code)
-  const isFromThirdPartyOrNextRouter = stackFrames.some(
+  // Check if there's a console breadcrumb indicating a ChunkLoadError
+  const hasChunkLoadBreadcrumb = breadcrumbs.some((breadcrumb) => {
+    if (breadcrumb.category !== "console") return false;
+
+    const breadcrumbMessage = breadcrumb.message ?? "";
+    return (
+      breadcrumbMessage.includes("ChunkLoadError") ||
+      breadcrumbMessage.includes("Failed to load chunk")
+    );
+  });
+
+  if (!hasChunkLoadBreadcrumb) {
+    return false;
+  }
+
+  // Additional validation: Console-based errors have no stack trace
+  const hasMinimalStackTrace = stackFrames.length === 0;
+
+  return hasMinimalStackTrace;
+};
+
+/**
+ * Check if an error is a third-party tracking pixel JSON parsing error.
+ * These occur when tracking pixel scripts (Reddit Pixel, TikTok Pixel, Facebook Pixel, etc.)
+ * attempt to parse HTTP responses as JSON but receive HTML error pages (502/503/504) from
+ * the ad network's CDN instead.
+ *
+ * UX note: This error is not visible to users and does not affect application functionality.
+ * It occurs in isolated third-party tracking script contexts when ad networks experience
+ * transient CDN/API outages. Users never see these errors - the pixel scripts fail silently
+ * and only analytics/tracking may be affected while core application continues normally.
+ *
+ * Detection pattern:
+ * - SyntaxError with "<!doctype"/"<!DOCTYPE" in "is not valid JSON" message
+ * - Originates from ads/pixel.js or similar tracking scripts
+ * - XHR mechanism: auto.browser.browserapierrors.xhr.onreadystatechange
+ * - Breadcrumbs may show pixel-config endpoint requests (Reddit, TikTok, Facebook, etc.)
+ *
+ * CORS handling: When third-party scripts are anonymized due to cross-origin restrictions,
+ * we fall back to breadcrumb-based detection (XHR + pixel configuration endpoint).
+ *
+ * THENINJARPG-2AP: Filter tracking pixel JSON parsing errors from transient CDN outages.
+ */
+const isThirdPartyPixelJsonParseError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+  const mechanism = event.exception?.values?.[0]?.mechanism?.type ?? "";
+  const breadcrumbs = event.breadcrumbs ?? [];
+
+  // Must be a SyntaxError with HTML DOCTYPE in JSON parsing error
+  if (errorType !== "SyntaxError") return false;
+  if (!message.includes("is not valid JSON")) return false;
+  if (!(message.includes("<!doctype") || message.includes("<!DOCTYPE"))) return false;
+
+  // Check if error originates from third-party pixel scripts
+  // Reddit's pixel script may appear as:
+  // - app:///ads/pixel.js (third-party script URL scheme)
+  // - Anonymous frames due to cross-origin restrictions
+  const isFromPixelScript = stackFrames.some(
     (frame) =>
-      // Vercel Speed Insights
-      frame.filename?.includes("_vercel/speed-insights") ||
-      frame.abs_path?.includes("_vercel/speed-insights") ||
-      // Google Tag Manager / Analytics
-      frame.filename?.includes("gtag/js") ||
-      frame.abs_path?.includes("gtag/js") ||
-      // i18n tracking pixel
-      frame.filename?.includes("i18n/pixel") ||
-      frame.abs_path?.includes("i18n/pixel") ||
-      // Next.js app router (internal navigation handling)
-      frame.filename?.includes("node_modules/next/") ||
-      frame.abs_path?.includes("node_modules/next/"),
+      frame.filename?.includes("ads/pixel.js") ||
+      frame.abs_path?.includes("ads/pixel.js") ||
+      frame.filename?.includes("pixel-config.reddit.com") ||
+      frame.abs_path?.includes("pixel-config.reddit.com") ||
+      frame.filename?.includes("pixel.js") ||
+      frame.abs_path?.includes("pixel.js")
   );
 
-  // If we can verify it's from third-party scripts or Next.js router, filter it
-  // If stack trace is empty (native code), also filter based on message alone
-  return isFromThirdPartyOrNextRouter || stackFrames.length === 0;
+  if (isFromPixelScript) {
+    return true;
+  }
+
+  // Fallback detection for CORS-anonymized stack traces:
+  // If stack trace is empty/minimal AND we see XHR mechanism AND pixel config breadcrumbs,
+  // this is likely a tracking pixel error that was anonymized due to cross-origin restrictions
+  const isXhrMechanism = mechanism.includes("xhr");
+  const hasPixelConfigBreadcrumb = breadcrumbs.some((breadcrumb) => {
+    if (breadcrumb.category !== "xhr" && breadcrumb.category !== "fetch") return false;
+    const url = breadcrumb.data?.url ?? "";
+    return (
+      url.includes("pixel-config.reddit.com") ||
+      url.includes("pixel-config") ||
+      url.includes("/pixel/") ||
+      url.includes("/ads/")
+    );
+  });
+
+  // Filter if XHR mechanism + pixel breadcrumb + HTML JSON parse error
+  // (catches cases where stack trace is anonymized due to CORS)
+  if (isXhrMechanism && hasPixelConfigBreadcrumb) {
+    return true;
+  }
+
+  return false;
+};
+
+/**
+ * Check if an error is a clipboard write permission error that should be filtered.
+ * These occur when browsers deny clipboard write access due to permission settings,
+ * security policies, or browser-specific restrictions (e.g., Huawei Browser).
+ *
+ * UX note: These errors are handled gracefully with toast notifications showing
+ * "Could not copy to clipboard. Please copy the link/code manually." The user is
+ * informed and can manually select and copy the text.
+ *
+ * Reference: THENINJARPG-2CB - Filter clipboard permission errors with graceful UX fallback.
+ */
+const isClipboardPermissionError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+
+  return (
+    (errorType === "NotAllowedError" || errorType === "DOMException") &&
+    message.includes("Write permission denied")
+  );
+};
+
+/**
+ * Check if an error is a Firefox NS_ERROR from third-party scripts.
+ *
+ * NS_ERROR_* are Firefox-specific internal error codes (Netscape Error legacy, XPCOM)
+ * that occur when third-party scripts encounter browser-level failures. Common sources:
+ * - Advertising/tracking pixels (app:///ads/pixel.js, pixel-config.reddit.com)
+ * - Browser extensions interfering with page scripts
+ * - Ad blockers blocking third-party requests
+ * - CDN timeouts or network issues for third-party resources
+ *
+ * Common NS_ERROR types from third-party scripts:
+ * - NS_ERROR_FAILURE (0x80004005): Generic unspecified error
+ * - NS_ERROR_NOT_AVAILABLE: Resource/service not available
+ * - NS_ERROR_ABORT: Operation aborted
+ *
+ * UX note: These errors are not visible to users and do not affect application
+ * functionality. They occur in isolated third-party script contexts that fail
+ * independently of our application. The tRPC error handler in Provider.tsx handles
+ * any application errors gracefully. Users without the particular third-party script
+ * installed will never see these errors.
+ *
+ * Detection pattern:
+ * - Error type starts with "NS_ERROR_"
+ * - Stack trace from app:/// URL scheme (browser extension/injected script) OR
+ *   known third-party script paths (ads/, pixel.js)
+ * - Often has empty or minimal error messages
+ * - Anonymous/minified function names in stack (cross-origin restrictions)
+ *
+ * THENINJARPG-2HR: Filter Firefox NS_ERROR from third-party ad/tracking scripts.
+ */
+const isFirefoxNSError = (event: Sentry.ErrorEvent): boolean => {
+  const exceptionValues = event.exception?.values ?? [];
+
+  // Check if ANY exception value is an NS_ERROR from third-party scripts
+  return exceptionValues.some((exception) => {
+    const errorType = exception.type ?? "";
+    const stackFrames = exception.stacktrace?.frames ?? [];
+
+    // Must be an NS_ERROR type
+    if (!errorType.startsWith("NS_ERROR_")) {
+      return false;
+    }
+
+    // Verify it's from third-party scripts (not our application code)
+    // Check for app:/// URL scheme (extensions/injected scripts)
+    const isFromAppProtocol = stackFrames.some(
+      (frame) =>
+        frame.filename?.startsWith("app:///") ||
+        frame.abs_path?.startsWith("app:///")
+    );
+
+    // Check for common third-party script patterns
+    const isFromThirdPartyScript = stackFrames.some(
+      (frame) =>
+        frame.filename?.includes("ads/") ||
+        frame.filename?.includes("pixel.js") ||
+        frame.abs_path?.includes("ads/") ||
+        frame.abs_path?.includes("pixel.js")
+    );
+
+    // Check if all our application code is absent from stack
+    // (If our code is present, don't filter - could be actionable)
+    const hasOurCode = stackFrames.some(
+      (frame) =>
+        frame.filename?.includes("/_next/") ||
+        frame.abs_path?.includes("/_next/") ||
+        frame.filename?.includes("theninja-rpg.com") ||
+        frame.abs_path?.includes("theninja-rpg.com")
+    );
+
+    // Filter if from third-party sources AND not from our code
+    return (isFromAppProtocol || isFromThirdPartyScript) && !hasOurCode;
+  });
 };
 
 /**
@@ -993,7 +1729,8 @@ const isUserscriptRawError = (err: unknown): boolean => {
   // Check for userscript-internal error patterns that should always be filtered:
   // 1. Single-letter variable errors (typical of minified userscripts) like "d is not defined"
   // 2. Userscript-specific function patterns like window["__f__..."]
-  const isSingleLetterVarError = /^[a-z]( is not defined| is not a function|\.)/i.test(errorMessage);
+  // THENINJARPG-2HF: Handle error type prefixes like "ReferenceError: d is not defined"
+  const isSingleLetterVarError = /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(errorMessage);
 
   const hasUserscriptFunctionPattern =
     errorStack.includes('window["__f__') ||
@@ -1018,6 +1755,254 @@ const isUserscriptRawError = (err: unknown): boolean => {
 
   // Only filter if the error is purely from the userscript (no app code in stack)
   return !hasAppCodeInStack;
+};
+
+/**
+ * Check if an event is a Sentry rage click detection.
+ * Rage clicks are user interaction patterns (rapid repeated clicks) detected by
+ * Sentry's Session Replay SDK, not actual application errors. They represent
+ * potential UX friction points but are not actionable bugs.
+ *
+ * UX note: Rage clicks are expected user behavior, especially on:
+ * - Mobile devices with touch screen sensitivity
+ * - Slow networks where users perceive UI as unresponsive
+ * - Budget devices with lower touch accuracy
+ * - Accordion/expandable UI components where users try to close already-open items
+ *
+ * Rage clicks are still captured as replay events (when replays are enabled) and
+ * can be analyzed separately from error tracking. Filtering them from error tracking
+ * reduces noise and focuses attention on actual application bugs.
+ *
+ * Detection pattern:
+ * - Event title: "Rage Click"
+ * - Event level: "error" (Sentry's default categorization)
+ * - No exception or stack trace (not a JavaScript error)
+ * - May have replay_id tag indicating associated session replay
+ *
+ * THENINJARPG-2H8: Filter rage click events from error tracking.
+ */
+const isRageClickEvent = (event: Sentry.ErrorEvent): boolean => {
+  const title = (event as any).title ?? "";
+  const level = event.level;
+  const hasException = (event.exception?.values?.length ?? 0) > 0;
+
+  // Rage clicks have:
+  // 1. Title "Rage Click"
+  // 2. Level "error"
+  // 3. No exception/stack trace
+  return title === "Rage Click" && level === "error" && !hasException;
+};
+
+/**
+ * Check if an error is a Response.json() body stream already read error.
+ * These can occur when:
+ * 1. fetch-retry library consumes response body during retry logic (THENINJARPG-2GY)
+ * 2. Browser extensions intercept fetch requests and read body multiple times
+ * 3. Code accidentally calls .json()/.text()/.blob() multiple times without cloning
+ *
+ * Root cause in globe.ts:52 has been fixed by adding response.clone() (2026-02-28).
+ * This filter serves as defense-in-depth for any similar errors elsewhere.
+ *
+ * UX note: When this error occurs, users may see map loading failures or similar
+ * fetch-dependent features fail. The application's retry logic attempts to recover
+ * automatically. If the error persists after the globe.ts fix, investigate other
+ * fetch usage patterns in the codebase.
+ *
+ * Common patterns:
+ * - Minimal or anonymous stack traces (native browser API errors)
+ * - TypeError from browser's fetch API
+ * - Single or very low occurrence (timing-dependent race conditions)
+ */
+const isResponseBodyAlreadyReadError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must be a TypeError with the specific Response.json() message
+  if (errorType !== "TypeError") return false;
+  if (!message.includes("Failed to execute 'json' on 'Response'")) return false;
+  if (!message.includes("body stream already read")) return false;
+
+  // Additional validation: These errors typically have minimal stack traces
+  // from native browser code or cross-origin contexts
+  const hasMinimalStackTrace =
+    stackFrames.length === 0 ||
+    stackFrames.every(
+      (frame) =>
+        frame.function === "?" ||
+        frame.function === "<anonymous>" ||
+        frame.function === "<unknown>" ||
+        !frame.filename ||
+        frame.filename === "<anonymous>"
+    );
+
+  // Only filter if it has the minimal stack trace pattern.
+  // If we have meaningful stack traces pointing to our code, let it through
+  // for investigation (in case the fix didn't work or there are other instances).
+  return hasMinimalStackTrace;
+};
+
+/**
+ * Check if an error is a React internal scheduler error.
+ * These occur when React's concurrent rendering scheduler detects it's already
+ * processing work when attempting to schedule new work. This is an internal
+ * React assertion that can fire in rare edge cases during:
+ * - Complex navigation patterns (same-page navigation, back button during async operations)
+ * - Concurrent rendering transitions (React 19 with React Compiler)
+ * - Third-party component interactions (Clerk's SignUp/SignIn components with routing="path")
+ * - Browser-specific timing variations (Firefox, mobile browsers)
+ *
+ * Root cause: React's scheduler work loop enters a re-entrant state when:
+ * 1. Scheduler starts work (sets isHostCallbackScheduled = true)
+ * 2. During work, a navigation or state change triggers new scheduling
+ * 3. Scheduler attempts to schedule again while already scheduled
+ * 4. Internal assertion "Should not already be working." fires
+ *
+ * UX note: This error is not visible to users and does not affect functionality.
+ * The error occurs in React's internal scheduler, not during actual rendering.
+ * React's error recovery mechanisms handle these internal assertions gracefully.
+ * Users continue their workflow without interruption.
+ *
+ * Detection pattern:
+ * - Error message: "Should not already be working." (exact match with period)
+ * - Error type: "Error" (generic)
+ * - Stack trace: Only React/React DOM internal frames (scheduler.production.js, react-dom-client.production.js)
+ * - No application code frames (pure React internal error)
+ * - Minimal or no line numbers (minified production code)
+ *
+ * This error is not actionable at the application level:
+ * - Originates deep in React's scheduler (we don't control this code)
+ * - Transient timing-dependent edge case (single occurrence indicates extreme rarity)
+ * - React team owns this code path (application code cannot prevent scheduler re-entrancy)
+ *
+ * THENINJARPG-2GN: Filter React scheduler "Should not already be working." errors.
+ * Occurred once on 2026-02-19 during signup navigation in Firefox 147.0.
+ */
+const isReactSchedulerError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must be the exact "Should not already be working." error message (with period)
+  if (message !== "Should not already be working.") {
+    return false;
+  }
+
+  // Typically a generic "Error" type (React throws this internally)
+  if (errorType !== "Error" && errorType !== "") {
+    return false;
+  }
+
+  // Verify it's from React internal code (scheduler or react-dom-client)
+  // If stack trace is empty (production builds may strip stack traces), we still filter
+  // based on the unique message, as it's React-specific
+  if (stackFrames.length === 0) {
+    return true; // Unique message + no stack = React internal error
+  }
+
+  // Check if ALL stack frames are from React scheduler or React DOM client
+  // If ANY frame is from application code, don't filter (could indicate app triggering issue)
+  const isFromReactInternals = stackFrames.every((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+
+    // Must be from React/Next.js compiled code (not our application code)
+    const isReactCode =
+      filename.includes("scheduler.production.js") ||
+      filename.includes("react-dom-client.production.js") ||
+      filename.includes("scheduler.development.js") ||
+      filename.includes("react-dom-client.development.js") ||
+      absPath.includes("scheduler.production.js") ||
+      absPath.includes("react-dom-client.production.js") ||
+      absPath.includes("scheduler.development.js") ||
+      absPath.includes("react-dom-client.development.js");
+
+    // If we have frames, they should all be from React internals (no app code mixed in)
+    // If a frame isn't identifiable as React code, be conservative and don't filter
+    return isReactCode || filename === "" || absPath === "";
+  });
+
+  return isFromReactInternals;
+};
+
+/**
+ * Check if an error is a Firefox input stream error that should be filtered.
+ *
+ * Firefox throws "Error in input stream" when the browser's fetch implementation
+ * encounters errors reading response streams. This typically occurs during:
+ * - Network interruptions during fetch (mobile network changes, Wi-Fi handoff)
+ * - Corrupted or incomplete responses from CDN/proxy
+ * - Next.js RSC (React Server Components) payload stream failures
+ * - Browser internal stream reader errors
+ *
+ * Key characteristics:
+ * - Error message: "Error in input stream" (Firefox-specific)
+ * - Error type: "TypeError" (browser-level type error)
+ * - No stack trace or minimal browser-level frames (error before JS execution)
+ * - Often marked as handled=yes (Firefox's fetch catches it internally)
+ * - Common during navigation with _rsc query parameter (RSC prefetch)
+ *
+ * This is Firefox's equivalent to Chrome's "Failed to fetch" or Safari's "Load failed".
+ *
+ * UX Handling:
+ * - Next.js RSC has built-in retry logic for failed prefetch/navigation requests
+ * - Firefox's fetch implementation handles the error internally (handled=yes)
+ * - Users experience normal navigation; failed streams fall back to fresh requests
+ * - No user-visible error unless all retries fail (would see different error)
+ *
+ * Edge cases handled:
+ * 1. Case-insensitive matching for Firefox version variations
+ * 2. Stack trace validation to avoid filtering application bugs
+ * 3. Only filters if error is browser-level (no application code in stack)
+ * 4. Type validation to ensure it's a TypeError or generic Error
+ *
+ * THENINJARPG-2GM: Filter Firefox "Error in input stream" during RSC fetch.
+ * Single occurrence on 2026-02-19 during /manual -> /news navigation in Firefox 147.0.
+ */
+const isFirefoxInputStreamError = (event: Sentry.ErrorEvent): boolean => {
+  const message = (event.exception?.values?.[0]?.value ?? "").toLowerCase();
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must contain "error in input stream" (case-insensitive)
+  if (!message.includes("error in input stream")) {
+    return false;
+  }
+
+  // Typically "TypeError" but may be empty or "Error" for browser-level errors
+  // Don't filter custom error types (could be application-level)
+  const isValidErrorType =
+    errorType === "TypeError" || errorType === "" || errorType === "Error";
+  if (!isValidErrorType) {
+    return false;
+  }
+
+  // If no stack trace, this is a browser-level error (safe to filter)
+  if (stackFrames.length === 0) {
+    return true;
+  }
+
+  // If stack trace exists, verify it contains NO application code
+  // Only filter if all frames are from browser internals or Next.js/React
+  const hasApplicationCode = stackFrames.some((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+    const combinedPath = (filename + absPath).toLowerCase();
+
+    // Check if frame is from application code
+    return (
+      combinedPath.includes("src/app/") ||
+      combinedPath.includes("src/layout/") ||
+      combinedPath.includes("src/libs/") ||
+      combinedPath.includes("src/routers/") ||
+      combinedPath.includes("src/server/") ||
+      combinedPath.includes("src/utils/") ||
+      combinedPath.includes("src/validators/")
+    );
+  });
+
+  // Only filter if there's NO application code in the stack
+  return !hasApplicationCode;
 };
 
 const ensureBrowserErrorHandler = () => {

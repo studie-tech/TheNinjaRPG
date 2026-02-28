@@ -107,7 +107,6 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
         });
       }
     };
-    updateState();
     const interval = setInterval(updateState, 250);
     return () => {
       clearInterval(interval);

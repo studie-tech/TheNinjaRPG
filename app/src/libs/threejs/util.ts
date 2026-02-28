@@ -108,6 +108,66 @@ export const createSpriteMaterial = (
 };
 
 /**
+ * Dispose and clear all texture/material caches.
+ * Call this when unmounting 3D scenes to prevent memory leaks.
+ * IMPORTANT: Only call this when navigating away from the page or when WebGL context is lost.
+ */
+export const clearTextureCaches = () => {
+  // Dispose all cached textures
+  textureCache.forEach((texture) => {
+    try {
+      texture.dispose();
+    } catch {
+      // Ignore errors if texture already disposed
+    }
+  });
+  textureCache.clear();
+
+  // Dispose all cached materials
+  materialCache.forEach((material) => {
+    try {
+      material.dispose();
+    } catch {
+      // Ignore errors if material already disposed
+    }
+  });
+  materialCache.clear();
+
+  // Dispose status bar textures
+  statusBarTextureCache.forEach((texture) => {
+    try {
+      texture.dispose();
+    } catch {
+      // Ignore errors if texture already disposed
+    }
+  });
+  statusBarTextureCache.clear();
+
+  // Dispose shadow textures
+  shadowTextureCache.forEach((texture) => {
+    try {
+      texture.dispose();
+    } catch {
+      // Ignore errors if texture already disposed
+    }
+  });
+  shadowTextureCache.clear();
+
+  // Dispose border textures
+  borderTextureCache.forEach((texture) => {
+    try {
+      texture.dispose();
+    } catch {
+      // Ignore errors if texture already disposed
+    }
+  });
+  borderTextureCache.clear();
+
+  // Clear pending loads
+  pendingLoads.clear();
+};
+
+/**
  * Preload a set of texture URLs into memory so they are instantly available.
  */
 export const preloadTextures = async (paths: string[]) => {
@@ -225,6 +285,79 @@ export const createShadowTexture = (
   texture.needsUpdate = true;
   texture.colorSpace = SRGBColorSpace;
   shadowTextureCache.set(cacheKey, texture);
+  return texture;
+};
+
+// Performance optimization: Cache border textures for avatar sprites
+// Key format: "color-size"
+const borderTextureCache = new Map<string, Texture>();
+const MAX_BORDER_CACHE_SIZE = 20; // Prevent unbounded growth
+
+/**
+ * Create a procedural border texture - a solid circular border.
+ * PERFORMANCE OPTIMIZATION: Caches textures to avoid canvas redraws and re-uploads.
+ * @param borderColor - CSS color string for the border (e.g., "white", "red", "#FF0000")
+ * @param size - Canvas size in pixels (default 64)
+ * @returns A texture with the procedural border
+ */
+export const createBorderTexture = (borderColor: string, size = 64): Texture => {
+  const cacheKey = `${borderColor}-${size}`;
+  const cached = borderTextureCache.get(cacheKey);
+  if (cached) return cached;
+
+  // Implement cache size limit (FIFO eviction)
+  if (borderTextureCache.size >= MAX_BORDER_CACHE_SIZE) {
+    const firstKey = borderTextureCache.keys().next().value;
+    if (firstKey) {
+      const firstTexture = borderTextureCache.get(firstKey);
+      if (firstTexture) {
+        try {
+          firstTexture.dispose();
+        } catch {
+          // Ignore disposal errors
+        }
+      }
+      borderTextureCache.delete(firstKey);
+    }
+  }
+
+  // Create canvas and draw circular border
+  let texture: Texture;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d");
+
+    if (context) {
+      context.clearRect(0, 0, size, size);
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const radius = size / 2 - 2; // Leave padding for border
+
+      context.beginPath();
+      context.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      context.fillStyle = borderColor;
+      context.fill();
+    }
+
+    texture = new Texture(canvas);
+    texture.generateMipmaps = false;
+    texture.minFilter = LinearFilter;
+    texture.needsUpdate = true;
+    texture.colorSpace = SRGBColorSpace;
+
+    borderTextureCache.set(cacheKey, texture);
+  } catch (error) {
+    // If canvas creation fails (OOM), return empty texture as fallback
+    console.warn(
+      "Failed to create border texture, falling back to empty texture:",
+      error,
+    );
+    texture = new Texture();
+    texture.colorSpace = SRGBColorSpace;
+  }
+
   return texture;
 };
 

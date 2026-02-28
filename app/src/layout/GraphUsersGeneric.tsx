@@ -28,6 +28,12 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
   const localTheme = safeLocalStorageGetItem("theme");
   const cyRef = useRef<Cytoscape.Core | null>(null);
   const isMountedRef = useRef(true);
+  const layoutRunningRef = useRef(false);
+  const isMobile =
+    typeof window !== "undefined" &&
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
+    );
   const color = localTheme === "dark" ? "white" : "black";
 
   // Cleanup cytoscape instance on unmount to prevent touch event race conditions
@@ -38,6 +44,18 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
       if (cyRef.current) {
         const cyRefInstance = cyRef.current;
         cyRef.current = null;
+
+        // Stop any running layout first to prevent "Cannot read properties of null (reading 'notify')" errors
+        if (layoutRunningRef.current) {
+          try {
+            // Stop all running layouts
+            cyRefInstance.elements().layout({ name: "null" }).stop();
+            layoutRunningRef.current = false;
+          } catch {
+            // Ignore errors if layout is already stopped
+          }
+        }
+
         // Disable all user interactions immediately to prevent new touch events
         cyRefInstance.autoungrabify(true);
         cyRefInstance.autounselectify(true);
@@ -118,6 +136,16 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
 
   // Memo
   const graph = useMemo(() => {
+    // Stop any running layout from previous render to prevent race conditions
+    if (cyRef.current && layoutRunningRef.current) {
+      try {
+        cyRef.current.elements().layout({ name: "null" }).stop();
+        layoutRunningRef.current = false;
+      } catch {
+        // Ignore errors if already stopped
+      }
+    }
+
     return (
       <div className="h-full w-full">
         <CytoscapeComponent
@@ -136,10 +164,19 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
             edgeElasticity: (edge) => edge.data().weight as number,
             nestingFactor: 5,
             gravity: 80,
-            numIter: 1000,
+            numIter: isMobile ? 500 : 1000,
             initialTemp: 200,
             coolingFactor: 0.95,
             minTemp: 1.0,
+            // Track layout lifecycle
+            ready: () => {
+              if (isMountedRef.current) {
+                layoutRunningRef.current = true;
+              }
+            },
+            stop: () => {
+              layoutRunningRef.current = false;
+            },
           }}
           style={{ width: "100%", height: "100%" }}
           stylesheet={
