@@ -164,7 +164,7 @@ declare global {
  * Check if an error is a PayPal cleanup error that should be suppressed.
  * These occur when users navigate away while PayPal buttons are initializing.
  */
-function isPayPalCleanupError(err: unknown): boolean {
+const isPayPalCleanupError = (err: unknown): boolean => {
   const errorMessage = err?.toString() ?? "";
   return (
     errorMessage.includes("zoid destroyed") ||
@@ -175,34 +175,34 @@ function isPayPalCleanupError(err: unknown): boolean {
     errorMessage.includes("postrobot_method") ||
     errorMessage.includes("paypal_js_sdk")
   );
-}
+};
 
 /**
  * Check if an error is a Clerk script loading error that should be suppressed.
  * These occur when the Clerk JS script fails to load on mobile devices due to
  * network issues, ad blockers, or browser restrictions.
  */
-function isClerkScriptLoadError(err: unknown): boolean {
+const isClerkScriptLoadError = (err: unknown): boolean => {
   const errorMessage = err?.toString() ?? "";
   return (
     errorMessage.includes("failed to load script") ||
     errorMessage.includes("failed_to_load_clerk_js") ||
     errorMessage.includes("Failed to load Clerk")
   );
-}
+};
 
 /**
  * Check if an error is a localStorage access error caused by browser privacy settings.
  * These are SecurityErrors thrown when cookies/storage are blocked.
  */
-function isLocalStorageAccessError(err: unknown): boolean {
+const isLocalStorageAccessError = (err: unknown): boolean => {
   const msg = err?.toString() ?? "";
   return (
     msg.includes("localStorage") &&
     msg.includes("Access is denied") &&
     msg.includes("SecurityError")
   );
-}
+};
 
 /**
  * Check if an error is a network fetch error that should be suppressed.
@@ -210,17 +210,17 @@ function isLocalStorageAccessError(err: unknown): boolean {
  * or the request is aborted during navigation. The "Load failed" message may
  * include a domain suffix like "(uploadthing.b-cdn.net)" for CDN requests.
  */
-function isNetworkFetchError(err: unknown): boolean {
+const isNetworkFetchError = (err: unknown): boolean => {
   if (!(err instanceof Error)) return false;
   const msg = err.message ?? "";
   return msg.startsWith("Load failed") || msg === "Failed to fetch" || msg === "network error";
-}
+};
 
 /**
  * Check if an error is a Clerk storage access error that should be filtered.
  * These occur when browser privacy settings block Clerk from accessing localStorage.
  */
-function isClerkStorageError(event: Sentry.ErrorEvent): boolean {
+const isClerkStorageError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
@@ -236,13 +236,13 @@ function isClerkStorageError(event: Sentry.ErrorEvent): boolean {
       frame.filename?.includes("@clerk/clerk-js") ||
       frame.abs_path?.includes("@clerk/clerk-js"),
   );
-}
+};
 
 /**
  * Check if an error is a TRPC error that should be handled by react-query's error handlers.
  * These are filtered out here to avoid duplicate error reporting.
  */
-function isTRPCError(err: unknown): boolean {
+const isTRPCError = (err: unknown): boolean => {
   // Check if it's an object with TRPC error shape
   if (typeof err === "object" && err !== null) {
     const hasCode = "code" in err;
@@ -267,14 +267,14 @@ function isTRPCError(err: unknown): boolean {
     }
   }
   return false;
-}
+};
 
 /**
  * Check if an error is from Google Translate scripts that should be filtered.
  * When users access the site through Google Translate (translate.goog proxy),
  * Google's scripts sometimes fail when manipulating DOM elements.
  */
-function isGoogleTranslateError(event: Sentry.ErrorEvent): boolean {
+const isGoogleTranslateError = (event: Sentry.ErrorEvent): boolean => {
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
   // Check if the error originates from Google Translate scripts
@@ -287,7 +287,7 @@ function isGoogleTranslateError(event: Sentry.ErrorEvent): boolean {
       frame.abs_path?.includes("translate.goog") ||
       frame.abs_path?.includes("translate_http"),
   );
-}
+};
 
 /**
  * Check if an error is a PayPal SDK cleanup error that should be filtered.
@@ -298,7 +298,7 @@ function isGoogleTranslateError(event: Sentry.ErrorEvent): boolean {
  * which can occur during component cleanup when the internal promise handlers
  * (dispatch/resolve/reject) enter infinite recursion.
  */
-function isPayPalSdkError(event: Sentry.ErrorEvent): boolean {
+const isPayPalSdkError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const errorType = event.exception?.values?.[0]?.type ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
@@ -344,13 +344,13 @@ function isPayPalSdkError(event: Sentry.ErrorEvent): boolean {
   }
 
   return false;
-}
+};
 
 /**
  * Check if an error is from an injected third-party script like Facebook or Cookiebot.
  * These often cause "Illegal invocation" errors in document.createEvent or similar.
  */
-function isThirdPartyInjectedError(event: Sentry.ErrorEvent): boolean {
+const isThirdPartyInjectedError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
@@ -381,21 +381,21 @@ function isThirdPartyInjectedError(event: Sentry.ErrorEvent): boolean {
   }
 
   return false;
-}
+};
 
 /**
  * Check if an error is from Effect-TS (used by SpacetimeDB SDK).
  * Effect-TS creates frozen error objects for fiber interruption, and Sentry
  * throws when trying to modify the `stack` property of these frozen objects.
  */
-function isEffectInterruptError(event: Sentry.ErrorEvent): boolean {
+const isEffectInterruptError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   return (
     message.includes("MicroCause.Interrupt") ||
     (message.includes("Cannot assign to read only property") &&
       message.includes("stack"))
   );
-}
+};
 
 /**
  * Check if an error is a DataCloneError from third-party scripts.
@@ -403,7 +403,7 @@ function isEffectInterruptError(event: Sentry.ErrorEvent): boolean {
  * code that tries to postMessage with DOM elements that cannot be cloned.
  * Common in Facebook's in-app browser.
  */
-function isDataCloneError(event: Sentry.ErrorEvent): boolean {
+const isDataCloneError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
@@ -421,7 +421,7 @@ function isDataCloneError(event: Sentry.ErrorEvent): boolean {
       frame.abs_path?.includes("gtag/js") ||
       frame.abs_path?.includes("mediafilter"),
   );
-}
+};
 
 /**
  * Check if an error is a Replicate API error that should be filtered.
@@ -853,29 +853,43 @@ const isGoogleApiLoaderError = (event: Sentry.ErrorEvent): boolean => {
     return true;
   }
 
-  const isFromGoogleMaps = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("maps.googleapis.com") ||
-      frame.abs_path?.includes("maps.googleapis.com") ||
-      frame.filename?.includes("jsapi_compiled") ||
-      frame.abs_path?.includes("jsapi_compiled"),
-  );
+  const isFromGoogleMaps = stackFrames.some((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+
+    // Check for jsapi_compiled (not a URL, just a script identifier)
+    if (filename.includes("jsapi_compiled") || absPath.includes("jsapi_compiled")) {
+      return true;
+    }
+
+    // Safely validate URLs using URL constructor to prevent spoofing
+    for (const path of [filename, absPath]) {
+      if (!path) continue;
+      try {
+        const url = new URL(path);
+        if (url.hostname === "maps.googleapis.com") {
+          return true;
+        }
+      } catch {
+        // Not a valid URL, skip
+      }
+    }
+
+    return false;
+  });
 
   if (isFromGoogleMaps) {
     return true;
   }
 
-  if (
-    message.includes("__googleMapsScriptId") ||
-    message.includes("google.maps")
-  ) {
+  if (message.includes("__googleMapsScriptId")) {
     return true;
   }
 
   return false;
 };
 
-function ensureBrowserErrorHandler() {
+const ensureBrowserErrorHandler = () => {
   if (typeof window === "undefined") return;
   if (window.__TNR_GLOBAL_REJECTION_HANDLER__) return;
   window.__TNR_GLOBAL_REJECTION_HANDLER__ = true;
@@ -930,7 +944,7 @@ function ensureBrowserErrorHandler() {
       }
     }
   });
-}
+};
 
 // Ensure handlers are registered immediately after Sentry.init
 ensureBrowserErrorHandler();
