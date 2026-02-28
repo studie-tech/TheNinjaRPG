@@ -73,7 +73,8 @@ Sentry.init({
     "ResizeObserver loop completed with undelivered notifications", // Alternative format of the same benign ResizeObserver warning (used by some browsers)
     "undefined is not an object (evaluating 'window.webkit.messageHandlers')", // iOS WebKit bridge error - third-party scripts attempting to use iOS native bridge APIs that aren't available in web browser context
     "TransformStream is not defined", // Older browser compatibility error (Firefox Mobile <102, some Android browsers) - AI chat feature uses @ai-sdk/react which requires TransformStream for SSE parsing. Users see fallback UX (chat unavailable).
-    /No ack for postMessage .* in \d+ms/, // Third-party SDK postMessage timeout - occurs when Clerk or similar services fail to receive acknowledgment for cross-origin frame communication (THENINJARPG-2FV)
+    /No ack for postMessage .* in \d+ms/, // Third-party SDK postMessage timeout - occurs when Clerk or similar services fail to receive acknowledgment for cross-origin frame communication
+    /app:\/\/\/userscripts\//, // Userscript errors from browser extensions (Violentmonkey, Tampermonkey, Greasemonkey) - scripts run in isolated contexts and their errors do not affect the application
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -125,6 +126,9 @@ Sentry.init({
     }
     if (isSpacetimeDBWebSocketConnectingError(event)) {
       return null; // Drop SpacetimeDB WebSocket timing errors (transient)
+    }
+    if (isUserscriptError(event)) {
+      return null; // Drop userscript errors from browser extensions
     }
     return event;
   },
@@ -769,6 +773,57 @@ const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolea
   // If we can verify it's from SpacetimeDB, filter it
   // If stack trace is empty/anonymized (production builds), still filter based on message
   return isFromSpacetimeDB || stackFrames.length === 0;
+};
+
+/**
+ * Check if an error is from a third-party userscript or browser extension.
+ * Userscripts (Tampermonkey, Greasemonkey, Violentmonkey) are user-installed scripts
+ * that modify web pages. They may break when our application's DOM structure or APIs change.
+ *
+ * UX note: These errors do not affect application functionality for users without the
+ * userscript installed. Users with broken userscripts may see the script fail silently,
+ * but the core application continues to work. Users can disable or update their userscripts
+ * if they notice issues with custom functionality they've added.
+ *
+ * Common patterns:
+ * - app:///userscripts/[script-name].user.js (Tampermonkey/Greasemonkey URL scheme)
+ * - *.user.js file extensions (standard userscript naming)
+ * - Minified variable names like "d", "a", "e" in error messages from bundled scripts
+ * - Errors referencing our pages but originating from injected code
+ * - Filter errors from userscripts like "Jutsu-Hotkeys" that add keyboard shortcuts for
+ *   jutsu actions. These scripts may have compatibility issues when page structure changes.
+ */
+const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Check if error originates from a userscript
+  // Userscripts use the app:/// URL scheme with /userscripts/ path
+  const isFromUserscript = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("app:///userscripts/") ||
+      frame.abs_path?.includes("app:///userscripts/") ||
+      // Some userscript managers use different URL patterns but standard .user.js extension
+      frame.filename?.endsWith(".user.js") ||
+      frame.abs_path?.endsWith(".user.js"),
+  );
+
+  if (!isFromUserscript) {
+    return false;
+  }
+
+  // Additional safety check: If the error stack includes both userscript frames AND
+  // our application code frames (from /_next/), this might indicate the userscript
+  // is breaking our functionality. In that case, we want to see the error.
+  const hasAppCodeFrames = stackFrames.some(
+    (frame) =>
+      (frame.filename?.includes("/_next/") || frame.abs_path?.includes("/_next/")) &&
+      !frame.filename?.includes("app:///userscripts/") &&
+      !frame.abs_path?.includes("app:///userscripts/"),
+  );
+
+  // Only filter if the error is purely from the userscript (no app code in stack)
+  // If there's app code mixed in, let it through - might be a real issue
+  return !hasAppCodeFrames;
 };
 
 function ensureBrowserErrorHandler() {
