@@ -74,7 +74,7 @@ Sentry.init({
     "undefined is not an object (evaluating 'window.webkit.messageHandlers')", // iOS WebKit bridge error - third-party scripts attempting to use iOS native bridge APIs that aren't available in web browser context
     "TransformStream is not defined", // Older browser compatibility error (Firefox Mobile <102, some Android browsers) - AI chat feature uses @ai-sdk/react which requires TransformStream for SSE parsing. Users see fallback UX (chat unavailable).
     /No ack for postMessage .* in \d+ms/, // Third-party SDK postMessage timeout - occurs when Clerk or similar services fail to receive acknowledgment for cross-origin frame communication
-    /app:\/\/\/userscripts\//, // Userscript errors from browser extensions (Violentmonkey, Tampermonkey, Greasemonkey) - scripts run in isolated contexts and their errors do not affect the application
+    "Jsloader error", // Google Maps JS API loader error - occurs when the @googlemaps/js-api-loader script fails to load (network issues, ad blockers, or Google CDN outages). Users see map not loading but the rest of the app works normally.
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -129,6 +129,9 @@ Sentry.init({
     }
     if (isUserscriptError(event)) {
       return null; // Drop userscript errors from browser extensions
+    }
+    if (isGoogleApiLoaderError(event)) {
+      return null; // Drop Google Maps API loader errors (network/CDN failures)
     }
     return event;
   },
@@ -824,6 +827,52 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
   // Only filter if the error is purely from the userscript (no app code in stack)
   // If there's app code mixed in, let it through - might be a real issue
   return !hasAppCodeFrames;
+};
+
+/**
+ * Check if an error is from the Google Maps JS API loader (@googlemaps/js-api-loader).
+ * These errors occur when the Google Maps script fails to load due to network issues,
+ * ad blockers, or Google CDN outages. The loader retries internally and then rejects
+ * with a non-Error object that Sentry captures.
+ *
+ * UX note: Users see the map area fail to load, but the rest of the application
+ * continues to work normally. The map component shows appropriate fallback UI.
+ *
+ * Common patterns:
+ * - "Jsloader error" message (caught by ignoreErrors, but some slip through as
+ *   non-Error promise rejections with different serialized formats)
+ * - Stack frames from maps.googleapis.com or jsapi_compiled scripts
+ * - Non-Error rejection objects containing script load failure details
+ */
+const isGoogleApiLoaderError = (event: Sentry.ErrorEvent): boolean => {
+  const message =
+    event.exception?.values?.[0]?.value ?? event.message ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  if (message.includes("Jsloader error")) {
+    return true;
+  }
+
+  const isFromGoogleMaps = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("maps.googleapis.com") ||
+      frame.abs_path?.includes("maps.googleapis.com") ||
+      frame.filename?.includes("jsapi_compiled") ||
+      frame.abs_path?.includes("jsapi_compiled"),
+  );
+
+  if (isFromGoogleMaps) {
+    return true;
+  }
+
+  if (
+    message.includes("__googleMapsScriptId") ||
+    message.includes("google.maps")
+  ) {
+    return true;
+  }
+
+  return false;
 };
 
 function ensureBrowserErrorHandler() {
