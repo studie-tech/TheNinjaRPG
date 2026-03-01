@@ -23,7 +23,9 @@ interface GraphUsersGenericProps {
     weight: number;
   }[];
 }
-function GraphUsersGeneric(props: GraphUsersGenericProps): React.ReactElement | null {
+const GraphUsersGeneric = (
+  props: GraphUsersGenericProps,
+): React.ReactElement | null => {
   // State
   const localTheme = safeLocalStorageGetItem("theme");
   const cyRef = useRef<Cytoscape.Core | null>(null);
@@ -254,6 +256,6 @@ function GraphUsersGeneric(props: GraphUsersGenericProps): React.ReactElement | 
       {graph}
     </div>
   );
-}
+};
 
 export default React.memo(GraphUsersGeneric);

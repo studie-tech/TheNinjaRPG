@@ -785,6 +785,8 @@ const isClerkSignOutError = (event: Sentry.ErrorEvent): boolean => {
  * - Stack trace points to /_next/static/chunks/ files with no line number
  * - Mechanism: auto.browser.global_handlers.onerror (parse-time error)
  * - Typically occurs on mobile devices (iOS Safari, Chrome Mobile)
+ *
+ * THENINJARPG-2G6: Filter Next.js chunk truncation errors from network issues.
  */
 const isNextJsChunkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
   const errorType = event.exception?.values?.[0]?.type ?? "";
@@ -841,7 +843,7 @@ const isNextJsChunkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
  * cryptocurrency functionality.
  *
  * Examples of filtered errors:
- * - TronLink proxy trap error when setting tronlinkParams property
+ * - THENINJARPG-2G3: TronLink proxy trap error when setting tronlinkParams property
  */
 const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -872,7 +874,7 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
 
   // Additional check for proxy trap errors from wallet extensions
   // TronLink and similar extensions may fail when setting properties on Proxy objects
-  // Example: TronLink's injected.js attempting to set tronlinkParams
+  // Example: THENINJARPG-2G3 - TronLink's injected.js attempting to set tronlinkParams
   const isProxyTrapError =
     message.includes("'set' on proxy: trap returned falsish") ||
     message.includes("proxy trap");
@@ -903,7 +905,7 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
  * - SSO callback: URL contains /signup/sso-callback or /signin/sso-callback
  * - Sign-out: Breadcrumbs show sign-out button click + POST request with 403 status
  *
- * Filter server action errors on SSO callback URLs and during sign-out.
+ * THENINJARPG-1NM: Filter server action errors on SSO callback URLs and during sign-out.
  * Source: Plan B (breadcrumb validation), Plan C (naming), Plan A (documentation style)
  */
 const isServerActionAuthError = (event: Sentry.ErrorEvent): boolean => {
@@ -958,6 +960,7 @@ const isServerActionAuthError = (event: Sentry.ErrorEvent): boolean => {
  * They occur in isolated third-party script contexts and are caught by the global error handler.
  * Since we have no control over third-party script code, filtering is the appropriate action.
  *
+ * THENINJARPG-1XW: Filter stack overflow errors from third-party tracking scripts.
  */
 const isThirdPartyStackOverflowError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -1002,6 +1005,7 @@ const isThirdPartyStackOverflowError = (event: Sentry.ErrorEvent): boolean => {
  * functionality. They occur in third-party script contexts (analytics, tracking,
  * consent management, Sentry SDK) that probe for native app features.
  *
+ * THENINJARPG-2FP: Filter iOS WebKit bridge errors from third-party scripts.
  */
 const isWebKitMessageHandlersError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -1028,6 +1032,7 @@ const isWebKitMessageHandlersError = (event: Sentry.ErrorEvent): boolean => {
  * We cannot fix this in the SpacetimeDB SDK itself as it's a third-party library.
  * The error originates from the SDK's websocket_decompress_adapter.ts send() method.
  *
+ * THENINJARPG-2CN: Filter SpacetimeDB WebSocket timing errors from Sentry.
  */
 const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -1077,48 +1082,48 @@ const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolea
  *   jutsu actions. These scripts may have compatibility issues when page structure changes.
  *
  * Filtered Sentry issues:
- * - "d is not defined" on /occupation page (30+ events)
- * - "d is not defined" on /items page (7 events)
- * - "d is not defined" on /travel page (2 events) - Fix: check all exception values
- * - "d is not defined" on /manual page (2 events) - Fix: refine app code detection to distinguish page context pollution
- * - "d is not defined" on /hospital page (2 events)
- * - "d is not defined" on /items page (1 event) - Fix: add breadcrumb-based userscript detection fallback
- * - "d is not defined" on /reports page (1 event)
- * - "d is not defined" on /jutsus page (1 event)
- * - "d is not defined" on /village page (1 event, 2026-02-23) -
+ * - THENINJARPG-2H0: "d is not defined" on /occupation page (30+ events)
+ * - THENINJARPG-2GW: "d is not defined" on /items page (7 events)
+ * - THENINJARPG-2HM: "d is not defined" on /travel page (2 events) - Fix: check all exception values
+ * - THENINJARPG-2HA: "d is not defined" on /manual page (2 events) - Fix: refine app code detection to distinguish page context pollution
+ * - THENINJARPG-2GT: "d is not defined" on /hospital page (2 events)
+ * - THENINJARPG-2J5: "d is not defined" on /items page (1 event) - Fix: add breadcrumb-based userscript detection fallback
+ * - THENINJARPG-2J4: "d is not defined" on /reports page (1 event)
+ * - THENINJARPG-2J3: "d is not defined" on /jutsus page (1 event)
+ * - THENINJARPG-2HB: "d is not defined" on /village page (1 event, 2026-02-23) -
  *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-23T16:12:05Z during
- *   filter deployment transition period.
+ *   filter deployment transition period (22 seconds before THENINJARPG-2HC).
  *   Already covered by existing breadcrumb + single-letter error detection (lines 1028-1052)
  *   and userscript frame detection (lines 1061-1093).
- * - "d is not defined" on /jutsus page (1 event, 2026-02-23) -
+ * - THENINJARPG-2HC: "d is not defined" on /jutsus page (1 event, 2026-02-23) -
  *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-23T16:12:27Z during
  *   filter deployment transition period (before comprehensive filters fully deployed).
- *   Same userscript pattern (2026-02-27). Already covered by
+ *   Same userscript pattern as THENINJARPG-2J3 (2026-02-27). Already covered by
  *   existing breadcrumb + single-letter error detection (lines 1028-1052, 1061-1068).
- * - "d is not defined" on /combat page (1 event)
- * - "d is not defined" on /battlelog page (1 event)
- * - "d is not defined" on /username page (1 event) - Fix: add explicit page context pollution early filter
- * - "d is not defined" on /username page (1 event) - Same userscript (Jutsu-Hotkeys) error, already handled by existing filters
- * - "d is not defined" on /occupation page (1 event) - Occurred 2026-02-24, before comprehensive filters fully deployed
- * - "d is not defined" on /manual/jutsu page (1 event) - Jutsu-Hotkeys.user.js
+ * - THENINJARPG-2HT: "d is not defined" on /combat page (1 event)
+ * - THENINJARPG-2HQ: "d is not defined" on /battlelog page (1 event)
+ * - THENINJARPG-2HP: "d is not defined" on /username page (1 event) - Fix: add explicit page context pollution early filter
+ * - THENINJARPG-2HN: "d is not defined" on /username page (1 event) - Same userscript (Jutsu-Hotkeys) error, already handled by existing filters
+ * - THENINJARPG-2HJ: "d is not defined" on /occupation page (1 event) - Occurred 2026-02-24, before comprehensive filters fully deployed
+ * - THENINJARPG-2HH: "d is not defined" on /manual/jutsu page (1 event) - Jutsu-Hotkeys.user.js
  *   userscript error. Occurred 2026-02-24, should have been caught by existing filters
  *   (likely timing/deployment edge case).
- * - "d is not defined" on /combat page (1 event) - Jutsu-Hotkeys.user.js
+ * - THENINJARPG-2HG: "d is not defined" on /combat page (1 event) - Jutsu-Hotkeys.user.js
  *   userscript error with [Persistent Keybinds] breadcrumb. Occurred 2026-02-24T15:26:27Z.
  *   Fixed by adding early breadcrumb check in isUserscriptError() for defense-in-depth.
- * - "d is not defined" on /traininggrounds page (1 event) -
+ * - THENINJARPG-2HF: "d is not defined" on /traininggrounds page (1 event) -
  *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-24T00:24:12Z.
  *   Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with window["__f__mlzykk8m.cfq"]
  *   Breadcrumb: "[Persistent Keybinds] Key listener attached." Single occurrence.
  *   Fixed by enhancing regex to handle error type prefixes (e.g., "ReferenceError: d is not defined").
- * - "d is not defined" on /news page (1 event) - Jutsu-Hotkeys.user.js
+ * - THENINJARPG-2HD: "d is not defined" on /news page (1 event) - Jutsu-Hotkeys.user.js
  *   userscript error. Occurred 2026-02-23T18:01:27Z during filter transition period.
  *   Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with window["__f__mlzn50o5.uji"]
  *   Breadcrumb: "[Persistent Keybinds] Key listener attached." Single occurrence.
  *   Already covered by existing breadcrumb + single-letter error detection (line 1044).
- * - "d is not defined" on /inbox page (1 event, 2026-02-21T15:23:01Z) -
+ * - THENINJARPG-2GZ: "d is not defined" on /inbox page (1 event, 2026-02-21T15:23:01Z) -
  *   Jutsu-Hotkeys.user.js userscript error. The ACTUAL EARLIEST logged Jutsu-Hotkeys
- *   occurrence, by 2.7 hours. Occurred BEFORE any userscript
+ *   occurrence, predating THENINJARPG-2H3 by 2.7 hours. Occurred BEFORE any userscript
  *   filters were implemented. Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js:?
  *   in window["__f__mlwqvleb.rx"]/< followed by page context pollution frames
  *   (app:///inbox:? in At, r<, ?, _). Breadcrumb: "[Persistent Keybinds] Key listener
@@ -1127,10 +1132,11 @@ const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolea
  *   (lines 1102-1109), (3) Page context pollution filtering (lines 1177-1182),
  *   (4) Fallback breadcrumb detection (lines 1231-1262). This error represents the
  *   initial detection that led to comprehensive Jutsu-Hotkeys filtering.
- * - "d is not defined" on /jutsus page (1 event, 2026-02-21) -
+ * - THENINJARPG-2H3: "d is not defined" on /jutsus page (1 event, 2026-02-21) -
  *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-21T17:47:25Z, the
- *   second-earliest logged occurrence, occurring 2 days
- *   BEFORE the filter deployment transition period (on 2026-02-22). This was one of the initial errors that prompted investigation
+ *   second-earliest logged occurrence (after THENINJARPG-2GZ), occurring 2 days
+ *   BEFORE the filter deployment transition period (predates THENINJARPG-2H7 which
+ *   occurred 2026-02-22). This was one of the initial errors that prompted investigation
  *   into Jutsu-Hotkeys userscript issues and drove development of comprehensive
  *   defensive filters. Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with
  *   window["__f__mlwtmvde.d2i"]/< followed by page context pollution frames
@@ -1139,13 +1145,13 @@ const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolea
  *   error detection (lines 1042-1066), (2) Userscript frame detection (lines 1075-1082),
  *   (3) Error pattern matching (lines 1088-1101), (4) Page context pollution filtering
  *   (lines 1146-1155), (5) Breadcrumb-based fallback (lines 1204-1235).
- * - "d is not defined" on /username/:username page (1 event, 2026-02-22) -
+ * - THENINJARPG-2H7: "d is not defined" on /username/:username page (1 event, 2026-02-22) -
  *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-22T13:22:26Z, the second
- *   occurrence in this batch of Jutsu-Hotkeys errors. This error
+ *   occurrence in this batch of Jutsu-Hotkeys errors (after THENINJARPG-2H3). This error
  *   occurred BEFORE comprehensive userscript filters were fully deployed (filters deployed 2026-02-23+).
  *   This was one of the first detected Jutsu-Hotkeys errors that drove the development
  *   of defense-in-depth breadcrumb checking (lines 1034-1066), page context pollution
- *   filtering (lines 1146-1155), and regex enhancements.
+ *   filtering (lines 1146-1155), and regex enhancements (THENINJARPG-2HF).
  *   Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with window["__f__mlxscmnm.3e"]/<
  *   followed by page context pollution frames (app:///username/enryu:? in At, r<, ?).
  *   Breadcrumb: "[Persistent Keybinds] Key listener attached."
@@ -1165,7 +1171,7 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
   // filter immediately without complex stack frame analysis.
   //
   // Filtered issues:
-  // - "d is not defined" on /combat page (1 event, 2026-02-24)
+  // - THENINJARPG-2HG: "d is not defined" on /combat page (1 event, 2026-02-24)
   const hasUserscriptBreadcrumb = breadcrumbs.some((breadcrumb) => {
     if (breadcrumb.category !== "console") return false;
     const msg = breadcrumb.message ?? "";
@@ -1182,7 +1188,7 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
   if (hasUserscriptBreadcrumb) {
     const hasSingleLetterVarError = exceptionValues.some((exception) => {
       const message = exception.value ?? "";
-      // Handle error type prefixes like "ReferenceError: d is not defined"
+      // THENINJARPG-2HF: Handle error type prefixes like "ReferenceError: d is not defined"
       // Pattern matches single-letter variables at start OR after ": "
       return /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(message);
     });
@@ -1215,7 +1221,7 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
     // Check for userscript-internal error patterns that should always be filtered:
     // 1. Single-letter variable errors (typical of minified userscripts) like "d is not defined"
     // 2. Userscript-specific function patterns like window["__f__..."]
-    // Handle error type prefixes like "ReferenceError: d is not defined"
+    // THENINJARPG-2HF: Handle error type prefixes like "ReferenceError: d is not defined"
     const isSingleLetterVarError = /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(message);
 
     const hasUserscriptFunctionPattern = stackFrames.some((frame) => {
@@ -1243,7 +1249,7 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
     //   /_next/static/chunks/app-pages-browser_src_layout_Loader_tsx.js:1:2345 in LoaderComponent
     // - Function names and line numbers indicate real application code execution
     //
-    // Refined check to look for MEANINGFUL app code frames, not just page URLs
+    // THENINJARPG-2HA: Refined check to look for MEANINGFUL app code frames, not just page URLs
     //
     // Check if error stack includes MEANINGFUL application code (not just page context pollution)
     // Real app code has:
@@ -1319,7 +1325,7 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
  * functionality for users without the userscript installed.
  *
  * Filtered Sentry issues:
- * - "d is not defined" on /items page (1 event) - Edge case where
+ * - THENINJARPG-2J5: "d is not defined" on /items page (1 event) - Edge case where
  *   multiple exception values had varying structures, causing stack frame detection
  *   to be ambiguous
  */
@@ -1348,7 +1354,7 @@ const isUserscriptErrorFromBreadcrumbs = (event: Sentry.ErrorEvent): boolean => 
   // Check if any exception has a single-letter variable error
   const hasSingleLetterVarError = exceptionValues.some((exception) => {
     const message = exception.value ?? "";
-    // Handle error type prefixes like "ReferenceError: d is not defined"
+    // THENINJARPG-2HF: Handle error type prefixes like "ReferenceError: d is not defined"
     return /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(message);
   });
 
@@ -1433,6 +1439,8 @@ const isGoogleApiLoaderError = (event: Sentry.ErrorEvent): boolean => {
  * - app:///i18n/pixel/ (i18n tracking pixel)
  * - node_modules/next/ (Next.js App Router internal navigation)
  *
+ * THENINJARPG-2GA: Filter pushState rate limit errors from third-party analytics.
+ * THENINJARPG-2G9: Check all exception values, not just the first one.
  */
 const isHistoryPushStateRateLimitError = (event: Sentry.ErrorEvent): boolean => {
   // Check all exception values, not just the first one
@@ -1467,6 +1475,7 @@ const isHistoryPushStateRateLimitError = (event: Sentry.ErrorEvent): boolean => 
  * This function provides defense-in-depth for the console breadcrumb variant
  * that bypasses ignoreErrors pattern matching.
  *
+ * THENINJARPG-2D0: Filter chunk load errors captured through console breadcrumbs.
  */
 const isChunkLoadConsoleError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -1526,6 +1535,7 @@ const isChunkLoadConsoleError = (event: Sentry.ErrorEvent): boolean => {
  * CORS handling: When third-party scripts are anonymized due to cross-origin restrictions,
  * we fall back to breadcrumb-based detection (XHR + pixel configuration endpoint).
  *
+ * THENINJARPG-2AP: Filter tracking pixel JSON parsing errors from transient CDN outages.
  */
 const isThirdPartyPixelJsonParseError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -1620,7 +1630,7 @@ const isThirdPartyPixelJsonParseError = (event: Sentry.ErrorEvent): boolean => {
  * "Could not copy to clipboard. Please copy the link/code manually." The user is
  * informed and can manually select and copy the text.
  *
- * Filter clipboard permission errors with graceful UX fallback.
+ * Reference: THENINJARPG-2CB - Filter clipboard permission errors with graceful UX fallback.
  */
 const isClipboardPermissionError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -1660,6 +1670,7 @@ const isClipboardPermissionError = (event: Sentry.ErrorEvent): boolean => {
  * - Often has empty or minimal error messages
  * - Anonymous/minified function names in stack (cross-origin restrictions)
  *
+ * THENINJARPG-2HR: Filter Firefox NS_ERROR from third-party ad/tracking scripts.
  */
 const isFirefoxNSError = (event: Sentry.ErrorEvent): boolean => {
   const exceptionValues = event.exception?.values ?? [];
@@ -1834,6 +1845,7 @@ const isUserscriptRawError = (err: unknown): boolean => {
  * - No exception or stack trace (not a JavaScript error)
  * - May have replay_id tag indicating associated session replay
  *
+ * THENINJARPG-2H8: Filter rage click events from error tracking.
  */
 const isRageClickEvent = (event: Sentry.ErrorEvent): boolean => {
   const title = (event as any).title ?? "";
@@ -1850,7 +1862,7 @@ const isRageClickEvent = (event: Sentry.ErrorEvent): boolean => {
 /**
  * Check if an error is a Response.json() body stream already read error.
  * These can occur when:
- * 1. fetch-retry library consumes response body during retry logic
+ * 1. fetch-retry library consumes response body during retry logic (THENINJARPG-2GY)
  * 2. Browser extensions intercept fetch requests and read body multiple times
  * 3. Code accidentally calls .json()/.text()/.blob() multiple times without cloning
  *
@@ -1929,6 +1941,7 @@ const isResponseBodyAlreadyReadError = (event: Sentry.ErrorEvent): boolean => {
  * - Transient timing-dependent edge case (single occurrence indicates extreme rarity)
  * - React team owns this code path (application code cannot prevent scheduler re-entrancy)
  *
+ * THENINJARPG-2GN: Filter React scheduler "Should not already be working." errors.
  * Occurred once on 2026-02-19 during signup navigation in Firefox 147.0.
  */
 const isReactSchedulerError = (event: Sentry.ErrorEvent): boolean => {
@@ -2009,6 +2022,7 @@ const isReactSchedulerError = (event: Sentry.ErrorEvent): boolean => {
  * 3. Only filters if error is browser-level (no application code in stack)
  * 4. Type validation to ensure it's a TypeError or generic Error
  *
+ * THENINJARPG-2GM: Filter Firefox "Error in input stream" during RSC fetch.
  * Single occurrence on 2026-02-19 during /manual -> /news navigation in Firefox 147.0.
  */
 const isFirefoxInputStreamError = (event: Sentry.ErrorEvent): boolean => {

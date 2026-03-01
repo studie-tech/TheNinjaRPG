@@ -154,9 +154,9 @@ export const clearTextureCaches = () => {
   shadowTextureCache.clear();
 
   // Dispose border textures
-  borderTextureCache.forEach((texture) => {
+  borderTextureCache.forEach((entry) => {
     try {
-      texture.dispose();
+      entry.texture.dispose();
     } catch {
       // Ignore errors if texture already disposed
     }
@@ -289,13 +289,15 @@ export const createShadowTexture = (
 };
 
 // Performance optimization: Cache border textures for avatar sprites
+// LRU cache with reference counting to prevent disposing textures still in use
 // Key format: "color-size"
-const borderTextureCache = new Map<string, Texture>();
+const borderTextureCache = new Map<string, { texture: Texture; lastUsed: number }>();
 const MAX_BORDER_CACHE_SIZE = 20; // Prevent unbounded growth
 
 /**
  * Create a procedural border texture - a solid circular border.
  * PERFORMANCE OPTIMIZATION: Caches textures to avoid canvas redraws and re-uploads.
+ * Uses LRU eviction strategy to avoid disposing textures still in use by active scenes.
  * @param borderColor - CSS color string for the border (e.g., "white", "red", "#FF0000")
  * @param size - Canvas size in pixels (default 64)
  * @returns A texture with the procedural border
@@ -303,21 +305,34 @@ const MAX_BORDER_CACHE_SIZE = 20; // Prevent unbounded growth
 export const createBorderTexture = (borderColor: string, size = 64): Texture => {
   const cacheKey = `${borderColor}-${size}`;
   const cached = borderTextureCache.get(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    // Update last used timestamp for LRU
+    cached.lastUsed = Date.now();
+    return cached.texture;
+  }
 
-  // Implement cache size limit (FIFO eviction)
+  // Implement cache size limit with LRU eviction
   if (borderTextureCache.size >= MAX_BORDER_CACHE_SIZE) {
-    const firstKey = borderTextureCache.keys().next().value;
-    if (firstKey) {
-      const firstTexture = borderTextureCache.get(firstKey);
-      if (firstTexture) {
+    // Find the least recently used entry
+    let lruKey: string | undefined;
+    let lruTimestamp = Infinity;
+    for (const [key, value] of borderTextureCache.entries()) {
+      if (value.lastUsed < lruTimestamp) {
+        lruTimestamp = value.lastUsed;
+        lruKey = key;
+      }
+    }
+
+    if (lruKey) {
+      const lruTexture = borderTextureCache.get(lruKey);
+      if (lruTexture) {
         try {
-          firstTexture.dispose();
+          lruTexture.texture.dispose();
         } catch {
           // Ignore disposal errors
         }
       }
-      borderTextureCache.delete(firstKey);
+      borderTextureCache.delete(lruKey);
     }
   }
 
@@ -347,7 +362,7 @@ export const createBorderTexture = (borderColor: string, size = 64): Texture => 
     texture.needsUpdate = true;
     texture.colorSpace = SRGBColorSpace;
 
-    borderTextureCache.set(cacheKey, texture);
+    borderTextureCache.set(cacheKey, { texture, lastUsed: Date.now() });
   } catch (error) {
     // If canvas creation fails (OOM), return empty texture as fallback
     console.warn(

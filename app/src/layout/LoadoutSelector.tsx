@@ -35,31 +35,27 @@ interface LoadoutSelectorProps<T extends LoadoutData> {
 const LoadoutSelector = <T extends LoadoutData>(
   props: LoadoutSelectorProps<T>,
 ): React.ReactElement | null => {
-  // State
+  // All hooks MUST be called before any early returns
   const { data: userData } = useRequiredUserData();
-
-  // How many loadouts?
-  const maxLoadouts = userData ? props.config.maxLoadoutsFn(userData) : 0;
-
-  // Get loadouts
   const { data, isFetching } = props.config.getQuery();
-
-  // Mutations
   const { mutate: selectLoadout, isPending } = props.config.selectMutation();
 
-  // Derived size vars
+  // Derived values (calculated after all hooks)
+  const maxLoadouts = userData ? props.config.maxLoadoutsFn(userData) : 0;
   const iconSize = props?.size === "small" ? "h-6 w-6" : "h-10 w-10";
   const textSize = props?.size === "small" ? "text-xs" : "text-sm mt-1";
   const selectedId =
-    props.selectedOverrideId ||
-    (userData ? props.config.getSelectedId(userData) : null);
+    props.selectedOverrideId !== undefined
+      ? props.selectedOverrideId
+      : userData
+        ? props.config.getSelectedId(userData)
+        : null;
 
-  // Loaders
+  // Early returns AFTER all hooks
   if (!userData) return <Loader />;
   if (isFetching) return <Loader />;
-  if (isPending) return <Loader />;
 
-  if (maxLoadouts <= 0) return null;
+  if (maxLoadouts <= 1) return null;
 
   // Handle select
   const handleSelect = (id: string) => {
@@ -83,17 +79,18 @@ const LoadoutSelector = <T extends LoadoutData>(
               className="relative"
               key={loadout.id}
               onClick={() => handleSelect(loadout.id)}
+              disabled={isPending}
               aria-label={`${props.label || "Loadout"} ${i + 1}${isSelected ? " (selected)" : ""}`}
               aria-pressed={isSelected}
             >
               <Folder
-                className={`${iconSize} ${isSelected ? "fill-orange-300" : "hover:cursor-pointer hover:fill-orange-300"}`}
+                className={`${iconSize} ${isSelected ? "fill-orange-300" : "hover:cursor-pointer hover:fill-orange-300"} ${isPending ? "opacity-50" : ""}`}
               />
               <div
                 className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-bold ${textSize}`}
                 aria-hidden="true"
               >
-                {i + 1}
+                {isPending ? "..." : i + 1}
               </div>
             </button>
           );

@@ -34,11 +34,11 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
             onSettled: () => {
               document.body.style.cursor = "default";
             },
-            onError: onError,
+            onError: (err) => onError(err, 1),
           },
         },
         queryCache: new QueryCache({
-          onError: onError,
+          onError: (err, query) => onError(err, query.state.fetchFailureCount),
         }),
         mutationCache: new MutationCache({
           onMutate: (_variables, mutation) => {
@@ -51,6 +51,8 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
             onMutateCheck(mutationPath);
             document.body.style.cursor = "wait";
           },
+          onError: (err, _variables, _context, mutation) =>
+            onError(err, mutation.state.failureCount),
           onSettled: () => {
             document.body.style.cursor = "default";
           },
@@ -102,7 +104,7 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
   );
 }
 
-export const onError = (err: unknown) => {
+export const onError = (err: unknown, failureCount: number = 1) => {
   // Ignore "Unauthorized for tRPC endpoint", since this could be just the user logging out, thus queries failing
   if (
     err instanceof TRPCClientError &&
@@ -112,13 +114,11 @@ export const onError = (err: unknown) => {
   }
   // Ignore transient network/CDN errors (retries handle these gracefully)
   // Only suppress if the error was actually retried and failed (not first attempt failures)
+  // Use React Query's built-in failureCount instead of non-existent meta.attempts
   if (err instanceof TRPCClientError && isRetryableError(err.message)) {
-    // Check if this is from a retry context (has retry metadata)
-    // If meta.attempts exists and is > 1, this was retried before failing
-    const attempts = (err as unknown as { meta?: { attempts?: number } }).meta
-      ?.attempts;
-    if (attempts && attempts > 1) {
+    if (failureCount > 1) {
       // Retried and still failed - suppress as it's a persistent network issue
+      // Filtered from Sentry in instrumentation-client.ts (isNetworkNavigationError)
       return;
     }
     // First attempt failure - let it through to Sentry for visibility
