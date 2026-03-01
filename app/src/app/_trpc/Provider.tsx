@@ -21,7 +21,7 @@ const getBaseUrl = () => {
   return `http://127.0.0.1:${process.env.PORT ?? 3000}`;
 };
 
-export default function TrpcClientProvider(props: { children: React.ReactNode }) {
+const TrpcClientProvider = (props: { children: React.ReactNode }) => {
   const onMutateCheck = useGlobalOnMutateProtect();
   const [queryClient] = useState(
     () =>
@@ -30,15 +30,9 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
           queries: {
             staleTime: Infinity,
           },
-          mutations: {
-            onSettled: () => {
-              document.body.style.cursor = "default";
-            },
-            onError: (err) => onError(err, 1),
-          },
         },
         queryCache: new QueryCache({
-          onError: (err, query) => onError(err, query.state.fetchFailureCount),
+          onError: (err, _query) => onError(err),
         }),
         mutationCache: new MutationCache({
           onMutate: (_variables, mutation) => {
@@ -51,8 +45,7 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
             onMutateCheck(mutationPath);
             document.body.style.cursor = "wait";
           },
-          onError: (err, _variables, _context, mutation) =>
-            onError(err, mutation.state.failureCount),
+          onError: (err, _variables, _context, _mutation) => onError(err),
           onSettled: () => {
             document.body.style.cursor = "default";
           },
@@ -102,9 +95,11 @@ export default function TrpcClientProvider(props: { children: React.ReactNode })
       <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>
     </api.Provider>
   );
-}
+};
 
-export const onError = (err: unknown, failureCount: number = 1) => {
+export default TrpcClientProvider;
+
+export const onError = (err: unknown) => {
   // Ignore "Unauthorized for tRPC endpoint", since this could be just the user logging out, thus queries failing
   if (
     err instanceof TRPCClientError &&
@@ -113,15 +108,11 @@ export const onError = (err: unknown, failureCount: number = 1) => {
     return;
   }
   // Ignore transient network/CDN errors (retries handle these gracefully)
-  // Only suppress if the error was actually retried and failed (not first attempt failures)
-  // Use React Query's built-in failureCount instead of non-existent meta.attempts
+  // Queries are retried by retryLink (up to 3 attempts), mutations are never retried
+  // All retryable errors are suppressed here to avoid user-facing toasts for transient issues
   if (err instanceof TRPCClientError && isRetryableError(err.message)) {
-    if (failureCount > 1) {
-      // Retried and still failed - suppress as it's a persistent network issue
-      // Filtered from Sentry in instrumentation-client.ts (isNetworkNavigationError)
-      return;
-    }
-    // First attempt failure - let it through to Sentry for visibility
+    // Filtered from Sentry in instrumentation-client.ts (isNetworkNavigationError)
+    return;
   }
   // Ignore abort errors (user navigated away before request completed)
   // Check both cause.name (spec-compliant) and message (fallback for browser variations)

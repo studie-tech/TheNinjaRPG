@@ -8,6 +8,7 @@ import type { z } from "zod";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { isMobile } from "@/utils/audio";
 import { getSearchValidator } from "@/validators/register";
 
 // Register edgehandles extension once globally
@@ -31,11 +32,8 @@ const GraphUsersGeneric = (
   const cyRef = useRef<Cytoscape.Core | null>(null);
   const isMountedRef = useRef(true);
   const layoutRunningRef = useRef(false);
-  const isMobile =
-    typeof window !== "undefined" &&
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent,
-    );
+  const layoutInstanceRef = useRef<Cytoscape.Layouts | null>(null);
+  const isMobileDevice = isMobile();
   const color = localTheme === "dark" ? "white" : "black";
 
   // Cleanup cytoscape instance on unmount to prevent touch event race conditions
@@ -48,15 +46,17 @@ const GraphUsersGeneric = (
         cyRef.current = null;
 
         // Stop any running layout first to prevent "Cannot read properties of null (reading 'notify')" errors
-        if (layoutRunningRef.current) {
+        if (layoutRunningRef.current && layoutInstanceRef.current) {
           try {
-            // Get all running layouts and stop them individually
-            // Note: Cytoscape's layout.stop() stops the layout instance, not the elements
-            const layout = cyRefInstance.layout({ name: "null" });
-            layout.stop();
+            // Stop the currently running layout instance
+            layoutInstanceRef.current.stop();
             layoutRunningRef.current = false;
-          } catch {
-            // Ignore errors if layout is already stopped
+            layoutInstanceRef.current = null;
+          } catch (e) {
+            // Log unexpected errors during cleanup for debugging
+            if (e instanceof Error && !e.message.includes("already stopped")) {
+              console.warn("Unexpected error stopping layout:", e);
+            }
           }
         }
 
@@ -75,8 +75,11 @@ const GraphUsersGeneric = (
         setTimeout(() => {
           try {
             cyRefInstance.destroy();
-          } catch {
-            // Ignore errors during cleanup - the instance may already be partially destroyed
+          } catch (e) {
+            // Log unexpected errors during cleanup for debugging
+            if (e instanceof Error && !e.message.includes("destroyed")) {
+              console.warn("Unexpected error destroying cytoscape:", e);
+            }
           }
         }, 0);
       }
@@ -141,12 +144,16 @@ const GraphUsersGeneric = (
   // Memo
   const graph = useMemo(() => {
     // Stop any running layout from previous render to prevent race conditions
-    if (cyRef.current && layoutRunningRef.current) {
+    if (cyRef.current && layoutRunningRef.current && layoutInstanceRef.current) {
       try {
-        cyRef.current.elements().layout({ name: "null" }).stop();
+        layoutInstanceRef.current.stop();
         layoutRunningRef.current = false;
-      } catch {
-        // Ignore errors if already stopped
+        layoutInstanceRef.current = null;
+      } catch (e) {
+        // Log unexpected errors during cleanup for debugging
+        if (e instanceof Error && !e.message.includes("already stopped")) {
+          console.warn("Unexpected error stopping layout:", e);
+        }
       }
     }
 
@@ -154,34 +161,43 @@ const GraphUsersGeneric = (
       <div className="h-full w-full">
         <CytoscapeComponent
           elements={elements}
-          cy={setCytoscape}
-          layout={{
-            name: "cose",
-            idealEdgeLength: (edge) => edge.data().weight as number,
-            nodeOverlap: 20,
-            refresh: 20,
-            fit: true,
-            padding: 30,
-            randomize: true,
-            componentSpacing: 100,
-            nodeRepulsion: () => 400000,
-            edgeElasticity: (edge) => edge.data().weight as number,
-            nestingFactor: 5,
-            gravity: 80,
-            numIter: isMobile ? 500 : 1000,
-            initialTemp: 200,
-            coolingFactor: 0.95,
-            minTemp: 1.0,
-            // Track layout lifecycle
-            ready: () => {
-              if (isMountedRef.current) {
-                layoutRunningRef.current = true;
-              }
-            },
-            stop: () => {
-              layoutRunningRef.current = false;
-            },
+          cy={(cy) => {
+            setCytoscape(cy);
+            // Store the layout instance when it's created
+            if (cy && isMountedRef.current) {
+              const layout = cy.layout({
+                name: "cose",
+                idealEdgeLength: (edge) => edge.data().weight as number,
+                nodeOverlap: 20,
+                refresh: 20,
+                fit: true,
+                padding: 30,
+                randomize: true,
+                componentSpacing: 100,
+                nodeRepulsion: () => 400000,
+                edgeElasticity: (edge) => edge.data().weight as number,
+                nestingFactor: 5,
+                gravity: 80,
+                numIter: isMobileDevice ? 500 : 1000,
+                initialTemp: 200,
+                coolingFactor: 0.95,
+                minTemp: 1.0,
+                // Track layout lifecycle
+                ready: () => {
+                  if (isMountedRef.current) {
+                    layoutRunningRef.current = true;
+                  }
+                },
+                stop: () => {
+                  layoutRunningRef.current = false;
+                  layoutInstanceRef.current = null;
+                },
+              });
+              layoutInstanceRef.current = layout;
+              layout.run();
+            }
           }}
+          layout={{ name: "preset" }}
           style={{ width: "100%", height: "100%" }}
           stylesheet={
             [
@@ -239,7 +255,15 @@ const GraphUsersGeneric = (
         />
       </div>
     );
-  }, [joinedHighlights]);
+  }, [
+    joinedHighlights,
+    elements,
+    setCytoscape,
+    isMobileDevice,
+    props.nodes,
+    highlights,
+    color,
+  ]);
 
   // Render
   return (
