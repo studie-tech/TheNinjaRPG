@@ -23,7 +23,7 @@ interface GraphUsersGenericProps {
     weight: number;
   }[];
 }
-const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
+function GraphUsersGeneric(props: GraphUsersGenericProps): React.ReactElement | null {
   // State
   const localTheme = safeLocalStorageGetItem("theme");
   const cyRef = useRef<Cytoscape.Core | null>(null);
@@ -48,8 +48,10 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
         // Stop any running layout first to prevent "Cannot read properties of null (reading 'notify')" errors
         if (layoutRunningRef.current) {
           try {
-            // Stop all running layouts
-            cyRefInstance.elements().layout({ name: "null" }).stop();
+            // Get all running layouts and stop them individually
+            // Note: Cytoscape's layout.stop() stops the layout instance, not the elements
+            const layout = cyRefInstance.layout({ name: "null" });
+            layout.stop();
             layoutRunningRef.current = false;
           } catch {
             // Ignore errors if layout is already stopped
@@ -252,6 +254,6 @@ const GraphUsersGeneric: React.FC<GraphUsersGenericProps> = (props) => {
       {graph}
     </div>
   );
-};
+}
 
 export default React.memo(GraphUsersGeneric);

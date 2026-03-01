@@ -39,9 +39,10 @@ import { TrackballControls } from "@/libs/threejs/TrackBallControls";
 import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/types";
 import {
   cleanUp,
-  clearTextureCaches,
   createTexture,
   loadTexture,
+  safeRemoveRendererElement,
+  setupContextLossHandling,
   setupScene,
 } from "@/libs/threejs/util";
 import { useUserData } from "@/utils/UserContext";
@@ -153,23 +154,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       sceneRef.appendChild(renderer.domElement);
 
       // Track WebGL context loss to prevent shader errors on iOS mobile browsers
-      let isContextLost = false;
-      const handleContextLost = (event: Event) => {
-        event.preventDefault();
-        isContextLost = true;
-
-        // Clear texture caches when context is lost to free memory
-        // This helps recover from low-memory situations
-        clearTextureCaches();
-      };
-      const handleContextRestored = () => {
-        isContextLost = false;
-      };
-      renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
-      renderer.domElement.addEventListener(
-        "webglcontextrestored",
-        handleContextRestored,
-      );
+      // Clear texture caches when context is lost to free memory
+      const contextHandlers = setupContextLossHandling(renderer, { clearCaches: true });
 
       // Setup camera
       const camera = new PerspectiveCamera(fov, aspect, near, far);
@@ -616,7 +602,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
 
         // Render the scene (skip if WebGL context is lost)
         animationId = requestAnimationFrame(render);
-        if (!isContextLost) {
+        if (!contextHandlers.isContextLost()) {
           renderer?.render(scene, camera);
         }
 
@@ -642,38 +628,19 @@ const GlobalMap: React.FC<MapProps> = (props) => {
             renderer.domElement.removeEventListener("touchend", onTouchEnd);
           }
           window.removeEventListener("resize", handleResize);
-          renderer.domElement.removeEventListener(
-            "webglcontextlost",
-            handleContextLost,
-          );
-          renderer.domElement.removeEventListener(
-            "webglcontextrestored",
-            handleContextRestored,
-          );
+          contextHandlers.cleanup();
         } catch {
           // Ignore errors if elements are already removed
         }
 
         // Safely remove renderer DOM element
-        // Defense-in-depth against THENINJARPG-2GX: Check parent relationship to prevent TOCTOU race condition
-        // during React reconciliation when rapid movements trigger multiple cleanup cycles
-        try {
-          if (
-            renderer.domElement &&
-            renderer.domElement.parentNode === sceneRef &&
-            sceneRef.contains(renderer.domElement)
-          ) {
-            sceneRef.removeChild(renderer.domElement);
-          }
-        } catch {
-          // Ignore errors if element is already removed by React reconciliation
-        }
+        safeRemoveRendererElement(renderer, sceneRef);
 
         cleanUp(scene, renderer);
 
-        // Clear texture caches to prevent memory leaks on low-memory devices
-        // This is a defense-in-depth measure for THENINJARPG-2HZ (Firefox OOM)
-        clearTextureCaches();
+        // Note: Do NOT call clearTextureCaches() here as it clears module-wide caches
+        // that may be in use by other Map instances. Texture caches are shared across
+        // all scenes for performance. Individual texture cleanup happens in cleanUp().
       };
     }
   }, [

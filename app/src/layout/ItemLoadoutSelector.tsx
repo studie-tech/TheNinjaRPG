@@ -49,10 +49,6 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
         selectMutation: () => mutationResult,
         maxLoadoutsFn: fedItemLoadouts,
         getSelectedId: (userData) => userData.itemLoadout,
-        invalidateQueries: async () => {
-          await utils.profile.getUser.invalidate();
-          await utils.item.getUserItems.invalidate();
-        },
       }}
     />
   );

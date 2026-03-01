@@ -1234,15 +1234,10 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
     // THENINJARPG-2HF: Handle error type prefixes like "ReferenceError: d is not defined"
     const isSingleLetterVarError = /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(message);
 
-    const hasUserscriptFunctionPattern = stackFrames.some(
-      (frame) =>
-        // Minified function patterns like window["__f__mm6eqil6.gsn"]
-        frame.function?.includes('window["__f__') ||
-        frame.function?.includes("window['__f__") ||
-        // Anonymous or generated function names typical of bundled scripts
-        frame.function?.includes("<") || // e.g., "window[..."]/<"
-        frame.function === "?", // Anonymous
-    );
+    const hasUserscriptFunctionPattern = stackFrames.some((frame) => {
+      const func = frame.function ?? "";
+      return hasUserscriptFunctionName(func);
+    });
 
     // If it's clearly a userscript-internal error, filter it regardless of mixed stack
     if (isSingleLetterVarError || hasUserscriptFunctionPattern) {
@@ -1568,15 +1563,38 @@ const isThirdPartyPixelJsonParseError = (event: Sentry.ErrorEvent): boolean => {
   // Reddit's pixel script may appear as:
   // - app:///ads/pixel.js (third-party script URL scheme)
   // - Anonymous frames due to cross-origin restrictions
-  const isFromPixelScript = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("ads/pixel.js") ||
-      frame.abs_path?.includes("ads/pixel.js") ||
-      frame.filename?.includes("pixel-config.reddit.com") ||
-      frame.abs_path?.includes("pixel-config.reddit.com") ||
-      frame.filename?.includes("pixel.js") ||
-      frame.abs_path?.includes("pixel.js")
-  );
+  const isFromPixelScript = stackFrames.some((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+
+    // Check for pixel script paths
+    if (filename.includes("ads/pixel.js") || absPath.includes("ads/pixel.js")) {
+      return true;
+    }
+    if (filename.includes("pixel.js") || absPath.includes("pixel.js")) {
+      return true;
+    }
+
+    // Check for Reddit pixel domain with proper URL validation
+    try {
+      if (filename.startsWith("http")) {
+        const url = new URL(filename);
+        if (url.hostname === "pixel-config.reddit.com") return true;
+      }
+      if (absPath.startsWith("http")) {
+        const url = new URL(absPath);
+        if (url.hostname === "pixel-config.reddit.com") return true;
+      }
+    } catch {
+      // If URL parsing fails, fall back to substring check for non-URL paths
+      // This handles cases like "app:///ads/pixel.js" that are not valid URLs
+      if (filename.includes("pixel-config.reddit.com") || absPath.includes("pixel-config.reddit.com")) {
+        return true;
+      }
+    }
+
+    return false;
+  });
 
   if (isFromPixelScript) {
     return true;
@@ -1589,12 +1607,20 @@ const isThirdPartyPixelJsonParseError = (event: Sentry.ErrorEvent): boolean => {
   const hasPixelConfigBreadcrumb = breadcrumbs.some((breadcrumb) => {
     if (breadcrumb.category !== "xhr" && breadcrumb.category !== "fetch") return false;
     const url = breadcrumb.data?.url ?? "";
-    return (
-      url.includes("pixel-config.reddit.com") ||
-      url.includes("pixel-config") ||
-      url.includes("/pixel/") ||
-      url.includes("/ads/")
-    );
+
+    // Check for path-based patterns first
+    if (url.includes("/pixel/") || url.includes("/ads/")) {
+      return true;
+    }
+
+    // For domain checks, use proper URL validation
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname === "pixel-config.reddit.com" || urlObj.hostname.endsWith(".reddit.com");
+    } catch {
+      // If URL parsing fails, fall back to substring check for relative paths
+      return url.includes("pixel-config.reddit.com") || url.includes("pixel-config");
+    }
   });
 
   // Filter if XHR mechanism + pixel breadcrumb + HTML JSON parse error
@@ -1689,17 +1715,67 @@ const isFirefoxNSError = (event: Sentry.ErrorEvent): boolean => {
 
     // Check if all our application code is absent from stack
     // (If our code is present, don't filter - could be actionable)
-    const hasOurCode = stackFrames.some(
-      (frame) =>
-        frame.filename?.includes("/_next/") ||
-        frame.abs_path?.includes("/_next/") ||
-        frame.filename?.includes("theninja-rpg.com") ||
-        frame.abs_path?.includes("theninja-rpg.com")
-    );
+    const hasOurCode = stackFrames.some((frame) => {
+      const filename = frame.filename ?? "";
+      const absPath = frame.abs_path ?? "";
+
+      // Check for Next.js paths
+      if (filename.includes("/_next/") || absPath.includes("/_next/")) {
+        return true;
+      }
+
+      // Check for our domain with proper URL validation
+      try {
+        if (filename.startsWith("http")) {
+          const url = new URL(filename);
+          if (url.hostname === "theninja-rpg.com" || url.hostname.endsWith(".theninja-rpg.com")) {
+            return true;
+          }
+        }
+        if (absPath.startsWith("http")) {
+          const url = new URL(absPath);
+          if (url.hostname === "theninja-rpg.com" || url.hostname.endsWith(".theninja-rpg.com")) {
+            return true;
+          }
+        }
+      } catch {
+        // If URL parsing fails, fall back to substring check for relative paths
+        if (filename.includes("theninja-rpg.com") || absPath.includes("theninja-rpg.com")) {
+          return true;
+        }
+      }
+
+      return false;
+    });
 
     // Filter if from third-party sources AND not from our code
     return (isFromAppProtocol || isFromThirdPartyScript) && !hasOurCode;
   });
+};
+
+/**
+ * Shared utility to check if a function name matches userscript-specific patterns.
+ * Extracted to avoid duplication between isUserscriptError and isUserscriptRawError.
+ */
+const hasUserscriptFunctionName = (funcName: string): boolean => {
+  // Minified function patterns like window["__f__mm6eqil6.gsn"]
+  if (funcName.includes('window["__f__') || funcName.includes("window['__f__")) {
+    return true;
+  }
+
+  // Anonymous function
+  if (funcName === "?") {
+    return true;
+  }
+
+  // Only match < when it's part of typical userscript patterns
+  // like "r<", "At<", or ends with "/<" (bundled script artifacts)
+  // This avoids matching legitimate component names like "<MyComponent>"
+  if (funcName.includes("<")) {
+    return /^[a-zA-Z_]{1,3}</.test(funcName) || funcName.endsWith("/<");
+  }
+
+  return false;
 };
 
 /**
@@ -1728,14 +1804,17 @@ const isUserscriptRawError = (err: unknown): boolean => {
 
   // Check for userscript-internal error patterns that should always be filtered:
   // 1. Single-letter variable errors (typical of minified userscripts) like "d is not defined"
-  // 2. Userscript-specific function patterns like window["__f__..."]
-  // THENINJARPG-2HF: Handle error type prefixes like "ReferenceError: d is not defined"
+  // 2. Userscript-specific function patterns (using shared utility)
   const isSingleLetterVarError = /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(errorMessage);
 
-  const hasUserscriptFunctionPattern =
+  // Check if stack contains userscript function patterns
+  // Note: For raw errors, we check the stack string directly since we don't have parsed frames
+  const hasUserscriptPattern =
     errorStack.includes('window["__f__') ||
     errorStack.includes("window['__f__") ||
-    errorStack.includes("/<"); // e.g., "window[..."]/<"
+    // Only match /< pattern in context (end of function identifier)
+    /[a-zA-Z_]{1,3}</.test(errorStack) ||
+    errorStack.includes("/< ");
 
   // Additional evidence: Check for userscript-specific console log patterns in the error context
   // Userscripts often log to console with identifiable prefixes like "[Persistent Keybinds]"
@@ -1745,7 +1824,7 @@ const isUserscriptRawError = (err: unknown): boolean => {
     errorStack.includes("userscript");
 
   // If it's clearly a userscript-internal error, filter it
-  if (isSingleLetterVarError || hasUserscriptFunctionPattern || hasUserscriptLogPattern) {
+  if (isSingleLetterVarError || hasUserscriptPattern || hasUserscriptLogPattern) {
     return true;
   }
 

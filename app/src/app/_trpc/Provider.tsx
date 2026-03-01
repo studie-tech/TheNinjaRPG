@@ -111,8 +111,17 @@ export const onError = (err: unknown) => {
     return;
   }
   // Ignore transient network/CDN errors (retries handle these gracefully)
+  // Only suppress if the error was actually retried and failed (not first attempt failures)
   if (err instanceof TRPCClientError && isRetryableError(err.message)) {
-    return;
+    // Check if this is from a retry context (has retry metadata)
+    // If meta.attempts exists and is > 1, this was retried before failing
+    const attempts = (err as unknown as { meta?: { attempts?: number } }).meta
+      ?.attempts;
+    if (attempts && attempts > 1) {
+      // Retried and still failed - suppress as it's a persistent network issue
+      return;
+    }
+    // First attempt failure - let it through to Sentry for visibility
   }
   // Ignore abort errors (user navigated away before request completed)
   // Check both cause.name (spec-compliant) and message (fallback for browser variations)

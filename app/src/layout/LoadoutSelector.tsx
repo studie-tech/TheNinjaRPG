@@ -22,7 +22,6 @@ interface LoadoutSelectorConfig<T extends LoadoutData> {
   };
   maxLoadoutsFn: (userData: UserData) => number;
   getSelectedId: (userData: UserData) => string | null;
-  invalidateQueries: () => Promise<void>;
 }
 
 interface LoadoutSelectorProps<T extends LoadoutData> {
@@ -77,18 +76,22 @@ const LoadoutSelector = <T extends LoadoutData>(
       {props.label && <p className="text-sm">{props.label}</p>}
       <div className="flex flex-row gap-1">
         {data?.map((loadout, i) => {
+          const isSelected = selectedId === loadout.id;
           return (
             <button
               type="button"
               className="relative"
               key={loadout.id}
               onClick={() => handleSelect(loadout.id)}
+              aria-label={`${props.label || "Loadout"} ${i + 1}${isSelected ? " (selected)" : ""}`}
+              aria-pressed={isSelected}
             >
               <Folder
-                className={`${iconSize} ${selectedId === loadout.id ? "fill-orange-300" : "hover:cursor-pointer hover:fill-orange-300"}`}
+                className={`${iconSize} ${isSelected ? "fill-orange-300" : "hover:cursor-pointer hover:fill-orange-300"}`}
               />
               <div
                 className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-bold ${textSize}`}
+                aria-hidden="true"
               >
                 {i + 1}
               </div>

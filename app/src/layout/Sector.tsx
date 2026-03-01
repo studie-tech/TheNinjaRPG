@@ -58,9 +58,10 @@ import { updateWaveAnimation, updateWindAnimation } from "@/libs/threejs/shaders
 import type { GlobalTile, SectorPoint, SectorUser } from "@/libs/threejs/types";
 import {
   cleanUp,
-  clearTextureCaches,
   profiler,
+  safeRemoveRendererElement,
   setRaycasterFromMouse,
+  setupContextLossHandling,
   setupScene,
   smoothCameraFollow,
 } from "@/libs/threejs/util";
@@ -720,22 +721,8 @@ const Sector: React.FC<SectorProps> = (props) => {
       sceneRef.appendChild(renderer.domElement);
 
       // Track WebGL context loss to prevent shader errors on iOS mobile browsers
-      let isContextLost = false;
-      const handleContextLost = (event: Event) => {
-        event.preventDefault();
-        isContextLost = true;
-
-        // Clear texture caches when context is lost to free memory
-        clearTextureCaches();
-      };
-      const handleContextRestored = () => {
-        isContextLost = false;
-      };
-      renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
-      renderer.domElement.addEventListener(
-        "webglcontextrestored",
-        handleContextRestored,
-      );
+      // Clear texture caches when context is lost to free memory
+      const contextHandlers = setupContextLossHandling(renderer, { clearCaches: true });
 
       // Setup camara
       const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
@@ -994,7 +981,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
         // Render the scene (skip if WebGL context is lost)
         const endRender = profiler.mark("animate_render");
-        if (!isContextLost) {
+        if (!contextHandlers.isContextLost()) {
           renderer?.render(scene, camera);
         }
         endRender();
@@ -1028,38 +1015,20 @@ const Sector: React.FC<SectorProps> = (props) => {
           sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
           controls.removeEventListener("change", onZoomChange);
           rendererElement.removeEventListener("click", onClick, true);
-          renderer.domElement.removeEventListener(
-            "webglcontextlost",
-            handleContextLost,
-          );
-          renderer.domElement.removeEventListener(
-            "webglcontextrestored",
-            handleContextRestored,
-          );
+          contextHandlers.cleanup();
         } catch {
           // Ignore errors if elements are already removed
         }
 
         // Safely remove renderer DOM element
-        // Defense-in-depth against THENINJARPG-2GX: Check parent relationship to prevent TOCTOU race condition
-        // during React reconciliation when rapid movements trigger multiple cleanup cycles
-        try {
-          if (
-            renderer.domElement &&
-            renderer.domElement.parentNode === sceneRef &&
-            sceneRef.contains(renderer.domElement)
-          ) {
-            sceneRef.removeChild(renderer.domElement);
-          }
-        } catch {
-          // Ignore errors if element is already removed by React reconciliation
-        }
+        safeRemoveRendererElement(renderer, sceneRef);
 
         profiler.reset();
         cleanUp(scene, renderer);
 
-        // Clear texture caches to prevent memory leaks on low-memory devices
-        clearTextureCaches();
+        // Note: Do NOT call clearTextureCaches() here as it clears module-wide caches
+        // that may be in use by other Sector instances. Texture caches are shared across
+        // all scenes for performance. Individual texture cleanup happens in cleanUp().
       };
     }
   }, [props.sector, isAttacking, fetchedUsers]);

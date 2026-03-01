@@ -768,6 +768,76 @@ export const profiler = {
 };
 
 /**
+ * Setup WebGL context loss handling for a renderer.
+ * Tracks context loss/restore to prevent shader errors on iOS mobile browsers.
+ * @param renderer - The WebGLRenderer to setup context handling for
+ * @param options - Optional configuration
+ * @param options.clearCaches - Whether to clear texture caches when context is lost (default: false)
+ * @returns Object with isContextLost getter and cleanup function
+ */
+export const setupContextLossHandling = (
+  renderer: WebGLRenderer,
+  options?: { clearCaches?: boolean },
+) => {
+  let isContextLost = false;
+
+  const handleContextLost = (event: Event) => {
+    event.preventDefault();
+    isContextLost = true;
+
+    if (options?.clearCaches) {
+      clearTextureCaches();
+    }
+  };
+
+  const handleContextRestored = () => {
+    isContextLost = false;
+  };
+
+  renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
+  renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored);
+
+  return {
+    isContextLost: () => isContextLost,
+    cleanup: () => {
+      try {
+        renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+        renderer.domElement.removeEventListener(
+          "webglcontextrestored",
+          handleContextRestored,
+        );
+      } catch {
+        // Ignore errors if elements are already removed
+      }
+    },
+  };
+};
+
+/**
+ * Safely removes a Three.js renderer's DOM element from the scene container.
+ * Defense-in-depth against TOCTOU race condition during React reconciliation
+ * when rapid movements trigger multiple cleanup cycles.
+ * @param renderer - The WebGLRenderer whose DOM element should be removed
+ * @param sceneRef - The parent DOM element containing the renderer
+ */
+export const safeRemoveRendererElement = (
+  renderer: WebGLRenderer,
+  sceneRef: HTMLDivElement,
+) => {
+  try {
+    if (
+      renderer.domElement &&
+      renderer.domElement.parentNode === sceneRef &&
+      sceneRef.contains(renderer.domElement)
+    ) {
+      sceneRef.removeChild(renderer.domElement);
+    }
+  } catch {
+    // Ignore errors if element is already removed by React reconciliation
+  }
+};
+
+/**
  * Smoothly moves camera to follow a target position using linear interpolation
  * @param params Configuration object for camera following
  * @param params.camera The orthographic camera to move

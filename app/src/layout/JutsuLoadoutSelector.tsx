@@ -50,11 +50,6 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
         selectMutation: () => mutationResult,
         maxLoadoutsFn: fedJutsuLoadouts,
         getSelectedId: (userData) => userData.jutsuLoadout,
-        invalidateQueries: async () => {
-          await utils.profile.getUser.invalidate();
-          await utils.item.getUserItems.invalidate();
-          await utils.jutsu.getUserJutsus.invalidate();
-        },
       }}
     />
   );

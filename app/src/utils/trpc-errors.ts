@@ -4,8 +4,17 @@
  * automatically without showing errors to users.
  */
 
-export const isNetworkError = (message?: string) =>
-  message?.includes("Load failed") || message?.includes("fetch");
+export const isNetworkError = (message?: string) => {
+  if (!message) return false;
+  // Match specific network error patterns, not just any mention of "fetch"
+  return (
+    message.includes("Load failed") ||
+    message.includes("fetch failed") ||
+    message.includes("Failed to fetch") ||
+    message.includes("Network request failed") ||
+    message.includes("NetworkError")
+  );
+};
 
 export const isOfflineError = (message?: string) =>
   message?.includes('"Offline" is not valid JSON');
