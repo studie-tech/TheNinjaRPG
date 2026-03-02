@@ -109,12 +109,17 @@ export default TrpcClientProvider;
 
 export const onError = (err: unknown) => {
   // Ignore "Unauthorized for tRPC endpoint", since this could be just the user logging out, thus queries failing
+  // This error is thrown server-side by auth middleware, so we silently handle it to avoid showing
+  // destructive toasts during normal logout flows
   // Validate error originates from auth middleware by checking stack trace
   if (
     err instanceof TRPCClientError &&
     err.message.includes("Unauthorized for tRPC endpoint")
   ) {
-    const stackFrames = parseStackFrames(err.stack);
+    const stackFrames =
+      err.cause instanceof Error && "stack" in err.cause
+        ? parseStackFrames((err.cause as Error).stack)
+        : undefined;
     const isFromAuthMiddleware = stackFrames?.some(
       (frame) =>
         frame.filename?.includes("auth") || frame.filename?.includes("middleware"),

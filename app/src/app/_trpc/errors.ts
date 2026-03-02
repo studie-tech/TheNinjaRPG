@@ -20,9 +20,11 @@ export const parseStackFrames = (stack?: string): Array<StackFrame> => {
     .slice(1) // Skip the first line (error message)
     .map((line) => {
       // Extract filename from stack trace line
-      // Matches patterns like "at functionName (filename:line:col)" or "at filename:line:col"
-      const match = line.match(/\(([^)]+)\)|at\s+([^\s]+)/);
-      return { filename: match?.[1] || match?.[2] };
+      // Chrome/Firefox: "at functionName (filename:line:col)" or "at filename:line:col"
+      // Safari: "functionName@filename:line:col"
+      const chromeMatch = line.match(/\(([^)]+)\)|at\s+([^\s]+)/);
+      const safariMatch = line.match(/@([^\s]+)/);
+      return { filename: chromeMatch?.[1] || chromeMatch?.[2] || safariMatch?.[1] };
     })
     .filter((frame) => frame.filename);
 };
@@ -50,16 +52,23 @@ const isNetworkError = (message?: string, stackFrames?: Array<StackFrame>): bool
   ); // Allow if no stack available (browser errors)
 };
 
-const isOfflineError = (message?: string, stackFrames?: Array<StackFrame>): boolean => {
-  if (!message?.includes('"Offline" is not valid JSON')) return false;
-
-  // Verify from tRPC or fetch context
+/**
+ * Checks if stack frames indicate the error originated from tRPC client or fetch context.
+ * Used to validate that retryable errors are actually network-related.
+ * @param stackFrames - Stack frames to check
+ * @returns true if from tRPC/fetch context or no stack available (likely network error)
+ */
+const isFromTrpcOrFetchContext = (stackFrames?: Array<StackFrame>): boolean => {
   if (!stackFrames || stackFrames.length === 0) return true; // Likely network error
-
   return stackFrames.some(
     (frame) =>
       frame.filename?.includes("@trpc/client") || frame.filename?.includes("fetch"),
   );
+};
+
+const isOfflineError = (message?: string, stackFrames?: Array<StackFrame>): boolean => {
+  if (!message?.includes('"Offline" is not valid JSON')) return false;
+  return isFromTrpcOrFetchContext(stackFrames);
 };
 
 const isSafariJsonError = (
@@ -67,26 +76,12 @@ const isSafariJsonError = (
   stackFrames?: Array<StackFrame>,
 ): boolean => {
   if (!message?.includes("The string did not match the expected pattern")) return false;
-
-  // Verify from tRPC or fetch context
-  if (!stackFrames || stackFrames.length === 0) return true; // Likely network error
-
-  return stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("@trpc/client") || frame.filename?.includes("fetch"),
-  );
+  return isFromTrpcOrFetchContext(stackFrames);
 };
 
 const isProxyError = (message?: string, stackFrames?: Array<StackFrame>): boolean => {
   if (!message?.includes('"An error o"... is not valid JSON')) return false;
-
-  // Verify from tRPC or fetch context
-  if (!stackFrames || stackFrames.length === 0) return true; // Likely network error
-
-  return stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("@trpc/client") || frame.filename?.includes("fetch"),
-  );
+  return isFromTrpcOrFetchContext(stackFrames);
 };
 
 const isHtmlResponseError = (
@@ -94,14 +89,7 @@ const isHtmlResponseError = (
   stackFrames?: Array<StackFrame>,
 ): boolean => {
   if (!message?.includes('"<!DOCTYPE "... is not valid JSON')) return false;
-
-  // Verify from tRPC or fetch context
-  if (!stackFrames || stackFrames.length === 0) return true; // Likely network error
-
-  return stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("@trpc/client") || frame.filename?.includes("fetch"),
-  );
+  return isFromTrpcOrFetchContext(stackFrames);
 };
 
 const isFirefoxJsonError = (
@@ -110,14 +98,7 @@ const isFirefoxJsonError = (
 ): boolean => {
   if (!message?.includes("JSON.parse: unexpected character at line 1 column 1"))
     return false;
-
-  // Verify from tRPC or fetch context
-  if (!stackFrames || stackFrames.length === 0) return true; // Likely network error
-
-  return stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("@trpc/client") || frame.filename?.includes("fetch"),
-  );
+  return isFromTrpcOrFetchContext(stackFrames);
 };
 
 /**
