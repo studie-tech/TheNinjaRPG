@@ -1,3 +1,5 @@
+"use client";
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import Cytoscape from "cytoscape";
 import edgehandles from "cytoscape-edgehandles";
@@ -5,23 +7,15 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
-import { parseStackFrames } from "@/app/_trpc/errors";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { isMobile } from "@/utils/audio";
+import { parseStackFrames } from "@/utils/error";
 import { getSearchValidator } from "@/validators/register";
 
 // Register edgehandles extension once globally
 Cytoscape.use(edgehandles);
-
-const isCytoscapeError = (error: Error, expectedMessage: string): boolean => {
-  const stackFrames = parseStackFrames(error.stack);
-  const isFromCytoscape = stackFrames?.some((frame) =>
-    frame.filename?.includes("cytoscape"),
-  );
-  return error.message.includes(expectedMessage) && isFromCytoscape;
-};
 
 interface GraphUsersGenericProps {
   hideDefault?: boolean;
@@ -135,14 +129,16 @@ const GraphUsersGeneric = (
   const joinedHighlights = [...highlights].sort((a, b) => (a < b ? -1 : 1)).join(",");
 
   // If we are highlighting users, find out which users to show
-  const showIds =
-    highlights.length > 0
+  // Memoize showIds to prevent triggering elements recalculation every render
+  const showIds = useMemo(() => {
+    return highlights.length > 0
       ? props.edges
           .filter((e) => highlights.includes(e.source) || highlights.includes(e.target))
           .flatMap((edge) => [edge.source, edge.target])
       : props.hideDefault
         ? []
         : null;
+  }, [highlights, props.edges, props.hideDefault]);
 
   // Second layer
   // showIds?.push(
@@ -297,6 +293,14 @@ const GraphUsersGeneric = (
       {graph}
     </div>
   );
+};
+
+const isCytoscapeError = (error: Error, expectedMessage: string): boolean => {
+  const stackFrames = parseStackFrames(error.stack);
+  const isFromCytoscape = stackFrames?.some((frame) =>
+    frame.filename?.includes("cytoscape"),
+  );
+  return error.message.includes(expectedMessage) && isFromCytoscape;
 };
 
 export default React.memo(GraphUsersGeneric);

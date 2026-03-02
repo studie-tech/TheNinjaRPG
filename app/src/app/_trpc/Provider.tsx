@@ -12,8 +12,9 @@ import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
+import { parseStackFrames } from "@/utils/error";
 import { api, useGlobalOnMutateProtect } from "./client";
-import { isRetryableError, parseStackFrames } from "./errors";
+import { isRetryableError } from "./errors";
 
 const getBaseUrl = () => {
   if (typeof window !== "undefined") return "";
