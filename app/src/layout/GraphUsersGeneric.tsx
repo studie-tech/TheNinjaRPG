@@ -17,6 +17,20 @@ import { getSearchValidator } from "@/validators/register";
 // Register edgehandles extension once globally
 Cytoscape.use(edgehandles);
 
+/**
+ * Checks if an error originated from Cytoscape library.
+ * @param error - Error object to check
+ * @param expectedMessage - Expected message substring in error
+ * @returns True if error is from Cytoscape and contains expected message
+ */
+const isCytoscapeError = (error: Error, expectedMessage: string): boolean => {
+  const stackFrames = parseStackFrames(error.stack);
+  const isFromCytoscape = stackFrames?.some((frame) =>
+    frame.filename?.includes("cytoscape"),
+  );
+  return error.message.includes(expectedMessage) && isFromCytoscape;
+};
+
 interface GraphUsersGenericProps {
   hideDefault?: boolean;
   nodes: { id: string; label: string; img: string | null }[];
@@ -44,17 +58,22 @@ const GraphUsersGeneric = (
     if (layoutRunningRef.current && layoutInstanceRef.current) {
       try {
         layoutInstanceRef.current.stop();
-        layoutRunningRef.current = false;
-        layoutInstanceRef.current = null;
       } catch (e) {
         if (e instanceof Error) {
           // Only suppress the known "already stopped" error from cytoscape
           if (isCytoscapeError(e, "already stopped")) {
+            // Reset refs even for expected errors before returning
+            layoutRunningRef.current = false;
+            layoutInstanceRef.current = null;
             return; // Silently ignore expected error
           }
           // Log all other errors - these are unexpected
           console.warn("Unexpected error stopping layout:", e);
         }
+      } finally {
+        // Always reset refs regardless of whether stop() succeeded or threw
+        layoutRunningRef.current = false;
+        layoutInstanceRef.current = null;
       }
     }
   }, []);
@@ -293,14 +312,6 @@ const GraphUsersGeneric = (
       {graph}
     </div>
   );
-};
-
-const isCytoscapeError = (error: Error, expectedMessage: string): boolean => {
-  const stackFrames = parseStackFrames(error.stack);
-  const isFromCytoscape = stackFrames?.some((frame) =>
-    frame.filename?.includes("cytoscape"),
-  );
-  return error.message.includes(expectedMessage) && isFromCytoscape;
 };
 
 export default React.memo(GraphUsersGeneric);

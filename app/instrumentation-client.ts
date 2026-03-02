@@ -1201,7 +1201,8 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
       const message = exception.value ?? "";
       // Handle error type prefixes like "ReferenceError: d is not defined"
       // Pattern matches single-letter variables at start OR after ": "
-      return /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(message);
+      // Matches only "is not defined" or "is not a function" patterns
+      return /(?:^|:\s*)[a-z]\s+is\s+not\s+(?:defined|a\s+function)/i.test(message);
     });
 
     if (hasSingleLetterVarError) {
@@ -1361,7 +1362,8 @@ const isUserscriptErrorFromBreadcrumbs = (event: Sentry.ErrorEvent): boolean => 
   const hasSingleLetterVarError = exceptionValues.some((exception) => {
     const message = exception.value ?? "";
     // Handle error type prefixes like "ReferenceError: d is not defined"
-    return /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(message);
+    // Matches only "is not defined" or "is not a function" patterns
+    return /(?:^|:\s*)[a-z]\s+is\s+not\s+(?:defined|a\s+function)/i.test(message);
   });
 
   // Only filter if BOTH conditions are met
@@ -1829,15 +1831,17 @@ const isUserscriptRawError = (err: unknown): boolean => {
   // Check for userscript-internal error patterns that should always be filtered:
   // 1. Single-letter variable errors (typical of minified userscripts) like "d is not defined"
   // 2. Userscript-specific function patterns (using shared utility)
-  const isSingleLetterVarError = /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(errorMessage);
+  // Matches only "is not defined" or "is not a function" patterns
+  const isSingleLetterVarError = /(?:^|:\s*)[a-z]\s+is\s+not\s+(?:defined|a\s+function)/i.test(errorMessage);
 
   // Check if stack contains userscript function patterns
   // Note: For raw errors, we check the stack string directly since we don't have parsed frames
   const hasUserscriptPattern =
     errorStack.includes('window["__f__') ||
     errorStack.includes("window['__f__") ||
-    // Only match /< pattern in context (end of function identifier)
-    /[a-zA-Z_]{1,3}</.test(errorStack) ||
+    // Match function name patterns at word boundaries: "at r<" or "at At<" or ends with "/<"
+    // This avoids matching generic patterns like "Map<" that could appear anywhere
+    /\bat\s+[a-zA-Z_]{1,3}</.test(errorStack) ||
     errorStack.includes("/< ");
 
   // Additional evidence: Check for userscript-specific console log patterns in the error context
