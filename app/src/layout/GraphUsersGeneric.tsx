@@ -44,7 +44,12 @@ const GraphUsersGeneric = (
         layoutRunningRef.current = false;
         layoutInstanceRef.current = null;
       } catch (e) {
-        if (e instanceof Error && !e.message.includes("already stopped")) {
+        if (e instanceof Error) {
+          // Only suppress the known "already stopped" error from cytoscape
+          if (e.message.includes("already stopped")) {
+            return; // Silently ignore expected error
+          }
+          // Log all other errors - these are unexpected
           console.warn("Unexpected error stopping layout:", e);
         }
       }
@@ -79,8 +84,12 @@ const GraphUsersGeneric = (
           try {
             cyRefInstance.destroy();
           } catch (e) {
-            // Log unexpected errors during cleanup for debugging
-            if (e instanceof Error && !e.message.includes("destroyed")) {
+            if (e instanceof Error) {
+              // Only suppress the known "destroyed" error from cytoscape
+              if (e.message.includes("destroyed")) {
+                return; // Silently ignore expected error
+              }
+              // Log all other errors - these are unexpected
               console.warn("Unexpected error destroying cytoscape:", e);
             }
           }
@@ -153,10 +162,44 @@ const GraphUsersGeneric = (
     ];
   }, [props.nodes, props.edges, showIds]);
 
-  // Stop any running layout before re-rendering graph
+  // Stop any running layout before re-rendering graph, then run new layout
   useEffect(() => {
     stopLayout();
-  }, [joinedHighlights, elements, stopLayout]);
+
+    // Run layout after elements change
+    if (cyRef.current && isMountedRef.current) {
+      const layout = cyRef.current.layout({
+        name: "cose",
+        idealEdgeLength: (edge) => edge.data().weight as number,
+        nodeOverlap: 20,
+        refresh: 20,
+        fit: true,
+        padding: 30,
+        randomize: true,
+        componentSpacing: 100,
+        nodeRepulsion: () => 400000,
+        edgeElasticity: (edge) => edge.data().weight as number,
+        nestingFactor: 5,
+        gravity: 80,
+        numIter: isMobileDevice ? 500 : 1000,
+        initialTemp: 200,
+        coolingFactor: 0.95,
+        minTemp: 1.0,
+        // Track layout lifecycle
+        ready: () => {
+          if (isMountedRef.current) {
+            layoutRunningRef.current = true;
+          }
+        },
+        stop: () => {
+          layoutRunningRef.current = false;
+          layoutInstanceRef.current = null;
+        },
+      });
+      layoutInstanceRef.current = layout;
+      layout.run();
+    }
+  }, [joinedHighlights, elements, stopLayout, isMobileDevice]);
 
   // Memo
   const graph = useMemo(() => {
@@ -164,42 +207,7 @@ const GraphUsersGeneric = (
       <div className="h-full w-full">
         <CytoscapeComponent
           elements={elements}
-          cy={(cy) => {
-            setCytoscape(cy);
-            // Store the layout instance when it's created
-            if (cy && isMountedRef.current) {
-              const layout = cy.layout({
-                name: "cose",
-                idealEdgeLength: (edge) => edge.data().weight as number,
-                nodeOverlap: 20,
-                refresh: 20,
-                fit: true,
-                padding: 30,
-                randomize: true,
-                componentSpacing: 100,
-                nodeRepulsion: () => 400000,
-                edgeElasticity: (edge) => edge.data().weight as number,
-                nestingFactor: 5,
-                gravity: 80,
-                numIter: isMobileDevice ? 500 : 1000,
-                initialTemp: 200,
-                coolingFactor: 0.95,
-                minTemp: 1.0,
-                // Track layout lifecycle
-                ready: () => {
-                  if (isMountedRef.current) {
-                    layoutRunningRef.current = true;
-                  }
-                },
-                stop: () => {
-                  layoutRunningRef.current = false;
-                  layoutInstanceRef.current = null;
-                },
-              });
-              layoutInstanceRef.current = layout;
-              layout.run();
-            }
-          }}
+          cy={setCytoscape}
           layout={{ name: "preset" }}
           style={{ width: "100%", height: "100%" }}
           stylesheet={

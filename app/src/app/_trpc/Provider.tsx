@@ -12,8 +12,8 @@ import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
-import { isRetryableError } from "@/utils/trpc-errors";
 import { api, useGlobalOnMutateProtect } from "./client";
+import { isRetryableError } from "./errors";
 
 const getBaseUrl = () => {
   if (typeof window !== "undefined") return "";

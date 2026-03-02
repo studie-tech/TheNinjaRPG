@@ -83,14 +83,12 @@ Sentry.init({
     "Jsloader error", // Google Maps JS API loader error - occurs when the @googlemaps/js-api-loader script fails to load (network issues, ad blockers, or Google CDN outages). Users see map not loading but the rest of the app works normally.
     "Attempt to use history.pushState() more than 100 times per 10 seconds", // Browser security limit on history API - occurs when third-party analytics scripts (Speed Insights, GTM, i18n pixel) exceed rate limit during rapid navigation. Users can navigate normally; only analytics logging is rate-limited.
     "window.setDgResult is not a function", // Third-party bot detection/anti-fraud script error (likely DataDome) - occurs when bot detection services attempt to call undefined callback function on mobile WebView with strict security policies. Users continue signup flow normally; error is isolated to third-party script context.
-    "out of memory", // Browser-level memory error on /travel during 3D rendering. Occurs on Firefox with low memory/heavy tabs. UX: WebGL error boundary shows fallback, users can refresh. Fix: Texture cache disposal in Map.tsx/Sector.tsx cleanup.
     /SyntaxError.*Unexpected EOF/, // Next.js chunk truncation errors (network issues on mobile) - captured by isNextJsChunkSyntaxError for precise filtering
     "JSON.parse: unexpected character at line 1 column 1 of the JSON data", // Firefox JSON parsing error - occurs when tRPC receives non-JSON responses (network issues, CDN outages). Equivalent to Chrome's '"Offline" is not valid JSON' or '"<!DOCTYPE "... is not valid JSON'. Handled by tRPC retry logic in Provider.tsx.
     "Error in input stream", // Firefox stream error - occurs when Firefox's fetch implementation encounters errors reading response streams during Next.js RSC (React Server Components) navigation/prefetch. Common causes: network interruption mid-stream, corrupted CDN response, incomplete RSC payload, browser abort during navigation. This is Firefox's equivalent to Chrome's "Failed to fetch" or Safari's "Load failed". UX: Handled gracefully by Next.js internal retry logic and Firefox's fetch error recovery (marked as handled:yes in Sentry). Users see normal navigation; failed streams fall back to fresh server requests. Detection: handled=yes, no stack trace (browser-level error before JS execution), Firefox browser tag, RSC navigation with _rsc query param.
     "failed to decode cache", // Next.js RSC (React Server Components) cache decoding error - occurs when browser cache contains stale, corrupted, or incomplete RSC payload data from prefetch requests. Common causes: browser cache inconsistency after deployments, network issues during RSC payload download, memory pressure during cleanup, Firefox-specific cache validation. UX: Handled gracefully by Next.js internal retry logic - failed cache reads fall back to fresh server requests. Users may experience slightly slower navigation but no visible error. Detection: minimal stack trace, global error handler mechanism, recent RSC prefetch breadcrumbs (_rsc query param).
     /NS_ERROR_/, // Firefox internal error codes (NS_ERROR_FAILURE, NS_ERROR_NOT_AVAILABLE, etc.) from third-party scripts (ads/pixel.js, tracking pixels, browser extensions). These are Firefox XPCOM errors that occur when third-party code encounters browser-level failures. Not actionable from application code. UX: No user-visible impact - errors occur in isolated third-party script contexts.
     "Should not already be working.", // React internal scheduler error - occurs when React's concurrent rendering scheduler detects re-entrant scheduling during complex navigation patterns. Not actionable at application level. UX: No user-visible impact - React's error recovery handles scheduler assertions gracefully.
-    "invalid origin", // Third-party script or browser security error during navigation - occurs when cross-origin requests from analytics, tracking scripts, or browser privacy features (DuckDuckGo Mobile's tracking protection) are blocked. UX: No user-visible impact - page navigation and tRPC queries complete successfully. Error occurs in background processes isolated from application code.
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -187,6 +185,12 @@ Sentry.init({
     }
     if (isClerkSignOutError(event)) {
       return null; // Drop Clerk sign-out race condition errors
+    }
+    if (isOutOfMemoryError(event)) {
+      return null; // Drop scoped out of memory errors from /travel 3D rendering
+    }
+    if (isInvalidOriginError(event)) {
+      return null; // Drop scoped invalid origin errors from third-party scripts
     }
     return event;
   },
@@ -769,6 +773,106 @@ const isClerkSignOutError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
+ * Check if an error is a scoped "out of memory" error that should be filtered.
+ * These errors occur during 3D rendering on /travel when browsers (especially Firefox)
+ * run out of memory due to heavy tab usage or limited device memory.
+ *
+ * UX: WebGL error boundary shows fallback UI. Users can refresh to free memory.
+ *
+ * Only filters when:
+ * - Error message is exactly "out of memory" (case-insensitive)
+ * - URL is /travel (the 3D rendering page)
+ * - Stack frames point to Three.js or WebGL context
+ */
+const isOutOfMemoryError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const url = event.request?.url ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must be the specific "out of memory" error message
+  if (!message.toLowerCase().includes("out of memory")) {
+    return false;
+  }
+
+  // Must be on /travel page (3D rendering context)
+  if (!url.includes("/travel")) {
+    return false;
+  }
+
+  // Verify it originates from Three.js or WebGL rendering context
+  const isFromThreeJs = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("three") ||
+      frame.filename?.includes("webgl") ||
+      frame.abs_path?.includes("three") ||
+      frame.abs_path?.includes("webgl"),
+  );
+
+  // Also check for empty stack trace (browser-level memory error)
+  const isBrowserLevelError = stackFrames.length === 0;
+
+  return isFromThreeJs || isBrowserLevelError;
+};
+
+/**
+ * Check if an error is a scoped "invalid origin" error that should be filtered.
+ * These errors occur when third-party scripts (analytics, tracking, browser privacy features)
+ * make cross-origin requests that are blocked by browser security policies.
+ *
+ * UX: No user-visible impact. Page navigation and tRPC queries complete successfully.
+ * Error occurs in background processes isolated from application code.
+ *
+ * Only filters when:
+ * - Error message contains "invalid origin" (case-insensitive)
+ * - Stack frames show third-party script origins OR no meaningful stack trace
+ * - NOT from our application code (/_next/, /app/, theninja-rpg.com)
+ */
+const isInvalidOriginError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Must contain "invalid origin" in the error message
+  if (!message.toLowerCase().includes("invalid origin")) {
+    return false;
+  }
+
+  // Check if any stack frames are from our application code
+  const hasAppFrames = stackFrames.some((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+
+    // Check for our app code paths
+    if (filename.includes("/_next/") || filename.includes("/app/") || filename.includes("/src/")) {
+      return true;
+    }
+
+    // For URL-based checks, validate hostname properly
+    try {
+      if (filename.startsWith("http")) {
+        const url = new URL(filename);
+        if (url.hostname === "theninja-rpg.com" || url.hostname.endsWith(".theninja-rpg.com")) {
+          return true;
+        }
+      }
+      if (absPath.startsWith("http")) {
+        const url = new URL(absPath);
+        if (url.hostname === "theninja-rpg.com" || url.hostname.endsWith(".theninja-rpg.com")) {
+          return true;
+        }
+      }
+    } catch {
+      // URL parsing failed
+    }
+
+    return false;
+  });
+
+  // Only filter if no app frames are present (third-party origin)
+  // OR if there's no meaningful stack trace (browser-level error)
+  return !hasAppFrames || stackFrames.length === 0;
+};
+
+/**
  * Check if an error is a Next.js chunk parsing error that should be filtered.
  * These occur when Next.js JavaScript chunks are truncated during download due to network
  * issues (mobile network changes, device sleep, interrupted connection, CDN timeouts).
@@ -899,9 +1003,6 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
  * - Error message: "An unexpected response was received from the server"
  * - SSO callback: URL contains /signup/sso-callback or /signin/sso-callback
  * - Sign-out: Breadcrumbs show sign-out button click + POST request with 403 status
- *
- * Filter server action errors on SSO callback URLs and during sign-out.
- * Source: Plan B (breadcrumb validation), Plan C (naming), Plan A (documentation style)
  */
 const isServerActionAuthError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -1072,84 +1173,6 @@ const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolea
  * - Errors referencing our pages but originating from injected code
  * - Filter errors from userscripts like "Jutsu-Hotkeys" that add keyboard shortcuts for
  *   jutsu actions. These scripts may have compatibility issues when page structure changes.
- *
- * Filtered Sentry issues:
- * - "d is not defined" on /occupation page (30+ events)
- * - "d is not defined" on /items page (7 events)
- * - "d is not defined" on /travel page (2 events) - Fix: check all exception values
- * - "d is not defined" on /manual page (2 events) - Fix: refine app code detection to distinguish page context pollution
- * - "d is not defined" on /hospital page (2 events)
- * - "d is not defined" on /items page (1 event) - Fix: add breadcrumb-based userscript detection fallback
- * - "d is not defined" on /reports page (1 event)
- * - "d is not defined" on /jutsus page (1 event)
- * - "d is not defined" on /village page (1 event, 2026-02-23) -
- *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-23T16:12:05Z during
- *   filter deployment transition period.
- *   Already covered by existing breadcrumb + single-letter error detection (lines 1028-1052)
- *   and userscript frame detection (lines 1061-1093).
- * - "d is not defined" on /jutsus page (1 event, 2026-02-23) -
- *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-23T16:12:27Z during
- *   filter deployment transition period (before comprehensive filters fully deployed).
- *   Same userscript pattern (2026-02-27). Already covered by
- *   existing breadcrumb + single-letter error detection (lines 1028-1052, 1061-1068).
- * - "d is not defined" on /combat page (1 event)
- * - "d is not defined" on /battlelog page (1 event)
- * - "d is not defined" on /username page (1 event) - Fix: add explicit page context pollution early filter
- * - "d is not defined" on /username page (1 event) - Same userscript (Jutsu-Hotkeys) error, already handled by existing filters
- * - "d is not defined" on /occupation page (1 event) - Occurred 2026-02-24, before comprehensive filters fully deployed
- * - "d is not defined" on /manual/jutsu page (1 event) - Jutsu-Hotkeys.user.js
- *   userscript error. Occurred 2026-02-24, should have been caught by existing filters
- *   (likely timing/deployment edge case).
- * - "d is not defined" on /combat page (1 event) - Jutsu-Hotkeys.user.js
- *   userscript error with [Persistent Keybinds] breadcrumb. Occurred 2026-02-24T15:26:27Z.
- *   Fixed by adding early breadcrumb check in isUserscriptError() for defense-in-depth.
- * - "d is not defined" on /traininggrounds page (1 event) -
- *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-24T00:24:12Z.
- *   Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with window["__f__mlzykk8m.cfq"]
- *   Breadcrumb: "[Persistent Keybinds] Key listener attached." Single occurrence.
- *   Fixed by enhancing regex to handle error type prefixes (e.g., "ReferenceError: d is not defined").
- * - "d is not defined" on /news page (1 event) - Jutsu-Hotkeys.user.js
- *   userscript error. Occurred 2026-02-23T18:01:27Z during filter transition period.
- *   Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with window["__f__mlzn50o5.uji"]
- *   Breadcrumb: "[Persistent Keybinds] Key listener attached." Single occurrence.
- *   Already covered by existing breadcrumb + single-letter error detection (line 1044).
- * - "d is not defined" on /inbox page (1 event, 2026-02-21T15:23:01Z) -
- *   Jutsu-Hotkeys.user.js userscript error. The ACTUAL EARLIEST logged Jutsu-Hotkeys
- *   occurrence, by 2.7 hours. Occurred BEFORE any userscript
- *   filters were implemented. Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js:?
- *   in window["__f__mlwqvleb.rx"]/< followed by page context pollution frames
- *   (app:///inbox:? in At, r<, ?, _). Breadcrumb: "[Persistent Keybinds] Key listener
- *   attached." Now covered by multiple defensive layers: (1) Early breadcrumb +
- *   single-letter error detection (lines 1061-1093), (2) Userscript frame detection
- *   (lines 1102-1109), (3) Page context pollution filtering (lines 1177-1182),
- *   (4) Fallback breadcrumb detection (lines 1231-1262). This error represents the
- *   initial detection that led to comprehensive Jutsu-Hotkeys filtering.
- * - "d is not defined" on /jutsus page (1 event, 2026-02-21) -
- *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-21T17:47:25Z, the
- *   second-earliest logged occurrence, occurring 2 days
- *   BEFORE the filter deployment transition period (on 2026-02-22). This was one of the initial errors that prompted investigation
- *   into Jutsu-Hotkeys userscript issues and drove development of comprehensive
- *   defensive filters. Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with
- *   window["__f__mlwtmvde.d2i"]/< followed by page context pollution frames
- *   (app:///jutsus:? in At, r<, ?). Breadcrumb: "[Persistent Keybinds] Key listener attached."
- *   Now covered by multiple defensive layers: (1) Early breadcrumb + single-letter
- *   error detection (lines 1042-1066), (2) Userscript frame detection (lines 1075-1082),
- *   (3) Error pattern matching (lines 1088-1101), (4) Page context pollution filtering
- *   (lines 1146-1155), (5) Breadcrumb-based fallback (lines 1204-1235).
- * - "d is not defined" on /username/:username page (1 event, 2026-02-22) -
- *   Jutsu-Hotkeys.user.js userscript error. Occurred 2026-02-22T13:22:26Z, the second
- *   occurrence in this batch of Jutsu-Hotkeys errors. This error
- *   occurred BEFORE comprehensive userscript filters were fully deployed (filters deployed 2026-02-23+).
- *   This was one of the first detected Jutsu-Hotkeys errors that drove the development
- *   of defense-in-depth breadcrumb checking (lines 1034-1066), page context pollution
- *   filtering (lines 1146-1155), and regex enhancements.
- *   Stack trace: app:///userscripts/Jutsu-Hotkeys.user.js with window["__f__mlxscmnm.3e"]/<
- *   followed by page context pollution frames (app:///username/enryu:? in At, r<, ?).
- *   Breadcrumb: "[Persistent Keybinds] Key listener attached."
- *   Now covered by multiple defensive layers: (1) Early breadcrumb + single-letter error
- *   detection (lines 1042-1066), (2) Userscript frame detection (lines 1075-1082),
- *   (3) Page context pollution filtering (lines 1146-1155), (4) Fallback breadcrumb
- *   detection (lines 1204-1235).
  */
 const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
   const exceptionValues = event.exception?.values ?? [];
@@ -1160,9 +1183,6 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
   // (some with clear userscript frames, others with only page context pollution).
   // When a userscript console breadcrumb is present AND the error matches userscript patterns,
   // filter immediately without complex stack frame analysis.
-  //
-  // Filtered issues:
-  // - "d is not defined" on /combat page (1 event, 2026-02-24)
   const hasUserscriptBreadcrumb = breadcrumbs.some((breadcrumb) => {
     if (breadcrumb.category !== "console") return false;
     const msg = breadcrumb.message ?? "";
@@ -1314,11 +1334,6 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
  *
  * UX note: Same as isUserscriptError - these errors do not affect application
  * functionality for users without the userscript installed.
- *
- * Filtered Sentry issues:
- * - "d is not defined" on /items page (1 event) - Edge case where
- *   multiple exception values had varying structures, causing stack frame detection
- *   to be ambiguous
  */
 const isUserscriptErrorFromBreadcrumbs = (event: Sentry.ErrorEvent): boolean => {
   const breadcrumbs = event.breadcrumbs ?? [];
@@ -1447,13 +1462,32 @@ const isHistoryPushStateRateLimitError = (event: Sentry.ErrorEvent): boolean => 
     const frames = exception.stacktrace?.frames ?? [];
     const hasAppFrames = frames.some((frame) => {
       const filename = frame.filename ?? "";
-      // Consider it an app frame if it's from our domain or has our app code paths
-      return (
-        filename.includes("theninja-rpg.com") ||
-        filename.includes("/_next/") ||
-        filename.includes("/app/") ||
-        filename.includes("/src/")
-      );
+      const absPath = frame.abs_path ?? "";
+
+      // Check for our app code paths (non-URL based)
+      if (filename.includes("/_next/") || filename.includes("/app/") || filename.includes("/src/")) {
+        return true;
+      }
+
+      // For URL-based checks, validate hostname properly to prevent spoofing
+      try {
+        if (filename.startsWith("http")) {
+          const url = new URL(filename);
+          if (url.hostname === "theninja-rpg.com" || url.hostname.endsWith(".theninja-rpg.com")) {
+            return true;
+          }
+        }
+        if (absPath.startsWith("http")) {
+          const url = new URL(absPath);
+          if (url.hostname === "theninja-rpg.com" || url.hostname.endsWith(".theninja-rpg.com")) {
+            return true;
+          }
+        }
+      } catch {
+        // URL parsing failed, not a valid HTTP URL
+      }
+
+      return false;
     });
 
     // Only filter if no app frames are present (third-party origin)
@@ -1868,13 +1902,13 @@ const isRageClickEvent = (event: Sentry.ErrorEvent): boolean => {
  * 2. Browser extensions intercept fetch requests and read body multiple times
  * 3. Code accidentally calls .json()/.text()/.blob() multiple times without cloning
  *
- * Root cause in globe.ts:52 has been fixed by adding response.clone() (2026-02-28).
+ * The globe.ts implementation uses response.clone() to prevent this error.
  * This filter serves as defense-in-depth for any similar errors elsewhere.
  *
  * UX note: When this error occurs, users may see map loading failures or similar
  * fetch-dependent features fail. The application's retry logic attempts to recover
- * automatically. If the error persists after the globe.ts fix, investigate other
- * fetch usage patterns in the codebase.
+ * automatically. If the error persists, investigate other fetch usage patterns in
+ * the codebase.
  *
  * Common patterns:
  * - Minimal or anonymous stack traces (native browser API errors)
@@ -1940,10 +1974,8 @@ const isResponseBodyAlreadyReadError = (event: Sentry.ErrorEvent): boolean => {
  *
  * This error is not actionable at the application level:
  * - Originates deep in React's scheduler (we don't control this code)
- * - Transient timing-dependent edge case (single occurrence indicates extreme rarity)
+ * - Transient timing-dependent edge case
  * - React team owns this code path (application code cannot prevent scheduler re-entrancy)
- *
- * Occurred once on 2026-02-19 during signup navigation in Firefox 147.0.
  */
 const isReactSchedulerError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -2022,8 +2054,6 @@ const isReactSchedulerError = (event: Sentry.ErrorEvent): boolean => {
  * 2. Stack trace validation to avoid filtering application bugs
  * 3. Only filters if error is browser-level (no application code in stack)
  * 4. Type validation to ensure it's a TypeError or generic Error
- *
- * Single occurrence on 2026-02-19 during /manual -> /news navigation in Firefox 147.0.
  */
 const isFirefoxInputStreamError = (event: Sentry.ErrorEvent): boolean => {
   const message = (event.exception?.values?.[0]?.value ?? "").toLowerCase();
