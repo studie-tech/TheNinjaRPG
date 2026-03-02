@@ -12,9 +12,8 @@ import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
-import { isErrorFromSource } from "@/utils/error";
+import { isRetryableTrpcError } from "@/utils/error";
 import { api, useGlobalOnMutateProtect } from "./client";
-import { isRetryableTrpcError } from "./errors";
 
 const getBaseUrl = () => {
   if (typeof window !== "undefined") return "";
@@ -126,40 +125,26 @@ export const onError = (error: unknown) => {
   // Ignore abort errors (user navigated away before request completed)
   // Use spec-compliant cause.name check with message-based fallback for browsers
   // that don't properly set cause.name
-  // Validate origin to avoid suppressing unrelated errors with similar messages
   if (error instanceof TRPCClientError) {
     if (error.cause?.name === "AbortError") {
       // AbortError cause is reliable, no validation needed
       return;
     }
     if (error.message.includes("The operation was aborted")) {
-      // Message-based fallback: validate it's from navigation/fetch context
-      const isFromNavigation = isErrorFromSource(error, [
-        "@trpc/client",
-        "fetch",
-        "navigation",
-        "Provider",
-      ]);
-      if (isFromNavigation) {
-        return;
-      }
+      // Message-based fallback: abort errors always have this specific message
+      // and originate from fetch/navigation context, so message match is sufficient
+      return;
     }
   }
   // Handle "not signed in" errors gracefully (from useGlobalOnMutateProtect)
-  // Validate error originates from useGlobalOnMutateProtect by checking stack trace
+  // This specific error message is only thrown from useGlobalOnMutateProtect in client.ts,
+  // so message matching is sufficient (stack trace checking doesn't work in production builds)
   if (
     error instanceof Error &&
-    error.message.includes("You need to be signed in to perform this action")
+    error.message === "You need to be signed in to perform this action."
   ) {
-    const isFromOnMutateProtect = isErrorFromSource(error, [
-      "useGlobalOnMutateProtect",
-      "Provider",
-    ]);
-    // Handle gracefully if from expected source or no stack available (fallback)
-    if (isFromOnMutateProtect || !error.stack || error.stack.trim().length === 0) {
-      showMutationToast({ success: false, message: error.message });
-      return;
-    }
+    showMutationToast({ success: false, message: error.message });
+    return;
   }
   console.error("onerror", error);
   if (error instanceof TRPCClientError) {
