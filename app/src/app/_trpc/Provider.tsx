@@ -12,9 +12,9 @@ import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
-import { parseStackFrames } from "@/utils/error";
+import { extractStackFramesFromError, parseStackFrames } from "@/utils/error";
 import { api, useGlobalOnMutateProtect } from "./client";
-import { isRetryableError } from "./errors";
+import { isRetryableTrpcError } from "./errors";
 
 const getBaseUrl = () => {
   if (typeof window !== "undefined") return "";
@@ -33,7 +33,7 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
           },
         },
         queryCache: new QueryCache({
-          onError: (err, _query) => onError(err),
+          onError: (error, _query) => onError(error),
         }),
         mutationCache: new MutationCache({
           onMutate: (_variables, mutation) => {
@@ -46,7 +46,7 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
             onMutateCheck(mutationPath);
             document.body.style.cursor = "wait";
           },
-          onError: (err, _variables, _context, _mutation) => onError(err),
+          onError: (error, _variables, _context, _mutation) => onError(error),
           onSettled: () => {
             document.body.style.cursor = "default";
           },
@@ -57,32 +57,24 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
     api.createClient({
       links: [
         retryLink({
-          retry(opts) {
+          retry(options) {
             // Retry transient network/CDN errors (network failures, offline, invalid JSON responses)
-            // Extract stack frames from error for validation
-            const stackFrames =
-              opts.error.cause instanceof Error && "stack" in opts.error.cause
-                ? parseStackFrames((opts.error.cause as Error).stack)
-                : undefined;
-            if (
-              isRetryableError(opts.error.message, stackFrames) &&
-              opts.op.type === "query"
-            ) {
-              return opts.attempts <= 3;
+            if (isRetryableTrpcError(options.error) && options.op.type === "query") {
+              return options.attempts <= 3;
             }
             // Don't retry on non-500s
             if (
-              opts.error.data &&
-              (opts.error.data as { code?: string }).code !== "INTERNAL_SERVER_ERROR"
+              options.error.data &&
+              (options.error.data as { code?: string }).code !== "INTERNAL_SERVER_ERROR"
             ) {
               return false;
             }
             // Only retry queries
-            if (opts.op.type !== "query") {
+            if (options.op.type !== "query") {
               return false;
             }
             // Retry up to 3 times
-            return opts.attempts <= 3;
+            return options.attempts <= 3;
           },
           // Double every attempt, with max of 30 seconds (starting at 1 second)
           retryDelayMs: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
@@ -108,88 +100,83 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
 
 export default TrpcClientProvider;
 
-export const onError = (err: unknown) => {
+export const onError = (error: unknown) => {
   // Ignore "Unauthorized for tRPC endpoint", since this could be just the user logging out, thus queries failing
   // This error is thrown server-side by auth middleware, so we silently handle it to avoid showing
   // destructive toasts during normal logout flows
   // Validate error originates from auth middleware by checking stack trace
   if (
-    err instanceof TRPCClientError &&
-    err.message.includes("Unauthorized for tRPC endpoint")
+    error instanceof TRPCClientError &&
+    error.message.includes("Unauthorized for tRPC endpoint")
   ) {
-    const stackFrames =
-      err.cause instanceof Error && "stack" in err.cause
-        ? parseStackFrames((err.cause as Error).stack)
-        : undefined;
-    const isFromAuthMiddleware = stackFrames?.some(
-      (frame) =>
-        frame.filename?.includes("auth") || frame.filename?.includes("middleware"),
-    );
-    if (isFromAuthMiddleware || !stackFrames || stackFrames.length === 0) {
+    const stackFrames = extractStackFramesFromError(error);
+    const isFromAuthMiddleware =
+      stackFrames?.some(
+        (frame) =>
+          frame.filename?.includes("trpc") || frame.filename?.includes("middleware"),
+      ) ||
+      !stackFrames ||
+      stackFrames.length === 0;
+    if (isFromAuthMiddleware) {
       return;
     }
   }
   // Ignore transient network/CDN errors (retries handle these gracefully)
   // Queries are retried by retryLink (up to 3 attempts), mutations are never retried
   // All retryable errors are suppressed here to avoid user-facing toasts for transient issues
-  if (err instanceof TRPCClientError) {
-    // Extract stack frames from error for validation
-    const stackFrames =
-      err.cause instanceof Error && "stack" in err.cause
-        ? parseStackFrames((err.cause as Error).stack)
-        : undefined;
-    if (isRetryableError(err.message, stackFrames)) {
+  if (error instanceof TRPCClientError) {
+    if (isRetryableTrpcError(error)) {
       // Filtered from Sentry in instrumentation-client.ts (isNetworkNavigationError)
       return;
     }
   }
   // Ignore abort errors (user navigated away before request completed)
   // Use spec-compliant cause.name check
-  if (err instanceof TRPCClientError && err.cause?.name === "AbortError") {
+  if (error instanceof TRPCClientError && error.cause?.name === "AbortError") {
     return;
   }
   // Handle "not signed in" errors gracefully (from useGlobalOnMutateProtect)
   // Validate error originates from useGlobalOnMutateProtect by checking stack trace
   if (
-    err instanceof Error &&
-    err.message.includes("You need to be signed in to perform this action")
+    error instanceof Error &&
+    error.message.includes("You need to be signed in to perform this action")
   ) {
-    const stackFrames = parseStackFrames(err.stack);
+    const stackFrames = parseStackFrames(error.stack);
     const isFromOnMutateProtect = stackFrames?.some(
       (frame) =>
         frame.filename?.includes("useGlobalOnMutateProtect") ||
         frame.filename?.includes("Provider"),
     );
     if (isFromOnMutateProtect || !stackFrames || stackFrames.length === 0) {
-      showMutationToast({ success: false, message: err.message });
+      showMutationToast({ success: false, message: error.message });
       return;
     }
   }
-  console.error("onerror", err);
-  if (err instanceof TRPCClientError) {
-    const errorCode = (err.data as { code?: string })?.code;
+  console.error("onerror", error);
+  if (error instanceof TRPCClientError) {
+    const errorCode = (error.data as { code?: string })?.code;
     // Handle rate limiting errors with a softer toast (not logged to Sentry, not destructive)
     if (errorCode === "TOO_MANY_REQUESTS") {
-      showMutationToast({ success: false, message: err.message });
+      showMutationToast({ success: false, message: error.message });
       return;
     }
-    Sentry.captureException(err, { extra: { message: "TRPC Client Error" } });
+    Sentry.captureException(error, { extra: { message: "TRPC Client Error" } });
     toast({
       variant: "destructive",
-      title: err?.data?.code ?? "Unknown",
-      description: err.message,
+      title: error?.data?.code ?? "Unknown",
+      description: error.message,
     });
-  } else if (err instanceof Error) {
-    Sentry.captureException(err, { extra: { message: "TRPC Frontend Error" } });
+  } else if (error instanceof Error) {
+    Sentry.captureException(error, { extra: { message: "TRPC Frontend Error" } });
     toast({
       variant: "destructive",
       title: "Error",
-      description: err.message,
+      description: error.message,
     });
-  } else if (err !== null && err !== undefined) {
+  } else if (error !== null && error !== undefined) {
     Sentry.captureMessage("Non-Error object thrown", {
       level: "warning",
-      extra: { err },
+      extra: { error },
     });
   }
 };

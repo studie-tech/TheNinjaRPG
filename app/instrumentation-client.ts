@@ -3,6 +3,13 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
+import {
+  isNetworkError as isNetworkErrorPattern,
+  isHtmlResponseError as isHtmlResponseErrorPattern,
+  isFirefoxJsonError as isFirefoxJsonErrorPattern,
+  isProxyError as isProxyErrorPattern,
+} from "@/app/_trpc/errors";
+import type { StackFrame } from "@/utils/error";
 
 Sentry.init({
   dsn: "https://c35c54f99b73b4a3b8a7e60936bc2967@o4507797256601600.ingest.de.sentry.io/4507797262958672",
@@ -119,6 +126,9 @@ Sentry.init({
     }
     if (isHtmlResponseError(event)) {
       return null; // Drop HTML response parsing errors (CDN/proxy outages)
+    }
+    if (isProxyError(event)) {
+      return null; // Drop proxy error response parsing errors (truncated proxy error messages)
     }
     if (isInjectedJsonParseError(event)) {
       return null; // Drop JSON parsing errors from anonymous/injected code (browser extensions)
@@ -264,10 +274,28 @@ const isLocalStorageAccessError = (err: unknown): boolean => {
 };
 
 /**
+ * Helper to extract stack frames from Sentry error event.
+ * Converts Sentry's stack frame format to our simplified StackFrame type
+ * used by the shared error pattern matchers.
+ */
+const extractStackFramesFromSentryEvent = (
+  event: Sentry.ErrorEvent,
+): Array<StackFrame> => {
+  const sentryFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+  return sentryFrames.map((frame) => ({
+    filename: frame.filename ?? frame.abs_path,
+  }));
+};
+
+/**
  * Check if an error is a network fetch error that should be suppressed.
  * These occur on iOS Safari when the device goes to sleep, network changes,
  * or the request is aborted during navigation. The "Load failed" message may
  * include a domain suffix like "(uploadthing.b-cdn.net)" for CDN requests.
+ *
+ * Note: This is a legacy function for unhandledrejection handler.
+ * For Sentry beforeSend filtering, use isNetworkLoadError() which leverages
+ * the shared error patterns from errors.ts.
  */
 const isNetworkFetchError = (err: unknown): boolean => {
   if (!(err instanceof Error)) return false;
@@ -535,8 +563,7 @@ const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
  * - Silent ignore in tRPC onError prevents alarming toast notifications
  * - Users only see errors if the request fails after all retries for other reasons
  *
- * This filter serves as a backup to the ignoreErrors regex pattern, catching
- * errors that may slip through due to timing in Sentry's global handler.
+ * Uses shared error patterns from errors.ts to ensure consistency with retry logic.
  */
 const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -544,20 +571,15 @@ const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
   const hasStackTrace =
     (event.exception?.values?.[0]?.stacktrace?.frames?.length ?? 0) > 0;
 
-  // Check for "Load failed" pattern (may have domain suffix like "(uploadthing.b-cdn.net)")
-  const isLoadFailed = message.startsWith("Load failed");
-
-  // Also check for "Failed to fetch" as a related network error
-  const isFailedToFetch = message === "Failed to fetch";
-
-  // Check for Chrome/Android "network error" message
-  const isNetworkError = message === "network error";
+  // Use shared pattern matcher from errors.ts
+  const stackFrames = extractStackFramesFromSentryEvent(event);
+  const matchesPattern = isNetworkErrorPattern(message, stackFrames);
 
   // These errors typically have no stack trace and are TypeError
   const isNetworkErrorShape =
     !hasStackTrace && (errorType === "TypeError" || errorType === "");
 
-  return (isLoadFailed || isFailedToFetch || isNetworkError) && isNetworkErrorShape;
+  return matchesPattern && isNetworkErrorShape;
 };
 
 /**
@@ -569,20 +591,49 @@ const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
  * - tRPC retry logic (Provider.tsx) automatically retries up to 3 times
  * - Silent ignore in tRPC onError prevents alarming toast notifications
  * - Users only see errors if the request fails after all retries
+ *
+ * Uses shared error patterns from errors.ts to ensure consistency with retry logic.
  */
 const isHtmlResponseError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const errorType = event.exception?.values?.[0]?.type ?? "";
 
-  // Check for HTML DOCTYPE in JSON parsing error (CDN/proxy returning HTML error page)
-  const isHtmlParsingError =
-    message.includes('"<!DOCTYPE "') && message.includes("is not valid JSON");
+  // Use shared pattern matcher from errors.ts
+  const stackFrames = extractStackFramesFromSentryEvent(event);
+  const matchesPattern = isHtmlResponseErrorPattern(message, stackFrames);
 
   // This error comes from tRPC client as TRPCClientError or SyntaxError
   const isTrpcOrSyntaxError =
     errorType === "TRPCClientError" || errorType === "SyntaxError";
 
-  return isHtmlParsingError && isTrpcOrSyntaxError;
+  return matchesPattern && isTrpcOrSyntaxError;
+};
+
+/**
+ * Check if an error is a proxy error response parsing error from tRPC.
+ * These occur when a proxy or reverse proxy returns a truncated error message
+ * like "An error o..." instead of proper JSON, causing tRPC client parsing failure.
+ *
+ * UX note: These errors are handled gracefully:
+ * - tRPC retry logic (Provider.tsx) automatically retries up to 3 times
+ * - Silent ignore in tRPC onError prevents alarming toast notifications
+ * - Users only see errors if the request fails after all retries
+ *
+ * Uses shared error patterns from errors.ts to ensure consistency with retry logic.
+ */
+const isProxyError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+
+  // Use shared pattern matcher from errors.ts
+  const stackFrames = extractStackFramesFromSentryEvent(event);
+  const matchesPattern = isProxyErrorPattern(message, stackFrames);
+
+  // This error comes from tRPC client as TRPCClientError or SyntaxError
+  const isTrpcOrSyntaxError =
+    errorType === "TRPCClientError" || errorType === "SyntaxError";
+
+  return matchesPattern && isTrpcOrSyntaxError;
 };
 
 /**
@@ -650,31 +701,20 @@ const isInjectedJsonParseError = (event: Sentry.ErrorEvent): boolean => {
  * - Silent ignore in tRPC onError prevents alarming toast notifications
  * - Users only see errors if the request fails after all retries for other reasons
  *
- * This is Firefox's equivalent to:
- * - Chrome/Safari: '"Offline" is not valid JSON'
- * - Chrome/Safari: '"<!DOCTYPE "... is not valid JSON'
- * - Safari: '"The string did not match the expected pattern"'
+ * Uses shared error patterns from errors.ts to ensure consistency with retry logic.
  */
 const isFirefoxJsonParseError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const errorType = event.exception?.values?.[0]?.type ?? "";
-  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
-  // Check for Firefox-specific JSON parsing error message
-  const isFirefoxJsonMessage =
-    message.includes("JSON.parse: unexpected character at line 1 column 1");
+  // Use shared pattern matcher from errors.ts
+  const stackFrames = extractStackFramesFromSentryEvent(event);
+  const matchesPattern = isFirefoxJsonErrorPattern(message, stackFrames);
 
-  if (!isFirefoxJsonMessage) return false;
-
-  // Verify it's from tRPC client (not some other JSON parsing error)
+  // Verify it's a tRPC error type
   const isTrpcError = errorType === "TRPCClientError";
-  const isFromTrpcClient = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("@trpc/client") ||
-      frame.abs_path?.includes("@trpc/client")
-  );
 
-  return isTrpcError && isFromTrpcClient;
+  return matchesPattern && isTrpcError;
 };
 
 /**
@@ -1183,27 +1223,10 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
   // (some with clear userscript frames, others with only page context pollution).
   // When a userscript console breadcrumb is present AND the error matches userscript patterns,
   // filter immediately without complex stack frame analysis.
-  const hasUserscriptBreadcrumb = breadcrumbs.some((breadcrumb) => {
-    if (breadcrumb.category !== "console") return false;
-    const msg = breadcrumb.message ?? "";
-    return (
-      msg.includes("[Persistent Keybinds]") ||
-      msg.includes("[Jutsu-Hotkeys]") ||
-      msg.includes("[Tampermonkey]") ||
-      msg.includes("[Greasemonkey]") ||
-      msg.includes("[Violentmonkey]") ||
-      msg.toLowerCase().includes("userscript")
-    );
-  });
+  const hasUserscriptBreadcrumb = checkHasUserscriptBreadcrumb(breadcrumbs);
 
   if (hasUserscriptBreadcrumb) {
-    const hasSingleLetterVarError = exceptionValues.some((exception) => {
-      const message = exception.value ?? "";
-      // Handle error type prefixes like "ReferenceError: d is not defined"
-      // Pattern matches single-letter variables at start OR after ": "
-      // Matches only "is not defined" or "is not a function" patterns
-      return /(?:^|:\s*)[a-z]\s+is\s+not\s+(?:defined|a\s+function)/i.test(message);
-    });
+    const hasSingleLetterVarError = checkHasSingleLetterVarError(exceptionValues);
 
     if (hasSingleLetterVarError) {
       return true; // Filter immediately - strong evidence of userscript error
@@ -1233,7 +1256,9 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
     // Check for userscript-internal error patterns that should always be filtered:
     // 1. Single-letter variable errors (typical of minified userscripts) like "d is not defined"
     // 2. Userscript-specific function patterns like window["__f__..."]
-    // Handle error type prefixes like "ReferenceError: d is not defined"
+    // Note: This uses a more permissive pattern than checkHasSingleLetterVarError because
+    // we already know we're in userscript frames. It also matches dot notation (e.g., "d.")
+    // which is common in minified userscript code accessing undefined objects.
     const isSingleLetterVarError = /(?:^|:\s*)[a-z](?:\s+is\s+not\s+(?:defined|a\s+function)|\.)/i.test(message);
 
     const hasUserscriptFunctionPattern = stackFrames.some((frame) => {
@@ -1341,30 +1366,14 @@ const isUserscriptErrorFromBreadcrumbs = (event: Sentry.ErrorEvent): boolean => 
   const exceptionValues = event.exception?.values ?? [];
 
   // Check for userscript console breadcrumbs
-  const hasUserscriptBreadcrumb = breadcrumbs.some((breadcrumb) => {
-    if (breadcrumb.category !== "console") return false;
-    const msg = breadcrumb.message ?? "";
-    return (
-      msg.includes("[Persistent Keybinds]") ||
-      msg.includes("[Jutsu-Hotkeys]") ||
-      msg.includes("[Tampermonkey]") ||
-      msg.includes("[Greasemonkey]") ||
-      msg.includes("[Violentmonkey]") ||
-      msg.toLowerCase().includes("userscript")
-    );
-  });
+  const hasUserscriptBreadcrumb = checkHasUserscriptBreadcrumb(breadcrumbs);
 
   if (!hasUserscriptBreadcrumb) {
     return false;
   }
 
   // Check if any exception has a single-letter variable error
-  const hasSingleLetterVarError = exceptionValues.some((exception) => {
-    const message = exception.value ?? "";
-    // Handle error type prefixes like "ReferenceError: d is not defined"
-    // Matches only "is not defined" or "is not a function" patterns
-    return /(?:^|:\s*)[a-z]\s+is\s+not\s+(?:defined|a\s+function)/i.test(message);
-  });
+  const hasSingleLetterVarError = checkHasSingleLetterVarError(exceptionValues);
 
   // Only filter if BOTH conditions are met
   return hasSingleLetterVarError;
@@ -1805,6 +1814,52 @@ const hasUserscriptFunctionName = (funcName: string): boolean => {
 };
 
 /**
+ * Shared utility to check if breadcrumbs contain userscript console logs.
+ * Extracted to avoid duplication across multiple userscript detection functions.
+ */
+const checkHasUserscriptBreadcrumb = (
+  breadcrumbs: Array<Sentry.Breadcrumb>,
+): boolean => {
+  return breadcrumbs.some((breadcrumb) => {
+    if (breadcrumb.category !== "console") return false;
+    const msg = breadcrumb.message ?? "";
+    return (
+      msg.includes("[Persistent Keybinds]") ||
+      msg.includes("[Jutsu-Hotkeys]") ||
+      msg.includes("[Tampermonkey]") ||
+      msg.includes("[Greasemonkey]") ||
+      msg.includes("[Violentmonkey]") ||
+      msg.toLowerCase().includes("userscript")
+    );
+  });
+};
+
+/**
+ * Shared utility to check if a message contains single-letter variable error patterns.
+ * These errors are typical of minified userscripts (e.g., "d is not defined").
+ * Extracted to avoid duplication across multiple userscript detection functions.
+ */
+const isSingleLetterVarErrorMessage = (message: string): boolean => {
+  // Handle error type prefixes like "ReferenceError: d is not defined"
+  // Matches only "is not defined" or "is not a function" patterns
+  return /(?:^|:\s*)[a-z]\s+is\s+not\s+(?:defined|a\s+function)/i.test(message);
+};
+
+/**
+ * Shared utility to check if exception values contain single-letter variable errors.
+ * These errors are typical of minified userscripts (e.g., "d is not defined").
+ * Extracted to avoid duplication across multiple userscript detection functions.
+ */
+const checkHasSingleLetterVarError = (
+  exceptionValues: Array<{ value?: string }>,
+): boolean => {
+  return exceptionValues.some((exception) => {
+    const message = exception.value ?? "";
+    return isSingleLetterVarErrorMessage(message);
+  });
+};
+
+/**
  * Check if a raw error object (not Sentry event) is from a userscript.
  * This is used in the global unhandledrejection handler to filter errors before Sentry sees them.
  *
@@ -1831,8 +1886,7 @@ const isUserscriptRawError = (err: unknown): boolean => {
   // Check for userscript-internal error patterns that should always be filtered:
   // 1. Single-letter variable errors (typical of minified userscripts) like "d is not defined"
   // 2. Userscript-specific function patterns (using shared utility)
-  // Matches only "is not defined" or "is not a function" patterns
-  const isSingleLetterVarError = /(?:^|:\s*)[a-z]\s+is\s+not\s+(?:defined|a\s+function)/i.test(errorMessage);
+  const isSingleLetterVarError = isSingleLetterVarErrorMessage(errorMessage);
 
   // Check if stack contains userscript function patterns
   // Note: For raw errors, we check the stack string directly since we don't have parsed frames

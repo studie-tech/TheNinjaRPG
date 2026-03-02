@@ -32,3 +32,17 @@ export const parseStackFrames = (stack?: string): Array<StackFrame> => {
     })
     .filter((frame) => frame.filename);
 };
+
+/**
+ * Extracts stack frames from an error's cause chain.
+ * Commonly used for tRPC errors where the actual error is nested in error.cause.
+ * @param error - Error object to extract stack frames from
+ * @returns Stack frames from the error's cause, or undefined if not available
+ */
+export const extractStackFramesFromError = (error: {
+  cause?: unknown;
+}): Array<StackFrame> | undefined => {
+  return error.cause instanceof Error && "stack" in error.cause
+    ? parseStackFrames((error.cause as Error).stack)
+    : undefined;
+};

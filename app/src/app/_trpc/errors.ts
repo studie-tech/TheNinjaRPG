@@ -5,29 +5,7 @@
  */
 
 import type { StackFrame } from "@/utils/error";
-
-const isNetworkError = (message?: string, stackFrames?: Array<StackFrame>): boolean => {
-  if (!message) return false;
-  const networkErrorPatterns = [
-    "Load failed",
-    "fetch failed",
-    "Failed to fetch",
-    "Network request failed",
-    "NetworkError",
-  ];
-  if (!networkErrorPatterns.some((pattern) => message.includes(pattern))) {
-    return false;
-  }
-  // Verify it's from fetch API or tRPC client
-  return (
-    stackFrames?.some(
-      (frame) =>
-        frame.filename?.includes("@trpc/client") ||
-        frame.filename?.includes("fetch") ||
-        frame.filename === "", // Browser-level network errors have no stack
-    ) ?? true
-  ); // Allow if no stack available (browser errors)
-};
+import { extractStackFramesFromError } from "@/utils/error";
 
 /**
  * Checks if stack frames indicate the error originated from tRPC client or fetch context.
@@ -38,45 +16,58 @@ const isNetworkError = (message?: string, stackFrames?: Array<StackFrame>): bool
 const isFromTrpcOrFetchContext = (stackFrames?: Array<StackFrame>): boolean => {
   if (!stackFrames || stackFrames.length === 0) return true; // Likely network error
   return stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("@trpc/client") || frame.filename?.includes("fetch"),
+    (stackFrame) =>
+      stackFrame.filename?.includes("@trpc/client") ||
+      stackFrame.filename?.includes("fetch"),
   );
 };
 
-const isOfflineError = (message?: string, stackFrames?: Array<StackFrame>): boolean => {
-  if (!message?.includes('"Offline" is not valid JSON')) return false;
-  return isFromTrpcOrFetchContext(stackFrames);
-};
+/**
+ * Factory function to create error pattern matchers.
+ * All matchers follow the same logic: check if message includes pattern, then validate with stack frames.
+ * @param patterns - String pattern(s) to match in error message
+ * @returns Matcher function that checks message and validates with stack frames
+ */
+const createErrorPatternMatcher =
+  (patterns: string | string[]) =>
+  (message?: string, stackFrames?: Array<StackFrame>): boolean => {
+    if (!message) return false;
+    const patternArray = Array.isArray(patterns) ? patterns : [patterns];
+    if (!patternArray.some((pattern) => message.includes(pattern))) {
+      return false;
+    }
+    return isFromTrpcOrFetchContext(stackFrames);
+  };
 
-const isSafariJsonError = (
-  message?: string,
-  stackFrames?: Array<StackFrame>,
-): boolean => {
-  if (!message?.includes("The string did not match the expected pattern")) return false;
-  return isFromTrpcOrFetchContext(stackFrames);
-};
+/**
+ * Individual pattern matchers exported for reuse in other modules (e.g., Sentry filtering).
+ * Each matcher validates both the error message pattern and stack frame context.
+ */
+export const isNetworkError = createErrorPatternMatcher([
+  "Load failed",
+  "fetch failed",
+  "Failed to fetch",
+  "Network request failed",
+  "NetworkError",
+]);
 
-const isProxyError = (message?: string, stackFrames?: Array<StackFrame>): boolean => {
-  if (!message?.includes('"An error o"... is not valid JSON')) return false;
-  return isFromTrpcOrFetchContext(stackFrames);
-};
+export const isOfflineError = createErrorPatternMatcher('"Offline" is not valid JSON');
 
-const isHtmlResponseError = (
-  message?: string,
-  stackFrames?: Array<StackFrame>,
-): boolean => {
-  if (!message?.includes('"<!DOCTYPE "... is not valid JSON')) return false;
-  return isFromTrpcOrFetchContext(stackFrames);
-};
+export const isSafariJsonError = createErrorPatternMatcher(
+  "The string did not match the expected pattern",
+);
 
-const isFirefoxJsonError = (
-  message?: string,
-  stackFrames?: Array<StackFrame>,
-): boolean => {
-  if (!message?.includes("JSON.parse: unexpected character at line 1 column 1"))
-    return false;
-  return isFromTrpcOrFetchContext(stackFrames);
-};
+export const isProxyError = createErrorPatternMatcher(
+  '"An error o"... is not valid JSON',
+);
+
+export const isHtmlResponseError = createErrorPatternMatcher(
+  '"<!DOCTYPE "... is not valid JSON',
+);
+
+export const isFirefoxJsonError = createErrorPatternMatcher(
+  "JSON.parse: unexpected character at line 1 column 1",
+);
 
 /**
  * Checks if an error message matches any retryable error pattern.
@@ -96,3 +87,18 @@ export const isRetryableError = (message?: string, stackFrames?: Array<StackFram
   isProxyError(message, stackFrames) ||
   isHtmlResponseError(message, stackFrames) ||
   isFirefoxJsonError(message, stackFrames);
+
+/**
+ * Convenience wrapper for checking if a tRPC error object is retryable.
+ * Automatically extracts stack frames from the error's cause chain.
+ *
+ * @param error - Error object with optional cause chain (tRPC error structure)
+ * @returns true if the error matches any retryable pattern
+ */
+export const isRetryableTrpcError = (error: {
+  message?: string;
+  cause?: unknown;
+}): boolean => {
+  const stackFrames = extractStackFramesFromError(error);
+  return isRetryableError(error.message, stackFrames);
+};
