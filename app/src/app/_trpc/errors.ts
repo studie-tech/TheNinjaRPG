@@ -14,7 +14,9 @@ import { extractStackFramesFromError } from "@/utils/error";
  * @returns true if from tRPC/fetch context or no stack available (likely network error)
  */
 const isFromTrpcOrFetchContext = (stackFrames?: Array<StackFrame>): boolean => {
-  if (!stackFrames || stackFrames.length === 0) return true; // Likely network error
+  // If no stack frames, assume network error (common for actual network failures)
+  if (!stackFrames || stackFrames.length === 0) return true;
+  // Check if any frame is from tRPC client or fetch context
   return stackFrames.some(
     (stackFrame) =>
       stackFrame.filename?.includes("@trpc/client") ||

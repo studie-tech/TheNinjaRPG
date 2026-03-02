@@ -46,3 +46,28 @@ export const extractStackFramesFromError = (error: {
     ? parseStackFrames((error.cause as Error).stack)
     : undefined;
 };
+
+/**
+ * Checks if an error originated from a specific source by examining stack frames.
+ * @param error - Error object to check
+ * @param sourcePatterns - Pattern(s) to match in stack frame filenames
+ * @param expectedMessage - Optional expected message substring in error
+ * @returns True if error is from specified source and contains expected message (if provided)
+ */
+export const isErrorFromSource = (
+  error: Error,
+  sourcePatterns: string | string[],
+  expectedMessage?: string,
+): boolean => {
+  const stackFrames = parseStackFrames(error.stack);
+  const patterns = Array.isArray(sourcePatterns) ? sourcePatterns : [sourcePatterns];
+  const isFromSource =
+    !stackFrames || stackFrames.length === 0
+      ? false
+      : stackFrames.some((frame) =>
+          patterns.some((pattern) => frame.filename?.includes(pattern)),
+        );
+  return expectedMessage
+    ? error.message.includes(expectedMessage) && isFromSource
+    : isFromSource;
+};

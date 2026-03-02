@@ -12,7 +12,7 @@ import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
-import { extractStackFramesFromError, parseStackFrames } from "@/utils/error";
+import { isErrorFromSource } from "@/utils/error";
 import { api, useGlobalOnMutateProtect } from "./client";
 import { isRetryableTrpcError } from "./errors";
 
@@ -31,6 +31,9 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
           queries: {
             staleTime: Infinity,
           },
+          mutations: {
+            onError: (error) => onError(error),
+          },
         },
         queryCache: new QueryCache({
           onError: (error, _query) => onError(error),
@@ -46,7 +49,6 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
             onMutateCheck(mutationPath);
             document.body.style.cursor = "wait";
           },
-          onError: (error, _variables, _context, _mutation) => onError(error),
           onSettled: () => {
             document.body.style.cursor = "default";
           },
@@ -104,22 +106,13 @@ export const onError = (error: unknown) => {
   // Ignore "Unauthorized for tRPC endpoint", since this could be just the user logging out, thus queries failing
   // This error is thrown server-side by auth middleware, so we silently handle it to avoid showing
   // destructive toasts during normal logout flows
-  // Validate error originates from auth middleware by checking stack trace
+  // Use tRPC error code instead of stack trace checking (which doesn't work in production builds)
   if (
     error instanceof TRPCClientError &&
-    error.message.includes("Unauthorized for tRPC endpoint")
+    error.message.includes("Unauthorized for tRPC endpoint") &&
+    error.data?.code === "UNAUTHORIZED"
   ) {
-    const stackFrames = extractStackFramesFromError(error);
-    const isFromAuthMiddleware =
-      stackFrames?.some(
-        (frame) =>
-          frame.filename?.includes("trpc") || frame.filename?.includes("middleware"),
-      ) ||
-      !stackFrames ||
-      stackFrames.length === 0;
-    if (isFromAuthMiddleware) {
-      return;
-    }
+    return;
   }
   // Ignore transient network/CDN errors (retries handle these gracefully)
   // Queries are retried by retryLink (up to 3 attempts), mutations are never retried
@@ -131,9 +124,26 @@ export const onError = (error: unknown) => {
     }
   }
   // Ignore abort errors (user navigated away before request completed)
-  // Use spec-compliant cause.name check
-  if (error instanceof TRPCClientError && error.cause?.name === "AbortError") {
-    return;
+  // Use spec-compliant cause.name check with message-based fallback for browsers
+  // that don't properly set cause.name
+  // Validate origin to avoid suppressing unrelated errors with similar messages
+  if (error instanceof TRPCClientError) {
+    if (error.cause?.name === "AbortError") {
+      // AbortError cause is reliable, no validation needed
+      return;
+    }
+    if (error.message.includes("The operation was aborted")) {
+      // Message-based fallback: validate it's from navigation/fetch context
+      const isFromNavigation = isErrorFromSource(error, [
+        "@trpc/client",
+        "fetch",
+        "navigation",
+        "Provider",
+      ]);
+      if (isFromNavigation) {
+        return;
+      }
+    }
   }
   // Handle "not signed in" errors gracefully (from useGlobalOnMutateProtect)
   // Validate error originates from useGlobalOnMutateProtect by checking stack trace
@@ -141,13 +151,12 @@ export const onError = (error: unknown) => {
     error instanceof Error &&
     error.message.includes("You need to be signed in to perform this action")
   ) {
-    const stackFrames = parseStackFrames(error.stack);
-    const isFromOnMutateProtect = stackFrames?.some(
-      (frame) =>
-        frame.filename?.includes("useGlobalOnMutateProtect") ||
-        frame.filename?.includes("Provider"),
-    );
-    if (isFromOnMutateProtect || !stackFrames || stackFrames.length === 0) {
+    const isFromOnMutateProtect = isErrorFromSource(error, [
+      "useGlobalOnMutateProtect",
+      "Provider",
+    ]);
+    // Handle gracefully if from expected source or no stack available (fallback)
+    if (isFromOnMutateProtect || !error.stack || error.stack.trim().length === 0) {
       showMutationToast({ success: false, message: error.message });
       return;
     }

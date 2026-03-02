@@ -11,25 +11,11 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { isMobile } from "@/utils/audio";
-import { parseStackFrames } from "@/utils/error";
+import { isErrorFromSource } from "@/utils/error";
 import { getSearchValidator } from "@/validators/register";
 
 // Register edgehandles extension once globally
 Cytoscape.use(edgehandles);
-
-/**
- * Checks if an error originated from Cytoscape library.
- * @param error - Error object to check
- * @param expectedMessage - Expected message substring in error
- * @returns True if error is from Cytoscape and contains expected message
- */
-const isCytoscapeError = (error: Error, expectedMessage: string): boolean => {
-  const stackFrames = parseStackFrames(error.stack);
-  const isFromCytoscape = stackFrames?.some((frame) =>
-    frame.filename?.includes("cytoscape"),
-  );
-  return error.message.includes(expectedMessage) && isFromCytoscape;
-};
 
 interface GraphUsersGenericProps {
   hideDefault?: boolean;
@@ -61,7 +47,7 @@ const GraphUsersGeneric = (
       } catch (e) {
         if (e instanceof Error) {
           // Only suppress the known "already stopped" error from cytoscape
-          if (isCytoscapeError(e, "already stopped")) {
+          if (isErrorFromSource(e, "cytoscape", "already stopped")) {
             // Reset refs even for expected errors before returning
             layoutRunningRef.current = false;
             layoutInstanceRef.current = null;
@@ -108,7 +94,7 @@ const GraphUsersGeneric = (
           } catch (e) {
             if (e instanceof Error) {
               // Only suppress the known "destroyed" error from cytoscape
-              if (isCytoscapeError(e, "destroyed")) {
+              if (isErrorFromSource(e, "cytoscape", "destroyed")) {
                 return; // Silently ignore expected error
               }
               // Log all other errors - these are unexpected
@@ -287,15 +273,7 @@ const GraphUsersGeneric = (
         />
       </div>
     );
-  }, [
-    joinedHighlights,
-    elements,
-    setCytoscape,
-    isMobileDevice,
-    props.nodes,
-    highlights,
-    color,
-  ]);
+  }, [joinedHighlights, elements, setCytoscape, props.nodes, highlights, color]);
 
   // Render
   return (
