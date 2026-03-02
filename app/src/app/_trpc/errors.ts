@@ -4,9 +4,28 @@
  * automatically without showing errors to users.
  */
 
-interface StackFrame {
+export interface StackFrame {
   filename?: string;
 }
+
+/**
+ * Parses stack trace string into structured stack frames.
+ * @param stack - Stack trace string from Error.stack
+ * @returns Array of stack frames with extracted filenames
+ */
+export const parseStackFrames = (stack?: string): Array<StackFrame> => {
+  if (!stack) return [];
+  return stack
+    .split("\n")
+    .slice(1) // Skip the first line (error message)
+    .map((line) => {
+      // Extract filename from stack trace line
+      // Matches patterns like "at functionName (filename:line:col)" or "at filename:line:col"
+      const match = line.match(/\(([^)]+)\)|at\s+([^\s]+)/);
+      return { filename: match?.[1] || match?.[2] };
+    })
+    .filter((frame) => frame.filename);
+};
 
 const isNetworkError = (message?: string, stackFrames?: Array<StackFrame>): boolean => {
   if (!message) return false;

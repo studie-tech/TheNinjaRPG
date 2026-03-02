@@ -13,7 +13,7 @@ import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
 import { api, useGlobalOnMutateProtect } from "./client";
-import { isRetryableError } from "./errors";
+import { isRetryableError, parseStackFrames } from "./errors";
 
 const getBaseUrl = () => {
   if (typeof window !== "undefined") return "";
@@ -58,7 +58,15 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
         retryLink({
           retry(opts) {
             // Retry transient network/CDN errors (network failures, offline, invalid JSON responses)
-            if (isRetryableError(opts.error.message) && opts.op.type === "query") {
+            // Extract stack frames from error for validation
+            const stackFrames =
+              opts.error.cause instanceof Error && "stack" in opts.error.cause
+                ? parseStackFrames((opts.error.cause as Error).stack)
+                : undefined;
+            if (
+              isRetryableError(opts.error.message, stackFrames) &&
+              opts.op.type === "query"
+            ) {
               return opts.attempts <= 3;
             }
             // Don't retry on non-500s
@@ -101,35 +109,55 @@ export default TrpcClientProvider;
 
 export const onError = (err: unknown) => {
   // Ignore "Unauthorized for tRPC endpoint", since this could be just the user logging out, thus queries failing
+  // Validate error originates from auth middleware by checking stack trace
   if (
     err instanceof TRPCClientError &&
     err.message.includes("Unauthorized for tRPC endpoint")
   ) {
-    return;
+    const stackFrames = parseStackFrames(err.stack);
+    const isFromAuthMiddleware = stackFrames?.some(
+      (frame) =>
+        frame.filename?.includes("auth") || frame.filename?.includes("middleware"),
+    );
+    if (isFromAuthMiddleware || !stackFrames || stackFrames.length === 0) {
+      return;
+    }
   }
   // Ignore transient network/CDN errors (retries handle these gracefully)
   // Queries are retried by retryLink (up to 3 attempts), mutations are never retried
   // All retryable errors are suppressed here to avoid user-facing toasts for transient issues
-  if (err instanceof TRPCClientError && isRetryableError(err.message)) {
-    // Filtered from Sentry in instrumentation-client.ts (isNetworkNavigationError)
-    return;
+  if (err instanceof TRPCClientError) {
+    // Extract stack frames from error for validation
+    const stackFrames =
+      err.cause instanceof Error && "stack" in err.cause
+        ? parseStackFrames((err.cause as Error).stack)
+        : undefined;
+    if (isRetryableError(err.message, stackFrames)) {
+      // Filtered from Sentry in instrumentation-client.ts (isNetworkNavigationError)
+      return;
+    }
   }
   // Ignore abort errors (user navigated away before request completed)
-  // Check both cause.name (spec-compliant) and message (fallback for browser variations)
-  if (
-    err instanceof TRPCClientError &&
-    (err.cause?.name === "AbortError" ||
-      err.message.includes("The operation was aborted"))
-  ) {
+  // Use spec-compliant cause.name check
+  if (err instanceof TRPCClientError && err.cause?.name === "AbortError") {
     return;
   }
   // Handle "not signed in" errors gracefully (from useGlobalOnMutateProtect)
+  // Validate error originates from useGlobalOnMutateProtect by checking stack trace
   if (
     err instanceof Error &&
     err.message.includes("You need to be signed in to perform this action")
   ) {
-    showMutationToast({ success: false, message: err.message });
-    return;
+    const stackFrames = parseStackFrames(err.stack);
+    const isFromOnMutateProtect = stackFrames?.some(
+      (frame) =>
+        frame.filename?.includes("useGlobalOnMutateProtect") ||
+        frame.filename?.includes("Provider"),
+    );
+    if (isFromOnMutateProtect || !stackFrames || stackFrames.length === 0) {
+      showMutationToast({ success: false, message: err.message });
+      return;
+    }
   }
   console.error("onerror", err);
   if (err instanceof TRPCClientError) {

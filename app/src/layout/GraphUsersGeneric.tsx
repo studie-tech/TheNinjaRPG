@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
+import { parseStackFrames } from "@/app/_trpc/errors";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -13,6 +14,14 @@ import { getSearchValidator } from "@/validators/register";
 
 // Register edgehandles extension once globally
 Cytoscape.use(edgehandles);
+
+const isCytoscapeError = (error: Error, expectedMessage: string): boolean => {
+  const stackFrames = parseStackFrames(error.stack);
+  const isFromCytoscape = stackFrames?.some((frame) =>
+    frame.filename?.includes("cytoscape"),
+  );
+  return error.message.includes(expectedMessage) && isFromCytoscape;
+};
 
 interface GraphUsersGenericProps {
   hideDefault?: boolean;
@@ -46,7 +55,7 @@ const GraphUsersGeneric = (
       } catch (e) {
         if (e instanceof Error) {
           // Only suppress the known "already stopped" error from cytoscape
-          if (e.message.includes("already stopped")) {
+          if (isCytoscapeError(e, "already stopped")) {
             return; // Silently ignore expected error
           }
           // Log all other errors - these are unexpected
@@ -86,7 +95,7 @@ const GraphUsersGeneric = (
           } catch (e) {
             if (e instanceof Error) {
               // Only suppress the known "destroyed" error from cytoscape
-              if (e.message.includes("destroyed")) {
+              if (isCytoscapeError(e, "destroyed")) {
                 return; // Silently ignore expected error
               }
               // Log all other errors - these are unexpected
@@ -99,14 +108,11 @@ const GraphUsersGeneric = (
   }, [stopLayout]);
 
   // Set Cytoscape
-  const setCytoscape = useCallback(
-    (ref: cytoscape.Core) => {
-      if (isMountedRef.current && ref) {
-        cyRef.current = ref;
-      }
-    },
-    [cyRef],
-  );
+  const setCytoscape = useCallback((ref: cytoscape.Core) => {
+    if (isMountedRef.current && ref) {
+      cyRef.current = ref;
+    }
+  }, []);
 
   // User Searching
   const userSearchSchema = getSearchValidator({ max: 10 });
@@ -126,7 +132,7 @@ const GraphUsersGeneric = (
     return watchedUsers.map((u) => u.userId);
   }, [watchedUsers]);
 
-  const joinedHighlights = highlights.sort((a, b) => (a < b ? -1 : 1)).join(",");
+  const joinedHighlights = [...highlights].sort((a, b) => (a < b ? -1 : 1)).join(",");
 
   // If we are highlighting users, find out which users to show
   const showIds =
