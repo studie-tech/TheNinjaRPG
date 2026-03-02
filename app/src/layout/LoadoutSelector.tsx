@@ -45,7 +45,7 @@ const LoadoutSelector = <T extends LoadoutData>(
   const iconSize = props?.size === "small" ? "h-6 w-6" : "h-10 w-10";
   const textSize = props?.size === "small" ? "text-xs" : "text-sm mt-1";
   const selectedId =
-    props.selectedOverrideId !== undefined
+    props.selectedOverrideId !== undefined && props.selectedOverrideId !== null
       ? props.selectedOverrideId
       : userData
         ? props.config.getSelectedId(userData)
@@ -71,7 +71,7 @@ const LoadoutSelector = <T extends LoadoutData>(
     <div>
       {props.label && <p className="text-sm">{props.label}</p>}
       <div className="flex flex-row gap-1">
-        {data?.map((loadout, i) => {
+        {data?.map((loadout, index) => {
           const isSelected = selectedId === loadout.id;
           return (
             <button
@@ -80,17 +80,17 @@ const LoadoutSelector = <T extends LoadoutData>(
               key={loadout.id}
               onClick={() => handleSelect(loadout.id)}
               disabled={isPending}
-              aria-label={`${props.label || "Loadout"} ${i + 1}${isSelected ? " (selected)" : ""}`}
+              aria-label={`${props.label || "Loadout"} ${index + 1}${isSelected ? " (selected)" : ""}`}
               aria-pressed={isSelected}
             >
               <Folder
-                className={`${iconSize} ${isSelected ? "fill-orange-300" : "hover:cursor-pointer hover:fill-orange-300"} ${isPending ? "opacity-50" : ""}`}
+                className={`${iconSize} ${isSelected ? "fill-primary" : "hover:cursor-pointer hover:fill-primary"} ${isPending ? "opacity-50" : ""}`}
               />
               <div
                 className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-bold ${textSize}`}
                 aria-hidden="true"
               >
-                {isPending ? "..." : i + 1}
+                {isPending ? "..." : index + 1}
               </div>
             </button>
           );
