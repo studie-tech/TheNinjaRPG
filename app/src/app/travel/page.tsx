@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,16 @@ import {
   VILLAGE_REDUCED_GAINS_DAYS,
 } from "@/drizzle/constants";
 import type { UserItemWithItem } from "@/drizzle/schema";
+
+type RevealedPlayer = {
+  userId: string;
+  username: string;
+  longitude: number;
+  latitude: number;
+  villageId: string | null;
+  level: number;
+};
+
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useMap } from "@/hooks/map";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -85,6 +95,122 @@ import {
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
 
+const RevealedPlayerCard = ({
+  player,
+  userData,
+  villageData,
+  sensoryAllyAttack,
+  isAttackingRevealed,
+  pendingAttackTarget,
+  attackRevealedUser,
+  setPendingAttackTarget,
+  setTargetPosition,
+  setShowRevealedPlayersModal,
+}: {
+  player: RevealedPlayer;
+  userData: ReturnType<typeof useRequiredUserData>["data"];
+  villageData: { id: string; name: string; hexColor: string }[] | undefined;
+  sensoryAllyAttack: boolean;
+  isAttackingRevealed: boolean;
+  pendingAttackTarget: {
+    userId: string;
+    username: string;
+    longitude: number;
+    latitude: number;
+  } | null;
+  attackRevealedUser: (params: {
+    userId: string;
+    longitude: number;
+    latitude: number;
+    sector: number;
+  }) => void;
+  setPendingAttackTarget: (target: {
+    userId: string;
+    username: string;
+    longitude: number;
+    latitude: number;
+  }) => void;
+  setTargetPosition: (pos: { x: number; y: number }) => void;
+  setShowRevealedPlayersModal: (show: boolean) => void;
+}) => {
+  const sameHex =
+    player.latitude === userData?.latitude && player.longitude === userData?.longitude;
+
+  const village = villageData?.find((v) => v.id === player.villageId);
+  const villageName = village?.name ?? (player.villageId ? "Unknown" : "Outlaw");
+  const villageColor = village?.hexColor ?? "gray";
+
+  const relationship =
+    userData?.village &&
+    findVillageUserRelationship(userData.village, player.villageId);
+  const isAlly =
+    player.villageId === userData?.villageId || relationship?.status === "ALLY";
+  const showAttack = sensoryAllyAttack || !isAlly;
+
+  return (
+    <div
+      key={player.userId}
+      className="flex items-center justify-between rounded-lg bg-muted p-3"
+    >
+      <div>
+        <p className="font-semibold">{player.username}</p>
+        <p className="text-muted-foreground text-sm">
+          Lvl. {player.level} -{" "}
+          <span style={{ color: villageColor }}>{villageName}</span>
+        </p>
+        <p className="text-muted-foreground text-sm">
+          Position: ({player.longitude}, {player.latitude})
+          {sameHex && " - Same hex as you!"}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        {showAttack && sameHex && userData ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() =>
+              attackRevealedUser({
+                userId: player.userId,
+                longitude: player.longitude,
+                latitude: player.latitude,
+                sector: userData.sector,
+              })
+            }
+            disabled={isAttackingRevealed}
+          >
+            <Swords className="mr-1 h-4 w-4" />
+            Attack
+          </Button>
+        ) : showAttack && !sameHex ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              setPendingAttackTarget({
+                userId: player.userId,
+                username: player.username,
+                longitude: player.longitude,
+                latitude: player.latitude,
+              });
+              setTargetPosition({
+                x: player.longitude,
+                y: player.latitude,
+              });
+              setShowRevealedPlayersModal(false);
+            }}
+            disabled={isAttackingRevealed || !!pendingAttackTarget}
+          >
+            <Swords className="mr-1 h-4 w-4" />
+            Attack
+          </Button>
+        ) : !showAttack ? (
+          <span className="text-muted-foreground text-sm italic">Ally</span>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
 export default function Travel() {
   // What is shown on this page
   const [showActive, setShowActive] = useLocalStorage<boolean>(
@@ -106,16 +232,7 @@ export default function Travel() {
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showSorrounding, setShowSorrounding] = useState<boolean>(false);
   const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
-  const [revealedPlayers, setRevealedPlayers] = useState<
-    {
-      userId: string;
-      username: string;
-      longitude: number;
-      latitude: number;
-      villageId: string | null;
-      level: number;
-    }[]
-  >([]);
+  const [revealedPlayers, setRevealedPlayers] = useState<RevealedPlayer[]>([]);
   const [showRevealedPlayersModal, setShowRevealedPlayersModal] =
     useState<boolean>(false);
   const [pendingAttackTarget, setPendingAttackTarget] = useState<{
@@ -152,13 +269,9 @@ export default function Travel() {
   // Memoize villages to prevent re-creating array reference on every render
   // This is important because useLiveCountdown triggers re-renders every second
   const villages = useMemo(() => {
-    return villageData?.filter((v) => {
-      if (userData?.isOutlaw) {
-        return true;
-      } else {
-        return ["VILLAGE", "SAFEZONE"].includes(v.type);
-      }
-    });
+    if (!villageData) return undefined;
+    if (userData?.isOutlaw) return villageData;
+    return villageData.filter((v) => ["VILLAGE", "SAFEZONE"].includes(v.type));
   }, [villageData, userData?.isOutlaw]);
 
   // Fetch tracked bounties for map display
@@ -222,13 +335,13 @@ export default function Travel() {
     if (activeTab === "" && sectorLink) {
       setActiveTab(sectorLink);
     }
-  }, [sectorLink]);
+  }, [sectorLink, activeTab]);
 
   useEffect(() => {
     if (userData?.status === "BATTLE") {
       void router.push(`/combat`);
     }
-  }, [userData?.status]);
+  }, [userData?.status, router]);
 
   useAwake(userData);
 
@@ -383,24 +496,27 @@ export default function Travel() {
     });
 
   // Convenience for starting global move
-  const initiateGlobalMoveStart = (sector: number) => {
-    // Guards against global movement
-    if (
-      currentStep?.title === "Travel" &&
-      currentStep?.relatedValue !== undefined &&
-      userData?.tutorialOn
-    ) {
-      if (sector !== currentStep?.relatedValue) {
-        showMutationToast({
-          success: false,
-          message: `For now, you need to travel to sector ${currentStep?.relatedValue} first.`,
-        });
-        return;
+  const handleGlobalMove = useCallback(
+    (sector: number) => {
+      // Guards against global movement
+      if (
+        currentStep?.title === "Travel" &&
+        currentStep?.relatedValue !== undefined &&
+        userData?.tutorialOn
+      ) {
+        if (sector !== currentStep?.relatedValue) {
+          showMutationToast({
+            success: false,
+            message: `For now, you need to travel to sector ${currentStep?.relatedValue} first.`,
+          });
+          return;
+        }
       }
-    }
-    // Start global move
-    startGlobalMove({ sector });
-  };
+      // Start global move
+      startGlobalMove({ sector });
+    },
+    [currentStep, userData?.tutorialOn, startGlobalMove],
+  );
 
   // Convenience variables
   const onEdge = isAtEdge(currentPosition);
@@ -409,11 +525,14 @@ export default function Travel() {
   const showSector = villages && currentSector && currentTile && !isGlobal;
 
   useEffect(() => {
+    // Check if user reached the target position on the current map
     const atTarget =
       currentPosition &&
       targetPosition &&
       currentPosition.x === targetPosition.x &&
       currentPosition.y === targetPosition.y;
+    // Auto-initiate global move when: user is at target hex, on sector edge,
+    // target sector differs from current, and not already traveling
     if (
       atTarget &&
       onEdge &&
@@ -421,9 +540,17 @@ export default function Travel() {
       targetSector !== currentSector &&
       !isStartingTravel
     ) {
-      initiateGlobalMoveStart(targetSector);
+      handleGlobalMove(targetSector);
     }
-  }, [currentPosition]);
+  }, [
+    currentPosition,
+    targetPosition,
+    targetSector,
+    currentSector,
+    onEdge,
+    isStartingTravel,
+    handleGlobalMove,
+  ]);
 
   // Attack revealed stealthed player after moving to their position
   useEffect(() => {
@@ -443,7 +570,13 @@ export default function Travel() {
       });
       setPendingAttackTarget(null);
     }
-  }, [currentPosition, pendingAttackTarget]);
+  }, [
+    currentPosition,
+    pendingAttackTarget,
+    userData,
+    isAttackingRevealed,
+    attackRevealedUser,
+  ]);
 
   // Memoized Map component to prevent re-renders during countdown updates
   const MapComponent = useMemo(() => {
@@ -488,7 +621,6 @@ export default function Travel() {
       )
     );
   }, [
-    userData,
     currentTile,
     currentSector,
     targetPosition,
@@ -797,7 +929,7 @@ export default function Travel() {
                 setTargetPosition(findNearestEdge(currentPosition));
                 setActiveTab(sectorLink);
               } else {
-                initiateGlobalMoveStart(targetSector);
+                handleGlobalMove(targetSector);
               }
             }}
           >
@@ -924,89 +1056,21 @@ export default function Travel() {
             <p className="text-muted-foreground text-sm">
               Your sensory ability detected the following stealthed players:
             </p>
-            {revealedPlayers.map((player) => {
-              const sameHex =
-                player.latitude === userData?.latitude &&
-                player.longitude === userData?.longitude;
-
-              // Look up village data
-              const village = villageData?.find((v) => v.id === player.villageId);
-              const villageName =
-                village?.name ?? (player.villageId ? "Unknown" : "Outlaw");
-              const villageColor = village?.hexColor ?? "gray";
-
-              // Check ally status
-              const relationship =
-                userData?.village &&
-                findVillageUserRelationship(userData.village, player.villageId);
-              const isAlly =
-                player.villageId === userData?.villageId ||
-                relationship?.status === "ALLY";
-              const showAttack = sensoryAllyAttack || !isAlly;
-
-              return (
-                <div
-                  key={player.userId}
-                  className="flex items-center justify-between rounded-lg bg-muted p-3"
-                >
-                  <div>
-                    <p className="font-semibold">{player.username}</p>
-                    <p className="text-muted-foreground text-sm">
-                      Lvl. {player.level} -{" "}
-                      <span style={{ color: villageColor }}>{villageName}</span>
-                    </p>
-                    <p className="text-muted-foreground text-sm">
-                      Position: ({player.longitude}, {player.latitude})
-                      {sameHex && " - Same hex as you!"}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    {showAttack && sameHex && userData ? (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() =>
-                          attackRevealedUser({
-                            userId: player.userId,
-                            longitude: player.longitude,
-                            latitude: player.latitude,
-                            sector: userData.sector,
-                          })
-                        }
-                        disabled={isAttackingRevealed}
-                      >
-                        <Swords className="mr-1 h-4 w-4" />
-                        Attack
-                      </Button>
-                    ) : showAttack && !sameHex ? (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => {
-                          setPendingAttackTarget({
-                            userId: player.userId,
-                            username: player.username,
-                            longitude: player.longitude,
-                            latitude: player.latitude,
-                          });
-                          setTargetPosition({
-                            x: player.longitude,
-                            y: player.latitude,
-                          });
-                          setShowRevealedPlayersModal(false);
-                        }}
-                        disabled={isAttackingRevealed || !!pendingAttackTarget}
-                      >
-                        <Swords className="mr-1 h-4 w-4" />
-                        Attack
-                      </Button>
-                    ) : !showAttack ? (
-                      <span className="text-muted-foreground text-sm italic">Ally</span>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
+            {revealedPlayers.map((player) => (
+              <RevealedPlayerCard
+                key={player.userId}
+                player={player}
+                userData={userData}
+                villageData={villageData}
+                sensoryAllyAttack={sensoryAllyAttack}
+                isAttackingRevealed={isAttackingRevealed}
+                pendingAttackTarget={pendingAttackTarget}
+                attackRevealedUser={attackRevealedUser}
+                setPendingAttackTarget={setPendingAttackTarget}
+                setTargetPosition={setTargetPosition}
+                setShowRevealedPlayersModal={setShowRevealedPlayersModal}
+              />
+            ))}
             {/* Ally attack toggle */}
             <div className="flex flex-row items-center pt-3">
               <Checkbox

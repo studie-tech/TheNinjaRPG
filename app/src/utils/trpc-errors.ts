@@ -4,31 +4,31 @@
  * automatically without showing errors to users.
  */
 
-export const isNetworkError = (message?: string) => {
+const isNetworkError = (message?: string) => {
   if (!message) return false;
-  // Match specific network error patterns, not just any mention of "fetch"
-  return (
-    message.includes("Load failed") ||
-    message.includes("fetch failed") ||
-    message.includes("Failed to fetch") ||
-    message.includes("Network request failed") ||
-    message.includes("NetworkError")
-  );
+  const networkErrorPatterns = [
+    "Load failed",
+    "fetch failed",
+    "Failed to fetch",
+    "Network request failed",
+    "NetworkError",
+  ];
+  return networkErrorPatterns.some((pattern) => message.includes(pattern));
 };
 
-export const isOfflineError = (message?: string) =>
+const isOfflineError = (message?: string) =>
   message?.includes('"Offline" is not valid JSON');
 
-export const isSafariJsonError = (message?: string) =>
+const isSafariJsonError = (message?: string) =>
   message?.includes("The string did not match the expected pattern");
 
-export const isProxyError = (message?: string) =>
+const isProxyError = (message?: string) =>
   message?.includes('"An error o"... is not valid JSON');
 
-export const isHtmlResponseError = (message?: string) =>
+const isHtmlResponseError = (message?: string) =>
   message?.includes('"<!DOCTYPE "... is not valid JSON');
 
-export const isFirefoxJsonError = (message?: string) =>
+const isFirefoxJsonError = (message?: string) =>
   message?.includes("JSON.parse: unexpected character at line 1 column 1");
 
 /**

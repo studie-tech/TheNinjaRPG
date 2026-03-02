@@ -228,6 +228,43 @@ export const createTexture = (canvas: HTMLCanvasElement) => {
 // Performance optimization: Cache shadow textures
 const shadowTextureCache = new Map<string, Texture>();
 
+const createRadialGradient = (
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  radiusX: number,
+  opacity: number,
+) => {
+  const gradient = ctx.createRadialGradient(
+    centerX,
+    centerX,
+    0,
+    centerX,
+    centerX,
+    radiusX,
+  );
+
+  gradient.addColorStop(0, `rgba(0, 0, 0, ${opacity})`);
+  gradient.addColorStop(0.5, `rgba(0, 0, 0, ${opacity * 0.6})`);
+  gradient.addColorStop(0.8, `rgba(0, 0, 0, ${opacity * 0.2})`);
+  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+  return gradient;
+};
+
+const applyShadowGradient = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  radiusX: number,
+  radiusY: number,
+  gradient: CanvasGradient,
+) => {
+  ctx.save();
+  ctx.scale(1, radiusY / radiusX);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, width);
+  ctx.restore();
+};
+
 /**
  * Create a procedural shadow texture - an elongated blurred ellipse
  * PERFORMANCE OPTIMIZATION: Caches textures to avoid canvas redraws and re-uploads.
@@ -251,34 +288,12 @@ export const createShadowTexture = (
   const ctx = canvas.getContext("2d");
 
   if (ctx) {
-    // Create radial gradient for soft elliptical shadow
     const centerX = width / 2;
     const radiusX = width / 2;
     const radiusY = height / 2;
 
-    // Use an elliptical gradient by scaling the context
-    ctx.save();
-    ctx.scale(1, radiusY / radiusX);
-
-    const gradient = ctx.createRadialGradient(
-      centerX,
-      centerX, // Use centerX for both since we're scaling
-      0,
-      centerX,
-      centerX,
-      radiusX,
-    );
-
-    // Soft falloff from center to edges
-    gradient.addColorStop(0, `rgba(0, 0, 0, ${opacity})`);
-    gradient.addColorStop(0.5, `rgba(0, 0, 0, ${opacity * 0.6})`);
-    gradient.addColorStop(0.8, `rgba(0, 0, 0, ${opacity * 0.2})`);
-    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, width); // Use width for both due to scaling
-
-    ctx.restore();
+    const gradient = createRadialGradient(ctx, centerX, radiusX, opacity);
+    applyShadowGradient(ctx, width, radiusX, radiusY, gradient);
   }
 
   const texture = new Texture(canvas);
@@ -289,15 +304,65 @@ export const createShadowTexture = (
 };
 
 // Performance optimization: Cache border textures for avatar sprites
-// LRU cache with reference counting to prevent disposing textures still in use
+// LRU (Least Recently Used) cache to prevent unbounded memory growth
 // Key format: "color-size"
 const borderTextureCache = new Map<string, { texture: Texture; lastUsed: number }>();
 const MAX_BORDER_CACHE_SIZE = 20; // Prevent unbounded growth
 
+const drawCircularBorder = (borderColor: string, size: number): HTMLCanvasElement => {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+
+  if (context) {
+    context.clearRect(0, 0, size, size);
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const radius = size / 2 - 2;
+
+    context.beginPath();
+    context.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    context.fillStyle = borderColor;
+    context.fill();
+  }
+
+  return canvas;
+};
+
+const createBorderTextureCanvas = (
+  borderColor: string,
+  size: number,
+  cacheKey: string,
+): Texture => {
+  let texture: Texture;
+  try {
+    const canvas = drawCircularBorder(borderColor, size);
+
+    texture = new Texture(canvas);
+    texture.generateMipmaps = false;
+    texture.minFilter = LinearFilter;
+    texture.needsUpdate = true;
+    texture.colorSpace = SRGBColorSpace;
+
+    borderTextureCache.set(cacheKey, { texture, lastUsed: Date.now() });
+  } catch (error) {
+    console.warn(
+      "Failed to create border texture, falling back to empty texture:",
+      error,
+    );
+    texture = new Texture();
+    texture.colorSpace = SRGBColorSpace;
+  }
+
+  return texture;
+};
+
 /**
  * Create a procedural border texture - a solid circular border.
  * PERFORMANCE OPTIMIZATION: Caches textures to avoid canvas redraws and re-uploads.
- * Uses LRU eviction strategy to avoid disposing textures still in use by active scenes.
+ * Uses LRU (Least Recently Used) eviction based on timestamps to prevent disposing
+ * recently used textures and to keep cache size bounded.
  * @param borderColor - CSS color string for the border (e.g., "white", "red", "#FF0000")
  * @param size - Canvas size in pixels (default 64)
  * @returns A texture with the procedural border
@@ -336,43 +401,42 @@ export const createBorderTexture = (borderColor: string, size = 64): Texture => 
     }
   }
 
-  // Create canvas and draw circular border
-  let texture: Texture;
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const context = canvas.getContext("2d");
+  const texture = createBorderTextureCanvas(borderColor, size, cacheKey);
+  return texture;
+};
 
-    if (context) {
-      context.clearRect(0, 0, size, size);
-      const centerX = size / 2;
-      const centerY = size / 2;
-      const radius = size / 2 - 2; // Leave padding for border
-
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-      context.fillStyle = borderColor;
-      context.fill();
+const renderStatusBarCanvas = (
+  canvasWidth: number,
+  canvasHeight: number,
+  color: string,
+  stroke: boolean,
+): Texture => {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  const context = canvas.getContext("2d");
+  if (context) {
+    context.fillStyle = color;
+    const lineWidth = Math.max(1, Math.min(4, canvasHeight / 6));
+    context.lineWidth = lineWidth;
+    context.strokeStyle = "black";
+    if (stroke) {
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.strokeRect(0, 0, canvas.width, canvas.height);
+    } else {
+      const padding = lineWidth / 2;
+      context.fillRect(
+        padding,
+        padding,
+        canvas.width - 2 * padding,
+        canvas.height - 2 * padding,
+      );
     }
-
-    texture = new Texture(canvas);
-    texture.generateMipmaps = false;
-    texture.minFilter = LinearFilter;
-    texture.needsUpdate = true;
-    texture.colorSpace = SRGBColorSpace;
-
-    borderTextureCache.set(cacheKey, { texture, lastUsed: Date.now() });
-  } catch (error) {
-    // If canvas creation fails (OOM), return empty texture as fallback
-    console.warn(
-      "Failed to create border texture, falling back to empty texture:",
-      error,
-    );
-    texture = new Texture();
-    texture.colorSpace = SRGBColorSpace;
   }
-
+  const texture = createTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = LinearFilter;
+  texture.needsUpdate = true;
   return texture;
 };
 
@@ -396,43 +460,12 @@ export const drawStatusBar = (info: {
   const canvasWidth = r * L;
   const canvasHeight = (r * height) / 10;
 
-  // Create cache key for this specific status bar configuration
   const cacheKey = `${canvasWidth}-${canvasHeight}-${color}-${stroke}`;
 
-  // Check if we already have a cached texture for this configuration
   let texture = statusBarTextureCache.get(cacheKey);
 
   if (!texture) {
-    // Create new canvas and texture if not cached
-    const canvas = document.createElement("canvas");
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
-    const context = canvas.getContext("2d");
-    if (context) {
-      context.fillStyle = color;
-      // Scale line width proportionally to canvas size, but keep reasonable bounds
-      const lineWidth = Math.max(1, Math.min(4, canvasHeight / 6));
-      context.lineWidth = lineWidth;
-      context.strokeStyle = "black";
-      if (stroke) {
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        context.strokeRect(0, 0, canvas.width, canvas.height);
-      } else {
-        const padding = lineWidth / 2;
-        context.fillRect(
-          padding,
-          padding,
-          canvas.width - 2 * padding,
-          canvas.height - 2 * padding,
-        );
-      }
-    }
-    texture = createTexture(canvas);
-    texture.generateMipmaps = false;
-    texture.minFilter = LinearFilter;
-    texture.needsUpdate = true;
-
-    // Cache the texture for reuse
+    texture = renderStatusBarCanvas(canvasWidth, canvasHeight, color, stroke);
     statusBarTextureCache.set(cacheKey, texture);
   }
 
@@ -864,20 +897,26 @@ export const safeRemoveRendererElement = (
  * @param params.lerpFactor Interpolation factor for smooth following (default: 0.1)
  */
 export const smoothCameraFollow = (params: {
+  // Camera configuration
   camera: OrthographicCamera;
   controls: { target: Vector3; update: () => void };
   targetPosition: { x: number; y: number } | null;
+  // Viewport dimensions
   width: number;
   height: number;
+  // Behavior configuration
   minZoom?: number;
   lerpFactor?: number;
 }) => {
   const {
+    // Camera configuration
     camera,
     controls,
     targetPosition,
+    // Viewport dimensions
     width,
     height,
+    // Behavior configuration
     minZoom = 1.5,
     lerpFactor = 0.1,
   } = params;

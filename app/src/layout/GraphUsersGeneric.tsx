@@ -36,6 +36,21 @@ const GraphUsersGeneric = (
   const isMobileDevice = isMobile();
   const color = localTheme === "dark" ? "white" : "black";
 
+  // Extract stop logic to useCallback to avoid side effects in render
+  const stopLayout = useCallback(() => {
+    if (layoutRunningRef.current && layoutInstanceRef.current) {
+      try {
+        layoutInstanceRef.current.stop();
+        layoutRunningRef.current = false;
+        layoutInstanceRef.current = null;
+      } catch (e) {
+        if (e instanceof Error && !e.message.includes("already stopped")) {
+          console.warn("Unexpected error stopping layout:", e);
+        }
+      }
+    }
+  }, []);
+
   // Cleanup cytoscape instance on unmount to prevent touch event race conditions
   useEffect(() => {
     isMountedRef.current = true;
@@ -45,20 +60,8 @@ const GraphUsersGeneric = (
         const cyRefInstance = cyRef.current;
         cyRef.current = null;
 
-        // Stop any running layout first to prevent "Cannot read properties of null (reading 'notify')" errors
-        if (layoutRunningRef.current && layoutInstanceRef.current) {
-          try {
-            // Stop the currently running layout instance
-            layoutInstanceRef.current.stop();
-            layoutRunningRef.current = false;
-            layoutInstanceRef.current = null;
-          } catch (e) {
-            // Log unexpected errors during cleanup for debugging
-            if (e instanceof Error && !e.message.includes("already stopped")) {
-              console.warn("Unexpected error stopping layout:", e);
-            }
-          }
-        }
+        // Stop any running layout first using the extracted function
+        stopLayout();
 
         // Disable all user interactions immediately to prevent new touch events
         cyRefInstance.autoungrabify(true);
@@ -84,7 +87,7 @@ const GraphUsersGeneric = (
         }, 0);
       }
     };
-  }, []);
+  }, [stopLayout]);
 
   // Set Cytoscape
   const setCytoscape = useCallback(
@@ -102,11 +105,18 @@ const GraphUsersGeneric = (
     resolver: zodResolver(userSearchSchema),
     defaultValues: { username: "", users: [] },
   });
-  const highlights = useWatch({
+
+  const watchedUsers = useWatch({
     control: userSearchMethods.control,
     name: "users",
     defaultValue: [],
-  }).map((u) => u.userId);
+  });
+
+  // Memoize highlights array to provide stable reference
+  const highlights = useMemo(() => {
+    return watchedUsers.map((u) => u.userId);
+  }, [watchedUsers]);
+
   const joinedHighlights = highlights.sort((a, b) => (a < b ? -1 : 1)).join(",");
 
   // If we are highlighting users, find out which users to show
@@ -126,37 +136,30 @@ const GraphUsersGeneric = (
   //     .flatMap((edge) => [edge.source, edge.target]),
   // );
 
-  // Data
-  const maxWeight = Math.max(...props.edges.map((x) => x.weight));
-  const elements = [
-    ...props.nodes
-      .filter((n) => !showIds || showIds.includes(n.id))
-      .map((user) => ({ data: user })),
-    ...props.edges
-      .filter(
-        (e) => !showIds || (showIds.includes(e.source) && showIds.includes(e.target)),
-      )
-      .map((e) => ({
-        data: { ...e, weight: (5 * maxWeight) / e.weight, classes: "autorotate" },
-      })),
-  ];
+  // Memoize elements array to provide stable reference for useMemo dependencies
+  const elements = useMemo(() => {
+    const maxWeight = Math.max(...props.edges.map((x) => x.weight));
+    return [
+      ...props.nodes
+        .filter((n) => !showIds || showIds.includes(n.id))
+        .map((user) => ({ data: user })),
+      ...props.edges
+        .filter(
+          (e) => !showIds || (showIds.includes(e.source) && showIds.includes(e.target)),
+        )
+        .map((e) => ({
+          data: { ...e, weight: (5 * maxWeight) / e.weight, classes: "autorotate" },
+        })),
+    ];
+  }, [props.nodes, props.edges, showIds]);
+
+  // Stop any running layout before re-rendering graph
+  useEffect(() => {
+    stopLayout();
+  }, [joinedHighlights, elements, stopLayout]);
 
   // Memo
   const graph = useMemo(() => {
-    // Stop any running layout from previous render to prevent race conditions
-    if (cyRef.current && layoutRunningRef.current && layoutInstanceRef.current) {
-      try {
-        layoutInstanceRef.current.stop();
-        layoutRunningRef.current = false;
-        layoutInstanceRef.current = null;
-      } catch (e) {
-        // Log unexpected errors during cleanup for debugging
-        if (e instanceof Error && !e.message.includes("already stopped")) {
-          console.warn("Unexpected error stopping layout:", e);
-        }
-      }
-    }
-
     return (
       <div className="h-full w-full">
         <CytoscapeComponent

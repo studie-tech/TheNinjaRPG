@@ -498,25 +498,22 @@ const isDataCloneError = (event: Sentry.ErrorEvent): boolean => {
 const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
 
-  // Match TRPCClientError wrapping Replicate API gateway errors (502, 503, 504)
-  // Use regex to properly match the domain (not just substring) to avoid false positives
-  // from URLs like "evil-api.replicate.com.attacker.com"
   const isReplicateDomain =
     /(?:^|[/:])api\.replicate\.com(?:[/:$?]|$)/.test(message);
 
+  const gatewayErrorCodes = ["502 Bad Gateway", "503 Service", "504 Gateway"];
   const isGatewayError =
     isReplicateDomain &&
-    (message.includes("502 Bad Gateway") ||
-      message.includes("503 Service") ||
-      message.includes("504 Gateway"));
+    gatewayErrorCodes.some((code) => message.includes(code));
 
-  // Match Replicate safety filter errors (E005) - these occur when content moderation
-  // flags the input or output as sensitive. This is expected user behavior, not a bug.
-  // Error format: "Prediction failed: The input or output was flagged as sensitive. Please try again with different inputs. (E005)"
-  const isSafetyFilterError =
-    message.includes("Prediction failed") &&
-    message.includes("flagged as sensitive") &&
-    message.includes("E005");
+  const safetyFilterPatterns = [
+    "Prediction failed",
+    "flagged as sensitive",
+    "E005",
+  ];
+  const isSafetyFilterError = safetyFilterPatterns.every((pattern) =>
+    message.includes(pattern),
+  );
 
   return isGatewayError || isSafetyFilterError;
 };
@@ -1439,11 +1436,28 @@ const isHistoryPushStateRateLimitError = (event: Sentry.ErrorEvent): boolean => 
   const exceptionValues = event.exception?.values ?? [];
 
   // This is a very specific browser security error that will never be actionable.
-  // The error message is unique to this browser rate limit feature, so we can
-  // safely filter it regardless of error type or stack trace characteristics.
+  // However, we only filter it when it comes from third-party scripts, not our app.
   return exceptionValues.some((exception) => {
     const message = exception.value ?? "";
-    return message.includes("Attempt to use history.pushState() more than 100 times per 10 seconds");
+    if (!message.includes("Attempt to use history.pushState() more than 100 times per 10 seconds")) {
+      return false;
+    }
+
+    // Check stack frames to ensure this isn't from our application code
+    const frames = exception.stacktrace?.frames ?? [];
+    const hasAppFrames = frames.some((frame) => {
+      const filename = frame.filename ?? "";
+      // Consider it an app frame if it's from our domain or has our app code paths
+      return (
+        filename.includes("theninja-rpg.com") ||
+        filename.includes("/_next/") ||
+        filename.includes("/app/") ||
+        filename.includes("/src/")
+      );
+    });
+
+    // Only filter if no app frames are present (third-party origin)
+    return !hasAppFrames;
   });
 };
 
