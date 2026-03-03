@@ -110,7 +110,10 @@ export const SHARED_COOLDOWN_TAGS = [
   "moveprevent",
   "pierce",
   "poison",
+  "recoil",
+  "reflect",
   "seal",
+  "shield",
   "stun",
   "summon",
 ] as const;
