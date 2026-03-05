@@ -221,6 +221,15 @@ export const auctionRouter = createTRPCRouter({
       if (userItemData.isInAuction) {
         return errorResponse("Item is already in auction");
       }
+      const hasActiveImbue = userItemData.imbuements?.some(
+        (imb) =>
+          imb.craftingFinishedAt && new Date(imb.craftingFinishedAt) > new Date(),
+      );
+      if (hasActiveImbue) {
+        return errorResponse(
+          "Cannot list item for auction or direct sale while it is being imbued",
+        );
+      }
       if (!userItemData.item.canBeTraded) {
         return errorResponse("Item is not tradable");
       }

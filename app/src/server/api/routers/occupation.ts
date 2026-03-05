@@ -340,6 +340,12 @@ export const occupationRouter = createTRPCRouter({
       if (crystalUserItem.quantity <= 0) {
         return errorResponse("You don't have this crystal");
       }
+      if (
+        crystalUserItem.craftingFinishedAt &&
+        new Date(crystalUserItem.craftingFinishedAt) > new Date()
+      ) {
+        return errorResponse("You cannot use a crystal that is still being crafted");
+      }
       if (crystalItem.itemType !== "CRYSTAL") {
         return errorResponse("Selected item is not a crystal");
       }
@@ -355,6 +361,11 @@ export const occupationRouter = createTRPCRouter({
       }
       if (targetUserItem.equipped !== "NONE") {
         return errorResponse("You cannot imbue an equipped item");
+      }
+      if (targetUserItem.isInAuction) {
+        return errorResponse(
+          "You cannot imbue an item that is listed for auction or direct sale",
+        );
       }
       if (curImbuingItemsCount > 0) {
         return errorResponse(
