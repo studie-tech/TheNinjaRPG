@@ -221,15 +221,6 @@ export const auctionRouter = createTRPCRouter({
       if (userItemData.isInAuction) {
         return errorResponse("Item is already in auction");
       }
-      const hasActiveImbue = userItemData.imbuements?.some(
-        (imb) =>
-          imb.craftingFinishedAt && new Date(imb.craftingFinishedAt) > new Date(),
-      );
-      if (hasActiveImbue) {
-        return errorResponse(
-          "Cannot list item for auction or direct sale while it is being imbued",
-        );
-      }
       if (!userItemData.item.canBeTraded) {
         return errorResponse("Item is not tradable");
       }
@@ -295,6 +286,27 @@ export const auctionRouter = createTRPCRouter({
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + durationHours);
 
+      // Write-time guard: set isInAuction only if item still has no active imbuement (atomic)
+      const markInAuctionResult = await ctx.drizzle
+        .update(userItem)
+        .set({
+          isInAuction: true,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(userItem.id, auctionUserItemId),
+            eq(userItem.userId, ctx.userId),
+            eq(userItem.isInAuction, false),
+            sql`NOT EXISTS (SELECT 1 FROM UserItemImbuement WHERE UserItemImbuement.userItemId = ${auctionUserItemId} AND UserItemImbuement.craftingFinishedAt > NOW())`,
+          ),
+        );
+      if (markInAuctionResult.rowsAffected === 0) {
+        return errorResponse(
+          "Item is not available or is being imbued; cannot list for auction or direct sale",
+        );
+      }
+
       // Create the auction listing
       const auctionId = nanoid();
       await Promise.all([
@@ -310,13 +322,6 @@ export const auctionRouter = createTRPCRouter({
           currencyType,
           expiresAt,
         }),
-        ctx.drizzle
-          .update(userItem)
-          .set({
-            isInAuction: true,
-            updatedAt: new Date(),
-          })
-          .where(eq(userItem.id, auctionUserItemId)),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,

@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -362,11 +362,6 @@ export const occupationRouter = createTRPCRouter({
       if (targetUserItem.equipped !== "NONE") {
         return errorResponse("You cannot imbue an equipped item");
       }
-      if (targetUserItem.isInAuction) {
-        return errorResponse(
-          "You cannot imbue an item that is listed for auction or direct sale",
-        );
-      }
       if (curImbuingItemsCount > 0) {
         return errorResponse(
           "You are already imbuing an item. Please wait for it to finish.",
@@ -385,6 +380,23 @@ export const occupationRouter = createTRPCRouter({
       if (imbuingTime === 0) {
         return errorResponse(
           `You need to be at least ${crystalItem.rarity === "EPIC" ? "Apprentice" : "Master"} rank to imbue ${crystalItem.rarity} crystals`,
+        );
+      }
+
+      // Write-time guard: only proceed if item is still not in auction (atomic)
+      const notInAuctionGuard = await ctx.drizzle
+        .update(userItem)
+        .set({ updatedAt: new Date() })
+        .where(
+          and(
+            eq(userItem.id, input.userItemId),
+            eq(userItem.userId, ctx.userId),
+            eq(userItem.isInAuction, false),
+          ),
+        );
+      if (notInAuctionGuard.rowsAffected === 0) {
+        return errorResponse(
+          "You cannot imbue an item that is listed for auction or direct sale",
         );
       }
 
