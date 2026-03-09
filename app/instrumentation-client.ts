@@ -1240,14 +1240,7 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
 
     // Check if error originates from a userscript
     // Userscripts use the app:/// URL scheme with /userscripts/ path
-    const isFromUserscript = stackFrames.some(
-      (frame) =>
-        frame.filename?.includes("app:///userscripts/") ||
-        frame.abs_path?.includes("app:///userscripts/") ||
-        // Some userscript managers use different URL patterns but standard .user.js extension
-        frame.filename?.endsWith(".user.js") ||
-        frame.abs_path?.endsWith(".user.js"),
-    );
+    const isFromUserscript = hasUserscriptStackSignal(stackFrames);
 
     if (!isFromUserscript) {
       return false;
@@ -1298,44 +1291,7 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
     // 1. Page URLs like "app:///manual", "app:///occupation"
     // 2. Anonymized/minified function names ("?", "r<", "At", "_", etc.)
     // 3. Often missing line numbers
-    const hasAppCodeFrames = stackFrames.some((frame) => {
-      const filename = frame.filename ?? "";
-      const absPath = frame.abs_path ?? "";
-      const func = frame.function ?? "";
-
-      // Exclude userscript frames
-      if (filename.includes("app:///userscripts/") || absPath.includes("app:///userscripts/")) {
-        return false;
-      }
-
-      // Explicitly filter page context pollution
-      // Pattern: app:///[page-path]:? in [anonymized-function]
-      // These frames occur when userscript errors bubble up through page global scope
-      // Examples: "app:///username/foo:? in At", "app:///manual:? in r<"
-      const isPageContextPollution =
-        (filename.startsWith("app:///") && !filename.includes("/_next/")) ||
-        (absPath.startsWith("app:///") && !absPath.includes("/_next/"));
-      if (isPageContextPollution) {
-        return false;
-      }
-
-      // Must be from Next.js compiled code (/_next/)
-      const isNextJsCode = filename.includes("/_next/") || absPath.includes("/_next/");
-      if (!isNextJsCode) {
-        return false;
-      }
-
-      // Must have meaningful execution context (not anonymized)
-      // Anonymized frames from userscript pollution have patterns like: "?", "r<", "At", "_", single letters
-      const isAnonymizedFunction = /^([a-z_]|[a-z]<|\?|[A-Z][a-z]?)$/i.test(func);
-      if (isAnonymizedFunction) {
-        return false;
-      }
-
-      // Prefer frames with line numbers (more likely to be real code execution)
-      // But don't require it as minified code may not always have line numbers
-      return true;
-    });
+    const hasAppCodeFrames = hasMeaningfulAppCodeFrame(stackFrames);
 
     // Only filter if the error is purely from the userscript (no app code in stack)
     // If there's app code mixed in, let it through - might be a real issue
@@ -1352,9 +1308,10 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
  * - Some exception values lack userscript frames
  * - Stack traces are incomplete due to CORS or timing
  *
- * Requires BOTH conditions:
+ * Requires ALL conditions:
  * 1. Console breadcrumb from userscript (e.g., "[Persistent Keybinds]")
  * 2. Single-letter variable error pattern (e.g., "d is not defined")
+ * 3. Stack evidence that the exception still points to userscript code and not app code
  *
  * This conservative approach minimizes false positives while catching edge cases.
  *
@@ -1375,8 +1332,28 @@ const isUserscriptErrorFromBreadcrumbs = (event: Sentry.ErrorEvent): boolean => 
   // Check if any exception has a single-letter variable error
   const hasSingleLetterVarError = checkHasSingleLetterVarError(exceptionValues);
 
-  // Only filter if BOTH conditions are met
-  return hasSingleLetterVarError;
+  if (!hasSingleLetterVarError) {
+    return false;
+  }
+
+  // Require stack evidence that the error still points back to a userscript.
+  // Console breadcrumbs alone are not enough because minified production bundles
+  // can also throw single-letter variable errors like "d is not defined".
+  const hasUserscriptStackEvidence = exceptionValues.some((exception) =>
+    hasUserscriptStackSignal(exception.stacktrace?.frames ?? []),
+  );
+
+  if (!hasUserscriptStackEvidence) {
+    return false;
+  }
+
+  // If any exception value includes meaningful app execution frames, treat it as
+  // a real application error instead of suppressing it as a userscript issue.
+  const hasAppCodeFrames = exceptionValues.some((exception) =>
+    hasMeaningfulAppCodeFrame(exception.stacktrace?.frames ?? []),
+  );
+
+  return !hasAppCodeFrames;
 };
 
 /**
@@ -1811,6 +1788,64 @@ const hasUserscriptFunctionName = (funcName: string): boolean => {
   }
 
   return false;
+};
+
+type UserscriptStackFrame = {
+  filename?: string;
+  abs_path?: string;
+  function?: string;
+  lineno?: number;
+};
+
+const hasUserscriptStackSignal = (
+  stackFrames: Array<UserscriptStackFrame>,
+): boolean => {
+  return stackFrames.some((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+    const func = frame.function ?? "";
+
+    return (
+      filename.includes("app:///userscripts/") ||
+      absPath.includes("app:///userscripts/") ||
+      filename.endsWith(".user.js") ||
+      absPath.endsWith(".user.js") ||
+      hasUserscriptFunctionName(func)
+    );
+  });
+};
+
+const hasMeaningfulAppCodeFrame = (
+  stackFrames: Array<UserscriptStackFrame>,
+): boolean => {
+  return stackFrames.some((frame) => {
+    const filename = frame.filename ?? "";
+    const absPath = frame.abs_path ?? "";
+    const func = frame.function ?? "";
+
+    if (filename.includes("app:///userscripts/") || absPath.includes("app:///userscripts/")) {
+      return false;
+    }
+
+    const isPageContextPollution =
+      (filename.startsWith("app:///") && !filename.includes("/_next/")) ||
+      (absPath.startsWith("app:///") && !absPath.includes("/_next/"));
+    if (isPageContextPollution) {
+      return false;
+    }
+
+    const isNextJsCode = filename.includes("/_next/") || absPath.includes("/_next/");
+    if (!isNextJsCode) {
+      return false;
+    }
+
+    const isAnonymizedFunction = /^([a-z_]|[a-z]<|\?|[A-Z][a-z]?)$/i.test(func);
+    if (isAnonymizedFunction) {
+      return false;
+    }
+
+    return true;
+  });
 };
 
 /**

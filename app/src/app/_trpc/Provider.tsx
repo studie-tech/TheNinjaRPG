@@ -13,7 +13,11 @@ import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
-import { api, useGlobalOnMutateProtect } from "./client";
+import {
+  api,
+  SIGN_IN_REQUIRED_MUTATION_MESSAGE,
+  useGlobalOnMutateProtect,
+} from "./client";
 
 const getBaseUrl = () => {
   if (typeof window !== "undefined") return "";
@@ -102,14 +106,19 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
 export default TrpcClientProvider;
 
 export const onError = (error: unknown) => {
+  const trpcErrorCode =
+    error instanceof TRPCClientError
+      ? (error.data as { code?: string } | undefined)?.code
+      : undefined;
+
   // Ignore "Unauthorized for tRPC endpoint", since this could be just the user logging out, thus queries failing
   // This error is thrown server-side by auth middleware, so we silently handle it to avoid showing
-  // destructive toasts during normal logout flows
-  // Use tRPC error code instead of stack trace checking (which doesn't work in production builds)
+  // destructive toasts during normal logout flows. Some client/network error shapes do not
+  // preserve error.data.code, so only require the code when tRPC actually provided one.
   if (
     error instanceof TRPCClientError &&
     error.message.includes("Unauthorized for tRPC endpoint") &&
-    error.data?.code === "UNAUTHORIZED"
+    (trpcErrorCode === undefined || trpcErrorCode === "UNAUTHORIZED")
   ) {
     return;
   }
@@ -139,16 +148,13 @@ export const onError = (error: unknown) => {
   // Handle "not signed in" errors gracefully (from useGlobalOnMutateProtect)
   // This specific error message is only thrown from useGlobalOnMutateProtect in client.ts,
   // so message matching is sufficient (stack trace checking doesn't work in production builds)
-  if (
-    error instanceof Error &&
-    error.message === "You need to be signed in to perform this action."
-  ) {
+  if (error instanceof Error && error.message === SIGN_IN_REQUIRED_MUTATION_MESSAGE) {
     showMutationToast({ success: false, message: error.message });
     return;
   }
   console.error("onerror", error);
   if (error instanceof TRPCClientError) {
-    const errorCode = (error.data as { code?: string })?.code;
+    const errorCode = trpcErrorCode;
     // Handle rate limiting errors with a softer toast (not logged to Sentry, not destructive)
     if (errorCode === "TOO_MANY_REQUESTS") {
       showMutationToast({ success: false, message: error.message });

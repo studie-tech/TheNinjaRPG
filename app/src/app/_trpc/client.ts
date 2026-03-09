@@ -29,6 +29,9 @@ export type RouterInputs = inferRouterInputs<AppRouter>;
  */
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
 
+export const SIGN_IN_REQUIRED_MUTATION_MESSAGE =
+  "You need to be signed in to perform this action.";
+
 export const onError = (err: unknown) => {
   if (err instanceof TRPCClientError) {
     toast({
@@ -59,7 +62,7 @@ export const useGlobalOnMutateProtect = () => {
       return;
     }
     if (!isSignedIn) {
-      throw new Error("You need to be signed in to perform this action.");
+      throw new Error(SIGN_IN_REQUIRED_MUTATION_MESSAGE);
     }
   };
 };
