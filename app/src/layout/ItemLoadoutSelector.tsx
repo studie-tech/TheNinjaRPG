@@ -44,7 +44,6 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
     <LoadoutSelector
       {...props}
       config={{
-        loadoutType: "item",
         getQuery: () => queryResult,
         selectMutation: () => mutationResult,
         maxLoadoutsFn: fedItemLoadouts,

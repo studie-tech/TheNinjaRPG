@@ -45,7 +45,6 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
     <LoadoutSelector
       {...props}
       config={{
-        loadoutType: "jutsu",
         getQuery: () => queryResult,
         selectMutation: () => mutationResult,
         maxLoadoutsFn: fedJutsuLoadouts,

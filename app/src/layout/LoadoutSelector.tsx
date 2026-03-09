@@ -11,7 +11,6 @@ interface LoadoutData {
 }
 
 interface LoadoutSelectorConfig<T extends LoadoutData> {
-  loadoutType: "item" | "jutsu";
   getQuery: () => {
     data: T[] | undefined;
     isFetching: boolean;

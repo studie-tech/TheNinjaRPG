@@ -95,122 +95,6 @@ import {
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
 
-const RevealedPlayerCard = ({
-  player,
-  userData,
-  villageData,
-  sensoryAllyAttack,
-  isAttackingRevealed,
-  pendingAttackTarget,
-  attackRevealedUser,
-  setPendingAttackTarget,
-  setTargetPosition,
-  setShowRevealedPlayersModal,
-}: {
-  player: RevealedPlayer;
-  userData: ReturnType<typeof useRequiredUserData>["data"];
-  villageData: { id: string; name: string; hexColor: string }[] | undefined;
-  sensoryAllyAttack: boolean;
-  isAttackingRevealed: boolean;
-  pendingAttackTarget: {
-    userId: string;
-    username: string;
-    longitude: number;
-    latitude: number;
-  } | null;
-  attackRevealedUser: (params: {
-    userId: string;
-    longitude: number;
-    latitude: number;
-    sector: number;
-  }) => void;
-  setPendingAttackTarget: (target: {
-    userId: string;
-    username: string;
-    longitude: number;
-    latitude: number;
-  }) => void;
-  setTargetPosition: (pos: { x: number; y: number }) => void;
-  setShowRevealedPlayersModal: (show: boolean) => void;
-}) => {
-  const sameHex =
-    player.latitude === userData?.latitude && player.longitude === userData?.longitude;
-
-  const village = villageData?.find((v) => v.id === player.villageId);
-  const villageName = village?.name ?? (player.villageId ? "Unknown" : "Outlaw");
-  const villageColor = village?.hexColor ?? "gray";
-
-  const relationship =
-    userData?.village &&
-    findVillageUserRelationship(userData.village, player.villageId);
-  const isAlly =
-    player.villageId === userData?.villageId || relationship?.status === "ALLY";
-  const showAttack = sensoryAllyAttack || !isAlly;
-
-  return (
-    <div
-      key={player.userId}
-      className="flex items-center justify-between rounded-lg bg-muted p-3"
-    >
-      <div>
-        <p className="font-semibold">{player.username}</p>
-        <p className="text-muted-foreground text-sm">
-          Lvl. {player.level} -{" "}
-          <span style={{ color: villageColor }}>{villageName}</span>
-        </p>
-        <p className="text-muted-foreground text-sm">
-          Position: ({player.longitude}, {player.latitude})
-          {sameHex && " - Same hex as you!"}
-        </p>
-      </div>
-      <div className="flex gap-2">
-        {showAttack && sameHex && userData ? (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() =>
-              attackRevealedUser({
-                userId: player.userId,
-                longitude: player.longitude,
-                latitude: player.latitude,
-                sector: userData.sector,
-              })
-            }
-            disabled={isAttackingRevealed}
-          >
-            <Swords className="mr-1 h-4 w-4" />
-            Attack
-          </Button>
-        ) : showAttack && !sameHex ? (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => {
-              setPendingAttackTarget({
-                userId: player.userId,
-                username: player.username,
-                longitude: player.longitude,
-                latitude: player.latitude,
-              });
-              setTargetPosition({
-                x: player.longitude,
-                y: player.latitude,
-              });
-              setShowRevealedPlayersModal(false);
-            }}
-            disabled={isAttackingRevealed || !!pendingAttackTarget}
-          >
-            <Swords className="mr-1 h-4 w-4" />
-            Attack
-          </Button>
-        ) : !showAttack ? (
-          <span className="text-muted-foreground text-sm italic">Ally</span>
-        ) : null}
-      </div>
-    </div>
-  );
-};
-
 export default function Travel() {
   // What is shown on this page
   const [showActive, setShowActive] = useLocalStorage<boolean>(
@@ -1086,3 +970,132 @@ export default function Travel() {
     </>
   );
 }
+
+/**
+ * Revealed Player Card
+ * @param player - The revealed player
+ * @param userData - The user data
+ * @param villageData - The village data
+ * @param sensoryAllyAttack - Whether to attack allies
+ * @param isAttackingRevealed - Whether the user is attacking a revealed player
+ * @param pendingAttackTarget - The target of the pending attack
+ * @param attackRevealedUser - The function to attack a revealed player
+ * @param setPendingAttackTarget - The function to set the pending attack target
+ * @param setTargetPosition - The function to set the target position
+ * @returns
+ */
+const RevealedPlayerCard = ({
+  player,
+  userData,
+  villageData,
+  sensoryAllyAttack,
+  isAttackingRevealed,
+  pendingAttackTarget,
+  attackRevealedUser,
+  setPendingAttackTarget,
+  setTargetPosition,
+  setShowRevealedPlayersModal,
+}: {
+  player: RevealedPlayer;
+  userData: ReturnType<typeof useRequiredUserData>["data"];
+  villageData: { id: string; name: string; hexColor: string }[] | undefined;
+  sensoryAllyAttack: boolean;
+  isAttackingRevealed: boolean;
+  pendingAttackTarget: {
+    userId: string;
+    username: string;
+    longitude: number;
+    latitude: number;
+  } | null;
+  attackRevealedUser: (params: {
+    userId: string;
+    longitude: number;
+    latitude: number;
+    sector: number;
+  }) => void;
+  setPendingAttackTarget: (target: {
+    userId: string;
+    username: string;
+    longitude: number;
+    latitude: number;
+  }) => void;
+  setTargetPosition: (pos: { x: number; y: number }) => void;
+  setShowRevealedPlayersModal: (show: boolean) => void;
+}) => {
+  const sameHex =
+    player.latitude === userData?.latitude && player.longitude === userData?.longitude;
+
+  const village = villageData?.find((v) => v.id === player.villageId);
+  const villageName = village?.name ?? (player.villageId ? "Unknown" : "Outlaw");
+  const villageColor = village?.hexColor ?? "gray";
+
+  const relationship =
+    userData?.village &&
+    findVillageUserRelationship(userData.village, player.villageId);
+  const isAlly =
+    player.villageId === userData?.villageId || relationship?.status === "ALLY";
+  const showAttack = sensoryAllyAttack || !isAlly;
+
+  return (
+    <div
+      key={player.userId}
+      className="flex items-center justify-between rounded-lg bg-muted p-3"
+    >
+      <div>
+        <p className="font-semibold">{player.username}</p>
+        <p className="text-muted-foreground text-sm">
+          Lvl. {player.level} -{" "}
+          <span style={{ color: villageColor }}>{villageName}</span>
+        </p>
+        <p className="text-muted-foreground text-sm">
+          Position: ({player.longitude}, {player.latitude})
+          {sameHex && " - Same hex as you!"}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        {showAttack && sameHex && userData ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() =>
+              attackRevealedUser({
+                userId: player.userId,
+                longitude: player.longitude,
+                latitude: player.latitude,
+                sector: userData.sector,
+              })
+            }
+            disabled={isAttackingRevealed}
+          >
+            <Swords className="mr-1 h-4 w-4" />
+            Attack
+          </Button>
+        ) : showAttack && !sameHex ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              setPendingAttackTarget({
+                userId: player.userId,
+                username: player.username,
+                longitude: player.longitude,
+                latitude: player.latitude,
+              });
+              setTargetPosition({
+                x: player.longitude,
+                y: player.latitude,
+              });
+              setShowRevealedPlayersModal(false);
+            }}
+            disabled={isAttackingRevealed || !!pendingAttackTarget}
+          >
+            <Swords className="mr-1 h-4 w-4" />
+            Attack
+          </Button>
+        ) : !showAttack ? (
+          <span className="text-muted-foreground text-sm italic">Ally</span>
+        ) : null}
+      </div>
+    </div>
+  );
+};
