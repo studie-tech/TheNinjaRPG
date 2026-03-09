@@ -1768,15 +1768,14 @@ const isFirefoxNSError = (event: Sentry.ErrorEvent): boolean => {
 /**
  * Shared utility to check if a function name matches userscript-specific patterns.
  * Extracted to avoid duplication between isUserscriptError and isUserscriptRawError.
+ *
+ * Important: anonymous function placeholders like "?" are intentionally excluded.
+ * Sentry commonly uses "?" for anonymous Firefox frames, and treating that as a
+ * userscript signal can incorrectly classify legitimate application errors.
  */
 const hasUserscriptFunctionName = (funcName: string): boolean => {
   // Minified function patterns like window["__f__mm6eqil6.gsn"]
   if (funcName.includes('window["__f__') || funcName.includes("window['__f__")) {
-    return true;
-  }
-
-  // Anonymous function
-  if (funcName === "?") {
     return true;
   }
 

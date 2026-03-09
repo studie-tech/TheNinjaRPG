@@ -35,11 +35,11 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
             staleTime: Infinity,
           },
           mutations: {
-            onError: (error) => onError(error),
+            onError: (error) => handleTrpcError(error),
           },
         },
         queryCache: new QueryCache({
-          onError: (error, _query) => onError(error),
+          onError: (error, _query) => handleTrpcError(error),
         }),
         mutationCache: new MutationCache({
           onMutate: (_variables, mutation) => {
@@ -105,7 +105,7 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
 
 export default TrpcClientProvider;
 
-export const onError = (error: unknown) => {
+const handleTrpcError = (error: unknown) => {
   const trpcErrorCode =
     error instanceof TRPCClientError
       ? (error.data as { code?: string } | undefined)?.code
