@@ -10,7 +10,7 @@ import type {
 import type { Battle } from "@/drizzle/schema";
 import type { CombatAction } from "@/libs/combat/types";
 import {
-  getEffectStage,
+  getBaseDamageForModifier,
   getPoolsAffected,
   getPreventTypeName,
   isEffectActive,
@@ -797,18 +797,13 @@ export const adjustDamageGiven = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
-          // Use staged base damage for percentage calculations
-          // Stage 1 (equipment/pre-battle): use original baseDamageForModifiers
-          // Stage 2 (in-battle): use baseDamageAfterStage1 (post-equipment damage)
-          const effectStage = getEffectStage(effect);
-          const baseDamage =
-            effectStage === 1
-              ? (consequence.baseDamageForModifiers ?? consequence.damage)
-              : (consequence.baseDamageAfterStage1 ??
-                consequence.baseDamageForModifiers ??
-                consequence.damage);
+
+          const baseDamage = getBaseDamageForModifier(power, effect, consequence);
+
           const change =
             effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
+
+          // Bloodline seal check using calculated base damage
           if (effect.fromType === "bloodline") {
             if (
               "allowBloodlineDamageIncrease" in damageEffect &&
@@ -874,16 +869,9 @@ export const adjustDamageTaken = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
-          // Use staged base damage for percentage calculations
-          // Stage 1 (equipment/pre-battle): use original baseDamageForModifiers
-          // Stage 2 (in-battle): use baseDamageAfterStage1 (post-equipment damage)
-          const effectStage = getEffectStage(effect);
-          const baseDamage =
-            effectStage === 1
-              ? (consequence.baseDamageForModifiers ?? consequence.damage)
-              : (consequence.baseDamageAfterStage1 ??
-                consequence.baseDamageForModifiers ??
-                consequence.damage);
+
+          const baseDamage = getBaseDamageForModifier(power, effect, consequence);
+
           const change =
             effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           consequence.damage = consequence.damage + change * ratio;

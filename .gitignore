@@ -25,3 +25,4 @@ app/spacetimedb/node_modules/
 # AI clutter
 .cursor
 .claude
+Makefile.agent

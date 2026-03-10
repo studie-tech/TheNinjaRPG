@@ -9,7 +9,12 @@ import {
 } from "@/drizzle/constants";
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
-import { damageModifierTypes, dmgConfig as defaultDmgConfig } from "./constants";
+import {
+  damageBoostTypes,
+  damageModifierTypes,
+  damageReductionTypes,
+  dmgConfig as defaultDmgConfig,
+} from "./constants";
 import {
   absorb,
   afterburn,
@@ -345,13 +350,14 @@ export const applyEffects = (
     (e) => e.type === "increaseheal" || e.type === "decreaseheal",
   );
 
-  // Separate damage modifier effects by stage
-  const stage1DamageModifiers = usersEffects
-    .filter((e) => damageModifierTypes.includes(e.type))
+  // Separate damage boosts (increases) from reductions (decreases)
+  // We'll apply boosts first, then capture a snapshot, then apply reductions
+  const stage1DamageBoosts = usersEffects
+    .filter((e) => damageBoostTypes.includes(e.type))
     .filter((e) => getEffectStage(e) === 1);
 
-  const stage2DamageModifiers = usersEffects
-    .filter((e) => damageModifierTypes.includes(e.type))
+  const stage2DamageBoosts = usersEffects
+    .filter((e) => damageBoostTypes.includes(e.type))
     .filter((e) => getEffectStage(e) === 2);
 
   // Apply non-damage-modifier effects first (maintains existing ordering)
@@ -370,8 +376,9 @@ export const applyEffects = (
     );
   });
 
-  // Apply Stage 1 damage modifiers (equipment/pre-battle effects)
-  stage1DamageModifiers.sort(sortEffects).forEach((effect) => {
+  // Phase 1: Apply Stage 1 damage BOOSTS (equipment/pre-battle: armor, skill, village, ranked)
+  // These modify damage before in-battle effects
+  stage1DamageBoosts.sort(sortEffects).forEach((effect) => {
     applySingleEffect(
       consequences,
       newUsersState,
@@ -394,8 +401,9 @@ export const applyEffects = (
     }
   });
 
-  // Apply Stage 2 damage modifiers (in-battle effects)
-  stage2DamageModifiers.sort(sortEffects).forEach((effect) => {
+  // Phase 2: Apply Stage 2 damage BOOSTS (in-battle: bloodline, jutsu, item, basic)
+  // These stack on top of Stage 1 boosts
+  stage2DamageBoosts.sort(sortEffects).forEach((effect) => {
     applySingleEffect(
       consequences,
       newUsersState,
@@ -410,20 +418,50 @@ export const applyEffects = (
     );
   });
 
-  // Enforce damage reduction cap: damage cannot be reduced below (1 - DMG_REDUCTION_CAP) of base
+  // Capture baseDamageAfterBoosts for reduction calculations
+  // This is the fully boosted damage that reductions will use as their base
+  consequences.forEach((consequence) => {
+    if (consequence.damage !== undefined) {
+      consequence.baseDamageAfterBoosts = consequence.damage;
+    }
+  });
+
+  // Phase 3: Apply ALL damage REDUCTIONS (from any stage)
+  // Reductions are calculated as percentages of the FULLY BOOSTED damage
+  // This ensures damage reduction is effective against amplified damage
+  const allDamageReductions = usersEffects.filter((e) =>
+    damageReductionTypes.includes(e.type),
+  );
+
+  allDamageReductions.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
+  });
+
+  // Enforce damage reduction cap: damage cannot be reduced below (1 - DMG_REDUCTION_CAP) of boosted pre-reduction damage
   consequences.forEach((consequence) => {
     if (
       consequence.damage !== undefined &&
-      consequence.baseDamageForModifiers !== undefined
+      consequence.baseDamageAfterBoosts !== undefined
     ) {
-      const minDamage = consequence.baseDamageForModifiers * (1 - DMG_REDUCTION_CAP);
+      const minDamage = consequence.baseDamageAfterBoosts * (1 - DMG_REDUCTION_CAP);
       consequence.damage = Math.max(consequence.damage, minDamage);
     }
     if (
       consequence.residual !== undefined &&
-      consequence.baseDamageForModifiers !== undefined
+      consequence.baseDamageAfterBoosts !== undefined
     ) {
-      const minResidual = consequence.baseDamageForModifiers * (1 - DMG_REDUCTION_CAP);
+      const minResidual = consequence.baseDamageAfterBoosts * (1 - DMG_REDUCTION_CAP);
       consequence.residual = Math.max(consequence.residual, minResidual);
     }
   });

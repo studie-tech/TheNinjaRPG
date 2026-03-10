@@ -858,6 +858,37 @@ export const getEffectStage = (effect: UserEffect | GroundEffect): 1 | 2 => {
 };
 
 /**
+ * Get the appropriate base damage for a modifier calculation.
+ * For damage REDUCTIONS (negative power), uses the fully boosted damage.
+ * For damage INCREASES (positive power), uses staged base damage.
+ */
+export const getBaseDamageForModifier = (
+  power: number,
+  effect: UserEffect,
+  consequence: {
+    damage?: number;
+    baseDamageForModifiers?: number;
+    baseDamageAfterStage1?: number;
+    baseDamageAfterBoosts?: number;
+  },
+): number => {
+  // For damage REDUCTIONS (negative power), use the fully boosted damage
+  // This ensures reductions are calculated on the fully amplified damage
+  if (power < 0 && consequence.baseDamageAfterBoosts !== undefined) {
+    return consequence.baseDamageAfterBoosts;
+  }
+
+  // For damage INCREASES (positive power), use staged base
+  const effectStage = getEffectStage(effect);
+  return effectStage === 1
+    ? (consequence.baseDamageForModifiers ?? consequence.damage ?? 0)
+    : (consequence.baseDamageAfterStage1 ??
+        consequence.baseDamageForModifiers ??
+        consequence.damage ??
+        0);
+};
+
+/**
  * Sort order in which effects are applied
  */
 export const sortEffects = (

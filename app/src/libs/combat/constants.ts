@@ -119,13 +119,29 @@ export const GenNames = ["strength", "intelligence", "willpower", "speed"] as co
 export type GenName = (typeof GenNames)[number];
 
 /**
+ * Damage boost effect types (increases)
+ * These should be applied BEFORE damage reductions
+ */
+export const damageBoostTypes: string[] = [
+  "increasedamagetaken",
+  "increasedamagegiven",
+];
+
+/**
+ * Damage reduction effect types (decreases)
+ * These should be applied AFTER all damage boosts
+ */
+export const damageReductionTypes: string[] = [
+  "decreasedamagetaken",
+  "decreasedamagegiven",
+];
+
+/**
  * Damage modifier effect types that require staged processing
  */
 export const damageModifierTypes: string[] = [
-  "decreasedamagetaken",
-  "decreasedamagegiven",
-  "increasedamagetaken",
-  "increasedamagegiven",
+  ...damageReductionTypes,
+  ...damageBoostTypes,
 ];
 
 /**

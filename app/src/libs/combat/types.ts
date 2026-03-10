@@ -479,6 +479,8 @@ export type Consequence = {
   baseDamageForModifiers?: number;
   /** Base damage after Stage 1 (equipment/pre-battle) modifiers are applied */
   baseDamageAfterStage1?: number;
+  /** Base damage after ALL boost modifiers (Stage 1 + Stage 2 increases) are applied, before any reductions */
+  baseDamageAfterBoosts?: number;
   wound?: number;
   reflect?: number;
   recoil?: number;
