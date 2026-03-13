@@ -431,6 +431,7 @@ export const applyEffects = (
   // Phase 3: Apply ALL damage REDUCTIONS (from any stage)
   // Reductions are calculated as percentages of the FULLY BOOSTED damage
   // This ensures damage reduction is effective against amplified damage
+  // Note: reductions intentionally apply to both direct and residual (DOT) damage
   const allDamageReductions = usersEffects.filter((e) =>
     damageReductionTypes.includes(e.type),
   );

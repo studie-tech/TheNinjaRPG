@@ -782,7 +782,7 @@ export const decreaseStats = (
   return adjustStats(effect, target);
 };
 
-/** Adjust damage given by target */
+/** Adjust damage given by target. Applies to both direct and residual (DOT) damage. */
 export const adjustDamageGiven = (
   effect: UserEffect,
   usersEffects: UserEffect[],
@@ -860,7 +860,7 @@ export const decreaseDamageGiven = (
   return adjustDamageGiven(effect, usersEffects, consequences, target);
 };
 
-/** Adjust damage taken by user */
+/** Adjust damage taken by user. Applies to both direct and residual (DOT) damage. */
 export const adjustDamageTaken = (
   effect: UserEffect,
   usersEffects: UserEffect[],

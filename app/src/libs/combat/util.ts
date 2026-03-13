@@ -878,11 +878,15 @@ export const getBaseDamageForModifier = (
   },
 ): number => {
   // For damage REDUCTIONS, use the fully boosted damage.
-  if (
-    damageReductionTypes.includes(effect.type) &&
-    consequence.baseDamageAfterBoosts !== undefined
-  ) {
-    return consequence.baseDamageAfterBoosts;
+  // baseDamageAfterBoosts is snapshotted in Phase 2 of process.ts and must
+  // always be present before any reduction effect reaches this function.
+  if (damageReductionTypes.includes(effect.type)) {
+    if (consequence.baseDamageAfterBoosts === undefined) {
+      console.warn(
+        "getBaseDamageForModifier: baseDamageAfterBoosts missing for reduction effect",
+      );
+    }
+    return consequence.baseDamageAfterBoosts ?? consequence.baseDamageForModifiers ?? 0;
   }
 
   // For damage INCREASES, use staged base
