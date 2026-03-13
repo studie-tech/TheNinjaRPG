@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Hammer, Plus, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -17,6 +17,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +42,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -113,11 +122,11 @@ interface AuctionListingProps {
 }
 
 const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
+  const [searchTerm, setSearchTerm] = useState("");
   // User data
   const { timeDiff } = useRequiredUserData();
 
   // State
-  const [searchTerm, setSearchTerm] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [selectedAuction, setSelectedAuction] = useState<string | null>(null);
@@ -253,10 +262,10 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
             <Search className="absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
             <Input
               id="search"
-              placeholder="Search by item name..."
+              placeholder="Search listings..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-10 mb-2 w-full border border-gray-400 bg-white font-semibold text-black placeholder:font-bold placeholder:text-gray-600"
             />
           </div>
         </div>
@@ -705,12 +714,16 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
 };
 
 export const NewAuctionListingDialog: React.FC = () => {
+  const ignoreNextPopoverOpenRef = useRef(false);
+  const itemSearchInputRef = useRef<HTMLInputElement>(null);
+
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Utils
   const utils = api.useUtils();
 
-  // Create listing form
+  // Create Listing Form
   const createForm = useForm<
     z.input<typeof createAuctionListingSchema>,
     unknown,
@@ -724,7 +737,7 @@ export const NewAuctionListingDialog: React.FC = () => {
     },
   });
 
-  // User search form for DIRECT auctions
+  // Search Form for DIRECT auctions
   const maxUsers = 1;
   const userSearchSchema = getSearchValidator({ max: maxUsers });
   const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
@@ -736,6 +749,32 @@ export const NewAuctionListingDialog: React.FC = () => {
   const { data: userItems } = api.item.getUserItems.useQuery();
 
   // Mutations
+  const [itemSearchTerm, setItemSearchTerm] = useState("");
+
+  // Ensure keyboard focus is moved into the dialog's search field on every open.
+  // (autoFocus only happens on mount, but some popover implementations may keep the input mounted)
+  useEffect(() => {
+    if (!isOpen || !dropdownOpen) return;
+    const timer = setTimeout(() => itemSearchInputRef.current?.focus(), 50);
+    return () => clearTimeout(timer);
+  }, [isOpen, dropdownOpen]);
+
+  const filteredItems =
+    userItems?.filter((item) => {
+      return (
+        item.item?.canBeTraded &&
+        item.equipped === "NONE" &&
+        (!item.craftingFinishedAt || new Date(item.craftingFinishedAt) < new Date()) &&
+        !item.isInAuction
+      );
+    }) || [];
+
+  const filteredItemsForDropdown = filteredItems.filter((userItem) => {
+    const name = (userItem.item?.name || "").trim().toLowerCase();
+    const search = itemSearchTerm.trim().toLowerCase();
+    return name.includes(search);
+  });
+
   const { mutate: createListing, isPending: isCreating } =
     api.auction.createAuctionListing.useMutation({
       onSuccess: async (data) => {
@@ -743,6 +782,8 @@ export const NewAuctionListingDialog: React.FC = () => {
         if (data.success) {
           setIsOpen(false);
           createForm.reset();
+          setItemSearchTerm("");
+          setDropdownOpen(false);
           userSearchMethods.reset();
           await Promise.all([
             utils.auction.getAuctionListings.invalidate(),
@@ -762,16 +803,6 @@ export const NewAuctionListingDialog: React.FC = () => {
     control: createForm.control,
     name: "userItemId",
   });
-
-  const filteredItems =
-    userItems?.filter((item) => {
-      return (
-        item.item?.canBeTraded &&
-        item.equipped === "NONE" &&
-        (!item.craftingFinishedAt || new Date(item.craftingFinishedAt) < new Date()) &&
-        !item.isInAuction
-      );
-    }) || [];
 
   // Get the selected item to check if it's stackable
   const selectedItem = filteredItems.find((item) => item.id === watchedUserItemId);
@@ -795,9 +826,25 @@ export const NewAuctionListingDialog: React.FC = () => {
     };
     createListing(submissionData);
   };
-
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (open) {
+          // Show the item search dropdown when opening the dialog,
+          // then let `autoFocus` handle focusing the actual CommandInput.
+          setItemSearchTerm("");
+          setDropdownOpen(true);
+        } else {
+          createForm.reset();
+          setItemSearchTerm("");
+          setDropdownOpen(false);
+          ignoreNextPopoverOpenRef.current = false;
+          userSearchMethods.reset();
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
@@ -808,7 +855,6 @@ export const NewAuctionListingDialog: React.FC = () => {
         <DialogHeader>
           <DialogTitle>Create Auction Listing</DialogTitle>
         </DialogHeader>
-
         <Form {...createForm}>
           <form
             onSubmit={createForm.handleSubmit(onCreateSubmit)}
@@ -820,24 +866,83 @@ export const NewAuctionListingDialog: React.FC = () => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Item to List</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select an item to list" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {filteredItems.map((userItem) => (
-                        <SelectItem key={userItem.id} value={userItem.id}>
-                          {userItem.item?.name}
-                          {userItem.quantity > 1 ? ` (${userItem.quantity})` : ""}
-                          {userItem.imbuements && userItem.imbuements.length > 0
-                            ? ` (${userItem.imbuements.length} imbuement(s))`
-                            : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={dropdownOpen} onOpenChange={setDropdownOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Input
+                          id="user-item-search"
+                          role="combobox"
+                          aria-expanded={dropdownOpen}
+                          aria-controls="user-item-list"
+                          placeholder="Search your items..."
+                          value={field.value ? selectedItem?.item?.name || "" : ""}
+                          readOnly
+                          onFocus={() => {
+                            if (ignoreNextPopoverOpenRef.current) {
+                              ignoreNextPopoverOpenRef.current = false;
+                              return;
+                            }
+                            setDropdownOpen(true);
+                          }}
+                          onClick={() => {
+                            if (ignoreNextPopoverOpenRef.current) {
+                              ignoreNextPopoverOpenRef.current = false;
+                              return;
+                            }
+                            setDropdownOpen(true);
+                          }}
+                          className="mb-2 w-full cursor-text border border-gray-400 bg-white font-semibold text-black placeholder:font-bold placeholder:text-gray-600"
+                        />
+                      </FormControl>
+                    </PopoverTrigger>
+
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                      <Command shouldFilter={false}>
+                        <CommandInput
+                          autoFocus
+                          ref={itemSearchInputRef}
+                          placeholder="Search your items..."
+                          value={itemSearchTerm}
+                          onValueChange={(value) => {
+                            if (field.value) {
+                              field.onChange("");
+                            }
+                            setItemSearchTerm(value);
+                          }}
+                          className="h-9"
+                        />
+                        <CommandList>
+                          {filteredItemsForDropdown.length === 0 ? (
+                            <CommandEmpty>No items found</CommandEmpty>
+                          ) : (
+                            <CommandGroup>
+                              {filteredItemsForDropdown.map((userItem) => (
+                                <CommandItem
+                                  key={userItem.id}
+                                  value={userItem.item?.name || ""}
+                                  onSelect={() => {
+                                    ignoreNextPopoverOpenRef.current = true;
+                                    field.onChange(userItem.id);
+                                    setItemSearchTerm("");
+                                    setDropdownOpen(false);
+                                  }}
+                                >
+                                  {userItem.item?.name}
+                                  {userItem.quantity > 1
+                                    ? ` (${userItem.quantity})`
+                                    : ""}
+                                  {userItem.imbuements && userItem.imbuements.length > 0
+                                    ? ` (${userItem.imbuements.length} imbuement(s))`
+                                    : ""}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+
                   <FormMessage />
                 </FormItem>
               )}
@@ -1020,7 +1125,17 @@ export const NewAuctionListingDialog: React.FC = () => {
               <Button type="submit" disabled={isCreating}>
                 {isCreating ? <Loader size={20} /> : "Create Listing"}
               </Button>
-              <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsOpen(false);
+                  createForm.reset();
+                  setItemSearchTerm("");
+                  setDropdownOpen(false);
+                  userSearchMethods.reset();
+                }}
+              >
                 Cancel
               </Button>
             </div>
