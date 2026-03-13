@@ -459,18 +459,16 @@ export const clanRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const request = await fetchRequest(ctx.drizzle, input.id, "CLAN");
       // Secondary fetches
-      const [fetchedClan, leader, user] = await Promise.all([
+      const [fetchedClan, user] = await Promise.all([
         fetchClanByLeader(ctx.drizzle, request.receiverId),
-        fetchUser(ctx.drizzle, request.receiverId),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Derived
-      const groupLabel = leader?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user?.isOutlaw ? "faction" : "clan";
       const isLeader = user.userId === fetchedClan?.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
-      if (!leader) return errorResponse("Leader not found");
       if (!isLeader && !isColeader) {
         return errorResponse(
           `Only ${groupLabel} leader or co-leaders can reject requests`,
