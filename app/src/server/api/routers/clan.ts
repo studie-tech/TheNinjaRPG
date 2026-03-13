@@ -510,8 +510,8 @@ export const clanRouter = createTRPCRouter({
       ]);
       // Derived
       const nMembers = fetchedClan?.members.length || 0;
-      const groupLabel = leader?.isOutlaw ? "faction" : "clan";
-      const locationLabel = leader?.isOutlaw ? "syndicate" : "village";
+      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const locationLabel = user?.isOutlaw ? "syndicate" : "village";
       const isLeader = user.userId === fetchedClan?.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
       // Guards
