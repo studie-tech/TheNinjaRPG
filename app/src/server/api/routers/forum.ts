@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { asc, eq, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { forumBoard, forumPost, forumThread, userData } from "@/drizzle/schema";
@@ -91,8 +91,6 @@ export const forumRouter = createTRPCRouter({
       // Mutate
       const sanitized = sanitize(input.content);
       const postId = nanoid();
-      // Use guard clause in board update to prevent orphaned threads if board is deleted
-      // SECURITY: This prevents race condition where thread/post are created but board update fails
       const [, , , boardUpdateResult] = await Promise.all([
         moderateContent(ctx.drizzle, {
           content: sanitized,
@@ -117,13 +115,7 @@ export const forumRouter = createTRPCRouter({
         ctx.drizzle
           .update(forumBoard)
           .set({ nThreads: sql`nThreads + 1`, updatedAt: new Date() })
-          .where(
-            and(
-              eq(forumBoard.id, input.board_id),
-              // Guard: Only update if board still exists (id matches the pre-check)
-              eq(forumBoard.id, board.id),
-            ),
-          ),
+          .where(eq(forumBoard.id, input.board_id)),
       ]);
 
       // Note: In edge case where board is deleted during mutation, thread/post still exist

@@ -48,6 +48,7 @@ export const truncateString = (
   maximumLength: number,
   indicator: string = "...",
 ): string => {
+  if (maximumLength <= 0) return "";
   if (text.length <= maximumLength) return text;
   if (maximumLength <= indicator.length) return text.slice(0, maximumLength);
   return `${text.slice(0, maximumLength - indicator.length)}${indicator}`;
