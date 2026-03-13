@@ -871,6 +871,7 @@ export const getBaseDamageForModifier = (
   effect: UserEffect,
   consequence: {
     damage?: number;
+    residual?: number;
     baseDamageForModifiers?: number;
     baseDamageAfterStage1?: number;
     baseDamageAfterBoosts?: number;
@@ -887,10 +888,14 @@ export const getBaseDamageForModifier = (
   // For damage INCREASES, use staged base
   const effectStage = getEffectStage(effect);
   return effectStage === 1
-    ? (consequence.baseDamageForModifiers ?? consequence.damage ?? 0)
+    ? (consequence.baseDamageForModifiers ??
+        consequence.damage ??
+        consequence.residual ??
+        0)
     : (consequence.baseDamageAfterStage1 ??
         consequence.baseDamageForModifiers ??
         consequence.damage ??
+        consequence.residual ??
         0);
 };
 
