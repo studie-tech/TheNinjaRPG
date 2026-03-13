@@ -59,7 +59,12 @@ import type { ZodAllTags } from "@/validators/combat";
 import type { PathCalculator, TerrainHex } from "../hexgrid";
 import { defineHex } from "../hexgrid";
 import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
-import { allState, POST_PIERCE_TAGS, publicState } from "./constants";
+import {
+  allState,
+  damageReductionTypes,
+  POST_PIERCE_TAGS,
+  publicState,
+} from "./constants";
 import { checkFriendlyFire } from "./process";
 import { getPower } from "./tags";
 import type {
@@ -859,11 +864,10 @@ export const getEffectStage = (effect: UserEffect | GroundEffect): 1 | 2 => {
 
 /**
  * Get the appropriate base damage for a modifier calculation.
- * For damage REDUCTIONS (negative power), uses the fully boosted damage.
- * For damage INCREASES (positive power), uses staged base damage.
+ * Damage reductions use the fully boosted damage.
+ * Damage increases use staged base damage.
  */
 export const getBaseDamageForModifier = (
-  power: number,
   effect: UserEffect,
   consequence: {
     damage?: number;
@@ -872,13 +876,15 @@ export const getBaseDamageForModifier = (
     baseDamageAfterBoosts?: number;
   },
 ): number => {
-  // For damage REDUCTIONS (negative power), use the fully boosted damage
-  // This ensures reductions are calculated on the fully amplified damage
-  if (power < 0 && consequence.baseDamageAfterBoosts !== undefined) {
+  // For damage REDUCTIONS, use the fully boosted damage.
+  if (
+    damageReductionTypes.includes(effect.type) &&
+    consequence.baseDamageAfterBoosts !== undefined
+  ) {
     return consequence.baseDamageAfterBoosts;
   }
 
-  // For damage INCREASES (positive power), use staged base
+  // For damage INCREASES, use staged base
   const effectStage = getEffectStage(effect);
   return effectStage === 1
     ? (consequence.baseDamageForModifiers ?? consequence.damage ?? 0)

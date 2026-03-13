@@ -793,12 +793,18 @@ export const adjustDamageGiven = (
   const affected = getAffected(effect, "offence");
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
-      if (consequence.userId === effect.targetId && consequence.damage) {
+      const damageKey =
+        consequence.damage !== undefined
+          ? "damage"
+          : consequence.residual !== undefined
+            ? "residual"
+            : undefined;
+      if (consequence.userId === effect.targetId && damageKey !== undefined) {
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
 
-          const baseDamage = getBaseDamageForModifier(power, effect, consequence);
+          const baseDamage = getBaseDamageForModifier(effect, consequence);
 
           const change =
             effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
@@ -814,7 +820,7 @@ export const adjustDamageGiven = (
               return;
             }
           }
-          consequence.damage = consequence.damage + change * ratio;
+          consequence[damageKey] = (consequence[damageKey] ?? 0) + change * ratio;
         }
       }
     });
@@ -865,16 +871,22 @@ export const adjustDamageTaken = (
   const affected = getAffected(effect, "offence");
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
-      if (consequence.targetId === effect.targetId && consequence.damage) {
+      const damageKey =
+        consequence.damage !== undefined
+          ? "damage"
+          : consequence.residual !== undefined
+            ? "residual"
+            : undefined;
+      if (consequence.targetId === effect.targetId && damageKey !== undefined) {
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
 
-          const baseDamage = getBaseDamageForModifier(power, effect, consequence);
+          const baseDamage = getBaseDamageForModifier(effect, consequence);
 
           const change =
             effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
-          consequence.damage = consequence.damage + change * ratio;
+          consequence[damageKey] = (consequence[damageKey] ?? 0) + change * ratio;
         }
       }
     });

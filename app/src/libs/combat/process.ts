@@ -393,11 +393,12 @@ export const applyEffects = (
     );
   });
 
-  // Capture baseDamageAfterStage1 for all consequences with damage
+  // Capture baseDamageAfterStage1 for all damage consequences, including DOT
   // This becomes the base for Stage 2 percentage calculations
   consequences.forEach((consequence) => {
-    if (consequence.damage !== undefined) {
-      consequence.baseDamageAfterStage1 = consequence.damage;
+    const stagedDamage = consequence.damage ?? consequence.residual;
+    if (stagedDamage !== undefined) {
+      consequence.baseDamageAfterStage1 = stagedDamage;
     }
   });
 
@@ -418,11 +419,12 @@ export const applyEffects = (
     );
   });
 
-  // Capture baseDamageAfterBoosts for reduction calculations
+  // Capture baseDamageAfterBoosts for reduction calculations, including DOT
   // This is the fully boosted damage that reductions will use as their base
   consequences.forEach((consequence) => {
-    if (consequence.damage !== undefined) {
-      consequence.baseDamageAfterBoosts = consequence.damage;
+    const boostedDamage = consequence.damage ?? consequence.residual;
+    if (boostedDamage !== undefined) {
+      consequence.baseDamageAfterBoosts = boostedDamage;
     }
   });
 

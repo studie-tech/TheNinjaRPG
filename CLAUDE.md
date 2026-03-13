@@ -2,24 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Before Starting Work
-
-- Always make a plan in "plan mode"
-- After you make the plan, write the plan to .claude/tasks/TASK_NAME.md
-- The plan should be a detailed implementation plan and the reasoning behind them, as well as the tasks broken down.
-- If the task requires external knowledge, research to retrieve this knowledge (use Task tool for research)
-- Do not over plan, always try to find the simplest solution
-- Once you have the plan, first ask me to review it, and do not continue untill I approve the plan.
-
-## While Implementing
-
-- You should update the task plan .md-file as you work
-- After you complete tasks in the plan, also update and append information on the changes made to the task .md-file
-
-## After Implementing
-
-- After implementing, review whether the changes conform to the standards defined in the Claude.md file
-- Document any rejected feedback reasoning in the task .md-file if significant
 
 ## Development Commands
 
