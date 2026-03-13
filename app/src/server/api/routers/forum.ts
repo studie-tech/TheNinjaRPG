@@ -142,7 +142,7 @@ export const forumRouter = createTRPCRouter({
           ctx.drizzle
             .update(userData)
             .set({ unreadNews: sql`LEAST(unreadNews + 1, 1000)` })
-            .where(ne(userData.userId, effectiveUserId)),
+            .where(ne(userData.userId, ctx.userId)),
           ...publishNewsToSocialMedia(
             input.title,
             input.content,
