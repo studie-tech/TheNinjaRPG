@@ -305,6 +305,8 @@ export class SpacetimeDBConnection {
       })
       .onError((ctx: ErrorContext) => {
         console.error("[SpacetimeDB] Global subscription error:", ctx);
+        this.connectionState = "error";
+        this.emit({ type: "connection_state", state: "error" });
         this.emit({ type: "error", message: "Global subscription error" });
       })
       .subscribe(queries);
@@ -341,6 +343,8 @@ export class SpacetimeDBConnection {
       })
       .onError((ctx: ErrorContext) => {
         console.error("[SpacetimeDB] Guest session subscription error:", ctx);
+        this.connectionState = "error";
+        this.emit({ type: "connection_state", state: "error" });
         this.emit({ type: "error", message: "Guest session subscription error" });
       })
       .subscribe([
@@ -379,6 +383,8 @@ export class SpacetimeDBConnection {
       })
       .onError((ctx: ErrorContext) => {
         console.error("[SpacetimeDB] Session subscription error:", ctx);
+        this.connectionState = "error";
+        this.emit({ type: "connection_state", state: "error" });
         this.emit({ type: "error", message: "Session subscription error" });
       })
       .subscribe([
