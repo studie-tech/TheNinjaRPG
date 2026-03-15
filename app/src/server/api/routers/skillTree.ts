@@ -476,6 +476,15 @@ export const skillTreeRouter = createTRPCRouter({
       }
 
       if (hadUndeletedRows) {
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "userSkill",
+          changes: [`Partial mass reset of users' skill trees`],
+          relatedId: null,
+          relatedMsg: `Partial skill tree reset by ${user.username} (${totalDeleted} entries cleared, some remained)`,
+          relatedImage: user.avatarLight,
+        });
         return errorResponse(
           `Partial reset: ${totalDeleted} entries cleared, but some entries could not be deleted`,
         );
