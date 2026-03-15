@@ -158,8 +158,7 @@ const handleTrpcError = (error: unknown) => {
     if (isJsonParseError) {
       showMutationToast({
         success: false,
-        message:
-          "You are acting too fast. Please slow down. Incident logged for review. 1% money reduced.",
+        message: "You are acting too fast. Please slow down.",
       });
       return;
     }

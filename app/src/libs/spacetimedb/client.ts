@@ -231,13 +231,13 @@ export class SpacetimeDBConnection {
           this.connectionState = "connected";
           this.emit({ type: "connection_state", state: "connected" });
 
-          // Mark WebSocket as ready immediately when SDK fires onConnect
-          // The SDK only calls this callback when the connection is fully established
-          this.wsReady = true;
-
-          // Set up filtered subscriptions AFTER marking ready
+          // Set up filtered subscriptions first to avoid race conditions
           // PERFORMANCE: Only subscribe to this user's data
           this.setupGlobalSubscriptions();
+
+          // Mark WebSocket as ready AFTER subscriptions are sent
+          // This ensures awaiting code won't send reducers before subscriptions are established
+          this.wsReady = true;
         })
         .onDisconnect((_ctx, error) => {
           if (DEBUG) {

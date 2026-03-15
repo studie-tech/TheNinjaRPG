@@ -107,7 +107,9 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
         });
       }
     };
-    // Update via interval only - initial state is calculated in useState
+    // Call immediately to avoid visual lag when dependencies change
+    updateState();
+    // Then update at regular intervals
     const interval = setInterval(updateState, 250);
     return () => {
       clearInterval(interval);

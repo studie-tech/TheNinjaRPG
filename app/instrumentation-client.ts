@@ -44,7 +44,6 @@ Sentry.init({
     "The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.", // audio permission denied
     "TypeError: undefined is not an object (evaluating 'this.updateVisibleFocusableElements.bind')", // Cookiebot error: https://github.com/getsentry/sentry-javascript/issues/16850
     "Failed to read a named property 'Element' from 'Window': Blocked a frame with origin \"https://www.theninja-rpg.com\"", // Sentry iframe error?
-    "invalid origin", // Cross-origin security errors from third-party scripts or browser privacy features (e.g., DuckDuckGo Mobile tracking protection, browser extensions). UX: No user-visible impact - page navigation and tRPC queries complete successfully. Also filtered by isInvalidOriginError() for defense-in-depth (THENINJARPG-2G1).
     "Cannot read properties of undefined (reading 'bind')", // Cookiebot error on resize
     "Cannot read properties of null (reading 'parentNode')", // Cookiebot error in calcFadeState when clicking "More Details"
     "null is not an object (evaluating 'element.parentNode')", // Cookiebot error in calcFadeState (Safari format)
@@ -101,7 +100,6 @@ Sentry.init({
     /NS_ERROR_/, // Firefox internal error codes (NS_ERROR_FAILURE, NS_ERROR_NOT_AVAILABLE, etc.) from third-party scripts (ads/pixel.js, tracking pixels, browser extensions). These are Firefox XPCOM errors that occur when third-party code encounters browser-level failures. Not actionable from application code. UX: No user-visible impact - errors occur in isolated third-party script contexts.
     "Should not already be working.", // React internal scheduler error - occurs when React's concurrent rendering scheduler detects re-entrant scheduling during complex navigation patterns. Not actionable at application level. UX: No user-visible impact - React's error recovery handles scheduler assertions gracefully.
     "feature named `pageObserver` was not found", // DuckDuckGo browser internal error - occurs when DuckDuckGo's privacy/tracker blocking features attempt to register a page observer during Next.js RSC navigation but the feature registration fails. Browser-specific to DuckDuckGo 26.3 on Mac. UX: No user-visible impact - Next.js navigation completes successfully via fallback mechanisms. Detection: no stack trace (browser-internal error), DuckDuckGo browser tag, handled=no, RSC navigation with _rsc query param.
-    /feature named .* was not found/, // General pattern for DuckDuckGo or other browser feature registration errors - catches variations of the pageObserver error and similar browser-internal feature lookup failures
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -1062,17 +1060,6 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
-  // Check for wallet-specific error patterns
-  const isWalletErrorMessage =
-    message.includes("Failed to connect to MetaMask") ||
-    message.includes("No extension found with id:") ||
-    message.includes("setExternalProvider is not a function") ||
-    message.includes("Cannot redefine property"); // ScatterJS, walletRouter, and other wallet extension property conflicts
-
-  if (isWalletErrorMessage) {
-    return true;
-  }
-
   // Check if error originates from wallet extension's injected script
   // - inpage.js is the common name for wallet extension content scripts (MetaMask, etc.)
   // - app:///scripts/ is the URL scheme for browser extension injected scripts
@@ -1086,6 +1073,31 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
       frame.abs_path?.startsWith("app:///scripts/") ||
       frame.abs_path?.includes("app:///injected"),
   );
+
+  // Check for wallet-specific error patterns that require stack evidence
+  const isWalletErrorMessage =
+    message.includes("Failed to connect to MetaMask") ||
+    message.includes("No extension found with id:") ||
+    message.includes("setExternalProvider is not a function");
+
+  // "Cannot redefine property" requires wallet-specific property names or wallet script frames
+  // to avoid hiding real app-side TypeErrors
+  const isWalletPropertyError =
+    message.includes("Cannot redefine property") &&
+    (message.includes("ethereum") ||
+      message.includes("tronWeb") ||
+      message.includes("tronLink") ||
+      message.includes("scatter") ||
+      message.includes("walletRouter") ||
+      isFromWalletScript);
+
+  if (isWalletErrorMessage && isFromWalletScript) {
+    return true;
+  }
+
+  if (isWalletPropertyError) {
+    return true;
+  }
 
   // Additional check for proxy trap errors from wallet extensions
   // TronLink and similar extensions may fail when setting properties on Proxy objects
@@ -2404,16 +2416,27 @@ const isMinifiedThreeJsError = (event: Sentry.ErrorEvent): boolean => {
   const isFromThreeJs = stackFrames.some(
     (frame) =>
       frame.filename?.includes("three") ||
-      frame.filename?.includes("Combat") ||
-      frame.filename?.includes("Map") ||
-      frame.filename?.includes("chunk") || // Next.js chunks containing Three.js
       frame.abs_path?.includes("three"),
   );
 
+  // Check if error has WebGL-related breadcrumbs or context
+  const hasWebGLContext =
+    event.breadcrumbs?.some(
+      (crumb) =>
+        crumb.message?.toLowerCase().includes("webgl") ||
+        crumb.message?.toLowerCase().includes("context lost") ||
+        crumb.message?.toLowerCase().includes("renderer"),
+    ) ?? false;
+
   // Filter if:
-  // 1. Mobile browser + (no stack trace OR Three.js in stack) - prioritize mobile
-  // 2. Desktop browser + no stack trace + Three.js context - allow desktop edge cases
-  if (isMobileBrowser && (isBrowserLevelError || isFromThreeJs)) {
+  // 1. Mobile browser + no stack trace (browser-level WebGL error)
+  // 2. Mobile browser + Three.js in stack + WebGL context
+  // 3. Desktop browser + no stack trace + 3D page (edge cases)
+  if (isMobileBrowser && isBrowserLevelError) {
+    return true;
+  }
+
+  if (isMobileBrowser && isFromThreeJs && hasWebGLContext) {
     return true;
   }
 

@@ -230,24 +230,25 @@ export const travelRouter = createTRPCRouter({
           money: user.money + stolenAmount,
         };
       } else {
-        // Failed rob attempt - break stealth and initiate combat in parallel
-        const [, battle] = await Promise.all([
-          user.stealthActive
-            ? breakStealth(ctx.drizzle, ctx.userId, user.stealth, false)
-            : Promise.resolve(),
-          initiateBattle(
-            {
-              longitude: input.longitude,
-              latitude: input.latitude,
-              sector: input.sector,
-              userIds: [ctx.userId],
-              targetIds: [input.userId],
-              client: ctx.drizzle,
-              biome: "default",
-            },
-            "COMBAT",
-          ),
-        ]);
+        // Failed rob attempt - break stealth first, then initiate combat
+        // Sequential execution ensures initiateBattle sees correct stealth state
+        // and avoids double stealth rolls
+        if (user.stealthActive) {
+          await breakStealth(ctx.drizzle, ctx.userId, user.stealth, false);
+        }
+
+        const battle = await initiateBattle(
+          {
+            longitude: input.longitude,
+            latitude: input.latitude,
+            sector: input.sector,
+            userIds: [ctx.userId],
+            targetIds: [input.userId],
+            client: ctx.drizzle,
+            biome: "default",
+          },
+          "COMBAT",
+        );
 
         if (battle.success) {
           return {
