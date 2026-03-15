@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { isFetchOriginError } from "@/utils/error";
 import { fetchWithTimeout } from "@/utils/http";
-import { isUrlSafeSynchronous } from "@/utils/ssrf";
+import { validateUrlForSsrf } from "@/utils/ssrf";
 
 /**
  * Check if a URL is accessible by making a HEAD request.
@@ -12,8 +12,9 @@ import { isUrlSafeSynchronous } from "@/utils/ssrf";
  * @returns true if URL is accessible (2xx-5xx status), false if network error or timeout
  */
 export async function isUrlAccessible(url: string): Promise<boolean> {
-  // SECURITY: Block SSRF attempts before making request
-  if (!isUrlSafeSynchronous(url)) {
+  // SECURITY: Block SSRF attempts (including DNS-based) before making request
+  const isSafe = await validateUrlForSsrf(url);
+  if (!isSafe) {
     console.log(`URL check blocked (SSRF protection): ${url}`);
     return false;
   }

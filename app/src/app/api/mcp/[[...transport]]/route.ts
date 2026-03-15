@@ -108,7 +108,7 @@ const getClerkFrontendApiUrl = (): string | null => {
   const isValidClerkDomain =
     /^[a-z0-9-]+\.clerk\.accounts\.dev$/.test(frontendApiHost) || // Development: *.clerk.accounts.dev
     /^clerk\.[a-z0-9-]+\.lcl\.dev$/.test(frontendApiHost) || // Local development
-    /^clerk\.[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+(-[a-z0-9]+)*)*$/.test(frontendApiHost); // Production custom domains (no consecutive dots)
+    /^[a-z0-9]+(-[a-z0-9]+)*\.clerk\.com$/.test(frontendApiHost); // Production: *.clerk.com
 
   if (!isValidClerkDomain) {
     console.error("[MCP] Invalid Clerk FAPI domain:", frontendApiHost);
