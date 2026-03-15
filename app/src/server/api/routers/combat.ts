@@ -180,7 +180,7 @@ import { findRelationship } from "@/utils/alliance";
 import { getRandomElement } from "@/utils/array";
 import { randomInt } from "@/utils/math";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
-import { canAccessStructure, getStrucBoost } from "@/utils/village";
+import { canAccessStructure } from "@/utils/village";
 import type { StatSchemaType } from "@/validators/combat";
 import {
   BarrierTag,
@@ -2491,34 +2491,6 @@ export const processUsersForBattle = async (
       user.username = "ANBU Member";
       user.avatar = user.anbuSquad.image;
       user.avatarLight = user.anbuSquad.image;
-    }
-
-    // If in own village, add defence bonus
-    const ownSector = user.sector === user.village?.sector;
-    const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
-    const excludedBattleTypes = ["ARENA", "RANKED_PVP", "SPARRING", "RANKED_SPARRING"];
-    if (ownSector && inVillage && !excludedBattleTypes.includes(battleType)) {
-      const boost = getStrucBoost("villageDefencePerLvl", user.village?.structures);
-      const effect = DecreaseDamageTakenTag.parse({
-        target: "SELF",
-        statTypes: StatTypes,
-        generalTypes: GeneralTypes,
-        type: "decreasedamagetaken",
-        power: boost,
-        rounds: undefined,
-      }) as unknown as UserEffect;
-      const realized = realizeTag({
-        tag: effect,
-        user: user,
-        actionId: "initial",
-        target: user,
-        level: user.level,
-      });
-      realized.isNew = false;
-      realized.castThisRound = false;
-      realized.targetId = user.userId;
-      realized.fromType = "village";
-      userEffects.push(realized);
     }
 
     // Add bloodline efects
