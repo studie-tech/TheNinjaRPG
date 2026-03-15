@@ -7,6 +7,7 @@ import { use, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
+import NotFoundPage from "@/app/[...not-found]/page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,7 @@ function Board(properties: { params: Promise<{ boardid: string }> }) {
     data: threads,
     fetchNextPage,
     hasNextPage,
+    isPending: isPendingThreads,
     refetch,
   } = api.forum.getThreads.useInfiniteQuery(
     { boardId: boardIdentifier, limit: FORUM_BOARD_THREADS_PER_PAGE },
@@ -135,7 +137,8 @@ function Board(properties: { params: Promise<{ boardid: string }> }) {
     });
   });
 
-  if (!board) return <Loader explanation="Loading..."></Loader>;
+  if (isPendingThreads) return <Loader explanation="Loading..." />;
+  if (!board) return <NotFoundPage />;
 
   const canEdit = userData && canModerate(userData.role);
 

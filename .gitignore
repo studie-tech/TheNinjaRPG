@@ -26,3 +26,4 @@ app/spacetimedb/node_modules/
 .cursor
 .claude
 Makefile.agent
+.hermes/

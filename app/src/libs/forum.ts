@@ -15,6 +15,7 @@ export const getInfiniteThreads = async (props: {
 }) => {
   const { client, boardId, boardName, cursor, limit, highlightPinned } = props;
   const board = await fetchBoard(client, boardId, boardName);
+  if (!board) return { board: null, threads: [], nextCursor: null };
   const currentCursor = cursor ? cursor : 0;
   const skip = currentCursor * limit;
   const threads = await client.query.forumThread.findMany({
@@ -44,16 +45,13 @@ export const fetchBoard = async (
   boardId?: string,
   boardName?: string,
 ) => {
-  if (!boardId && !boardName) {
-    throw new Error("No specific board requested");
-  }
+  if (!boardId && !boardName) return null;
   const entry = await client.query.forumBoard.findFirst({
     where: boardId
       ? eq(forumBoard.id, boardId ?? "")
       : eq(forumBoard.name, boardName ?? ""),
   });
-  if (!entry) throw new Error(`Board not found: ${boardId} ${boardName}`);
-  return entry;
+  return entry ?? null;
 };
 
 export const readNews = async (client: DrizzleClient, userId: string) => {
@@ -76,11 +74,9 @@ export const fetchForumPageData = async (
 
   const userDataPromise = userId
     ? fetchUser(client, userId).catch((error) => {
-        // Check if it's an expected "not found" error
         if (error.message?.includes("not found")) {
           return null;
         }
-        // For unexpected errors, log to Sentry for monitoring
         console.error("Failed to fetch user:", error);
         Sentry.captureException(error, {
           tags: { source: "forum-fetch-user" },

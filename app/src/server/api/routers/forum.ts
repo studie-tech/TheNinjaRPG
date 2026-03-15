@@ -75,18 +75,18 @@ export const forumRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
       ]);
+      // Guard
+      if (!board) {
+        return errorResponse("Board does not exist");
+      }
       // Resolve effective poster (allow staff to post as AI)
       const effectiveUserId = resolveSenderId(user, sender);
-      // Guard
       const isNews = board.name === "News";
       if (isNews && !canCreateNews(user.role)) {
         return errorResponse("You are not authorized to create news");
       }
       if (user.isBanned || user.isSilenced) {
         return errorResponse("You are banned");
-      }
-      if (!board) {
-        return errorResponse("Board does not exist");
       }
       // Mutate
       const sanitized = sanitize(input.content);

@@ -311,6 +311,7 @@ const LayoutCore4: React.FC<LayoutProps> = (props) => {
 
       <div className="flex justify-center pt-6 pl-2 align-center">
         <iframe
+          suppressHydrationWarning
           src="https://ghbtns.com/github-btn.html?user=studie-tech&repo=TheNinjaRPG&type=star&count=true"
           width="90"
           height="20"

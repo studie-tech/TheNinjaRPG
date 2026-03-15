@@ -8,6 +8,7 @@ const FANCY_FORUM_THREADS_PER_PAGE = 10;
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import NotFoundPage from "@/app/[...not-found]/page";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
@@ -51,7 +52,8 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
     lastElement,
   });
 
-  if (!board || isPending) return <Loader explanation="Loading data" />;
+  if (isPending) return <Loader explanation="Loading data" />;
+  if (!board) return <NotFoundPage />;
 
   return (
     <ContentBox
@@ -99,7 +101,8 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
                 <div>
                   <h2 className="font-bold">{thread.title}</h2>
                   <p className="pb-1 font-bold italic" suppressHydrationWarning>
-                    By {thread.user.username} on {thread.createdAt.toLocaleDateString()}
+                    By {thread.user?.username ?? "Unknown"} on{" "}
+                    {thread.createdAt.toLocaleDateString()}
                   </p>
                 </div>
                 {post && parseHtml(post.content)}
