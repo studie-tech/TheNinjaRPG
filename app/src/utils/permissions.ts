@@ -517,16 +517,17 @@ export const canDeleteStaffApplication = (role: UserRole) => {
 };
 
 export const canViewAllApplications = (role: UserRole) => {
-  return role === "OWNER" || StaffApprovalGroups.includes(role as StaffApprovalGroup);
+  return getApprovalGroup(role) !== null;
 };
 
 export const canApproveApplications = (role: UserRole) => {
-  return role === "OWNER" || StaffApprovalGroups.includes(role as StaffApprovalGroup);
+  return getApprovalGroup(role) !== null;
 };
 
 /**
  * Helper to get the approval group for a user role.
- * OWNER approvals are recorded as CODING-ADMIN so they count toward that group.
+ * OWNER approvals are recorded under CODING-ADMIN so they count toward the
+ * coding approval lane.
  */
 export const getApprovalGroup = (role: UserRole): StaffApprovalGroup | null => {
   if (role === "OWNER") return "CODING-ADMIN";

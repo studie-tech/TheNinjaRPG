@@ -216,7 +216,7 @@ export const applicationsRouter = createTRPCRouter({
       if (app.state === "APPROVED")
         return errorResponse("Application already approved");
       if (!canApproveApplications(user.role))
-        return errorResponse("Only owner and admins can approve applications");
+        return errorResponse("Only approval staff can approve applications");
 
       // Update: record approval (upsert)
       const approvalGroup = getApprovalGroup(user.role);
@@ -294,7 +294,7 @@ export const applicationsRouter = createTRPCRouter({
       // Guards
       if (!app) return errorResponse("No application found");
       if (!canApproveApplications(user.role))
-        return errorResponse("Only owner and admins can reject applications");
+        return errorResponse("Only approval staff can reject applications");
       // Mutate: record rejection (upsert)
       const rejectionGroup = getApprovalGroup(user.role);
       if (!rejectionGroup)

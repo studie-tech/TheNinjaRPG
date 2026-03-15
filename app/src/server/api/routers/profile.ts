@@ -23,7 +23,6 @@ import {
   COST_CHANGE_USERNAME,
   getUserCaps,
   IMG_AVATAR_DEFAULT,
-  isStaffApprovalGroup,
   KAGE_MIN_PRESTIGE,
   KAGE_PRESTIGE_REQUIREMENT,
   MAX_ATTRIBUTES,
@@ -140,6 +139,7 @@ import {
   canOnlyEditSelf,
   canSeeIps,
   canSeeSecretData,
+  getApprovalGroup,
 } from "@/utils/permissions";
 import sanitize from "@/utils/sanitize";
 import {
@@ -720,8 +720,9 @@ export const profileRouter = createTRPCRouter({
           });
         }
 
-        // Get number of un-resolved user reports and staff application counts in parallel
-        if (canModerateRoles.includes(user.role)) {
+        // Get moderation and application counts in parallel for eligible staff.
+        const approvalGroup = getApprovalGroup(user.role);
+        if (canModerateRoles.includes(user.role) || approvalGroup) {
           const [reportCounts, ticketCounts, applicationCounts] = await Promise.all([
             canModerateRoles.includes(user.role)
               ? ctx.drizzle
@@ -742,7 +743,7 @@ export const profileRouter = createTRPCRouter({
                     ]),
                   )
               : null,
-            isStaffApprovalGroup(user.role)
+            approvalGroup
               ? ctx.drizzle
                   .select({ count: sql`count(*)`.mapWith(Number) })
                   .from(staffApplication)
@@ -750,7 +751,7 @@ export const profileRouter = createTRPCRouter({
                     staffApplicationApproval,
                     and(
                       eq(staffApplication.id, staffApplicationApproval.applicationId),
-                      eq(staffApplicationApproval.group, user.role),
+                      eq(staffApplicationApproval.group, approvalGroup),
                       eq(staffApplicationApproval.approverUserId, user.userId),
                     ),
                   )
