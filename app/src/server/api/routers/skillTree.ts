@@ -475,6 +475,12 @@ export const skillTreeRouter = createTRPCRouter({
         );
       }
 
+      if (hadUndeletedRows) {
+        return errorResponse(
+          `Partial reset: ${totalDeleted} entries cleared, but some entries could not be deleted`,
+        );
+      }
+
       // Log the action
       await ctx.drizzle.insert(actionLog).values({
         id: nanoid(),
