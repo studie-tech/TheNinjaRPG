@@ -446,6 +446,7 @@ export const skillTreeRouter = createTRPCRouter({
       // Delete in batches to avoid PlanetScale/Vitess timeouts (vttablet EOF on large single deletes)
       const BATCH_SIZE = 500;
       let totalDeleted = 0;
+      let hadUndeletedRows = false;
 
       while (true) {
         const batch = await ctx.drizzle
@@ -459,12 +460,19 @@ export const skillTreeRouter = createTRPCRouter({
         const result = await ctx.drizzle
           .delete(userSkill)
           .where(inArray(userSkill.id, ids));
-        if (result.rowsAffected === 0) break;
+        if (result.rowsAffected === 0) {
+          hadUndeletedRows = true;
+          break;
+        }
         totalDeleted += result.rowsAffected;
       }
 
       if (totalDeleted === 0) {
-        return errorResponse("No skill tree entries to reset");
+        return errorResponse(
+          hadUndeletedRows
+            ? "Failed to reset skill trees"
+            : "No skill tree entries to reset",
+        );
       }
 
       // Log the action
