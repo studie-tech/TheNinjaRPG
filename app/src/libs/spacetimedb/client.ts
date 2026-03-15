@@ -140,7 +140,7 @@ export class SpacetimeDBConnection {
    * Wait for connection to complete (or fail)
    * Used to avoid race conditions when multiple calls to connect() happen concurrently
    * Waits for both connectionState === "connected" AND wsReady === true,
-   * ensuring subscriptions are fully set up before proceeding.
+   * ensuring subscriptions are fully applied before proceeding.
    */
   private waitForConnection(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
@@ -233,11 +233,8 @@ export class SpacetimeDBConnection {
 
           // Set up filtered subscriptions first to avoid race conditions
           // PERFORMANCE: Only subscribe to this user's data
+          // Note: wsReady will be set to true in setupGlobalSubscriptions's onApplied callback
           this.setupGlobalSubscriptions();
-
-          // Mark WebSocket as ready AFTER subscriptions are sent
-          // This ensures awaiting code won't send reducers before subscriptions are established
-          this.wsReady = true;
         })
         .onDisconnect((_ctx, error) => {
           if (DEBUG) {
@@ -280,6 +277,8 @@ export class SpacetimeDBConnection {
     // For guests, skip global subscription - they'll use subscribeToGuestSession() with specific seed
     if (this.currentUserId === "guest") {
       this.setupTableHandlers();
+      // Mark WebSocket as ready immediately for guests (no subscription to wait for)
+      this.wsReady = true;
       return;
     }
 
@@ -297,6 +296,9 @@ export class SpacetimeDBConnection {
         if (DEBUG) {
           console.log("[SpacetimeDB] Global subscription applied");
         }
+        // Mark WebSocket as ready AFTER subscriptions are applied
+        // This ensures reducers won't fire before subscriptions are fully established
+        this.wsReady = true;
       })
       .onError((ctx: ErrorContext) => {
         console.error("[SpacetimeDB] Global subscription error:", ctx);

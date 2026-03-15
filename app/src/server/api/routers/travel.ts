@@ -158,7 +158,7 @@ export const travelRouter = createTRPCRouter({
         const stolenAmount = Math.floor(target.money * ROBBING_STOLLEN_AMOUNT);
 
         // Update robber's money, target's money, break stealth, and update clan points in parallel
-        const [robberUpdate, targetUpdate] = await Promise.all([
+        const results = await Promise.all([
           ctx.drizzle
             .update(userData)
             .set({
@@ -188,7 +188,18 @@ export const travelRouter = createTRPCRouter({
               ]
             : []),
         ]);
+
+        const robberUpdate = results[0];
+        const targetUpdate = results[1];
+
         if (robberUpdate.rowsAffected === 0) {
+          // Rollback target update if robber update fails
+          await ctx.drizzle
+            .update(userData)
+            .set({
+              money: sql`${userData.money} + ${stolenAmount}`,
+            })
+            .where(eq(userData.userId, input.userId));
           return errorResponse("Failed to update robber's data");
         }
         if (targetUpdate.rowsAffected === 0) {

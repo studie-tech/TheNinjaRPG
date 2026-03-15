@@ -991,15 +991,9 @@ const Sector: React.FC<SectorProps> = (props) => {
           endShaders();
         }
 
-        // Render the scene (skip if WebGL context is lost or invalid)
+        // Render the scene (skip if WebGL context is lost)
         const endRender = profiler.mark("animate_render");
-        // EDGE CASE DEFENSE: Check both the context loss handler AND validate the context directly
-        // This catches iOS Safari edge cases where context appears valid but shader creation fails
-        if (
-          !contextHandlers.isContextLost() &&
-          renderer &&
-          isRendererContextValid(renderer)
-        ) {
+        if (!contextHandlers.isContextLost() && renderer) {
           renderer.render(scene, camera);
         }
         endRender();

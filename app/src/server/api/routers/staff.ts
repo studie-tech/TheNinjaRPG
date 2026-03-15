@@ -1042,14 +1042,14 @@ const delay = (ms: number): Promise<void> =>
 /**
  * Delete a user and all associated data with automatic retry on deadlock.
  * Implements exponential backoff with jitter to handle MySQL deadlocks (errno 1213).
- * Uses 10 retry attempts with base delay of 300ms (max ~20-30s total retry time).
+ * Uses 6 retry attempts with base delay of 100ms (max ~6-7s total retry time).
  * @param client - The database client.
  * @param userId - The ID of the user to delete.
  */
 export const deleteUser = async (client: DrizzleClient, userId: string) => {
-  const MAX_RETRIES = 10;
-  const BASE_DELAY_MS = 300;
-  const MAX_JITTER_MS = 200;
+  const MAX_RETRIES = 6;
+  const BASE_DELAY_MS = 100;
+  const MAX_JITTER_MS = 100;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {

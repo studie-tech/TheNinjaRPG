@@ -594,16 +594,8 @@ export const setupScene = (info: {
   let renderer: WebGLRenderer | undefined;
   try {
     renderer = new WebGLRenderer();
-
-    // EDGE CASE DEFENSE: Validate the context is actually functional
-    // On iOS Safari, the renderer can be created successfully but have an invalid context
-    if (!isRendererContextValid(renderer)) {
-      console.error("WebGLRenderer created but context is not functional");
-      renderer.dispose();
-      renderer = undefined;
-    }
   } catch (error) {
-    console.error("Error creating WebGLRenderer, falling back to WebGL1Renderer");
+    console.error("Error creating WebGLRenderer");
     console.error(error);
   }
 

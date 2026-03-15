@@ -2399,9 +2399,23 @@ const isMinifiedThreeJsError = (event: Sentry.ErrorEvent): boolean => {
   }
 
   // Must be on combat or travel page (3D rendering contexts)
-  const isOn3DPage = url.includes("/combat") || url.includes("/travel");
-  if (!isOn3DPage) {
-    return false;
+  // Use pathname matching to avoid false positives like "/combat-log" or "/travel-guide"
+  try {
+    const urlObj = new URL(url, "https://example.com");
+    const isOn3DPage =
+      urlObj.pathname === "/combat" ||
+      urlObj.pathname.startsWith("/combat/") ||
+      urlObj.pathname === "/travel" ||
+      urlObj.pathname.startsWith("/travel/");
+    if (!isOn3DPage) {
+      return false;
+    }
+  } catch {
+    // If URL parsing fails, fall back to includes check
+    const isOn3DPage = url.includes("/combat") || url.includes("/travel");
+    if (!isOn3DPage) {
+      return false;
+    }
   }
 
   // Check if from mobile browser (iOS/Android) where WebGL issues are most common

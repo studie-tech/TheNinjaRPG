@@ -752,7 +752,8 @@ export const combatRouter = createTRPCRouter({
               battleUpdate: newMaskedBattle,
               updatedQuestIds: updatedQuestIds,
             };
-          } catch (_e) {
+          } catch (e) {
+            console.error("Error updating battle state:", e);
             return {
               notification: `Seems like the battle was out of sync with server, please try again`,
             };

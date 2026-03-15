@@ -134,10 +134,19 @@ const handleTrpcError = (error: unknown) => {
   // This check must come BEFORE console.error and Sentry logging to prevent noise.
   if (
     error instanceof TRPCClientError &&
-    (error.data as { httpStatus?: number } | undefined)?.httpStatus === 403 &&
-    isRetryableTrpcError(error)
+    (error.data as { httpStatus?: number } | undefined)?.httpStatus === 403
   ) {
-    return;
+    // Verify it's actually a JSON parsing error from an HTML error page (not a well-formed 403 with valid JSON)
+    const isJsonParseError =
+      error.message.includes("Failed to execute 'json' on 'Response'") ||
+      error.message.includes("Unexpected end of JSON input") ||
+      error.message.includes("JSON.parse") ||
+      error.message.includes("The string did not match the expected pattern") ||
+      error.message.includes("is not valid JSON");
+
+    if (isJsonParseError) {
+      return;
+    }
   }
 
   // Handle JSON parsing errors from 429 rate limit responses
@@ -153,7 +162,9 @@ const handleTrpcError = (error: unknown) => {
     const isJsonParseError =
       error.message.includes("Failed to execute 'json' on 'Response'") ||
       error.message.includes("Unexpected end of JSON input") ||
-      error.message.includes("JSON.parse");
+      error.message.includes("JSON.parse") ||
+      error.message.includes("The string did not match the expected pattern") ||
+      error.message.includes("is not valid JSON");
 
     if (isJsonParseError) {
       showMutationToast({
