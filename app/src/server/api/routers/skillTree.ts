@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull, like, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, like, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -443,18 +443,28 @@ export const skillTreeRouter = createTRPCRouter({
         );
       }
 
-      // Get all users with skill trees
-      const allUsers = await ctx.drizzle.select().from(userData);
+      // Delete in batches to avoid PlanetScale/Vitess timeouts (vttablet EOF on large single deletes)
+      const BATCH_SIZE = 500;
+      let totalDeleted = 0;
 
-      if (allUsers.length === 0) {
-        return errorResponse("No users found");
+      while (true) {
+        const batch = await ctx.drizzle
+          .select({ id: userSkill.id })
+          .from(userSkill)
+          .limit(BATCH_SIZE);
+
+        if (batch.length === 0) break;
+
+        const ids = batch.map((row) => row.id);
+        const result = await ctx.drizzle
+          .delete(userSkill)
+          .where(inArray(userSkill.id, ids));
+        if (result.rowsAffected === 0) break;
+        totalDeleted += result.rowsAffected;
       }
 
-      // Delete all user skills (skill points remain, just reset used skills)
-      const result = await ctx.drizzle.delete(userSkill);
-
-      if (result.rowsAffected === 0) {
-        return errorResponse("Failed to reset skill trees");
+      if (totalDeleted === 0) {
+        return errorResponse("No skill tree entries to reset");
       }
 
       // Log the action
@@ -470,7 +480,7 @@ export const skillTreeRouter = createTRPCRouter({
 
       return {
         success: true,
-        message: `Reset skill trees for all ${allUsers.length} users`,
+        message: `Reset skill trees (${totalDeleted} entries cleared)`,
       };
     }),
 
