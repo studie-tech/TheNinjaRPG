@@ -193,25 +193,51 @@ export const travelRouter = createTRPCRouter({
         const targetUpdate = results[1];
 
         if (robberUpdate.rowsAffected === 0) {
-          // Rollback target update if robber update fails (restore money and remove immunity)
-          await ctx.drizzle
-            .update(userData)
-            .set({
-              money: sql`${userData.money} + ${stolenAmount}`,
-              robImmunityUntil: null,
-            })
-            .where(eq(userData.userId, input.userId));
+          // Rollback target update and clan points if robber update fails
+          await Promise.all([
+            ctx.drizzle
+              .update(userData)
+              .set({
+                money: sql`${userData.money} + ${stolenAmount}`,
+                robImmunityUntil: null,
+              })
+              .where(eq(userData.userId, input.userId)),
+            ...(user.clanId
+              ? [
+                  ctx.drizzle
+                    .update(clan)
+                    .set({
+                      points: sql`${clan.points} - 1`,
+                      activityPoints: sql`${clan.activityPoints} - 1`,
+                    })
+                    .where(eq(clan.id, user.clanId)),
+                ]
+              : []),
+          ]);
           return errorResponse("Failed to update robber's data");
         }
         if (targetUpdate.rowsAffected === 0) {
-          // Rollback robber update if target update fails
-          await ctx.drizzle
-            .update(userData)
-            .set({
-              money: sql`${userData.money} - ${stolenAmount}`,
-              villagePrestige: sql`${userData.villagePrestige} - ${ROBBING_VILLAGE_PRESTIGE_GAIN}`,
-            })
-            .where(eq(userData.userId, ctx.userId));
+          // Rollback robber update and clan points if target update fails
+          await Promise.all([
+            ctx.drizzle
+              .update(userData)
+              .set({
+                money: sql`${userData.money} - ${stolenAmount}`,
+                villagePrestige: sql`${userData.villagePrestige} - ${ROBBING_VILLAGE_PRESTIGE_GAIN}`,
+              })
+              .where(eq(userData.userId, ctx.userId)),
+            ...(user.clanId
+              ? [
+                  ctx.drizzle
+                    .update(clan)
+                    .set({
+                      points: sql`${clan.points} - 1`,
+                      activityPoints: sql`${clan.activityPoints} - 1`,
+                    })
+                    .where(eq(clan.id, user.clanId)),
+                ]
+              : []),
+          ]);
           return errorResponse("Failed to update target's data");
         }
 
