@@ -978,7 +978,7 @@ const isRateLimitJsonParseError = (event: Sentry.ErrorEvent): boolean => {
 
   // Check breadcrumbs for 429 status code
   const has429Status = event.breadcrumbs?.some(
-    (b) => b.category === "fetch" && b.data?.status_code === 429
+    (b) => b.category === "fetch" && (b.data?.status_code === 429 || b.data?.status_code === "429")
   );
 
   return Boolean(has429Status);
@@ -1140,7 +1140,7 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
  * - Error message: "An unexpected response was received from the server"
  * - SSO callback: URL contains /signup/sso-callback or /signin/sso-callback
  * - Sign-out: Breadcrumbs show sign-out button click + POST request with 403 status
- * - Rate limiting: Breadcrumbs show POST request with 429 status
+ * - Rate limiting: Most recent fetch breadcrumb is a POST request with 429 status
  */
 const isServerActionError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -1180,18 +1180,20 @@ const isServerActionError = (event: Sentry.ErrorEvent): boolean => {
   });
 
   // Check if error occurred during rate limiting
-  // POST requests to routes can receive 429 when rate limit middleware triggers
-  const has429Post = breadcrumbs.some((breadcrumb) => {
-    if (breadcrumb.category !== "fetch") return false;
-    const data = breadcrumb.data ?? {};
+  // Only filter if there's a recent 429 POST (likely the direct cause of this error)
+  // Find the last fetch breadcrumb to see if it was a rate-limited request
+  const fetchBreadcrumbs = breadcrumbs.filter((b) => b.category === "fetch");
+  const lastFetch = fetchBreadcrumbs[fetchBreadcrumbs.length - 1];
+  const has429Post = lastFetch ? (() => {
+    const data = lastFetch.data ?? {};
     // Check for POST request with 429 status code (rate limiting)
     return (
       data.method === "POST" &&
       (data.status_code === 429 || data.status_code === "429")
     );
-  });
+  })() : false;
 
-  // Filter if: (SSO callback URL) OR (sign-out click + 403 POST) OR (429 POST)
+  // Filter if: (SSO callback URL) OR (sign-out click + 403 POST) OR (recent 429 POST)
   const isSignOutRaceCondition = hasSignOutClick && has403Post;
 
   return isSsoCallbackUrl || isSignOutRaceCondition || has429Post;
