@@ -194,14 +194,19 @@ export const travelRouter = createTRPCRouter({
 
         if (robberUpdate.rowsAffected === 0) {
           // Rollback target update and clan points if robber update fails
+          // Only rollback target's money if it was actually deducted
           await Promise.all([
-            ctx.drizzle
-              .update(userData)
-              .set({
-                money: sql`${userData.money} + ${stolenAmount}`,
-                robImmunityUntil: null,
-              })
-              .where(eq(userData.userId, input.userId)),
+            ...(targetUpdate.rowsAffected > 0
+              ? [
+                  ctx.drizzle
+                    .update(userData)
+                    .set({
+                      money: sql`${userData.money} + ${stolenAmount}`,
+                      robImmunityUntil: null,
+                    })
+                    .where(eq(userData.userId, input.userId)),
+                ]
+              : []),
             ...(user.clanId
               ? [
                   ctx.drizzle
