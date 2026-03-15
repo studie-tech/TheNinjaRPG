@@ -2341,7 +2341,18 @@ const isWebGLShaderContextLossError = (event: Sentry.ErrorEvent): boolean => {
   }
 
   // Must be on /travel page (3D rendering context)
-  if (!url.includes("/travel")) {
+  // Use pathname matching to avoid false positives like "/travel-guide"
+  let isOnTravelPage = false;
+  try {
+    const urlObj = new URL(url, "https://example.com");
+    isOnTravelPage =
+      urlObj.pathname === "/travel" || urlObj.pathname.startsWith("/travel/");
+  } catch {
+    // If URL parsing fails, fall back to includes check
+    isOnTravelPage = url.includes("/travel");
+  }
+
+  if (!isOnTravelPage) {
     return false;
   }
 

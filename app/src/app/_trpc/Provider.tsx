@@ -146,12 +146,16 @@ const handleTrpcError = (error: unknown) => {
   // These are legitimate auth transitions, not actionable errors.
   // UX: No toast shown, user either gets redirected by useRequiredUserData or stays on page silently.
   // This check must come BEFORE console.error and Sentry logging to prevent noise.
-  if (
-    error instanceof TRPCClientError &&
-    (error.data as { httpStatus?: number } | undefined)?.httpStatus === 403
-  ) {
-    // Verify it's actually a JSON parsing error from an HTML error page (not a well-formed 403 with valid JSON)
-    if (isJsonParseError(error.message)) {
+  // Note: When JSON parsing fails, error.data is null/undefined, so we only check the message pattern.
+  // HTML error pages (403/404/500) all trigger similar JSON parse errors and should be filtered here.
+  if (error instanceof TRPCClientError && isJsonParseError(error.message)) {
+    // Check if this is an HTML error page (DOCTYPE or common HTML tags in the response)
+    // tRPC wraps the unparseable response body in the error message like: '"<!DOCTYPE "... is not valid JSON'
+    if (
+      error.message.includes("<!DOCTYPE") ||
+      error.message.includes("<html") ||
+      error.message.includes("<HTML")
+    ) {
       return;
     }
   }
@@ -161,12 +165,18 @@ const handleTrpcError = (error: unknown) => {
   // The tRPC client fails to parse this as JSON, throwing a parsing error before we can check error.data.code.
   // This occurs with batch requests and certain timing conditions in tRPC's response serialization.
   // UX: Show non-destructive toast with rate limit message (same as successful 429 parsing).
-  if (
-    error instanceof TRPCClientError &&
-    (error.data as { httpStatus?: number } | undefined)?.httpStatus === 429
-  ) {
-    // Verify it's actually a JSON parsing error (not a well-formed 429 with valid JSON)
-    if (isJsonParseError(error.message)) {
+  // Note: When JSON parsing fails, error.data is null/undefined. We identify 429s by checking if the
+  // error is NOT an HTML error page (filtered above) and matches specific rate-limit error patterns.
+  if (error instanceof TRPCClientError && isJsonParseError(error.message)) {
+    // Empty/malformed responses without HTML indicate rate limiting (429) or other server errors
+    // Rate limiting typically returns empty body or plain text, while auth errors (403) return HTML
+    // This heuristic isn't perfect but handles the common case of 429 with empty/malformed body
+    const isLikelyHtmlResponse =
+      error.message.includes("<!DOCTYPE") ||
+      error.message.includes("<html") ||
+      error.message.includes("<HTML");
+
+    if (!isLikelyHtmlResponse) {
       showMutationToast({
         success: false,
         message: "You are acting too fast. Please slow down.",
