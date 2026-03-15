@@ -2328,7 +2328,7 @@ const isWebGLShaderContextLossError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const url = event.request?.url ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
-  const isHandled = event.tags?.handled === "yes";
+  const isHandled = event.exception?.values?.[0]?.mechanism?.handled === true;
 
   // Must match the specific shader error message
   if (
@@ -2400,22 +2400,21 @@ const isMinifiedThreeJsError = (event: Sentry.ErrorEvent): boolean => {
 
   // Must be on combat or travel page (3D rendering contexts)
   // Use pathname matching to avoid false positives like "/combat-log" or "/travel-guide"
+  let isOn3DPage = false;
   try {
     const urlObj = new URL(url, "https://example.com");
-    const isOn3DPage =
+    isOn3DPage =
       urlObj.pathname === "/combat" ||
       urlObj.pathname.startsWith("/combat/") ||
       urlObj.pathname === "/travel" ||
       urlObj.pathname.startsWith("/travel/");
-    if (!isOn3DPage) {
-      return false;
-    }
   } catch {
     // If URL parsing fails, fall back to includes check
-    const isOn3DPage = url.includes("/combat") || url.includes("/travel");
-    if (!isOn3DPage) {
-      return false;
-    }
+    isOn3DPage = url.includes("/combat") || url.includes("/travel");
+  }
+
+  if (!isOn3DPage) {
+    return false;
   }
 
   // Check if from mobile browser (iOS/Android) where WebGL issues are most common
@@ -2455,7 +2454,7 @@ const isMinifiedThreeJsError = (event: Sentry.ErrorEvent): boolean => {
   }
 
   // Also filter desktop cases if no stack trace (browser-level WebGL error)
-  if (!isMobileBrowser && isBrowserLevelError && isOn3DPage) {
+  if (!isMobileBrowser && isBrowserLevelError) {
     return true;
   }
 

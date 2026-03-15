@@ -193,11 +193,12 @@ export const travelRouter = createTRPCRouter({
         const targetUpdate = results[1];
 
         if (robberUpdate.rowsAffected === 0) {
-          // Rollback target update if robber update fails
+          // Rollback target update if robber update fails (restore money and remove immunity)
           await ctx.drizzle
             .update(userData)
             .set({
               money: sql`${userData.money} + ${stolenAmount}`,
+              robImmunityUntil: null,
             })
             .where(eq(userData.userId, input.userId));
           return errorResponse("Failed to update robber's data");

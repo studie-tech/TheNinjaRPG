@@ -228,12 +228,11 @@ export class SpacetimeDBConnection {
             );
           }
           this.identity = identity.toHexString();
-          this.connectionState = "connected";
-          this.emit({ type: "connection_state", state: "connected" });
 
           // Set up filtered subscriptions first to avoid race conditions
           // PERFORMANCE: Only subscribe to this user's data
-          // Note: wsReady will be set to true in setupGlobalSubscriptions's onApplied callback
+          // Note: connectionState and wsReady will be set in setupGlobalSubscriptions's onApplied callback
+          // This ensures callers cannot send reducers before subscriptions are established
           this.setupGlobalSubscriptions();
         })
         .onDisconnect((_ctx, error) => {
@@ -278,7 +277,9 @@ export class SpacetimeDBConnection {
     if (this.currentUserId === "guest") {
       this.setupTableHandlers();
       // Mark WebSocket as ready immediately for guests (no subscription to wait for)
+      this.connectionState = "connected";
       this.wsReady = true;
+      this.emit({ type: "connection_state", state: "connected" });
       return;
     }
 
@@ -296,9 +297,11 @@ export class SpacetimeDBConnection {
         if (DEBUG) {
           console.log("[SpacetimeDB] Global subscription applied");
         }
-        // Mark WebSocket as ready AFTER subscriptions are applied
+        // Mark WebSocket and connection as ready AFTER subscriptions are applied
         // This ensures reducers won't fire before subscriptions are fully established
+        this.connectionState = "connected";
         this.wsReady = true;
+        this.emit({ type: "connection_state", state: "connected" });
       })
       .onError((ctx: ErrorContext) => {
         console.error("[SpacetimeDB] Global subscription error:", ctx);

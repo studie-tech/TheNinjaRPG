@@ -105,6 +105,20 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
 
 export default TrpcClientProvider;
 
+/**
+ * Check if an error message indicates a JSON parsing error.
+ * Detects browser-specific JSON parsing error messages from tRPC responses.
+ */
+const isJsonParseError = (message: string): boolean => {
+  return (
+    message.includes("Failed to execute 'json' on 'Response'") ||
+    message.includes("Unexpected end of JSON input") ||
+    message.includes("JSON.parse") ||
+    message.includes("The string did not match the expected pattern") ||
+    message.includes("is not valid JSON")
+  );
+};
+
 const handleTrpcError = (error: unknown) => {
   const trpcErrorCode =
     error instanceof TRPCClientError
@@ -137,14 +151,7 @@ const handleTrpcError = (error: unknown) => {
     (error.data as { httpStatus?: number } | undefined)?.httpStatus === 403
   ) {
     // Verify it's actually a JSON parsing error from an HTML error page (not a well-formed 403 with valid JSON)
-    const isJsonParseError =
-      error.message.includes("Failed to execute 'json' on 'Response'") ||
-      error.message.includes("Unexpected end of JSON input") ||
-      error.message.includes("JSON.parse") ||
-      error.message.includes("The string did not match the expected pattern") ||
-      error.message.includes("is not valid JSON");
-
-    if (isJsonParseError) {
+    if (isJsonParseError(error.message)) {
       return;
     }
   }
@@ -159,14 +166,7 @@ const handleTrpcError = (error: unknown) => {
     (error.data as { httpStatus?: number } | undefined)?.httpStatus === 429
   ) {
     // Verify it's actually a JSON parsing error (not a well-formed 429 with valid JSON)
-    const isJsonParseError =
-      error.message.includes("Failed to execute 'json' on 'Response'") ||
-      error.message.includes("Unexpected end of JSON input") ||
-      error.message.includes("JSON.parse") ||
-      error.message.includes("The string did not match the expected pattern") ||
-      error.message.includes("is not valid JSON");
-
-    if (isJsonParseError) {
+    if (isJsonParseError(error.message)) {
       showMutationToast({
         success: false,
         message: "You are acting too fast. Please slow down.",
