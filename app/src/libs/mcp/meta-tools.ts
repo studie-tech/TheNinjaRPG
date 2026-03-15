@@ -638,6 +638,13 @@ function hasWriteScope(scopes: string[]): boolean {
  * Check if user has required scope for the endpoint.
  * Returns error response if unauthorized, undefined if authorized.
  *
+ * For mutation endpoints the caller needs either:
+ *  - To be an authenticated user (game policy: all authenticated users may mutate), OR
+ *  - To hold an explicit write scope (for non-session tokens such as service-to-service).
+ *
+ * This keeps the "authenticated users can mutate" policy decision separate from
+ * OAuth scope enforcement — scopes are never synthetically injected.
+ *
  * NOTE: Currently checks for write scope broadly. All mutations with write scope can execute any mutation endpoint.
  * For production use, consider implementing endpoint-specific permission checks for sensitive operations
  * (e.g., require "profile:write" for profile mutations, "admin" scope for administrative operations).
@@ -646,25 +653,17 @@ function checkEndpointAuthorization(
   endpoint: EndpointData,
   endpointName: string,
   getScopes?: () => string[],
+  getIsAuthenticated?: () => boolean,
 ) {
   if (endpoint.isMutationEndpoint) {
-    if (!getScopes) {
+    const isAuthenticated = getIsAuthenticated?.() ?? false;
+    const scopes = getScopes?.() ?? [];
+    if (!isAuthenticated && !hasWriteScope(scopes)) {
       return {
         content: [
           {
             type: "text" as const,
-            text: `Insufficient permissions: ${endpointName} is a mutation and requires authentication.`,
-          },
-        ],
-      };
-    }
-    const scopes = getScopes();
-    if (!hasWriteScope(scopes)) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Insufficient permissions: ${endpointName} is a mutation and requires write scope. Current scopes: ${scopes.join(", ") || "none"}`,
+            text: `Insufficient permissions: ${endpointName} is a mutation and requires authentication or write scope. Current scopes: ${scopes.join(", ") || "none"}`,
           },
         ],
       };
@@ -826,6 +825,7 @@ export const handleCallEndpoint = async (
   createCaller: () => Promise<unknown>,
   endpointName: string,
   getScopes?: () => string[],
+  getIsAuthenticated?: () => boolean,
   input?: Record<string, unknown>,
   filters?: ResponseFilters,
 ) => {
@@ -842,7 +842,12 @@ export const handleCallEndpoint = async (
     };
   }
 
-  const authError = checkEndpointAuthorization(endpoint, endpointName, getScopes);
+  const authError = checkEndpointAuthorization(
+    endpoint,
+    endpointName,
+    getScopes,
+    getIsAuthenticated,
+  );
   if (authError) {
     return authError;
   }

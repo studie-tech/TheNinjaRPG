@@ -44,10 +44,10 @@ function processContentUrls<T extends { id: string; content: string }>(
         if (!keep) {
           // Always replace image tags first if present
           if (isImg && fullTag) {
-            newContent = newContent.replace(fullTag, "[UNREACHABLE_IMG]");
+            newContent = newContent.replaceAll(fullTag, "[UNREACHABLE_IMG]");
           }
           // Then replace any remaining text occurrences of the URL
-          newContent = newContent.replace(url, "[UNREACHABLE_URL]");
+          newContent = newContent.replaceAll(url, "[UNREACHABLE_URL]");
         }
       });
 

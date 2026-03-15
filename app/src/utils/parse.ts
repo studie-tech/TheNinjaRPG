@@ -1,5 +1,4 @@
 import * as Sentry from "@sentry/nextjs";
-import { nanoid } from "nanoid";
 import React from "react";
 import type { Transform } from "react-html-parser";
 import ReactHtmlParser from "react-html-parser";
@@ -128,26 +127,30 @@ const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefi
     Object.entries(imageAttributes).filter(([, value]) => value !== undefined),
   ) as React.ImgHTMLAttributes<HTMLImageElement>;
 
-  return React.createElement("img", { ...filteredAttributes, key: nanoid() });
+  return React.createElement("img", { ...filteredAttributes, key: sourceUrl });
+};
+
+const getTextFromNode = (node: HtmlNode): string => {
+  if (node.type === "text") return node.data ?? "";
+  if (node.children) return node.children.map(getTextFromNode).join("");
+  return "";
 };
 
 /**
  * Transform blockquote nodes to Quote component
  */
 const transformBlockquoteNode = (blockquoteNode: HtmlNode): React.ReactElement => {
-  const content = blockquoteNode.children?.reduce((acc, child) => {
-    if (child.type === "text") {
-      return acc + child.data;
-    }
-    return acc;
-  }, "");
+  const content = blockquoteNode.children?.map(getTextFromNode).join("");
+
+  const author = blockquoteNode.attribs?.author || undefined;
+  const date = blockquoteNode.attribs?.date || undefined;
 
   return React.createElement(
     Quote,
     {
-      author: blockquoteNode.attribs?.author || undefined,
-      date: blockquoteNode.attribs?.date || undefined,
-      key: nanoid(),
+      author,
+      date,
+      key: `quote-${author ?? ""}-${date ?? ""}-${content?.slice(0, 32) ?? ""}`,
     },
     content,
   );
@@ -165,7 +168,7 @@ const transformConceptArtNode = (
 
   return React.createElement(EmbeddedConceptArt, {
     imageId,
-    key: `conceptart-${imageId}-${nanoid()}`,
+    key: `conceptart-${imageId}`,
   });
 };
 
@@ -190,7 +193,9 @@ const transformIframeNode = (iframeNode: HtmlNode): React.ReactElement | undefin
   } = iframeNode.attribs as Record<string, string> & { class?: string };
 
   if (!sourceUrl || !isAllowedIframeUrl(sourceUrl)) {
-    return React.createElement("div", { key: nanoid() });
+    return React.createElement("div", {
+      key: sourceUrl ? `blocked-${sourceUrl}` : undefined,
+    });
   }
 
   const parsedStyle = parseStyleAttribute(style);
@@ -223,7 +228,7 @@ const transformIframeNode = (iframeNode: HtmlNode): React.ReactElement | undefin
     Object.entries(props).filter(([, value]) => value !== undefined),
   ) as React.IframeHTMLAttributes<HTMLIFrameElement> & { "data-user-iframe"?: string };
 
-  return React.createElement("iframe", { ...filteredProperties, key: nanoid() });
+  return React.createElement("iframe", { ...filteredProperties, key: sourceUrl });
 };
 
 /**

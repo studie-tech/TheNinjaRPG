@@ -106,7 +106,7 @@ const getClerkFrontendApiUrl = (): string | null => {
   // This prevents token leakage if the publishable key is manipulated
   // SECURITY: Properly anchor patterns and prevent consecutive dots
   const isValidClerkDomain =
-    /^[a-z0-9-]+\.clerk\.accounts(\.[a-z]+)?$/.test(frontendApiHost) || // Development: *.clerk.accounts.dev
+    /^[a-z0-9-]+\.clerk\.accounts\.dev$/.test(frontendApiHost) || // Development: *.clerk.accounts.dev
     /^clerk\.[a-z0-9-]+\.lcl\.dev$/.test(frontendApiHost) || // Local development
     /^clerk\.[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+(-[a-z0-9]+)*)*$/.test(frontendApiHost); // Production custom domains (no consecutive dots)
 
@@ -124,15 +124,15 @@ const clerkFrontendApiUrl = getClerkFrontendApiUrl();
 
 /**
  * Parse and normalize OAuth scopes from token claims.
- * Handles both string and array scope formats, and adds write scope for authenticated users.
+ * Handles both string and array scope formats. Returns only the scopes as issued
+ * without synthesizing additional scopes — authorization decisions (e.g. allowing
+ * all authenticated users to mutate) are made explicitly in checkEndpointAuthorization.
  *
  * @param oauthScopeClaim - OAuth scope claim from token (string, array, or undefined)
- * @param userId - User ID from token (null if unauthenticated)
  * @returns Normalized array of unique scopes
  */
 const parseAndNormalizeScopes = (
   oauthScopeClaim: string | string[] | undefined,
-  userId: string | null,
 ): string[] => {
   const tokenScopes = Array.isArray(oauthScopeClaim)
     ? oauthScopeClaim
@@ -140,9 +140,7 @@ const parseAndNormalizeScopes = (
       ? oauthScopeClaim.split(" ")
       : [];
   // SECURITY: Normalize all scopes to lowercase and trim whitespace to prevent authorization bypass
-  const normalizedScopes = tokenScopes.map((s) => s.trim().toLowerCase());
-  // All authenticated users get write scope to perform game mutations
-  return userId ? [...new Set([...normalizedScopes, "write"])] : normalizedScopes;
+  return [...new Set(tokenScopes.map((s) => s.trim().toLowerCase()))];
 };
 
 /**
@@ -194,7 +192,7 @@ const verifyOpaqueToken = async (
   };
 
   const userId = userInfo.user_id ?? userInfo.sub ?? null;
-  const scopes = parseAndNormalizeScopes(userInfo.scope, userId);
+  const scopes = parseAndNormalizeScopes(userInfo.scope);
 
   updateRequestContext(userId, scopes);
 
@@ -219,7 +217,7 @@ const verifyJwtToken = async (bearerToken: string): Promise<AuthInfo | undefined
 
   // OAuth tokens may include a scope claim as a string or array
   const scopeClaim = (payload as { scope?: string | string[] }).scope;
-  const scopes = parseAndNormalizeScopes(scopeClaim, userId);
+  const scopes = parseAndNormalizeScopes(scopeClaim);
 
   updateRequestContext(userId, scopes);
 
@@ -338,6 +336,8 @@ const mcpHandler = trpcToModelContextProtocolHandler(appRouter, createMcpContext
   },
   // Provide scopes from request-scoped context for authorization checks
   getScopes: () => requestContext.getStore()?.scopes ?? [],
+  // Explicit authenticated check — decoupled from scope enforcement
+  getIsAuthenticated: () => !!requestContext.getStore()?.userId,
 });
 
 // Wrapper around mcpHandler to add per-user rate limiting after auth

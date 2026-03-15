@@ -125,17 +125,13 @@ export const forumRouter = createTRPCRouter({
           `Board update failed for board ${input.board_id} - board may have been deleted`,
         );
       }
-      // Then update counters and publish to social media
-      // If these fail, the thread still exists and counters can be recalculated
-
-      const counterUpdates: Promise<unknown>[] = [];
       if (isNews) {
-        counterUpdates.push(
-          ctx.drizzle
-            .update(userData)
-            .set({ unreadNews: sql`LEAST(unreadNews + 1, 1000)` })
-            .where(ne(userData.userId, ctx.userId)),
-          ...publishNewsToSocialMedia(
+        await ctx.drizzle
+          .update(userData)
+          .set({ unreadNews: sql`LEAST(unreadNews + 1, 1000)` })
+          .where(ne(userData.userId, ctx.userId));
+        void Promise.allSettled(
+          publishNewsToSocialMedia(
             input.title,
             input.content,
             user.avatar,
@@ -143,7 +139,6 @@ export const forumRouter = createTRPCRouter({
           ),
         );
       }
-      await Promise.all(counterUpdates);
       return { success: true, message: "Thread created" };
     }),
   // Pin forum thread to be on top
@@ -222,11 +217,13 @@ export const forumRouter = createTRPCRouter({
       if (result.error) return result.error;
       const { thread } = result;
       // Mutate
-      // Parallel deletion with atomic guards: PlanetScale doesn't support transactions,
-      // but we can use WHERE clauses to ensure cleanup only happens if data exists.
-      // All operations run in parallel to minimize inconsistency window.
+      const deleteResult = await ctx.drizzle
+        .delete(forumThread)
+        .where(eq(forumThread.id, thread.id));
+      if (deleteResult.rowsAffected === 0) {
+        return { success: false, message: "Thread already deleted" };
+      }
       await Promise.all([
-        ctx.drizzle.delete(forumThread).where(eq(forumThread.id, thread.id)),
         ctx.drizzle
           .update(forumBoard)
           .set({ nThreads: sql`GREATEST(nThreads - 1, 0)` })

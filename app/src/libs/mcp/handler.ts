@@ -49,6 +49,8 @@ type ModelContextProtocolHandlerOptions = {
   serverOptions?: ModelContextProtocolServerOptions;
   /** Function to get current OAuth scopes for authorization checks */
   getScopes?: () => string[];
+  /** Function to check if the current request is from an authenticated user */
+  getIsAuthenticated?: () => boolean;
 };
 
 /**
@@ -65,12 +67,14 @@ type ModelContextProtocolHandlerOptions = {
  * @param tools - Array of extracted MCP tools (used to build the registry)
  * @param createCaller - Factory function to create a fresh tRPC caller for each request
  * @param getScopes - Optional function to get current OAuth scopes for authorization
+ * @param getIsAuthenticated - Optional function to check if the user is authenticated
  */
 const setRequestHandler = (
   modelContextProtocolServer: ModelContextProtocolServer,
   tools: ReturnType<typeof extractToolsFromProcedures>,
   createTrpcCaller: () => Promise<unknown>,
   getScopes?: () => string[],
+  getIsAuthenticated?: () => boolean,
 ) => {
   // Build registry from all extracted tools
   const registry = buildToolRegistry(tools);
@@ -150,6 +154,7 @@ const setRequestHandler = (
             createTrpcCaller,
             endpointName,
             getScopes,
+            getIsAuthenticated,
             input as Record<string, unknown> | undefined,
             filters,
           );
@@ -180,7 +185,7 @@ export const trpcToModelContextProtocolHandler = <
   context: TRoot["ctx"] | (() => MaybePromise<TRoot["ctx"]>),
   handlerOptions: ModelContextProtocolHandlerOptions,
 ): ((request: Request) => Promise<Response>) => {
-  const { serverOptions, config, getScopes } = handlerOptions;
+  const { serverOptions, config, getScopes, getIsAuthenticated } = handlerOptions;
 
   // Extract tools once at startup
   const tools = extractToolsFromProcedures(appRouter);
@@ -198,7 +203,7 @@ export const trpcToModelContextProtocolHandler = <
   const handler = createMcpHandler(
     (server) => {
       // Pass the factory function, not a pre-created caller
-      setRequestHandler(server, tools, createTrpcCaller, getScopes);
+      setRequestHandler(server, tools, createTrpcCaller, getScopes, getIsAuthenticated);
     },
     {
       capabilities: {
