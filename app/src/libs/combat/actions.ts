@@ -603,10 +603,10 @@ export const userJutsuToAction = (
 };
 
 /**
- * Handle injected jutsus
- * @param battle - The battle to handle the injected jutsus for
- * @param user - The user to handle the injected jutsus for
- * @returns The active jutsus for the user
+ * Handle injected jutsus from all active inject effects.
+ * - Union of jutsus from ALL active inject effects (multiple injects stack, Bug 1).
+ * - Remove only jutsus that are no longer in any active effect (expiry, Bug 3).
+ * - Preserve existing injected jutsu objects so lastUsedRound/cooldown is kept (Bug 2).
  */
 export const handleInjectedJutsus = (
   battle: ReturnedBattle,
@@ -616,32 +616,31 @@ export const handleInjectedJutsus = (
     ?.filter((e) => e.targetId === user.userId && isEffectActive(e))
     ?.filter((e) => e.type === "injectjutsus");
 
-  // Inject jutsus (and remove expired ones) before processing actions
-  // extraState.jutsus is now a Record<string, Jutsu> containing all jutsus
   const allJutsus = battle?.extraState.jutsus ?? {};
   const userCurrentExtraJutsuIds =
     user?.jutsus?.filter((j) => j.origin === "injected").map((j) => j.jutsuId) ?? [];
-  let toBeRemovedIds: string[] = [];
-  let toBeAddedIds: string[] = [];
+
+  // Union of all jutsu IDs from all active inject effects (don't remove jutsus from other effects)
+  const allInjectedJutsuIdsFromEffects = new Set<string>();
   const toBeAddedJutsuPower: Record<string, number> = {};
-  injectEffects?.forEach((e) => {
+  for (const e of injectEffects ?? []) {
     const jutsuIds = InjectJutsusTag.parse(e).jutsuIds;
-    // Filter jutsus that are in the inject effect and exist in allJutsus
     const tagJutsus = jutsuIds
       .map((id) => allJutsus[id])
       .filter((j): j is Jutsu => j !== undefined);
-    const tagJutsuIds = tagJutsus.map((j) => j.id);
-    toBeRemovedIds.push(
-      ...(userCurrentExtraJutsuIds.filter((id) => !tagJutsuIds.includes(id)) ?? []),
-    );
-    tagJutsus.forEach((j) => {
-      if (!toBeRemovedIds.includes(j.id) && !userCurrentExtraJutsuIds.includes(j.id)) {
+    for (const j of tagJutsus) {
+      allInjectedJutsuIdsFromEffects.add(j.id);
+      if (!userCurrentExtraJutsuIds.includes(j.id)) {
         toBeAddedJutsuPower[j.id] = e.power ?? 1;
       }
-    });
-  });
-  toBeRemovedIds = [...new Set(toBeRemovedIds)];
-  toBeAddedIds = [...new Set(Object.keys(toBeAddedJutsuPower))];
+    }
+  }
+
+  // Remove only injected jutsus that are no longer granted by any active effect (e.g. effect expired)
+  const toBeRemovedIds = userCurrentExtraJutsuIds.filter(
+    (id) => !allInjectedJutsuIdsFromEffects.has(id),
+  );
+  const toBeAddedIds = [...new Set(Object.keys(toBeAddedJutsuPower))];
 
   // Define the user available jutsus
   const activeJutsus = [
