@@ -2493,6 +2493,10 @@ export const processUsersForBattle = async (
       user.avatarLight = user.anbuSquad.image;
     }
 
+    // For ally village check later (and formerly for village wall defence bonus)
+    const ownSector = user.sector === user.village?.sector;
+    const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
+
     // Add bloodline efects
     if (
       user.bloodline?.effects &&
