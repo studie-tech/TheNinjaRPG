@@ -732,6 +732,9 @@ const Sector: React.FC<SectorProps> = (props) => {
         console.error(
           "WebGL context became invalid immediately after setup - aborting scene creation",
         );
+        // Clean up DOM element and event listeners before returning
+        contextHandlers.cleanup();
+        safeRemoveRendererElement(renderer, sceneRef);
         setWebglError(true);
         return;
       }
