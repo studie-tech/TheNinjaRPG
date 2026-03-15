@@ -157,7 +157,12 @@ export const travelRouter = createTRPCRouter({
         // Rob 30% of target's money
         const stolenAmount = Math.floor(target.money * ROBBING_STOLLEN_AMOUNT);
 
-        // Update robber's money, target's money, break stealth, and update clan points in parallel
+        // Break stealth first (if active) to avoid coupling with money operations
+        if (user.stealthActive) {
+          await breakStealth(ctx.drizzle, ctx.userId, user.stealth, false);
+        }
+
+        // Update robber's money, target's money, and update clan points in parallel
         const results = await Promise.all([
           ctx.drizzle
             .update(userData)
@@ -173,9 +178,6 @@ export const travelRouter = createTRPCRouter({
               robImmunityUntil: secondsFromNow(ROBBING_IMMUNITY_DURATION),
             })
             .where(eq(userData.userId, input.userId)),
-          ...(user.stealthActive
-            ? [breakStealth(ctx.drizzle, ctx.userId, user.stealth, false)]
-            : []),
           ...(user.clanId
             ? [
                 ctx.drizzle

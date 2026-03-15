@@ -2348,8 +2348,8 @@ const isWebGLShaderContextLossError = (event: Sentry.ErrorEvent): boolean => {
     isOnTravelPage =
       urlObj.pathname === "/travel" || urlObj.pathname.startsWith("/travel/");
   } catch {
-    // If URL parsing fails, fall back to includes check
-    isOnTravelPage = url.includes("/travel");
+    // If URL parsing fails, cannot verify path - return false to avoid false positives
+    isOnTravelPage = false;
   }
 
   if (!isOnTravelPage) {
@@ -2422,8 +2422,8 @@ const isMinifiedThreeJsError = (event: Sentry.ErrorEvent): boolean => {
       urlObj.pathname === "/travel" ||
       urlObj.pathname.startsWith("/travel/");
   } catch {
-    // If URL parsing fails, fall back to includes check
-    isOn3DPage = url.includes("/combat") || url.includes("/travel");
+    // If URL parsing fails, cannot verify path - return false to avoid false positives
+    isOn3DPage = false;
   }
 
   if (!isOn3DPage) {
