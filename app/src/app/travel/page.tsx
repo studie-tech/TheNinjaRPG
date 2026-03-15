@@ -148,7 +148,7 @@ export default function Travel() {
   });
   const { data: sectorData } = api.travel.getSectorData.useQuery(
     { sector: userData?.sector ?? -1 },
-    { enabled: !!userData },
+    { enabled: !!userData && userData.sector !== undefined },
   );
   // Memoize villages to prevent re-creating array reference on every render
   // This is important because useLiveCountdown triggers re-renders every second

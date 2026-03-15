@@ -122,6 +122,49 @@ const handleTrpcError = (error: unknown) => {
   ) {
     return;
   }
+
+  // Ignore JSON parsing errors from 403 responses (auth session expired)
+  // When Clerk sessions expire, protected endpoints return 403 with HTML error pages.
+  // tRPC attempts to parse as JSON, triggering browser-specific JSON errors:
+  // - Safari: "The string did not match the expected pattern"
+  // - Chrome: '"<!DOCTYPE "... is not valid JSON'
+  // - Firefox: "JSON.parse: unexpected character at line 1 column 1"
+  // These are legitimate auth transitions, not actionable errors.
+  // UX: No toast shown, user either gets redirected by useRequiredUserData or stays on page silently.
+  // This check must come BEFORE console.error and Sentry logging to prevent noise.
+  if (
+    error instanceof TRPCClientError &&
+    (error.data as { httpStatus?: number } | undefined)?.httpStatus === 403 &&
+    isRetryableTrpcError(error)
+  ) {
+    return;
+  }
+
+  // Handle JSON parsing errors from 429 rate limit responses
+  // When rate limiting occurs, the server returns 429 but the response body may be empty/malformed.
+  // The tRPC client fails to parse this as JSON, throwing a parsing error before we can check error.data.code.
+  // This occurs with batch requests and certain timing conditions in tRPC's response serialization.
+  // UX: Show non-destructive toast with rate limit message (same as successful 429 parsing).
+  if (
+    error instanceof TRPCClientError &&
+    (error.data as { httpStatus?: number } | undefined)?.httpStatus === 429
+  ) {
+    // Verify it's actually a JSON parsing error (not a well-formed 429 with valid JSON)
+    const isJsonParseError =
+      error.message.includes("Failed to execute 'json' on 'Response'") ||
+      error.message.includes("Unexpected end of JSON input") ||
+      error.message.includes("JSON.parse");
+
+    if (isJsonParseError) {
+      showMutationToast({
+        success: false,
+        message:
+          "You are acting too fast. Please slow down. Incident logged for review. 1% money reduced.",
+      });
+      return;
+    }
+  }
+
   // Ignore transient network/CDN errors (retries handle these gracefully)
   // Queries are retried by retryLink (up to 3 attempts), mutations are never retried
   // All retryable errors are suppressed here to avoid user-facing toasts for transient issues

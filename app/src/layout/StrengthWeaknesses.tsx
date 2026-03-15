@@ -131,22 +131,22 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
           <div className="flex flex-row items-center">
             <ElementImage element="Ninjutsu" className="mr-1 mb-1 h-6 w-6" />
             Ninjutsu offence:{" "}
-            {Number(userData.ninjutsuOffence.toFixed(2)).toLocaleString()}
+            {Number((userData.ninjutsuOffence ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Genjutsu" className="mr-1 mb-1 h-6 w-6" />
             Genjutsu offence:{" "}
-            {Number(userData.genjutsuOffence.toFixed(2)).toLocaleString()}
+            {Number((userData.genjutsuOffence ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Taijutsu" className="mr-1 mb-1 h-6 w-6" />
             Taijutsu offence:{" "}
-            {Number(userData.taijutsuOffence.toFixed(2)).toLocaleString()}
+            {Number((userData.taijutsuOffence ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Bukijutsu" className="mr-1 mb-1 h-6 w-6" />
             Bukijutsu offence:{" "}
-            {Number(userData.bukijutsuOffence.toFixed(2)).toLocaleString()}
+            {Number((userData.bukijutsuOffence ?? 0).toFixed(2)).toLocaleString()}
           </div>
         </div>
 
@@ -155,22 +155,22 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
           <div className="flex flex-row items-center">
             <ElementImage element="Ninjutsu" className="mr-1 mb-1 h-6 w-6" />
             Ninjutsu defence:{" "}
-            {Number(userData.ninjutsuDefence.toFixed(2)).toLocaleString()}
+            {Number((userData.ninjutsuDefence ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Genjutsu" className="mr-1 mb-1 h-6 w-6" />
             Genjutsu defence:{" "}
-            {Number(userData.genjutsuDefence.toFixed(2)).toLocaleString()}
+            {Number((userData.genjutsuDefence ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Taijutsu" className="mr-1 mb-1 h-6 w-6" />
             Taijutsu defence:{" "}
-            {Number(userData.taijutsuDefence.toFixed(2)).toLocaleString()}
+            {Number((userData.taijutsuDefence ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Bukijutsu" className="mr-1 mb-1 h-6 w-6" />
             Bukijutsu defence:{" "}
-            {Number(userData.bukijutsuDefence.toFixed(2)).toLocaleString()}
+            {Number((userData.bukijutsuDefence ?? 0).toFixed(2)).toLocaleString()}
           </div>
         </div>
       </div>
@@ -180,19 +180,20 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
             <b>Generals</b>
             <div className="flex flex-row items-center">
               <ElementImage element="Strength" className="mr-1 mb-1 h-6 w-6" />
-              Strength: {Number(userData.strength.toFixed(2)).toLocaleString()}
+              Strength: {Number((userData.strength ?? 0).toFixed(2)).toLocaleString()}
             </div>
             <div className="flex flex-row items-center">
               <ElementImage element="Intelligence" className="mr-1 mb-1 h-6 w-6" />
-              Intelligence: {Number(userData.intelligence.toFixed(2)).toLocaleString()}
+              Intelligence:{" "}
+              {Number((userData.intelligence ?? 0).toFixed(2)).toLocaleString()}
             </div>
             <div className="flex flex-row items-center">
               <ElementImage element="Willpower" className="mr-1 mb-1 h-6 w-6" />
-              Willpower: {Number(userData.willpower.toFixed(2)).toLocaleString()}
+              Willpower: {Number((userData.willpower ?? 0).toFixed(2)).toLocaleString()}
             </div>
             <div className="flex flex-row items-center">
               <ElementImage element="Speed" className="mr-1 mb-1 h-6 w-6" />
-              Speed: {Number(userData.speed.toFixed(2)).toLocaleString()}
+              Speed: {Number((userData.speed ?? 0).toFixed(2)).toLocaleString()}
             </div>
           </div>
           <div>
@@ -275,14 +276,14 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
             {
               label: "Value",
               data: [
-                userData.ninjutsuOffence,
-                userData.genjutsuOffence,
-                userData.taijutsuOffence,
-                userData.bukijutsuOffence,
-                userData.ninjutsuDefence,
-                userData.genjutsuDefence,
-                userData.taijutsuDefence,
-                userData.bukijutsuDefence,
+                userData.ninjutsuOffence ?? 0,
+                userData.genjutsuOffence ?? 0,
+                userData.taijutsuOffence ?? 0,
+                userData.bukijutsuOffence ?? 0,
+                userData.ninjutsuDefence ?? 0,
+                userData.genjutsuDefence ?? 0,
+                userData.taijutsuDefence ?? 0,
+                userData.bukijutsuDefence ?? 0,
               ],
               fill: true,
               backgroundColor: "rgba(255, 99, 132, 0.2)",
@@ -318,10 +319,10 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
           datasets: [
             {
               data: [
-                userData.strength,
-                userData.speed,
-                userData.intelligence,
-                userData.willpower,
+                userData.strength ?? 0,
+                userData.speed ?? 0,
+                userData.intelligence ?? 0,
+                userData.willpower ?? 0,
               ],
               backgroundColor: [
                 "rgba(255, 99, 132, 0.5)",

@@ -40,6 +40,7 @@ import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/type
 import {
   cleanUp,
   createTexture,
+  isRendererContextValid,
   loadTexture,
   safeRemoveRendererElement,
   setupContextLossHandling,
@@ -156,6 +157,16 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       // Track WebGL context loss to prevent shader errors on iOS mobile browsers
       // Clear texture caches when context is lost to free memory
       const contextHandlers = setupContextLossHandling(renderer, { clearCaches: true });
+
+      // EDGE CASE DEFENSE: Double-check context is valid after setup
+      // Even if renderer was created, the context might become invalid immediately on iOS
+      if (!isRendererContextValid(renderer)) {
+        console.error(
+          "WebGL context became invalid immediately after setup - aborting scene creation",
+        );
+        setWebglError(true);
+        return;
+      }
 
       // Setup camera
       const camera = new PerspectiveCamera(fov, aspect, near, far);
@@ -418,8 +429,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         group_highlights.add(userAvatarGroup);
       }
 
-      if (props.userLocation && userData && !showOwnership) {
-        userData.userQuests?.forEach((userquest) => {
+      if (props.userLocation && userData && userData.userQuests && !showOwnership) {
+        userData.userQuests.forEach((userquest) => {
           userquest.quest.content.objectives.forEach((objective) => {
             const isHidden = "hideLocation" in objective && objective.hideLocation;
             const isDialog = objective.task === "dialog";
@@ -600,10 +611,16 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         // Trackball updates
         controls.update();
 
-        // Render the scene (skip if WebGL context is lost)
+        // Render the scene (skip if WebGL context is lost or invalid)
         animationId = requestAnimationFrame(render);
-        if (!contextHandlers.isContextLost()) {
-          renderer?.render(scene, camera);
+        // EDGE CASE DEFENSE: Check both the context loss handler AND validate the context directly
+        // This catches iOS Safari edge cases where context appears valid but shader creation fails
+        if (
+          !contextHandlers.isContextLost() &&
+          renderer &&
+          isRendererContextValid(renderer)
+        ) {
+          renderer.render(scene, camera);
         }
 
         // Performance monitor

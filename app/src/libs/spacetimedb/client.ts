@@ -139,6 +139,8 @@ export class SpacetimeDBConnection {
   /**
    * Wait for connection to complete (or fail)
    * Used to avoid race conditions when multiple calls to connect() happen concurrently
+   * Waits for both connectionState === "connected" AND wsReady === true,
+   * ensuring subscriptions are fully set up before proceeding.
    */
   private waitForConnection(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
@@ -229,15 +231,13 @@ export class SpacetimeDBConnection {
           this.connectionState = "connected";
           this.emit({ type: "connection_state", state: "connected" });
 
-          // Set up filtered subscriptions after connection
+          // Mark WebSocket as ready immediately when SDK fires onConnect
+          // The SDK only calls this callback when the connection is fully established
+          this.wsReady = true;
+
+          // Set up filtered subscriptions AFTER marking ready
           // PERFORMANCE: Only subscribe to this user's data
           this.setupGlobalSubscriptions();
-
-          // Mark WebSocket as ready after a small delay to ensure the underlying
-          // WebSocket is fully in OPEN state. This fixes "Still in CONNECTING state" errors.
-          setTimeout(() => {
-            this.wsReady = true;
-          }, 100);
         })
         .onDisconnect((_ctx, error) => {
           if (DEBUG) {

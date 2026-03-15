@@ -594,6 +594,14 @@ export const setupScene = (info: {
   let renderer: WebGLRenderer | undefined;
   try {
     renderer = new WebGLRenderer();
+
+    // EDGE CASE DEFENSE: Validate the context is actually functional
+    // On iOS Safari, the renderer can be created successfully but have an invalid context
+    if (!isRendererContextValid(renderer)) {
+      console.error("WebGLRenderer created but context is not functional");
+      renderer.dispose();
+      renderer = undefined;
+    }
   } catch (error) {
     console.error("Error creating WebGLRenderer, falling back to WebGL1Renderer");
     console.error(error);
@@ -859,6 +867,76 @@ export const setupContextLossHandling = (
       }
     },
   };
+};
+
+/**
+ * Check if a WebGL rendering context is valid and functional.
+ * This goes beyond just checking if the context exists - it validates
+ * that the context can actually perform WebGL operations without errors.
+ *
+ * EDGE CASES COVERED:
+ * - Context exists but is in "lost" state (isContextLost() === true)
+ * - Context exists but gl methods return null (iOS Safari edge case)
+ * - Context exists but shader creation fails (memory pressure)
+ * - Canvas element has been detached from DOM
+ *
+ * @param gl - The WebGL rendering context to validate
+ * @returns true if context is valid and functional, false otherwise
+ */
+export const isWebGLContextValid = (
+  gl: WebGLRenderingContext | WebGL2RenderingContext | null,
+): boolean => {
+  if (!gl) return false;
+
+  // Check if context is marked as lost
+  if (gl.isContextLost?.()) {
+    return false;
+  }
+
+  // Check if the canvas is still connected to the DOM
+  // Note: OffscreenCanvas doesn't have isConnected, only HTMLCanvasElement does
+  if (!gl.canvas) {
+    return false;
+  }
+  if ("isConnected" in gl.canvas && !gl.canvas.isConnected) {
+    return false;
+  }
+
+  // Try to create a test shader to verify the context is functional
+  // This catches the iOS Safari edge case where context exists but shader creation returns null
+  try {
+    const testShader = gl.createShader(gl.VERTEX_SHADER);
+    if (!testShader) {
+      // Context exists but can't create shaders - this is the bug we're fixing!
+      return false;
+    }
+    // Clean up test shader immediately
+    gl.deleteShader(testShader);
+    return true;
+  } catch {
+    // Any error during shader creation means context is not functional
+    return false;
+  }
+};
+
+/**
+ * Check if a WebGLRenderer has a valid and functional context.
+ * Convenience wrapper around isWebGLContextValid for Three.js renderers.
+ *
+ * @param renderer - The WebGLRenderer to check
+ * @returns true if renderer has a valid context, false otherwise
+ */
+export const isRendererContextValid = (
+  renderer: WebGLRenderer | undefined,
+): boolean => {
+  if (!renderer) return false;
+  try {
+    const gl = renderer.getContext();
+    return isWebGLContextValid(gl);
+  } catch {
+    // getContext() can throw if renderer is disposed or in invalid state
+    return false;
+  }
 };
 
 /**

@@ -8,6 +8,7 @@ import {
   isHtmlResponseError as isHtmlResponseErrorPattern,
   isFirefoxJsonError as isFirefoxJsonErrorPattern,
   isProxyError as isProxyErrorPattern,
+  isSafariJsonError as isSafariJsonErrorPattern,
   type StackFrame,
 } from "@/utils/error";
 
@@ -26,6 +27,8 @@ Sentry.init({
   ignoreErrors: [
     "window.ethereum",
     "Cannot redefine property: walletRouter", // Cryptocurrency wallet extension error - occurs when wallet extensions (MetaMask, Coinbase Wallet, etc.) conflict or reinitialize
+    "Cannot redefine property: ScatterJS", // ScatterJS wallet extension error - occurs when Scatter crypto wallet extension conflicts with other web3 providers or attempts to reinitialize. UX: No user-visible impact - error occurs in isolated extension context during wallet initialization. Application continues normally.
+    "setExternalProvider is not a function", // Scatter/TronLink wallet extension error - occurs when extension's injected.bundle.js calls missing ethereum.setExternalProvider() method. UX: No user-visible impact - error is isolated to extension's initialization code, application functionality unaffected.
     "ClerkJS: Token refresh failed",
     "Converting circular structure to JSON",
     "Uncaught NetworkError: Failed to execute 'importScripts' on 'WorkerGlobalScope'",
@@ -41,6 +44,7 @@ Sentry.init({
     "The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.", // audio permission denied
     "TypeError: undefined is not an object (evaluating 'this.updateVisibleFocusableElements.bind')", // Cookiebot error: https://github.com/getsentry/sentry-javascript/issues/16850
     "Failed to read a named property 'Element' from 'Window': Blocked a frame with origin \"https://www.theninja-rpg.com\"", // Sentry iframe error?
+    "invalid origin", // Cross-origin security errors from third-party scripts or browser privacy features (e.g., DuckDuckGo Mobile tracking protection, browser extensions). UX: No user-visible impact - page navigation and tRPC queries complete successfully. Also filtered by isInvalidOriginError() for defense-in-depth (THENINJARPG-2G1).
     "Cannot read properties of undefined (reading 'bind')", // Cookiebot error on resize
     "Cannot read properties of null (reading 'parentNode')", // Cookiebot error in calcFadeState when clicking "More Details"
     "null is not an object (evaluating 'element.parentNode')", // Cookiebot error in calcFadeState (Safari format)
@@ -96,6 +100,8 @@ Sentry.init({
     "failed to decode cache", // Next.js RSC (React Server Components) cache decoding error - occurs when browser cache contains stale, corrupted, or incomplete RSC payload data from prefetch requests. Common causes: browser cache inconsistency after deployments, network issues during RSC payload download, memory pressure during cleanup, Firefox-specific cache validation. UX: Handled gracefully by Next.js internal retry logic - failed cache reads fall back to fresh server requests. Users may experience slightly slower navigation but no visible error. Detection: minimal stack trace, global error handler mechanism, recent RSC prefetch breadcrumbs (_rsc query param).
     /NS_ERROR_/, // Firefox internal error codes (NS_ERROR_FAILURE, NS_ERROR_NOT_AVAILABLE, etc.) from third-party scripts (ads/pixel.js, tracking pixels, browser extensions). These are Firefox XPCOM errors that occur when third-party code encounters browser-level failures. Not actionable from application code. UX: No user-visible impact - errors occur in isolated third-party script contexts.
     "Should not already be working.", // React internal scheduler error - occurs when React's concurrent rendering scheduler detects re-entrant scheduling during complex navigation patterns. Not actionable at application level. UX: No user-visible impact - React's error recovery handles scheduler assertions gracefully.
+    "feature named `pageObserver` was not found", // DuckDuckGo browser internal error - occurs when DuckDuckGo's privacy/tracker blocking features attempt to register a page observer during Next.js RSC navigation but the feature registration fails. Browser-specific to DuckDuckGo 26.3 on Mac. UX: No user-visible impact - Next.js navigation completes successfully via fallback mechanisms. Detection: no stack trace (browser-internal error), DuckDuckGo browser tag, handled=no, RSC navigation with _rsc query param.
+    /feature named .* was not found/, // General pattern for DuckDuckGo or other browser feature registration errors - catches variations of the pageObserver error and similar browser-internal feature lookup failures
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
@@ -136,6 +142,9 @@ Sentry.init({
     if (isFirefoxJsonParseError(event)) {
       return null; // Drop Firefox JSON parsing errors (network/CDN issues)
     }
+    if (isSafariJsonParseError(event)) {
+      return null; // Drop Safari JSON parsing errors (network/CDN issues)
+    }
     if (isClerkSyntaxError(event)) {
       return null; // Drop Clerk script parsing errors (network truncation)
     }
@@ -148,8 +157,8 @@ Sentry.init({
     if (isThirdPartyStackOverflowError(event)) {
       return null; // Drop third-party stack overflow errors (tracking scripts)
     }
-    if (isServerActionAuthError(event)) {
-      return null; // Drop server action errors during auth transitions (SSO callback, sign-out)
+    if (isServerActionError(event)) {
+      return null; // Drop server action errors during auth transitions and rate limiting (SSO callback, sign-out, 429)
     }
     if (isWebKitMessageHandlersError(event)) {
       return null; // Drop iOS WebKit bridge errors from third-party scripts
@@ -201,6 +210,15 @@ Sentry.init({
     }
     if (isInvalidOriginError(event)) {
       return null; // Drop scoped invalid origin errors from third-party scripts
+    }
+    if (isRateLimitJsonParseError(event)) {
+      return null; // Drop rate limit (429) JSON parsing errors - handled gracefully in UI
+    }
+    if (isWebGLShaderContextLossError(event)) {
+      return null; // Drop WebGL shader context loss errors - handled by error boundary
+    }
+    if (isMinifiedThreeJsError(event)) {
+      return null; // Drop minified Three.js errors - handled by error boundaries and context loss handlers
     }
     return event;
   },
@@ -718,6 +736,33 @@ const isFirefoxJsonParseError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
+ * Check if an error is a Safari JSON parsing error that should be filtered.
+ *
+ * Safari-specific JSON.parse error when receiving non-JSON responses (HTML error pages,
+ * plain text, truncated responses). This occurs when:
+ * - Server returns 403/500 with HTML error page instead of JSON
+ * - CDN/WAF returns error page before reaching application
+ * - Network issues cause truncated/corrupted responses
+ * - Rate limiting returns plain text error message
+ *
+ * UX: Handled gracefully by tRPC retry logic in Provider.tsx. Users see toast notification
+ * for API errors. tRPC automatically retries transient errors (per isRetryableError).
+ */
+const isSafariJsonParseError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const errorType = event.exception?.values?.[0]?.type ?? "";
+
+  // Use shared pattern matcher from errors.ts
+  const stackFrames = extractStackFramesFromSentryEvent(event);
+  const matchesPattern = isSafariJsonErrorPattern(message, stackFrames);
+
+  // Verify it's a tRPC error type
+  const isTrpcError = errorType === "TRPCClientError" || errorType === "SyntaxError";
+
+  return matchesPattern && isTrpcError;
+};
+
+/**
  * Check if an error is a Clerk script parsing error that should be filtered.
  * These occur when the Clerk SDK script is truncated during download due to network
  * issues (mobile network changes, device sleep, interrupted connection).
@@ -913,6 +958,35 @@ const isInvalidOriginError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
+ * Check if an error is a rate limit (429) JSON parsing error that should be filtered.
+ * When rate limiting returns 429 with empty/malformed body, tRPC client throws JSON parse error.
+ * UX: User sees "You are acting too fast" toast via Provider.tsx handleTrpcError.
+ * Detection: Check breadcrumbs for 429 status (most reliable signal) and JSON parse error message.
+ */
+const isRateLimitJsonParseError = (event: Sentry.ErrorEvent): boolean => {
+  const exception = event.exception?.values?.[0];
+
+  // Check if it's a TRPCClientError with JSON parsing error message
+  const hasJsonParseError =
+    exception?.value &&
+    (exception.value.includes("Failed to execute 'json' on 'Response'") ||
+     exception.value.includes("Unexpected end of JSON input") ||
+     exception.value.includes("JSON.parse")) &&
+    exception.type === "TRPCClientError";
+
+  if (!hasJsonParseError) {
+    return false;
+  }
+
+  // Check breadcrumbs for 429 status code
+  const has429Status = event.breadcrumbs?.some(
+    (b) => b.category === "fetch" && b.data?.status_code === 429
+  );
+
+  return Boolean(has429Status);
+};
+
+/**
  * Check if an error is a Next.js chunk parsing error that should be filtered.
  * These occur when Next.js JavaScript chunks are truncated during download due to network
  * issues (mobile network changes, device sleep, interrupted connection, CDN timeouts).
@@ -991,7 +1065,9 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   // Check for wallet-specific error patterns
   const isWalletErrorMessage =
     message.includes("Failed to connect to MetaMask") ||
-    message.includes("No extension found with id:");
+    message.includes("No extension found with id:") ||
+    message.includes("setExternalProvider is not a function") ||
+    message.includes("Cannot redefine property"); // ScatterJS, walletRouter, and other wallet extension property conflicts
 
   if (isWalletErrorMessage) {
     return true;
@@ -1000,15 +1076,15 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   // Check if error originates from wallet extension's injected script
   // - inpage.js is the common name for wallet extension content scripts (MetaMask, etc.)
   // - app:///scripts/ is the URL scheme for browser extension injected scripts
-  // - app:///injected/ is used by TronLink and other wallet extensions to inject SDK
+  // - app:///injected is used by TronLink, ScatterJS, and other wallet extensions to inject SDK
   const isFromWalletScript = stackFrames.some(
     (frame) =>
       frame.filename?.includes("inpage.js") ||
       frame.filename?.startsWith("app:///scripts/") ||
-      frame.filename?.includes("app:///injected/") ||
+      frame.filename?.includes("app:///injected") ||
       frame.abs_path?.includes("inpage.js") ||
       frame.abs_path?.startsWith("app:///scripts/") ||
-      frame.abs_path?.includes("app:///injected/"),
+      frame.abs_path?.includes("app:///injected"),
   );
 
   // Additional check for proxy trap errors from wallet extensions
@@ -1026,25 +1102,35 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
- * Check if an error is a Next.js server action error during authentication flows.
- * These occur when network issues or authentication state changes cause server action
- * responses to fail during:
- * 1. SSO callback flow (transient CDN errors, mobile network changes)
- * 2. Sign-out flow (race condition where requests hit server after session invalidation)
+ * Check if an error is a Next.js server action error that should be filtered from Sentry.
  *
- * UX note:
+ * These errors occur when Next.js server actions or background revalidations receive unexpected
+ * HTTP responses. The error message "An unexpected response was received from the server" is
+ * generic and thrown by Next.js's fetchServerAction when it receives non-2xx responses it
+ * doesn't know how to handle.
+ *
+ * Scenarios where this occurs:
+ * 1. SSO callback flow (403 from transient CDN errors, mobile network changes)
+ * 2. Sign-out flow (403 race condition where requests hit server after session invalidation)
+ * 3. Rate limiting (429 when user triggers too many requests, affecting background revalidations)
+ *
+ * UX note for all scenarios:
  * - SSO: Users experience a temporary error during SSO callback, but can retry or
  *   manually navigate to complete authentication. This is a transient infrastructure issue.
  * - Sign-out: Users successfully sign out despite the error. The error occurs when pending
  *   requests or revalidations receive 403 after the session is invalidated. This is expected
  *   behavior during the sign-out transition and does not affect functionality.
+ * - Rate limiting: Users already see appropriate toast messages from the tRPC error handler
+ *   (handled in _trpc/Provider.tsx lines 143-165 and 200-204). The Next.js server action
+ *   error is redundant and adds Sentry noise without providing actionable information.
  *
  * Detection pattern:
  * - Error message: "An unexpected response was received from the server"
  * - SSO callback: URL contains /signup/sso-callback or /signin/sso-callback
  * - Sign-out: Breadcrumbs show sign-out button click + POST request with 403 status
+ * - Rate limiting: Breadcrumbs show POST request with 429 status
  */
-const isServerActionAuthError = (event: Sentry.ErrorEvent): boolean => {
+const isServerActionError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const url = event.request?.url ?? "";
   const breadcrumbs = event.breadcrumbs ?? [];
@@ -1081,10 +1167,22 @@ const isServerActionAuthError = (event: Sentry.ErrorEvent): boolean => {
     );
   });
 
-  // Filter if: (SSO callback URL) OR (sign-out click + 403 POST)
+  // Check if error occurred during rate limiting
+  // POST requests to routes can receive 429 when rate limit middleware triggers
+  const has429Post = breadcrumbs.some((breadcrumb) => {
+    if (breadcrumb.category !== "fetch") return false;
+    const data = breadcrumb.data ?? {};
+    // Check for POST request with 429 status code (rate limiting)
+    return (
+      data.method === "POST" &&
+      (data.status_code === 429 || data.status_code === "429")
+    );
+  });
+
+  // Filter if: (SSO callback URL) OR (sign-out click + 403 POST) OR (429 POST)
   const isSignOutRaceCondition = hasSignOutClick && has403Post;
 
-  return isSsoCallbackUrl || isSignOutRaceCondition;
+  return isSsoCallbackUrl || isSignOutRaceCondition || has429Post;
 };
 
 /**
@@ -2070,50 +2168,55 @@ const isResponseBodyAlreadyReadError = (event: Sentry.ErrorEvent): boolean => {
  * - React team owns this code path (application code cannot prevent scheduler re-entrancy)
  */
 const isReactSchedulerError = (event: Sentry.ErrorEvent): boolean => {
-  const message = event.exception?.values?.[0]?.value ?? "";
-  const errorType = event.exception?.values?.[0]?.type ?? "";
-  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+  const exceptionValues = event.exception?.values ?? [];
 
-  // Must be the exact "Should not already be working." error message (with period)
-  if (message !== "Should not already be working.") {
-    return false;
-  }
+  // Check if ANY exception value matches the React scheduler error pattern
+  return exceptionValues.some((exception) => {
+    const message = exception?.value ?? "";
+    const errorType = exception?.type ?? "";
+    const stackFrames = exception?.stacktrace?.frames ?? [];
 
-  // Typically a generic "Error" type (React throws this internally)
-  if (errorType !== "Error" && errorType !== "") {
-    return false;
-  }
+    // Must be the exact "Should not already be working." error message (with period)
+    if (message !== "Should not already be working.") {
+      return false;
+    }
 
-  // Verify it's from React internal code (scheduler or react-dom-client)
-  // If stack trace is empty (production builds may strip stack traces), we still filter
-  // based on the unique message, as it's React-specific
-  if (stackFrames.length === 0) {
-    return true; // Unique message + no stack = React internal error
-  }
+    // Typically a generic "Error" type (React throws this internally)
+    if (errorType !== "Error" && errorType !== "") {
+      return false;
+    }
 
-  // Check if ALL stack frames are from React scheduler or React DOM client
-  // If ANY frame is from application code, don't filter (could indicate app triggering issue)
-  const isFromReactInternals = stackFrames.every((frame) => {
-    const filename = frame.filename ?? "";
-    const absPath = frame.abs_path ?? "";
+    // Verify it's from React internal code (scheduler or react-dom-client)
+    // If stack trace is empty (production builds may strip stack traces), we still filter
+    // based on the unique message, as it's React-specific
+    if (stackFrames.length === 0) {
+      return true; // Unique message + no stack = React internal error
+    }
 
-    // Must be from React/Next.js compiled code (not our application code)
-    const isReactCode =
-      filename.includes("scheduler.production.js") ||
-      filename.includes("react-dom-client.production.js") ||
-      filename.includes("scheduler.development.js") ||
-      filename.includes("react-dom-client.development.js") ||
-      absPath.includes("scheduler.production.js") ||
-      absPath.includes("react-dom-client.production.js") ||
-      absPath.includes("scheduler.development.js") ||
-      absPath.includes("react-dom-client.development.js");
+    // Check if ALL stack frames are from React scheduler or React DOM client
+    // If ANY frame is from application code, don't filter (could indicate app triggering issue)
+    const isFromReactInternals = stackFrames.every((frame) => {
+      const filename = frame?.filename ?? "";
+      const absPath = frame?.abs_path ?? "";
 
-    // If we have frames, they should all be from React internals (no app code mixed in)
-    // If a frame isn't identifiable as React code, be conservative and don't filter
-    return isReactCode || filename === "" || absPath === "";
+      // Must be from React/Next.js compiled code (not our application code)
+      const isReactCode =
+        filename.includes("scheduler.production.js") ||
+        filename.includes("react-dom-client.production.js") ||
+        filename.includes("scheduler.development.js") ||
+        filename.includes("react-dom-client.development.js") ||
+        absPath.includes("scheduler.production.js") ||
+        absPath.includes("react-dom-client.production.js") ||
+        absPath.includes("scheduler.development.js") ||
+        absPath.includes("react-dom-client.development.js");
+
+      // If we have frames, they should all be from React internals (no app code mixed in)
+      // If a frame isn't identifiable as React code, be conservative and don't filter
+      return isReactCode || filename === "" || absPath === "";
+    });
+
+    return isFromReactInternals;
   });
-
-  return isFromReactInternals;
 };
 
 /**
@@ -2191,6 +2294,135 @@ const isFirefoxInputStreamError = (event: Sentry.ErrorEvent): boolean => {
 
   // Only filter if there's NO application code in the stack
   return !hasApplicationCode;
+};
+
+/**
+ * Check if an error is a WebGL shader creation error after context loss.
+ * These occur on iOS Safari when WebGL context is lost due to memory pressure,
+ * device sleep, or background tabs. The error happens when Three.js attempts
+ * to create shaders with invalid WebGL objects after context loss.
+ *
+ * UX: WebGL error boundary shows fallback UI with option to refresh.
+ * Users see "Browser WebGL Error" message and can reload to recover.
+ * The error is caught by our validation guards and handled gracefully.
+ *
+ * Only filters when:
+ * - Error message is "Argument 1 ('shader') to WebGL2RenderingContext.shaderSource must be an instance of WebGLShader"
+ * - Error occurs on /travel page (3D rendering context)
+ * - Stack trace shows Three.js shader compilation (no application code)
+ * - Error is marked as handled (error boundary or validation guard caught it)
+ */
+const isWebGLShaderContextLossError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const url = event.request?.url ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+  const isHandled = event.tags?.handled === "yes";
+
+  // Must match the specific shader error message
+  if (
+    !message.includes("WebGL2RenderingContext.shaderSource") ||
+    !message.includes("must be an instance of WebGLShader")
+  ) {
+    return false;
+  }
+
+  // Must be on /travel page (3D rendering context)
+  if (!url.includes("/travel")) {
+    return false;
+  }
+
+  // Verify it originates from Three.js shader compilation (not application code)
+  const isFromThreeJs = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("three") ||
+      frame.filename?.includes("three.module.js") ||
+      frame.abs_path?.includes("three"),
+  );
+
+  // Also accept empty stack trace (browser-level WebGL error)
+  const isBrowserLevelError = stackFrames.length === 0;
+
+  // Only filter if from Three.js or browser-level AND error is handled
+  return (isFromThreeJs || isBrowserLevelError) && isHandled;
+};
+
+/**
+ * Filters minified Three.js/WebGL errors that occur on 3D rendering pages.
+ *
+ * These are production build errors where Three.js internal errors have minified
+ * variable names (e.g., "Nd", "Od", "Zd"). Common on iOS mobile browsers due to
+ * WebGL context loss or memory pressure, but can also occur on desktop browsers
+ * under certain conditions (tab backgrounding, GPU driver issues).
+ *
+ * UX: Combat and Travel pages have comprehensive WebGL error handling:
+ * - WebGL error boundaries showing fallback UI with refresh option
+ * - Context loss event handlers (webglcontextlost/webglcontextrestored)
+ * - Defensive cleanup code with try-catch blocks around dispose()
+ * - Texture loading fallbacks for invalid paths
+ * - Shader compilation guards checking for valid context
+ *
+ * Users see either:
+ * - "Browser WebGL Error" fallback UI with refresh option
+ * - Application continues normally (error caught during isolated render frame)
+ *
+ * Only filters when:
+ * - Error message matches minified identifier pattern (1-2 characters: "Nd", "Od", "Zd")
+ * - Error occurs on /combat or /travel pages (3D rendering contexts)
+ * - No stack trace (browser-level) OR stack trace contains Three.js references
+ * - Prioritizes mobile browsers (iOS/Android) but allows desktop if pattern matches
+ */
+const isMinifiedThreeJsError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  const url = event.request?.url ?? "";
+  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+  const browser = (event.contexts?.browser?.name as string | undefined) ?? "";
+  const os = (event.contexts?.os?.name as string | undefined) ?? "";
+
+  // Check if error message matches minified identifier pattern
+  // Pattern: "Error: Nd" or "Nd" format (1-2 character uppercase+optional lowercase)
+  // Matches: "Nd", "Od", "Zd", "N", "O", "Error: Nd", etc.
+  const isMinifiedIdentifier = /^(Error: )?[A-Z][a-z]?$/.test(message.trim());
+  if (!isMinifiedIdentifier) {
+    return false;
+  }
+
+  // Must be on combat or travel page (3D rendering contexts)
+  const isOn3DPage = url.includes("/combat") || url.includes("/travel");
+  if (!isOn3DPage) {
+    return false;
+  }
+
+  // Check if from mobile browser (iOS/Android) where WebGL issues are most common
+  const isMobileBrowser =
+    os.includes("iOS") ||
+    os.includes("Android") ||
+    browser.includes("Mobile") ||
+    (browser.includes("Safari") && os.includes("iOS"));
+
+  // Check if error is browser-level (no stack trace) or from Three.js
+  const isBrowserLevelError = stackFrames.length === 0;
+  const isFromThreeJs = stackFrames.some(
+    (frame) =>
+      frame.filename?.includes("three") ||
+      frame.filename?.includes("Combat") ||
+      frame.filename?.includes("Map") ||
+      frame.filename?.includes("chunk") || // Next.js chunks containing Three.js
+      frame.abs_path?.includes("three"),
+  );
+
+  // Filter if:
+  // 1. Mobile browser + (no stack trace OR Three.js in stack) - prioritize mobile
+  // 2. Desktop browser + no stack trace + Three.js context - allow desktop edge cases
+  if (isMobileBrowser && (isBrowserLevelError || isFromThreeJs)) {
+    return true;
+  }
+
+  // Also filter desktop cases if no stack trace (browser-level WebGL error)
+  if (!isMobileBrowser && isBrowserLevelError && isOn3DPage) {
+    return true;
+  }
+
+  return false;
 };
 
 const ensureBrowserErrorHandler = () => {

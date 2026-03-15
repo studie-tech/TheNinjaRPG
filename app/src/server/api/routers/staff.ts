@@ -227,7 +227,7 @@ export const staffRouter = createTRPCRouter({
       await Promise.all(clients.map(({ client }) => client.execute(deleteQuery)));
 
       if (backup.sqlText && !backup.sqlText.startsWith("/* Empty backup")) {
-        await Promise.all(clients.map(({ client }) => client.execute(backup.sqlText!)));
+        await Promise.all(clients.map(({ client }) => client.execute(backup.sqlText)));
       }
 
       const targets = clients.map(({ name }) => name).join(" + ");
@@ -481,7 +481,7 @@ export const staffRouter = createTRPCRouter({
     .input(z.object({ userId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [user, target, targetAttributes] = await Promise.all([
+      const [user, target, _userAttributes, targetAttributes] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, input.userId),
         fetchAttributes(ctx.drizzle, ctx.userId),
@@ -1040,14 +1040,16 @@ const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Delete a user from the database.
- * Implements retry logic for MySQL deadlock errors (errno 1213) as recommended by MySQL.
+ * Delete a user and all associated data with automatic retry on deadlock.
+ * Implements exponential backoff with jitter to handle MySQL deadlocks (errno 1213).
+ * Uses 10 retry attempts with base delay of 300ms (max ~20-30s total retry time).
  * @param client - The database client.
  * @param userId - The ID of the user to delete.
  */
 export const deleteUser = async (client: DrizzleClient, userId: string) => {
-  const MAX_RETRIES = 3;
-  const BASE_DELAY_MS = 100;
+  const MAX_RETRIES = 10;
+  const BASE_DELAY_MS = 300;
+  const MAX_JITTER_MS = 200;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -1055,8 +1057,24 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
       return;
     } catch (error) {
       if (isDeadlockError(error) && attempt < MAX_RETRIES) {
-        // Exponential backoff: 100ms, 200ms, 400ms
-        const delayMs = BASE_DELAY_MS * 2 ** (attempt - 1);
+        // Exponential backoff with jitter: 300ms, 600ms, 1200ms, 2400ms, 4800ms, 9600ms...
+        // Jitter (0-200ms) prevents thundering herd when multiple users retry simultaneously
+        const jitter = Math.random() * MAX_JITTER_MS;
+        const delayMs = BASE_DELAY_MS * 2 ** (attempt - 1) + jitter;
+
+        // Add Sentry breadcrumb for monitoring retry patterns
+        Sentry.addBreadcrumb({
+          category: "retry",
+          message: `Retrying deleteUser due to deadlock (attempt ${attempt}/${MAX_RETRIES}, delay: ${Math.round(delayMs)}ms)`,
+          level: "info",
+          data: {
+            attempt,
+            maxRetries: MAX_RETRIES,
+            delayMs: Math.round(delayMs),
+            userId,
+          },
+        });
+
         await delay(delayMs);
         continue;
       }
@@ -1110,13 +1128,15 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(bloodlineRolls).where(eq(bloodlineRolls.userId, userId)),
   ]);
 
-  // Batch 5: History & logs
+  // Batch 5: History, logs, AI & security
   await Promise.all([
     client.delete(historicalAvatar).where(eq(historicalAvatar.userId, userId)),
     client.delete(historicalIp).where(eq(historicalIp.userId, userId)),
     client.delete(userActivityEvent).where(eq(userActivityEvent.userId, userId)),
     client.delete(actionLog).where(eq(actionLog.userId, userId)),
     client.delete(trainingLog).where(eq(trainingLog.userId, userId)),
+    client.delete(aiProfile).where(eq(aiProfile.userId, userId)),
+    client.delete(captcha).where(eq(captcha.userId, userId)),
   ]);
 
   // Batch 6: Reports & moderation
@@ -1144,6 +1164,21 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(userVote).where(eq(userVote.userId, userId)),
   ]);
 
+  // Batch 8.5: PayPal transactions & Ryo trades (must delete before userData due to FKs)
+  await Promise.all([
+    client.delete(paypalSubscription).where(eq(paypalSubscription.createdById, userId)),
+    client
+      .delete(paypalSubscription)
+      .where(eq(paypalSubscription.affectedUserId, userId)),
+    client.delete(paypalTransaction).where(eq(paypalTransaction.createdById, userId)),
+    client
+      .delete(paypalTransaction)
+      .where(eq(paypalTransaction.affectedUserId, userId)),
+    client.delete(ryoTrade).where(eq(ryoTrade.creatorUserId, userId)),
+    client.delete(ryoTrade).where(eq(ryoTrade.purchaserUserId, userId)),
+    client.delete(ryoTrade).where(eq(ryoTrade.allowedPurchaserId, userId)),
+  ]);
+
   // Batch 9: Reviews & social
   await Promise.all([
     client.delete(userReview).where(eq(userReview.authorUserId, userId)),
@@ -1154,9 +1189,11 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(userRequest).where(eq(userRequest.receiverId, userId)),
   ]);
 
-  // Batch 10: Battle & war
+  // Batch 10: Battle, war & ranked PVP
   await Promise.all([
     client.delete(mpvpBattleUser).where(eq(mpvpBattleUser.userId, userId)),
+    client.delete(rankedPvpQueue).where(eq(rankedPvpQueue.userId, userId)),
+    client.delete(rankedUserRewards).where(eq(rankedUserRewards.userId, userId)),
     client
       .delete(kageDefendedChallenges)
       .where(eq(kageDefendedChallenges.userId, userId)),

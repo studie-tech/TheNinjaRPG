@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import {
   HEX_ASPECT_RATIO,
   HEX_STACKING_DISPLACEMENT,
+  IMG_AVATAR_DEFAULT,
   IMG_ICON_MOVE,
   IMG_SECTOR_ATTACK,
   IMG_SECTOR_INFO,
@@ -58,6 +59,7 @@ import { updateWaveAnimation, updateWindAnimation } from "@/libs/threejs/shaders
 import type { GlobalTile, SectorPoint, SectorUser } from "@/libs/threejs/types";
 import {
   cleanUp,
+  isRendererContextValid,
   profiler,
   safeRemoveRendererElement,
   setRaycasterFromMouse,
@@ -623,8 +625,8 @@ const Sector: React.FC<SectorProps> = (props) => {
           longitude: targetHex.col,
           latitude: targetHex.row,
           sector: sector,
-          avatar: userData.avatar,
-          avatarLight: userData.avatarLight || userData.avatar,
+          avatar: userData.avatar || IMG_AVATAR_DEFAULT,
+          avatarLight: userData.avatarLight || userData.avatar || IMG_AVATAR_DEFAULT,
           villageId: userData.villageId,
           battleId: userData.battleId,
           username: userData.username,
@@ -723,6 +725,16 @@ const Sector: React.FC<SectorProps> = (props) => {
       // Track WebGL context loss to prevent shader errors on iOS mobile browsers
       // Clear texture caches when context is lost to free memory
       const contextHandlers = setupContextLossHandling(renderer, { clearCaches: true });
+
+      // EDGE CASE DEFENSE: Double-check context is valid after setup
+      // Even if renderer was created, the context might become invalid immediately on iOS
+      if (!isRendererContextValid(renderer)) {
+        console.error(
+          "WebGL context became invalid immediately after setup - aborting scene creation",
+        );
+        setWebglError(true);
+        return;
+      }
 
       // Setup camara
       const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
@@ -979,10 +991,16 @@ const Sector: React.FC<SectorProps> = (props) => {
           endShaders();
         }
 
-        // Render the scene (skip if WebGL context is lost)
+        // Render the scene (skip if WebGL context is lost or invalid)
         const endRender = profiler.mark("animate_render");
-        if (!contextHandlers.isContextLost()) {
-          renderer?.render(scene, camera);
+        // EDGE CASE DEFENSE: Check both the context loss handler AND validate the context directly
+        // This catches iOS Safari edge cases where context appears valid but shader creation fails
+        if (
+          !contextHandlers.isContextLost() &&
+          renderer &&
+          isRendererContextValid(renderer)
+        ) {
+          renderer.render(scene, camera);
         }
         endRender();
 

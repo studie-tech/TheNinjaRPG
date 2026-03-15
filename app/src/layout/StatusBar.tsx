@@ -107,8 +107,7 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
         });
       }
     };
-    // Call immediately on mount/dependency change to avoid visual lag
-    updateState();
+    // Update via interval only - initial state is calculated in useState
     const interval = setInterval(updateState, 250);
     return () => {
       clearInterval(interval);

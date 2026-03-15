@@ -34,7 +34,31 @@ export const applyWindShader = (
   material.userData.animationType = "wind";
   material.userData.windOffset = randomOffset;
 
-  material.onBeforeCompile = (shader) => {
+  material.onBeforeCompile = (shader, renderer) => {
+    // EDGE CASE DEFENSE: Check if WebGL context is valid before modifying shader
+    // This prevents the "shaderSource must be an instance of WebGLShader" error
+    // when context is lost or invalid (common on iOS Safari)
+    try {
+      const gl = renderer.getContext();
+      if (!gl || gl.isContextLost()) {
+        console.warn("Skipping wind shader compilation: WebGL context is lost");
+        return;
+      }
+
+      // Additional iOS Safari edge case: context exists but shader creation returns null
+      const testShader = gl.createShader(gl.VERTEX_SHADER);
+      if (!testShader) {
+        console.warn(
+          "Skipping wind shader compilation: Cannot create shaders (context invalid)",
+        );
+        return;
+      }
+      gl.deleteShader(testShader);
+    } catch (e) {
+      console.warn("Skipping wind shader compilation due to context error:", e);
+      return;
+    }
+
     // Add uniforms for wind animation
     shader.uniforms.time = { value: 0 };
     shader.uniforms.windStrength = { value: WIND_CONFIG.strength };
@@ -150,7 +174,31 @@ export const applyWaveShader = (material: MeshBasicMaterial, randomOffset: numbe
   material.userData.animationType = "wave";
   material.userData.waveOffset = randomOffset;
 
-  material.onBeforeCompile = (shader) => {
+  material.onBeforeCompile = (shader, renderer) => {
+    // EDGE CASE DEFENSE: Check if WebGL context is valid before modifying shader
+    // This prevents the "shaderSource must be an instance of WebGLShader" error
+    // when context is lost or invalid (common on iOS Safari)
+    try {
+      const gl = renderer.getContext();
+      if (!gl || gl.isContextLost()) {
+        console.warn("Skipping wave shader compilation: WebGL context is lost");
+        return;
+      }
+
+      // Additional iOS Safari edge case: context exists but shader creation returns null
+      const testShader = gl.createShader(gl.VERTEX_SHADER);
+      if (!testShader) {
+        console.warn(
+          "Skipping wave shader compilation: Cannot create shaders (context invalid)",
+        );
+        return;
+      }
+      gl.deleteShader(testShader);
+    } catch (e) {
+      console.warn("Skipping wave shader compilation due to context error:", e);
+      return;
+    }
+
     // Add uniforms for wave animation
     shader.uniforms.time = { value: 0 };
     shader.uniforms.waveDistortion = { value: WAVE_CONFIG.distortion };

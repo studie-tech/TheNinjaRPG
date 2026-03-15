@@ -6,6 +6,7 @@ import * as map from "@/data/hexasphere.json";
 import {
   ANBU_STEALTH_BASE_CHANCE_PERC,
   ANBU_STEALTH_CHANGE_PER_LEVEL,
+  IMG_AVATAR_DEFAULT,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   ROBBING_IMMUNITY_DURATION,
   ROBBING_STOLLEN_AMOUNT,
@@ -152,29 +153,19 @@ export const travelRouter = createTRPCRouter({
       // 40% chance to rob successfully
       const success = Math.random() < ROBBING_SUCCESS_CHANCE;
 
-      // Handle stealth breaking when robbing (only if user is stealthed)
-      if (user.stealthActive) {
-        await breakStealth(ctx.drizzle, ctx.userId, user.stealth, false);
-      }
-
       if (success) {
         // Rob 30% of target's money
         const stolenAmount = Math.floor(target.money * ROBBING_STOLLEN_AMOUNT);
 
-        // Update robber's money and prestige
-        const robberUpdate = await ctx.drizzle
-          .update(userData)
-          .set({
-            money: sql`${userData.money} + ${stolenAmount}`,
-            villagePrestige: sql`${userData.villagePrestige} + ${ROBBING_VILLAGE_PRESTIGE_GAIN}`,
-          })
-          .where(eq(userData.userId, ctx.userId));
-        if (robberUpdate.rowsAffected === 0) {
-          return errorResponse("Failed to update robber's data");
-        }
-
-        // Update target's money and set immunity
-        const [targetUpdate] = await Promise.all([
+        // Update robber's money, target's money, break stealth, and update clan points in parallel
+        const [robberUpdate, targetUpdate] = await Promise.all([
+          ctx.drizzle
+            .update(userData)
+            .set({
+              money: sql`${userData.money} + ${stolenAmount}`,
+              villagePrestige: sql`${userData.villagePrestige} + ${ROBBING_VILLAGE_PRESTIGE_GAIN}`,
+            })
+            .where(eq(userData.userId, ctx.userId)),
           ctx.drizzle
             .update(userData)
             .set({
@@ -182,6 +173,9 @@ export const travelRouter = createTRPCRouter({
               robImmunityUntil: secondsFromNow(ROBBING_IMMUNITY_DURATION),
             })
             .where(eq(userData.userId, input.userId)),
+          ...(user.stealthActive
+            ? [breakStealth(ctx.drizzle, ctx.userId, user.stealth, false)]
+            : []),
           ...(user.clanId
             ? [
                 ctx.drizzle
@@ -194,6 +188,9 @@ export const travelRouter = createTRPCRouter({
               ]
             : []),
         ]);
+        if (robberUpdate.rowsAffected === 0) {
+          return errorResponse("Failed to update robber's data");
+        }
         if (targetUpdate.rowsAffected === 0) {
           // Rollback robber update if target update fails
           await ctx.drizzle
@@ -233,19 +230,24 @@ export const travelRouter = createTRPCRouter({
           money: user.money + stolenAmount,
         };
       } else {
-        // Failed rob attempt - initiate combat
-        const battle = await initiateBattle(
-          {
-            longitude: input.longitude,
-            latitude: input.latitude,
-            sector: input.sector,
-            userIds: [ctx.userId],
-            targetIds: [input.userId],
-            client: ctx.drizzle,
-            biome: "default",
-          },
-          "COMBAT",
-        );
+        // Failed rob attempt - break stealth and initiate combat in parallel
+        const [, battle] = await Promise.all([
+          user.stealthActive
+            ? breakStealth(ctx.drizzle, ctx.userId, user.stealth, false)
+            : Promise.resolve(),
+          initiateBattle(
+            {
+              longitude: input.longitude,
+              latitude: input.latitude,
+              sector: input.sector,
+              userIds: [ctx.userId],
+              targetIds: [input.userId],
+              client: ctx.drizzle,
+              biome: "default",
+            },
+            "COMBAT",
+          ),
+        ]);
 
         if (battle.success) {
           return {
@@ -509,8 +511,8 @@ export const travelRouter = createTRPCRouter({
         villageId: z.string().nullish(),
         battleId: z.string().nullish(),
         level: z.int(),
-        avatar: z.url(),
-        avatarLight: z.url(),
+        avatar: z.preprocess((val) => val || IMG_AVATAR_DEFAULT, z.string().url()),
+        avatarLight: z.preprocess((val) => val || IMG_AVATAR_DEFAULT, z.string().url()),
         username: z.string(),
       }),
     )
