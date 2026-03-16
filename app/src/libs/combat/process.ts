@@ -357,9 +357,25 @@ export const applyEffects = (
     .filter((e) => damageBoostTypes.includes(e.type))
     .filter((e) => getEffectStage(e) === 1);
 
+  // Bloodline damage boosts run last (Phase 4, after reductions) and are multiplicative; exclude from Stage 2
+  const bloodlineDamageBoosts = usersEffects.filter(
+    (e) =>
+      "fromType" in e &&
+      e.fromType === "bloodline" &&
+      (e.type === "increasedamagetaken" || e.type === "increasedamagegiven"),
+  );
+
   const stage2DamageBoosts = usersEffects
     .filter((e) => damageBoostTypes.includes(e.type))
-    .filter((e) => getEffectStage(e) === 2);
+    .filter((e) => getEffectStage(e) === 2)
+    .filter(
+      (e) =>
+        !(
+          "fromType" in e &&
+          e.fromType === "bloodline" &&
+          (e.type === "increasedamagetaken" || e.type === "increasedamagegiven")
+        ),
+    );
 
   // Apply non-damage-modifier effects first (maintains existing ordering)
   nonDamageModifierEffects.sort(sortEffects).forEach((effect) => {
@@ -468,6 +484,22 @@ export const applyEffects = (
       const minResidual = consequence.baseDamageAfterBoosts * (1 - DMG_REDUCTION_CAP);
       consequence.residual = Math.max(consequence.residual, minResidual);
     }
+  });
+
+  // Phase 4: Bloodline damage boosts (given/taken) apply last, after all modifiers including reductions; they are multiplicative
+  bloodlineDamageBoosts.sort(sortEffects).forEach((effect) => {
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      effect,
+      action,
+    );
   });
 
   // Apply pierce effects AFTER damage modifiers but BEFORE post-damage modifiers

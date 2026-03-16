@@ -804,22 +804,24 @@ export const adjustDamageGiven = (
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
 
-          const baseDamage = getBaseDamageForModifier(effect, consequence);
-
-          const change =
-            effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
-
-          // Bloodline seal check using calculated base damage
           if (effect.fromType === "bloodline") {
             if (
               "allowBloodlineDamageIncrease" in damageEffect &&
               "allowBloodlineDamageDecrease" in damageEffect &&
-              ((change > 0 && !damageEffect.allowBloodlineDamageIncrease) ||
-                (change < 0 && !damageEffect.allowBloodlineDamageDecrease))
+              ((power > 0 && !damageEffect.allowBloodlineDamageIncrease) ||
+                (power < 0 && !damageEffect.allowBloodlineDamageDecrease))
             ) {
               return;
             }
+            const current = consequence[damageKey] ?? 0;
+            const multiplier = 1 + (power / 100) * ratio;
+            consequence[damageKey] = current * multiplier;
+            return;
           }
+
+          const baseDamage = getBaseDamageForModifier(effect, consequence);
+          const change =
+            effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           consequence[damageKey] = (consequence[damageKey] ?? 0) + change * ratio;
         }
       }
@@ -882,8 +884,14 @@ export const adjustDamageTaken = (
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
 
-          const baseDamage = getBaseDamageForModifier(effect, consequence);
+          if (effect.fromType === "bloodline") {
+            const current = consequence[damageKey] ?? 0;
+            const multiplier = 1 + (power / 100) * ratio;
+            consequence[damageKey] = current * multiplier;
+            return;
+          }
 
+          const baseDamage = getBaseDamageForModifier(effect, consequence);
           const change =
             effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
           consequence[damageKey] = (consequence[damageKey] ?? 0) + change * ratio;
