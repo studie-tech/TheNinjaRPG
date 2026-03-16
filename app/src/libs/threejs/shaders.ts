@@ -1,4 +1,5 @@
 import type { MeshBasicMaterial, SpriteMaterial } from "three";
+import { isRendererContextValid } from "./util";
 
 // Wind effect parameters
 export const WIND_CONFIG = {
@@ -38,24 +39,8 @@ export const applyWindShader = (
     // EDGE CASE DEFENSE: Check if WebGL context is valid before modifying shader
     // This prevents the "shaderSource must be an instance of WebGLShader" error
     // when context is lost or invalid (common on iOS Safari)
-    try {
-      const gl = renderer.getContext();
-      if (!gl || gl.isContextLost()) {
-        console.warn("Skipping wind shader compilation: WebGL context is lost");
-        return;
-      }
-
-      // Additional iOS Safari edge case: context exists but shader creation returns null
-      const testShader = gl.createShader(gl.VERTEX_SHADER);
-      if (!testShader) {
-        console.warn(
-          "Skipping wind shader compilation: Cannot create shaders (context invalid)",
-        );
-        return;
-      }
-      gl.deleteShader(testShader);
-    } catch (e) {
-      console.warn("Skipping wind shader compilation due to context error:", e);
+    if (!isRendererContextValid(renderer)) {
+      console.warn("Skipping wind shader compilation: WebGL context is invalid");
       return;
     }
 
@@ -178,24 +163,8 @@ export const applyWaveShader = (material: MeshBasicMaterial, randomOffset: numbe
     // EDGE CASE DEFENSE: Check if WebGL context is valid before modifying shader
     // This prevents the "shaderSource must be an instance of WebGLShader" error
     // when context is lost or invalid (common on iOS Safari)
-    try {
-      const gl = renderer.getContext();
-      if (!gl || gl.isContextLost()) {
-        console.warn("Skipping wave shader compilation: WebGL context is lost");
-        return;
-      }
-
-      // Additional iOS Safari edge case: context exists but shader creation returns null
-      const testShader = gl.createShader(gl.VERTEX_SHADER);
-      if (!testShader) {
-        console.warn(
-          "Skipping wave shader compilation: Cannot create shaders (context invalid)",
-        );
-        return;
-      }
-      gl.deleteShader(testShader);
-    } catch (e) {
-      console.warn("Skipping wave shader compilation due to context error:", e);
+    if (!isRendererContextValid(renderer)) {
+      console.warn("Skipping wave shader compilation: WebGL context is invalid");
       return;
     }
 
