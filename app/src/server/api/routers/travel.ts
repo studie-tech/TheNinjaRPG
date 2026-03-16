@@ -193,6 +193,7 @@ export const travelRouter = createTRPCRouter({
 
         const robberUpdate = results[0];
         const targetUpdate = results[1];
+        const clanUpdate = results[2];
 
         if (robberUpdate.rowsAffected === 0) {
           // Rollback target update and clan points if robber update fails
@@ -209,7 +210,7 @@ export const travelRouter = createTRPCRouter({
                     .where(eq(userData.userId, input.userId)),
                 ]
               : []),
-            ...(user.clanId
+            ...(clanUpdate && clanUpdate.rowsAffected > 0
               ? [
                   ctx.drizzle
                     .update(clan)
@@ -233,7 +234,7 @@ export const travelRouter = createTRPCRouter({
                 villagePrestige: sql`${userData.villagePrestige} - ${ROBBING_VILLAGE_PRESTIGE_GAIN}`,
               })
               .where(eq(userData.userId, ctx.userId)),
-            ...(user.clanId
+            ...(clanUpdate && clanUpdate.rowsAffected > 0
               ? [
                   ctx.drizzle
                     .update(clan)
