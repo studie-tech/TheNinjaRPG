@@ -160,31 +160,6 @@ const handleTrpcError = (error: unknown) => {
     }
   }
 
-  // Handle JSON parsing errors from 429 rate limit responses
-  // When rate limiting occurs, the server returns 429 but the response body may be empty/malformed.
-  // The tRPC client fails to parse this as JSON, throwing a parsing error before we can check error.data.code.
-  // This occurs with batch requests and certain timing conditions in tRPC's response serialization.
-  // UX: Show non-destructive toast with rate limit message (same as successful 429 parsing).
-  // Note: When JSON parsing fails, error.data is null/undefined. We identify 429s by checking if the
-  // error is NOT an HTML error page (filtered above) and matches specific rate-limit error patterns.
-  if (error instanceof TRPCClientError && isJsonParseError(error.message)) {
-    // Empty/malformed responses without HTML indicate rate limiting (429) or other server errors
-    // Rate limiting typically returns empty body or plain text, while auth errors (403) return HTML
-    // This heuristic isn't perfect but handles the common case of 429 with empty/malformed body
-    const isLikelyHtmlResponse =
-      error.message.includes("<!DOCTYPE") ||
-      error.message.includes("<html") ||
-      error.message.includes("<HTML");
-
-    if (!isLikelyHtmlResponse) {
-      showMutationToast({
-        success: false,
-        message: "You are acting too fast. Please slow down.",
-      });
-      return;
-    }
-  }
-
   // Ignore transient network/CDN errors (retries handle these gracefully)
   // Queries are retried by retryLink (up to 3 attempts), mutations are never retried
   // All retryable errors are suppressed here to avoid user-facing toasts for transient issues
