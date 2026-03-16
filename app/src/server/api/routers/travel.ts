@@ -197,6 +197,7 @@ export const travelRouter = createTRPCRouter({
         if (robberUpdate.rowsAffected === 0) {
           // Rollback target update and clan points if robber update fails
           // Only rollback target's money if it was actually deducted
+          // Leave robImmunityUntil untouched to preserve the newly-set immunity
           await Promise.all([
             ...(targetUpdate.rowsAffected > 0
               ? [
@@ -204,7 +205,6 @@ export const travelRouter = createTRPCRouter({
                     .update(userData)
                     .set({
                       money: sql`${userData.money} + ${stolenAmount}`,
-                      robImmunityUntil: null,
                     })
                     .where(eq(userData.userId, input.userId)),
                 ]

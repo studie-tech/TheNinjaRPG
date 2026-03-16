@@ -2457,7 +2457,7 @@ const isMinifiedThreeJsError = (event: Sentry.ErrorEvent): boolean => {
   // Filter if:
   // 1. Mobile browser + no stack trace (browser-level WebGL error)
   // 2. Mobile browser + Three.js in stack + WebGL context
-  // 3. Desktop browser + no stack trace + 3D page (edge cases)
+  // 3. Desktop browser + no stack trace + WebGL context (requires WebGL evidence)
   if (isMobileBrowser && isBrowserLevelError) {
     return true;
   }
@@ -2466,8 +2466,9 @@ const isMinifiedThreeJsError = (event: Sentry.ErrorEvent): boolean => {
     return true;
   }
 
-  // Also filter desktop cases if no stack trace (browser-level WebGL error)
-  if (!isMobileBrowser && isBrowserLevelError) {
+  // Also filter desktop cases if no stack trace BUT only with WebGL context
+  // This prevents suppressing legitimate short errors like "No" or "Ok"
+  if (!isMobileBrowser && isBrowserLevelError && hasWebGLContext) {
     return true;
   }
 
