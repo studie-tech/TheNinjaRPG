@@ -885,6 +885,14 @@ export const adjustDamageTaken = (
           const ratio = getEfficiencyRatio(damageEffect, effect);
 
           if (effect.fromType === "bloodline") {
+            if (
+              "allowBloodlineDamageIncrease" in damageEffect &&
+              "allowBloodlineDamageDecrease" in damageEffect &&
+              ((power > 0 && !damageEffect.allowBloodlineDamageIncrease) ||
+                (power < 0 && !damageEffect.allowBloodlineDamageDecrease))
+            ) {
+              return;
+            }
             const current = consequence[damageKey] ?? 0;
             const multiplier = 1 + (power / 100) * ratio;
             consequence[damageKey] = current * multiplier;
