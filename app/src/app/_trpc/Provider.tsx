@@ -105,20 +105,6 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
 
 export default TrpcClientProvider;
 
-/**
- * Check if an error message indicates a JSON parsing error.
- * Detects browser-specific JSON parsing error messages from tRPC responses.
- */
-const isJsonParseError = (message: string): boolean => {
-  return (
-    message.includes("Failed to execute 'json' on 'Response'") ||
-    message.includes("Unexpected end of JSON input") ||
-    message.includes("JSON.parse") ||
-    message.includes("The string did not match the expected pattern") ||
-    message.includes("is not valid JSON")
-  );
-};
-
 const handleTrpcError = (error: unknown) => {
   const trpcErrorCode =
     error instanceof TRPCClientError
@@ -137,28 +123,11 @@ const handleTrpcError = (error: unknown) => {
     return;
   }
 
-  // Ignore JSON parsing errors from 403 responses (auth session expired)
-  // When Clerk sessions expire, protected endpoints return 403 with HTML error pages.
-  // tRPC attempts to parse as JSON, triggering browser-specific JSON errors:
-  // - Safari: "The string did not match the expected pattern"
-  // - Chrome: '"<!DOCTYPE "... is not valid JSON'
-  // - Firefox: "JSON.parse: unexpected character at line 1 column 1"
-  // These are legitimate auth transitions, not actionable errors.
-  // UX: No toast shown, user either gets redirected by useRequiredUserData or stays on page silently.
-  // This check must come BEFORE console.error and Sentry logging to prevent noise.
-  // Note: When JSON parsing fails, error.data is null/undefined, so we only check the message pattern.
-  // HTML error pages (403/404/500) all trigger similar JSON parse errors and should be filtered here.
-  if (error instanceof TRPCClientError && isJsonParseError(error.message)) {
-    // Check if this is an HTML error page (DOCTYPE or common HTML tags in the response)
-    // tRPC wraps the unparseable response body in the error message like: '"<!DOCTYPE "... is not valid JSON'
-    if (
-      error.message.includes("<!DOCTYPE") ||
-      error.message.includes("<html") ||
-      error.message.includes("<HTML")
-    ) {
-      return;
-    }
-  }
+  // Note: HTML error pages (403 auth, 500 server errors) trigger JSON parse errors.
+  // - 403 auth errors: Handled by "Unauthorized for tRPC endpoint" check above (lines 118-124)
+  // - Network/CDN HTML responses: Handled by isRetryableTrpcError below (retried up to 3x)
+  // - 500 server errors: Should NOT be silently suppressed - users need to see these
+  // Therefore, we don't filter HTML responses here. Let them fall through to proper handling.
 
   // Ignore transient network/CDN errors (retries handle these gracefully)
   // Queries are retried by retryLink (up to 3 attempts), mutations are never retried
