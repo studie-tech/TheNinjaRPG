@@ -2161,6 +2161,9 @@ export const HomeTypeDetails = {
 export type HomeTypeDetails = (typeof HomeTypeDetails)[keyof typeof HomeTypeDetails];
 
 // Auction system constants
+export const IMG_AUCTION_HOUSE =
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmcDNSqHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap" as const;
+
 export const AUCTION_LISTING_STATES = [
   "ACTIVE",
   "SOLD",
