@@ -620,8 +620,8 @@ export const applyEffects = (
         }
       }
 
-      // Store pre-shield damage for later use
-      c.preShieldDamage = preShieldDamage;
+      // Store pre-shield damage for later use (preserve if already set, e.g. by vamp)
+      c.preShieldDamage = c.preShieldDamage ?? preShieldDamage;
       return c;
     })
     .reduce(collapseConsequences, [] as Consequence[])
@@ -776,10 +776,13 @@ export const applyEffects = (
           target.curHealth > 0 &&
           user.curHealth > 0
         ) {
-          user.curHealth += c.vamp_hp;
+          const preShieldDamage = c.preShieldDamage ?? 0;
+          const maxVamp = preShieldDamage * 0.6;
+          const finalVamp = Math.min(c.vamp_hp, maxVamp);
+          user.curHealth += finalVamp;
           user.curHealth = Math.min(user.maxHealth, user.curHealth);
           actionEffects.push({
-            txt: `${user.username} exsanguinates ${c.vamp_hp.toFixed(2)} damage as health`,
+            txt: `${user.username} exsanguinates ${finalVamp.toFixed(2)} damage as health`,
             color: "green",
           });
         }

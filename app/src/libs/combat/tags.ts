@@ -1830,9 +1830,16 @@ export const vamp = (
   consequences: Map<string, Consequence>,
   target: BattleUserState,
 ) => {
-  // Prevent?
-  const { pass } = preventCheck(usersEffects, "healprevent", target, effect);
-  if (!pass) return preventResponse(effect, target, "cannot exsanguinate");
+  // Check healprevent on the caster directly (not the damage target)
+  const casterHealPrevented = usersEffects.some(
+    (e) =>
+      e.type === "healprevent" &&
+      e.targetId === effect.creatorId &&
+      !e.castThisRound &&
+      (e.rounds === undefined || e.rounds > 0),
+  );
+  if (casterHealPrevented)
+    return preventResponse(effect, target, "cannot exsanguinate");
   const { power, qualifier } = getPower(effect);
   if (effect.isNew && effect.castThisRound) {
     let totalDamage = 0;
@@ -1843,7 +1850,7 @@ export const vamp = (
         typeof c.damage === "number" &&
         c.damage > 0
       ) {
-        totalDamage += c.damage;
+        totalDamage += c.preShieldDamage ?? c.rawDamage ?? c.damage;
       }
     });
     if (totalDamage > 0) {
@@ -1861,6 +1868,8 @@ export const vamp = (
           consequences.set(effect.id, casterConsequence);
         }
         casterConsequence.vamp_hp = (casterConsequence.vamp_hp ?? 0) + vampHeal;
+        casterConsequence.preShieldDamage =
+          (casterConsequence.preShieldDamage ?? 0) + totalDamage;
       }
     }
   }

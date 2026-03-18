@@ -110,10 +110,10 @@ export const SHARED_COOLDOWN_TAGS = [
   "moveprevent",
   "pierce",
   "poison",
-  "vamp",
   "seal",
   "stun",
   "summon",
+  "vamp",
 ] as const;
 
 export const LOG_TYPES = [
