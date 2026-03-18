@@ -1,1 +1,1 @@
-cd app && npx lint-staged
+cd app && bunx lint-staged

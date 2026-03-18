@@ -1858,7 +1858,7 @@ export const vamp = (
             userId: effect.creatorId,
             targetId: effect.creatorId,
           };
-          consequences.set(`vamp-${effect.id}`, casterConsequence);
+          consequences.set(effect.id, casterConsequence);
         }
         casterConsequence.vamp_hp = (casterConsequence.vamp_hp ?? 0) + vampHeal;
       }
