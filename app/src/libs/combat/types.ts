@@ -486,6 +486,7 @@ export type Consequence = {
   recoil?: number;
   afterburn?: number;
   lifesteal_hp?: number;
+  vamp_hp?: number;
   absorb_hp?: number;
   absorb_sp?: number;
   absorb_cp?: number;

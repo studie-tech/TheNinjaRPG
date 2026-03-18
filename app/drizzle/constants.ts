@@ -110,6 +110,7 @@ export const SHARED_COOLDOWN_TAGS = [
   "moveprevent",
   "pierce",
   "poison",
+  "vamp",
   "seal",
   "stun",
   "summon",
@@ -1171,6 +1172,7 @@ export const POST_DAMAGE_MODIFIER_TYPES: string[] = [
   "recoil",
   "lifesteal",
   "absorb",
+  "vamp",
 ];
 
 // Black market config

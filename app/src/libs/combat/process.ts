@@ -77,6 +77,7 @@ import {
   timeCompression,
   timeDilation,
   updateStatUsage,
+  vamp,
   weakness,
   wound,
 } from "./tags";
@@ -769,6 +770,19 @@ export const applyEffects = (
             color: "green",
           });
         }
+        if (
+          c.vamp_hp !== undefined &&
+          c.vamp_hp > 0 &&
+          target.curHealth > 0 &&
+          user.curHealth > 0
+        ) {
+          user.curHealth += c.vamp_hp;
+          user.curHealth = Math.min(user.maxHealth, user.curHealth);
+          actionEffects.push({
+            txt: `${user.username} vampirises ${c.vamp_hp.toFixed(2)} damage as health`,
+            color: "green",
+          });
+        }
         if (c.absorb_hp !== undefined && c.absorb_hp >= 0 && target.curHealth > 0) {
           // Use pre-shield damage for the 60% cap calculation to avoid shield interference
           const preShieldDamage = c.preShieldDamage ?? 0;
@@ -1059,6 +1073,8 @@ export const applySingleEffect = (
           info = afterburn(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "lifesteal") {
           info = lifesteal(effect, usersEffects, consequences, curTarget);
+        } else if (effect.type === "vamp") {
+          info = vamp(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "fleeprevent") {
           info = fleePrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "healprevent") {

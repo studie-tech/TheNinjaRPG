@@ -487,6 +487,17 @@ export const LifeStealTag = z.object({
   calculation: z.enum(["percentage"]).prefault("percentage"),
 });
 
+export const VampTag = z.object({
+  ...BaseAttributes,
+  ...PowerAttributes,
+  type: z.literal("vamp").prefault("vamp"),
+  description: msg(
+    "Instantly heal yourself based on a percentage of the damage dealt by this jutsu",
+  ),
+  calculation: z.enum(["percentage"]).prefault("percentage"),
+});
+export type VampTagType = z.infer<typeof VampTag>;
+
 export const DrainTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
@@ -857,6 +868,7 @@ export const AllTags = z.union([
   TimeCompressionTag.prefault({}),
   TimeDilationTag.prefault({}),
   UnknownTag.prefault({}),
+  VampTag.prefault({}),
   VisualTag.prefault({}),
   WeaknessTag.prefault({}),
   WoundTag.prefault({}),
@@ -1111,6 +1123,16 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
         addIssue(
           ctx,
           "WoundTag must be used together with a damage or pierce effect on the same action",
+        );
+      }
+    } else if (e.type === "vamp") {
+      const hasDamageOrPierce = effects.some(
+        (x) => x.type === "damage" || x.type === "pierce",
+      );
+      if (!hasDamageOrPierce) {
+        addIssue(
+          ctx,
+          "VampTag must be used together with a damage or pierce effect on the same action",
         );
       }
     } else if (e.type === "rollbloodline" && e.powerPerLevel > 0) {

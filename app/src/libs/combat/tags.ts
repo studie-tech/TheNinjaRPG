@@ -958,6 +958,17 @@ export const adjustHealGiven = (
           consequence.lifesteal_hp = consequence.lifesteal_hp + change;
         }
       }
+      // Adjust vamp
+      if (consequence.userId === effect.targetId && consequence.vamp_hp) {
+        const vampEffect = usersEffects.find((e) => e.id === effectId);
+        if (vampEffect) {
+          const change =
+            effect.calculation === "percentage"
+              ? (power / 100) * consequence.vamp_hp
+              : power;
+          consequence.vamp_hp = consequence.vamp_hp + change;
+        }
+      }
       // Adjust absorb
       if (consequence.targetId === effect.targetId && consequence.absorb_hp) {
         const absorbEffect = usersEffects.find((e) => e.id === effectId);
@@ -1810,6 +1821,50 @@ export const lifesteal = (
     });
   }
   return getInfo(target, effect, `will steal ${qualifier} damage as health`);
+};
+
+/** Instantly heal the caster based on damage dealt by this jutsu. Does not stack with lifesteal. */
+export const vamp = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  consequences: Map<string, Consequence>,
+  target: BattleUserState,
+) => {
+  // Prevent?
+  const { pass } = preventCheck(usersEffects, "healprevent", target, effect);
+  if (!pass) return preventResponse(effect, target, "cannot vampirise health");
+  const { power, qualifier } = getPower(effect);
+  if (effect.isNew && effect.castThisRound) {
+    let totalDamage = 0;
+    consequences.forEach((c) => {
+      if (
+        c.userId === effect.creatorId &&
+        c.targetId !== effect.creatorId &&
+        typeof c.damage === "number" &&
+        c.damage > 0
+      ) {
+        totalDamage += c.damage;
+      }
+    });
+    if (totalDamage > 0) {
+      const vampHeal = Math.floor(totalDamage * (power / 100));
+      if (vampHeal > 0) {
+        // Find or create the consequence for the caster (userId == creatorId, targetId == creatorId)
+        let casterConsequence = Array.from(consequences.values()).find(
+          (c) => c.userId === effect.creatorId && c.targetId === effect.creatorId,
+        );
+        if (!casterConsequence) {
+          casterConsequence = {
+            userId: effect.creatorId,
+            targetId: effect.creatorId,
+          };
+          consequences.set(`vamp-${effect.id}`, casterConsequence);
+        }
+        casterConsequence.vamp_hp = (casterConsequence.vamp_hp ?? 0) + vampHeal;
+      }
+    }
+  }
+  return getInfo(target, effect, `will drain ${qualifier} damage as health`);
 };
 
 /** Drain target's Chakra and Stamina over time */
