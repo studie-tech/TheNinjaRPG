@@ -1832,7 +1832,7 @@ export const vamp = (
 ) => {
   // Prevent?
   const { pass } = preventCheck(usersEffects, "healprevent", target, effect);
-  if (!pass) return preventResponse(effect, target, "cannot vampirise health");
+  if (!pass) return preventResponse(effect, target, "cannot exsanguinate");
   const { power, qualifier } = getPower(effect);
   if (effect.isNew && effect.castThisRound) {
     let totalDamage = 0;
@@ -1864,7 +1864,7 @@ export const vamp = (
       }
     }
   }
-  return getInfo(target, effect, `will drain ${qualifier} damage as health`);
+  return getInfo(target, effect, `will exsanguinate ${qualifier} damage as health`);
 };
 
 /** Drain target's Chakra and Stamina over time */
