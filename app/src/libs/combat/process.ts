@@ -782,7 +782,7 @@ export const applyEffects = (
           user.curHealth += finalVamp;
           user.curHealth = Math.min(user.maxHealth, user.curHealth);
           actionEffects.push({
-            txt: `${user.username} exsanguinates ${finalVamp.toFixed(2)} damage as health`,
+            txt: `${user.username} vamps ${finalVamp.toFixed(2)} damage as health`,
             color: "green",
           });
         }
