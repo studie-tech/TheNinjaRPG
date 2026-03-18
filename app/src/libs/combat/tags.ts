@@ -1823,7 +1823,7 @@ export const lifesteal = (
   return getInfo(target, effect, `will steal ${qualifier} damage as health`);
 };
 
-/** Instantly heal the caster based on damage dealt by this jutsu. Does not stack with lifesteal. */
+/** Instantly heal the caster based on damage dealt by this jutsu. Applies independently of lifesteal. */
 export const vamp = (
   effect: UserEffect,
   usersEffects: UserEffect[],
