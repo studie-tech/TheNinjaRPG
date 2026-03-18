@@ -1838,7 +1838,7 @@ export const vamp = (
       !e.castThisRound &&
       (e.rounds === undefined || e.rounds > 0),
   );
-  if (casterHealPrevented) return preventResponse(effect, target, "cannot vampe");
+  if (casterHealPrevented) return preventResponse(effect, target, "cannot vamp");
   const { power, qualifier } = getPower(effect);
   if (effect.isNew && effect.castThisRound) {
     let totalDamage = 0;
@@ -1872,7 +1872,7 @@ export const vamp = (
       }
     }
   }
-  return getInfo(target, effect, `will vampe ${qualifier} damage as health`);
+  return getInfo(target, effect, `will vamp ${qualifier} damage as health`);
 };
 
 /** Drain target's Chakra and Stamina over time */
