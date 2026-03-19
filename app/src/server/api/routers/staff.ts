@@ -481,10 +481,9 @@ export const staffRouter = createTRPCRouter({
     .input(z.object({ userId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [user, target, _userAttributes, targetAttributes] = await Promise.all([
+      const [user, target, targetAttributes] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, input.userId),
-        fetchAttributes(ctx.drizzle, ctx.userId),
         fetchAttributes(ctx.drizzle, input.userId),
       ]);
       if (!user || !target) {

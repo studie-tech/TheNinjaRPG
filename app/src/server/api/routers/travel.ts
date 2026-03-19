@@ -162,15 +162,20 @@ export const travelRouter = createTRPCRouter({
           await breakStealth(ctx.drizzle, ctx.userId, user.stealth, false);
         }
 
-        // Update robber's money, target's money, and update clan points in parallel
-        const results = await Promise.all([
-          ctx.drizzle
-            .update(userData)
-            .set({
-              money: sql`${userData.money} + ${stolenAmount}`,
-              villagePrestige: sql`${userData.villagePrestige} + ${ROBBING_VILLAGE_PRESTIGE_GAIN}`,
-            })
-            .where(eq(userData.userId, ctx.userId)),
+        // Update robber first — if this fails, we bail out before touching anyone else
+        const robberUpdate = await ctx.drizzle
+          .update(userData)
+          .set({
+            money: sql`${userData.money} + ${stolenAmount}`,
+            villagePrestige: sql`${userData.villagePrestige} + ${ROBBING_VILLAGE_PRESTIGE_GAIN}`,
+          })
+          .where(eq(userData.userId, ctx.userId));
+        if (robberUpdate.rowsAffected === 0) {
+          return errorResponse("Failed to update robber's data");
+        }
+
+        // Robber update succeeded — now update target and clan in parallel
+        const [targetUpdate] = await Promise.all([
           ctx.drizzle
             .update(userData)
             .set({
@@ -191,61 +196,15 @@ export const travelRouter = createTRPCRouter({
             : []),
         ]);
 
-        const robberUpdate = results[0];
-        const targetUpdate = results[1];
-        const clanUpdate = results[2];
-
-        if (robberUpdate.rowsAffected === 0) {
-          // Rollback target update and clan points if robber update fails
-          // Only rollback target's money if it was actually deducted
-          // Leave robImmunityUntil untouched to preserve the newly-set immunity
-          await Promise.all([
-            ...(targetUpdate.rowsAffected > 0
-              ? [
-                  ctx.drizzle
-                    .update(userData)
-                    .set({
-                      money: sql`${userData.money} + ${stolenAmount}`,
-                    })
-                    .where(eq(userData.userId, input.userId)),
-                ]
-              : []),
-            ...(clanUpdate && clanUpdate.rowsAffected > 0 && user.clanId
-              ? [
-                  ctx.drizzle
-                    .update(clan)
-                    .set({
-                      points: sql`${clan.points} - 1`,
-                      activityPoints: sql`${clan.activityPoints} - 1`,
-                    })
-                    .where(eq(clan.id, user.clanId)),
-                ]
-              : []),
-          ]);
-          return errorResponse("Failed to update robber's data");
-        }
-        if (targetUpdate.rowsAffected === 0) {
-          // Rollback robber update and clan points if target update fails
-          await Promise.all([
-            ctx.drizzle
-              .update(userData)
-              .set({
-                money: sql`${userData.money} - ${stolenAmount}`,
-                villagePrestige: sql`${userData.villagePrestige} - ${ROBBING_VILLAGE_PRESTIGE_GAIN}`,
-              })
-              .where(eq(userData.userId, ctx.userId)),
-            ...(clanUpdate && clanUpdate.rowsAffected > 0 && user.clanId
-              ? [
-                  ctx.drizzle
-                    .update(clan)
-                    .set({
-                      points: sql`${clan.points} - 1`,
-                      activityPoints: sql`${clan.activityPoints} - 1`,
-                    })
-                    .where(eq(clan.id, user.clanId)),
-                ]
-              : []),
-          ]);
+        if (targetUpdate && targetUpdate.rowsAffected === 0) {
+          // Rollback robber update since target deduction failed
+          await ctx.drizzle
+            .update(userData)
+            .set({
+              money: sql`${userData.money} - ${stolenAmount}`,
+              villagePrestige: sql`${userData.villagePrestige} - ${ROBBING_VILLAGE_PRESTIGE_GAIN}`,
+            })
+            .where(eq(userData.userId, ctx.userId));
           return errorResponse("Failed to update target's data");
         }
 

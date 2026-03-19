@@ -2451,7 +2451,9 @@ const isMinifiedThreeJsError = (event: Sentry.ErrorEvent): boolean => {
       (crumb) =>
         crumb.message?.toLowerCase().includes("webgl") ||
         crumb.message?.toLowerCase().includes("context lost") ||
-        crumb.message?.toLowerCase().includes("renderer"),
+        crumb.message?.toLowerCase().includes("webglrenderer") ||
+        crumb.message?.toLowerCase().includes("webgl renderer") ||
+        crumb.message?.toLowerCase().includes("three.js renderer"),
     ) ?? false;
 
   // Filter if:
