@@ -74,7 +74,6 @@ import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { CreateAuctionListingSchema } from "@/validators/auction";
 import { createAuctionListingSchema } from "@/validators/auction";
 import { getSearchValidator } from "@/validators/register";
-
 export default function AuctionHousePage() {
   // Settings
   const { userData, access } = useRequireInVillage("/auctionhouse");
@@ -911,34 +910,45 @@ export const NewAuctionListingDialog: React.FC = () => {
                           }}
                           className="h-9"
                         />
-                        <CommandList>
-                          {filteredItemsForDropdown.length === 0 ? (
-                            <CommandEmpty>No items found</CommandEmpty>
-                          ) : (
-                            <CommandGroup>
-                              {filteredItemsForDropdown.map((userItem) => (
-                                <CommandItem
-                                  key={userItem.id}
-                                  value={userItem.item?.name || ""}
-                                  onSelect={() => {
-                                    ignoreNextPopoverOpenRef.current = true;
-                                    field.onChange(userItem.id);
-                                    setItemSearchTerm("");
-                                    setDropdownOpen(false);
-                                  }}
-                                >
-                                  {userItem.item?.name}
-                                  {userItem.quantity > 1
-                                    ? ` (${userItem.quantity})`
-                                    : ""}
-                                  {userItem.imbuements && userItem.imbuements.length > 0
-                                    ? ` (${userItem.imbuements.length} imbuement(s))`
-                                    : ""}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          )}
-                        </CommandList>
+                        <div
+                          className="max-h-[300px] overflow-y-auto w-full"
+                          onWheel={(e) => {
+                            // Allow wheel events to reach scrollable CommandList
+                            e.currentTarget.scrollTop += e.deltaY;
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          <CommandList className="w-full">
+                            {filteredItemsForDropdown.length === 0 ? (
+                              <CommandEmpty>No items found</CommandEmpty>
+                            ) : (
+                              <CommandGroup>
+                                {filteredItemsForDropdown.map((userItem) => (
+                                  <CommandItem
+                                    key={userItem.id}
+                                    value={userItem.id}
+                                    onSelect={() => {
+                                      ignoreNextPopoverOpenRef.current = true;
+                                      field.onChange(userItem.id);
+                                      setItemSearchTerm("");
+                                      setDropdownOpen(false);
+                                    }}
+                                  >
+                                    {userItem.item?.name}
+                                    {userItem.quantity > 1
+                                      ? ` (${userItem.quantity})`
+                                      : ""}
+                                    {userItem.imbuements &&
+                                    userItem.imbuements.length > 0
+                                      ? ` (${userItem.imbuements.length} imbuement(s))`
+                                      : ""}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </div>
                       </Command>
                     </PopoverContent>
                   </Popover>
