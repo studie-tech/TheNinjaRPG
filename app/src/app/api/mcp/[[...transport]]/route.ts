@@ -370,6 +370,22 @@ const authenticatedHandler = withMcpAuth(mcpHandlerWithUserRateLimit, verifyToke
 
 // Main handler that wraps requests with request-scoped context
 const mcpRequestHandlerWithContext = async (req: Request) => {
+  // Guard against empty body on POST requests — the mcp-handler library calls
+  // req.json() without checking for empty bodies, which throws SyntaxError.
+  if (req.method === "POST") {
+    const contentLength = req.headers.get("content-length");
+    if (contentLength === "0" || !req.body) {
+      return NextResponse.json(
+        {
+          jsonrpc: "2.0",
+          error: { code: -32700, message: "Parse error: empty body" },
+          id: null,
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   // Extract request metadata for context
   const userIp = getClientIp(req.headers);
   const userAgent = req.headers.get("user-agent") ?? "mcp-client";
