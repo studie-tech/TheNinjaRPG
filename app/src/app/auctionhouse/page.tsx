@@ -910,52 +910,49 @@ export const NewAuctionListingDialog: React.FC = () => {
                           }}
                           className="h-9"
                         />
-                        <div className="max-h-[300px] overflow-y-auto w-full">
-                          <CommandList
-                            className="w-full"
-                            onWheel={(e) => {
-                              const LINE_HEIGHT = 18;
-                              const PAGE_HEIGHT = e.currentTarget.clientHeight;
-                              const delta =
-                                e.deltaMode === 1
-                                  ? e.deltaY * LINE_HEIGHT
-                                  : e.deltaMode === 2
-                                    ? e.deltaY * PAGE_HEIGHT
-                                    : e.deltaY;
-                              e.currentTarget.scrollTop += delta;
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }}
-                          >
-                            {filteredItemsForDropdown.length === 0 ? (
-                              <CommandEmpty>No items found</CommandEmpty>
-                            ) : (
-                              <CommandGroup>
-                                {filteredItemsForDropdown.map((userItem) => (
-                                  <CommandItem
-                                    key={userItem.id}
-                                    value={userItem.id}
-                                    onSelect={() => {
-                                      ignoreNextPopoverOpenRef.current = true;
-                                      field.onChange(userItem.id);
-                                      setItemSearchTerm("");
-                                      setDropdownOpen(false);
-                                    }}
-                                  >
-                                    {userItem.item?.name}
-                                    {userItem.quantity > 1
-                                      ? ` (${userItem.quantity})`
-                                      : ""}
-                                    {userItem.imbuements &&
-                                    userItem.imbuements.length > 0
-                                      ? ` (${userItem.imbuements.length} imbuement(s))`
-                                      : ""}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            )}
-                          </CommandList>
-                        </div>
+                        <CommandList
+                          className="w-full max-h-[300px] overflow-y-auto"
+                          onWheel={(e) => {
+                            const LINE_HEIGHT = 18;
+                            const PAGE_HEIGHT = e.currentTarget.clientHeight;
+                            const delta =
+                              e.deltaMode === 1
+                                ? e.deltaY * LINE_HEIGHT
+                                : e.deltaMode === 2
+                                  ? e.deltaY * PAGE_HEIGHT
+                                  : e.deltaY;
+                            e.currentTarget.scrollTop += delta;
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          {filteredItemsForDropdown.length === 0 ? (
+                            <CommandEmpty>No items found</CommandEmpty>
+                          ) : (
+                            <CommandGroup>
+                              {filteredItemsForDropdown.map((userItem) => (
+                                <CommandItem
+                                  key={userItem.id}
+                                  value={userItem.id}
+                                  onSelect={() => {
+                                    ignoreNextPopoverOpenRef.current = true;
+                                    field.onChange(userItem.id);
+                                    setItemSearchTerm("");
+                                    setDropdownOpen(false);
+                                  }}
+                                >
+                                  {userItem.item?.name}
+                                  {userItem.quantity > 1
+                                    ? ` (${userItem.quantity})`
+                                    : ""}
+                                  {userItem.imbuements && userItem.imbuements.length > 0
+                                    ? ` (${userItem.imbuements.length} imbuement(s))`
+                                    : ""}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
+                        </CommandList>
                       </Command>
                     </PopoverContent>
                   </Popover>
