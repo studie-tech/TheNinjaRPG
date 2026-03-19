@@ -1164,21 +1164,6 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(userVote).where(eq(userVote.userId, userId)),
   ]);
 
-  // Batch 8.5: PayPal transactions & Ryo trades (must delete before userData due to FKs)
-  await Promise.all([
-    client.delete(paypalSubscription).where(eq(paypalSubscription.createdById, userId)),
-    client
-      .delete(paypalSubscription)
-      .where(eq(paypalSubscription.affectedUserId, userId)),
-    client.delete(paypalTransaction).where(eq(paypalTransaction.createdById, userId)),
-    client
-      .delete(paypalTransaction)
-      .where(eq(paypalTransaction.affectedUserId, userId)),
-    client.delete(ryoTrade).where(eq(ryoTrade.creatorUserId, userId)),
-    client.delete(ryoTrade).where(eq(ryoTrade.purchaserUserId, userId)),
-    client.delete(ryoTrade).where(eq(ryoTrade.allowedPurchaserId, userId)),
-  ]);
-
   // Batch 9: Reviews & social
   await Promise.all([
     client.delete(userReview).where(eq(userReview.authorUserId, userId)),
