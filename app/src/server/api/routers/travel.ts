@@ -210,7 +210,7 @@ export const travelRouter = createTRPCRouter({
                     .where(eq(userData.userId, input.userId)),
                 ]
               : []),
-            ...(clanUpdate && clanUpdate.rowsAffected > 0
+            ...(clanUpdate && clanUpdate.rowsAffected > 0 && user.clanId
               ? [
                   ctx.drizzle
                     .update(clan)
@@ -234,7 +234,7 @@ export const travelRouter = createTRPCRouter({
                 villagePrestige: sql`${userData.villagePrestige} - ${ROBBING_VILLAGE_PRESTIGE_GAIN}`,
               })
               .where(eq(userData.userId, ctx.userId)),
-            ...(clanUpdate && clanUpdate.rowsAffected > 0
+            ...(clanUpdate && clanUpdate.rowsAffected > 0 && user.clanId
               ? [
                   ctx.drizzle
                     .update(clan)
