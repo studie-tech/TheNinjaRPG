@@ -910,16 +910,23 @@ export const NewAuctionListingDialog: React.FC = () => {
                           }}
                           className="h-9"
                         />
-                        <div
-                          className="max-h-[300px] overflow-y-auto w-full"
-                          onWheel={(e) => {
-                            // Allow wheel events to reach scrollable CommandList
-                            e.currentTarget.scrollTop += e.deltaY;
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
-                        >
-                          <CommandList className="w-full">
+                        <div className="max-h-[300px] overflow-y-auto w-full">
+                          <CommandList
+                            className="w-full"
+                            onWheel={(e) => {
+                              const LINE_HEIGHT = 18;
+                              const PAGE_HEIGHT = e.currentTarget.clientHeight;
+                              const delta =
+                                e.deltaMode === 1
+                                  ? e.deltaY * LINE_HEIGHT
+                                  : e.deltaMode === 2
+                                    ? e.deltaY * PAGE_HEIGHT
+                                    : e.deltaY;
+                              e.currentTarget.scrollTop += delta;
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                          >
                             {filteredItemsForDropdown.length === 0 ? (
                               <CommandEmpty>No items found</CommandEmpty>
                             ) : (
