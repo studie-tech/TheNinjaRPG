@@ -1,12 +1,18 @@
 import { useAtomValue } from "jotai";
 import {
   Atom,
+  ClipboardList,
   Dumbbell,
+  EyeOff,
   Filter,
+  Gem,
+  Hammer,
   LayoutList,
   Moon,
+  ScanSearch,
   ShieldCheck,
   Star,
+  Stethoscope,
   Sun,
   Swords,
 } from "lucide-react";
@@ -29,6 +35,7 @@ import type {
 } from "@/drizzle/constants";
 import {
   DISCORD_INVITE_URL,
+  ERRANDS_PER_DAY,
   IMG_ICON_DISCORD,
   IMG_ICON_FACEBOOK,
   IMG_ICON_INSTAGRAM,
@@ -36,7 +43,9 @@ import {
   IMG_ICON_TIKTOK,
   IMG_ICON_TWITTER,
   IMG_ICON_YOUTUBE,
+  MEDICAL_MISSIONS_PER_DAY,
   MISSIONS_PER_DAY,
+  PVP_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
@@ -53,6 +62,7 @@ import { getPreventTypeName, isEffectActive } from "@/libs/combat/util";
 import { useGameMenu } from "@/libs/menus";
 import { calcLevelRequirements } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
+import { calcCovertTrainingFinishAt } from "@/libs/stealth";
 import { trainingSpeedSeconds } from "@/libs/train";
 import { getDaysHoursMinutesSeconds, getGameTime, secondsFromDate } from "@/utils/time";
 import { userBattleAtom, useUserData } from "@/utils/UserContext";
@@ -112,9 +122,61 @@ const MenuBoxProfile: React.FC = () => {
   const { data: userJutsus } = api.jutsu.getUserJutsus.useQuery(getFilter(state), {
     enabled: !!userData,
   });
+  const { data: userItems } = api.item.getUserItems.useQuery(undefined, {
+    enabled: !!userData,
+  });
   const trainingJutsu = userJutsus?.find(
     (j) => j.finishTraining && j.finishTraining > new Date(),
   );
+
+  /** Finish time for stealth or sensory training at the training grounds */
+  const covertTrainingFinishAt = useMemo(() => {
+    if (!userData?.covertTrainingType) return null;
+    return calcCovertTrainingFinishAt(
+      userData.covertTrainingStartedAt,
+      userData.covertTrainingMinutes,
+    );
+  }, [
+    userData?.covertTrainingType,
+    userData?.covertTrainingStartedAt,
+    userData?.covertTrainingMinutes,
+  ]);
+
+  const activeItemCraftingTimer = useMemo(() => {
+    if (!userItems?.length) return null;
+    const now = Date.now();
+    let best: { finish: Date; tooltip: string } | null = null;
+    for (const ui of userItems) {
+      if (!ui.craftingFinishedAt) continue;
+      const finish = new Date(ui.craftingFinishedAt);
+      if (finish.getTime() <= now) continue;
+      const entry = {
+        finish,
+        tooltip: `Crafting ${ui.item.name}`,
+      };
+      if (!best || finish < best.finish) best = entry;
+    }
+    return best;
+  }, [userItems]);
+
+  const activeImbuementTimer = useMemo(() => {
+    if (!userItems?.length) return null;
+    const now = Date.now();
+    let best: { finish: Date; tooltip: string } | null = null;
+    for (const ui of userItems) {
+      for (const imb of ui.imbuements ?? []) {
+        if (!imb.craftingFinishedAt) continue;
+        const finish = new Date(imb.craftingFinishedAt);
+        if (finish.getTime() <= now) continue;
+        const entry = {
+          finish,
+          tooltip: `Imbuing ${imb.item.name} onto ${ui.item.name}`,
+        };
+        if (!best || finish < best.finish) best = entry;
+      }
+    }
+    return best;
+  }, [userItems]);
 
   // Update the gameTime with the UTC HH:MM:SS timestring every second
   useEffect(() => {
@@ -380,6 +442,139 @@ const MenuBoxProfile: React.FC = () => {
               </Tooltip>
             </TooltipProvider>
           )}
+          {userData?.covertTrainingType && covertTrainingFinishAt && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                  <div className="flex flex-row items-center hover:text-orange-500">
+                    {userData.covertTrainingType === "stealth" ? (
+                      <EyeOff className="mr-2 h-6 w-6" />
+                    ) : (
+                      <ScanSearch className="mr-2 h-6 w-6" />
+                    )}
+                    <Link href="/traininggrounds">
+                      <Countdown
+                        targetDate={covertTrainingFinishAt}
+                        timeDiff={timeDiff}
+                        onFinish={async () => {
+                          await utils.profile.getUser.invalidate();
+                        }}
+                      />
+                    </Link>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {userData.covertTrainingType === "stealth"
+                    ? "Stealth training"
+                    : "Sensory training"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {activeItemCraftingTimer && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                  <div className="flex flex-row items-center hover:text-orange-500">
+                    <Hammer className="mr-2 h-6 w-6" />
+                    <Link href="/occupation">
+                      <Countdown
+                        targetDate={activeItemCraftingTimer.finish}
+                        timeDiff={timeDiff}
+                        onFinish={async () => {
+                          await utils.item.getUserItems.invalidate();
+                        }}
+                      />
+                    </Link>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>{activeItemCraftingTimer.tooltip}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {activeImbuementTimer && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                  <div className="flex flex-row items-center hover:text-orange-500">
+                    <Gem className="mr-2 h-6 w-6" />
+                    <Link href="/occupation">
+                      <Countdown
+                        targetDate={activeImbuementTimer.finish}
+                        timeDiff={timeDiff}
+                        onFinish={async () => {
+                          await utils.item.getUserItems.invalidate();
+                        }}
+                      />
+                    </Link>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>{activeImbuementTimer.tooltip}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {userData && userData.dailyMissions < MISSIONS_PER_DAY && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                  <Link href="/missionhall" className="hover:text-orange-500">
+                    <div className="flex flex-row items-center">
+                      <LayoutList className="mr-2 h-6 w-6" /> {userData.dailyMissions} /{" "}
+                      {MISSIONS_PER_DAY}
+                    </div>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent>Daily missions to complete</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {userData && (userData.dailyErrands ?? 0) < ERRANDS_PER_DAY && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                  <Link href="/missionhall" className="hover:text-orange-500">
+                    <div className="flex flex-row items-center">
+                      <ClipboardList className="mr-2 h-6 w-6" />{" "}
+                      {userData.dailyErrands ?? 0} / {ERRANDS_PER_DAY}
+                    </div>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent>Daily errands to complete</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {userData &&
+            (userData.dailyMedicalMissions ?? 0) < MEDICAL_MISSIONS_PER_DAY && (
+              <TooltipProvider delayDuration={50}>
+                <Tooltip>
+                  <TooltipTrigger className="w-full">
+                    <Link href="/missionhall" className="hover:text-orange-500">
+                      <div className="flex flex-row items-center">
+                        <Stethoscope className="mr-2 h-6 w-6" />{" "}
+                        {userData.dailyMedicalMissions ?? 0} /{" "}
+                        {MEDICAL_MISSIONS_PER_DAY}
+                      </div>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>Daily medical missions to complete</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          {userData && (userData.dailyPvpMissions ?? 0) < PVP_MISSIONS_PER_DAY && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                  <Link href="/missionhall" className="hover:text-orange-500">
+                    <div className="flex flex-row items-center">
+                      <Swords className="mr-2 h-6 w-6" />{" "}
+                      {userData.dailyPvpMissions ?? 0} / {PVP_MISSIONS_PER_DAY}
+                    </div>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent>Daily PvP missions to complete</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <TooltipProvider delayDuration={50}>
             <Tooltip>
               <TooltipTrigger className="w-full">
@@ -393,21 +588,6 @@ const MenuBoxProfile: React.FC = () => {
               <TooltipContent>Reputation points for use in black market</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {userData && userData.dailyMissions < MISSIONS_PER_DAY && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <Link href="/missionhall" className="hover:text-orange-500">
-                    <div className="flex flex-row items-center">
-                      <LayoutList className="mr-2 h-6 w-6" />{" "}
-                      {userData?.dailyMissions ?? "??"} / {MISSIONS_PER_DAY}
-                    </div>
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent>Daily missions to complete</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
         </div>
       </div>
       <hr className="my-2" />

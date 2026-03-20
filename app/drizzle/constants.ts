@@ -1218,7 +1218,7 @@ export const FED_EVENT_ITEMS_DEFAULT = 10;
 export const ERRANDS_PER_DAY = 50;
 export const MISSIONS_PER_DAY = 20;
 export const MEDICAL_MISSIONS_PER_DAY = 9;
-export const PVP_MISSIONS_PER_DAY = 12;
+export const PVP_MISSIONS_PER_DAY = 9;
 export const ADDITIONAL_MISSION_REWARD_MULTIPLIER = 0.4;
 
 // War config
