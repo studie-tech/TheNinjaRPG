@@ -846,10 +846,16 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                         )}
                         {(parsedEffect.type === "damage" ||
                           parsedEffect.type === "pierce") && (
-                          <span>
-                            <b>Bloodline boosted: </b>
-                            {parsedEffect.allowBloodlineDamageIncrease ? "Yes" : "No"}
-                          </span>
+                          <>
+                            <span>
+                              <b>Bloodline damage increase: </b>
+                              {parsedEffect.allowBloodlineDamageIncrease ? "Yes" : "No"}
+                            </span>
+                            <span>
+                              <b>Bloodline damage decrease: </b>
+                              {parsedEffect.allowBloodlineDamageDecrease ? "Yes" : "No"}
+                            </span>
+                          </>
                         )}
                         {"generalTypes" in parsedEffect &&
                           parsedEffect.generalTypes &&
