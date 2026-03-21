@@ -357,12 +357,19 @@ export const applyEffects = (
     .filter((e) => damageBoostTypes.includes(e.type))
     .filter((e) => getEffectStage(e) === 1);
 
-  // Bloodline damage boosts run last (Phase 4, after reductions) and are multiplicative; exclude from Stage 2
+  // Bloodline damage boosts/decreases run last (Phase 4, after non-bloodline reductions + cap); multiplicative; exclude bloodline boosts from Stage 2
   const bloodlineDamageBoosts = usersEffects.filter(
     (e) =>
       "fromType" in e &&
       e.fromType === "bloodline" &&
       (e.type === "increasedamagetaken" || e.type === "increasedamagegiven"),
+  );
+
+  const bloodlineDamageReductions = usersEffects.filter(
+    (e) =>
+      "fromType" in e &&
+      e.fromType === "bloodline" &&
+      (e.type === "decreasedamagetaken" || e.type === "decreasedamagegiven"),
   );
 
   const stage2DamageBoosts = usersEffects
@@ -445,12 +452,19 @@ export const applyEffects = (
     }
   });
 
-  // Phase 3: Apply ALL damage REDUCTIONS (from any stage)
+  // Phase 3: Apply non-bloodline damage REDUCTIONS (from any stage)
+  // Bloodline decreasedamagetaken / decreasedamagegiven run in Phase 4 with bloodline increases
   // Reductions are calculated as percentages of the FULLY BOOSTED damage
   // This ensures damage reduction is effective against amplified damage
   // Note: reductions intentionally apply to both direct and residual (DOT) damage
-  const allDamageReductions = usersEffects.filter((e) =>
-    damageReductionTypes.includes(e.type),
+  const allDamageReductions = usersEffects.filter(
+    (e) =>
+      damageReductionTypes.includes(e.type) &&
+      !(
+        "fromType" in e &&
+        e.fromType === "bloodline" &&
+        (e.type === "decreasedamagetaken" || e.type === "decreasedamagegiven")
+      ),
   );
 
   allDamageReductions.sort(sortEffects).forEach((effect) => {
@@ -486,21 +500,25 @@ export const applyEffects = (
     }
   });
 
-  // Phase 4: Bloodline damage boosts (given/taken) apply last, after all modifiers including reductions; they are multiplicative
-  bloodlineDamageBoosts.sort(sortEffects).forEach((effect) => {
-    applySingleEffect(
-      consequences,
-      newUsersState,
-      newUsersEffects,
-      newGroundEffects,
-      actionEffects,
-      appliedEffects,
-      battle,
-      actorId,
-      effect,
-      action,
-    );
-  });
+  // Phase 4: Bloodline damage modifiers (decreasedamagetaken, decreasedamagegiven,
+  // increasedamagetaken, increasedamagegiven) apply after the cap, in sortEffects order
+  // (decreases before increases). Same timing for offensive and defensive bloodline modifiers.
+  [...bloodlineDamageReductions, ...bloodlineDamageBoosts]
+    .sort(sortEffects)
+    .forEach((effect) => {
+      applySingleEffect(
+        consequences,
+        newUsersState,
+        newUsersEffects,
+        newGroundEffects,
+        actionEffects,
+        appliedEffects,
+        battle,
+        actorId,
+        effect,
+        action,
+      );
+    });
 
   // Apply pierce effects AFTER damage modifiers but BEFORE post-damage modifiers
   // Pierce adds damage that should be included in post-damage calculations (lifesteal, etc.)

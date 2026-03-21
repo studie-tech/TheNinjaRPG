@@ -813,9 +813,14 @@ export const adjustDamageGiven = (
             ) {
               return;
             }
-            const current = consequence[damageKey] ?? 0;
-            const multiplier = 1 + (power / 100) * ratio;
-            consequence[damageKey] = current * multiplier;
+            if (effect.calculation === "static") {
+              const change = power;
+              consequence[damageKey] = (consequence[damageKey] ?? 0) + change * ratio;
+            } else {
+              const current = consequence[damageKey] ?? 0;
+              const multiplier = 1 + (power / 100) * ratio;
+              consequence[damageKey] = current * multiplier;
+            }
             return;
           }
 
@@ -893,9 +898,14 @@ export const adjustDamageTaken = (
             ) {
               return;
             }
-            const current = consequence[damageKey] ?? 0;
-            const multiplier = 1 + (power / 100) * ratio;
-            consequence[damageKey] = current * multiplier;
+            if (effect.calculation === "static") {
+              const change = power;
+              consequence[damageKey] = (consequence[damageKey] ?? 0) + change * ratio;
+            } else {
+              const current = consequence[damageKey] ?? 0;
+              const multiplier = 1 + (power / 100) * ratio;
+              consequence[damageKey] = current * multiplier;
+            }
             return;
           }
 
