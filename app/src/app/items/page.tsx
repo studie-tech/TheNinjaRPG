@@ -8,6 +8,7 @@ import {
   Merge,
   Shirt,
   Split,
+  Undo2,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -92,6 +93,40 @@ export default function MyItems() {
           await utils.item.getUserItems.invalidate();
           await utils.profile.getUser.invalidate();
         }
+      },
+    });
+
+  const { mutate: mergeAllStacks, isPending: isMergingAllStacks } =
+    api.item.mergeAllStacks.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await utils.item.getUserItems.invalidate();
+      },
+      onError: (error) => {
+        showMutationToast({
+          success: false,
+          message: error.message,
+          variant: "destructive",
+        });
+      },
+    });
+
+  const { mutate: unequipAllItems, isPending: isUnequippingAll } =
+    api.item.unequipAllItems.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await Promise.all([
+          utils.item.getUserItems.invalidate(),
+          utils.profile.getUser.invalidate(),
+          utils.item.getItemLoadouts.invalidate(),
+        ]);
+      },
+      onError: (error) => {
+        showMutationToast({
+          success: false,
+          message: error.message,
+          variant: "destructive",
+        });
       },
     });
 
@@ -202,7 +237,35 @@ export default function MyItems() {
               </div>
             </div>
             <div className="max-h-full basis-1/2 overflow-y-scroll border-t-2 border-dashed bg-poppopover p-3 sm:max-h-[600px] sm:border-t-0 sm:border-l-2">
-              <h2 className="font-bold text-2xl text-foreground">Backpack</h2>
+              <div className="mb-2 flex flex-row flex-wrap items-center justify-between gap-2">
+                <h2 className="font-bold text-2xl text-foreground">Backpack</h2>
+                <Confirm2
+                  title="Merge all stacks"
+                  proceed_label={isMergingAllStacks ? undefined : "Merge all stacks"}
+                  isValid={!isMergingAllStacks}
+                  button={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isMergingAllStacks}
+                    >
+                      <Merge className="mr-2 h-4 w-4" />
+                      {isMergingAllStacks ? "Merging..." : "Merge all stacks"}
+                    </Button>
+                  }
+                  onAccept={(e) => {
+                    e.preventDefault();
+                    mergeAllStacks();
+                  }}
+                >
+                  <p>
+                    Consolidate stackable items in your carried inventory (backpack and
+                    equipped slots) into the fewest possible stacks. Home storage is not
+                    affected. This cannot be automatically undone.
+                  </p>
+                </Confirm2>
+              </div>
               <Backpack
                 userData={userData}
                 useritems={
@@ -217,9 +280,29 @@ export default function MyItems() {
           </div>
         </div>
       </ContentBox>
-      <div className="mt-1 flex w-full items-center justify-between">
-        <div>
+      <div className="mt-1 flex w-full flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ItemLoadoutSelector />
+          <Confirm2
+            title="Unequip all items"
+            proceed_label={isUnequippingAll ? undefined : "Unequip all"}
+            isValid={!isUnequippingAll}
+            button={
+              <Button disabled={isUnequippingAll} variant="outline" type="button">
+                <Undo2 className="mr-2 h-4 w-4" />
+                {isUnequippingAll ? "Unequipping..." : "Unequip all"}
+              </Button>
+            }
+            onAccept={(e) => {
+              e.preventDefault();
+              unequipAllItems();
+            }}
+          >
+            <p>
+              Remove every equipped item from your character and clear equipment on your
+              current item loadout. Your loadout slot selection stays the same.
+            </p>
+          </Confirm2>
         </div>
         <div className="flex gap-2">
           {itemsNeedingRepair.length > 0 && repairKits.length > 0 && (
@@ -494,9 +577,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   const { mutate: merge, isPending: isMerging } = api.item.mergeStacks.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      if (data.success) {
-        await utils.item.getUserItems.invalidate();
-      }
+      await utils.item.getUserItems.invalidate();
     },
     onSettled,
   });

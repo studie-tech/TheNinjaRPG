@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, like, lte, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -20,7 +20,12 @@ import {
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
   TUTORIAL_ITEM_ID,
 } from "@/drizzle/constants";
-import type { ItemLoadout, UserData, UserItemWithRelations } from "@/drizzle/schema";
+import type {
+  ItemLoadout,
+  UserData,
+  UserItem,
+  UserItemWithRelations,
+} from "@/drizzle/schema";
 import {
   actionLog,
   bloodlineRolls,
@@ -437,75 +442,107 @@ export const itemRouter = createTRPCRouter({
     }),
   // Merge item stacks
   mergeStacks: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Merge item stacks together" } })
+    .meta({
+      mcp: {
+        enabled: true,
+        description:
+          "Merge carried stacks for one item type (storedAtHome=false). Per (storedAtHome+equipped) bucket; home storage is not included",
+      },
+    })
     .input(z.object({ itemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const info = await fetchItem(ctx.drizzle, input.itemId);
-      const userItems = await ctx.drizzle.query.userItem.findMany({
-        where: and(eq(userItem.userId, ctx.userId), eq(userItem.itemId, input.itemId)),
-        with: { imbuements: true },
-      });
-      const filteredUserItems = userItems.filter(
-        (i) =>
-          i.imbuements.length === 0 &&
-          (!i.craftingFinishedAt || i.craftingFinishedAt < new Date()) &&
-          !i.isInAuction,
+      const result = await executeMergeStacksForItem(
+        ctx.drizzle,
+        ctx.userId,
+        input.itemId,
       );
-      const totalQuantity = filteredUserItems.reduce((acc, i) => acc + i.quantity, 0);
-      if (info && filteredUserItems.length > 0) {
-        const stackSize = info.stackSize;
-        const numFullStacks = Math.floor(totalQuantity / stackSize);
-        const remainder = totalQuantity % stackSize;
-        const targetStacks = numFullStacks + (remainder > 0 ? 1 : 0);
-
-        // Sort items by ID for deterministic processing
-        const sortedItems = [...filteredUserItems].sort((a, b) =>
-          a.id.localeCompare(b.id),
-        );
-
-        // Determine which items to keep and which to delete
-        const itemsToKeep = sortedItems.slice(0, targetStacks);
-        const itemsToDelete = sortedItems.slice(targetStacks);
-
-        // Build update promises with guard clauses
-        const updatePromises = itemsToKeep.map((item, index) => {
-          const targetQuantity = index < numFullStacks ? stackSize : remainder;
-          return ctx.drizzle
-            .update(userItem)
-            .set({ quantity: targetQuantity })
-            .where(
-              and(
-                eq(userItem.id, item.id),
-                eq(userItem.userId, ctx.userId),
-                eq(userItem.isInAuction, false),
-              ),
-            );
-        });
-
-        // Build delete promises with guard clauses
-        const deletePromises = itemsToDelete.map((item) =>
-          ctx.drizzle
-            .delete(userItem)
-            .where(
-              and(
-                eq(userItem.id, item.id),
-                eq(userItem.userId, ctx.userId),
-                eq(userItem.isInAuction, false),
-              ),
-            ),
-        );
-
-        // Execute all operations in parallel for atomicity
-        const results = await Promise.all([...updatePromises, ...deletePromises]);
-        const allSucceeded = results.every((r) => r.rowsAffected > 0);
-        if (!allSucceeded) {
-          return { success: false, message: "Some stack operations failed" };
-        }
-
-        return { success: true, message: `Merged stacks of ${info.name}` };
+      if (!result.success) {
+        return { success: false, message: result.message };
       }
-      return { success: false, message: "Failed to merge stacks" };
+      if (!result.didMerge) {
+        return { success: true, message: "Nothing to merge" };
+      }
+      return { success: true, message: result.message };
+    }),
+
+  mergeAllStacks: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description:
+          "Merge all mergeable item stacks in carried inventory (excludes home storage)",
+      },
+    })
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      const userItemsAll = await ctx.drizzle.query.userItem.findMany({
+        where: and(
+          eq(userItem.userId, ctx.userId),
+          eq(userItem.storedAtHome, false),
+          eq(userItem.isInAuction, false),
+          or(
+            isNull(userItem.craftingFinishedAt),
+            lte(userItem.craftingFinishedAt, new Date()),
+          ),
+        ),
+        with: { imbuements: true, item: true },
+      });
+      if (userItemsAll.length === 0) {
+        return { success: true, message: "Nothing to merge" };
+      }
+      const itemIds = [
+        ...new Set(
+          userItemsAll
+            .filter((r) => r.item && r.item.stackSize > 1)
+            .map((r) => r.itemId),
+        ),
+      ];
+      if (itemIds.length === 0) {
+        return { success: true, message: "Nothing to merge" };
+      }
+      const itemById = new Map<string, ItemRowForMerge>();
+      for (const row of userItemsAll) {
+        if (row.item) {
+          itemById.set(row.itemId, row.item);
+        }
+      }
+      const userItemsByItemId = new Map<string, typeof userItemsAll>();
+      for (const row of userItemsAll) {
+        const list = userItemsByItemId.get(row.itemId);
+        if (list) {
+          list.push(row);
+        } else {
+          userItemsByItemId.set(row.itemId, [row]);
+        }
+      }
+      const results = await Promise.all(
+        itemIds.map((itemId) =>
+          executeMergeStacksForItem(ctx.drizzle, ctx.userId, itemId, {
+            userItems: userItemsByItemId.get(itemId) ?? [],
+            item: itemById.get(itemId) ?? undefined,
+          }),
+        ),
+      );
+      const failed = results.filter((r) => !r.success);
+      const mergedTypes = results.filter((r) => r.success && r.didMerge).length;
+
+      if (failed.length > 0 && mergedTypes === 0) {
+        return { success: false, message: failed[0]?.message ?? "Merge failed" };
+      }
+      if (failed.length > 0) {
+        return {
+          success: false,
+          message: `Merged ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}, but ${failed.length} other type${failed.length === 1 ? "" : "s"} did not complete (inventory may already show partial merges — try merge again).`,
+        };
+      }
+      if (mergedTypes === 0) {
+        return { success: true, message: "Nothing to merge" };
+      }
+      return {
+        success: true,
+        message: `Merged stacks for ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}`,
+      };
     }),
   // Split item stack
   splitStack: protectedProcedure
@@ -628,6 +665,93 @@ export const itemRouter = createTRPCRouter({
       // Else return the result from toggling
       return result;
     }),
+
+  unequipAllItems: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description:
+          "Unequip all items on the character and clear the active item loadout",
+      },
+    })
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Equipped rows only (not fetchUserItems — it omits hidden items). `ctx.userId` is the session user; no extra userId guard.
+      const [user, loadouts, equippedItems] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchItemLoadouts(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.userItem.findMany({
+          where: and(
+            eq(userItem.userId, ctx.userId),
+            ne(userItem.equipped, "NONE"),
+            eq(userItem.isInAuction, false),
+          ),
+        }),
+      ]);
+      if (!user) return errorResponse("User not found");
+
+      const currentLoadout = user.itemLoadout
+        ? loadouts.find((l) => l.id === user.itemLoadout)
+        : undefined;
+      const shouldClearLoadout = !!currentLoadout && currentLoadout.itemData.length > 0;
+
+      if (equippedItems.length === 0) {
+        if (shouldClearLoadout && currentLoadout) {
+          await ctx.drizzle
+            .update(itemLoadout)
+            .set({ itemData: [] })
+            .where(
+              and(
+                eq(itemLoadout.id, currentLoadout.id),
+                eq(itemLoadout.userId, ctx.userId),
+              ),
+            );
+          return { success: true, message: "Cleared active loadout" };
+        }
+        return { success: true, message: "Nothing equipped" };
+      }
+
+      const itemUnequipPromises: Promise<{ rowsAffected: number }>[] =
+        equippedItems.map((ui) =>
+          ctx.drizzle
+            .update(userItem)
+            .set({ equipped: "NONE" })
+            .where(
+              and(
+                eq(userItem.id, ui.id),
+                eq(userItem.userId, ctx.userId),
+                ne(userItem.equipped, "NONE"),
+                eq(userItem.isInAuction, false),
+              ),
+            ),
+        );
+
+      // rowsAffected may be 0 if another request already unequipped (same WHERE); still success.
+      // Best-effort loadout clear runs in parallel; another request may have cleared it first.
+      const loadoutClearPromise =
+        shouldClearLoadout && currentLoadout
+          ? ctx.drizzle
+              .update(itemLoadout)
+              .set({ itemData: [] })
+              .where(
+                and(
+                  eq(itemLoadout.id, currentLoadout.id),
+                  eq(itemLoadout.userId, ctx.userId),
+                ),
+              )
+          : undefined;
+
+      await Promise.all([
+        ...itemUnequipPromises,
+        ...(loadoutClearPromise ? [loadoutClearPromise] : []),
+      ]);
+
+      return {
+        success: true,
+        message: `Unequipped ${equippedItems.length} item${equippedItems.length === 1 ? "" : "s"}${loadoutClearPromise ? " and cleared active loadout" : ""}`,
+      };
+    }),
+
   // Consume item
   consume: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Consume a consumable item" } })
@@ -1821,7 +1945,7 @@ export const toggleEquipItem = async (
   if (!newEquipSlot) return errorResponse("No slot found");
   // Response info
   let message = "";
-  let promises: Promise<unknown>[] = [];
+  let promises: Promise<{ rowsAffected: number }>[] = [];
   // Mutate
   if (doEquip) {
     const userItemInSlot = newUserItems.find(
@@ -2068,3 +2192,222 @@ export const splitItemStack = async (
     quantityToSplit,
   };
 };
+
+// --- Stack merge (used by mergeStacks / mergeAllStacks; kept at bottom with other helpers)
+
+type ItemRowForMerge = NonNullable<Awaited<ReturnType<typeof fetchItem>>>;
+
+type MergeEligibleUserItemForStackMerge = Pick<
+  UserItem,
+  | "id"
+  | "itemId"
+  | "userId"
+  | "quantity"
+  | "equipped"
+  | "storedAtHome"
+  | "craftingFinishedAt"
+  | "isInAuction"
+> & { imbuements: readonly unknown[] };
+
+type PreloadedStackMergePayload = {
+  userItems: MergeEligibleUserItemForStackMerge[];
+  item: ItemRowForMerge | undefined;
+};
+
+type MergeStacksExecutionResult =
+  | { success: true; didMerge: boolean; message: string }
+  | { success: false; didMerge: false; message: string };
+
+type UserItemMergeBucketRow = Pick<
+  UserItem,
+  "id" | "quantity" | "equipped" | "storedAtHome"
+>;
+
+const mergeStacksBucketKey = (row: Pick<UserItem, "storedAtHome" | "equipped">) =>
+  `${row.storedAtHome ? "home" : "carry"}:${row.equipped}`;
+
+/**
+ * Merges stacks only within the same inventory bucket (`storedAtHome` + `equipped`) so
+ * merge never deletes an equipped row while keeping a backpack copy (or mixes home vs carried).
+ */
+async function executeMergeStacksForItemBucket(
+  drizzle: DrizzleClient,
+  userId: string,
+  itemName: string,
+  stackSize: number,
+  bucketItems: UserItemMergeBucketRow[],
+): Promise<MergeStacksExecutionResult> {
+  if (stackSize <= 1) {
+    return { success: true, didMerge: false, message: "" };
+  }
+
+  const totalQuantity = bucketItems.reduce((acc, i) => acc + i.quantity, 0);
+  const numFullStacks = Math.floor(totalQuantity / stackSize);
+  const remainder = totalQuantity % stackSize;
+  const targetStacks = numFullStacks + (remainder > 0 ? 1 : 0);
+
+  const sortedItems = [...bucketItems].sort((a, b) => a.id.localeCompare(b.id));
+  const itemsToKeep = sortedItems.slice(0, targetStacks);
+  const itemsToDelete = sortedItems.slice(targetStacks);
+
+  const targetQuantityForKeepIndex = (index: number) =>
+    index < numFullStacks ? stackSize : remainder;
+
+  const needsMerge =
+    itemsToDelete.length > 0 ||
+    itemsToKeep.some(
+      (item, index) => item.quantity !== targetQuantityForKeepIndex(index),
+    );
+  if (!needsMerge) {
+    return { success: true, didMerge: false, message: "" };
+  }
+
+  const updatePromises = itemsToKeep.flatMap((item, index) => {
+    const targetQuantity = targetQuantityForKeepIndex(index);
+    if (item.quantity === targetQuantity) {
+      return [];
+    }
+    return [
+      drizzle
+        .update(userItem)
+        .set({ quantity: targetQuantity })
+        .where(
+          and(
+            eq(userItem.id, item.id),
+            eq(userItem.userId, userId),
+            eq(userItem.isInAuction, false),
+            eq(userItem.quantity, item.quantity),
+            eq(userItem.equipped, item.equipped),
+            eq(userItem.storedAtHome, item.storedAtHome),
+          ),
+        ),
+    ];
+  });
+
+  const deletePromises = itemsToDelete.map((item) =>
+    drizzle
+      .delete(userItem)
+      .where(
+        and(
+          eq(userItem.id, item.id),
+          eq(userItem.userId, userId),
+          eq(userItem.isInAuction, false),
+          eq(userItem.quantity, item.quantity),
+          eq(userItem.equipped, item.equipped),
+          eq(userItem.storedAtHome, item.storedAtHome),
+        ),
+      ),
+  );
+
+  // rowsAffected may be 0 if another request already merged (same guarded WHERE); still success.
+  try {
+    await Promise.all([...updatePromises, ...deletePromises]);
+  } catch (err: unknown) {
+    if (err instanceof TypeError || err instanceof ReferenceError) {
+      throw err;
+    }
+    if (err instanceof Error) {
+      return {
+        success: false,
+        didMerge: false,
+        message: `Failed to merge stacks of ${itemName}`,
+      };
+    }
+    throw err;
+  }
+  return {
+    success: true,
+    didMerge: true,
+    message: `Merged stacks of ${itemName}`,
+  };
+}
+
+/**
+ * Merge stacks for one item type (`mergeStacks`, `mergeAllStacks`).
+ *
+ * **Carried inventory:** Without `preloaded`, the query uses `storedAtHome === false` only.
+ * Home storage is not merged here; players move items to carried first.
+ *
+ * **Buckets:** Each `(storedAtHome, equipped)` group merges separately so equipped and
+ * backpack rows are never consolidated into one row.
+ *
+ * **mergeAllStacks** passes `preloaded` rows already limited to carried, non-auction stacks.
+ */
+async function executeMergeStacksForItem(
+  drizzle: DrizzleClient,
+  userId: string,
+  itemId: string,
+  preloaded?: PreloadedStackMergePayload,
+): Promise<MergeStacksExecutionResult> {
+  let info: ItemRowForMerge | undefined;
+  let userItems: MergeEligibleUserItemForStackMerge[];
+
+  if (preloaded) {
+    info = preloaded.item;
+    userItems = preloaded.userItems.filter(
+      (r) => r.userId === userId && r.itemId === itemId,
+    );
+  } else {
+    const [fetchedInfo, fetchedUserItems] = await Promise.all([
+      fetchItem(drizzle, itemId),
+      drizzle.query.userItem.findMany({
+        where: and(
+          eq(userItem.userId, userId),
+          eq(userItem.itemId, itemId),
+          eq(userItem.storedAtHome, false),
+          eq(userItem.isInAuction, false),
+        ),
+        with: { imbuements: true },
+      }),
+    ]);
+    info = fetchedInfo ?? undefined;
+    userItems = fetchedUserItems;
+  }
+  const filteredUserItems = userItems.filter(
+    (i) =>
+      i.imbuements.length === 0 &&
+      (!i.craftingFinishedAt || i.craftingFinishedAt < new Date()) &&
+      !i.isInAuction,
+  );
+  if (!info || filteredUserItems.length === 0) {
+    return { success: true, didMerge: false, message: "" };
+  }
+
+  const buckets = new Map<string, UserItemMergeBucketRow[]>();
+  for (const row of filteredUserItems) {
+    const key = mergeStacksBucketKey(row);
+    const list = buckets.get(key);
+    if (list) {
+      list.push(row);
+    } else {
+      buckets.set(key, [row]);
+    }
+  }
+
+  const bucketResults = await Promise.all(
+    [...buckets.values()].map((bucket) =>
+      executeMergeStacksForItemBucket(
+        drizzle,
+        userId,
+        info.name,
+        info.stackSize,
+        bucket,
+      ),
+    ),
+  );
+
+  const failed = bucketResults.find((r) => !r.success);
+  if (failed) {
+    return failed;
+  }
+
+  const didMerge = bucketResults.some((r) => r.didMerge);
+  if (!didMerge) {
+    return { success: true, didMerge: false, message: "" };
+  }
+  return {
+    success: true,
+    didMerge: true,
+    message: `Merged stacks of ${info.name}`,
+  };
+}

@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "808f5a2a-6151-421b-bd66-923f4e07e59b",
-  "prevId": "9233d669-7a27-40d8-ad53-7a326a266cae",
+  "id": "4d29eb5b-cb7e-402e-ae52-9924888ce24f",
+  "prevId": "cdf022ae-738a-4b65-92c9-09bcee2ebcaa",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",
@@ -1156,7 +1156,7 @@
         },
         "amount": {
           "name": "amount",
-          "type": "int",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -10999,14 +10999,6 @@
         },
         "dailyPvpMissions": {
           "name": "dailyPvpMissions",
-          "type": "smallint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "dailyWarMissions": {
-          "name": "dailyWarMissions",
           "type": "smallint unsigned",
           "primaryKey": false,
           "notNull": true,

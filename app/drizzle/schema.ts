@@ -3444,7 +3444,7 @@ export const bankTransfers = mysqlTable(
   {
     senderId: varchar("senderId", { length: 191 }).notNull(),
     receiverId: varchar("receiverId", { length: 191 }).notNull(),
-    amount: int("amount").notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull(),
     type: mysqlEnum("type", consts.BankTransferTypes).default("bank").notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
