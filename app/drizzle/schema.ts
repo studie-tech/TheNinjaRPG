@@ -1370,6 +1370,20 @@ export const jutsu = mysqlTable(
     battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
       .default("BOTH")
       .notNull(),
+    // Evolution fields
+    parentJutsuId: varchar("parentJutsuId", { length: 191 }),
+    requiredNinjutsuOffence: int("requiredNinjutsuOffence"),
+    requiredNinjutsuDefence: int("requiredNinjutsuDefence"),
+    requiredGenjutsuOffence: int("requiredGenjutsuOffence"),
+    requiredGenjutsuDefence: int("requiredGenjutsuDefence"),
+    requiredTaijutsuOffence: int("requiredTaijutsuOffence"),
+    requiredTaijutsuDefence: int("requiredTaijutsuDefence"),
+    requiredBukijutsuOffence: int("requiredBukijutsuOffence"),
+    requiredBukijutsuDefence: int("requiredBukijutsuDefence"),
+    requiredStrength: int("requiredStrength"),
+    requiredSpeed: int("requiredSpeed"),
+    requiredIntelligence: int("requiredIntelligence"),
+    requiredWillpower: int("requiredWillpower"),
   },
   (table) => {
     return {
@@ -1378,6 +1392,7 @@ export const jutsu = mysqlTable(
       bloodlineIdIdx: index("Jutsu_bloodlineId_idx").on(table.bloodlineId),
       villageIdIdx: index("Jutsu_villageId_idx").on(table.villageId),
       injectableIdx: index("Jutsu_injectable_idx").on(table.injectableInBattle),
+      parentJutsuIdIdx: index("Jutsu_parentJutsuId_idx").on(table.parentJutsuId),
     };
   },
 );
@@ -1388,6 +1403,12 @@ export const jutsuRelations = relations(jutsu, ({ one, many }) => ({
     references: [bloodline.id],
   }),
   reskins: many(jutsuReskin, { relationName: "jutsuReskins" }),
+  parentJutsu: one(jutsu, {
+    fields: [jutsu.parentJutsuId],
+    references: [jutsu.id],
+    relationName: "jutsuEvolutions",
+  }),
+  evolutions: many(jutsu, { relationName: "jutsuEvolutions" }),
 }));
 
 export type Jutsu = InferSelectModel<typeof jutsu>;

@@ -101,6 +101,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   // Get bloodline names for displaying bloodline requirements
   const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
 
+  // Get evolutions for jutsu items that are not themselves evolutions
+  const isParentJutsu =
+    "jutsuType" in item && !("parentJutsuId" in item && item.parentJutsuId);
+  const { data: evolutionsData } = api.jutsu.getEvolutions.useQuery(
+    { jutsuId: item.id },
+    { enabled: isParentJutsu },
+  );
+
   // Setup clone mutations
   const { mutate: cloneQuest } = api.quests.clone.useMutation({
     onSuccess: (data) => {
@@ -596,6 +604,71 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     item.bloodlineId}
                 </p>
               )}
+              {"parentJutsuId" in item && item.parentJutsuId && (
+                <p className="col-span-2">
+                  <b>Evolution</b>: Yes (evolves from a parent jutsu)
+                </p>
+              )}
+              {"requiredNinjutsuOffence" in item && item.requiredNinjutsuOffence && (
+                <p>
+                  <b>Req. Nin. Offence</b>: {item.requiredNinjutsuOffence}
+                </p>
+              )}
+              {"requiredNinjutsuDefence" in item && item.requiredNinjutsuDefence && (
+                <p>
+                  <b>Req. Nin. Defence</b>: {item.requiredNinjutsuDefence}
+                </p>
+              )}
+              {"requiredGenjutsuOffence" in item && item.requiredGenjutsuOffence && (
+                <p>
+                  <b>Req. Gen. Offence</b>: {item.requiredGenjutsuOffence}
+                </p>
+              )}
+              {"requiredGenjutsuDefence" in item && item.requiredGenjutsuDefence && (
+                <p>
+                  <b>Req. Gen. Defence</b>: {item.requiredGenjutsuDefence}
+                </p>
+              )}
+              {"requiredTaijutsuOffence" in item && item.requiredTaijutsuOffence && (
+                <p>
+                  <b>Req. Tai. Offence</b>: {item.requiredTaijutsuOffence}
+                </p>
+              )}
+              {"requiredTaijutsuDefence" in item && item.requiredTaijutsuDefence && (
+                <p>
+                  <b>Req. Tai. Defence</b>: {item.requiredTaijutsuDefence}
+                </p>
+              )}
+              {"requiredBukijutsuOffence" in item && item.requiredBukijutsuOffence && (
+                <p>
+                  <b>Req. Buki. Offence</b>: {item.requiredBukijutsuOffence}
+                </p>
+              )}
+              {"requiredBukijutsuDefence" in item && item.requiredBukijutsuDefence && (
+                <p>
+                  <b>Req. Buki. Defence</b>: {item.requiredBukijutsuDefence}
+                </p>
+              )}
+              {"requiredStrength" in item && item.requiredStrength && (
+                <p>
+                  <b>Req. Strength</b>: {item.requiredStrength}
+                </p>
+              )}
+              {"requiredSpeed" in item && item.requiredSpeed && (
+                <p>
+                  <b>Req. Speed</b>: {item.requiredSpeed}
+                </p>
+              )}
+              {"requiredIntelligence" in item && item.requiredIntelligence && (
+                <p>
+                  <b>Req. Intelligence</b>: {item.requiredIntelligence}
+                </p>
+              )}
+              {"requiredWillpower" in item && item.requiredWillpower && (
+                <p>
+                  <b>Req. Willpower</b>: {item.requiredWillpower}
+                </p>
+              )}
               {"maxLevel" in item && item.maxLevel && (
                 <p>
                   <b>Max Level</b>: {item.maxLevel}
@@ -650,6 +723,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 <p className="col-span-2">
                   <b>Traits</b>: {item.traits}
                 </p>
+              )}
+              {evolutionsData && evolutionsData.length > 0 && (
+                <div className="col-span-2">
+                  <b>Evolutions</b>: {evolutionsData.map((evo) => evo.name).join(", ")}
+                </div>
               )}
             </div>
           )}

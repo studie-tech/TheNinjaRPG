@@ -27,6 +27,23 @@ import type {
   UserItemWithItem,
   UserRank,
 } from "@/drizzle/schema";
+
+type UserStatData = Pick<
+  UserData,
+  | "ninjutsuOffence"
+  | "ninjutsuDefence"
+  | "genjutsuOffence"
+  | "genjutsuDefence"
+  | "taijutsuOffence"
+  | "taijutsuDefence"
+  | "bukijutsuOffence"
+  | "bukijutsuDefence"
+  | "strength"
+  | "speed"
+  | "intelligence"
+  | "willpower"
+>;
+
 import type { UserWithRelations } from "@/routers/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
@@ -185,12 +202,40 @@ export const checkJutsuItems = (
   return true;
 };
 
+export const isJutsuEvolution = (jutsu: Jutsu): boolean => {
+  return !!jutsu.parentJutsuId;
+};
+
+export const canEvolveJutsu = (
+  evolutionJutsu: Jutsu,
+  userdata: UserStatData,
+): boolean => {
+  const statChecks = [
+    { req: evolutionJutsu.requiredNinjutsuOffence, val: userdata.ninjutsuOffence },
+    { req: evolutionJutsu.requiredNinjutsuDefence, val: userdata.ninjutsuDefence },
+    { req: evolutionJutsu.requiredGenjutsuOffence, val: userdata.genjutsuOffence },
+    { req: evolutionJutsu.requiredGenjutsuDefence, val: userdata.genjutsuDefence },
+    { req: evolutionJutsu.requiredTaijutsuOffence, val: userdata.taijutsuOffence },
+    { req: evolutionJutsu.requiredTaijutsuDefence, val: userdata.taijutsuDefence },
+    { req: evolutionJutsu.requiredBukijutsuOffence, val: userdata.bukijutsuOffence },
+    { req: evolutionJutsu.requiredBukijutsuDefence, val: userdata.bukijutsuDefence },
+    { req: evolutionJutsu.requiredStrength, val: userdata.strength },
+    { req: evolutionJutsu.requiredSpeed, val: userdata.speed },
+    { req: evolutionJutsu.requiredIntelligence, val: userdata.intelligence },
+    { req: evolutionJutsu.requiredWillpower, val: userdata.willpower },
+  ];
+  return statChecks.every(
+    ({ req, val }) => req === null || req === undefined || val >= req,
+  );
+};
+
 export const canTrainJutsu = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
 ) => {
   const userElements = new Set(getUserElements(userdata));
   if (userdata.isAi) return true;
+  if (isJutsuEvolution(jutsu)) return false;
   return (
     hasRequiredRank(userdata.rank, jutsu.requiredRank) &&
     hasRequiredLevel(userdata.level, jutsu.requiredLevel) &&

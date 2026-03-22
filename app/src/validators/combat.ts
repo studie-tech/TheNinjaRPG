@@ -1182,6 +1182,73 @@ export const JutsuValidatorRawSchema = z.object({
   villageId: z.string().nullable(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
   battleUsageType: z.enum(BattleUsageTypes).prefault("BOTH"),
+  parentJutsuId: z.string().nullable().optional(),
+  requiredNinjutsuOffence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(450000)
+    .nullable()
+    .optional(),
+  requiredNinjutsuDefence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(450000)
+    .nullable()
+    .optional(),
+  requiredGenjutsuOffence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(450000)
+    .nullable()
+    .optional(),
+  requiredGenjutsuDefence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(450000)
+    .nullable()
+    .optional(),
+  requiredTaijutsuOffence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(450000)
+    .nullable()
+    .optional(),
+  requiredTaijutsuDefence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(450000)
+    .nullable()
+    .optional(),
+  requiredBukijutsuOffence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(450000)
+    .nullable()
+    .optional(),
+  requiredBukijutsuDefence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(450000)
+    .nullable()
+    .optional(),
+  requiredStrength: z.coerce.number().int().min(0).max(450000).nullable().optional(),
+  requiredSpeed: z.coerce.number().int().min(0).max(450000).nullable().optional(),
+  requiredIntelligence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(450000)
+    .nullable()
+    .optional(),
+  requiredWillpower: z.coerce.number().int().min(0).max(450000).nullable().optional(),
 });
 
 // Final validator with additional cross-field checks
