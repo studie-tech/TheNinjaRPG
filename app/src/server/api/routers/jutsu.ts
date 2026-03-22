@@ -39,7 +39,10 @@ import {
   calcJutsuEquipLimit,
   calcJutsuTrainCost,
   calcJutsuTrainTime,
+  canEvolveJutsu,
   canTrainJutsu,
+  hasRequiredLevel,
+  hasRequiredRank,
 } from "@/libs/train";
 import { fetchStudents } from "@/routers/sensei";
 import {
@@ -420,6 +423,70 @@ export const jutsuRouter = createTRPCRouter({
       return { success: false, message: `Could not find jutsu to delete` };
     }),
 
+  getEvolutions: publicProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Get all evolution jutsus for a parent jutsu",
+      },
+    })
+    .input(z.object({ jutsuId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return await ctx.drizzle.query.jutsu.findMany({
+        where: eq(jutsu.parentJutsuId, input.jutsuId),
+        orderBy: (table, { asc }) => [asc(table.requiredLevel)],
+      });
+    }),
+
+  evolveJutsu: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Evolve a jutsu into its evolution" } })
+    .input(
+      z.object({
+        userJutsuId: z.string(),
+        evolutionJutsuId: z.string(),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, userJutsus, evolutionJutsu] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserJutsus(ctx.drizzle, ctx.userId),
+        fetchJutsu(ctx.drizzle, input.evolutionJutsuId),
+      ]);
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (!evolutionJutsu) return errorResponse("Evolution jutsu not found");
+      if (!evolutionJutsu.parentJutsuId)
+        return errorResponse("Target jutsu is not an evolution");
+      const userJutsuObj = userJutsus.find((j) => j.id === input.userJutsuId);
+      if (!userJutsuObj) return errorResponse("You don't own this jutsu");
+      if (userJutsuObj.jutsuId !== evolutionJutsu.parentJutsuId)
+        return errorResponse("This jutsu cannot evolve into the target evolution");
+      if (userJutsus.some((j) => j.jutsuId === input.evolutionJutsuId))
+        return errorResponse("You already have this evolved jutsu");
+      if (!hasRequiredRank(user.rank, evolutionJutsu.requiredRank))
+        return errorResponse("You don't meet the rank requirement for this evolution");
+      if (!hasRequiredLevel(user.level, evolutionJutsu.requiredLevel))
+        return errorResponse("You don't meet the level requirement for this evolution");
+      if (!canEvolveJutsu(evolutionJutsu, user))
+        return errorResponse("You don't meet the stat requirements for this evolution");
+      // Mutate: replace the old jutsu with the evolved version
+      await ctx.drizzle
+        .update(userJutsu)
+        .set({
+          jutsuId: input.evolutionJutsuId,
+          level: 1,
+          experience: 0,
+          updatedAt: new Date(),
+          reskinId: null,
+        })
+        .where(
+          and(eq(userJutsu.id, input.userJutsuId), eq(userJutsu.userId, ctx.userId)),
+        );
+      return { success: true, message: `Evolved into ${evolutionJutsu.name}!` };
+    }),
+
   update: protectedProcedure
     .input(z.object({ id: z.string(), data: JutsuValidator }))
     .output(baseServerResponse)
@@ -473,6 +540,32 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse(
           "At least one effect must have both appearAnimation and appearSfx defined",
         );
+      }
+      // Validate evolution chain constraints
+      if (input.data.parentJutsuId) {
+        if (input.data.parentJutsuId === input.id)
+          return errorResponse("A jutsu cannot be its own parent");
+        const [parent, siblings] = await Promise.all([
+          fetchJutsu(ctx.drizzle, input.data.parentJutsuId),
+          ctx.drizzle.query.jutsu.findMany({
+            columns: { id: true },
+            where: eq(jutsu.parentJutsuId, input.data.parentJutsuId),
+          }),
+        ]);
+        if (!parent) return errorResponse("Parent jutsu not found");
+        // Max 3 direct evolutions per parent (exclude self in case of re-save)
+        const siblingCount = siblings.filter((s) => s.id !== input.id).length;
+        if (siblingCount >= 3)
+          return errorResponse("A jutsu can have a maximum of 3 evolutions");
+        // Validate chain depth (max 3 levels: A → B → C)
+        let depth = 1;
+        let currentParentId = parent.parentJutsuId;
+        while (currentParentId && depth < 4) {
+          depth++;
+          const grandParent = await fetchJutsu(ctx.drizzle, currentParentId);
+          currentParentId = grandParent?.parentJutsuId ?? null;
+        }
+        if (depth >= 3) return errorResponse("Maximum evolution chain depth is 3");
       }
       // Diff
       const diff = calculateContentDiff(entry, {
