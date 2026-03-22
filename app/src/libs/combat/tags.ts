@@ -1839,7 +1839,8 @@ export const vamp = (
       (e.rounds === undefined || e.rounds > 0),
   );
   if (casterHealPrevented) return preventResponse(effect, target, "cannot vamp");
-  const { power, qualifier } = getPower(effect);
+  const power = effect.power ?? 0;
+  const qualifier = effect.calculation === "percentage" ? `${power}%` : power;
   if (effect.isNew && effect.castThisRound) {
     let totalDamage = 0;
     consequences.forEach((c) => {
