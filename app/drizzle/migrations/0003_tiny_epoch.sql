@@ -1,0 +1,14 @@
+ALTER TABLE `Jutsu` ADD `parentJutsuId` varchar(191);
+ALTER TABLE `Jutsu` ADD `requiredNinjutsuOffence` int;
+ALTER TABLE `Jutsu` ADD `requiredNinjutsuDefence` int;
+ALTER TABLE `Jutsu` ADD `requiredGenjutsuOffence` int;
+ALTER TABLE `Jutsu` ADD `requiredGenjutsuDefence` int;
+ALTER TABLE `Jutsu` ADD `requiredTaijutsuOffence` int;
+ALTER TABLE `Jutsu` ADD `requiredTaijutsuDefence` int;
+ALTER TABLE `Jutsu` ADD `requiredBukijutsuOffence` int;
+ALTER TABLE `Jutsu` ADD `requiredBukijutsuDefence` int;
+ALTER TABLE `Jutsu` ADD `requiredStrength` int;
+ALTER TABLE `Jutsu` ADD `requiredSpeed` int;
+ALTER TABLE `Jutsu` ADD `requiredIntelligence` int;
+ALTER TABLE `Jutsu` ADD `requiredWillpower` int;
+CREATE INDEX `Jutsu_parentJutsuId_idx` ON `Jutsu` (`parentJutsuId`);

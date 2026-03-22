@@ -45,6 +45,7 @@ import { getFreeTransfers } from "@/libs/jutsu";
 import { showMutationToast } from "@/libs/toast";
 import {
   calcJutsuEquipLimit,
+  canEvolveJutsu,
   checkJutsuBloodline,
   checkJutsuElements,
   checkJutsuItems,
@@ -286,6 +287,23 @@ export default function MyJutsu() {
       },
     });
 
+  const { mutate: evolveJutsu, isPending: isEvolving } =
+    api.jutsu.evolveJutsu.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.jutsu.getUserJutsus.invalidate();
+          setIsOpen(false);
+          setUserJutsu(undefined);
+        }
+      },
+    });
+
+  const { data: availableEvolutions } = api.jutsu.getEvolutions.useQuery(
+    { jutsuId: userjutsu?.jutsuId ?? "" },
+    { enabled: !!userjutsu && !userjutsu.jutsu.parentJutsuId },
+  );
+
   const isPending =
     isToggling ||
     isForgetting ||
@@ -293,7 +311,8 @@ export default function MyJutsu() {
     isUnequipping ||
     isTransferring ||
     isReskinning ||
-    isRemovingReskin;
+    isRemovingReskin ||
+    isEvolving;
   const isFetching = l1 || l2;
 
   // Collapse UserItem and Item
@@ -705,6 +724,55 @@ export default function MyJutsu() {
                         )}
                       </Confirm2>
                     )}
+                  {availableEvolutions &&
+                    availableEvolutions.length > 0 &&
+                    availableEvolutions.map((evo) => (
+                      <Confirm2
+                        key={evo.id}
+                        title={`Evolve to ${evo.name}`}
+                        button={
+                          <Button
+                            id={`evolve-${evo.id}`}
+                            variant="secondary"
+                            disabled={
+                              isPending ||
+                              !userData ||
+                              !canEvolveJutsu(evo, userData) ||
+                              !hasRequiredRank(userData.rank, evo.requiredRank) ||
+                              !hasRequiredLevel(userData.level, evo.requiredLevel)
+                            }
+                          >
+                            <CircleFadingArrowUp className="h-6 w-6 sm:mr-2" />
+                            <p className="hidden sm:block">Evolve</p>
+                          </Button>
+                        }
+                        onAccept={(e) => {
+                          e.preventDefault();
+                          evolveJutsu({
+                            userJutsuId: userjutsu.id,
+                            evolutionJutsuId: evo.id,
+                          });
+                        }}
+                      >
+                        <p>
+                          Evolve <b>{userjutsu.jutsu.name}</b> into <b>{evo.name}</b>?
+                        </p>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          This will replace your current jutsu. The evolved jutsu starts
+                          at level 1.
+                        </p>
+                        {evo.requiredRank && (
+                          <p className="text-sm">
+                            Required Rank: <b>{evo.requiredRank}</b>
+                          </p>
+                        )}
+                        {evo.requiredLevel > 1 && (
+                          <p className="text-sm">
+                            Required Level: <b>{evo.requiredLevel}</b>
+                          </p>
+                        )}
+                      </Confirm2>
+                    ))}
                   {userjutsu.activeReskin ? (
                     <Confirm2
                       title="Remove Reskin"

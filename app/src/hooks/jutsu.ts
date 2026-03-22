@@ -37,10 +37,11 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     resolver: zodResolver(JutsuValidator),
   });
 
-  // Query for bloodlines and villages
+  // Query for bloodlines, villages, and jutsus (for evolution parent selection)
   const { data: bloodlines, isPending: l1 } =
     api.bloodline.getAllNames.useQuery(undefined);
   const { data: villages, isPending: l2 } = api.village.getAllNames.useQuery(undefined);
+  const { data: jutsus, isPending: l4 } = api.jutsu.getAllNames.useQuery(undefined);
 
   // Mutation for updating jutsu
   const { mutate: updateJutsu, isPending: l3 } = api.jutsu.update.useMutation({
@@ -74,7 +75,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   };
 
   // Are we loading data
-  const loading = l1 || l2 || l3;
+  const loading = l1 || l2 || l3 || l4;
 
   // Watch for changes to avatar
   const imageUrl = useWatch({
@@ -111,6 +112,25 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     { id: "battleUsageType", type: "str_array", values: BattleUsageTypes },
     { id: "hidden", type: "boolean" },
     { id: "injectableInBattle", type: "boolean" },
+    {
+      id: "parentJutsuId",
+      label: "Parent Jutsu (Evolution)",
+      type: "db_values",
+      values: jutsus,
+      resetButton: true,
+    },
+    { id: "requiredNinjutsuOffence", label: "Req. Nin. Offence", type: "number" },
+    { id: "requiredNinjutsuDefence", label: "Req. Nin. Defence", type: "number" },
+    { id: "requiredGenjutsuOffence", label: "Req. Gen. Offence", type: "number" },
+    { id: "requiredGenjutsuDefence", label: "Req. Gen. Defence", type: "number" },
+    { id: "requiredTaijutsuOffence", label: "Req. Tai. Offence", type: "number" },
+    { id: "requiredTaijutsuDefence", label: "Req. Tai. Defence", type: "number" },
+    { id: "requiredBukijutsuOffence", label: "Req. Buki. Offence", type: "number" },
+    { id: "requiredBukijutsuDefence", label: "Req. Buki. Defence", type: "number" },
+    { id: "requiredStrength", label: "Req. Strength", type: "number" },
+    { id: "requiredSpeed", label: "Req. Speed", type: "number" },
+    { id: "requiredIntelligence", label: "Req. Intelligence", type: "number" },
+    { id: "requiredWillpower", label: "Req. Willpower", type: "number" },
   ];
 
   return { jutsu, effects, form, formData, loading, setEffects, handleJutsuSubmit };
