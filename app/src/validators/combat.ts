@@ -13,6 +13,7 @@ import {
   ItemTypes,
   JutsuTypes,
   LetterRanks,
+  MAX_STATS_CAP,
   PoolTypes,
   SkillTreeEntryTypes,
   SkillTreeTargets,
@@ -1187,68 +1188,86 @@ export const JutsuValidatorRawSchema = z.object({
     .number()
     .int()
     .min(0)
-    .max(450000)
+    .max(MAX_STATS_CAP)
     .nullable()
     .optional(),
   requiredNinjutsuDefence: z.coerce
     .number()
     .int()
     .min(0)
-    .max(450000)
+    .max(MAX_STATS_CAP)
     .nullable()
     .optional(),
   requiredGenjutsuOffence: z.coerce
     .number()
     .int()
     .min(0)
-    .max(450000)
+    .max(MAX_STATS_CAP)
     .nullable()
     .optional(),
   requiredGenjutsuDefence: z.coerce
     .number()
     .int()
     .min(0)
-    .max(450000)
+    .max(MAX_STATS_CAP)
     .nullable()
     .optional(),
   requiredTaijutsuOffence: z.coerce
     .number()
     .int()
     .min(0)
-    .max(450000)
+    .max(MAX_STATS_CAP)
     .nullable()
     .optional(),
   requiredTaijutsuDefence: z.coerce
     .number()
     .int()
     .min(0)
-    .max(450000)
+    .max(MAX_STATS_CAP)
     .nullable()
     .optional(),
   requiredBukijutsuOffence: z.coerce
     .number()
     .int()
     .min(0)
-    .max(450000)
+    .max(MAX_STATS_CAP)
     .nullable()
     .optional(),
   requiredBukijutsuDefence: z.coerce
     .number()
     .int()
     .min(0)
-    .max(450000)
+    .max(MAX_STATS_CAP)
     .nullable()
     .optional(),
-  requiredStrength: z.coerce.number().int().min(0).max(450000).nullable().optional(),
-  requiredSpeed: z.coerce.number().int().min(0).max(450000).nullable().optional(),
+  requiredStrength: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredSpeed: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
   requiredIntelligence: z.coerce
     .number()
     .int()
     .min(0)
-    .max(450000)
+    .max(MAX_STATS_CAP)
     .nullable()
     .optional(),
-  requiredWillpower: z.coerce.number().int().min(0).max(450000).nullable().optional(),
+  requiredWillpower: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
 });
 
 // Final validator with additional cross-field checks
