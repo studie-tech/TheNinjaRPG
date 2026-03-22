@@ -609,62 +609,70 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Evolution</b>: Yes (evolves from a parent jutsu)
                 </p>
               )}
-              {"requiredNinjutsuOffence" in item && item.requiredNinjutsuOffence && (
-                <p>
-                  <b>Req. Nin. Offence</b>: {item.requiredNinjutsuOffence}
-                </p>
-              )}
-              {"requiredNinjutsuDefence" in item && item.requiredNinjutsuDefence && (
-                <p>
-                  <b>Req. Nin. Defence</b>: {item.requiredNinjutsuDefence}
-                </p>
-              )}
-              {"requiredGenjutsuOffence" in item && item.requiredGenjutsuOffence && (
-                <p>
-                  <b>Req. Gen. Offence</b>: {item.requiredGenjutsuOffence}
-                </p>
-              )}
-              {"requiredGenjutsuDefence" in item && item.requiredGenjutsuDefence && (
-                <p>
-                  <b>Req. Gen. Defence</b>: {item.requiredGenjutsuDefence}
-                </p>
-              )}
-              {"requiredTaijutsuOffence" in item && item.requiredTaijutsuOffence && (
-                <p>
-                  <b>Req. Tai. Offence</b>: {item.requiredTaijutsuOffence}
-                </p>
-              )}
-              {"requiredTaijutsuDefence" in item && item.requiredTaijutsuDefence && (
-                <p>
-                  <b>Req. Tai. Defence</b>: {item.requiredTaijutsuDefence}
-                </p>
-              )}
-              {"requiredBukijutsuOffence" in item && item.requiredBukijutsuOffence && (
-                <p>
-                  <b>Req. Buki. Offence</b>: {item.requiredBukijutsuOffence}
-                </p>
-              )}
-              {"requiredBukijutsuDefence" in item && item.requiredBukijutsuDefence && (
-                <p>
-                  <b>Req. Buki. Defence</b>: {item.requiredBukijutsuDefence}
-                </p>
-              )}
-              {"requiredStrength" in item && item.requiredStrength && (
+              {"requiredNinjutsuOffence" in item &&
+                item.requiredNinjutsuOffence != null && (
+                  <p>
+                    <b>Req. Nin. Offence</b>: {item.requiredNinjutsuOffence}
+                  </p>
+                )}
+              {"requiredNinjutsuDefence" in item &&
+                item.requiredNinjutsuDefence != null && (
+                  <p>
+                    <b>Req. Nin. Defence</b>: {item.requiredNinjutsuDefence}
+                  </p>
+                )}
+              {"requiredGenjutsuOffence" in item &&
+                item.requiredGenjutsuOffence != null && (
+                  <p>
+                    <b>Req. Gen. Offence</b>: {item.requiredGenjutsuOffence}
+                  </p>
+                )}
+              {"requiredGenjutsuDefence" in item &&
+                item.requiredGenjutsuDefence != null && (
+                  <p>
+                    <b>Req. Gen. Defence</b>: {item.requiredGenjutsuDefence}
+                  </p>
+                )}
+              {"requiredTaijutsuOffence" in item &&
+                item.requiredTaijutsuOffence != null && (
+                  <p>
+                    <b>Req. Tai. Offence</b>: {item.requiredTaijutsuOffence}
+                  </p>
+                )}
+              {"requiredTaijutsuDefence" in item &&
+                item.requiredTaijutsuDefence != null && (
+                  <p>
+                    <b>Req. Tai. Defence</b>: {item.requiredTaijutsuDefence}
+                  </p>
+                )}
+              {"requiredBukijutsuOffence" in item &&
+                item.requiredBukijutsuOffence != null && (
+                  <p>
+                    <b>Req. Buki. Offence</b>: {item.requiredBukijutsuOffence}
+                  </p>
+                )}
+              {"requiredBukijutsuDefence" in item &&
+                item.requiredBukijutsuDefence != null && (
+                  <p>
+                    <b>Req. Buki. Defence</b>: {item.requiredBukijutsuDefence}
+                  </p>
+                )}
+              {"requiredStrength" in item && item.requiredStrength != null && (
                 <p>
                   <b>Req. Strength</b>: {item.requiredStrength}
                 </p>
               )}
-              {"requiredSpeed" in item && item.requiredSpeed && (
+              {"requiredSpeed" in item && item.requiredSpeed != null && (
                 <p>
                   <b>Req. Speed</b>: {item.requiredSpeed}
                 </p>
               )}
-              {"requiredIntelligence" in item && item.requiredIntelligence && (
+              {"requiredIntelligence" in item && item.requiredIntelligence != null && (
                 <p>
                   <b>Req. Intelligence</b>: {item.requiredIntelligence}
                 </p>
               )}
-              {"requiredWillpower" in item && item.requiredWillpower && (
+              {"requiredWillpower" in item && item.requiredWillpower != null && (
                 <p>
                   <b>Req. Willpower</b>: {item.requiredWillpower}
                 </p>

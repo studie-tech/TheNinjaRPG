@@ -292,7 +292,10 @@ export default function MyJutsu() {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.jutsu.getUserJutsus.invalidate();
+          await Promise.all([
+            utils.jutsu.getUserJutsus.invalidate(),
+            utils.jutsu.getEvolutions.invalidate(),
+          ]);
           setIsOpen(false);
           setUserJutsu(undefined);
         }

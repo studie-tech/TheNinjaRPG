@@ -449,8 +449,8 @@ export const jutsuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, userJutsus, evolutionJutsu] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [{ user }, userJutsus, evolutionJutsu] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchJutsu(ctx.drizzle, input.evolutionJutsuId),
       ]);
@@ -471,19 +471,38 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("You don't meet the level requirement for this evolution");
       if (!canEvolveJutsu(evolutionJutsu, user))
         return errorResponse("You don't meet the stat requirements for this evolution");
-      // Mutate: replace the old jutsu with the evolved version
-      await ctx.drizzle
-        .update(userJutsu)
-        .set({
-          jutsuId: input.evolutionJutsuId,
-          level: 1,
-          experience: 0,
-          updatedAt: new Date(),
-          reskinId: null,
-        })
-        .where(
-          and(eq(userJutsu.id, input.userJutsuId), eq(userJutsu.userId, ctx.userId)),
-        );
+      // Quest tracking
+      const { trackers } = getNewTrackers(user, [
+        { task: "jutsus_mastered", increment: 1 },
+      ]);
+      // Mutate: replace the old jutsu with the evolved version + update quest data + audit log
+      await Promise.all([
+        ctx.drizzle
+          .update(userJutsu)
+          .set({
+            jutsuId: input.evolutionJutsuId,
+            level: 1,
+            experience: 0,
+            updatedAt: new Date(),
+            reskinId: null,
+          })
+          .where(
+            and(eq(userJutsu.id, input.userJutsuId), eq(userJutsu.userId, ctx.userId)),
+          ),
+        ctx.drizzle
+          .update(userData)
+          .set({ questData: trackers })
+          .where(eq(userData.userId, ctx.userId)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "userJutsu",
+          changes: [`Evolved ${userJutsuObj.jutsu.name} into ${evolutionJutsu.name}`],
+          relatedId: input.evolutionJutsuId,
+          relatedMsg: "JutsuEvolution",
+          relatedImage: evolutionJutsu.image,
+        }),
+      ]);
       return { success: true, message: `Evolved into ${evolutionJutsu.name}!` };
     }),
 
@@ -557,15 +576,14 @@ export const jutsuRouter = createTRPCRouter({
         const siblingCount = siblings.filter((s) => s.id !== input.id).length;
         if (siblingCount >= 3)
           return errorResponse("A jutsu can have a maximum of 3 evolutions");
-        // Validate chain depth (max 3 levels: A → B → C)
-        let depth = 1;
-        let currentParentId = parent.parentJutsuId;
-        while (currentParentId && depth < 4) {
-          depth++;
-          const grandParent = await fetchJutsu(ctx.drizzle, currentParentId);
-          currentParentId = grandParent?.parentJutsuId ?? null;
+        // Validate chain depth (max 3 levels: A → B → C).
+        // Fetch grandparent in parallel — if it exists, adding this jutsu
+        // as a child of parent would create a chain of depth >= 3.
+        if (parent.parentJutsuId) {
+          const grandParent = await fetchJutsu(ctx.drizzle, parent.parentJutsuId);
+          if (grandParent?.parentJutsuId)
+            return errorResponse("Maximum evolution chain depth is 3");
         }
-        if (depth >= 3) return errorResponse("Maximum evolution chain depth is 3");
       }
       // Diff
       const diff = calculateContentDiff(entry, {
