@@ -1183,58 +1183,95 @@ export const JutsuValidatorRawSchema = z.object({
   villageId: z.string().nullable(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
   battleUsageType: z.enum(BattleUsageTypes).prefault("BOTH"),
-  parentJutsuId: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.string().nullable().optional(),
-  ),
-  requiredNinjutsuOffence: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredNinjutsuDefence: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredGenjutsuOffence: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredGenjutsuDefence: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredTaijutsuOffence: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredTaijutsuDefence: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredBukijutsuOffence: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredBukijutsuDefence: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredStrength: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredSpeed: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredIntelligence: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
-  requiredWillpower: z.preprocess(
-    (v) => (v === "" ? null : v),
-    z.coerce.number().int().min(0).max(MAX_STATS_CAP).nullable().optional(),
-  ),
+  parentJutsuId: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((v) => (v === "" ? null : v) ?? null),
+  requiredNinjutsuOffence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredNinjutsuDefence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredGenjutsuOffence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredGenjutsuDefence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredTaijutsuOffence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredTaijutsuDefence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredBukijutsuOffence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredBukijutsuDefence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredStrength: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredSpeed: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredIntelligence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
+  requiredWillpower: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_STATS_CAP)
+    .nullable()
+    .optional(),
 });
 
 // Final validator with additional cross-field checks
