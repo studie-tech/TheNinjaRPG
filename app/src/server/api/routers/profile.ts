@@ -557,6 +557,36 @@ export const profileRouter = createTRPCRouter({
         });
       }
 
+      // Village war / raid notifications (VILLAGE_WAR and WAR_RAID have sector=0)
+      const villageWars =
+        userWithRelations?.activeWars?.filter(
+          (w) => w.type === "VILLAGE_WAR" || w.type === "WAR_RAID",
+        ) ?? [];
+      for (const w of villageWars) {
+        const isAttacker = w.attackerVillageId === user?.villageId;
+        const isDefender = w.defenderVillageId === user?.villageId;
+        const isAttackerAlly = w.warAllies?.some(
+          (a) =>
+            a.villageId === user?.villageId &&
+            a.supportVillageId === w.attackerVillageId,
+        );
+        const defenderName = w.defenderVillage?.name ?? "another village";
+        const attackerName = w.attackerVillage?.name ?? "another village";
+        const label = isAttacker
+          ? `At war: attacking ${defenderName}`
+          : isDefender
+            ? `At war: defending vs ${attackerName}`
+            : isAttackerAlly
+              ? `Supporting ${attackerName} attacking ${defenderName}`
+              : `Supporting ${defenderName} defending vs ${attackerName}`;
+        notifications.push({
+          href: "/townhall",
+          name: label,
+          color: "red",
+          alwaysShow: true,
+        });
+      }
+
       // Raid notifications
       const openRaids =
         userWithRelations?.activeRaids?.filter((r) => r.raidType === "open") ?? [];
@@ -2271,13 +2301,14 @@ export const fetchUpdatedUser = async (props: {
       where: isNull(war.endedAt),
       columns: {
         id: true,
+        type: true,
         attackerVillageId: true,
         defenderVillageId: true,
         sector: true,
       },
       with: {
-        attackerVillage: { columns: { id: true, sector: true } },
-        defenderVillage: { columns: { id: true, sector: true } },
+        attackerVillage: { columns: { id: true, name: true, sector: true } },
+        defenderVillage: { columns: { id: true, name: true, sector: true } },
         warAllies: true,
       },
     }),
@@ -2804,11 +2835,12 @@ export type UserWithRelations =
       votes?: UserVote | null;
       activeWars?: {
         id: string;
+        type: string;
         attackerVillageId: string;
         defenderVillageId: string;
         sector: number;
-        attackerVillage: { id: string; sector: number };
-        defenderVillage: { id: string; sector: number };
+        attackerVillage: { id: string; name: string; sector: number };
+        defenderVillage: { id: string; name: string; sector: number };
         warAllies?: { villageId: string; supportVillageId: string }[];
       }[];
       shrineBattles?: {

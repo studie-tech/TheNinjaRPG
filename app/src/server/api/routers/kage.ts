@@ -786,13 +786,17 @@ export const kageRouter = createTRPCRouter({
         )
         .then(([r]) => r?.count ?? 0);
 
-      // Insert vote entry
-      await ctx.drizzle.insert(villageElderVoteEntry).values({
-        id: nanoid(),
-        voteId: input.voteId,
-        userId: user.userId,
-        vote: input.vote,
-      });
+      // Insert vote entry — unique constraint on (voteId, userId) guards concurrent dupes
+      try {
+        await ctx.drizzle.insert(villageElderVoteEntry).values({
+          id: nanoid(),
+          voteId: input.voteId,
+          userId: user.userId,
+          vote: input.vote,
+        });
+      } catch {
+        return errorResponse("You have already voted");
+      }
 
       // Re-evaluate outcome
       const entries = [
