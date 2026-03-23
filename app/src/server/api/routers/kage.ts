@@ -1,8 +1,9 @@
-import { and, desc, eq, gte, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   ELDER_KAGE_REMOVAL_VOTE_DAYS,
+  ELDER_MIN_VOTING_COUNT,
   KAGE_CHALLENGE_ACCEPT_PRESTIGE,
   KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS,
   KAGE_CHALLENGE_OPEN_FOR_SECONDS,
@@ -21,6 +22,7 @@ import {
   actionLog,
   clan,
   kageDefendedChallenges,
+  notification,
   userData,
   village,
   villageElderVote,
@@ -712,6 +714,23 @@ export const kageRouter = createTRPCRouter({
         );
       }
 
+      // Check minimum elder count
+      const elderCount = await ctx.drizzle
+        .select({ count: sql<number>`count(*)` })
+        .from(userData)
+        .where(
+          and(
+            eq(userData.villageId, input.villageId),
+            eq(userData.rank, "ELDER"),
+            eq(userData.isAi, false),
+          ),
+        )
+        .then(([r]) => r?.count ?? 0);
+      if (elderCount < ELDER_MIN_VOTING_COUNT)
+        return errorResponse(
+          `At least ${ELDER_MIN_VOTING_COUNT} elders are required to initiate a vote`,
+        );
+
       // Check no active removal vote
       const existingVote = await ctx.drizzle.query.villageElderVote.findFirst({
         where: and(
@@ -786,6 +805,12 @@ export const kageRouter = createTRPCRouter({
         )
         .then(([r]) => r?.count ?? 0);
 
+      // Enforce minimum elder count (excluding the kage being voted on)
+      if (elderCount < ELDER_MIN_VOTING_COUNT)
+        return errorResponse(
+          `At least ${ELDER_MIN_VOTING_COUNT} elders are required for a vote`,
+        );
+
       // Insert vote entry — unique constraint on (voteId, userId) guards concurrent dupes
       try {
         await ctx.drizzle.insert(villageElderVoteEntry).values({
@@ -794,8 +819,11 @@ export const kageRouter = createTRPCRouter({
           userId: user.userId,
           vote: input.vote,
         });
-      } catch {
-        return errorResponse("You have already voted");
+      } catch (e) {
+        const isDupe =
+          typeof e === "object" && e !== null && "errno" in e && e.errno === 1062;
+        if (isDupe) return errorResponse("You have already voted");
+        throw e;
       }
 
       // Re-evaluate outcome
@@ -836,6 +864,31 @@ export const kageRouter = createTRPCRouter({
             .update(villageElderVote)
             .set({ status: "APPROVED" })
             .where(eq(villageElderVote.id, input.voteId)),
+          // Notify the removed kage
+          ctx.drizzle.insert(notification).values({
+            userId: voteRecord.targetId,
+            content: `You have been removed as Kage by the Elder Council. ${replacement.username} is the new Kage.`,
+          }),
+          // Notify the new kage
+          ctx.drizzle.insert(notification).values({
+            userId: replacement.userId,
+            content: `You have been appointed as the new Kage following the removal of the previous Kage.`,
+          }),
+          // Increment unread notifications for removed kage, new kage, and all elders
+          ctx.drizzle
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(inArray(userData.userId, [voteRecord.targetId, replacement.userId])),
+          ctx.drizzle
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(
+              and(
+                eq(userData.villageId, user.villageId),
+                eq(userData.rank, "ELDER"),
+                eq(userData.isAi, false),
+              ),
+            ),
         ]);
         return {
           success: true,
@@ -844,10 +897,23 @@ export const kageRouter = createTRPCRouter({
       }
 
       if (outcome === "REJECTED") {
-        await ctx.drizzle
-          .update(villageElderVote)
-          .set({ status: "REJECTED" })
-          .where(eq(villageElderVote.id, input.voteId));
+        await Promise.all([
+          ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, input.voteId)),
+          // Notify all elders that the vote failed
+          ctx.drizzle
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(
+              and(
+                eq(userData.villageId, user.villageId),
+                eq(userData.rank, "ELDER"),
+                eq(userData.isAi, false),
+              ),
+            ),
+        ]);
         return { success: true, message: "Kage removal vote failed" };
       }
 
