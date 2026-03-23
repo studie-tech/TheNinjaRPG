@@ -854,6 +854,10 @@ export const jutsuRouter = createTRPCRouter({
       if (!info) return errorResponse("Jutsu not found");
       if (!canTrainJutsu(info, user) && !info.parentJutsuId)
         return errorResponse("Jutsu not for you");
+      if (info.parentJutsuId && !userjutsuObj)
+        return errorResponse(
+          "Evolution jutsus can only be obtained by evolving the parent jutsu",
+        );
       if (
         userjutsus.some(
           (j) =>
