@@ -106,7 +106,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     "jutsuType" in item && !("parentJutsuId" in item && item.parentJutsuId);
   const { data: evolutionsData } = api.jutsu.getEvolutions.useQuery(
     { jutsuId: item.id },
-    { enabled: isParentJutsu },
+    { enabled: isParentJutsu, staleTime: 5 * 60 * 1000 },
   );
 
   // Setup clone mutations
