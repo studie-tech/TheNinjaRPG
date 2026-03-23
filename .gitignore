@@ -1,0 +1,30 @@
+.DS_Store
+*node_modules*
+.pnpm-store
+scripts/clerk_migration.ipynb
+scripts/discord_analysis.ipynb
+scripts/user_segmentation.ipynb
+scripts/clips/*
+scripts/music/*
+scripts/theninja_rpg_trailer*
+scripts/fiverr*
+scripts/fetch_sentry_issues.sh
+scripts/sentry_fix_logs/*
+*.pem
+assets/pwa/*
+assets/sfx/*
+**.pyc
+
+# Rust / SpacetimeDB
+app/spacetimedb/target/
+app/spacetimedb/dist/
+app/spacetimedb/Cargo.lock
+app/spacetimedb/node_modules/
+*.wasm
+
+# AI clutter
+.cursor
+.claude
+Makefile.agent
+.hermes/
+.zed/
