@@ -130,6 +130,10 @@ export const jutsuRouter = createTRPCRouter({
       // Guard
       if (!fromJutsu) return errorResponse("Source jutsu not found");
       if (!toJutsu) return errorResponse("Target jutsu not found");
+      if (fromJutsu.parentJutsuId)
+        return errorResponse("Cannot transfer levels from an evolution jutsu");
+      if (toJutsu.parentJutsuId)
+        return errorResponse("Cannot transfer levels to an evolution jutsu");
       if (fromJutsu.jutsuType !== toJutsu.jutsuType) {
         return errorResponse("Jutsus must be of the same type");
       }
@@ -572,6 +576,8 @@ export const jutsuRouter = createTRPCRouter({
           }),
         ]);
         if (!parent) return errorResponse("Parent jutsu not found");
+        if (parent.jutsuType === "AI")
+          return errorResponse("AI jutsus cannot be evolution parents");
         // Max 3 direct evolutions per parent (exclude self in case of re-save)
         const siblingCount = siblings.filter((s) => s.id !== input.id).length;
         if (siblingCount >= 3)
@@ -938,10 +944,9 @@ export const jutsuRouter = createTRPCRouter({
       const { user } = data;
       if (!user) return errorResponse("User not found");
 
-      const filteredJutsus = userjutsus.filter((uj) => canTrainJutsu(uj.jutsu, user));
-      const userjutsuObj = filteredJutsus.find((j) => j.id === input.userJutsuId);
+      const userjutsuObj = userjutsus.find((j) => j.id === input.userJutsuId);
       const isEquipped = userjutsuObj?.equipped || false;
-      const equippedJutsus = filteredJutsus.filter((j) => j.equipped);
+      const equippedJutsus = userjutsus.filter((j) => j.equipped);
       const curEquip = equippedJutsus.length || 0;
       const maxEquip = userData && calcJutsuEquipLimit(user);
       const pierceEquipped = equippedJutsus.filter((j) =>
@@ -982,7 +987,12 @@ export const jutsuRouter = createTRPCRouter({
       if (!userjutsuObj) return errorResponse("Jutsu not found");
 
       // Check if jutsu can be equipped (including bloodline check)
-      if (!isEquipped && !canTrainJutsu(userjutsuObj.jutsu, user)) {
+      // Evolution jutsus (parentJutsuId set) bypass canTrainJutsu — they were earned via evolveJutsu
+      if (
+        !isEquipped &&
+        !userjutsuObj.jutsu.parentJutsuId &&
+        !canTrainJutsu(userjutsuObj.jutsu, user)
+      ) {
         return errorResponse("You cannot equip this jutsu due to missing requirements");
       }
 
