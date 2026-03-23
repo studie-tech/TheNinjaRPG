@@ -439,8 +439,18 @@ export const jutsuRouter = createTRPCRouter({
     })
     .input(z.object({ jutsuId: z.string() }))
     .query(async ({ ctx, input }) => {
+      const user = ctx.userId
+        ? await ctx.drizzle.query.userData.findFirst({
+            where: eq(userData.userId, ctx.userId),
+            columns: { role: true },
+          })
+        : null;
+      const showHidden = user && canChangeContent(user.role);
       return await ctx.drizzle.query.jutsu.findMany({
-        where: eq(jutsu.parentJutsuId, input.jutsuId),
+        where: and(
+          eq(jutsu.parentJutsuId, input.jutsuId),
+          ...(showHidden ? [] : [eq(jutsu.hidden, false)]),
+        ),
         orderBy: (table, { asc }) => [asc(table.requiredLevel)],
       });
     }),
@@ -494,6 +504,7 @@ export const jutsuRouter = createTRPCRouter({
             jutsuId: input.evolutionJutsuId,
             level: 1,
             experience: 0,
+            finishTraining: null,
             updatedAt: new Date(),
           })
           .where(

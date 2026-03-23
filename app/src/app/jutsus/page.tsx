@@ -296,6 +296,7 @@ export default function MyJutsu() {
           await Promise.all([
             utils.jutsu.getUserJutsus.invalidate(),
             utils.jutsu.getEvolutions.invalidate(),
+            utils.profile.getUser.invalidate(),
           ]);
           setIsOpen(false);
           setUserJutsu(undefined);
@@ -781,6 +782,28 @@ export default function MyJutsu() {
                             Required Level: <b>{evo.requiredLevel}</b>
                           </p>
                         )}
+                        {(
+                          [
+                            ["requiredNinjutsuOffence", "Ninjutsu Offence"],
+                            ["requiredNinjutsuDefence", "Ninjutsu Defence"],
+                            ["requiredTaijutsuOffence", "Taijutsu Offence"],
+                            ["requiredTaijutsuDefence", "Taijutsu Defence"],
+                            ["requiredGenjutsuOffence", "Genjutsu Offence"],
+                            ["requiredGenjutsuDefence", "Genjutsu Defence"],
+                            ["requiredBukijutsuOffence", "Bukijutsu Offence"],
+                            ["requiredBukijutsuDefence", "Bukijutsu Defence"],
+                            ["requiredStrength", "Strength"],
+                            ["requiredSpeed", "Speed"],
+                            ["requiredIntelligence", "Intelligence"],
+                            ["requiredWillpower", "Willpower"],
+                          ] as const
+                        )
+                          .filter(([key]) => evo[key] != null)
+                          .map(([key, label]) => (
+                            <p key={key} className="text-sm">
+                              Required {label}: <b>{evo[key]}</b>
+                            </p>
+                          ))}
                       </Confirm2>
                     ))}
                   {userjutsu.activeReskin ? (
