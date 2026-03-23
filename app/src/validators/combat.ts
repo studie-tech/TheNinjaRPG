@@ -1194,84 +1194,96 @@ export const JutsuValidatorRawSchema = z.object({
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredNinjutsuDefence: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredGenjutsuOffence: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredGenjutsuDefence: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredTaijutsuOffence: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredTaijutsuDefence: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredBukijutsuOffence: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredBukijutsuDefence: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredStrength: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredSpeed: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredIntelligence: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
   requiredWillpower: z.coerce
     .number()
     .int()
     .min(0)
     .max(MAX_STATS_CAP)
     .nullable()
-    .optional(),
+    .optional()
+    .transform((v) => v || null),
 });
 
 // Final validator with additional cross-field checks
