@@ -473,6 +473,8 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       // Guards
       if (!user) return errorResponse("User not found");
+      if (user.status !== "AWAKE")
+        return errorResponse("Must be awake to evolve a jutsu");
       if (!evolutionJutsu) return errorResponse("Evolution jutsu not found");
       if (!evolutionJutsu.parentJutsuId)
         return errorResponse("Target jutsu is not an evolution");
@@ -798,7 +800,13 @@ export const jutsuRouter = createTRPCRouter({
 
       if (!info) return errorResponse("Jutsu not found");
       if (!canTrainJutsu(info, user)) return errorResponse("Jutsu not for you");
-      if (userjutsus.some((j) => j.jutsu.parentJutsuId === input.jutsuId))
+      if (
+        userjutsus.some(
+          (j) =>
+            j.jutsu.parentJutsuId === input.jutsuId ||
+            j.parentJutsuParentId === input.jutsuId,
+        )
+      )
         return errorResponse("You have already evolved this jutsu");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
 
