@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, gte, inArray, like, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -480,6 +481,8 @@ export const jutsuRouter = createTRPCRouter({
         { task: "jutsus_mastered", increment: 1 },
       ]);
       // Mutate: replace the old jutsu with the evolved version + update quest data + audit log
+      // reskinId is intentionally kept — fetchUserJutsus joins on reskinId (not jutsuReskin.jutsuId)
+      // so the cosmetic reskin carries over to the evolved jutsu without touching the reskin record.
       await Promise.all([
         ctx.drizzle
           .update(userJutsu)
@@ -488,7 +491,6 @@ export const jutsuRouter = createTRPCRouter({
             level: 1,
             experience: 0,
             updatedAt: new Date(),
-            reskinId: null,
           })
           .where(
             and(eq(userJutsu.id, input.userJutsuId), eq(userJutsu.userId, ctx.userId)),
@@ -779,6 +781,8 @@ export const jutsuRouter = createTRPCRouter({
 
       if (!info) return errorResponse("Jutsu not found");
       if (!canTrainJutsu(info, user)) return errorResponse("Jutsu not for you");
+      if (userjutsus.some((j) => j.jutsu.parentJutsuId === input.jutsuId))
+        return errorResponse("You have already evolved this jutsu");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
 
       const level = userjutsuObj ? userjutsuObj.level : 0;
@@ -1552,6 +1556,8 @@ export const fetchUserJutsus = async (
   userId: string,
   input?: JutsuFilteringSchema,
 ) => {
+  // Self-join alias to get the parent jutsu's parentJutsuId (grandparent)
+  const parentJutsuAlias = alias(jutsu, "parentJutsu");
   // Grab all userJutsus with Jutsu data and reskin data
   const userjutsus = await client
     .select()
@@ -1559,6 +1565,7 @@ export const fetchUserJutsus = async (
     .innerJoin(jutsu, eq(userJutsu.jutsuId, jutsu.id))
     .leftJoin(bloodline, eq(jutsu.bloodlineId, bloodline.id))
     .leftJoin(jutsuReskin, eq(userJutsu.reskinId, jutsuReskin.id))
+    .leftJoin(parentJutsuAlias, eq(jutsu.parentJutsuId, parentJutsuAlias.id))
     .where(
       and(
         eq(userJutsu.userId, userId),
@@ -1575,6 +1582,8 @@ export const fetchUserJutsus = async (
       bloodline: result.Bloodline,
     },
     activeReskin: result.JutsuReskin,
+    // Grandparent ID — allows frontend to walk the full ancestor chain
+    parentJutsuParentId: result.parentJutsu?.parentJutsuId ?? null,
   }));
   // Then map to reskinned format
   return unskinnedUserJutsus.map((userjutsu) => getReskinnedUserJutsu(userjutsu));

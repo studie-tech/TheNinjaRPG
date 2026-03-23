@@ -42,6 +42,7 @@ import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import { getFreeTransfers } from "@/libs/jutsu";
+import { showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import {
   calcJutsuEquipLimit,
@@ -304,7 +305,7 @@ export default function MyJutsu() {
 
   const { data: availableEvolutions } = api.jutsu.getEvolutions.useQuery(
     { jutsuId: userjutsu?.jutsuId ?? "" },
-    { enabled: !!userjutsu && !userjutsu.jutsu.parentJutsuId },
+    { enabled: !!userjutsu },
   );
 
   const isPending =
@@ -766,7 +767,13 @@ export default function MyJutsu() {
                         </p>
                         {evo.requiredRank && (
                           <p className="text-sm">
-                            Required Rank: <b>{evo.requiredRank}</b>
+                            Required Rank:{" "}
+                            <b>
+                              {showUserRank({
+                                rank: evo.requiredRank,
+                                isOutlaw: userData?.isOutlaw,
+                              })}
+                            </b>
                           </p>
                         )}
                         {evo.requiredLevel > 1 && (
