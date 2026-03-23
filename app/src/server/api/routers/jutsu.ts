@@ -626,12 +626,16 @@ export const jutsuRouter = createTRPCRouter({
         // Validate chain depth (max 3 levels: A → B → C).
         // Walk upward from parent to get ancestor depth, checking for circular refs.
         let ancestorDepth = 1;
-        let ancestorNode = parent;
+        let ancestorNode: typeof parent | undefined = parent;
         while (ancestorNode.parentJutsuId) {
           if (ancestorNode.parentJutsuId === input.id)
             return errorResponse("Cannot create a circular evolution chain");
-          ancestorNode = await fetchJutsu(ctx.drizzle, ancestorNode.parentJutsuId);
-          if (!ancestorNode) break;
+          const nextAncestor = await fetchJutsu(
+            ctx.drizzle,
+            ancestorNode.parentJutsuId,
+          );
+          if (!nextAncestor) break;
+          ancestorNode = nextAncestor;
           ancestorDepth++;
         }
         // Walk downward from input.id to get the deepest descendant depth.
