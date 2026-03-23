@@ -47,6 +47,7 @@ import {
   IMG_TRAIN_TAI_OFF,
   IMG_TRAIN_WILLPOWER,
   JUTSU_LEVEL_CAP,
+  JUTSU_TRAIN_LEVEL_CAP,
   MAX_DAILY_TRAININGS,
   SENSEI_RANKS,
   STEALTH_SENSORY_CAP,
@@ -726,7 +727,11 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Filtering jutsus
   const alljutsus = jutsus?.pages
     .flatMap((page) => page.data)
-    .filter((j) => canTrainJutsu(j, userData))
+    .filter((j) => {
+      if (j.parentJutsuId)
+        return userJutsus?.some((uj) => uj.jutsuId === j.id) ?? false;
+      return canTrainJutsu(j, userData);
+    })
     .filter((j) => !evolvedAncestorIds.has(j.id))
     .filter((j) => {
       const userJutsu = userJutsus?.find((uj) => uj.jutsuId === j.id);
@@ -736,7 +741,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);
       return { ...j, level: uj?.level || 0 };
     })
-    .filter((j) => j.level < JUTSU_LEVEL_CAP)
+    .filter(
+      (j) => j.level < (j.parentJutsuId ? JUTSU_TRAIN_LEVEL_CAP : JUTSU_LEVEL_CAP),
+    )
     .sort((a, b) => b.level - a.level);
 
   // Training time
@@ -756,7 +763,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const okVillage = checkJutsuVillage(jutsu, userData);
   const okBloodline = checkJutsuBloodline(jutsu, userData);
   const canAfford = userData && cost && userData.money >= cost;
-  const isCapped = level >= JUTSU_LEVEL_CAP;
+  const isCapped =
+    level >= (jutsu?.parentJutsuId ? JUTSU_TRAIN_LEVEL_CAP : JUTSU_LEVEL_CAP);
   const canTrain = okRank && okVillage && okBloodline && !isCapped && canAfford;
 
   // Label for proceed button

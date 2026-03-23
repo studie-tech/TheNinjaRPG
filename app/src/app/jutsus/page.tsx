@@ -22,6 +22,7 @@ import type { ElementName } from "@/drizzle/constants";
 import {
   COST_EXTRA_JUTSU_SLOT,
   COST_RESKIN_JUTSU,
+  JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_TRANSFER_COST,
   JUTSU_TRANSFER_DAYS,
   JUTSU_TRANSFER_MAX_LEVEL,
@@ -742,6 +743,7 @@ export default function MyJutsu() {
                             disabled={
                               isPending ||
                               !userData ||
+                              userjutsu.level < JUTSU_TRAIN_LEVEL_CAP ||
                               !canEvolveJutsu(evo, userData) ||
                               !hasRequiredRank(userData.rank, evo.requiredRank) ||
                               !hasRequiredLevel(userData.level, evo.requiredLevel)
@@ -764,8 +766,15 @@ export default function MyJutsu() {
                         </p>
                         <p className="mt-2 text-sm text-muted-foreground">
                           This will replace your current jutsu. The evolved jutsu starts
-                          at level 1.
+                          at level 1 and can be trained to level {JUTSU_TRAIN_LEVEL_CAP}
+                          .
                         </p>
+                        {userjutsu.level < JUTSU_TRAIN_LEVEL_CAP && (
+                          <p className="text-sm text-destructive">
+                            Required Jutsu Level: <b>{JUTSU_TRAIN_LEVEL_CAP}</b>{" "}
+                            (current: {userjutsu.level})
+                          </p>
+                        )}
                         {evo.requiredRank && (
                           <p className="text-sm">
                             Required Rank:{" "}

@@ -12,6 +12,7 @@ import {
   JUTSU_MAX_PIERCE_EQUIPPED,
   JUTSU_MAX_RESIDUAL_EQUIPPED,
   JUTSU_MAX_STUN_EQUIPPED,
+  JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_TRANSFER_COST,
   JUTSU_TRANSFER_DAYS,
   JUTSU_TRANSFER_MAX_LEVEL,
@@ -486,6 +487,10 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse(
           "This jutsu is currently being trained. Wait for training to complete before evolving.",
         );
+      if (userJutsuObj.level < JUTSU_TRAIN_LEVEL_CAP)
+        return errorResponse(
+          `Jutsu must be at max level (${JUTSU_TRAIN_LEVEL_CAP}) to evolve`,
+        );
       if (userJutsuObj.jutsuId !== evolutionJutsu.parentJutsuId)
         return errorResponse("This jutsu cannot evolve into the target evolution");
       if (userJutsus.some((j) => j.jutsuId === input.evolutionJutsuId))
@@ -847,7 +852,8 @@ export const jutsuRouter = createTRPCRouter({
       );
 
       if (!info) return errorResponse("Jutsu not found");
-      if (!canTrainJutsu(info, user)) return errorResponse("Jutsu not for you");
+      if (!canTrainJutsu(info, user) && !info.parentJutsuId)
+        return errorResponse("Jutsu not for you");
       if (
         userjutsus.some(
           (j) =>
@@ -859,7 +865,8 @@ export const jutsuRouter = createTRPCRouter({
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
 
       const level = userjutsuObj ? userjutsuObj.level : 0;
-      if (level >= JUTSU_LEVEL_CAP) {
+      const levelCap = info.parentJutsuId ? JUTSU_TRAIN_LEVEL_CAP : JUTSU_LEVEL_CAP;
+      if (level >= levelCap) {
         return errorResponse("Jutsu is already at max level");
       }
       if (info.hidden && !canChangeContent(user.role)) {
