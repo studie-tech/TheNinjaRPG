@@ -124,7 +124,9 @@ export const shrineRouter = createTRPCRouter({
         );
       }
 
-      // Activate any schedules whose startAt has passed but haven't been processed yet
+      // Activate any schedules whose startAt has passed but haven't been processed yet.
+      // Only write if there's at least one boost not yet stored (or stored with an earlier
+      // endAt), so concurrent callers converge rather than overwriting each other.
       const dueSchedules = schedules.filter((s) => new Date(s.startAt) <= now);
       if (dueSchedules.length > 0 && villageData) {
         const settings = villageData.shrineSettings as {
@@ -134,23 +136,28 @@ export const shrineRouter = createTRPCRouter({
         } | null;
         const currentBoosts = { ...(settings?.activeBoosts ?? {}) };
 
+        let hasChanges = false;
         for (const s of dueSchedules) {
           const existingEnd = currentBoosts[s.boostType];
-          if (!existingEnd || new Date(existingEnd) < new Date(s.endAt)) {
-            currentBoosts[s.boostType] = new Date(s.endAt).toISOString();
+          const newEnd = new Date(s.endAt).toISOString();
+          if (!existingEnd || existingEnd < newEnd) {
+            currentBoosts[s.boostType] = newEnd;
+            hasChanges = true;
           }
         }
 
-        await ctx.drizzle
-          .update(village)
-          .set({
-            shrineSettings: {
-              unlockedAiIds: settings?.unlockedAiIds ?? [],
-              activeAiIds: settings?.activeAiIds ?? [],
-              activeBoosts: currentBoosts,
-            },
-          })
-          .where(eq(village.id, input.villageId));
+        if (hasChanges) {
+          await ctx.drizzle
+            .update(village)
+            .set({
+              shrineSettings: {
+                unlockedAiIds: settings?.unlockedAiIds ?? [],
+                activeAiIds: settings?.activeAiIds ?? [],
+                activeBoosts: currentBoosts,
+              },
+            })
+            .where(eq(village.id, input.villageId));
+        }
       }
 
       return schedules;

@@ -57,13 +57,14 @@ import type { DrizzleClient } from "@/server/db";
 
 import { findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
-import { canAdministrateWars } from "@/utils/permissions";
+import { canAdministrateWars, canSeeSecretData } from "@/utils/permissions";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  serverError,
 } from "../trpc";
 
 export const warRouter = createTRPCRouter({
@@ -665,6 +666,18 @@ export const warRouter = createTRPCRouter({
           await ctx.drizzle.delete(war).where(eq(war.id, warId));
           return errorResponse("Not enough tokens to declare war");
         }
+        await Promise.all([
+          ctx.drizzle.insert(notification).values({
+            userId: user.userId,
+            content: `${attackerVillage.name} has declared war on ${defenderVillage.name}!`,
+          }),
+          ctx.drizzle
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(
+              inArray(userData.villageId, [user.villageId, input.targetVillageId]),
+            ),
+        ]);
         return { success: true, message: "War declared successfully" };
       }
 
@@ -1152,6 +1165,10 @@ export const warRouter = createTRPCRouter({
     })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.villageId !== input.villageId && !canSeeSecretData(user.role)) {
+        throw serverError("FORBIDDEN", "You can only view votes for your own village");
+      }
       return fetchElderVotes(ctx.drizzle, input.villageId);
     }),
 
@@ -1199,13 +1216,17 @@ export const warRouter = createTRPCRouter({
         )
         .then(([r]) => r?.count ?? 0);
 
-      // Insert the vote entry
-      await ctx.drizzle.insert(villageElderVoteEntry).values({
-        id: nanoid(),
-        voteId: input.voteId,
-        userId: user.userId,
-        vote: input.vote,
-      });
+      // Insert the vote entry — unique constraint on (voteId, userId) guards concurrent dupes
+      try {
+        await ctx.drizzle.insert(villageElderVoteEntry).values({
+          id: nanoid(),
+          voteId: input.voteId,
+          userId: user.userId,
+          vote: input.vote,
+        });
+      } catch {
+        return errorResponse("You have already voted");
+      }
 
       // Re-fetch entries to decide outcome
       const entries = [
@@ -1218,9 +1239,15 @@ export const warRouter = createTRPCRouter({
       const outcome = resolveElderVote(yesCount, noCount, elderCount);
       if (outcome === "APPROVED") {
         // Start the war and deduct tokens
-        const attackerVillage = await ctx.drizzle.query.village.findFirst({
-          where: eq(village.id, voteRecord.villageId),
-        });
+        const [attackerVillage, defenderVillage] = await Promise.all([
+          ctx.drizzle.query.village.findFirst({
+            where: eq(village.id, voteRecord.villageId),
+          }),
+          ctx.drizzle.query.village.findFirst({
+            columns: { name: true },
+            where: eq(village.id, voteRecord.targetId),
+          }),
+        ]);
         if (!attackerVillage || attackerVillage.tokens < WAR_DECLARATION_COST) {
           await ctx.drizzle
             .update(villageElderVote)
@@ -1228,17 +1255,26 @@ export const warRouter = createTRPCRouter({
             .where(eq(villageElderVote.id, input.voteId));
           return errorResponse("Village no longer has enough tokens to declare war");
         }
-        const warId = nanoid();
-        const [updateResult] = await Promise.all([
-          ctx.drizzle
-            .update(village)
-            .set({ tokens: attackerVillage.tokens - WAR_DECLARATION_COST })
-            .where(
-              and(
-                eq(village.id, voteRecord.villageId),
-                gte(village.tokens, WAR_DECLARATION_COST),
-              ),
+        // Deduct tokens first with DB guard — if this fails, war is never inserted
+        const tokenResult = await ctx.drizzle
+          .update(village)
+          .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
+          .where(
+            and(
+              eq(village.id, voteRecord.villageId),
+              gte(village.tokens, WAR_DECLARATION_COST),
             ),
+          );
+        if (tokenResult.rowsAffected === 0) {
+          await ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, input.voteId));
+          return errorResponse("Village no longer has enough tokens to declare war");
+        }
+        const warId = nanoid();
+        const warContent = `${attackerVillage.name} has declared war on ${defenderVillage?.name ?? "another village"}!`;
+        await Promise.all([
           ctx.drizzle.insert(war).values({
             id: warId,
             attackerVillageId: voteRecord.villageId,
@@ -1257,15 +1293,16 @@ export const warRouter = createTRPCRouter({
             .update(villageElderVote)
             .set({ status: "APPROVED" })
             .where(eq(villageElderVote.id, input.voteId)),
+          ctx.drizzle
+            .insert(notification)
+            .values({ userId: user.userId, content: warContent }),
+          ctx.drizzle
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(
+              inArray(userData.villageId, [voteRecord.villageId, voteRecord.targetId]),
+            ),
         ]);
-        if (updateResult.rowsAffected === 0) {
-          await ctx.drizzle.delete(war).where(eq(war.id, warId));
-          await ctx.drizzle
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, input.voteId));
-          return errorResponse("Not enough tokens to declare war");
-        }
         return { success: true, message: "War declaration approved. War has started!" };
       }
 

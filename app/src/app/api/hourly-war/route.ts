@@ -12,6 +12,7 @@ import {
   WAR_TOKEN_REDUCTION_INTERVAL_HOURS,
 } from "@/drizzle/constants";
 import {
+  notification,
   quest,
   questHistory,
   userData,
@@ -405,9 +406,13 @@ async function processExpiredElderVotes() {
       }
 
       // APPROVED or PENDING (no blocking majority) → auto-start war
-      const attackerVillage = await drizzleDB.query.village.findFirst({
-        where: eq(village.id, vote.villageId),
-      });
+      const [attackerVillage, defenderVillage] = await Promise.all([
+        drizzleDB.query.village.findFirst({ where: eq(village.id, vote.villageId) }),
+        drizzleDB.query.village.findFirst({
+          columns: { name: true },
+          where: eq(village.id, vote.targetId),
+        }),
+      ]);
       if (!attackerVillage || attackerVillage.tokens < WAR_DECLARATION_COST) {
         await drizzleDB
           .update(villageElderVote)
@@ -416,17 +421,26 @@ async function processExpiredElderVotes() {
         continue;
       }
 
-      const warId = nanoid();
-      const [updateResult] = await Promise.all([
-        drizzleDB
-          .update(village)
-          .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
-          .where(
-            and(
-              eq(village.id, vote.villageId),
-              gte(village.tokens, WAR_DECLARATION_COST),
-            ),
+      // Deduct tokens first with DB guard — if this fails, war is never inserted
+      const tokenResult = await drizzleDB
+        .update(village)
+        .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
+        .where(
+          and(
+            eq(village.id, vote.villageId),
+            gte(village.tokens, WAR_DECLARATION_COST),
           ),
+        );
+      if (tokenResult.rowsAffected === 0) {
+        await drizzleDB
+          .update(villageElderVote)
+          .set({ status: "REJECTED" })
+          .where(eq(villageElderVote.id, vote.id));
+        continue;
+      }
+      const warId = nanoid();
+      const warContent = `${attackerVillage.name} has declared war on ${defenderVillage?.name ?? "another village"}!`;
+      await Promise.all([
         drizzleDB.insert(war).values({
           id: warId,
           attackerVillageId: vote.villageId,
@@ -445,14 +459,14 @@ async function processExpiredElderVotes() {
           .update(villageElderVote)
           .set({ status: "APPROVED" })
           .where(eq(villageElderVote.id, vote.id)),
+        drizzleDB
+          .insert(notification)
+          .values({ userId: vote.initiatedByUserId, content: warContent }),
+        drizzleDB
+          .update(userData)
+          .set({ unreadNotifications: sql`unreadNotifications + 1` })
+          .where(inArray(userData.villageId, [vote.villageId, vote.targetId])),
       ]);
-      if (updateResult.rowsAffected === 0) {
-        await drizzleDB.delete(war).where(eq(war.id, warId));
-        await drizzleDB
-          .update(villageElderVote)
-          .set({ status: "REJECTED" })
-          .where(eq(villageElderVote.id, vote.id));
-      }
     } else if (vote.type === "KAGE_REMOVAL") {
       // Count eligible elders (not the kage being removed)
       const elderCount = await drizzleDB
