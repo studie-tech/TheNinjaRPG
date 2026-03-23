@@ -373,7 +373,8 @@ export const jutsuRouter = createTRPCRouter({
         relations.bloodlineInjectors.length +
         relations.skillInjectors.length +
         relations.itemInjectors.length +
-        relations.aiUsingJutsu.length;
+        relations.aiUsingJutsu.length +
+        relations.childEvolutions.length;
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
@@ -388,6 +389,7 @@ export const jutsuRouter = createTRPCRouter({
           ...relations.skillInjectors.map((s) => `Skill: ${s.name}`),
           ...relations.itemInjectors.map((i) => `Item: ${i.name}`),
           ...relations.aiUsingJutsu.map((a) => `AI: ${a.name}`),
+          ...relations.childEvolutions.map((e) => `Evolution: ${e.name}`),
         ].join(", ");
         return errorResponse(
           `Justu is being used by: ${message}. So you cannot delete it.`,
@@ -464,6 +466,8 @@ export const jutsuRouter = createTRPCRouter({
       if (!evolutionJutsu) return errorResponse("Evolution jutsu not found");
       if (!evolutionJutsu.parentJutsuId)
         return errorResponse("Target jutsu is not an evolution");
+      if (evolutionJutsu.hidden && !canChangeContent(user.role))
+        return errorResponse("This evolution is not yet available");
       const userJutsuObj = userJutsus.find((j) => j.id === input.userJutsuId);
       if (!userJutsuObj) return errorResponse("You don't own this jutsu");
       if (userJutsuObj.jutsuId !== evolutionJutsu.parentJutsuId)
@@ -588,6 +592,8 @@ export const jutsuRouter = createTRPCRouter({
         // Fetch grandparent in parallel — if it exists, adding this jutsu
         // as a child of parent would create a chain of depth >= 3.
         if (parent.parentJutsuId) {
+          if (parent.parentJutsuId === input.id)
+            return errorResponse("Cannot create a circular evolution chain");
           const grandParent = await fetchJutsu(ctx.drizzle, parent.parentJutsuId);
           if (grandParent?.parentJutsuId)
             return errorResponse("Maximum evolution chain depth is 3");
@@ -1425,6 +1431,7 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
     itemInjectors,
     aiUsingJutsu,
     questsUsingJutsu,
+    childEvolutions,
   ] = await Promise.all([
     client.query.jutsu.findMany({
       columns: { id: true, name: true },
@@ -1461,6 +1468,10 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
         OR JSON_SEARCH(${quest.content}, 'one', ${jutsuId}, NULL, '$.objectives[*].reward_jutsus[*]') IS NOT NULL
       )`,
     }),
+    client.query.jutsu.findMany({
+      columns: { id: true, name: true },
+      where: eq(jutsu.parentJutsuId, jutsuId),
+    }),
   ]);
 
   return {
@@ -1470,6 +1481,7 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
     itemInjectors,
     aiUsingJutsu,
     questsUsingJutsu,
+    childEvolutions,
   };
 };
 export type JutsuRelations = Awaited<ReturnType<typeof getJutsuRelations>>;
