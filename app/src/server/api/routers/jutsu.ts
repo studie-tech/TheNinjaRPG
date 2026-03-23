@@ -517,27 +517,30 @@ export const jutsuRouter = createTRPCRouter({
         );
       if (evolveResult.rowsAffected === 0)
         return errorResponse("Evolution failed — jutsu may have already been evolved");
-      // Replace old jutsu ID with evolved ID in loadout if present
+      // Replace old jutsu ID with evolved ID across all user loadouts
       const oldJutsuId = userJutsuObj.jutsu.id;
-      const currentLoadoutIds = user.loadout?.jutsuIds ?? [];
-      const updatedLoadoutIds = currentLoadoutIds.includes(oldJutsuId)
-        ? currentLoadoutIds.map((id) =>
+      const allLoadouts = await ctx.drizzle.query.jutsuLoadout.findMany({
+        where: eq(jutsuLoadout.userId, ctx.userId),
+      });
+      const loadoutsToUpdate = allLoadouts
+        .filter((l) => l.jutsuIds.includes(oldJutsuId))
+        .map((l) => ({
+          id: l.id,
+          jutsuIds: l.jutsuIds.map((id) =>
             id === oldJutsuId ? input.evolutionJutsuId : id,
-          )
-        : null;
+          ),
+        }));
       await Promise.all([
         ctx.drizzle
           .update(userData)
           .set({ questData: trackers })
           .where(eq(userData.userId, ctx.userId)),
-        ...(updatedLoadoutIds && user.jutsuLoadout
-          ? [
-              ctx.drizzle
-                .update(jutsuLoadout)
-                .set({ jutsuIds: updatedLoadoutIds })
-                .where(eq(jutsuLoadout.id, user.jutsuLoadout)),
-            ]
-          : []),
+        ...loadoutsToUpdate.map((l) =>
+          ctx.drizzle
+            .update(jutsuLoadout)
+            .set({ jutsuIds: l.jutsuIds })
+            .where(eq(jutsuLoadout.id, l.id)),
+        ),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
