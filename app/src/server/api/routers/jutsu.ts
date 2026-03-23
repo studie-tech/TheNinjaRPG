@@ -482,6 +482,10 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("This evolution is not yet available");
       const userJutsuObj = userJutsus.find((j) => j.id === input.userJutsuId);
       if (!userJutsuObj) return errorResponse("You don't own this jutsu");
+      if (userJutsuObj.finishTraining && userJutsuObj.finishTraining > new Date())
+        return errorResponse(
+          "This jutsu is currently being trained. Wait for training to complete before evolving.",
+        );
       if (userJutsuObj.jutsuId !== evolutionJutsu.parentJutsuId)
         return errorResponse("This jutsu cannot evolve into the target evolution");
       if (userJutsus.some((j) => j.jutsuId === input.evolutionJutsuId))
