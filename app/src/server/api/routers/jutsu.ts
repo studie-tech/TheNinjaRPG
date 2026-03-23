@@ -496,26 +496,48 @@ export const jutsuRouter = createTRPCRouter({
       const { trackers } = getNewTrackers(user, [
         { task: "jutsus_mastered", increment: 1 },
       ]);
-      // Mutate: replace the old jutsu with the evolved version + update quest data + audit log
+      // Mutate: compare-and-swap on jutsuId to prevent double-evolve on retry/double-submit.
       // reskinId is intentionally kept — fetchUserJutsus joins on reskinId (not jutsuReskin.jutsuId)
       // so the cosmetic reskin carries over to the evolved jutsu without touching the reskin record.
-      await Promise.all([
-        ctx.drizzle
-          .update(userJutsu)
-          .set({
-            jutsuId: input.evolutionJutsuId,
-            level: 1,
-            experience: 0,
-            finishTraining: null,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(eq(userJutsu.id, input.userJutsuId), eq(userJutsu.userId, ctx.userId)),
+      const evolveResult = await ctx.drizzle
+        .update(userJutsu)
+        .set({
+          jutsuId: input.evolutionJutsuId,
+          level: 1,
+          experience: 0,
+          finishTraining: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(userJutsu.id, input.userJutsuId),
+            eq(userJutsu.userId, ctx.userId),
+            eq(userJutsu.jutsuId, userJutsuObj.jutsu.id),
           ),
+        );
+      if (evolveResult.rowsAffected === 0)
+        return errorResponse("Evolution failed — jutsu may have already been evolved");
+      // Replace old jutsu ID with evolved ID in loadout if present
+      const oldJutsuId = userJutsuObj.jutsu.id;
+      const currentLoadoutIds = user.loadout?.jutsuIds ?? [];
+      const updatedLoadoutIds = currentLoadoutIds.includes(oldJutsuId)
+        ? currentLoadoutIds.map((id) =>
+            id === oldJutsuId ? input.evolutionJutsuId : id,
+          )
+        : null;
+      await Promise.all([
         ctx.drizzle
           .update(userData)
           .set({ questData: trackers })
           .where(eq(userData.userId, ctx.userId)),
+        ...(updatedLoadoutIds && user.jutsuLoadout
+          ? [
+              ctx.drizzle
+                .update(jutsuLoadout)
+                .set({ jutsuIds: updatedLoadoutIds })
+                .where(eq(jutsuLoadout.id, user.jutsuLoadout)),
+            ]
+          : []),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
@@ -602,15 +624,30 @@ export const jutsuRouter = createTRPCRouter({
         if (siblingCount >= 3)
           return errorResponse("A jutsu can have a maximum of 3 evolutions");
         // Validate chain depth (max 3 levels: A → B → C).
-        // Fetch grandparent in parallel — if it exists, adding this jutsu
-        // as a child of parent would create a chain of depth >= 3.
-        if (parent.parentJutsuId) {
-          if (parent.parentJutsuId === input.id)
+        // Walk upward from parent to get ancestor depth, checking for circular refs.
+        let ancestorDepth = 1;
+        let ancestorNode = parent;
+        while (ancestorNode.parentJutsuId) {
+          if (ancestorNode.parentJutsuId === input.id)
             return errorResponse("Cannot create a circular evolution chain");
-          const grandParent = await fetchJutsu(ctx.drizzle, parent.parentJutsuId);
-          if (grandParent?.parentJutsuId)
-            return errorResponse("Maximum evolution chain depth is 3");
+          ancestorNode = await fetchJutsu(ctx.drizzle, ancestorNode.parentJutsuId);
+          if (!ancestorNode) break;
+          ancestorDepth++;
         }
+        // Walk downward from input.id to get the deepest descendant depth.
+        let descendantDepth = 1;
+        let frontier = [input.id];
+        while (true) {
+          const children = await ctx.drizzle.query.jutsu.findMany({
+            columns: { id: true },
+            where: inArray(jutsu.parentJutsuId, frontier),
+          });
+          if (children.length === 0) break;
+          frontier = children.map((c) => c.id);
+          descendantDepth++;
+        }
+        if (ancestorDepth + descendantDepth > 3)
+          return errorResponse("Maximum evolution chain depth is 3");
       }
       // Diff
       const diff = calculateContentDiff(entry, {
