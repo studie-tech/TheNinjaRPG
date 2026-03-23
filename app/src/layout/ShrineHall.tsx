@@ -3,7 +3,7 @@
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, CalendarClock, Clock, Coins, Shield, X } from "lucide-react";
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,8 +49,9 @@ import { showMutationToast } from "@/libs/toast";
 import { getShrineHpByLevel } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import {
-  combineLocalDateTime,
+  combineUTCDateTime,
   DAY_S,
+  formatDateTimeShort,
   getDaysHoursMinutesSeconds,
   getTimeLeftStr,
   secondsFromNow,
@@ -353,9 +354,18 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const [scheduleTime, setScheduleTime] = useState<string>(""); // "HH:MM"
   const maxScheduleDate = useMemo(() => secondsFromNow(7 * DAY_S), []);
 
+  // After getScheduledBoosts activates due schedules server-side, refresh user data
+  useEffect(() => {
+    if (!scheduledBoosts) return;
+    const now = new Date();
+    const hasDue = scheduledBoosts.some((s) => new Date(s.startAt) <= now);
+    if (hasDue) void utils.profile.getUser.invalidate();
+  }, [scheduledBoosts, utils]);
+
   if (!sectorData) return <Loader explanation="Loading shrine data" />;
 
   const isKage = user.userId === user.village?.kageId;
+  const isElder = user.rank === "ELDER";
 
   const level3Shrines = (capturedSectors || []).filter(
     (s) => s.shrineLevel === 3,
@@ -411,7 +421,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
         </CardContent>
       </Card>
 
-      {user.villageId && isKage && (
+      {user.villageId && (isKage || isElder) && (
         <Card>
           <CardHeader>
             <CardTitle>Activate or Schedule a Boost</CardTitle>
@@ -429,8 +439,8 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
             ) : (
               <>
                 <p className="text-muted-foreground text-xs">
-                  Scheduling uses <span className="font-medium">your local time</span>{" "}
-                  (not server time).
+                  Scheduling uses <span className="font-medium">UTC time</span> (server
+                  time).
                 </p>
 
                 {SHRINE_BOOST_TYPES.map((boostType, i) => {
@@ -482,11 +492,11 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
                             setSchedulingBoostType(boostType);
 
                             const d = new Date();
-                            d.setHours(d.getHours() + 1);
+                            d.setUTCHours(d.getUTCHours() + 1, d.getUTCMinutes(), 0, 0);
                             setScheduleDate(d);
 
-                            const hh = String(d.getHours()).padStart(2, "0");
-                            const mm = String(d.getMinutes()).padStart(2, "0");
+                            const hh = String(d.getUTCHours()).padStart(2, "0");
+                            const mm = String(d.getUTCMinutes()).padStart(2, "0");
                             setScheduleTime(`${hh}:${mm}`);
                           }}
                         >
@@ -507,7 +517,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
                           <PopoverContent align="end" className="w-auto p-3">
                             <div className="space-y-3">
                               <div className="font-medium text-muted-foreground text-xs">
-                                Scheduling (local time)
+                                Scheduling (UTC time)
                               </div>
 
                               <div className="space-y-2">
@@ -537,9 +547,15 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
                                 </Label>
                                 <Input
                                   id={`time-${boostType}`}
-                                  type="time"
+                                  type="text"
+                                  placeholder="HH:MM"
+                                  pattern="^([01]\d|2[0-3]):[0-5]\d$"
+                                  maxLength={5}
                                   value={scheduleTime}
-                                  onChange={(e) => setScheduleTime(e.target.value)}
+                                  onChange={(e) => {
+                                    const v = e.target.value.replace(/[^0-9:]/g, "");
+                                    setScheduleTime(v);
+                                  }}
                                 />
                               </div>
 
@@ -547,12 +563,14 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
                                 <Button
                                   size="sm"
                                   disabled={
-                                    isSchedulingBoost || !scheduleDate || !scheduleTime
+                                    isSchedulingBoost ||
+                                    !scheduleDate ||
+                                    !/^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime)
                                   }
                                   onClick={() => {
                                     if (!scheduleDate || !scheduleTime) return;
 
-                                    const startAtLocal = combineLocalDateTime(
+                                    const startAtLocal = combineUTCDateTime(
                                       scheduleDate,
                                       scheduleTime,
                                     );
@@ -604,8 +622,8 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
                                 >
                                   <div className="flex-1">
                                     <div className="font-medium">
-                                      {startDate.toLocaleString()} -{" "}
-                                      {endDate.toLocaleString()}
+                                      {formatDateTimeShort(startDate)} UTC -{" "}
+                                      {formatDateTimeShort(endDate)} UTC
                                     </div>
                                     {isPast && (
                                       <div className="text-muted-foreground text-xs">

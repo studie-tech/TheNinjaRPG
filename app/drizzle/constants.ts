@@ -1385,6 +1385,15 @@ export const CLAN_MAX_MEMBERS = 100;
 // Elder nomination schedule
 export const ELDER_NOMINATION_CUTOFF_DAY = 25;
 export const ELDER_NOMINATION_DEADLINE_DAY = 28;
+
+// Elder governance
+export const KAGE_ELDER_REMOVAL_LOCK_SECS = 4 * 24 * 3600; // 4 days before elders can vote to remove kage
+export const ELDER_WAR_VOTE_HOURS = 24; // Hours elders have to vote on war declarations
+export const ELDER_KAGE_REMOVAL_VOTE_DAYS = 7; // Days elders have to vote on kage removal
+export const ELDER_VOTE_TYPES = ["WAR_DECLARATION", "KAGE_REMOVAL"] as const;
+export type ElderVoteType = (typeof ELDER_VOTE_TYPES)[number];
+export const ELDER_VOTE_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
+export type ElderVoteStatus = (typeof ELDER_VOTE_STATUSES)[number];
 export const CLANS_PER_STRUCTURE_LEVEL = 999999;
 export const CLAN_LOBBY_SECONDS = 30;
 export const CLAN_BATTLE_REWARD_POINTS = 50;

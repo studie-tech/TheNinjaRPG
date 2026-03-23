@@ -2,6 +2,7 @@ import { and, desc, eq, gte, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  ELDER_KAGE_REMOVAL_VOTE_DAYS,
   KAGE_CHALLENGE_ACCEPT_PRESTIGE,
   KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS,
   KAGE_CHALLENGE_OPEN_FOR_SECONDS,
@@ -9,6 +10,7 @@ import {
   KAGE_CHALLENGE_SECS,
   KAGE_DEFAULT_PRESTIGE,
   KAGE_DELAY_SECS,
+  KAGE_ELDER_REMOVAL_LOCK_SECS,
   KAGE_MAX_DAILIES,
   KAGE_MAX_WEEKLY_PRESTIGE_SEND,
   KAGE_PRESTIGE_REQUIREMENT,
@@ -21,6 +23,8 @@ import {
   kageDefendedChallenges,
   userData,
   village,
+  villageElderVote,
+  villageElderVoteEntry,
   villageStructure,
 } from "@/drizzle/schema";
 import { getServerPusher } from "@/libs/pusher";
@@ -34,7 +38,7 @@ import {
   updateRequestState,
 } from "@/routers/sparring";
 import { fetchVillage } from "@/routers/village";
-import { fetchActiveWars } from "@/routers/war";
+import { fetchActiveWars, fetchElderVote, resolveElderVote } from "@/routers/war";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -44,7 +48,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { calculateDailyLockedTime, canChallengeKage } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
-import { secondsFromDate, secondsPassed } from "@/utils/time";
+import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { calcStructureUpgrade } from "@/utils/village";
 
 const pusher = getServerPusher();
@@ -669,6 +673,183 @@ export const kageRouter = createTRPCRouter({
       return {
         success: true,
         message: `Village is now ${!userVillage.openForChallenges ? "open" : "closed"} for challenges`,
+      };
+    }),
+
+  // Initiate a kage removal vote (elder-only, once per 7 days, requires 4-day kage lock to have passed)
+  initiateKageRemovalVote: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Initiate a vote to remove the current kage" },
+    })
+    .input(z.object({ villageId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [{ user }, uVillage] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchVillage(ctx.drizzle, input.villageId),
+      ]);
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (!uVillage) return errorResponse("Village not found");
+      if (uVillage.type !== "VILLAGE") return errorResponse("Only for villages");
+      if (user.villageId !== input.villageId) return errorResponse("Wrong village");
+      if (user.rank !== "ELDER")
+        return errorResponse("Only elders can initiate a removal vote");
+      if (user.userId === uVillage.kageId)
+        return errorResponse("You cannot remove yourself as kage");
+
+      // Check 4-day kage action lock
+      const lockExpiry = new Date(
+        uVillage.leaderUpdatedAt.getTime() + KAGE_ELDER_REMOVAL_LOCK_SECS * 1000,
+      );
+      if (new Date() < lockExpiry) {
+        const daysLeft = Math.ceil(
+          (lockExpiry.getTime() - Date.now()) / (1000 * 3600 * 24),
+        );
+        return errorResponse(
+          `The kage is protected for ${daysLeft} more day${daysLeft !== 1 ? "s" : ""}`,
+        );
+      }
+
+      // Check no active removal vote
+      const existingVote = await ctx.drizzle.query.villageElderVote.findFirst({
+        where: and(
+          eq(villageElderVote.villageId, input.villageId),
+          eq(villageElderVote.type, "KAGE_REMOVAL"),
+          eq(villageElderVote.status, "PENDING"),
+        ),
+      });
+      if (existingVote)
+        return errorResponse("There is already a pending kage removal vote");
+
+      // Create the vote
+      const endsAt = secondsFromNow(ELDER_KAGE_REMOVAL_VOTE_DAYS * 24 * 3600);
+      await ctx.drizzle.insert(villageElderVote).values({
+        id: nanoid(),
+        villageId: input.villageId,
+        type: "KAGE_REMOVAL",
+        initiatedByUserId: user.userId,
+        targetId: uVillage.kageId,
+        status: "PENDING",
+        endsAt,
+      });
+
+      return {
+        success: true,
+        message: `Kage removal vote initiated. Elders have ${ELDER_KAGE_REMOVAL_VOTE_DAYS} days to vote.`,
+      };
+    }),
+
+  // Cast a vote on a kage removal motion (elder-only)
+  voteOnKageRemoval: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Vote on a pending kage removal motion" },
+    })
+    .input(z.object({ voteId: z.string(), vote: z.enum(["YES", "NO"]) }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [{ user }, voteRecord] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchElderVote(ctx.drizzle, input.voteId),
+      ]);
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (!user.villageId) return errorResponse("You must be in a village");
+      if (user.rank !== "ELDER") return errorResponse("Only elders can vote");
+      if (!voteRecord) return errorResponse("Vote not found");
+      if (voteRecord.status !== "PENDING")
+        return errorResponse("Vote is no longer pending");
+      if (voteRecord.villageId !== user.villageId)
+        return errorResponse("Vote is not for your village");
+      if (voteRecord.type !== "KAGE_REMOVAL")
+        return errorResponse("Not a kage removal vote");
+      if (new Date() > voteRecord.endsAt)
+        return errorResponse("Voting period has ended");
+      if (user.userId === voteRecord.targetId)
+        return errorResponse("The kage cannot vote on their own removal");
+      const alreadyVoted = voteRecord.entries.some((e) => e.userId === user.userId);
+      if (alreadyVoted) return errorResponse("You have already voted");
+
+      // Count eligible elders (all elders except the kage being voted on)
+      const elderCount = await ctx.drizzle
+        .select({ count: sql<number>`count(*)` })
+        .from(userData)
+        .where(
+          and(
+            eq(userData.villageId, user.villageId),
+            eq(userData.rank, "ELDER"),
+            eq(userData.isAi, false),
+            ne(userData.userId, voteRecord.targetId),
+          ),
+        )
+        .then(([r]) => r?.count ?? 0);
+
+      // Insert vote entry
+      await ctx.drizzle.insert(villageElderVoteEntry).values({
+        id: nanoid(),
+        voteId: input.voteId,
+        userId: user.userId,
+        vote: input.vote,
+      });
+
+      // Re-evaluate outcome
+      const entries = [
+        ...voteRecord.entries,
+        { userId: user.userId, vote: input.vote },
+      ];
+      const yesCount = entries.filter((e) => e.vote === "YES").length;
+      const noCount = entries.filter((e) => e.vote === "NO").length;
+      const outcome = resolveElderVote(yesCount, noCount, elderCount);
+
+      if (outcome === "APPROVED") {
+        // Execute kage removal
+        const replacement = await fetchKageReplacement(
+          ctx.drizzle,
+          user.villageId,
+          voteRecord.targetId,
+        );
+        if (!replacement) {
+          await ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, input.voteId));
+          return errorResponse("No eligible replacement elder found");
+        }
+        await Promise.all([
+          // Reset kicked kage prestige to 0
+          ctx.drizzle
+            .update(userData)
+            .set({ villagePrestige: 0 })
+            .where(eq(userData.userId, voteRecord.targetId)),
+          // Install replacement kage and reset 4-day lock
+          ctx.drizzle
+            .update(village)
+            .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
+            .where(eq(village.id, user.villageId)),
+          ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "APPROVED" })
+            .where(eq(villageElderVote.id, input.voteId)),
+        ]);
+        return {
+          success: true,
+          message: `Kage removed. ${replacement.username} is the new kage.`,
+        };
+      }
+
+      if (outcome === "REJECTED") {
+        await ctx.drizzle
+          .update(villageElderVote)
+          .set({ status: "REJECTED" })
+          .where(eq(villageElderVote.id, input.voteId));
+        return { success: true, message: "Kage removal vote failed" };
+      }
+
+      return {
+        success: true,
+        message: `Vote recorded. Current tally: ${yesCount} YES, ${noCount} NO`,
       };
     }),
 });

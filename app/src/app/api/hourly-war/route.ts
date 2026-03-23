@@ -1,14 +1,25 @@
-import { and, eq, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { cookies } from "next/headers";
 import {
   WAR_DAILY_HEALTH_DRAIN,
   WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
   WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5,
   WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8,
+  WAR_DECLARATION_COST,
   WAR_MAX_DURATION_DAYS,
+  WAR_RAID_SHRINE_HP,
   WAR_TOKEN_REDUCTION_INTERVAL_HOURS,
 } from "@/drizzle/constants";
-import { village, villageStructure, war } from "@/drizzle/schema";
+import {
+  quest,
+  questHistory,
+  userData,
+  village,
+  villageElderVote,
+  villageStructure,
+  war,
+} from "@/drizzle/schema";
 import {
   getGameSetting,
   handleEndpointError,
@@ -16,8 +27,13 @@ import {
   updateGameSetting,
 } from "@/libs/gamesettings";
 import { handleWarEnd } from "@/libs/war";
+import { fetchKageReplacement } from "@/server/api/routers/kage";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
-import { fetchActiveWars } from "@/server/api/routers/war";
+import {
+  fetchActiveWars,
+  fetchExpiredElderVotes,
+  resolveElderVote,
+} from "@/server/api/routers/war";
 import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "hourly-war";
@@ -202,6 +218,21 @@ export async function GET() {
 
       // Update daily decay timer
       await updateGameSetting(drizzleDB, DAILY_DECAY_TIMER, 0, now);
+
+      // Refetch active wars after decay since handleWarEnd might have been called
+      activeWars = await fetchActiveWars(drizzleDB);
+    }
+
+    // =============================================
+    // HOURLY TASK: Process expired elder votes
+    // =============================================
+    await processExpiredElderVotes();
+
+    // =============================================
+    // HOURLY TASK: Assign war quests to users in active wars
+    // =============================================
+    if (activeWars.length > 0) {
+      await assignWarQuests(activeWars);
     }
 
     // Clear expired temporary structure bonuses
@@ -232,4 +263,248 @@ async function clearExpiredStructureBonuses(now: Date) {
         lt(villageStructure.temporaryLevelBonusExpiresAt, now),
       ),
     );
+}
+
+/**
+ * Assign war quests to users in active wars who don't have one already
+ */
+async function assignWarQuests(
+  activeWars: Awaited<ReturnType<typeof fetchActiveWars>>,
+) {
+  // Get all village IDs involved in active wars
+  const villageIds = [
+    ...new Set(
+      activeWars.flatMap((w) => [
+        w.attackerVillageId,
+        w.defenderVillageId,
+        ...w.warAllies.map((a) => a.villageId),
+      ]),
+    ),
+  ];
+
+  if (villageIds.length === 0) return;
+
+  // Fetch war quests and users without active war quests in parallel
+  const [warQuests, usersWithoutWarQuest] = await Promise.all([
+    drizzleDB.query.quest.findMany({
+      where: and(
+        eq(quest.questType, "war"),
+        isNotNull(quest.content),
+        eq(quest.hidden, false),
+      ),
+    }),
+    // Get users in war villages who don't have an active war quest
+    drizzleDB
+      .select({
+        userId: userData.userId,
+        rank: userData.rank,
+        level: userData.level,
+        villageId: userData.villageId,
+      })
+      .from(userData)
+      .leftJoin(
+        questHistory,
+        and(
+          eq(questHistory.userId, userData.userId),
+          eq(questHistory.questType, "war"),
+          eq(questHistory.completed, 0),
+          isNull(questHistory.endAt),
+        ),
+      )
+      .where(
+        and(
+          inArray(userData.villageId, villageIds),
+          eq(userData.isAi, false),
+          isNull(questHistory.id), // No active war quest
+        ),
+      ),
+  ]);
+
+  if (warQuests.length === 0 || usersWithoutWarQuest.length === 0) return;
+
+  // For each user, find an applicable war quest and assign it
+  const questAssignments: {
+    id: string;
+    userId: string;
+    questId: string;
+    questType: "war";
+  }[] = [];
+
+  for (const user of usersWithoutWarQuest) {
+    const questRanks = availableQuestLetterRanks(user.rank);
+
+    // Find an applicable quest for this user
+    const applicableQuest = [...warQuests]
+      .sort(() => Math.random() - 0.5)
+      .find(
+        (q) =>
+          questRanks.includes(q.questRank) &&
+          (!q.requiredVillage || q.requiredVillage === user.villageId) &&
+          q.requiredLevel <= user.level &&
+          q.maxLevel >= user.level,
+      );
+
+    if (applicableQuest) {
+      questAssignments.push({
+        id: nanoid(),
+        userId: user.userId,
+        questId: applicableQuest.id,
+        questType: "war",
+      });
+    }
+  }
+
+  // Bulk insert all quest assignments
+  if (questAssignments.length > 0) {
+    await drizzleDB
+      .insert(questHistory)
+      .values(questAssignments)
+      .onDuplicateKeyUpdate({
+        set: { completed: 0, endAt: null, startedAt: new Date() },
+      });
+  }
+}
+
+/**
+ * Process elder votes whose deadline has passed.
+ * - WAR_DECLARATION: if vote still PENDING after 24h, auto-approve and start the war
+ *   (as per: "if elders do not vote, the war starts anyway")
+ * - KAGE_REMOVAL: if majority YES when deadline passes, execute removal
+ */
+async function processExpiredElderVotes() {
+  const expiredVotes = await fetchExpiredElderVotes(drizzleDB);
+  if (expiredVotes.length === 0) return;
+
+  for (const vote of expiredVotes) {
+    if (vote.type === "WAR_DECLARATION") {
+      // Count eligible elders (not the initiator who is the kage)
+      const elderCount = await drizzleDB
+        .select({ count: sql<number>`count(*)` })
+        .from(userData)
+        .where(
+          and(
+            eq(userData.villageId, vote.villageId),
+            eq(userData.rank, "ELDER"),
+            eq(userData.isAi, false),
+            ne(userData.userId, vote.initiatedByUserId),
+          ),
+        )
+        .then(([r]) => r?.count ?? 0);
+
+      const yesCount = vote.entries.filter((e) => e.vote === "YES").length;
+      const noCount = vote.entries.filter((e) => e.vote === "NO").length;
+      const outcome = resolveElderVote(yesCount, noCount, elderCount);
+
+      // If decisively rejected, mark as rejected
+      if (outcome === "REJECTED") {
+        await drizzleDB
+          .update(villageElderVote)
+          .set({ status: "REJECTED" })
+          .where(eq(villageElderVote.id, vote.id));
+        continue;
+      }
+
+      // APPROVED or PENDING (no blocking majority) → auto-start war
+      const attackerVillage = await drizzleDB.query.village.findFirst({
+        where: eq(village.id, vote.villageId),
+      });
+      if (!attackerVillage || attackerVillage.tokens < WAR_DECLARATION_COST) {
+        await drizzleDB
+          .update(villageElderVote)
+          .set({ status: "REJECTED" })
+          .where(eq(villageElderVote.id, vote.id));
+        continue;
+      }
+
+      const warId = nanoid();
+      const [updateResult] = await Promise.all([
+        drizzleDB
+          .update(village)
+          .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
+          .where(
+            and(
+              eq(village.id, vote.villageId),
+              gte(village.tokens, WAR_DECLARATION_COST),
+            ),
+          ),
+        drizzleDB.insert(war).values({
+          id: warId,
+          attackerVillageId: vote.villageId,
+          defenderVillageId: vote.targetId,
+          status: "ACTIVE",
+          type: vote.warType ?? "VILLAGE_WAR",
+          targetStructureRoute: vote.targetStructureRoute ?? "/townhall",
+          attackerShrineHp: WAR_RAID_SHRINE_HP,
+          attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
+          attackerShrineStatus: "ACTIVE",
+          defenderShrineHp: WAR_RAID_SHRINE_HP,
+          defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
+          defenderShrineStatus: "ACTIVE",
+        }),
+        drizzleDB
+          .update(villageElderVote)
+          .set({ status: "APPROVED" })
+          .where(eq(villageElderVote.id, vote.id)),
+      ]);
+      if (updateResult.rowsAffected === 0) {
+        await drizzleDB.delete(war).where(eq(war.id, warId));
+        await drizzleDB
+          .update(villageElderVote)
+          .set({ status: "REJECTED" })
+          .where(eq(villageElderVote.id, vote.id));
+      }
+    } else if (vote.type === "KAGE_REMOVAL") {
+      // Count eligible elders (not the kage being removed)
+      const elderCount = await drizzleDB
+        .select({ count: sql<number>`count(*)` })
+        .from(userData)
+        .where(
+          and(
+            eq(userData.villageId, vote.villageId),
+            eq(userData.rank, "ELDER"),
+            eq(userData.isAi, false),
+            ne(userData.userId, vote.targetId),
+          ),
+        )
+        .then(([r]) => r?.count ?? 0);
+
+      const yesCount = vote.entries.filter((e) => e.vote === "YES").length;
+      const noCount = vote.entries.filter((e) => e.vote === "NO").length;
+      const outcome = resolveElderVote(yesCount, noCount, elderCount);
+
+      if (outcome === "APPROVED") {
+        const replacement = await fetchKageReplacement(
+          drizzleDB,
+          vote.villageId,
+          vote.targetId,
+        );
+        if (!replacement) {
+          await drizzleDB
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, vote.id));
+          continue;
+        }
+        await Promise.all([
+          drizzleDB
+            .update(userData)
+            .set({ villagePrestige: 0 })
+            .where(eq(userData.userId, vote.targetId)),
+          drizzleDB
+            .update(village)
+            .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
+            .where(eq(village.id, vote.villageId)),
+          drizzleDB
+            .update(villageElderVote)
+            .set({ status: "APPROVED" })
+            .where(eq(villageElderVote.id, vote.id)),
+        ]);
+      } else {
+        await drizzleDB
+          .update(villageElderVote)
+          .set({ status: "REJECTED" })
+          .where(eq(villageElderVote.id, vote.id));
+      }
+    }
+  }
 }

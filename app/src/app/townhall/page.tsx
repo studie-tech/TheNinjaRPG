@@ -16,6 +16,7 @@ import Link from "next/link";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,18 +36,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  ELDER_KAGE_REMOVAL_VOTE_DAYS,
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
   KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS,
   KAGE_CHALLENGE_MINS,
   KAGE_CHALLENGE_SECS,
+  KAGE_ELDER_REMOVAL_LOCK_SECS,
   KAGE_MIN_DAYS_IN_VILLAGE,
   KAGE_PRESTIGE_COST,
   KAGE_PRESTIGE_REQUIREMENT,
   KAGE_RANK_REQUIREMENT,
   WAR_FUNDS_COST,
 } from "@/drizzle/constants";
-import type { Village, VillageAlliance } from "@/drizzle/schema";
+import type { VillageAlliance } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
@@ -126,6 +129,56 @@ const ElderHall: React.FC<{
     { villageId: user.villageId ?? "", isOutlaw: false },
     { staleTime: 10000, enabled: !!user.villageId },
   );
+
+  // Fetch village for kage lock check
+  const { data: villageData } = api.village.get.useQuery(
+    { id: user.villageId ?? "" },
+    { staleTime: 10000, enabled: !!user.villageId },
+  );
+
+  // Fetch elder votes (war declarations and kage removal motions)
+  const { data: elderVotes, refetch: refetchVotes } = api.war.getElderVotes.useQuery(
+    { villageId: user.villageId ?? "" },
+    { staleTime: 5000, enabled: !!user.villageId },
+  );
+
+  const { mutate: voteWar, isPending: isVotingWar } =
+    api.war.voteOnWarDeclaration.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) await refetchVotes();
+      },
+    });
+
+  const { mutate: initiateRemoval, isPending: isInitiatingRemoval } =
+    api.kage.initiateKageRemovalVote.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) await refetchVotes();
+      },
+    });
+
+  const { mutate: voteRemoval, isPending: isVotingRemoval } =
+    api.kage.voteOnKageRemoval.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) await refetchVotes();
+      },
+    });
+
+  // Derived
+  const isElder = user.rank === "ELDER";
+  const isKage = user.userId === villageData?.villageData.kageId;
+  const pendingVotes = elderVotes?.filter((v) => v.status === "PENDING") ?? [];
+  const pendingWarVote = pendingVotes.find((v) => v.type === "WAR_DECLARATION");
+  const pendingKageVote = pendingVotes.find((v) => v.type === "KAGE_REMOVAL");
+
+  // 4-day lock check: elders can only initiate removal after the kage has been in power for 4 days
+  const leaderUpdatedAt = villageData?.villageData.leaderUpdatedAt;
+  const lockExpiry = leaderUpdatedAt
+    ? new Date(leaderUpdatedAt.getTime() + KAGE_ELDER_REMOVAL_LOCK_SECS * 1000)
+    : null;
+  const kageIsProtected = lockExpiry ? new Date() < lockExpiry : true;
 
   // Sort clans by activity points, with all-time points as tie-breaker
   const rankedClans = clans
@@ -241,6 +294,167 @@ const ElderHall: React.FC<{
           </div>
         ) : (
           <p className="text-muted-foreground">No clans found in this village.</p>
+        )}
+      </ContentBox>
+      {/* COUNCIL MOTIONS */}
+      <ContentBox
+        title="Council Motions"
+        initialBreak={true}
+        subtitle="Elder governance — war declarations and kage removal votes"
+      >
+        {isVotingWar || isInitiatingRemoval || isVotingRemoval ? (
+          <Loader explanation="Processing vote..." />
+        ) : (
+          <div className="space-y-4">
+            {/* Pending war declaration vote */}
+            {pendingWarVote && (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4">
+                <div className="mb-1 font-bold text-red-400">
+                  ⚔️ War Declaration — vs {pendingWarVote.targetName}
+                </div>
+                <div className="mb-2 text-muted-foreground text-sm">
+                  Submitted by {pendingWarVote.initiatedBy?.username}. Voting closes in{" "}
+                  <Countdown targetDate={pendingWarVote.endsAt} />. If no blocking
+                  majority votes NO, war starts automatically.
+                </div>
+                <div className="mb-3 text-sm">
+                  YES: {pendingWarVote.entries.filter((e) => e.vote === "YES").length}{" "}
+                  &nbsp;|&nbsp; NO:{" "}
+                  {pendingWarVote.entries.filter((e) => e.vote === "NO").length}
+                </div>
+                {isElder &&
+                  !pendingWarVote.entries.some((e) => e.userId === user.userId) && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() =>
+                          voteWar({ voteId: pendingWarVote.id, vote: "YES" })
+                        }
+                      >
+                        Vote YES
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() =>
+                          voteWar({ voteId: pendingWarVote.id, vote: "NO" })
+                        }
+                      >
+                        Vote NO
+                      </Button>
+                    </div>
+                  )}
+                {isElder &&
+                  pendingWarVote.entries.some((e) => e.userId === user.userId) && (
+                    <p className="text-muted-foreground text-sm italic">
+                      You have already voted.
+                    </p>
+                  )}
+              </div>
+            )}
+            {/* Pending kage removal vote */}
+            {pendingKageVote && (
+              <div className="rounded-lg border border-orange-500/40 bg-orange-500/10 p-4">
+                <div className="mb-1 font-bold text-orange-400">
+                  🗳️ Kage Removal — {pendingKageVote.targetName}
+                </div>
+                <div className="mb-2 text-muted-foreground text-sm">
+                  Initiated by {pendingKageVote.initiatedBy?.username}. Voting closes in{" "}
+                  <Countdown targetDate={pendingKageVote.endsAt} />.
+                </div>
+                <div className="mb-3 text-sm">
+                  YES: {pendingKageVote.entries.filter((e) => e.vote === "YES").length}{" "}
+                  &nbsp;|&nbsp; NO:{" "}
+                  {pendingKageVote.entries.filter((e) => e.vote === "NO").length}
+                </div>
+                {isElder &&
+                  user.userId !== pendingKageVote.targetId &&
+                  !pendingKageVote.entries.some((e) => e.userId === user.userId) && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() =>
+                          voteRemoval({ voteId: pendingKageVote.id, vote: "YES" })
+                        }
+                      >
+                        Vote YES (Remove)
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          voteRemoval({ voteId: pendingKageVote.id, vote: "NO" })
+                        }
+                      >
+                        Vote NO (Keep)
+                      </Button>
+                    </div>
+                  )}
+                {isElder &&
+                  pendingKageVote.entries.some((e) => e.userId === user.userId) && (
+                    <p className="text-muted-foreground text-sm italic">
+                      You have already voted.
+                    </p>
+                  )}
+                {isElder && user.userId === pendingKageVote.targetId && (
+                  <p className="text-muted-foreground text-sm italic">
+                    You cannot vote on your own removal.
+                  </p>
+                )}
+              </div>
+            )}
+            {/* Initiate kage removal */}
+            {isElder && !isKage && !pendingKageVote && (
+              <div className="rounded-lg border border-border p-4">
+                <div className="mb-2 font-bold">Remove Current Kage</div>
+                {kageIsProtected ? (
+                  <p className="text-muted-foreground text-sm">
+                    The kage is protected for{" "}
+                    {lockExpiry
+                      ? Math.ceil(
+                          (lockExpiry.getTime() - Date.now()) / (1000 * 3600 * 24),
+                        )
+                      : KAGE_ELDER_REMOVAL_LOCK_SECS / (24 * 3600)}{" "}
+                    more day(s). Elders cannot initiate a removal vote for{" "}
+                    {KAGE_ELDER_REMOVAL_LOCK_SECS / (24 * 3600)} days after a new kage
+                    takes power.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-3 text-muted-foreground text-sm">
+                      If 2 elders vote YES within {ELDER_KAGE_REMOVAL_VOTE_DAYS} days,
+                      the kage will be removed and lose all village prestige.
+                    </p>
+                    <Confirm2
+                      title="Initiate Kage Removal Vote"
+                      button={
+                        <Button size="sm" variant="destructive">
+                          <Swords className="mr-2 h-4 w-4" />
+                          Initiate Removal Vote
+                        </Button>
+                      }
+                      onAccept={() =>
+                        initiateRemoval({ villageId: user.villageId ?? "" })
+                      }
+                    >
+                      Are you sure you want to initiate a kage removal vote? The vote
+                      will be open for {ELDER_KAGE_REMOVAL_VOTE_DAYS} days. If a
+                      majority of elders vote YES, the kage will be removed and their
+                      village prestige reset to 0.
+                    </Confirm2>
+                  </>
+                )}
+              </div>
+            )}
+            {/* No motions */}
+            {!pendingWarVote && !pendingKageVote && (!isElder || isKage) && (
+              <p className="text-muted-foreground text-sm">
+                No active council motions.
+              </p>
+            )}
+          </div>
         )}
       </ContentBox>
     </>
@@ -848,13 +1062,15 @@ const AllianceHall: React.FC<{
   );
 };
 
+type VillageWithKage = RouterOutputs["village"]["getAlliances"]["villages"][number];
+
 /**
  * Alliance List Component
  * Displays a searchable/filterable list of all villages and factions with alliance actions
  */
 const AllianceList: React.FC<{
   user: NonNullable<UserWithRelations>;
-  villages: Village[];
+  villages: VillageWithKage[];
   relationships: VillageAlliance[];
 }> = ({ user, villages, relationships }) => {
   const utils = api.useUtils();
@@ -1006,10 +1222,10 @@ const AllianceList: React.FC<{
  * Displays a single village or faction with its alliance status and actions
  */
 const AllianceCard: React.FC<{
-  entity: Village;
+  entity: VillageWithKage;
   user: NonNullable<UserWithRelations>;
   relationships: VillageAlliance[];
-  villages: Village[];
+  villages: VillageWithKage[];
   isKage: boolean;
   onCreate: (params: { targetId: string; type: "ALLIANCE" | "SURRENDER" }) => void;
   onLeave: (params: { allianceId: string }) => void;
@@ -1068,6 +1284,24 @@ const AllianceCard: React.FC<{
               {capitalizeFirstLetter(status)}
             </span>
           </div>
+          {entity.kage && (
+            <div className="mt-1 flex items-center gap-1 text-muted-foreground text-xs">
+              <AvatarImage
+                href={entity.kage.avatar}
+                alt={entity.kage.username}
+                userId={entity.kage.userId}
+                size={20}
+                hover_effect={false}
+                priority={false}
+              />
+              <Link
+                href={`/userid/${entity.kage.userId}`}
+                className="hover:text-foreground"
+              >
+                {isVillage ? "Kage" : "Leader"}: {entity.kage.username}
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 

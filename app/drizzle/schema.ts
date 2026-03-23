@@ -3824,6 +3824,79 @@ export const warAllyRelations = relations(warAlly, ({ one }) => ({
   }),
 }));
 
+// Village elder vote (war declaration or kage removal proposals)
+export const villageElderVote = mysqlTable(
+  "VillageElderVote",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    villageId: varchar("villageId", { length: 191 }).notNull(),
+    type: mysqlEnum("type", consts.ELDER_VOTE_TYPES).notNull(),
+    initiatedByUserId: varchar("initiatedByUserId", { length: 191 }).notNull(),
+    // For WAR_DECLARATION: target village ID. For KAGE_REMOVAL: kage user ID.
+    targetId: varchar("targetId", { length: 191 }).notNull(),
+    // Only set for WAR_DECLARATION votes
+    warType: mysqlEnum("warType", consts.WAR_TYPES),
+    targetStructureRoute: varchar("targetStructureRoute", { length: 191 }),
+    status: mysqlEnum("status", consts.ELDER_VOTE_STATUSES).notNull().default("PENDING"),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    endsAt: datetime("endsAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => ({
+    villageIdIdx: index("VillageElderVote_villageId_idx").on(table.villageId),
+    typeIdx: index("VillageElderVote_type_idx").on(table.type),
+    statusIdx: index("VillageElderVote_status_idx").on(table.status),
+    endsAtIdx: index("VillageElderVote_endsAt_idx").on(table.endsAt),
+  }),
+);
+export type VillageElderVote = InferSelectModel<typeof villageElderVote>;
+
+export const villageElderVoteEntry = mysqlTable(
+  "VillageElderVoteEntry",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    voteId: varchar("voteId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    vote: mysqlEnum("vote", ["YES", "NO"]).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    voteIdIdx: index("VillageElderVoteEntry_voteId_idx").on(table.voteId),
+    userIdIdx: index("VillageElderVoteEntry_userId_idx").on(table.userId),
+    uniqueVoter: unique("VillageElderVoteEntry_voteId_userId_unique").on(
+      table.voteId,
+      table.userId,
+    ),
+  }),
+);
+export type VillageElderVoteEntry = InferSelectModel<typeof villageElderVoteEntry>;
+
+export const villageElderVoteRelations = relations(villageElderVote, ({ one, many }) => ({
+  village: one(village, {
+    fields: [villageElderVote.villageId],
+    references: [village.id],
+  }),
+  initiatedBy: one(userData, {
+    fields: [villageElderVote.initiatedByUserId],
+    references: [userData.userId],
+  }),
+  entries: many(villageElderVoteEntry),
+}));
+
+export const villageElderVoteEntryRelations = relations(villageElderVoteEntry, ({ one }) => ({
+  vote: one(villageElderVote, {
+    fields: [villageElderVoteEntry.voteId],
+    references: [villageElderVote.id],
+  }),
+  user: one(userData, {
+    fields: [villageElderVoteEntry.userId],
+    references: [userData.userId],
+  }),
+}));
+
 export const warKill = mysqlTable(
   "WarKill",
   {

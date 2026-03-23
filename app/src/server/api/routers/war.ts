@@ -1,8 +1,9 @@
-import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import {
+  ELDER_WAR_VOTE_HOURS,
   IMG_AVATAR_DEFAULT,
   MAP_RESERVED_SECTORS,
   SHRINE_MAX_PER_VILLAGE,
@@ -25,6 +26,8 @@ import {
   sector,
   userData,
   village,
+  villageElderVote,
+  villageElderVoteEntry,
   war,
   warAlly,
   warKill,
@@ -55,7 +58,7 @@ import type { DrizzleClient } from "@/server/db";
 import { findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars } from "@/utils/permissions";
-import { DAY_S, secondsFromDate } from "@/utils/time";
+import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -605,41 +608,95 @@ export const warRouter = createTRPCRouter({
         return errorResponse("A village is now already involved in an active war");
       }
 
-      // Create war and deduct tokens
-      const warId = nanoid();
-      const [updateResult] = await Promise.all([
-        ctx.drizzle
-          .update(village)
-          .set({ tokens: attackerVillage.tokens - WAR_DECLARATION_COST })
-          .where(
-            and(
-              eq(village.id, user.villageId),
-              gte(village.tokens, WAR_DECLARATION_COST),
-            ),
-          ),
-        ctx.drizzle.insert(war).values({
-          id: warId,
-          attackerVillageId: user.villageId,
-          defenderVillageId: input.targetVillageId,
-          status: "ACTIVE",
-          type: warType,
-          targetStructureRoute: structure.route,
-          // Village wars and raids have both attacker and defender shrines
-          attackerShrineHp: WAR_RAID_SHRINE_HP,
-          attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
-          attackerShrineStatus: "ACTIVE",
-          defenderShrineHp: WAR_RAID_SHRINE_HP,
-          defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
-          defenderShrineStatus: "ACTIVE",
-        }),
-      ]);
-      if (updateResult.rowsAffected === 0) {
-        await ctx.drizzle.delete(war).where(eq(war.id, warId));
-        return errorResponse("Not enough tokens to declare war");
+      // Check for existing pending war declaration vote
+      const existingVote = await ctx.drizzle.query.villageElderVote.findFirst({
+        where: and(
+          eq(villageElderVote.villageId, user.villageId),
+          eq(villageElderVote.type, "WAR_DECLARATION"),
+          eq(villageElderVote.status, "PENDING"),
+        ),
+      });
+      if (existingVote) {
+        return errorResponse(
+          "There is already a pending war declaration vote for your village",
+        );
       }
+
+      // Fetch village elders (excludes kage/initiator from voting)
+      const elders = await ctx.drizzle.query.userData.findMany({
+        columns: { userId: true },
+        where: and(
+          eq(userData.villageId, user.villageId),
+          eq(userData.rank, "ELDER"),
+          eq(userData.isAi, false),
+          ne(userData.userId, user.userId),
+        ),
+      });
+
+      // If no elders exist, start war immediately
+      if (elders.length === 0) {
+        const warId = nanoid();
+        const [updateResult] = await Promise.all([
+          ctx.drizzle
+            .update(village)
+            .set({ tokens: attackerVillage.tokens - WAR_DECLARATION_COST })
+            .where(
+              and(
+                eq(village.id, user.villageId),
+                gte(village.tokens, WAR_DECLARATION_COST),
+              ),
+            ),
+          ctx.drizzle.insert(war).values({
+            id: warId,
+            attackerVillageId: user.villageId,
+            defenderVillageId: input.targetVillageId,
+            status: "ACTIVE",
+            type: warType,
+            targetStructureRoute: structure.route,
+            attackerShrineHp: WAR_RAID_SHRINE_HP,
+            attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
+            attackerShrineStatus: "ACTIVE",
+            defenderShrineHp: WAR_RAID_SHRINE_HP,
+            defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
+            defenderShrineStatus: "ACTIVE",
+          }),
+        ]);
+        if (updateResult.rowsAffected === 0) {
+          await ctx.drizzle.delete(war).where(eq(war.id, warId));
+          return errorResponse("Not enough tokens to declare war");
+        }
+        return { success: true, message: "War declared successfully" };
+      }
+
+      // Create pending elder vote — tokens deducted only when war officially starts
+      const voteId = nanoid();
+      const endsAt = secondsFromNow(ELDER_WAR_VOTE_HOURS * 3600);
+      await Promise.all([
+        ctx.drizzle.insert(villageElderVote).values({
+          id: voteId,
+          villageId: user.villageId,
+          type: "WAR_DECLARATION",
+          initiatedByUserId: user.userId,
+          targetId: input.targetVillageId,
+          warType: warType,
+          targetStructureRoute: structure.route,
+          status: "PENDING",
+          endsAt,
+        }),
+        ctx.drizzle.insert(notification).values({
+          userId: user.userId,
+          content: `${user.username} has submitted a war declaration against ${defenderVillage.name}. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`,
+        }),
+        ctx.drizzle
+          .update(userData)
+          .set({ unreadNotifications: sql`unreadNotifications + 1` })
+          .where(
+            and(eq(userData.villageId, user.villageId), eq(userData.rank, "ELDER")),
+          ),
+      ]);
       return {
         success: true,
-        message: "War declared successfully",
+        message: `War declaration submitted. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`,
       };
     }),
 
@@ -1087,6 +1144,144 @@ export const warRouter = createTRPCRouter({
         .groupBy(warKill.killerId)
         .orderBy(desc(sql<number>`sum(GREATEST(${aggregateField}, 0))`));
     }),
+
+  // Get pending elder votes for a village
+  getElderVotes: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get pending elder votes for a village" },
+    })
+    .input(z.object({ villageId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return fetchElderVotes(ctx.drizzle, input.villageId);
+    }),
+
+  // Elder votes on a pending war declaration
+  voteOnWarDeclaration: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Vote on a pending war declaration as elder" },
+    })
+    .input(z.object({ voteId: z.string(), vote: z.enum(["YES", "NO"]) }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Fetch
+      const [{ user }, voteRecord] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchElderVote(ctx.drizzle, input.voteId),
+      ]);
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (!user.villageId) return errorResponse("You must be in a village");
+      if (user.rank !== "ELDER") return errorResponse("Only elders can vote");
+      if (!voteRecord) return errorResponse("Vote not found");
+      if (voteRecord.status !== "PENDING")
+        return errorResponse("Vote is no longer pending");
+      if (voteRecord.villageId !== user.villageId)
+        return errorResponse("Vote is not for your village");
+      if (voteRecord.type !== "WAR_DECLARATION")
+        return errorResponse("Not a war declaration vote");
+      if (new Date() > voteRecord.endsAt)
+        return errorResponse("Voting period has ended");
+      const alreadyVoted = voteRecord.entries.some((e) => e.userId === user.userId);
+      if (alreadyVoted) return errorResponse("You have already voted");
+
+      // Count elders (excluding vote initiator who may be the kage)
+      const elderCount = await ctx.drizzle
+        .select({ count: sql<number>`count(*)` })
+        .from(userData)
+        .where(
+          and(
+            eq(userData.villageId, user.villageId),
+            eq(userData.rank, "ELDER"),
+            eq(userData.isAi, false),
+            ne(userData.userId, voteRecord.initiatedByUserId),
+          ),
+        )
+        .then(([r]) => r?.count ?? 0);
+
+      // Insert the vote entry
+      await ctx.drizzle.insert(villageElderVoteEntry).values({
+        id: nanoid(),
+        voteId: input.voteId,
+        userId: user.userId,
+        vote: input.vote,
+      });
+
+      // Re-fetch entries to decide outcome
+      const entries = [
+        ...voteRecord.entries,
+        { userId: user.userId, vote: input.vote },
+      ];
+      const yesCount = entries.filter((e) => e.vote === "YES").length;
+      const noCount = entries.filter((e) => e.vote === "NO").length;
+
+      const outcome = resolveElderVote(yesCount, noCount, elderCount);
+      if (outcome === "APPROVED") {
+        // Start the war and deduct tokens
+        const attackerVillage = await ctx.drizzle.query.village.findFirst({
+          where: eq(village.id, voteRecord.villageId),
+        });
+        if (!attackerVillage || attackerVillage.tokens < WAR_DECLARATION_COST) {
+          await ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, input.voteId));
+          return errorResponse("Village no longer has enough tokens to declare war");
+        }
+        const warId = nanoid();
+        const [updateResult] = await Promise.all([
+          ctx.drizzle
+            .update(village)
+            .set({ tokens: attackerVillage.tokens - WAR_DECLARATION_COST })
+            .where(
+              and(
+                eq(village.id, voteRecord.villageId),
+                gte(village.tokens, WAR_DECLARATION_COST),
+              ),
+            ),
+          ctx.drizzle.insert(war).values({
+            id: warId,
+            attackerVillageId: voteRecord.villageId,
+            defenderVillageId: voteRecord.targetId,
+            status: "ACTIVE",
+            type: voteRecord.warType ?? "VILLAGE_WAR",
+            targetStructureRoute: voteRecord.targetStructureRoute ?? "/townhall",
+            attackerShrineHp: WAR_RAID_SHRINE_HP,
+            attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
+            attackerShrineStatus: "ACTIVE",
+            defenderShrineHp: WAR_RAID_SHRINE_HP,
+            defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
+            defenderShrineStatus: "ACTIVE",
+          }),
+          ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "APPROVED" })
+            .where(eq(villageElderVote.id, input.voteId)),
+        ]);
+        if (updateResult.rowsAffected === 0) {
+          await ctx.drizzle.delete(war).where(eq(war.id, warId));
+          await ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, input.voteId));
+          return errorResponse("Not enough tokens to declare war");
+        }
+        return { success: true, message: "War declaration approved. War has started!" };
+      }
+
+      if (outcome === "REJECTED") {
+        await ctx.drizzle
+          .update(villageElderVote)
+          .set({ status: "REJECTED" })
+          .where(eq(villageElderVote.id, input.voteId));
+        return { success: true, message: "War declaration rejected by the elders" };
+      }
+
+      return {
+        success: true,
+        message: `Vote recorded. Current tally: ${yesCount} YES, ${noCount} NO`,
+      };
+    }),
 });
 
 /**
@@ -1229,4 +1424,83 @@ const getVillageMemberCount = async (
     .from(userData)
     .where(eq(userData.villageId, villageId));
   return result[0]?.count || 0;
+};
+
+/**
+ * Fetch elder votes for a village with enriched target info
+ */
+export const fetchElderVotes = async (client: DrizzleClient, villageId: string) => {
+  const votes = await client.query.villageElderVote.findMany({
+    where: eq(villageElderVote.villageId, villageId),
+    with: {
+      entries: {
+        with: { user: { columns: { username: true, userId: true, avatar: true } } },
+      },
+      initiatedBy: { columns: { username: true, userId: true, avatar: true } },
+    },
+    orderBy: [desc(villageElderVote.createdAt)],
+  });
+  // Enrich with target name
+  const enriched = await Promise.all(
+    votes.map(async (vote) => {
+      let targetName = vote.targetId;
+      if (vote.type === "WAR_DECLARATION") {
+        const targetVillage = await client.query.village.findFirst({
+          columns: { name: true },
+          where: eq(village.id, vote.targetId),
+        });
+        targetName = targetVillage?.name ?? vote.targetId;
+      } else if (vote.type === "KAGE_REMOVAL") {
+        const targetUser = await client.query.userData.findFirst({
+          columns: { username: true },
+          where: eq(userData.userId, vote.targetId),
+        });
+        targetName = targetUser?.username ?? vote.targetId;
+      }
+      return { ...vote, targetName };
+    }),
+  );
+  return enriched;
+};
+
+/**
+ * Fetch a single elder vote by ID
+ */
+export const fetchElderVote = async (client: DrizzleClient, voteId: string) => {
+  return client.query.villageElderVote.findFirst({
+    where: eq(villageElderVote.id, voteId),
+    with: {
+      entries: true,
+    },
+  });
+};
+
+/**
+ * Determine outcome of an elder vote.
+ * Requires 2 YES votes to approve (matching "2 of 3 elders agree").
+ * Requires 2 NO votes to reject. Tie (all voted, equal counts) → REJECTED.
+ */
+export const resolveElderVote = (
+  yesCount: number,
+  noCount: number,
+  elderCount: number,
+): "APPROVED" | "REJECTED" | "PENDING" => {
+  if (yesCount >= 2) return "APPROVED";
+  if (noCount >= 2) return "REJECTED";
+  // All elders voted and it's a tie → cancelled
+  if (yesCount + noCount >= elderCount && yesCount === noCount) return "REJECTED";
+  return "PENDING";
+};
+
+/**
+ * Fetch all pending elder votes whose deadline has passed
+ */
+export const fetchExpiredElderVotes = async (client: DrizzleClient) => {
+  return client.query.villageElderVote.findMany({
+    where: and(
+      eq(villageElderVote.status, "PENDING"),
+      lt(villageElderVote.endsAt, new Date()),
+    ),
+    with: { entries: true },
+  });
 };
