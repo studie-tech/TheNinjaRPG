@@ -1307,10 +1307,24 @@ export const warRouter = createTRPCRouter({
       }
 
       if (outcome === "REJECTED") {
-        await ctx.drizzle
-          .update(villageElderVote)
-          .set({ status: "REJECTED" })
-          .where(eq(villageElderVote.id, input.voteId));
+        const targetVillage = await ctx.drizzle.query.village.findFirst({
+          columns: { name: true },
+          where: eq(village.id, voteRecord.targetId),
+        });
+        await Promise.all([
+          ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, input.voteId)),
+          ctx.drizzle.insert(notification).values({
+            userId: voteRecord.initiatedByUserId,
+            content: `War declaration against ${targetVillage?.name ?? "another village"} was rejected by the elders.`,
+          }),
+          ctx.drizzle
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(eq(userData.villageId, voteRecord.villageId)),
+        ]);
         return { success: true, message: "War declaration rejected by the elders" };
       }
 

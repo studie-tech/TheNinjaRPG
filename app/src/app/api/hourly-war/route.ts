@@ -396,12 +396,26 @@ async function processExpiredElderVotes() {
       const noCount = vote.entries.filter((e) => e.vote === "NO").length;
       const outcome = resolveElderVote(yesCount, noCount, elderCount);
 
-      // If decisively rejected, mark as rejected
+      // If decisively rejected, mark as rejected and notify elders
       if (outcome === "REJECTED") {
-        await drizzleDB
-          .update(villageElderVote)
-          .set({ status: "REJECTED" })
-          .where(eq(villageElderVote.id, vote.id));
+        const targetVillage = await drizzleDB.query.village.findFirst({
+          columns: { name: true },
+          where: eq(village.id, vote.targetId),
+        });
+        await Promise.all([
+          drizzleDB
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, vote.id)),
+          drizzleDB.insert(notification).values({
+            userId: vote.initiatedByUserId,
+            content: `War declaration against ${targetVillage?.name ?? "another village"} was rejected by the elders.`,
+          }),
+          drizzleDB
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(eq(userData.villageId, vote.villageId)),
+        ]);
         continue;
       }
 
