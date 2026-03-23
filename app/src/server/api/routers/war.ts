@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import {
+  ELDER_MIN_VOTING_COUNT,
   ELDER_WAR_VOTE_HOURS,
   IMG_AVATAR_DEFAULT,
   MAP_RESERVED_SECTORS,
@@ -634,52 +635,11 @@ export const warRouter = createTRPCRouter({
         ),
       });
 
-      // If no elders exist, start war immediately
-      if (elders.length === 0) {
-        const warId = nanoid();
-        const [updateResult] = await Promise.all([
-          ctx.drizzle
-            .update(village)
-            .set({ tokens: attackerVillage.tokens - WAR_DECLARATION_COST })
-            .where(
-              and(
-                eq(village.id, user.villageId),
-                gte(village.tokens, WAR_DECLARATION_COST),
-              ),
-            ),
-          ctx.drizzle.insert(war).values({
-            id: warId,
-            attackerVillageId: user.villageId,
-            defenderVillageId: input.targetVillageId,
-            status: "ACTIVE",
-            type: warType,
-            targetStructureRoute: structure.route,
-            attackerShrineHp: WAR_RAID_SHRINE_HP,
-            attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
-            attackerShrineStatus: "ACTIVE",
-            defenderShrineHp: WAR_RAID_SHRINE_HP,
-            defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
-            defenderShrineStatus: "ACTIVE",
-          }),
-        ]);
-        if (updateResult.rowsAffected === 0) {
-          await ctx.drizzle.delete(war).where(eq(war.id, warId));
-          return errorResponse("Not enough tokens to declare war");
-        }
-        await Promise.all([
-          ctx.drizzle.insert(notification).values({
-            userId: user.userId,
-            content: `${attackerVillage.name} has declared war on ${defenderVillage.name}!`,
-          }),
-          ctx.drizzle
-            .update(userData)
-            .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(
-              inArray(userData.villageId, [user.villageId, input.targetVillageId]),
-            ),
-        ]);
-        return { success: true, message: "War declared successfully" };
-      }
+      // Require minimum elder count to proceed with war declaration
+      if (elders.length < ELDER_MIN_VOTING_COUNT)
+        return errorResponse(
+          `At least ${ELDER_MIN_VOTING_COUNT} elders must be in position before war can be declared`,
+        );
 
       // Create pending elder vote — tokens deducted only when war officially starts
       const voteId = nanoid();
@@ -1216,6 +1176,12 @@ export const warRouter = createTRPCRouter({
         )
         .then(([r]) => r?.count ?? 0);
 
+      if (elderCount < ELDER_MIN_VOTING_COUNT) {
+        return errorResponse(
+          `At least ${ELDER_MIN_VOTING_COUNT} elders must be in position to vote`,
+        );
+      }
+
       // Insert the vote entry — unique constraint on (voteId, userId) guards concurrent dupes
       try {
         await ctx.drizzle.insert(villageElderVoteEntry).values({
@@ -1224,8 +1190,11 @@ export const warRouter = createTRPCRouter({
           userId: user.userId,
           vote: input.vote,
         });
-      } catch {
-        return errorResponse("You have already voted");
+      } catch (e) {
+        const isDupe =
+          typeof e === "object" && e !== null && "errno" in e && e.errno === 1062;
+        if (isDupe) return errorResponse("You have already voted");
+        throw e;
       }
 
       // Re-fetch entries to decide outcome
@@ -1527,17 +1496,18 @@ export const fetchElderVote = async (client: DrizzleClient, voteId: string) => {
 };
 
 /**
- * Determine outcome of an elder vote.
- * Requires 2 YES votes to approve (matching "2 of 3 elders agree").
- * Requires 2 NO votes to reject. Tie (all voted, equal counts) → REJECTED.
+ * Determine outcome of an elder vote based on simple majority.
+ * Majority = more than half of eligible elders (Math.floor(elderCount / 2) + 1).
+ * If all elders have voted and it's a tie → REJECTED.
  */
 export const resolveElderVote = (
   yesCount: number,
   noCount: number,
   elderCount: number,
 ): "APPROVED" | "REJECTED" | "PENDING" => {
-  if (yesCount >= 2) return "APPROVED";
-  if (noCount >= 2) return "REJECTED";
+  const majority = Math.floor(elderCount / 2) + 1;
+  if (yesCount >= majority) return "APPROVED";
+  if (noCount >= majority) return "REJECTED";
   // All elders voted and it's a tie → cancelled
   if (yesCount + noCount >= elderCount && yesCount === noCount) return "REJECTED";
   return "PENDING";

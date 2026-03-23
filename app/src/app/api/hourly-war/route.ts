@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-o
 import { nanoid } from "nanoid";
 import { cookies } from "next/headers";
 import {
+  ELDER_MIN_VOTING_COUNT,
   WAR_DAILY_HEALTH_DRAIN,
   WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
   WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5,
@@ -419,6 +420,29 @@ async function processExpiredElderVotes() {
         continue;
       }
 
+      // Block auto-approval if village no longer has minimum elder count
+      if (elderCount < ELDER_MIN_VOTING_COUNT) {
+        const targetVillage = await drizzleDB.query.village.findFirst({
+          columns: { name: true },
+          where: eq(village.id, vote.targetId),
+        });
+        await Promise.all([
+          drizzleDB
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, vote.id)),
+          drizzleDB.insert(notification).values({
+            userId: vote.initiatedByUserId,
+            content: `War declaration against ${targetVillage?.name ?? "another village"} was cancelled — not enough elders in position.`,
+          }),
+          drizzleDB
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(eq(userData.villageId, vote.villageId)),
+        ]);
+        continue;
+      }
+
       // APPROVED or PENDING (no blocking majority) → auto-start war
       const [attackerVillage, defenderVillage] = await Promise.all([
         drizzleDB.query.village.findFirst({ where: eq(village.id, vote.villageId) }),
@@ -507,12 +531,28 @@ async function processExpiredElderVotes() {
           vote.targetId,
         );
         if (!replacement) {
-          await drizzleDB
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, vote.id));
+          await Promise.all([
+            drizzleDB
+              .update(villageElderVote)
+              .set({ status: "REJECTED" })
+              .where(eq(villageElderVote.id, vote.id)),
+            drizzleDB
+              .update(userData)
+              .set({ unreadNotifications: sql`unreadNotifications + 1` })
+              .where(
+                and(
+                  eq(userData.villageId, vote.villageId),
+                  eq(userData.rank, "ELDER"),
+                  eq(userData.isAi, false),
+                ),
+              ),
+          ]);
           continue;
         }
+        const removedKage = await drizzleDB.query.userData.findFirst({
+          columns: { username: true },
+          where: eq(userData.userId, vote.targetId),
+        });
         await Promise.all([
           drizzleDB
             .update(userData)
@@ -526,12 +566,51 @@ async function processExpiredElderVotes() {
             .update(villageElderVote)
             .set({ status: "APPROVED" })
             .where(eq(villageElderVote.id, vote.id)),
+          // Notify the removed kage
+          drizzleDB.insert(notification).values({
+            userId: vote.targetId,
+            content: `You have been removed as Kage by the Elder Council. ${replacement.username} is the new Kage.`,
+          }),
+          // Notify the new kage
+          drizzleDB.insert(notification).values({
+            userId: replacement.userId,
+            content: `You have been appointed as the new Kage following the removal of ${removedKage?.username ?? "the previous Kage"}.`,
+          }),
+          // Increment unread notifications for both
+          drizzleDB
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(inArray(userData.userId, [vote.targetId, replacement.userId])),
+          // Notify all elders
+          drizzleDB
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(
+              and(
+                eq(userData.villageId, vote.villageId),
+                eq(userData.rank, "ELDER"),
+                eq(userData.isAi, false),
+              ),
+            ),
         ]);
       } else {
-        await drizzleDB
-          .update(villageElderVote)
-          .set({ status: "REJECTED" })
-          .where(eq(villageElderVote.id, vote.id));
+        await Promise.all([
+          drizzleDB
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, vote.id)),
+          // Notify all elders that the vote failed
+          drizzleDB
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(
+              and(
+                eq(userData.villageId, vote.villageId),
+                eq(userData.rank, "ELDER"),
+                eq(userData.isAi, false),
+              ),
+            ),
+        ]);
       }
     }
   }
