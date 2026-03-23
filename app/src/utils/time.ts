@@ -222,6 +222,29 @@ export const combineLocalDateTime = (date: Date, timeHHMM: string): Date => {
 };
 
 /**
+ * Combines a calendar date with a UTC HH:MM time string into a Date object.
+ * The date components are taken from the UTC representation of `date`,
+ * and the time is interpreted as UTC hours/minutes.
+ * @param date - A Date whose UTC year/month/day is used
+ * @param timeHHMM - A time string in "HH:MM" format (UTC)
+ * @returns A new Date representing that UTC date + time
+ */
+export const combineUTCDateTime = (date: Date, timeHHMM: string): Date => {
+  const [hhStr = "00", mmStr = "00"] = timeHHMM.split(":");
+  return new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      parseInt(hhStr, 10),
+      parseInt(mmStr, 10),
+      0,
+      0,
+    ),
+  );
+};
+
+/**
  * Check if two dates are on the same day (UTC-based comparison)
  */
 export const isSameDay = (date1: Date, date2: Date): boolean => {

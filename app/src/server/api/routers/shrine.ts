@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -98,7 +98,7 @@ export const shrineRouter = createTRPCRouter({
       const now = new Date();
 
       // Run queries in parallel
-      const [user, schedules] = await Promise.all([
+      const [user, schedules, villageData] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle
           .select()
@@ -106,10 +106,14 @@ export const shrineRouter = createTRPCRouter({
           .where(
             and(
               eq(shrineBoostSchedule.villageId, input.villageId),
-              gt(shrineBoostSchedule.startAt, now), // hide boosts that already started
+              gt(shrineBoostSchedule.endAt, now), // show until fully expired
             ),
           )
           .orderBy(asc(shrineBoostSchedule.startAt)),
+        ctx.drizzle.query.village.findFirst({
+          columns: { id: true, shrineSettings: true },
+          where: eq(village.id, input.villageId),
+        }),
       ]);
 
       // Authorization: only allow access if user belongs to the village or has admin/moderator access
@@ -118,6 +122,35 @@ export const shrineRouter = createTRPCRouter({
           "FORBIDDEN",
           "You can only view scheduled boosts for your own village",
         );
+      }
+
+      // Activate any schedules whose startAt has passed but haven't been processed yet
+      const dueSchedules = schedules.filter((s) => new Date(s.startAt) <= now);
+      if (dueSchedules.length > 0 && villageData) {
+        const settings = villageData.shrineSettings as {
+          activeBoosts?: Record<string, string>;
+          unlockedAiIds?: string[];
+          activeAiIds?: string[];
+        } | null;
+        const currentBoosts = { ...(settings?.activeBoosts ?? {}) };
+
+        for (const s of dueSchedules) {
+          const existingEnd = currentBoosts[s.boostType];
+          if (!existingEnd || new Date(existingEnd) < new Date(s.endAt)) {
+            currentBoosts[s.boostType] = new Date(s.endAt).toISOString();
+          }
+        }
+
+        await ctx.drizzle
+          .update(village)
+          .set({
+            shrineSettings: {
+              unlockedAiIds: settings?.unlockedAiIds ?? [],
+              activeAiIds: settings?.activeAiIds ?? [],
+              activeBoosts: currentBoosts,
+            },
+          })
+          .where(eq(village.id, input.villageId));
       }
 
       return schedules;
@@ -222,8 +255,8 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("You can only activate boosts for your own village");
       }
       if (!user.village) return errorResponse("Village not found");
-      if (user.village.kageId !== user.userId) {
-        return errorResponse("Only the Kage can activate boosts");
+      if (user.village.kageId !== user.userId && user.rank !== "ELDER") {
+        return errorResponse("Only the Kage or Elders can activate boosts");
       }
       if (level3Shrines.length === 0) {
         return errorResponse("Need at least one Level 3 shrine to activate boosts");
@@ -305,6 +338,7 @@ export const shrineRouter = createTRPCRouter({
               and(
                 eq(shrineBoostSchedule.villageId, input.villageId),
                 eq(shrineBoostSchedule.boostType, input.boostType),
+                gt(shrineBoostSchedule.endAt, now),
               ),
             ),
           ctx.drizzle
@@ -325,8 +359,8 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("You can only schedule boosts for your own village");
       }
       if (!user.village) return errorResponse("Village not found");
-      if (user.village.kageId !== user.userId) {
-        return errorResponse("Only the Kage can schedule boosts");
+      if (user.village.kageId !== user.userId && user.rank !== "ELDER") {
+        return errorResponse("Only the Kage or Elders can schedule boosts");
       }
       if (level3Shrines.length === 0) {
         return errorResponse("Need at least one Level 3 shrine to schedule boosts");
