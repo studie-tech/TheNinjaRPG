@@ -640,6 +640,17 @@ export const applyEffects = (
             color: "red",
             types: c.types,
           });
+          // Vamp: heal the attacker based on the final damage dealt (post-boost, post-shield)
+          if (c.vampRatio && c.vampRatio > 0 && c.damage > 0 && user.curHealth > 0) {
+            const vampHeal = Math.floor(c.damage * c.vampRatio);
+            if (vampHeal > 0) {
+              user.curHealth = Math.min(user.maxHealth, user.curHealth + vampHeal);
+              actionEffects.push({
+                txt: `${user.username} vamps ${vampHeal.toFixed(2)} damage as health`,
+                color: "green",
+              });
+            }
+          }
           // Reduce armor durability by 1 when hit (skip for battles that don't lose durability)
           if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
             const t = newUsersState.find((u) => u.userId === target.userId);
@@ -767,22 +778,6 @@ export const applyEffects = (
           user.curHealth = Math.min(user.maxHealth, user.curHealth);
           actionEffects.push({
             txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health`,
-            color: "green",
-          });
-        }
-        if (
-          c.vamp_hp !== undefined &&
-          c.vamp_hp > 0 &&
-          target.curHealth > 0 &&
-          user.curHealth > 0
-        ) {
-          const preShieldDamage = c.preShieldDamage ?? 0;
-          const maxVamp = preShieldDamage * 0.6;
-          const finalVamp = Math.min(c.vamp_hp, maxVamp);
-          user.curHealth += finalVamp;
-          user.curHealth = Math.min(user.maxHealth, user.curHealth);
-          actionEffects.push({
-            txt: `${user.username} vamps ${finalVamp.toFixed(2)} damage as health`,
             color: "green",
           });
         }

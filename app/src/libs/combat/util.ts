@@ -1103,6 +1103,11 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
     if (val.vamp_hp) {
       current.vamp_hp = current.vamp_hp ? current.vamp_hp + val.vamp_hp : val.vamp_hp;
     }
+    if (val.vampRatio) {
+      current.vampRatio = current.vampRatio
+        ? current.vampRatio + val.vampRatio
+        : val.vampRatio;
+    }
     if (val.absorb_hp) {
       current.absorb_hp = current.absorb_hp
         ? current.absorb_hp + val.absorb_hp

@@ -959,14 +959,14 @@ export const adjustHealGiven = (
         }
       }
       // Adjust vamp
-      if (consequence.userId === effect.targetId && consequence.vamp_hp) {
+      if (consequence.userId === effect.targetId && consequence.vampRatio) {
         const vampEffect = usersEffects.find((e) => e.id === effectId);
         if (vampEffect) {
           const change =
             effect.calculation === "percentage"
-              ? (power / 100) * consequence.vamp_hp
-              : power;
-          consequence.vamp_hp = consequence.vamp_hp + change;
+              ? (power / 100) * consequence.vampRatio
+              : power / 100;
+          consequence.vampRatio = consequence.vampRatio + change;
         }
       }
       // Adjust absorb
@@ -1840,8 +1840,9 @@ export const vamp = (
   );
   if (casterHealPrevented) return preventResponse(effect, target, "cannot vamp");
   const { power, qualifier } = getPower(effect);
+  // Store vampRatio on each outgoing damage consequence so the application phase
+  // can compute the heal from the truly final damage total (post-boost, post-shield).
   if (effect.isNew && effect.castThisRound) {
-    let totalDamage = 0;
     consequences.forEach((c) => {
       if (
         c.userId === effect.creatorId &&
@@ -1849,28 +1850,9 @@ export const vamp = (
         typeof c.damage === "number" &&
         c.damage > 0
       ) {
-        totalDamage += c.damage;
+        c.vampRatio = (c.vampRatio ?? 0) + power / 100;
       }
     });
-    if (totalDamage > 0) {
-      const vampHeal = Math.floor(totalDamage * (power / 100));
-      if (vampHeal > 0) {
-        // Find or create the consequence for the caster (userId == creatorId, targetId == creatorId)
-        let casterConsequence = Array.from(consequences.values()).find(
-          (c) => c.userId === effect.creatorId && c.targetId === effect.creatorId,
-        );
-        if (!casterConsequence) {
-          casterConsequence = {
-            userId: effect.creatorId,
-            targetId: effect.creatorId,
-          };
-          consequences.set(effect.id, casterConsequence);
-        }
-        casterConsequence.vamp_hp = (casterConsequence.vamp_hp ?? 0) + vampHeal;
-        casterConsequence.preShieldDamage =
-          (casterConsequence.preShieldDamage ?? 0) + totalDamage;
-      }
-    }
   }
   return getInfo(target, effect, `will vamp ${qualifier} damage as health`);
 };
