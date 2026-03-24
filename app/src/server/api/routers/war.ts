@@ -488,22 +488,24 @@ export const warRouter = createTRPCRouter({
       }
 
       // Check declaration cooldown (rejected or cancelled within last 24 hours)
+      // Use endsAt as the anchor — cron-rejected votes expire after the voting window,
+      // so createdAt would be older than the cooldown window and the check would silently pass.
       const recentRejection = await ctx.drizzle.query.villageElderVote.findFirst({
-        columns: { createdAt: true },
+        columns: { endsAt: true },
         where: and(
           eq(villageElderVote.villageId, user.villageId),
           eq(villageElderVote.type, "WAR_DECLARATION"),
           eq(villageElderVote.status, "REJECTED"),
           gte(
-            villageElderVote.createdAt,
+            villageElderVote.endsAt,
             secondsFromNow(-WAR_DECLARATION_COOLDOWN_HOURS * 3600),
           ),
         ),
-        orderBy: desc(villageElderVote.createdAt),
+        orderBy: desc(villageElderVote.endsAt),
       });
       if (recentRejection) {
         const cooldownEnd = new Date(
-          recentRejection.createdAt.getTime() +
+          recentRejection.endsAt.getTime() +
             WAR_DECLARATION_COOLDOWN_HOURS * 3600 * 1000,
         );
         return errorResponse(
@@ -1255,6 +1257,10 @@ export const warRouter = createTRPCRouter({
         return errorResponse("Vote is not for your village");
       if (voteRecord.type !== "WAR_DECLARATION")
         return errorResponse("Not a war declaration vote");
+      if (user.userId === voteRecord.initiatedByUserId)
+        return errorResponse(
+          "The war declaration initiator cannot vote on their own motion",
+        );
       if (new Date() > voteRecord.endsAt)
         return errorResponse("Voting period has ended");
       const alreadyVoted = voteRecord.entries.some((e) => e.userId === user.userId);
@@ -1345,7 +1351,7 @@ export const warRouter = createTRPCRouter({
             where: eq(village.id, voteRecord.villageId),
           }),
           ctx.drizzle.query.village.findFirst({
-            columns: { name: true },
+            columns: { name: true, kageId: true },
             where: eq(village.id, voteRecord.targetId),
           }),
         ]);
@@ -1375,6 +1381,8 @@ export const warRouter = createTRPCRouter({
         }
         const warId = nanoid();
         const warContent = `${attackerVillage.name} has declared war on ${defenderVillage?.name ?? "another village"}!`;
+        const notifyKageIds = [voteRecord.initiatedByUserId];
+        if (defenderVillage?.kageId) notifyKageIds.push(defenderVillage.kageId);
         await Promise.all([
           ctx.drizzle.insert(war).values({
             id: warId,
@@ -1392,11 +1400,13 @@ export const warRouter = createTRPCRouter({
           }),
           ctx.drizzle
             .insert(notification)
-            .values({ userId: voteRecord.initiatedByUserId, content: warContent }),
+            .values(notifyKageIds.map((userId) => ({ userId, content: warContent }))),
           ctx.drizzle
             .update(userData)
             .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(eq(userData.userId, voteRecord.initiatedByUserId)),
+            .where(
+              inArray(userData.villageId, [voteRecord.villageId, voteRecord.targetId]),
+            ),
         ]);
         return { success: true, message: "War declaration approved. War has started!" };
       }
@@ -1586,7 +1596,10 @@ const getVillageMemberCount = async (
  */
 export const fetchElderVotes = async (client: DrizzleClient, villageId: string) => {
   const votes = await client.query.villageElderVote.findMany({
-    where: eq(villageElderVote.villageId, villageId),
+    where: and(
+      eq(villageElderVote.villageId, villageId),
+      eq(villageElderVote.status, "PENDING"),
+    ),
     with: {
       entries: {
         with: { user: { columns: { username: true, userId: true, avatar: true } } },
