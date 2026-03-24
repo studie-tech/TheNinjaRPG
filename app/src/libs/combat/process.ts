@@ -642,7 +642,12 @@ export const applyEffects = (
           });
           // Vamp: heal the attacker based on the final damage dealt (post-boost, post-shield)
           if (c.vampRatio && c.vampRatio > 0 && c.damage > 0 && user.curHealth > 0) {
-            const vampHeal = Math.floor(c.damage * c.vampRatio);
+            const preShieldDamage = c.preShieldDamage ?? c.damage;
+            const maxVamp = preShieldDamage * 0.6;
+            const vampHeal = Math.min(
+              Math.floor(c.damage * c.vampRatio),
+              Math.floor(maxVamp),
+            );
             if (vampHeal > 0) {
               user.curHealth = Math.min(user.maxHealth, user.curHealth + vampHeal);
               actionEffects.push({
