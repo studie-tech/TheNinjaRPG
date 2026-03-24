@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import {
   ELDER_KAGE_REMOVAL_VOTE_DAYS,
+  ELDER_MIN_VOTING_COUNT,
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
   KAGE_CHALLENGE_MAX_DAILY_LOCKED_HOURS,
@@ -178,8 +179,9 @@ const ElderHall: React.FC<{
   const isElder = user.rank === "ELDER";
   const isKage = user.userId === villageData?.villageData.kageId;
   const pendingVotes = elderVotes?.filter((v) => v.status === "PENDING") ?? [];
-  const pendingWarVote = pendingVotes.find((v) => v.type === "WAR_DECLARATION");
-  const pendingKageVote = pendingVotes.find((v) => v.type === "KAGE_REMOVAL");
+  const pendingWarVotes = pendingVotes.filter((v) => v.type === "WAR_DECLARATION");
+  const pendingKageVotes = pendingVotes.filter((v) => v.type === "KAGE_REMOVAL");
+  const removalQuorum = Math.floor(ELDER_MIN_VOTING_COUNT / 2) + 1;
 
   // 4-day lock check: elders can only initiate removal after the kage has been in power for 4 days
   const leaderUpdatedAt = villageData?.villageData.leaderUpdatedAt;
@@ -314,9 +316,12 @@ const ElderHall: React.FC<{
           <Loader explanation="Processing vote..." />
         ) : (
           <div className="space-y-4">
-            {/* Pending war declaration vote */}
-            {pendingWarVote && (
-              <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4">
+            {/* Pending war declaration votes */}
+            {pendingWarVotes.map((pendingWarVote) => (
+              <div
+                key={pendingWarVote.id}
+                className="rounded-lg border border-red-500/40 bg-red-500/10 p-4"
+              >
                 <div className="mb-1 font-bold text-red-400">
                   ⚔️ War Declaration — vs {pendingWarVote.targetName}
                 </div>
@@ -376,10 +381,13 @@ const ElderHall: React.FC<{
                   </div>
                 )}
               </div>
-            )}
-            {/* Pending kage removal vote */}
-            {pendingKageVote && (
-              <div className="rounded-lg border border-orange-500/40 bg-orange-500/10 p-4">
+            ))}
+            {/* Pending kage removal votes */}
+            {pendingKageVotes.map((pendingKageVote) => (
+              <div
+                key={pendingKageVote.id}
+                className="rounded-lg border border-orange-500/40 bg-orange-500/10 p-4"
+              >
                 <div className="mb-1 font-bold text-orange-400">
                   🗳️ Kage Removal — {pendingKageVote.targetName}
                 </div>
@@ -428,9 +436,9 @@ const ElderHall: React.FC<{
                   </p>
                 )}
               </div>
-            )}
+            ))}
             {/* Initiate kage removal */}
-            {isElder && !isKage && !pendingKageVote && (
+            {isElder && !isKage && pendingKageVotes.length === 0 && (
               <div className="rounded-lg border border-border p-4">
                 <div className="mb-2 font-bold">Remove Current Kage</div>
                 {kageIsProtected ? (
@@ -448,8 +456,9 @@ const ElderHall: React.FC<{
                 ) : (
                   <>
                     <p className="mb-3 text-muted-foreground text-sm">
-                      If 2 elders vote YES within {ELDER_KAGE_REMOVAL_VOTE_DAYS} days,
-                      the kage will be removed and lose all village prestige.
+                      If {removalQuorum} elders vote YES within{" "}
+                      {ELDER_KAGE_REMOVAL_VOTE_DAYS} days, the kage will be removed and
+                      lose all village prestige.
                     </p>
                     <Confirm2
                       title="Initiate Kage Removal Vote"
@@ -473,11 +482,13 @@ const ElderHall: React.FC<{
               </div>
             )}
             {/* No motions */}
-            {!pendingWarVote && !pendingKageVote && (!isElder || isKage) && (
-              <p className="text-muted-foreground text-sm">
-                No active council motions.
-              </p>
-            )}
+            {pendingWarVotes.length === 0 &&
+              pendingKageVotes.length === 0 &&
+              (!isElder || isKage) && (
+                <p className="text-muted-foreground text-sm">
+                  No active council motions.
+                </p>
+              )}
           </div>
         )}
       </ContentBox>

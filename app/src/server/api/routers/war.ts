@@ -1595,26 +1595,40 @@ export const fetchElderVotes = async (client: DrizzleClient, villageId: string) 
     },
     orderBy: [desc(villageElderVote.createdAt)],
   });
-  // Enrich with target name
-  const enriched = await Promise.all(
-    votes.map(async (vote) => {
-      let targetName = vote.targetId;
-      if (vote.type === "WAR_DECLARATION") {
-        const targetVillage = await client.query.village.findFirst({
-          columns: { name: true },
-          where: eq(village.id, vote.targetId),
-        });
-        targetName = targetVillage?.name ?? vote.targetId;
-      } else if (vote.type === "KAGE_REMOVAL") {
-        const targetUser = await client.query.userData.findFirst({
-          columns: { username: true },
-          where: eq(userData.userId, vote.targetId),
-        });
-        targetName = targetUser?.username ?? vote.targetId;
-      }
-      return { ...vote, targetName };
-    }),
-  );
+  // Batch-fetch target names to avoid N+1 queries
+  const villageTargetIds = [
+    ...new Set(
+      votes.filter((v) => v.type === "WAR_DECLARATION").map((v) => v.targetId),
+    ),
+  ];
+  const userTargetIds = [
+    ...new Set(votes.filter((v) => v.type === "KAGE_REMOVAL").map((v) => v.targetId)),
+  ];
+  const [targetVillages, targetUsers] = await Promise.all([
+    villageTargetIds.length > 0
+      ? client
+          .select({ id: village.id, name: village.name })
+          .from(village)
+          .where(inArray(village.id, villageTargetIds))
+      : [],
+    userTargetIds.length > 0
+      ? client
+          .select({ userId: userData.userId, username: userData.username })
+          .from(userData)
+          .where(inArray(userData.userId, userTargetIds))
+      : [],
+  ]);
+  const villageById = Object.fromEntries(targetVillages.map((v) => [v.id, v.name]));
+  const userById = Object.fromEntries(targetUsers.map((u) => [u.userId, u.username]));
+  const enriched = votes.map((vote) => {
+    let targetName = vote.targetId;
+    if (vote.type === "WAR_DECLARATION") {
+      targetName = villageById[vote.targetId] ?? vote.targetId;
+    } else if (vote.type === "KAGE_REMOVAL") {
+      targetName = userById[vote.targetId] ?? vote.targetId;
+    }
+    return { ...vote, targetName };
+  });
   return enriched;
 };
 
