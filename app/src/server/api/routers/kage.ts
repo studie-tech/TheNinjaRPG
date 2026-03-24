@@ -714,20 +714,17 @@ export const kageRouter = createTRPCRouter({
         );
       }
 
-      // Check minimum elder count (excluding the kage who is the vote target)
-      const elderCount = await ctx.drizzle
-        .select({ count: sql<number>`count(*)` })
-        .from(userData)
-        .where(
-          and(
-            eq(userData.villageId, input.villageId),
-            eq(userData.rank, "ELDER"),
-            eq(userData.isAi, false),
-            ne(userData.userId, uVillage.kageId),
-          ),
-        )
-        .then(([r]) => r?.count ?? 0);
-      if (elderCount < ELDER_MIN_VOTING_COUNT)
+      // Fetch all eligible elders (excluding the kage who is the vote target)
+      const eligibleElders = await ctx.drizzle.query.userData.findMany({
+        columns: { userId: true },
+        where: and(
+          eq(userData.villageId, input.villageId),
+          eq(userData.rank, "ELDER"),
+          eq(userData.isAi, false),
+          ne(userData.userId, uVillage.kageId),
+        ),
+      });
+      if (eligibleElders.length < ELDER_MIN_VOTING_COUNT)
         return errorResponse(
           `At least ${ELDER_MIN_VOTING_COUNT} elders are required to initiate a vote`,
         );
@@ -751,6 +748,19 @@ export const kageRouter = createTRPCRouter({
           return errorResponse("There is already a pending kage removal vote");
         throw e;
       }
+
+      // Notify all eligible elders (including the initiator) that the vote has started
+      const notifyContent = `${user.username} has initiated a vote to remove the Kage. You have ${ELDER_KAGE_REMOVAL_VOTE_DAYS} days to vote.`;
+      const notifyUserIds = eligibleElders.map((e) => e.userId);
+      await Promise.all([
+        ctx.drizzle
+          .insert(notification)
+          .values(notifyUserIds.map((userId) => ({ userId, content: notifyContent }))),
+        ctx.drizzle
+          .update(userData)
+          .set({ unreadNotifications: sql`unreadNotifications + 1` })
+          .where(inArray(userData.userId, notifyUserIds)),
+      ]);
 
       return {
         success: true,
@@ -901,11 +911,12 @@ export const kageRouter = createTRPCRouter({
             userId: replacement.userId,
             content: `You have been appointed as the new Kage following the removal of the previous Kage.`,
           }),
-          // Increment unread notifications for removed kage, new kage, and all elders
+          // Increment unread for removed kage and new kage (their individual notifications)
           ctx.drizzle
             .update(userData)
             .set({ unreadNotifications: sql`unreadNotifications + 1` })
             .where(inArray(userData.userId, [voteRecord.targetId, replacement.userId])),
+          // Increment unread for all other elders (excluding replacement who already got +1 above)
           ctx.drizzle
             .update(userData)
             .set({ unreadNotifications: sql`unreadNotifications + 1` })
@@ -914,6 +925,7 @@ export const kageRouter = createTRPCRouter({
                 eq(userData.villageId, user.villageId),
                 eq(userData.rank, "ELDER"),
                 eq(userData.isAi, false),
+                ne(userData.userId, replacement.userId),
               ),
             ),
         ]);

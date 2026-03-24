@@ -446,7 +446,7 @@ async function processExpiredElderVotes() {
       const [attackerVillage, defenderVillage] = await Promise.all([
         drizzleDB.query.village.findFirst({ where: eq(village.id, vote.villageId) }),
         drizzleDB.query.village.findFirst({
-          columns: { name: true },
+          columns: { name: true, kageId: true },
           where: eq(village.id, vote.targetId),
         }),
       ]);
@@ -496,6 +496,8 @@ async function processExpiredElderVotes() {
       }
       const warId = crypto.randomUUID();
       const warContent = `${attackerVillage.name} has declared war on ${defenderVillage?.name ?? "another village"}!`;
+      const notifyKageIds = [vote.initiatedByUserId];
+      if (defenderVillage?.kageId) notifyKageIds.push(defenderVillage.kageId);
       await Promise.all([
         drizzleDB.insert(war).values({
           id: warId,
@@ -513,11 +515,11 @@ async function processExpiredElderVotes() {
         }),
         drizzleDB
           .insert(notification)
-          .values({ userId: vote.initiatedByUserId, content: warContent }),
+          .values(notifyKageIds.map((userId) => ({ userId, content: warContent }))),
         drizzleDB
           .update(userData)
           .set({ unreadNotifications: sql`unreadNotifications + 1` })
-          .where(eq(userData.userId, vote.initiatedByUserId)),
+          .where(inArray(userData.villageId, [vote.villageId, vote.targetId])),
       ]);
     } else if (vote.type === "KAGE_REMOVAL") {
       // Count eligible elders (not the kage being removed)
@@ -604,7 +606,9 @@ async function processExpiredElderVotes() {
           drizzleDB
             .update(village)
             .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
-            .where(eq(village.id, vote.villageId)),
+            .where(
+              and(eq(village.id, vote.villageId), eq(village.kageId, vote.targetId)),
+            ),
           // Notify the removed kage
           drizzleDB.insert(notification).values({
             userId: vote.targetId,
