@@ -702,16 +702,21 @@ export const kageRouter = createTRPCRouter({
         return errorResponse("You cannot remove yourself as kage");
 
       // Check 4-day kage action lock
-      const lockExpiry = new Date(
-        uVillage.leaderUpdatedAt.getTime() + KAGE_ELDER_REMOVAL_LOCK_SECS * 1000,
-      );
-      if (new Date() < lockExpiry) {
-        const daysLeft = Math.ceil(
-          (lockExpiry.getTime() - Date.now()) / (1000 * 3600 * 24),
+      if (
+        uVillage.leaderUpdatedAt instanceof Date &&
+        !isNaN(uVillage.leaderUpdatedAt.getTime())
+      ) {
+        const lockExpiry = new Date(
+          uVillage.leaderUpdatedAt.getTime() + KAGE_ELDER_REMOVAL_LOCK_SECS * 1000,
         );
-        return errorResponse(
-          `The kage is protected for ${daysLeft} more day${daysLeft !== 1 ? "s" : ""}`,
-        );
+        if (new Date() < lockExpiry) {
+          const daysLeft = Math.ceil(
+            (lockExpiry.getTime() - Date.now()) / (1000 * 3600 * 24),
+          );
+          return errorResponse(
+            `The kage is protected for ${daysLeft} more day${daysLeft !== 1 ? "s" : ""}`,
+          );
+        }
       }
 
       // Fetch all eligible elders (excluding the kage who is the vote target)
@@ -843,35 +848,7 @@ export const kageRouter = createTRPCRouter({
       const outcome = resolveElderVote(yesCount, noCount, elderCount);
 
       if (outcome === "APPROVED") {
-        // Early exit if kage already changed (atomic claim below is the real guard)
-        const currentVillage = await ctx.drizzle.query.village.findFirst({
-          columns: { kageId: true },
-          where: eq(village.id, user.villageId),
-        });
-        if (currentVillage?.kageId !== voteRecord.targetId) {
-          await ctx.drizzle
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, input.voteId));
-          return errorResponse(
-            "The kage has already changed — vote is no longer valid",
-          );
-        }
-
-        const replacement = await fetchKageReplacement(
-          ctx.drizzle,
-          user.villageId,
-          voteRecord.targetId,
-        );
-        if (!replacement) {
-          await ctx.drizzle
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, input.voteId));
-          return errorResponse("No eligible replacement elder found");
-        }
-
-        // Atomically claim the motion — only one concurrent request can proceed to side effects
+        // Atomically claim the motion first — only one concurrent request proceeds to side effects
         const claimResult = await ctx.drizzle
           .update(villageElderVote)
           .set({ status: "APPROVED" })
@@ -885,22 +862,57 @@ export const kageRouter = createTRPCRouter({
           return errorResponse("Vote already processed");
         }
 
+        const replacement = await fetchKageReplacement(
+          ctx.drizzle,
+          user.villageId,
+          voteRecord.targetId,
+        );
+        if (!replacement) {
+          // Revert only if we own the APPROVED state (safe conditional revert)
+          await ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(
+              and(
+                eq(villageElderVote.id, input.voteId),
+                eq(villageElderVote.status, "APPROVED"),
+              ),
+            );
+          return errorResponse("No eligible replacement elder found");
+        }
+
+        // Guarded village update — only succeeds if the target is still the current kage
+        const villageUpdateResult = await ctx.drizzle
+          .update(village)
+          .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
+          .where(
+            and(
+              eq(village.id, user.villageId),
+              eq(village.kageId, voteRecord.targetId),
+            ),
+          );
+        if (villageUpdateResult.rowsAffected === 0) {
+          // Kage already changed via another path — revert our APPROVED claim
+          await ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(
+              and(
+                eq(villageElderVote.id, input.voteId),
+                eq(villageElderVote.status, "APPROVED"),
+              ),
+            );
+          return errorResponse(
+            "The kage has already changed — vote is no longer valid",
+          );
+        }
+
         await Promise.all([
           // Reset kicked kage prestige to 0
           ctx.drizzle
             .update(userData)
             .set({ villagePrestige: 0 })
             .where(eq(userData.userId, voteRecord.targetId)),
-          // Install replacement kage, guarded by expected kageId
-          ctx.drizzle
-            .update(village)
-            .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
-            .where(
-              and(
-                eq(village.id, user.villageId),
-                eq(village.kageId, voteRecord.targetId),
-              ),
-            ),
           // Notify the removed kage
           ctx.drizzle.insert(notification).values({
             userId: voteRecord.targetId,
@@ -926,6 +938,7 @@ export const kageRouter = createTRPCRouter({
                 eq(userData.rank, "ELDER"),
                 eq(userData.isAi, false),
                 ne(userData.userId, replacement.userId),
+                ne(userData.userId, voteRecord.targetId),
               ),
             ),
         ]);
@@ -1028,5 +1041,6 @@ export const fetchKageReplacement = async (
   if (userElders.length > 0) {
     return userElders[randomInt(userElders.length)];
   }
+  if (elders.length === 0) return undefined;
   return elders[randomInt(elders.length)];
 };

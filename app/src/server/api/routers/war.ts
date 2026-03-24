@@ -1187,11 +1187,15 @@ export const warRouter = createTRPCRouter({
         return errorResponse("Can only cancel war declarations");
       if (voteRecord.status !== "PENDING")
         return errorResponse("Can only cancel a pending war declaration");
+      if (new Date(voteRecord.endsAt).getTime() <= Date.now())
+        return errorResponse("Voting window has ended; cannot cancel");
 
-      // Atomically cancel — guard ensures it's still PENDING
+      // Atomically cancel — guard ensures it's still PENDING.
+      // Set endsAt = now so the cooldown window starts from the actual resolution time,
+      // not the original scheduled deadline (which would be in the future).
       const updateRes = await ctx.drizzle
         .update(villageElderVote)
-        .set({ status: "REJECTED" })
+        .set({ status: "REJECTED", endsAt: new Date() })
         .where(
           and(
             eq(villageElderVote.id, input.voteId),
@@ -1404,18 +1408,17 @@ export const warRouter = createTRPCRouter({
           ctx.drizzle
             .update(userData)
             .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(
-              inArray(userData.villageId, [voteRecord.villageId, voteRecord.targetId]),
-            ),
+            .where(inArray(userData.userId, notifyKageIds)),
         ]);
         return { success: true, message: "War declaration approved. War has started!" };
       }
 
       if (outcome === "REJECTED") {
-        // Atomically claim the rejection to prevent double notifications on concurrent votes
+        // Atomically claim the rejection to prevent double notifications on concurrent votes.
+        // Set endsAt = now so the cooldown window starts from the real resolution time.
         const claimResult = await ctx.drizzle
           .update(villageElderVote)
-          .set({ status: "REJECTED" })
+          .set({ status: "REJECTED", endsAt: new Date() })
           .where(
             and(
               eq(villageElderVote.id, input.voteId),
@@ -1676,8 +1679,9 @@ export const resolveElderVote = (
   if (yesCount + noCount >= elderCount && yesCount === noCount) return "REJECTED";
   if (isExpired) {
     // autoApprove (WAR_DECLARATION): war starts unless a majority actively blocked it
-    // !autoApprove (KAGE_REMOVAL): removal only proceeds if yes strictly leads
-    return autoApprove || yesCount > noCount ? "APPROVED" : "REJECTED";
+    if (autoApprove) return "APPROVED";
+    // !autoApprove (KAGE_REMOVAL): removal requires a true majority, not just a plurality
+    return yesCount >= majority ? "APPROVED" : "REJECTED";
   }
   return "PENDING";
 };
