@@ -1,5 +1,4 @@
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   ELDER_KAGE_REMOVAL_VOTE_DAYS,
@@ -412,7 +411,7 @@ export const kageRouter = createTRPCRouter({
           .set({ villagePrestige: sql`${userData.villagePrestige} + ${input.amount}` })
           .where(eq(userData.userId, input.kageId)),
         ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
+          id: crypto.randomUUID(),
           userId: ctx.userId,
           tableName: "user",
           changes: [`${input.amount} prestige sent to ${kage.username}`],
@@ -472,7 +471,7 @@ export const kageRouter = createTRPCRouter({
           })
           .where(eq(userData.userId, user.userId)),
         ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
+          id: crypto.randomUUID(),
           userId: ctx.userId,
           tableName: "user",
           relatedId: user.userId,
@@ -661,7 +660,7 @@ export const kageRouter = createTRPCRouter({
           })
           .where(eq(village.id, input.villageId)),
         ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
+          id: crypto.randomUUID(),
           userId: ctx.userId,
           tableName: "kageChallengeToggle",
           changes: [
@@ -736,7 +735,7 @@ export const kageRouter = createTRPCRouter({
       const endsAt = secondsFromNow(ELDER_KAGE_REMOVAL_VOTE_DAYS * 24 * 3600);
       try {
         await ctx.drizzle.insert(villageElderVote).values({
-          id: nanoid(),
+          id: crypto.randomUUID(),
           villageId: input.villageId,
           type: "KAGE_REMOVAL",
           initiatedByUserId: user.userId,
@@ -812,7 +811,7 @@ export const kageRouter = createTRPCRouter({
       // Insert vote entry — unique constraint on (voteId, userId) guards concurrent dupes
       try {
         await ctx.drizzle.insert(villageElderVoteEntry).values({
-          id: nanoid(),
+          id: crypto.randomUUID(),
           voteId: input.voteId,
           userId: user.userId,
           vote: input.vote,
@@ -937,16 +936,21 @@ export const kageRouter = createTRPCRouter({
         if (claimResult.rowsAffected === 0) {
           return { success: true, message: "Kage removal vote already resolved" };
         }
-        await ctx.drizzle
-          .update(userData)
-          .set({ unreadNotifications: sql`unreadNotifications + 1` })
-          .where(
-            and(
-              eq(userData.villageId, user.villageId),
-              eq(userData.rank, "ELDER"),
-              eq(userData.isAi, false),
+        const voterIds = freshEntries.map((e) => e.userId);
+        if (voterIds.length > 0) {
+          await Promise.all([
+            ctx.drizzle.insert(notification).values(
+              voterIds.map((userId) => ({
+                userId,
+                content: `The vote to remove the Kage did not pass.`,
+              })),
             ),
-          );
+            ctx.drizzle
+              .update(userData)
+              .set({ unreadNotifications: sql`unreadNotifications + 1` })
+              .where(inArray(userData.userId, voterIds)),
+          ]);
+        }
         return { success: true, message: "Kage removal vote failed" };
       }
 
