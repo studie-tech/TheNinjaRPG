@@ -513,6 +513,18 @@ export const warRouter = createTRPCRouter({
         );
       }
 
+      const existingPending = await ctx.drizzle.query.villageElderVote.findFirst({
+        columns: { id: true },
+        where: and(
+          eq(villageElderVote.villageId, user.villageId),
+          eq(villageElderVote.type, "WAR_DECLARATION"),
+          eq(villageElderVote.status, "PENDING"),
+        ),
+      });
+      if (existingPending) {
+        return errorResponse("Your village already has a pending war declaration vote");
+      }
+
       if (user.village.tokens < WAR_DECLARATION_COST) {
         return errorResponse(
           `Your village needs ${WAR_DECLARATION_COST.toLocaleString()} tokens to declare war`,
