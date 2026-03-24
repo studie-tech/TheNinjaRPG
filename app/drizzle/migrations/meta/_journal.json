@@ -22,6 +22,20 @@
       "when": 1771398851340,
       "tag": "0002_fat_the_spike",
       "breakpoints": false
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1774291788478,
+      "tag": "0003_brave_black_cat",
+      "breakpoints": false
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1774372224916,
+      "tag": "0004_yummy_boomerang",
+      "breakpoints": false
     }
   ]
 }
