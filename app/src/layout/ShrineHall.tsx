@@ -3,7 +3,7 @@
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, CalendarClock, Clock, Coins, Shield, X } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   SHRINE_AI_UNLOCK_COST,
   SHRINE_BOOST_BASE_PERC,
   SHRINE_BOOST_COST,
+  SHRINE_BOOST_DURATION_HOURS,
   SHRINE_BOOST_PER_SHRINE_PERC,
   SHRINE_BOOST_TYPES,
   SHRINE_MAX_AI_ASSIGNMENTS,
@@ -354,14 +355,50 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const [scheduleTime, setScheduleTime] = useState<string>(""); // "HH:MM"
   const maxScheduleDate = useMemo(() => secondsFromNow(7 * DAY_S), []);
 
+  // Track previously active boost types for notifications (initialise with current state so
+  // we only fire toasts for boosts that become active after this component mounts)
+  const prevActiveBoostTypesRef = useRef<Set<string>>(
+    new Set(
+      Object.entries(user.village?.shrineSettings?.activeBoosts ?? {})
+        .filter(([, expiry]) => expiry && new Date(expiry).getTime() > Date.now())
+        .map(([boostType]) => boostType),
+    ),
+  );
+
+  // Show notification when a scheduled boost becomes active
+  useEffect(() => {
+    const currentBoosts = user.village?.shrineSettings?.activeBoosts ?? {};
+    const now = Date.now();
+    const currentTypes = new Set(
+      Object.entries(currentBoosts)
+        .filter(([, expiry]) => expiry && new Date(expiry).getTime() > now)
+        .map(([boostType]) => boostType),
+    );
+    for (const type of currentTypes) {
+      if (!prevActiveBoostTypesRef.current.has(type)) {
+        showMutationToast({
+          success: true,
+          title: "Village Boost Activated",
+          message: `${type} boost is now active for ${SHRINE_BOOST_DURATION_HOURS} hours!`,
+        });
+      }
+    }
+    prevActiveBoostTypesRef.current = currentTypes;
+  }, [user.village?.shrineSettings?.activeBoosts]);
+
   // Refresh user data when boosts become active
   useEffect(() => {
     if (!scheduledBoosts) return;
     const now = new Date();
-    const hasDue = scheduledBoosts.some((s) => new Date(s.startAt) <= now);
+
+    // Boosts whose window has started but not yet ended
+    const hasDue = scheduledBoosts.some(
+      (s) => new Date(s.startAt) <= now && new Date(s.endAt) > now,
+    );
+
     if (hasDue) void utils.profile.getUser.invalidate();
 
-    // Schedule a refresh at the nearest upcoming startAt
+    // Fire exactly at the nearest upcoming startAt
     const nextStart = scheduledBoosts
       .map((s) => new Date(s.startAt))
       .filter((d) => d > now)
@@ -531,6 +568,15 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
                               <div className="font-medium text-muted-foreground text-xs">
                                 Scheduling (UTC time)
                               </div>
+                              <p className="text-muted-foreground text-xs">
+                                Schedule at least{" "}
+                                <span className="font-semibold">1 hour in advance</span>
+                                . Boosts last{" "}
+                                <span className="font-semibold">
+                                  {SHRINE_BOOST_DURATION_HOURS} hours
+                                </span>{" "}
+                                from the scheduled start time.
+                              </p>
 
                               <div className="space-y-2">
                                 <Label className="text-sm">Start Date</Label>
@@ -649,9 +695,11 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
 
                           <div className="space-y-2">
                             {schedulesForType.map((schedule) => {
+                              const now = new Date();
                               const startDate = new Date(schedule.startAt);
                               const endDate = new Date(schedule.endAt);
-                              const isPast = endDate < new Date();
+                              const hasStarted = startDate <= now;
+                              const isPast = endDate < now;
 
                               return (
                                 <div
@@ -668,21 +716,28 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
                                         (Expired)
                                       </div>
                                     )}
+                                    {hasStarted && !isPast && (
+                                      <div className="text-xs text-green-600">
+                                        (Active)
+                                      </div>
+                                    )}
                                   </div>
 
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={isCancellingBoost}
-                                    onClick={() =>
-                                      cancelScheduledBoost({
-                                        scheduleId: schedule.id,
-                                      })
-                                    }
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
+                                  {!hasStarted && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={isCancellingBoost}
+                                      onClick={() =>
+                                        cancelScheduledBoost({
+                                          scheduleId: schedule.id,
+                                        })
+                                      }
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                 </div>
                               );
                             })}
