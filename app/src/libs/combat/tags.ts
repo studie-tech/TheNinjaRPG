@@ -1849,7 +1849,7 @@ export const vamp = (
         typeof c.damage === "number" &&
         c.damage > 0
       ) {
-        totalDamage += c.preShieldDamage ?? c.rawDamage ?? c.damage;
+        totalDamage += c.damage;
       }
     });
     if (totalDamage > 0) {
