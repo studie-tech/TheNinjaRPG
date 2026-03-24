@@ -2619,7 +2619,11 @@ export const processUsersForBattle = async (
             userQuests: user.userQuests ?? [],
             completedQuests: user.completedQuests ?? [],
           };
-          if (!canTrainJutsu(userjutsu.jutsu, userForCheck) && !user.isAi) {
+          if (
+            !userjutsu.jutsu.parentJutsuId &&
+            !canTrainJutsu(userjutsu.jutsu, userForCheck) &&
+            !user.isAi
+          ) {
             return false;
           }
         }
