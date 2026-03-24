@@ -181,7 +181,7 @@ const ElderHall: React.FC<{
   const pendingVotes = elderVotes?.filter((v) => v.status === "PENDING") ?? [];
   const pendingWarVotes = pendingVotes.filter((v) => v.type === "WAR_DECLARATION");
   const pendingKageVotes = pendingVotes.filter((v) => v.type === "KAGE_REMOVAL");
-  const removalQuorum = Math.floor(ELDER_MIN_VOTING_COUNT / 2) + 1;
+  const removalQuorum = Math.floor((elders?.length ?? ELDER_MIN_VOTING_COUNT) / 2) + 1;
 
   // 4-day lock check: elders can only initiate removal after the kage has been in power for 4 days
   const leaderUpdatedAt = villageData?.villageData.leaderUpdatedAt;
