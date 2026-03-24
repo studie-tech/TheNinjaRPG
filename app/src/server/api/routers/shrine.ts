@@ -353,6 +353,11 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("Start time must be in the future or very recent past");
       }
 
+      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+      if (startAt < oneHourFromNow) {
+        return errorResponse("Boosts must be scheduled at least 1 hour in advance");
+      }
+
       const sevenDaysFromNow = secondsFromDate(7 * 24 * 60 * 60, now);
       if (startAt > sevenDaysFromNow) {
         return errorResponse("Cannot schedule boosts more than 7 days in advance");
