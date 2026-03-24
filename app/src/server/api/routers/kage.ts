@@ -719,6 +719,9 @@ export const kageRouter = createTRPCRouter({
         }
       }
 
+      if (!uVillage.kageId)
+        return errorResponse("This village has no current Kage to remove");
+
       // Fetch all eligible elders (excluding the kage who is the vote target)
       const eligibleElders = await ctx.drizzle.query.userData.findMany({
         columns: { userId: true },
