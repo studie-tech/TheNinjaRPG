@@ -1,5 +1,4 @@
 import { and, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { cookies } from "next/headers";
 import {
   ELDER_MIN_VOTING_COUNT,
@@ -349,7 +348,7 @@ async function assignWarQuests(
 
     if (applicableQuest) {
       questAssignments.push({
-        id: nanoid(),
+        id: crypto.randomUUID(),
         userId: user.userId,
         questId: applicableQuest.id,
         questType: "war",
@@ -504,7 +503,7 @@ async function processExpiredElderVotes() {
           .where(eq(villageElderVote.id, vote.id));
         continue;
       }
-      const warId = nanoid();
+      const warId = crypto.randomUUID();
       const warContent = `${attackerVillage.name} has declared war on ${defenderVillage?.name ?? "another village"}!`;
       await Promise.all([
         drizzleDB.insert(war).values({
