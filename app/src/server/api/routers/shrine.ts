@@ -419,31 +419,6 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("Boost time overlaps with an existing scheduled boost");
       }
 
-      // If startAt is now or in the past, immediately apply the boost so the UI
-      // reflects it without waiting for the cron to fire.
-      // Re-read shrineSettings from DB to avoid clobbering concurrent changes.
-      if (startAt <= now) {
-        const freshVillage = await ctx.drizzle.query.village.findFirst({
-          columns: { shrineSettings: true },
-          where: eq(village.id, user.villageId),
-        });
-        const freshSettings =
-          freshVillage?.shrineSettings ?? user.village.shrineSettings;
-        const currentBoosts = freshSettings?.activeBoosts ?? {};
-        await ctx.drizzle
-          .update(village)
-          .set({
-            shrineSettings: {
-              ...freshSettings,
-              activeBoosts: {
-                ...currentBoosts,
-                [input.boostType]: endAt.toISOString(),
-              },
-            },
-          })
-          .where(eq(village.id, user.villageId));
-      }
-
       return {
         success: true,
         message: `${input.boostType} boost scheduled from ${formatDateTimeShort(startAt)} to ${formatDateTimeShort(endAt)}!`,

@@ -1392,11 +1392,11 @@ export const warRouter = createTRPCRouter({
           }),
           ctx.drizzle
             .insert(notification)
-            .values({ userId: user.userId, content: warContent }),
+            .values({ userId: voteRecord.initiatedByUserId, content: warContent }),
           ctx.drizzle
             .update(userData)
             .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(eq(userData.userId, user.userId)),
+            .where(eq(userData.userId, voteRecord.initiatedByUserId)),
         ]);
         return { success: true, message: "War declaration approved. War has started!" };
       }
