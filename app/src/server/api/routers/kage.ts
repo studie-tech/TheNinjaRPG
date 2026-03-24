@@ -1,3 +1,4 @@
+import { randomInt } from "crypto";
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -1013,7 +1014,7 @@ export const fetchKageReplacement = async (
   });
   const userElders = elders.filter((e) => !e.isAi);
   if (userElders.length > 0) {
-    return userElders[Math.floor(Math.random() * userElders.length)];
+    return userElders[randomInt(userElders.length)];
   }
-  return elders[Math.floor(Math.random() * elders.length)];
+  return elders[randomInt(elders.length)];
 };
