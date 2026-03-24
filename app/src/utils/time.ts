@@ -223,11 +223,13 @@ export const combineLocalDateTime = (date: Date, timeHHMM: string): Date => {
 
 /**
  * Combines a calendar date with a UTC HH:MM time string into a Date object.
- * The date components are taken from the UTC representation of `date`,
- * and the time is interpreted as UTC hours/minutes.
- * @param date - A Date whose UTC year/month/day is used
+ * The date components are taken from the **local** representation of `date`
+ * (year/month/day as the user sees them), and the time is interpreted as UTC
+ * hours/minutes. Using local components avoids off-by-one-day errors for users
+ * in non-UTC timezones where a local-midnight Date has a different UTC date.
+ * @param date - A Date whose local year/month/day is used
  * @param timeHHMM - A time string in "HH:MM" format (UTC)
- * @returns A new Date representing that UTC date + time
+ * @returns A new Date representing that local date + UTC time
  */
 export const combineUTCDateTime = (date: Date, timeHHMM: string): Date => {
   if (!/^\d{1,2}:\d{2}$/.test(timeHHMM)) {
@@ -245,15 +247,7 @@ export const combineUTCDateTime = (date: Date, timeHHMM: string): Date => {
     throw new TypeError(`combineUTCDateTime: minutes out of range (${mm})`);
   }
   return new Date(
-    Date.UTC(
-      date.getUTCFullYear(),
-      date.getUTCMonth(),
-      date.getUTCDate(),
-      hh,
-      mm,
-      0,
-      0,
-    ),
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hh, mm, 0, 0),
   );
 };
 

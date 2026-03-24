@@ -354,12 +354,24 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const [scheduleTime, setScheduleTime] = useState<string>(""); // "HH:MM"
   const maxScheduleDate = useMemo(() => secondsFromNow(7 * DAY_S), []);
 
-  // After getScheduledBoosts activates due schedules server-side, refresh user data
+  // Refresh user data when boosts become active
   useEffect(() => {
     if (!scheduledBoosts) return;
     const now = new Date();
     const hasDue = scheduledBoosts.some((s) => new Date(s.startAt) <= now);
     if (hasDue) void utils.profile.getUser.invalidate();
+
+    // Schedule a refresh at the nearest upcoming startAt
+    const nextStart = scheduledBoosts
+      .map((s) => new Date(s.startAt))
+      .filter((d) => d > now)
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+    if (!nextStart) return;
+    const timer = setTimeout(
+      () => void utils.profile.getUser.invalidate(),
+      nextStart.getTime() - now.getTime(),
+    );
+    return () => clearTimeout(timer);
   }, [scheduledBoosts, utils]);
 
   if (!sectorData) return <Loader explanation="Loading shrine data" />;
@@ -527,13 +539,27 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
                                   selected={scheduleDate}
                                   onSelect={setScheduleDate}
                                   disabled={(date) => {
-                                    const startOfToday = new Date();
-                                    startOfToday.setHours(0, 0, 0, 0);
-
                                     const end = new Date(maxScheduleDate);
                                     end.setHours(23, 59, 59, 999);
-
-                                    return date < startOfToday || date > end;
+                                    if (date > end) return true;
+                                    // If a valid time is already entered, disable dates whose
+                                    // combined UTC datetime is already in the past
+                                    if (
+                                      scheduleTime &&
+                                      /^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime)
+                                    ) {
+                                      try {
+                                        return (
+                                          combineUTCDateTime(date, scheduleTime) <=
+                                          new Date()
+                                        );
+                                      } catch {
+                                        // fall through to date-only check
+                                      }
+                                    }
+                                    const startOfToday = new Date();
+                                    startOfToday.setHours(0, 0, 0, 0);
+                                    return date < startOfToday;
                                   }}
                                 />
                               </div>
@@ -565,7 +591,19 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
                                   disabled={
                                     isSchedulingBoost ||
                                     !scheduleDate ||
-                                    !/^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime)
+                                    !/^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime) ||
+                                    (() => {
+                                      try {
+                                        return (
+                                          combineUTCDateTime(
+                                            scheduleDate,
+                                            scheduleTime,
+                                          ) <= new Date()
+                                        );
+                                      } catch {
+                                        return true;
+                                      }
+                                    })()
                                   }
                                   onClick={() => {
                                     if (!scheduleDate || !scheduleTime) return;
