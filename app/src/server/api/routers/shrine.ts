@@ -421,13 +421,20 @@ export const shrineRouter = createTRPCRouter({
 
       // If startAt is now or in the past, immediately apply the boost so the UI
       // reflects it without waiting for the cron to fire.
+      // Re-read shrineSettings from DB to avoid clobbering concurrent changes.
       if (startAt <= now) {
-        const currentBoosts = user.village.shrineSettings.activeBoosts || {};
+        const freshVillage = await ctx.drizzle.query.village.findFirst({
+          columns: { shrineSettings: true },
+          where: eq(village.id, user.villageId),
+        });
+        const freshSettings =
+          freshVillage?.shrineSettings ?? user.village.shrineSettings;
+        const currentBoosts = freshSettings?.activeBoosts ?? {};
         await ctx.drizzle
           .update(village)
           .set({
             shrineSettings: {
-              ...user.village.shrineSettings,
+              ...freshSettings,
               activeBoosts: {
                 ...currentBoosts,
                 [input.boostType]: endAt.toISOString(),
