@@ -268,7 +268,9 @@ export const warRouter = createTRPCRouter({
         return errorResponse("Only the leader can declare sector wars");
       }
       if (user.village.tokens < WAR_DECLARATION_COST) {
-        return errorResponse("Your village needs 15,000 tokens to declare war");
+        return errorResponse(
+          `Your village needs ${WAR_DECLARATION_COST.toLocaleString()} tokens to declare war`,
+        );
       }
       if (!attackerVillage) {
         return errorResponse("Village not found");
@@ -524,7 +526,9 @@ export const warRouter = createTRPCRouter({
       }
 
       if (user.village.tokens < WAR_DECLARATION_COST) {
-        return errorResponse("Your village needs 15,000 tokens to declare war");
+        return errorResponse(
+          `Your village needs ${WAR_DECLARATION_COST.toLocaleString()} tokens to declare war`,
+        );
       }
       if (!attackerVillage || !defenderVillage) {
         return errorResponse("Village not found");
