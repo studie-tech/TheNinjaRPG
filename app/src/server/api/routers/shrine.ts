@@ -419,6 +419,24 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("Boost time overlaps with an existing scheduled boost");
       }
 
+      // If startAt is now or in the past, immediately apply the boost so the UI
+      // reflects it without waiting for the cron to fire.
+      if (startAt <= now) {
+        const currentBoosts = user.village.shrineSettings.activeBoosts || {};
+        await ctx.drizzle
+          .update(village)
+          .set({
+            shrineSettings: {
+              ...user.village.shrineSettings,
+              activeBoosts: {
+                ...currentBoosts,
+                [input.boostType]: endAt.toISOString(),
+              },
+            },
+          })
+          .where(eq(village.id, user.villageId));
+      }
+
       return {
         success: true,
         message: `${input.boostType} boost scheduled from ${formatDateTimeShort(startAt)} to ${formatDateTimeShort(endAt)}!`,
@@ -459,8 +477,8 @@ export const shrineRouter = createTRPCRouter({
       if (schedule.villageId !== user.villageId) {
         return errorResponse("You can only cancel boosts for your own village");
       }
-      if (user.village.kageId !== user.userId) {
-        return errorResponse("Only the Kage can cancel scheduled boosts");
+      if (user.village.kageId !== user.userId && user.rank !== "ELDER") {
+        return errorResponse("Only the Kage or Elders can cancel scheduled boosts");
       }
       const startAt =
         schedule.startAt instanceof Date

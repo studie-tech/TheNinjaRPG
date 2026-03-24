@@ -1237,6 +1237,7 @@ export const WAR_STRUCTURE_UPGRADE_BLOCK_DAYS = 7; // Structure upgrade block du
 export const WAR_VICTORY_TOKEN_BONUS = 3000000; // Victory bonus tokens
 export const WAR_PURCHASE_SHRINE_TOKEN_COST = 100000; // Cost in village tokens to purchase a shrine
 export const WAR_DECLARATION_COST = 1000000; // Cost in village tokens to declare war
+export const WAR_DECLARATION_COOLDOWN_HOURS = 24; // Cooldown after a rejected/cancelled war declaration
 export const WAR_MISSIONS_PER_DAY = 5; // Maximum war missions per day
 export const WAR_ATTACKER_EXHAUSTION_MULTIPLIER = 1.1; // Attacker gets 10% more war exhaustion
 export const WAR_ALLY_OFFER_MIN = 1000; // Minimum token offer for allies

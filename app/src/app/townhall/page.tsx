@@ -150,6 +150,14 @@ const ElderHall: React.FC<{
       },
     });
 
+  const { mutate: cancelWarDeclaration, isPending: isCancellingWar } =
+    api.war.cancelWarDeclaration.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) await refetchVotes();
+      },
+    });
+
   const { mutate: initiateRemoval, isPending: isInitiatingRemoval } =
     api.kage.initiateKageRemovalVote.useMutation({
       onSuccess: async (data) => {
@@ -302,7 +310,7 @@ const ElderHall: React.FC<{
         initialBreak={true}
         subtitle="Elder governance — war declarations and kage removal votes"
       >
-        {isVotingWar || isInitiatingRemoval || isVotingRemoval ? (
+        {isVotingWar || isInitiatingRemoval || isVotingRemoval || isCancellingWar ? (
           <Loader explanation="Processing vote..." />
         ) : (
           <div className="space-y-4">
@@ -351,6 +359,22 @@ const ElderHall: React.FC<{
                       You have already voted.
                     </p>
                   )}
+                {isKage && (
+                  <div className="mt-2 border-t border-red-500/20 pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        cancelWarDeclaration({ voteId: pendingWarVote.id })
+                      }
+                    >
+                      Cancel Declaration
+                    </Button>
+                    <p className="mt-1 text-muted-foreground text-xs">
+                      No tokens will be charged if cancelled.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
             {/* Pending kage removal vote */}

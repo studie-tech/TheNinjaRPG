@@ -507,7 +507,7 @@ export const WarMap: React.FC<{
       {/* Find Sector Control */}
       <div className="absolute top-2 right-2 z-10">
         <Popover>
-          <PopoverTrigger>
+          <PopoverTrigger asChild>
             <Button
               variant="outline"
               size="icon"

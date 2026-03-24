@@ -10,6 +10,7 @@ import {
   SHRINE_MAX_PER_VILLAGE,
   VILLAGE_SYNDICATE_ID,
   WAR_ALLY_MAX_PAYMENT_PERCENTAGE,
+  WAR_DECLARATION_COOLDOWN_HOURS,
   WAR_DECLARATION_COST,
   WAR_FACTION_MAX_SECTORS,
   WAR_LOSING_COOLDOWN_DAYS,
@@ -485,6 +486,31 @@ export const warRouter = createTRPCRouter({
       if (user.userId !== user.village.kageId) {
         return errorResponse("Only the leader can declare war");
       }
+
+      // Check declaration cooldown (rejected or cancelled within last 24 hours)
+      const recentRejection = await ctx.drizzle.query.villageElderVote.findFirst({
+        columns: { createdAt: true },
+        where: and(
+          eq(villageElderVote.villageId, user.villageId),
+          eq(villageElderVote.type, "WAR_DECLARATION"),
+          eq(villageElderVote.status, "REJECTED"),
+          gte(
+            villageElderVote.createdAt,
+            secondsFromNow(-WAR_DECLARATION_COOLDOWN_HOURS * 3600),
+          ),
+        ),
+        orderBy: desc(villageElderVote.createdAt),
+      });
+      if (recentRejection) {
+        const cooldownEnd = new Date(
+          recentRejection.createdAt.getTime() +
+            WAR_DECLARATION_COOLDOWN_HOURS * 3600 * 1000,
+        );
+        return errorResponse(
+          `War declaration is on cooldown after a recent rejection or cancellation. Available again at ${cooldownEnd.toUTCString()}.`,
+        );
+      }
+
       if (user.village.tokens < WAR_DECLARATION_COST) {
         return errorResponse(
           `Your village needs ${WAR_DECLARATION_COST.toLocaleString()} tokens to declare war`,
@@ -1126,6 +1152,82 @@ export const warRouter = createTRPCRouter({
         throw serverError("FORBIDDEN", "You can only view votes for your own village");
       }
       return fetchElderVotes(ctx.drizzle, input.villageId);
+    }),
+
+  // Kage cancels a pending war declaration before elders vote
+  cancelWarDeclaration: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Cancel a pending war declaration vote (Kage only)",
+      },
+    })
+    .input(z.object({ voteId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [{ user }, voteRecord] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        ctx.drizzle.query.villageElderVote.findFirst({
+          where: eq(villageElderVote.id, input.voteId),
+          with: { entries: { columns: { userId: true } } },
+        }),
+      ]);
+
+      // Guards
+      if (!user?.villageId) return errorResponse("You must be in a village");
+      if (!user.village) return errorResponse("Village not found");
+      if (user.village.kageId !== user.userId)
+        return errorResponse("Only the Kage can cancel a war declaration");
+      if (!voteRecord) return errorResponse("War declaration not found");
+      if (voteRecord.villageId !== user.villageId)
+        return errorResponse("This vote does not belong to your village");
+      if (voteRecord.type !== "WAR_DECLARATION")
+        return errorResponse("Can only cancel war declarations");
+      if (voteRecord.status !== "PENDING")
+        return errorResponse("Can only cancel a pending war declaration");
+
+      // Atomically cancel — guard ensures it's still PENDING
+      const updateRes = await ctx.drizzle
+        .update(villageElderVote)
+        .set({ status: "REJECTED" })
+        .where(
+          and(
+            eq(villageElderVote.id, input.voteId),
+            eq(villageElderVote.status, "PENDING"),
+          ),
+        );
+
+      if (updateRes.rowsAffected === 0)
+        return errorResponse(
+          "War declaration could not be cancelled — it may have already been resolved",
+        );
+
+      // Notify elders of cancellation
+      const elders = await ctx.drizzle
+        .select({ userId: userData.userId })
+        .from(userData)
+        .where(and(eq(userData.villageId, user.villageId), eq(userData.rank, "ELDER")));
+
+      if (elders.length > 0) {
+        const notifyIds = elders.map((e) => e.userId);
+        await Promise.all([
+          ctx.drizzle.insert(notification).values(
+            notifyIds.map((userId) => ({
+              userId,
+              content: `${user.username} has cancelled the war declaration. No war will be started.`,
+            })),
+          ),
+          ctx.drizzle
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(inArray(userData.userId, notifyIds)),
+        ]);
+      }
+
+      return {
+        success: true,
+        message: "War declaration cancelled. No tokens were charged.",
+      };
     }),
 
   // Elder votes on a pending war declaration
