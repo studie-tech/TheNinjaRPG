@@ -560,7 +560,11 @@ export const profileRouter = createTRPCRouter({
       // Village war / raid notifications (VILLAGE_WAR and WAR_RAID have sector=0)
       const villageWars =
         userWithRelations?.activeWars?.filter(
-          (w) => w.type === "VILLAGE_WAR" || w.type === "WAR_RAID",
+          (w) =>
+            (w.type === "VILLAGE_WAR" || w.type === "WAR_RAID") &&
+            (w.attackerVillageId === user?.villageId ||
+              w.defenderVillageId === user?.villageId ||
+              w.warAllies?.some((a) => a.villageId === user?.villageId)),
         ) ?? [];
       for (const w of villageWars) {
         const isAttacker = w.attackerVillageId === user?.villageId;
