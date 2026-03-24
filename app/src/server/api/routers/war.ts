@@ -651,17 +651,17 @@ export const warRouter = createTRPCRouter({
           );
         throw e;
       }
+      const elderContent = `${user.username} has submitted a war declaration against ${defenderVillage.name}. You have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
+      const notifyUserIds = [user.userId, ...elders.map((e) => e.userId)];
       await Promise.all([
-        ctx.drizzle.insert(notification).values({
-          userId: user.userId,
-          content: `${user.username} has submitted a war declaration against ${defenderVillage.name}. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`,
-        }),
+        // Notify kage (submission confirmed) and each elder (vote request)
+        ctx.drizzle
+          .insert(notification)
+          .values(notifyUserIds.map((userId) => ({ userId, content: elderContent }))),
         ctx.drizzle
           .update(userData)
           .set({ unreadNotifications: sql`unreadNotifications + 1` })
-          .where(
-            and(eq(userData.villageId, user.villageId), eq(userData.rank, "ELDER")),
-          ),
+          .where(inArray(userData.userId, notifyUserIds)),
       ]);
       return {
         success: true,
@@ -1216,6 +1216,27 @@ export const warRouter = createTRPCRouter({
           return errorResponse("Vote already processed");
         }
 
+        // Re-check war involvement — a village may have entered a war during the voting window
+        const currentActiveWars = await fetchActiveWars(ctx.drizzle);
+        if (
+          isVillageInvolvedInAnyWar(
+            currentActiveWars,
+            voteRecord.villageId,
+            undefined,
+            ["VILLAGE_WAR", "WAR_RAID"],
+          ) ||
+          isVillageInvolvedInAnyWar(currentActiveWars, voteRecord.targetId, undefined, [
+            "VILLAGE_WAR",
+            "WAR_RAID",
+          ])
+        ) {
+          await ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, input.voteId));
+          return errorResponse("A village is already involved in an active war");
+        }
+
         // Start the war and deduct tokens
         const [attackerVillage, defenderVillage] = await Promise.all([
           ctx.drizzle.query.village.findFirst({
@@ -1273,9 +1294,7 @@ export const warRouter = createTRPCRouter({
           ctx.drizzle
             .update(userData)
             .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(
-              inArray(userData.villageId, [voteRecord.villageId, voteRecord.targetId]),
-            ),
+            .where(eq(userData.userId, user.userId)),
         ]);
         return { success: true, message: "War declaration approved. War has started!" };
       }
@@ -1519,14 +1538,18 @@ export const resolveElderVote = (
   noCount: number,
   elderCount: number,
   isExpired = false,
+  autoApprove = false,
 ): "APPROVED" | "REJECTED" | "PENDING" => {
   const majority = Math.floor(elderCount / 2) + 1;
   if (yesCount >= majority) return "APPROVED";
   if (noCount >= majority) return "REJECTED";
   // All elders voted and it's a tie → cancelled
   if (yesCount + noCount >= elderCount && yesCount === noCount) return "REJECTED";
-  // At expiry, approve only if yes strictly leads; ties or abstentions are rejected
-  if (isExpired) return yesCount > noCount ? "APPROVED" : "REJECTED";
+  if (isExpired) {
+    // autoApprove (WAR_DECLARATION): war starts unless a majority actively blocked it
+    // !autoApprove (KAGE_REMOVAL): removal only proceeds if yes strictly leads
+    return autoApprove || yesCount > noCount ? "APPROVED" : "REJECTED";
+  }
   return "PENDING";
 };
 

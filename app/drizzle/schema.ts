@@ -3855,6 +3855,9 @@ export const villageElderVote = mysqlTable(
     typeIdx: index("VillageElderVote_type_idx").on(table.type),
     statusIdx: index("VillageElderVote_status_idx").on(table.status),
     endsAtIdx: index("VillageElderVote_endsAt_idx").on(table.endsAt),
+    initiatedByUserIdIdx: index("VillageElderVote_initiatedByUserId_idx").on(
+      table.initiatedByUserId,
+    ),
     activePendingUnique: unique("VillageElderVote_active_pending_unique").on(
       table.villageId,
       table.type,

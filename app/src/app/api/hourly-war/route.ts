@@ -396,9 +396,9 @@ async function processExpiredElderVotes() {
 
       const yesCount = vote.entries.filter((e) => e.vote === "YES").length;
       const noCount = vote.entries.filter((e) => e.vote === "NO").length;
-      const outcome = resolveElderVote(yesCount, noCount, elderCount, true);
+      const outcome = resolveElderVote(yesCount, noCount, elderCount, true, true);
 
-      // If rejected (including ties and abstentions at expiry), notify initiator
+      // If rejected (majority NO blocks it), notify initiator
       if (outcome === "REJECTED") {
         const targetVillage = await drizzleDB.query.village.findFirst({
           columns: { name: true },
@@ -444,7 +444,15 @@ async function processExpiredElderVotes() {
         continue;
       }
 
-      // APPROVED → auto-start war
+      // APPROVED → atomically claim the motion, then start war
+      const warClaimResult = await drizzleDB
+        .update(villageElderVote)
+        .set({ status: "APPROVED" })
+        .where(
+          and(eq(villageElderVote.id, vote.id), eq(villageElderVote.status, "PENDING")),
+        );
+      if (warClaimResult.rowsAffected === 0) continue;
+
       const [attackerVillage, defenderVillage] = await Promise.all([
         drizzleDB.query.village.findFirst({ where: eq(village.id, vote.villageId) }),
         drizzleDB.query.village.findFirst({
@@ -514,10 +522,6 @@ async function processExpiredElderVotes() {
           defenderShrineStatus: "ACTIVE",
         }),
         drizzleDB
-          .update(villageElderVote)
-          .set({ status: "APPROVED" })
-          .where(eq(villageElderVote.id, vote.id)),
-        drizzleDB
           .insert(notification)
           .values({ userId: vote.initiatedByUserId, content: warContent }),
         drizzleDB
@@ -586,6 +590,18 @@ async function processExpiredElderVotes() {
           ]);
           continue;
         }
+        // Atomically claim the motion before executing side effects
+        const kageClaimResult = await drizzleDB
+          .update(villageElderVote)
+          .set({ status: "APPROVED" })
+          .where(
+            and(
+              eq(villageElderVote.id, vote.id),
+              eq(villageElderVote.status, "PENDING"),
+            ),
+          );
+        if (kageClaimResult.rowsAffected === 0) continue;
+
         const removedKage = await drizzleDB.query.userData.findFirst({
           columns: { username: true },
           where: eq(userData.userId, vote.targetId),
@@ -599,10 +615,6 @@ async function processExpiredElderVotes() {
             .update(village)
             .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
             .where(eq(village.id, vote.villageId)),
-          drizzleDB
-            .update(villageElderVote)
-            .set({ status: "APPROVED" })
-            .where(eq(villageElderVote.id, vote.id)),
           // Notify the removed kage
           drizzleDB.insert(notification).values({
             userId: vote.targetId,
