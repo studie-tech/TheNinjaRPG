@@ -98,7 +98,7 @@ export const shrineRouter = createTRPCRouter({
       const now = new Date();
 
       // Run queries in parallel
-      const [user, schedules, villageData] = await Promise.all([
+      const [user, schedules] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle
           .select()
@@ -110,10 +110,6 @@ export const shrineRouter = createTRPCRouter({
             ),
           )
           .orderBy(asc(shrineBoostSchedule.startAt)),
-        ctx.drizzle.query.village.findFirst({
-          columns: { id: true, shrineSettings: true },
-          where: eq(village.id, input.villageId),
-        }),
       ]);
 
       // Authorization: only allow access if user belongs to the village or has admin/moderator access
@@ -124,42 +120,8 @@ export const shrineRouter = createTRPCRouter({
         );
       }
 
-      // Activate any schedules whose startAt has passed but haven't been processed yet.
-      // Only write if there's at least one boost not yet stored (or stored with an earlier
-      // endAt), so concurrent callers converge rather than overwriting each other.
-      const dueSchedules = schedules.filter((s) => new Date(s.startAt) <= now);
-      if (dueSchedules.length > 0 && villageData) {
-        const settings = villageData.shrineSettings as {
-          activeBoosts?: Record<string, string>;
-          unlockedAiIds?: string[];
-          activeAiIds?: string[];
-        } | null;
-        const currentBoosts = { ...(settings?.activeBoosts ?? {}) };
-
-        let hasChanges = false;
-        for (const s of dueSchedules) {
-          const existingEnd = currentBoosts[s.boostType];
-          const newEnd = new Date(s.endAt).toISOString();
-          if (!existingEnd || existingEnd < newEnd) {
-            currentBoosts[s.boostType] = newEnd;
-            hasChanges = true;
-          }
-        }
-
-        if (hasChanges) {
-          await ctx.drizzle
-            .update(village)
-            .set({
-              shrineSettings: {
-                unlockedAiIds: settings?.unlockedAiIds ?? [],
-                activeAiIds: settings?.activeAiIds ?? [],
-                activeBoosts: currentBoosts,
-              },
-            })
-            .where(eq(village.id, input.villageId));
-        }
-      }
-
+      // Boost activation is handled by the shrine-maintenance cron (runs every minute).
+      // This read path intentionally does not mutate village.shrineSettings.
       return schedules;
     }),
 

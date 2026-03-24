@@ -3838,6 +3838,13 @@ export const villageElderVote = mysqlTable(
     warType: mysqlEnum("warType", consts.WAR_TYPES),
     targetStructureRoute: varchar("targetStructureRoute", { length: 191 }),
     status: mysqlEnum("status", consts.ELDER_VOTE_STATUSES).notNull().default("PENDING"),
+    // Stored generated column: 1 when PENDING, NULL otherwise.
+    // NULL values are ignored by MySQL unique indexes, so only one PENDING motion
+    // per (villageId, type, targetId) is enforced atomically at the DB level.
+    activeFlag: int("activeFlag").generatedAlwaysAs(
+      sql`CASE WHEN \`status\` = 'PENDING' THEN 1 ELSE NULL END`,
+      { mode: "stored" },
+    ),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -3848,6 +3855,12 @@ export const villageElderVote = mysqlTable(
     typeIdx: index("VillageElderVote_type_idx").on(table.type),
     statusIdx: index("VillageElderVote_status_idx").on(table.status),
     endsAtIdx: index("VillageElderVote_endsAt_idx").on(table.endsAt),
+    activePendingUnique: unique("VillageElderVote_active_pending_unique").on(
+      table.villageId,
+      table.type,
+      table.targetId,
+      table.activeFlag,
+    ),
   }),
 );
 export type VillageElderVote = InferSelectModel<typeof villageElderVote>;

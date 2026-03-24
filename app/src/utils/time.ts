@@ -230,14 +230,27 @@ export const combineLocalDateTime = (date: Date, timeHHMM: string): Date => {
  * @returns A new Date representing that UTC date + time
  */
 export const combineUTCDateTime = (date: Date, timeHHMM: string): Date => {
+  if (!/^\d{1,2}:\d{2}$/.test(timeHHMM)) {
+    throw new TypeError(
+      `combineUTCDateTime: invalid time format "${timeHHMM}" — expected HH:MM`,
+    );
+  }
   const [hhStr = "00", mmStr = "00"] = timeHHMM.split(":");
+  const hh = parseInt(hhStr, 10);
+  const mm = parseInt(mmStr, 10);
+  if (!Number.isFinite(hh) || hh < 0 || hh > 23) {
+    throw new TypeError(`combineUTCDateTime: hours out of range (${hh})`);
+  }
+  if (!Number.isFinite(mm) || mm < 0 || mm > 59) {
+    throw new TypeError(`combineUTCDateTime: minutes out of range (${mm})`);
+  }
   return new Date(
     Date.UTC(
       date.getUTCFullYear(),
       date.getUTCMonth(),
       date.getUTCDate(),
-      parseInt(hhStr, 10),
-      parseInt(mmStr, 10),
+      hh,
+      mm,
       0,
       0,
     ),
