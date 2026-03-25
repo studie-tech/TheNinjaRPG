@@ -57,6 +57,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   // State
   const [selectedRaidId, setSelectedRaidId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"active" | "history">("active");
+  const [isReadyToQueue, setIsReadyToQueue] = useState(false);
   const { data: userData, pusher } = useRequiredUserData();
 
   // Queries
@@ -139,9 +140,22 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
       },
     });
 
+  const { mutate: readyToQueue, isPending: readyPending } =
+    api.raids.readyToQueue.useMutation({
+      onSuccess: (data) => {
+        if (data.success) {
+          setIsReadyToQueue(true);
+          void util.raids.getUserRaidQueue.invalidate();
+          void util.profile.getUser.invalidate();
+        }
+        showMutationToast(data);
+      },
+    });
+
   // Event handlers
   const handleRaidSelect = (raidId: string) => {
     setSelectedRaidId((prev) => (prev === raidId ? null : raidId));
+    setIsReadyToQueue(false);
   };
 
   const handleJoinQueue = (teamId?: string) => {
@@ -525,7 +539,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                     </p>
                   </div>
                 </div>
-              ) : (
+              ) : userInSelectedRaidQueue || isReadyToQueue ? (
                 <RaidTeamsDisplay
                   activeTeams={activeTeams}
                   maxTeams={maxTeams}
@@ -540,6 +554,17 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                   isLeaving={leavePending}
                   isStarting={startPending}
                 />
+              ) : (
+                <div className="rounded-lg border bg-card p-4 text-center">
+                  <p className="mb-3 text-muted-foreground text-sm">
+                    Click the button below to prepare for battle. This will clear any
+                    stuck status before joining the queue.
+                  </p>
+                  <Button onClick={() => readyToQueue()} disabled={readyPending}>
+                    <Swords className="mr-2 h-4 w-4" />
+                    {readyPending ? "Preparing..." : "Ready to Queue"}
+                  </Button>
+                </div>
               ))}
 
             {/* Reward Thresholds */}

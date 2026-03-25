@@ -17,9 +17,11 @@ import {
   quest,
   raidDamageThreshold,
   raidParticipation,
+  rankedPvpQueue,
   sector,
   userData,
   userRaidBuff,
+  userRequest,
   war,
 } from "@/drizzle/schema";
 import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
@@ -392,6 +394,24 @@ export const raidsRouter = createTRPCRouter({
       if (!queue || queue.clanBattle?.battleType !== "RAID_BATTLE") {
         return { inQueue: false, queue: null, isClaiming: false };
       }
+
+      // Auto-cleanup if the raid has expired - user would be stuck otherwise
+      const raid = await ctx.drizzle.query.quest.findFirst({
+        where: eq(quest.id, queue.clanBattle.attackerEntityId),
+        columns: { raidEndsAt: true, raidBossCurrentHealth: true },
+      });
+      const now = new Date();
+      const raidExpired =
+        (raid?.raidEndsAt && raid.raidEndsAt < now) ||
+        (raid?.raidBossCurrentHealth ?? 1) <= 0;
+      if (raidExpired) {
+        await checkAndCleanupExpiredRaid(
+          ctx.drizzle,
+          queue.clanBattle.attackerEntityId,
+        );
+        return { inQueue: false, queue: null, isClaiming: false };
+      }
+
       // Allow teams in "claiming-" state to be visible (they're stuck during battle initialization)
       const isClaimingState =
         queue.clanBattle.battleId?.startsWith("claiming-") ?? false;
@@ -631,6 +651,84 @@ export const raidsRouter = createTRPCRouter({
         }),
         maxTeams: RAID_MAX_CONCURRENT_TEAMS,
       };
+    }),
+
+  /**
+   * Ready to queue - resets user status to AWAKE and clears any stuck queue entries
+   * so they can join a raid queue cleanly
+   */
+  readyToQueue: protectedProcedure
+    .use(ratelimitMiddleware)
+    .use(hasUserMiddleware)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Query
+      const [user, queueEntry] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.mpvpBattleUser.findFirst({
+          where: eq(mpvpBattleUser.userId, ctx.userId),
+        }),
+      ]);
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (user.status === "HOSPITALIZED") {
+        return errorResponse("You cannot ready up while hospitalized");
+      }
+      const userId = user.userId;
+      // Mutate - reset status, clear all queue entries, and cancel/reject pending spar requests
+      await Promise.all([
+        ctx.drizzle
+          .update(userData)
+          .set({ status: "AWAKE", travelFinishAt: null, battleId: null })
+          .where(eq(userData.userId, userId)),
+        ctx.drizzle.delete(mpvpBattleUser).where(eq(mpvpBattleUser.userId, userId)),
+        // Also clear ranked PVP queue — being in it sets status to QUEUED which blocks raid joining
+        ctx.drizzle.delete(rankedPvpQueue).where(eq(rankedPvpQueue.userId, userId)),
+        // Cancel spar requests the user sent
+        ctx.drizzle
+          .update(userRequest)
+          .set({ status: "CANCELLED" })
+          .where(
+            and(
+              eq(userRequest.senderId, userId),
+              eq(userRequest.type, "SPAR"),
+              eq(userRequest.status, "PENDING"),
+            ),
+          ),
+        // Reject spar requests the user received
+        ctx.drizzle
+          .update(userRequest)
+          .set({ status: "REJECTED" })
+          .where(
+            and(
+              eq(userRequest.receiverId, userId),
+              eq(userRequest.type, "SPAR"),
+              eq(userRequest.status, "PENDING"),
+            ),
+          ),
+      ]);
+      // Clean up empty teams or stuck claiming states if user was in a team
+      if (queueEntry) {
+        const remainingMembers = await ctx.drizzle.query.mpvpBattleUser.findMany({
+          where: eq(mpvpBattleUser.clanBattleId, queueEntry.clanBattleId),
+        });
+        if (remainingMembers.length === 0) {
+          await ctx.drizzle
+            .delete(mpvpBattleQueue)
+            .where(eq(mpvpBattleQueue.id, queueEntry.clanBattleId));
+        } else {
+          const team = await ctx.drizzle.query.mpvpBattleQueue.findFirst({
+            where: eq(mpvpBattleQueue.id, queueEntry.clanBattleId),
+          });
+          if (team?.battleId?.startsWith("claiming-")) {
+            await ctx.drizzle
+              .update(mpvpBattleQueue)
+              .set({ battleId: null })
+              .where(eq(mpvpBattleQueue.id, queueEntry.clanBattleId));
+          }
+        }
+      }
+      return { success: true, message: "You are ready to queue!" };
     }),
 
   /**
@@ -1419,6 +1517,35 @@ export const checkAndCleanupExpiredRaid = async (
 
   if (!raid) {
     return { wasExpired: false, sectorCleaned: false };
+  }
+
+  // Clean up any queued teams and reset stuck users to AWAKE
+  const queuedTeams = await client.query.mpvpBattleQueue.findMany({
+    where: and(
+      eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
+      eq(mpvpBattleQueue.attackerEntityId, raidId),
+    ),
+    with: { queue: { columns: { userId: true } } },
+  });
+
+  if (queuedTeams.length > 0) {
+    const teamIds = queuedTeams.map((t) => t.id);
+    const queuedUserIds = queuedTeams.flatMap((t) => t.queue.map((u) => u.userId));
+
+    await Promise.all([
+      client
+        .delete(mpvpBattleUser)
+        .where(inArray(mpvpBattleUser.clanBattleId, teamIds)),
+      client.delete(mpvpBattleQueue).where(inArray(mpvpBattleQueue.id, teamIds)),
+      ...(queuedUserIds.length > 0
+        ? [
+            client
+              .update(userData)
+              .set({ status: "AWAKE", battleId: null })
+              .where(inArray(userData.userId, queuedUserIds)),
+          ]
+        : []),
+    ]);
   }
 
   const objective = raid.content?.objectives?.[0];
