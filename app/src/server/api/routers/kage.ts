@@ -926,23 +926,28 @@ export const kageRouter = createTRPCRouter({
             userId: replacement.userId,
             content: `You have been appointed as the new Kage following the removal of the previous Kage.`,
           }),
-          // Increment unread for removed kage and new kage (their individual notifications)
-          ctx.drizzle
-            .update(userData)
-            .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(inArray(userData.userId, [voteRecord.targetId, replacement.userId])),
-          // Increment unread for all other elders (excluding replacement who already got +1 above)
+          // Notify elder voters of the outcome (excluding kage and replacement who have their own notifications)
+          ...voteRecord.entries
+            .filter(
+              (e) =>
+                e.userId !== voteRecord.targetId && e.userId !== replacement.userId,
+            )
+            .map((e) =>
+              ctx.drizzle.insert(notification).values({
+                userId: e.userId,
+                content: `The vote to remove the Kage has passed. ${replacement.username} is the new Kage.`,
+              }),
+            ),
+          // Increment unread only for those who received a notification
           ctx.drizzle
             .update(userData)
             .set({ unreadNotifications: sql`unreadNotifications + 1` })
             .where(
-              and(
-                eq(userData.villageId, user.villageId),
-                eq(userData.rank, "ELDER"),
-                eq(userData.isAi, false),
-                ne(userData.userId, replacement.userId),
-                ne(userData.userId, voteRecord.targetId),
-              ),
+              inArray(userData.userId, [
+                voteRecord.targetId,
+                replacement.userId,
+                ...voteRecord.entries.map((e) => e.userId),
+              ]),
             ),
         ]);
         return {
