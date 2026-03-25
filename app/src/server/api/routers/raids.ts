@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -1505,25 +1505,26 @@ export const checkAndCleanupExpiredRaid = async (
 ): Promise<{ wasExpired: boolean; sectorCleaned: boolean }> => {
   const now = new Date();
 
+  // Match both time-expired and boss-defeated raids
   const raid = await client.query.quest.findFirst({
     where: and(
       eq(quest.id, raidId),
       eq(quest.questType, "raid"),
-      lt(quest.raidEndsAt, now),
-      gte(quest.raidBossCurrentHealth, 1), // Boss not defeated
+      or(lt(quest.raidEndsAt, now), lte(quest.raidBossCurrentHealth, 0)),
     ),
-    columns: { id: true, content: true },
+    columns: { id: true, content: true, raidEndsAt: true, raidBossCurrentHealth: true },
   });
 
   if (!raid) {
     return { wasExpired: false, sectorCleaned: false };
   }
 
-  // Clean up any queued teams and reset stuck users to AWAKE
+  // Clean up only queued/claiming teams — skip teams already in an active battle
   const queuedTeams = await client.query.mpvpBattleQueue.findMany({
     where: and(
       eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
       eq(mpvpBattleQueue.attackerEntityId, raidId),
+      sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE 'claiming-%')`,
     ),
     with: { queue: { columns: { userId: true } } },
   });
@@ -1542,19 +1543,29 @@ export const checkAndCleanupExpiredRaid = async (
             client
               .update(userData)
               .set({ status: "AWAKE", battleId: null })
-              .where(inArray(userData.userId, queuedUserIds)),
+              .where(
+                and(
+                  inArray(userData.userId, queuedUserIds),
+                  eq(userData.status, "QUEUED"),
+                ),
+              ),
           ]
         : []),
     ]);
   }
 
-  const objective = raid.content?.objectives?.[0];
-  if (objective?.task === "exclusive_raid") {
-    const raidSector = (objective as RaidObjectiveType).sector;
-    if (raidSector !== null && raidSector !== undefined) {
-      // Delete sector - returns it to neutral ownership (syndicate)
-      const result = await client.delete(sector).where(eq(sector.sector, raidSector));
-      return { wasExpired: true, sectorCleaned: result.rowsAffected > 0 };
+  // Sector cleanup only for time-expired exclusive raids where boss was not defeated
+  const timeExpired = raid.raidEndsAt && raid.raidEndsAt < now;
+  const bossDefeated = (raid.raidBossCurrentHealth ?? 1) <= 0;
+  if (timeExpired && !bossDefeated) {
+    const objective = raid.content?.objectives?.[0];
+    if (objective?.task === "exclusive_raid") {
+      const raidSector = (objective as RaidObjectiveType).sector;
+      if (raidSector !== null && raidSector !== undefined) {
+        // Delete sector - returns it to neutral ownership (syndicate)
+        const result = await client.delete(sector).where(eq(sector.sector, raidSector));
+        return { wasExpired: true, sectorCleaned: result.rowsAffected > 0 };
+      }
     }
   }
 
