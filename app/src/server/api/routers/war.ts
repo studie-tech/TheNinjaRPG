@@ -692,16 +692,20 @@ export const warRouter = createTRPCRouter({
         throw e;
       }
       const elderContent = `${user.username} has submitted a war declaration against ${defenderVillage.name}. You have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
-      const notifyUserIds = [user.userId, ...elders.map((e) => e.userId)];
+      const kageContent = `Your war declaration against ${defenderVillage.name} has been submitted. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
+      const elderUserIds = elders.map((e) => e.userId);
+      const allNotifyIds = [user.userId, ...elderUserIds];
       await Promise.all([
-        // Notify kage (submission confirmed) and each elder (vote request)
         ctx.drizzle
           .insert(notification)
-          .values(notifyUserIds.map((userId) => ({ userId, content: elderContent }))),
+          .values([
+            { userId: user.userId, content: kageContent },
+            ...elderUserIds.map((userId) => ({ userId, content: elderContent })),
+          ]),
         ctx.drizzle
           .update(userData)
           .set({ unreadNotifications: sql`unreadNotifications + 1` })
-          .where(inArray(userData.userId, notifyUserIds)),
+          .where(inArray(userData.userId, allNotifyIds)),
       ]);
       return {
         success: true,
@@ -1340,8 +1344,22 @@ export const warRouter = createTRPCRouter({
           return errorResponse("Vote already processed");
         }
 
+        // Fetch village data and re-check war involvement in parallel
+        const [[attackerVillage, defenderVillage], currentActiveWars] =
+          await Promise.all([
+            Promise.all([
+              ctx.drizzle.query.village.findFirst({
+                where: eq(village.id, voteRecord.villageId),
+              }),
+              ctx.drizzle.query.village.findFirst({
+                columns: { name: true, kageId: true },
+                where: eq(village.id, voteRecord.targetId),
+              }),
+            ]),
+            fetchActiveWars(ctx.drizzle),
+          ]);
+
         // Re-check war involvement — a village may have entered a war during the voting window
-        const currentActiveWars = await fetchActiveWars(ctx.drizzle);
         if (
           isVillageInvolvedInAnyWar(
             currentActiveWars,
@@ -1354,28 +1372,39 @@ export const warRouter = createTRPCRouter({
             "WAR_RAID",
           ])
         ) {
-          await ctx.drizzle
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, input.voteId));
+          await Promise.all([
+            ctx.drizzle
+              .update(villageElderVote)
+              .set({ status: "REJECTED" })
+              .where(eq(villageElderVote.id, input.voteId)),
+            ctx.drizzle.insert(notification).values({
+              userId: voteRecord.initiatedByUserId,
+              content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — a village is already involved in an active war.`,
+            }),
+            ctx.drizzle
+              .update(userData)
+              .set({ unreadNotifications: sql`unreadNotifications + 1` })
+              .where(eq(userData.userId, voteRecord.initiatedByUserId)),
+          ]);
           return errorResponse("A village is already involved in an active war");
         }
 
         // Start the war and deduct tokens
-        const [attackerVillage, defenderVillage] = await Promise.all([
-          ctx.drizzle.query.village.findFirst({
-            where: eq(village.id, voteRecord.villageId),
-          }),
-          ctx.drizzle.query.village.findFirst({
-            columns: { name: true, kageId: true },
-            where: eq(village.id, voteRecord.targetId),
-          }),
-        ]);
         if (!attackerVillage || attackerVillage.tokens < WAR_DECLARATION_COST) {
-          await ctx.drizzle
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, input.voteId));
+          await Promise.all([
+            ctx.drizzle
+              .update(villageElderVote)
+              .set({ status: "REJECTED" })
+              .where(eq(villageElderVote.id, input.voteId)),
+            ctx.drizzle.insert(notification).values({
+              userId: voteRecord.initiatedByUserId,
+              content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — village no longer has enough tokens.`,
+            }),
+            ctx.drizzle
+              .update(userData)
+              .set({ unreadNotifications: sql`unreadNotifications + 1` })
+              .where(eq(userData.userId, voteRecord.initiatedByUserId)),
+          ]);
           return errorResponse("Village no longer has enough tokens to declare war");
         }
         // Deduct tokens with DB guard — if this fails, war is never inserted
@@ -1389,10 +1418,20 @@ export const warRouter = createTRPCRouter({
             ),
           );
         if (tokenResult.rowsAffected === 0) {
-          await ctx.drizzle
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, input.voteId));
+          await Promise.all([
+            ctx.drizzle
+              .update(villageElderVote)
+              .set({ status: "REJECTED" })
+              .where(eq(villageElderVote.id, input.voteId)),
+            ctx.drizzle.insert(notification).values({
+              userId: voteRecord.initiatedByUserId,
+              content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — the village no longer has enough tokens.`,
+            }),
+            ctx.drizzle
+              .update(userData)
+              .set({ unreadNotifications: sql`unreadNotifications + 1` })
+              .where(eq(userData.userId, voteRecord.initiatedByUserId)),
+          ]);
           return errorResponse("Village no longer has enough tokens to declare war");
         }
         const warId = nanoid();
