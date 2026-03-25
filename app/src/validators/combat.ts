@@ -917,7 +917,7 @@ export const isPositiveUserEffect = (tag: ZodAllTags) => {
       "stunprevent",
       "summon",
       "timedilation",
-      "injectjutsus",
+      //"injectjutsus",
       "immunity",
     ].includes(tag.type)
   ) {

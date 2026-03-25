@@ -107,6 +107,10 @@ const Sector: React.FC<SectorProps> = (props) => {
   const [moves, setMoves] = useState(0);
   const [sorrounding, setSorrounding] = useState<SectorUser[]>([]);
   const [allyAttack, setAllyAttack] = useLocalStorage<boolean>("friendlyAttack", false);
+  const [hideStudentGeninScout, setHideStudentGeninScout] = useLocalStorage<boolean>(
+    "hideScoutStudentGenin",
+    false,
+  );
   const [storedLvl, setStoredLvl] = useLocalStorage<number>("minLevelOnScout", 1);
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("sectorZoom", 2);
   const [currentStructure, setCurrentStructure] = useState<VillageStructure | null>(
@@ -125,6 +129,7 @@ const Sector: React.FC<SectorProps> = (props) => {
   const showUsersRef = useRef<boolean>(showActive);
   const minLevelDrawRef = useRef<number>(storedLvl);
   const showAllyAttackRef = useRef<boolean>(allyAttack);
+  const hideStudentGeninScoutRef = useRef<boolean>(hideStudentGeninScout);
   const userRef = useRef<UserWithRelations>(undefined);
   const lastAutoAttackTimeRef = useRef<number | null>(null);
   const cameraRef = useRef<OrthographicCamera | null>(null);
@@ -468,6 +473,10 @@ const Sector: React.FC<SectorProps> = (props) => {
   useEffect(() => {
     showAllyAttackRef.current = allyAttack;
   }, [allyAttack]);
+
+  useEffect(() => {
+    hideStudentGeninScoutRef.current = hideStudentGeninScout;
+  }, [hideStudentGeninScout]);
 
   // Listening to webcket events
   useEffect(() => {
@@ -932,6 +941,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             lastTime: lastTime,
             angle: userAngle,
             minLevel: minLevelDrawRef.current,
+            hideStudentAndGenin: hideStudentGeninScoutRef.current,
           });
           lastTime = Date.now();
           endUsers();
@@ -1115,6 +1125,8 @@ const Sector: React.FC<SectorProps> = (props) => {
           hex={originRef.current}
           allyAttack={allyAttack}
           setAllyAttack={setAllyAttack}
+          hideStudentGeninScout={hideStudentGeninScout}
+          setHideStudentGeninScout={setHideStudentGeninScout}
           storedLvl={storedLvl}
           setStoredLvl={setStoredLvl}
           attackUser={(userId) => {
@@ -1209,6 +1221,8 @@ interface SorroundingUsersProps {
   users: SectorUser[];
   allyAttack: boolean;
   setAllyAttack: (newValue: boolean) => void;
+  hideStudentGeninScout: boolean;
+  setHideStudentGeninScout: (newValue: boolean) => void;
   storedLvl: number;
   setStoredLvl: (newValue: number) => void;
   attackUser: (userId: string) => void;
@@ -1239,7 +1253,11 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   const users = props.users
     .filter((user) => user.userId !== userData.userId)
     .filter((user) => user.status === "AWAKE")
-    .filter((user) => user.level >= watchedLevel);
+    .filter((user) => user.level >= watchedLevel)
+    .filter(
+      (user) =>
+        !props.hideStudentGeninScout || !RANKS_RESTRICTED_FROM_PVP.includes(user.rank),
+    );
 
   // Update the localStorage whenever we change
   useEffect(() => {
@@ -1256,7 +1274,8 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
     >
       {users.length === 0 && (
         <p className="text-red-500">
-          No awake users above level {watchedLevel} in this sector
+          No awake users match your scouting filters (min level {watchedLevel}
+          {props.hideStudentGeninScout ? "; Academy & Genin hidden" : ""})
         </p>
       )}
       <div className="grid grid-cols-3 gap-4 pb-3 text-center sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 xl:grid-cols-14">
@@ -1272,9 +1291,9 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
             findVillageUserRelationship(userData.village, user.villageId);
           const isAlly =
             user.villageId === userData.villageId || relationship?.status === "ALLY";
-          const showAttack =
-            !RANKS_RESTRICTED_FROM_PVP.includes(user.rank) &&
-            (props.allyAttack || !isAlly);
+          const isPvpRestrictedRank = RANKS_RESTRICTED_FROM_PVP.includes(user.rank);
+          const showAttack = !isPvpRestrictedRank && (props.allyAttack || !isAlly);
+          const showRob = !isPvpRestrictedRank && sameHex && userData.isOutlaw;
 
           // Show user
           return (
@@ -1332,7 +1351,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
                 />
               </div>
               <div className="relative">
-                {sameHex && userData.isOutlaw && (
+                {showRob && (
                   <div className="absolute right-0 bottom-0 z-50 w-1/3 hover:cursor-pointer hover:opacity-80">
                     <Image
                       src={IMG_SECTOR_ROB}
@@ -1389,6 +1408,16 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
             onCheckedChange={() => props.setAllyAttack(!props.allyAttack)}
           />
           <Label>Attack button on allies</Label>
+        </div>
+        <div className="flex flex-row items-center">
+          <Checkbox
+            className="m-1 mr-3"
+            checked={props.hideStudentGeninScout}
+            onCheckedChange={() =>
+              props.setHideStudentGeninScout(!props.hideStudentGeninScout)
+            }
+          />
+          <Label>Hide Academy students &amp; Genin</Label>
         </div>
       </div>
     </Modal2>
