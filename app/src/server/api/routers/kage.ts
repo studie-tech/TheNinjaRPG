@@ -927,7 +927,7 @@ export const kageRouter = createTRPCRouter({
             content: `You have been appointed as the new Kage following the removal of the previous Kage.`,
           }),
           // Notify elder voters of the outcome (excluding kage and replacement who have their own notifications)
-          ...voteRecord.entries
+          ...freshEntries
             .filter(
               (e) =>
                 e.userId !== voteRecord.targetId && e.userId !== replacement.userId,
@@ -946,7 +946,7 @@ export const kageRouter = createTRPCRouter({
               inArray(userData.userId, [
                 voteRecord.targetId,
                 replacement.userId,
-                ...voteRecord.entries.map((e) => e.userId),
+                ...freshEntries.map((e) => e.userId),
               ]),
             ),
         ]);
