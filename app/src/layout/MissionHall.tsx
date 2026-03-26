@@ -20,6 +20,8 @@ import {
   MISSIONS_PER_DAY,
   PVP_MISSIONS_PER_DAY,
   VILLAGE_SYNDICATE_ID,
+  WAR_MISSIONS_PER_DAY,
+  WAR_SHRINE_IMAGE,
 } from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
@@ -79,6 +81,16 @@ export default function MissionHall({ userData }: MissionHallProps) {
   const availableUserRanks = availableQuestLetterRanks(userData.rank);
   const errandsLeft = ERRANDS_PER_DAY - userData.dailyErrands;
   const classifier = userData.isOutlaw ? "crime" : "mission";
+  const isInActiveWar = (userData.activeWars?.length ?? 0) > 0;
+  const regularMissions = hallData?.filter((q) => q.questType !== "war") ?? [];
+  const warMissions = hallData?.filter((q) => q.questType === "war") ?? [];
+  const warMissionsLeft = WAR_MISSIONS_PER_DAY - (userData.dailyWarMissions ?? 0);
+  const currentWarQuest = userData?.userQuests?.find(
+    (q) => q.quest.questType === "war" && !q.endAt,
+  );
+  const availableWarMissions = warMissions.filter((q) =>
+    availableUserRanks.includes(q.questRank),
+  );
 
   return (
     <>
@@ -102,6 +114,12 @@ export default function MissionHall({ userData }: MissionHallProps) {
             {MISSIONS_PER_DAY}] - Medical [{userData.dailyMedicalMissions} /{" "}
             {MEDICAL_MISSIONS_PER_DAY}] - PvP [{userData.dailyPvpMissions} /{" "}
             {PVP_MISSIONS_PER_DAY}]
+            {isInActiveWar && (
+              <>
+                {" "}
+                - War [{userData.dailyWarMissions ?? 0} / {WAR_MISSIONS_PER_DAY}]
+              </>
+            )}
           </p>
         </>
       )}
@@ -112,12 +130,61 @@ export default function MissionHall({ userData }: MissionHallProps) {
           <LogbookEntry userQuest={currentQuest} tracker={currentTracker} showScene />
         </div>
       )}
+      {!currentWarQuest && !isPending && isInActiveWar && warMissions.length > 0 && (
+        <div className="p-3">
+          <p className="text-center font-bold text-md mb-2">War Missions</p>
+          <div className="grid grid-cols-3 gap-4 text-center italic">
+            <MissionPicker
+              setting={{
+                rank: "S",
+                name: "War Mission",
+                image: WAR_SHRINE_IMAGE,
+              }}
+              missions={availableWarMissions.map((q) => ({
+                id: q.id,
+                name: q.name,
+                image: q.image || undefined,
+              }))}
+              count={availableWarMissions.length}
+              disabled={warMissionsLeft <= 0 || availableWarMissions.length === 0}
+              onMissionSelect={(mission) =>
+                startQuest({
+                  questId: mission.id,
+                  userSector: userData.sector,
+                })
+              }
+              dialogTitle="Accept War Mission"
+              dialogDescription={(mission) =>
+                warMissionsLeft <= 0 ? (
+                  `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}. Please try again tomorrow.`
+                ) : (
+                  <>
+                    Are you sure you want to accept the war mission &quot;{mission.name}
+                    &quot;?
+                  </>
+                )
+              }
+              actionDisabled={warMissionsLeft <= 0}
+              actionText={
+                warMissionsLeft <= 0 ? "Daily Limit Reached" : "Accept Mission"
+              }
+              additionalContent={() => (
+                <>
+                  {warMissionsLeft <= 0 && (
+                    <p className="text-red-500 text-sm">Daily Limit Reached</p>
+                  )}
+                </>
+              )}
+            />
+          </div>
+        </div>
+      )}
       {!currentQuest && !isPending && (
         <div className="grid grid-cols-3 gap-4 p-3 text-center italic">
           {getMissionHallSettings(userData.isOutlaw).map((setting) => {
             // Count how many of this type and rank are available
             const { filtered, rankInfo } = fallbackQuestsFilter(
-              hallData || [],
+              regularMissions,
               userData,
               setting.type,
             );

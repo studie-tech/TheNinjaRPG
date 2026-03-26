@@ -1,5 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
+import { and, eq, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import {
   WAR_DAILY_HEALTH_DRAIN,
@@ -9,22 +8,15 @@ import {
   WAR_MAX_DURATION_DAYS,
   WAR_TOKEN_REDUCTION_INTERVAL_HOURS,
 } from "@/drizzle/constants";
-import {
-  quest,
-  questHistory,
-  userData,
-  village,
-  villageStructure,
-  war,
-} from "@/drizzle/schema";
+import { village, villageStructure, war } from "@/drizzle/schema";
 import {
   getGameSetting,
   handleEndpointError,
   lockWithHourlyTimer,
   updateGameSetting,
 } from "@/libs/gamesettings";
-import { availableQuestLetterRanks } from "@/libs/train";
 import { handleWarEnd } from "@/libs/war";
+import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { fetchActiveWars } from "@/server/api/routers/war";
 import { drizzleDB } from "@/server/db";
 
@@ -52,16 +44,17 @@ export async function GET() {
     );
     const shouldRunDailyDecay = nowUTC !== prevUTC;
 
-    let activeWars = await fetchActiveWars(drizzleDB);
-    // Filter to VILLAGE_WAR and WAR_RAID for decay (include Outlaws/Factions)
-    const decayWars = activeWars.filter((war) =>
-      ["VILLAGE_WAR", "WAR_RAID"].includes(war.type),
-    );
-
     // =============================================
     // DAILY TASK: Token decay and war health drain
     // =============================================
-    if (shouldRunDailyDecay && decayWars.length > 0) {
+    if (shouldRunDailyDecay) {
+      // fetchActiveWars is expensive (loads village structures); only fetch when needed
+      const activeWars = await fetchActiveWars(drizzleDB);
+      // Filter to VILLAGE_WAR and WAR_RAID for decay (include Outlaws/Factions)
+      const decayWars = activeWars.filter((w) =>
+        ["VILLAGE_WAR", "WAR_RAID"].includes(w.type),
+      );
+
       for (const activeWar of decayWars) {
         if (!activeWar.attackerVillage || !activeWar.defenderVillage) {
           console.error("War found with missing village data:", activeWar.id);
@@ -166,12 +159,19 @@ export async function GET() {
                 .where(eq(village.id, activeWar.defenderVillage.id)),
             ]);
 
-            // Refetch the war to get updated health values
-            const updatedWars = await fetchActiveWars(drizzleDB);
-            const updatedWar = updatedWars.find((w) => w.id === activeWar.id);
-            if (updatedWar) {
-              await handleWarEnd(updatedWar);
-            }
+            // Build updated war object with drained health values to avoid an extra DB roundtrip
+            const warWithDrain: FetchActiveWarsReturnType = {
+              ...activeWar,
+              attackerWarHealth: Math.max(
+                activeWar.attackerWarHealth - totalHealthDrain,
+                0,
+              ),
+              defenderWarHealth: Math.max(
+                activeWar.defenderWarHealth - totalHealthDrain,
+                0,
+              ),
+            };
+            await handleWarEnd(warWithDrain);
           }
           continue;
         }
@@ -202,16 +202,6 @@ export async function GET() {
 
       // Update daily decay timer
       await updateGameSetting(drizzleDB, DAILY_DECAY_TIMER, 0, now);
-
-      // Refetch active wars after decay since handleWarEnd might have been called
-      activeWars = await fetchActiveWars(drizzleDB);
-    }
-
-    // =============================================
-    // HOURLY TASK: Assign war quests to users in active wars
-    // =============================================
-    if (activeWars.length > 0) {
-      await assignWarQuests(activeWars);
     }
 
     // Clear expired temporary structure bonuses
@@ -242,104 +232,4 @@ async function clearExpiredStructureBonuses(now: Date) {
         lt(villageStructure.temporaryLevelBonusExpiresAt, now),
       ),
     );
-}
-
-/**
- * Assign war quests to users in active wars who don't have one already
- */
-async function assignWarQuests(
-  activeWars: Awaited<ReturnType<typeof fetchActiveWars>>,
-) {
-  // Get all village IDs involved in active wars
-  const villageIds = [
-    ...new Set(
-      activeWars.flatMap((w) => [
-        w.attackerVillageId,
-        w.defenderVillageId,
-        ...w.warAllies.map((a) => a.villageId),
-      ]),
-    ),
-  ];
-
-  if (villageIds.length === 0) return;
-
-  // Fetch war quests and users without active war quests in parallel
-  const [warQuests, usersWithoutWarQuest] = await Promise.all([
-    drizzleDB.query.quest.findMany({
-      where: and(
-        eq(quest.questType, "war"),
-        isNotNull(quest.content),
-        eq(quest.hidden, false),
-      ),
-    }),
-    // Get users in war villages who don't have an active war quest
-    drizzleDB
-      .select({
-        userId: userData.userId,
-        rank: userData.rank,
-        level: userData.level,
-        villageId: userData.villageId,
-      })
-      .from(userData)
-      .leftJoin(
-        questHistory,
-        and(
-          eq(questHistory.userId, userData.userId),
-          eq(questHistory.questType, "war"),
-          eq(questHistory.completed, 0),
-          isNull(questHistory.endAt),
-        ),
-      )
-      .where(
-        and(
-          inArray(userData.villageId, villageIds),
-          eq(userData.isAi, false),
-          isNull(questHistory.id), // No active war quest
-        ),
-      ),
-  ]);
-
-  if (warQuests.length === 0 || usersWithoutWarQuest.length === 0) return;
-
-  // For each user, find an applicable war quest and assign it
-  const questAssignments: {
-    id: string;
-    userId: string;
-    questId: string;
-    questType: "war";
-  }[] = [];
-
-  for (const user of usersWithoutWarQuest) {
-    const questRanks = availableQuestLetterRanks(user.rank);
-
-    // Find an applicable quest for this user
-    const applicableQuest = [...warQuests]
-      .sort(() => Math.random() - 0.5)
-      .find(
-        (q) =>
-          questRanks.includes(q.questRank) &&
-          (!q.requiredVillage || q.requiredVillage === user.villageId) &&
-          q.requiredLevel <= user.level &&
-          q.maxLevel >= user.level,
-      );
-
-    if (applicableQuest) {
-      questAssignments.push({
-        id: nanoid(),
-        userId: user.userId,
-        questId: applicableQuest.id,
-        questType: "war",
-      });
-    }
-  }
-
-  // Bulk insert all quest assignments
-  if (questAssignments.length > 0) {
-    await drizzleDB
-      .insert(questHistory)
-      .values(questAssignments)
-      .onDuplicateKeyUpdate({
-        set: { completed: 0, endAt: null, startedAt: new Date() },
-      });
-  }
 }

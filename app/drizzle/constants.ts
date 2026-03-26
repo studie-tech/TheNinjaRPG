@@ -1234,9 +1234,11 @@ export const WAR_TOKEN_REDUCTION_INTERVAL_HOURS = 24; // How often tokens should
 export const WAR_LOSING_COOLDOWN_DAYS = 10; // Cooldown for losing a war
 export const WAR_WINNING_COOLDOWN_DAYS = 3; // Cooldown for winning a war
 export const WAR_STRUCTURE_UPGRADE_BLOCK_DAYS = 7; // Structure upgrade block duration
-export const WAR_VICTORY_TOKEN_BONUS = 500000; // Victory bonus tokens
+export const WAR_VICTORY_TOKEN_BONUS = 3000000; // Victory bonus tokens
 export const WAR_PURCHASE_SHRINE_TOKEN_COST = 100000; // Cost in village tokens to purchase a shrine
-export const WAR_DECLARATION_COST = 150000; // Cost in village tokens to declare war
+export const WAR_DECLARATION_COST = 1000000; // Cost in village tokens to declare war
+export const WAR_MISSIONS_PER_DAY = 5; // Maximum war missions per day
+export const WAR_ATTACKER_EXHAUSTION_MULTIPLIER = 1.1; // Attacker gets 10% more war exhaustion
 export const WAR_ALLY_OFFER_MIN = 1000; // Minimum token offer for allies
 export const WAR_ALLY_MAX_PAYMENT_PERCENTAGE = 0.2; // Maximum payment as percentage of village tokens (20%)
 

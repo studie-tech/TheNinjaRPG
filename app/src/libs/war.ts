@@ -3,6 +3,7 @@ import type { WarState, WarType } from "@/drizzle/constants";
 import {
   SHRINE_HP_BY_LEVEL,
   TERR_BOT_ID,
+  WAR_ATTACKER_EXHAUSTION_MULTIPLIER,
   WAR_DEFEAT_STRUCTURE_PENALTY_DAYS,
   WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
   WAR_LOSING_COOLDOWN_DAYS,
@@ -185,6 +186,15 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
     WAR_WINNING_COOLDOWN_DAYS * DAY_S,
     endedAt,
   );
+  // Attackers get 10% more exhaustion across all tiers
+  const attackerLosingCooldownEnd = secondsFromDate(
+    Math.round(WAR_LOSING_COOLDOWN_DAYS * WAR_ATTACKER_EXHAUSTION_MULTIPLIER * DAY_S),
+    endedAt,
+  );
+  const attackerWinningCooldownEnd = secondsFromDate(
+    Math.round(WAR_WINNING_COOLDOWN_DAYS * WAR_ATTACKER_EXHAUSTION_MULTIPLIER * DAY_S),
+    endedAt,
+  );
   const boostEndAt = secondsFromNow(WAR_WINNING_BOOST_DAYS * DAY_S);
 
   // Check if war should end based on tokens OR war health
@@ -338,13 +348,21 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
     ...(["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)
       ? isDraw
         ? [
+            // In a draw, attacker gets 10% more exhaustion
+            drizzleDB
+              .update(village)
+              .set({
+                warExhaustionEndedAt: attackerLosingCooldownEnd,
+                lastWarEndedAt: endedAt,
+              })
+              .where(eq(village.id, activeWar.attackerVillage.id)),
             drizzleDB
               .update(village)
               .set({
                 warExhaustionEndedAt: losingCooldownEnd,
                 lastWarEndedAt: endedAt,
               })
-              .where(inArray(village.id, [loserVillageId, winnerVillageId])),
+              .where(eq(village.id, activeWar.defenderVillage.id)),
             // Enhanced punishment: -3 temporary levels on structures for both sides in a draw
             // VILLAGE_WAR: ALL structures, WAR_RAID: only targeted structure
             drizzleDB
@@ -419,19 +437,25 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
                   ),
                 ),
               ),
-            // Loser gets war exhaustion
+            // Loser gets war exhaustion (attacker gets 10% more)
             drizzleDB
               .update(village)
               .set({
-                warExhaustionEndedAt: losingCooldownEnd,
+                warExhaustionEndedAt:
+                  loserVillageId === activeWar.attackerVillage.id
+                    ? attackerLosingCooldownEnd
+                    : losingCooldownEnd,
                 lastWarEndedAt: endedAt,
               })
               .where(eq(village.id, loserVillageId)),
-            // Winner gets shorter exhaustion
+            // Winner gets shorter exhaustion (attacker gets 10% more)
             drizzleDB
               .update(village)
               .set({
-                warExhaustionEndedAt: winningCooldownEnd,
+                warExhaustionEndedAt:
+                  winnerVillageId === activeWar.attackerVillage.id
+                    ? attackerWinningCooldownEnd
+                    : winningCooldownEnd,
                 lastWarEndedAt: endedAt,
               })
               .where(eq(village.id, winnerVillageId)),
@@ -462,7 +486,7 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
   // Run separately after other operations to avoid deadlock (these queries join multiple tables)
   await Promise.all([
     // Clean up incomplete war quests for users in villages involved in this war
-    // Daily cron will reassign if they're still in another war
+    // Players can re-accept war missions from the Mission Hall if still in another war
     drizzleDB.execute(sql`
       DELETE qh FROM QuestHistory qh
       INNER JOIN UserData ud ON qh.userId = ud.userId

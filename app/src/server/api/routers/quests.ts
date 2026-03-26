@@ -29,6 +29,7 @@ import {
   TUTORIAL_GENIN_EXAM_QUEST_ID,
   TUTORIAL_STARTER_QUEST_ID,
   VILLAGE_SYNDICATE_ID,
+  WAR_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
 import type { Quest, UserData } from "@/drizzle/schema";
 import {
@@ -251,7 +252,7 @@ export const questsRouter = createTRPCRouter({
     .input(z.object({ villageId: z.string(), level: z.number() }))
     .query(async ({ ctx, input }) => {
       // Query
-      const [{ user }, missions] = await Promise.all([
+      const [{ user }, missions, activeWars] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -274,6 +275,7 @@ export const questsRouter = createTRPCRouter({
                 "crime",
                 "medical",
                 "pvp",
+                "war",
               ]),
               ...(input.villageId
                 ? [
@@ -292,12 +294,18 @@ export const questsRouter = createTRPCRouter({
             ),
           )
           .orderBy(asc(quest.name)),
+        fetchActiveWars(ctx.drizzle, input.villageId),
       ]);
       if (!user) throw serverError("NOT_FOUND", "User not found");
-      missions.forEach((r) => {
+      const villageInWar = activeWars.length > 0;
+      const filtered = missions.filter((e) => {
+        if (e.questType === "war" && !villageInWar) return false;
+        return isAvailableUserQuests(e, user, true).check;
+      });
+      filtered.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
-      return missions.filter((e) => isAvailableUserQuests(e, user, true).check);
+      return filtered;
     }),
   specificQuests: protectedProcedure
     .meta({
@@ -681,6 +689,33 @@ export const questsRouter = createTRPCRouter({
             `Already ${QUESTS_CONCURRENT_LIMIT} active event quests; ${current.map((c) => c.quest.name).join(", ")}. Abandon one to start this quest.`,
           );
         }
+      } else if (questData.questType === "war") {
+        if (!user.villageId) {
+          return errorResponse("You must be in a village to accept war missions");
+        }
+        if (
+          !user.isOutlaw &&
+          !canAccessStructure(user, "/missionhall", sectorVillage)
+        ) {
+          return errorResponse("Must be in your allied village to start quest");
+        }
+        if (user.dailyWarMissions >= WAR_MISSIONS_PER_DAY) {
+          return errorResponse(
+            `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
+          );
+        }
+        const current = user?.userQuests?.find(
+          (q) => q.quest.questType === "war" && !q.endAt,
+        );
+        if (current) {
+          return errorResponse("Already have an active war mission");
+        }
+        // fetchActiveWars is expensive (loads village structures); only fetch for war quests
+        // and only after all cheap guards have passed
+        const warList = await fetchActiveWars(ctx.drizzle, user.villageId);
+        if (warList.length === 0) {
+          return errorResponse("Your village is not in an active war");
+        }
       } else if (["mission", "crime", "medical", "pvp"].includes(questData.questType)) {
         if (
           ["mission", "crime"].includes(questData.questType) &&
@@ -747,6 +782,7 @@ export const questsRouter = createTRPCRouter({
           "medical",
           "battlepyramid",
           "pvp",
+          "war",
         ].includes(current.questType)
       ) {
         return errorResponse(`Cannot abandon ${current.questType} quest type.`);
@@ -1951,13 +1987,15 @@ export const incrementDailyQuestCounter = async (
   user: UserData,
   questType: string,
 ) => {
-  if (["mission", "crime", "medical", "pvp"].includes(questType)) {
+  if (["mission", "crime", "medical", "pvp", "war"].includes(questType)) {
     const updateField =
       questType === "medical"
         ? { dailyMedicalMissions: sql`${userData.dailyMedicalMissions} + 1` }
         : questType === "pvp"
           ? { dailyPvpMissions: sql`${userData.dailyPvpMissions} + 1` }
-          : { dailyMissions: sql`${userData.dailyMissions} + 1` };
+          : questType === "war"
+            ? { dailyWarMissions: sql`${userData.dailyWarMissions} + 1` }
+            : { dailyMissions: sql`${userData.dailyMissions} + 1` };
 
     await client
       .update(userData)

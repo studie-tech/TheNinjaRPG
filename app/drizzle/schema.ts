@@ -2100,6 +2100,9 @@ export const userData = mysqlTable(
     dailyPvpMissions: smallint("dailyPvpMissions", { unsigned: true })
       .default(0)
       .notNull(),
+    dailyWarMissions: smallint("dailyWarMissions", { unsigned: true })
+      .default(0)
+      .notNull(),
     dailyTrainings: smallint("dailyTrainings", { unsigned: true }).default(0).notNull(),
     movedTooFastCount: int("movedTooFastCount").default(0).notNull(),
     extraItemSlots: smallint("extraItemSlots", { unsigned: true }).default(0).notNull(),

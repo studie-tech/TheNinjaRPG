@@ -34,6 +34,7 @@ export async function GET() {
       dailyErrands: 0,
       dailyMedicalMissions: 0,
       dailyPvpMissions: 0,
+      dailyWarMissions: 0,
       dailyTrainings: 0,
       aiCalls: 0,
     });

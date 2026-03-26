@@ -22,6 +22,13 @@
       "when": 1771398851340,
       "tag": "0002_fat_the_spike",
       "breakpoints": false
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1774554986059,
+      "tag": "0003_cute_hobgoblin",
+      "breakpoints": false
     }
   ]
 }
