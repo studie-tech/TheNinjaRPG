@@ -429,6 +429,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             // If user has a pending collect timer but moved away, cancel it on the server
             const goal = tracker?.goals.find((g) => g.id === objective.id);
             if (
+              (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
               objective.task === "collect_item" &&
               "collect_time_minutes" in objective &&
               objective.collect_time_minutes &&
