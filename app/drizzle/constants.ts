@@ -1294,11 +1294,11 @@ export const SKILL_POINT_MIN_LEVEL = 21; // Minimum level to start gaining skill
 export const SKILL_POINT_MAX_LEVEL = 40; // Maximum level to gain skill points from leveling
 export const MAX_SKILL_POINTS_FROM_LEVELING = 20; // Maximum skill points that can be gained from leveling
 
-export const WAR_SECTORWAR_AI_SHRINE_REDUCE = 3; // KIlling AI shrine hp decrease
+export const WAR_SECTORWAR_AI_SHRINE_REDUCE = 10; // KIlling AI shrine hp decrease
 export const WAR_SECTORWAR_AI_SHRINE_RECOVER = 3; // Shrine hp recover per day
-export const WAR_SECTORWAR_PVP_SHRINE_REDUCE = 5; // Killing a player in a sector war shrine hp decrease
+export const WAR_SECTORWAR_PVP_SHRINE_REDUCE = 20; // Killing a player in a sector war shrine hp decrease
 export const WAR_SECTORWAR_PVP_SHRINE_RECOVER = 7; // Shrine hp remove per day
-export const WAR_RAID_SHRINE_HP = 1000; // Fixed HP for Village Wars and Raids (abstract mechanic)
+export const WAR_RAID_SHRINE_HP = 500; // Fixed HP for Village Wars and Raids (abstract mechanic)
 export const WAR_SHRINE_CAPTURE_WARHEALTH_DMG = 200; // Damage to war health when shrine is captured (HP <= 0)
 export const WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL = 150; // Heal to war health when shrine is recaptured (HP > 25%)
 export const WAR_RECAPTURE_THRESHOLD = 0.25; // Threshold for recapture (25% of max shrine HP)

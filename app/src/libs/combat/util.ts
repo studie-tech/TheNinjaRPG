@@ -1808,13 +1808,9 @@ export const calcBattleResult = (
           warHealthInfo[name] = val * battle.rewardScaling;
         }
       });
-      Object.keys(villageWarShrineInfo).forEach((warId) => {
-        const info = villageWarShrineInfo[warId];
-        if (info) {
-          info.attacker *= battle.rewardScaling;
-          info.defender *= battle.rewardScaling;
-        }
-      });
+      // Note: villageWarShrineInfo is intentionally NOT scaled by rewardScaling.
+      // Shrine HP changes are a strategic war mechanic and should not be reduced
+      // by anti-farming scaling, ensuring consistent war progress per kill.
 
       // Adjust shrine & townhall datamage based on level different
       const maxTargetLevel = Math.max(...targetUsers.map((t) => t.level), 0);

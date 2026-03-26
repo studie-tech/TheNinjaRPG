@@ -441,8 +441,8 @@ export const updateWars = async (
       if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
         // Use the already-computed villageWarShrineInfo which includes:
         // 1. The correct shrine change constants
-        // 2. Scaling by rewardScaling
-        // 3. Level difference adjustment (reduced to ±1 when STREAK_LEVEL_DIFF exceeded)
+        // 2. Level difference adjustment (reduced to ±1 when STREAK_LEVEL_DIFF exceeded)
+        // Note: villageWarShrineInfo is NOT scaled by rewardScaling (shrine damage is a war mechanic)
         // Combine attacker and defender changes for logging purposes
         const shrineInfo = result.villageWarShrineInfo[w.id];
         logShrineHpChange = shrineInfo ? shrineInfo.attacker + shrineInfo.defender : 0;
