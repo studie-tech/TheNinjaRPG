@@ -42,7 +42,7 @@ import WebGlError from "@/layout/WebGLError";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
-import { isLocationObjective } from "@/libs/quest";
+import { GATHERING_CANCEL_PREFIX, isLocationObjective } from "@/libs/quest";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import { OrbitControls } from "@/libs/threejs/OrbitControls";
@@ -230,8 +230,9 @@ const Sector: React.FC<SectorProps> = (props) => {
       if (result.success) {
         // Push any notifications
         result.notifications.forEach((notification) => {
+          const isCancellation = notification.startsWith(GATHERING_CANCEL_PREFIX);
           showMutationToast({
-            success: true,
+            success: !isCancellation,
             message: notification,
           });
         });
@@ -400,6 +401,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       }
       // Check Quests
       if (userData && data) {
+        let shouldCheckQuest = false;
         userData?.userQuests?.forEach((userquest) => {
           const tracker = userData.questData?.find((q) => q.id === userquest.questId);
           userquest.quest.content.objectives.forEach((objective, i) => {
@@ -422,7 +424,19 @@ const Sector: React.FC<SectorProps> = (props) => {
                   objective.attackers &&
                   objective.attackers.length > 0))
             ) {
-              checkQuest();
+              shouldCheckQuest = true;
+            }
+            // If user has a pending collect timer but moved away, cancel it on the server
+            const goal = tracker?.goals.find((g) => g.id === objective.id);
+            if (
+              objective.task === "collect_item" &&
+              "collect_time_minutes" in objective &&
+              objective.collect_time_minutes &&
+              goal?.timestamp &&
+              !goal.done &&
+              !isOnLocation
+            ) {
+              shouldCheckQuest = true;
             }
             // For dialog objectives, check if we should show a modal
             if (objective.task === "dialog" && isOnLocation) {
@@ -431,6 +445,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             }
           });
         });
+        if (shouldCheckQuest) checkQuest();
       }
     },
   });

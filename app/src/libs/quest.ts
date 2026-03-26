@@ -526,6 +526,8 @@ export const collapseRewards = (
   return collapsed;
 };
 
+export const GATHERING_CANCEL_PREFIX = "Gathering cancelled";
+
 export type QuestConsequence = {
   type:
     | "add_item"
@@ -909,6 +911,20 @@ export const getNewTrackers = (
                     putInCombat();
                   }
                 }
+              }
+
+              // If user has a pending collect timer but left the location, reset the timer
+              else if (
+                task === "collect_item" &&
+                "collect_time_minutes" in objective &&
+                objective.collect_time_minutes &&
+                status?.timestamp &&
+                !status.done
+              ) {
+                status.timestamp = undefined;
+                notifications.push(
+                  `${GATHERING_CANCEL_PREFIX} for ${quest.name}: you left the collection area.`,
+                );
               }
 
               // If we're at a win_encounter_at_location objective, set to completed if we won
