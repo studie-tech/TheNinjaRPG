@@ -16,12 +16,12 @@ import {
 import {
   ERRANDS_PER_DAY,
   IMG_BUILDING_MISSIONHALL,
+  IMG_MISSION_WAR,
   MEDICAL_MISSIONS_PER_DAY,
   MISSIONS_PER_DAY,
   PVP_MISSIONS_PER_DAY,
   VILLAGE_SYNDICATE_ID,
   WAR_MISSIONS_PER_DAY,
-  WAR_SHRINE_IMAGE,
 } from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
@@ -88,6 +88,9 @@ export default function MissionHall({ userData }: MissionHallProps) {
   const currentWarQuest = userData?.userQuests?.find(
     (q) => q.quest.questType === "war" && !q.endAt,
   );
+  const currentWarTracker = userData?.questData?.find(
+    (q) => q.id === currentWarQuest?.questId,
+  );
   const availableWarMissions = warMissions.filter((q) =>
     availableUserRanks.includes(q.questRank),
   );
@@ -113,13 +116,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
             {capitalizeFirstLetter(classifier)}s [{userData.dailyMissions} /{" "}
             {MISSIONS_PER_DAY}] - Medical [{userData.dailyMedicalMissions} /{" "}
             {MEDICAL_MISSIONS_PER_DAY}] - PvP [{userData.dailyPvpMissions} /{" "}
-            {PVP_MISSIONS_PER_DAY}]
-            {isInActiveWar && (
-              <>
-                {" "}
-                - War [{userData.dailyWarMissions ?? 0} / {WAR_MISSIONS_PER_DAY}]
-              </>
-            )}
+            {PVP_MISSIONS_PER_DAY}] - War [{userData.dailyWarMissions ?? 0} /{" "}
+            {WAR_MISSIONS_PER_DAY}]
           </p>
         </>
       )}
@@ -130,53 +128,13 @@ export default function MissionHall({ userData }: MissionHallProps) {
           <LogbookEntry userQuest={currentQuest} tracker={currentTracker} showScene />
         </div>
       )}
-      {!currentWarQuest && !isPending && isInActiveWar && warMissions.length > 0 && (
+      {currentWarQuest && currentWarTracker && (
         <div className="p-3">
-          <p className="text-center font-bold text-md mb-2">War Missions</p>
-          <div className="grid grid-cols-3 gap-4 text-center italic">
-            <MissionPicker
-              setting={{
-                rank: "S",
-                name: "War Mission",
-                image: WAR_SHRINE_IMAGE,
-              }}
-              missions={availableWarMissions.map((q) => ({
-                id: q.id,
-                name: q.name,
-                image: q.image || undefined,
-              }))}
-              count={availableWarMissions.length}
-              disabled={warMissionsLeft <= 0 || availableWarMissions.length === 0}
-              onMissionSelect={(mission) =>
-                startQuest({
-                  questId: mission.id,
-                  userSector: userData.sector,
-                })
-              }
-              dialogTitle="Accept War Mission"
-              dialogDescription={(mission) =>
-                warMissionsLeft <= 0 ? (
-                  `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}. Please try again tomorrow.`
-                ) : (
-                  <>
-                    Are you sure you want to accept the war mission &quot;{mission.name}
-                    &quot;?
-                  </>
-                )
-              }
-              actionDisabled={warMissionsLeft <= 0}
-              actionText={
-                warMissionsLeft <= 0 ? "Daily Limit Reached" : "Accept Mission"
-              }
-              additionalContent={() => (
-                <>
-                  {warMissionsLeft <= 0 && (
-                    <p className="text-red-500 text-sm">Daily Limit Reached</p>
-                  )}
-                </>
-              )}
-            />
-          </div>
+          <LogbookEntry
+            userQuest={currentWarQuest}
+            tracker={currentWarTracker}
+            showScene
+          />
         </div>
       )}
       {!currentQuest && !isPending && (
@@ -455,6 +413,77 @@ export default function MissionHall({ userData }: MissionHallProps) {
               );
             }
           })}
+          <MissionPicker
+            setting={{
+              rank: "S",
+              name: "War Mission",
+              image: IMG_MISSION_WAR,
+            }}
+            missions={availableWarMissions.map((q) => ({
+              id: q.id,
+              name: q.name,
+              image: q.image || undefined,
+            }))}
+            count={availableWarMissions.length}
+            disabled={
+              !isInActiveWar ||
+              !!currentWarQuest ||
+              warMissionsLeft <= 0 ||
+              availableWarMissions.length === 0
+            }
+            onMissionSelect={(mission) =>
+              startQuest({
+                questId: mission.id,
+                userSector: userData.sector,
+              })
+            }
+            dialogTitle="Accept War Mission"
+            dialogDescription={(mission) =>
+              !isInActiveWar ? (
+                "Your village is not currently at war."
+              ) : currentWarQuest ? (
+                "You already have an active war mission. Complete it before accepting another."
+              ) : warMissionsLeft <= 0 ? (
+                `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}. Please try again tomorrow.`
+              ) : (
+                <>
+                  Are you sure you want to accept the war mission &quot;{mission.name}
+                  &quot;?
+                </>
+              )
+            }
+            actionDisabled={!isInActiveWar || !!currentWarQuest || warMissionsLeft <= 0}
+            actionText={
+              !isInActiveWar
+                ? "No Active War"
+                : currentWarQuest
+                  ? "Active Mission"
+                  : warMissionsLeft <= 0
+                    ? "Daily Limit Reached"
+                    : "Accept Mission"
+            }
+            emptyContent={
+              <p className="p-2 text-center text-sm text-muted-foreground">
+                {!isInActiveWar
+                  ? "Your village is not currently at war."
+                  : currentWarQuest
+                    ? "Complete your active war mission first."
+                    : warMissionsLeft <= 0
+                      ? `Daily limit of ${WAR_MISSIONS_PER_DAY} reached.`
+                      : "No war missions available at your rank."}
+              </p>
+            }
+            additionalContent={() => (
+              <>
+                {currentWarQuest && (
+                  <p className="text-yellow-500 text-sm">Active Mission</p>
+                )}
+                {!currentWarQuest && warMissionsLeft <= 0 && (
+                  <p className="text-red-500 text-sm">Daily Limit Reached</p>
+                )}
+              </>
+            )}
+          />
         </div>
       )}
     </>

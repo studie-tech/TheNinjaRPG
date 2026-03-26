@@ -41,6 +41,7 @@ interface MissionPickerProps {
     name: string;
     image?: string;
   }) => React.ReactNode;
+  emptyContent?: React.ReactNode;
 }
 
 export const MissionPicker: React.FC<MissionPickerProps> = ({
@@ -54,6 +55,7 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
   actionDisabled = false,
   actionText = "Accept Mission",
   additionalContent,
+  emptyContent,
 }) => {
   return (
     <Popover>
@@ -69,6 +71,7 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
         </div>
       </PopoverTrigger>
       <PopoverContent>
+        {missions.length === 0 && emptyContent}
         <div className="grid grid-cols-3 gap-2">
           {missions.map((mission) => (
             <AlertDialog key={mission.id}>

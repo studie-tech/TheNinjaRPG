@@ -2072,6 +2072,7 @@ export const IMG_MISSION_M =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyweIVKukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
 export const IMG_MISSION_PVP =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzCBxBXemvaQu94EYJs8HpxVzofny6iPtbgCZ";
+export const IMG_MISSION_WAR = "/War_mission.webp";
 
 export const IMG_BUILDING_MISSIONHALL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2TCTWInMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8";
