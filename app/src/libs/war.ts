@@ -477,8 +477,7 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
           sql`, `,
         )})
     `),
-    // For sector wars: reset users queued for shrine battles to AWAKE status
-    // This can run in parallel with quest cleanup since they operate on different data
+    // Reset users queued for shrine battles to AWAKE - runs in parallel with quest cleanup
     ...(activeWar.type === "SECTOR_WAR" && activeWar.sector
       ? [
           drizzleDB.execute(sql`
@@ -493,10 +492,26 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
           `),
         ]
       : []),
+    ...(["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)
+      ? [
+          drizzleDB.execute(sql`
+            UPDATE UserData ud
+            INNER JOIN MpvpBattleUser mbu ON ud.userId = mbu.userId
+            INNER JOIN MpvpBattleQueue mbq ON mbu.clanBattleId = mbq.id
+            SET ud.status = 'AWAKE'
+            WHERE mbq.battleType = 'SHRINE_BATTLE'
+              AND mbq.battleId IS NULL
+              AND (
+                mbq.attackerEntityId IN (${activeWar.attackerVillageId}, ${activeWar.defenderVillageId})
+                OR mbq.defenderEntityId IN (${activeWar.attackerVillageId}, ${activeWar.defenderVillageId})
+              )
+              AND ud.status = 'QUEUED'
+          `),
+        ]
+      : []),
   ]);
 
-  // For sector wars: delete battle user records, then queue records
-  // These must run sequentially after the UPDATE above since:
+  // Delete battle user records then queue records sequentially after the UPDATE above since:
   // 1. The UPDATE uses JOIN on MpvpBattleUser to find users to reset
   // 2. The MpvpBattleUser DELETE uses JOIN on MpvpBattleQueue to find records to delete
   if (activeWar.type === "SECTOR_WAR" && activeWar.sector) {
@@ -516,6 +531,37 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
           eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
           eq(mpvpBattleQueue.sector, activeWar.sector),
           isNull(mpvpBattleQueue.battleId),
+        ),
+      );
+  } else if (["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
+    // Delete battle user records for pending shrine battles
+    await drizzleDB.execute(sql`
+      DELETE mbu FROM MpvpBattleUser mbu
+      INNER JOIN MpvpBattleQueue mbq ON mbu.clanBattleId = mbq.id
+      WHERE mbq.battleType = 'SHRINE_BATTLE'
+        AND mbq.battleId IS NULL
+        AND (
+          mbq.attackerEntityId IN (${activeWar.attackerVillageId}, ${activeWar.defenderVillageId})
+          OR mbq.defenderEntityId IN (${activeWar.attackerVillageId}, ${activeWar.defenderVillageId})
+        )
+    `);
+    // Delete pending shrine battle queue records
+    await drizzleDB
+      .delete(mpvpBattleQueue)
+      .where(
+        and(
+          eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+          isNull(mpvpBattleQueue.battleId),
+          or(
+            inArray(mpvpBattleQueue.attackerEntityId, [
+              activeWar.attackerVillageId,
+              activeWar.defenderVillageId,
+            ]),
+            inArray(mpvpBattleQueue.defenderEntityId, [
+              activeWar.attackerVillageId,
+              activeWar.defenderVillageId,
+            ]),
+          ),
         ),
       );
   }
