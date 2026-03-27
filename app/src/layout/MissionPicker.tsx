@@ -71,7 +71,7 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
         </div>
       </PopoverTrigger>
       <PopoverContent>
-        {missions.length === 0 && emptyContent}
+        {(missions.length === 0 || disabled) && emptyContent}
         <div className="grid grid-cols-3 gap-2">
           {missions.map((mission) => (
             <AlertDialog key={mission.id}>

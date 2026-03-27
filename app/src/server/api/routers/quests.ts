@@ -704,11 +704,16 @@ export const questsRouter = createTRPCRouter({
             `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
           );
         }
-        const current = user?.userQuests?.find(
-          (q) => q.quest.questType === "war" && !q.endAt,
+        const currentActive = user?.userQuests?.find(
+          (q) =>
+            ["mission", "crime", "errand", "medical", "pvp", "war"].includes(
+              q.quest.questType,
+            ) && !q.endAt,
         );
-        if (current) {
-          return errorResponse("Already have an active war mission");
+        if (currentActive) {
+          return errorResponse(
+            `Already have an active ${currentActive.quest.questType}`,
+          );
         }
         // fetchActiveWars is expensive (loads village structures); only fetch for war quests
         // and only after all cheap guards have passed
@@ -746,11 +751,29 @@ export const questsRouter = createTRPCRouter({
         );
       }
 
-      // Insert quest entry
-      await Promise.all([
-        upsertQuestEntry(ctx.drizzle, user, questData),
-        incrementDailyQuestCounter(ctx.drizzle, user, questData.questType),
-      ]);
+      // Insert quest entry; for war quests atomically guard the daily limit increment
+      if (questData.questType === "war") {
+        const result = await ctx.drizzle
+          .update(userData)
+          .set({ dailyWarMissions: sql`${userData.dailyWarMissions} + 1` })
+          .where(
+            and(
+              eq(userData.userId, user.userId),
+              sql`${userData.dailyWarMissions} < ${WAR_MISSIONS_PER_DAY}`,
+            ),
+          );
+        if (result.rowsAffected === 0) {
+          return errorResponse(
+            `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
+          );
+        }
+        await upsertQuestEntry(ctx.drizzle, user, questData);
+      } else {
+        await Promise.all([
+          upsertQuestEntry(ctx.drizzle, user, questData),
+          incrementDailyQuestCounter(ctx.drizzle, user, questData.questType),
+        ]);
+      }
       return { success: true, message: `Quest started: ${questData.name}` };
     }),
   abandon: protectedProcedure
