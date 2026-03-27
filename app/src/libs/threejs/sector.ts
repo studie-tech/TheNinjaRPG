@@ -775,12 +775,18 @@ export const drawUsers = (info: {
   lastTime: number;
   angle: number;
   minLevel: number;
+  /** When true, do not draw Academy (STUDENT) or Genin — same set as PvP-restricted ranks */
+  hideStudentAndGenin?: boolean;
 }) => {
   const endMark = profiler.mark("drawUsers");
   // Group the users by their location
   const groups = groupBy(
     info.users
       .filter((user) => user.level >= info.minLevel)
+      .filter(
+        (user) =>
+          !info.hideStudentAndGenin || !RANKS_RESTRICTED_FROM_PVP.includes(user.rank),
+      )
       .map((user) => ({
         ...user,
         group: `${user.latitude},${user.longitude}`,

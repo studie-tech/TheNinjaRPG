@@ -844,6 +844,19 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                             {parsedEffect.residualModifier}
                           </span>
                         )}
+                        {(parsedEffect.type === "damage" ||
+                          parsedEffect.type === "pierce") && (
+                          <>
+                            <span>
+                              <b>Bloodline damage increase: </b>
+                              {parsedEffect.allowBloodlineDamageIncrease ? "Yes" : "No"}
+                            </span>
+                            <span>
+                              <b>Bloodline damage decrease: </b>
+                              {parsedEffect.allowBloodlineDamageDecrease ? "Yes" : "No"}
+                            </span>
+                          </>
+                        )}
                         {"generalTypes" in parsedEffect &&
                           parsedEffect.generalTypes &&
                           parsedEffect.generalTypes.length > 0 && (
