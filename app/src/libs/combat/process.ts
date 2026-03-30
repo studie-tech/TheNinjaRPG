@@ -632,6 +632,7 @@ export const applyEffects = (
 
       // Apply all the consequences
       if (target && user) {
+        let appliedVampHeal = 0;
         if (c.damage !== undefined && c.damage >= 0) {
           target.curHealth -= c.damage;
           target.curHealth = Math.max(0, target.curHealth);
@@ -647,6 +648,7 @@ export const applyEffects = (
             const preShieldDamage = c.preShieldDamage ?? c.damage ?? 0;
             const maxVamp = preShieldDamage * 0.6;
             const vampHeal = Math.min(Math.floor(rawVampHeal), Math.floor(maxVamp));
+            appliedVampHeal = vampHeal;
             if (vampHeal > 0) {
               user.curHealth = Math.min(user.maxHealth, user.curHealth + vampHeal);
               actionEffects.push({
@@ -770,7 +772,7 @@ export const applyEffects = (
         }
         // Vamp and lifesteal are mutually exclusive: if vamp drained this packet, suppress lifesteal.
         if (
-          (c.vampHeal === undefined || c.vampHeal <= 0) &&
+          appliedVampHeal <= 0 &&
           c.lifesteal_hp !== undefined &&
           c.lifesteal_hp >= 0 &&
           target.curHealth > 0 &&
