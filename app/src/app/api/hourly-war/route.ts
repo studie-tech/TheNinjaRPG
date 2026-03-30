@@ -1,4 +1,5 @@
 import { and, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { cookies } from "next/headers";
 import {
   ELDER_MIN_VOTING_COUNT,
@@ -351,7 +352,7 @@ async function assignWarQuests(
 
     if (applicableQuest) {
       questAssignments.push({
-        id: crypto.randomUUID(),
+        id: nanoid(),
         userId: user.userId,
         questId: applicableQuest.id,
         questType: "war",
@@ -543,7 +544,7 @@ async function processExpiredElderVotes() {
         ]);
         continue;
       }
-      const warId = crypto.randomUUID();
+      const warId = nanoid();
       const warContent = `${attackerVillage.name} has declared war on ${defenderVillage?.name ?? "another village"}!`;
       const notifyKageIds = [vote.initiatedByUserId];
       if (defenderVillage?.kageId) notifyKageIds.push(defenderVillage.kageId);
