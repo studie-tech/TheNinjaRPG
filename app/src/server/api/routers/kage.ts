@@ -887,8 +887,9 @@ export const kageRouter = createTRPCRouter({
           return errorResponse("Vote already processed");
         }
         if (!replacement) {
-          // Revert only if we own the APPROVED state (safe conditional revert)
-          await ctx.drizzle
+          // Revert only if we still own the APPROVED state.
+          // If this no-op's, another resolver already moved the vote forward.
+          const rejectResult = await ctx.drizzle
             .update(villageElderVote)
             .set({ status: "REJECTED" })
             .where(
@@ -897,9 +898,14 @@ export const kageRouter = createTRPCRouter({
                 eq(villageElderVote.status, "APPROVED"),
               ),
             );
+          if (rejectResult.rowsAffected === 0) {
+            return errorResponse("Vote already processed");
+          }
           return errorResponse("No eligible replacement elder found");
         }
 
+        // Keep this sequential after claim ownership: running village update in parallel
+        // can allow a losing concurrent resolver to swap kageId before claim failure is observed.
         const villageUpdateResult = await ctx.drizzle
           .update(village)
           .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
