@@ -851,6 +851,13 @@ export const kageRouter = createTRPCRouter({
           `At least ${ELDER_MIN_VOTING_COUNT} elders are required for a vote`,
         );
 
+      // Prefetch replacement in parallel with vote-entry insert + fresh tally fetch
+      const replacementPromise = fetchKageReplacement(
+        ctx.drizzle,
+        user.villageId,
+        voteRecord.targetId,
+      );
+
       // Insert vote entry, re-fetch fresh entries, and resolve outcome
       const voteResult = await castElderVoteEntry(
         ctx.drizzle,
@@ -864,24 +871,21 @@ export const kageRouter = createTRPCRouter({
 
       if (outcome === "APPROVED") {
         // Atomically claim the motion first — only one concurrent request proceeds to side effects
-        const claimResult = await ctx.drizzle
-          .update(villageElderVote)
-          .set({ status: "APPROVED" })
-          .where(
-            and(
-              eq(villageElderVote.id, input.voteId),
-              eq(villageElderVote.status, "PENDING"),
+        const [claimResult, replacement] = await Promise.all([
+          ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "APPROVED" })
+            .where(
+              and(
+                eq(villageElderVote.id, input.voteId),
+                eq(villageElderVote.status, "PENDING"),
+              ),
             ),
-          );
+          replacementPromise,
+        ]);
         if (claimResult.rowsAffected === 0) {
           return errorResponse("Vote already processed");
         }
-
-        const replacement = await fetchKageReplacement(
-          ctx.drizzle,
-          user.villageId,
-          voteRecord.targetId,
-        );
         if (!replacement) {
           // Revert only if we own the APPROVED state (safe conditional revert)
           await ctx.drizzle

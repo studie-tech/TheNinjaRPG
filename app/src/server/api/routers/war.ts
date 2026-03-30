@@ -1188,11 +1188,14 @@ export const warRouter = createTRPCRouter({
     })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, votes] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchElderVotes(ctx.drizzle, input.villageId),
+      ]);
       if (user.villageId !== input.villageId && !canSeeSecretData(user.role)) {
         throw serverError("FORBIDDEN", "You can only view votes for your own village");
       }
-      return fetchElderVotes(ctx.drizzle, input.villageId);
+      return votes;
     }),
 
   // Kage cancels a pending war declaration before elders vote
