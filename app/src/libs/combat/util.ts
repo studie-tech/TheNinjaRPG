@@ -1100,13 +1100,15 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
         ? current.lifesteal_hp + val.lifesteal_hp
         : val.lifesteal_hp;
     }
-    if (val.vamp_hp) {
-      current.vamp_hp = current.vamp_hp ? current.vamp_hp + val.vamp_hp : val.vamp_hp;
-    }
     if (val.vampRatio) {
       current.vampRatio = current.vampRatio
         ? current.vampRatio + val.vampRatio
         : val.vampRatio;
+    }
+    if (val.preShieldDamage) {
+      current.preShieldDamage = current.preShieldDamage
+        ? current.preShieldDamage + val.preShieldDamage
+        : val.preShieldDamage;
     }
     if (val.absorb_hp) {
       current.absorb_hp = current.absorb_hp
@@ -2486,13 +2488,29 @@ export const getAffectedTiles = (info: {
     const deltaY = Math.abs(a.r - b.r);
     if (deltaX >= deltaY) {
       tiles = grid.traverse([
-        line<TerrainHex>({ start: [b.q, b.r], length: 2, direction: Direction.N }),
-        line<TerrainHex>({ start: [b.q, b.r], length: 2, direction: Direction.S }),
+        line<TerrainHex>({
+          start: [b.q, b.r],
+          length: 2,
+          direction: Direction.N,
+        }),
+        line<TerrainHex>({
+          start: [b.q, b.r],
+          length: 2,
+          direction: Direction.S,
+        }),
       ]);
     } else {
       tiles = grid.traverse([
-        line<TerrainHex>({ start: [b.q, b.r], length: 2, direction: Direction.W }),
-        line<TerrainHex>({ start: [b.q, b.r], length: 2, direction: Direction.E }),
+        line<TerrainHex>({
+          start: [b.q, b.r],
+          length: 2,
+          direction: Direction.W,
+        }),
+        line<TerrainHex>({
+          start: [b.q, b.r],
+          length: 2,
+          direction: Direction.E,
+        }),
       ]);
     }
   } else if (action.method === "AOE_LARGE_WALL_SHOOT") {
@@ -2500,13 +2518,29 @@ export const getAffectedTiles = (info: {
     const deltaY = Math.abs(a.r - b.r);
     if (deltaX >= deltaY) {
       tiles = grid.traverse([
-        line<TerrainHex>({ start: [b.q, b.r], length: 3, direction: Direction.N }),
-        line<TerrainHex>({ start: [b.q, b.r], length: 3, direction: Direction.S }),
+        line<TerrainHex>({
+          start: [b.q, b.r],
+          length: 3,
+          direction: Direction.N,
+        }),
+        line<TerrainHex>({
+          start: [b.q, b.r],
+          length: 3,
+          direction: Direction.S,
+        }),
       ]);
     } else {
       tiles = grid.traverse([
-        line<TerrainHex>({ start: [b.q, b.r], length: 3, direction: Direction.W }),
-        line<TerrainHex>({ start: [b.q, b.r], length: 3, direction: Direction.E }),
+        line<TerrainHex>({
+          start: [b.q, b.r],
+          length: 3,
+          direction: Direction.W,
+        }),
+        line<TerrainHex>({
+          start: [b.q, b.r],
+          length: 3,
+          direction: Direction.E,
+        }),
       ]);
     }
   } else if (action.method === "AOE_CIRCLE_SHOOT") {

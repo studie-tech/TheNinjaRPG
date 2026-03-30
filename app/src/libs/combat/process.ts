@@ -327,7 +327,7 @@ export const applyEffects = (
   // where damage modifiers run BEFORE pierce (pierce bypasses damage reduction)
   // Note: POST_DAMAGE_MODIFIER_TYPES (wound, afterburn, reflect, recoil, lifesteal, absorb)
   // are excluded here because they must read post-mitigated damage values
-  // Note: increaseheal/decreaseheal are excluded because they modify lifesteal_hp/absorb_hp
+  // Note: increaseheal/decreaseheal are excluded because they modify lifesteal_hp/absorb_hp/vampRatio
   // which are set by post-damage modifiers
   const nonDamageModifierEffects = usersEffects
     .filter((e) => e.type !== "mirror" && e.type !== "copy")
@@ -346,7 +346,7 @@ export const applyEffects = (
   );
 
   // Separate heal adjustment effects (increaseheal/decreaseheal)
-  // These modify lifesteal_hp/absorb_hp so they must run AFTER post-damage modifiers set those values
+  // These modify lifesteal_hp/absorb_hp/vampRatio so they must run AFTER post-damage modifiers set those values
   const healAdjustmentEffects = usersEffects.filter(
     (e) => e.type === "increaseheal" || e.type === "decreaseheal",
   );
@@ -506,7 +506,7 @@ export const applyEffects = (
   });
 
   // Apply heal adjustment effects (increaseheal/decreaseheal) AFTER post-damage modifiers
-  // These modify lifesteal_hp/absorb_hp values that are set by lifesteal/absorb effects
+  // These modify lifesteal_hp/absorb_hp/vampRatio values set by lifesteal/absorb/vamp effects
   healAdjustmentEffects.sort(sortEffects).forEach((effect) => {
     applySingleEffect(
       consequences,
@@ -640,7 +640,8 @@ export const applyEffects = (
             color: "red",
             types: c.types,
           });
-          // Vamp: heal the attacker based on the final damage dealt (post-boost, post-shield)
+          // Vamp: heal the attacker based on the final damage dealt (post-boost, post-shield).
+          // Intentional: this can trigger on killing blows (no target.curHealth > 0 guard).
           if (c.vampRatio && c.vampRatio > 0 && c.damage > 0 && user.curHealth > 0) {
             const preShieldDamage = c.preShieldDamage ?? c.damage;
             const maxVamp = preShieldDamage * 0.6;
