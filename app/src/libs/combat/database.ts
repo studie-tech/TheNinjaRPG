@@ -109,7 +109,7 @@ export const updateBattle = async (
           ]
         : []),
       // Clean up battle users in parallel - safe since they only read from mpvpBattleQueue
-      ...(["RAID", "SHRINE_BATTLE"].includes(newBattle.battleType)
+      ...(["RAID", "SHRINE_WAR"].includes(newBattle.battleType)
         ? [
             client
               .delete(mpvpBattleUser)
@@ -128,7 +128,7 @@ export const updateBattle = async (
 
     // Delete queue entries AFTER the Promise.all to ensure mpvpBattleUser
     // subquery has completed (it references mpvpBattleQueue)
-    if (["RAID", "SHRINE_BATTLE"].includes(newBattle.battleType)) {
+    if (["RAID", "SHRINE_WAR"].includes(newBattle.battleType)) {
       await client
         .delete(mpvpBattleQueue)
         .where(eq(mpvpBattleQueue.battleId, newBattle.id));
