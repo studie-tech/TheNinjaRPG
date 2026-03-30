@@ -82,6 +82,7 @@ import {
   checkCoLeader,
   clanBoostTypeSchema,
   clanCreateSchema,
+  clanGetRequestSchema,
 } from "@/validators/clan";
 
 const pusher = getServerPusher();
@@ -375,7 +376,7 @@ export const clanRouter = createTRPCRouter({
     }),
   getRequests: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get pending clan join requests" } })
-    .input(z.object({ clanLeaderId: z.string() }))
+    .input(clanGetRequestSchema)
     .query(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
