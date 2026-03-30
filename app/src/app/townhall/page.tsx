@@ -345,7 +345,11 @@ const ElderHall: React.FC<{
                         size="sm"
                         variant="default"
                         onClick={() =>
-                          voteWar({ voteId: pendingWarVote.id, vote: "YES" })
+                          voteWar({
+                            voteId: pendingWarVote.id,
+                            vote: "YES",
+                            userVillageId: user.villageId ?? "",
+                          })
                         }
                       >
                         Vote YES
@@ -354,7 +358,11 @@ const ElderHall: React.FC<{
                         size="sm"
                         variant="destructive"
                         onClick={() =>
-                          voteWar({ voteId: pendingWarVote.id, vote: "NO" })
+                          voteWar({
+                            voteId: pendingWarVote.id,
+                            vote: "NO",
+                            userVillageId: user.villageId ?? "",
+                          })
                         }
                       >
                         Vote NO
@@ -411,7 +419,10 @@ const ElderHall: React.FC<{
                         size="sm"
                         variant="default"
                         onClick={() =>
-                          voteRemoval({ voteId: pendingKageVote.id, vote: "YES" })
+                          voteRemoval({
+                            voteId: pendingKageVote.id,
+                            vote: "YES",
+                          })
                         }
                       >
                         Vote YES (Remove)
@@ -420,7 +431,10 @@ const ElderHall: React.FC<{
                         size="sm"
                         variant="outline"
                         onClick={() =>
-                          voteRemoval({ voteId: pendingKageVote.id, vote: "NO" })
+                          voteRemoval({
+                            voteId: pendingKageVote.id,
+                            vote: "NO",
+                          })
                         }
                       >
                         Vote NO (Keep)

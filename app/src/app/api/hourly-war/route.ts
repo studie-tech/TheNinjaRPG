@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import {
   ELDER_MIN_VOTING_COUNT,
@@ -377,24 +377,29 @@ async function assignWarQuests(
  * - KAGE_REMOVAL: if majority YES when deadline passes, execute removal
  */
 async function processExpiredElderVotes() {
-  const expiredVotes = await fetchExpiredElderVotes(drizzleDB);
+  const [expiredVotes, allElders] = await Promise.all([
+    fetchExpiredElderVotes(drizzleDB),
+    drizzleDB
+      .select({ userId: userData.userId, villageId: userData.villageId })
+      .from(userData)
+      .where(and(eq(userData.rank, "ELDER"), eq(userData.isAi, false))),
+  ]);
   if (expiredVotes.length === 0) return;
+
+  const eldersByVillage = new Map<string, string[]>();
+  for (const elder of allElders) {
+    if (!elder.villageId) continue;
+    const villageElders = eldersByVillage.get(elder.villageId) ?? [];
+    villageElders.push(elder.userId);
+    eldersByVillage.set(elder.villageId, villageElders);
+  }
 
   for (const vote of expiredVotes) {
     if (vote.type === "WAR_DECLARATION") {
-      // Count eligible elders (not the initiator who is the kage)
-      const elderCount = await drizzleDB
-        .select({ count: sql<number>`count(*)` })
-        .from(userData)
-        .where(
-          and(
-            eq(userData.villageId, vote.villageId),
-            eq(userData.rank, "ELDER"),
-            eq(userData.isAi, false),
-            ne(userData.userId, vote.initiatedByUserId),
-          ),
-        )
-        .then(([r]) => r?.count ?? 0);
+      const villageElderIds = eldersByVillage.get(vote.villageId) ?? [];
+      const elderCount = villageElderIds.filter(
+        (userId) => userId !== vote.initiatedByUserId,
+      ).length;
 
       const yesCount = vote.entries.filter((e) => e.vote === "YES").length;
       const noCount = vote.entries.filter((e) => e.vote === "NO").length;
@@ -456,7 +461,9 @@ async function processExpiredElderVotes() {
       if (warClaimResult.rowsAffected === 0) continue;
 
       const [attackerVillage, defenderVillage] = await Promise.all([
-        drizzleDB.query.village.findFirst({ where: eq(village.id, vote.villageId) }),
+        drizzleDB.query.village.findFirst({
+          where: eq(village.id, vote.villageId),
+        }),
         drizzleDB.query.village.findFirst({
           columns: { name: true, kageId: true },
           where: eq(village.id, vote.targetId),
@@ -534,19 +541,10 @@ async function processExpiredElderVotes() {
           .where(inArray(userData.userId, notifyKageIds)),
       ]);
     } else if (vote.type === "KAGE_REMOVAL") {
-      // Count eligible elders (not the kage being removed)
-      const elderCount = await drizzleDB
-        .select({ count: sql<number>`count(*)` })
-        .from(userData)
-        .where(
-          and(
-            eq(userData.villageId, vote.villageId),
-            eq(userData.rank, "ELDER"),
-            eq(userData.isAi, false),
-            ne(userData.userId, vote.targetId),
-          ),
-        )
-        .then(([r]) => r?.count ?? 0);
+      const villageElderIds = eldersByVillage.get(vote.villageId) ?? [];
+      const elderCount = villageElderIds.filter(
+        (userId) => userId !== vote.targetId,
+      ).length;
 
       const yesCount = vote.entries.filter((e) => e.vote === "YES").length;
       const noCount = vote.entries.filter((e) => e.vote === "NO").length;

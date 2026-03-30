@@ -53,6 +53,7 @@ import {
   fetchAlliances,
   fetchSector,
   fetchStructures,
+  fetchVillage,
   fetchVillages,
 } from "@/routers/village";
 import type { DrizzleClient } from "@/server/db";
@@ -72,7 +73,9 @@ import {
 export const warRouter = createTRPCRouter({
   // Get active wars for a village
   getActiveWars: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get active wars for a village" } })
+    .meta({
+      mcp: { enabled: true, description: "Get active wars for a village" },
+    })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
       return await fetchActiveWars(ctx.drizzle, input.villageId);
@@ -80,7 +83,9 @@ export const warRouter = createTRPCRouter({
 
   // Get ended wars for a village
   getEndedWars: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get ended wars for a village" } })
+    .meta({
+      mcp: { enabled: true, description: "Get ended wars for a village" },
+    })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
       return fetchEndedWars(ctx.drizzle, input.villageId);
@@ -122,7 +127,9 @@ export const warRouter = createTRPCRouter({
     }),
 
   buildShrine: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Build a shrine to claim a sector" } })
+    .meta({
+      mcp: { enabled: true, description: "Build a shrine to claim a sector" },
+    })
     .input(z.object({ warId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -208,7 +215,10 @@ export const warRouter = createTRPCRouter({
 
   declareSectorWar: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Declare a sector war on a map sector" },
+      mcp: {
+        enabled: true,
+        description: "Declare a sector war on a map sector",
+      },
     })
     .input(z.object({ sectorId: z.number(), userVillageId: z.string().nullable() }))
     .output(baseServerResponse)
@@ -438,8 +448,15 @@ export const warRouter = createTRPCRouter({
 
   // Declare war on another village
   declareVillageWarOrRaid: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Declare village war or raid" } })
-    .input(z.object({ targetVillageId: z.string(), targetStructureRoute: z.string() }))
+    .meta({
+      mcp: { enabled: true, description: "Declare village war or raid" },
+    })
+    .input(
+      z.object({
+        targetVillageId: z.string(),
+        targetStructureRoute: z.string(),
+      }),
+    )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -487,22 +504,41 @@ export const warRouter = createTRPCRouter({
         return errorResponse("Only the leader can declare war");
       }
 
-      // Check declaration cooldown (rejected or cancelled within last 24 hours)
+      // Check declaration cooldown, existing pending vote, and elders in parallel
       // Use endsAt as the anchor — cron-rejected votes expire after the voting window,
       // so createdAt would be older than the cooldown window and the check would silently pass.
-      const recentRejection = await ctx.drizzle.query.villageElderVote.findFirst({
-        columns: { endsAt: true },
-        where: and(
-          eq(villageElderVote.villageId, user.villageId),
-          eq(villageElderVote.type, "WAR_DECLARATION"),
-          eq(villageElderVote.status, "REJECTED"),
-          gte(
-            villageElderVote.endsAt,
-            secondsFromNow(-WAR_DECLARATION_COOLDOWN_HOURS * 3600),
+      const [recentRejection, existingPending, elders] = await Promise.all([
+        ctx.drizzle.query.villageElderVote.findFirst({
+          columns: { endsAt: true },
+          where: and(
+            eq(villageElderVote.villageId, user.villageId),
+            eq(villageElderVote.type, "WAR_DECLARATION"),
+            eq(villageElderVote.status, "REJECTED"),
+            gte(
+              villageElderVote.endsAt,
+              secondsFromNow(-WAR_DECLARATION_COOLDOWN_HOURS * 3600),
+            ),
           ),
-        ),
-        orderBy: desc(villageElderVote.endsAt),
-      });
+          orderBy: desc(villageElderVote.endsAt),
+        }),
+        ctx.drizzle.query.villageElderVote.findFirst({
+          columns: { id: true },
+          where: and(
+            eq(villageElderVote.villageId, user.villageId),
+            eq(villageElderVote.type, "WAR_DECLARATION"),
+            eq(villageElderVote.status, "PENDING"),
+          ),
+        }),
+        ctx.drizzle.query.userData.findMany({
+          columns: { userId: true },
+          where: and(
+            eq(userData.villageId, user.villageId),
+            eq(userData.rank, "ELDER"),
+            eq(userData.isAi, false),
+            ne(userData.userId, user.userId),
+          ),
+        }),
+      ]);
       if (recentRejection) {
         const cooldownEnd = new Date(
           recentRejection.endsAt.getTime() +
@@ -512,15 +548,6 @@ export const warRouter = createTRPCRouter({
           `War declaration is on cooldown after a recent rejection or cancellation. Available again at ${cooldownEnd.toUTCString()}.`,
         );
       }
-
-      const existingPending = await ctx.drizzle.query.villageElderVote.findFirst({
-        columns: { id: true },
-        where: and(
-          eq(villageElderVote.villageId, user.villageId),
-          eq(villageElderVote.type, "WAR_DECLARATION"),
-          eq(villageElderVote.status, "PENDING"),
-        ),
-      });
       if (existingPending) {
         return errorResponse("Your village already has a pending war declaration vote");
       }
@@ -650,17 +677,6 @@ export const warRouter = createTRPCRouter({
         return errorResponse("A village is now already involved in an active war");
       }
 
-      // Fetch village elders (excludes kage/initiator from voting)
-      const elders = await ctx.drizzle.query.userData.findMany({
-        columns: { userId: true },
-        where: and(
-          eq(userData.villageId, user.villageId),
-          eq(userData.rank, "ELDER"),
-          eq(userData.isAi, false),
-          ne(userData.userId, user.userId),
-        ),
-      });
-
       // Require minimum elder count to proceed with war declaration
       if (elders.length < ELDER_MIN_VOTING_COUNT)
         return errorResponse(
@@ -670,8 +686,9 @@ export const warRouter = createTRPCRouter({
       // Insert vote first — unique constraint on (villageId, type, targetId, activeFlag) guards concurrent dupes
       const voteId = nanoid();
       const endsAt = secondsFromNow(ELDER_WAR_VOTE_HOURS * 3600);
-      try {
-        await ctx.drizzle.insert(villageElderVote).values({
+      const voteInsertResult = await ctx.drizzle
+        .insert(villageElderVote)
+        .values({
           id: voteId,
           villageId: user.villageId,
           type: "WAR_DECLARATION",
@@ -681,27 +698,25 @@ export const warRouter = createTRPCRouter({
           targetStructureRoute: structure.route,
           status: "PENDING",
           endsAt,
-        });
-      } catch (e) {
-        const isDupe =
-          typeof e === "object" && e !== null && "errno" in e && e.errno === 1062;
-        if (isDupe)
-          return errorResponse(
-            "There is already a pending war declaration vote for your village",
-          );
-        throw e;
+        })
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+      if (!voteInsertResult.rowsAffected) {
+        return errorResponse(
+          "There is already a pending war declaration vote for your village",
+        );
       }
       const elderContent = `${user.username} has submitted a war declaration against ${defenderVillage.name}. You have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
       const kageContent = `Your war declaration against ${defenderVillage.name} has been submitted. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
       const elderUserIds = elders.map((e) => e.userId);
       const allNotifyIds = [user.userId, ...elderUserIds];
       await Promise.all([
-        ctx.drizzle
-          .insert(notification)
-          .values([
-            { userId: user.userId, content: kageContent },
-            ...elderUserIds.map((userId) => ({ userId, content: elderContent })),
-          ]),
+        ctx.drizzle.insert(notification).values([
+          { userId: user.userId, content: kageContent },
+          ...elderUserIds.map((userId) => ({
+            userId,
+            content: elderContent,
+          })),
+        ]),
         ctx.drizzle
           .update(userData)
           .set({ unreadNotifications: sql`unreadNotifications + 1` })
@@ -715,7 +730,9 @@ export const warRouter = createTRPCRouter({
 
   // Create an offer for factions to join the war
   createAllyOffer: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Create ally offer for war support" } })
+    .meta({
+      mcp: { enabled: true, description: "Create ally offer for war support" },
+    })
     .input(
       z.object({
         warId: z.string(),
@@ -877,7 +894,9 @@ export const warRouter = createTRPCRouter({
 
   // Get faction offers for a war
   getAllyOffers: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get pending war ally offers" } })
+    .meta({
+      mcp: { enabled: true, description: "Get pending war ally offers" },
+    })
     .query(async ({ ctx }) => {
       return await fetchRequests(ctx.drizzle, ["WAR_ALLY"], 3600 * 12, ctx.userId);
     }),
@@ -1025,7 +1044,6 @@ export const warRouter = createTRPCRouter({
           userId: ctx.userId,
         }),
         fetchActiveWars(ctx.drizzle),
-        fetchVillages(ctx.drizzle),
       ]);
       // Derived
       const activeWar = activeWars.find((w) => w.id === input.warId);
@@ -1107,7 +1125,9 @@ export const warRouter = createTRPCRouter({
     }),
 
   getWarKillStats: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get aggregated war kill statistics" } })
+    .meta({
+      mcp: { enabled: true, description: "Get aggregated war kill statistics" },
+    })
     .input(
       z.object({
         warId: z.string(),
@@ -1161,7 +1181,10 @@ export const warRouter = createTRPCRouter({
   // Get pending elder votes for a village
   getElderVotes: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get pending elder votes for a village" },
+      mcp: {
+        enabled: true,
+        description: "Get pending elder votes for a village",
+      },
     })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -1185,10 +1208,7 @@ export const warRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const [{ user }, voteRecord] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        ctx.drizzle.query.villageElderVote.findFirst({
-          where: eq(villageElderVote.id, input.voteId),
-          with: { entries: { columns: { userId: true } } },
-        }),
+        fetchElderVote(ctx.drizzle, input.voteId),
       ]);
 
       // Guards
@@ -1209,26 +1229,28 @@ export const warRouter = createTRPCRouter({
       // Atomically cancel — guard ensures it's still PENDING.
       // Set endsAt = now so the cooldown window starts from the actual resolution time,
       // not the original scheduled deadline (which would be in the future).
-      const updateRes = await ctx.drizzle
-        .update(villageElderVote)
-        .set({ status: "REJECTED", endsAt: new Date() })
-        .where(
-          and(
-            eq(villageElderVote.id, input.voteId),
-            eq(villageElderVote.status, "PENDING"),
+      const [updateRes, elders] = await Promise.all([
+        ctx.drizzle
+          .update(villageElderVote)
+          .set({ status: "REJECTED", endsAt: new Date() })
+          .where(
+            and(
+              eq(villageElderVote.id, input.voteId),
+              eq(villageElderVote.status, "PENDING"),
+            ),
           ),
-        );
+        ctx.drizzle
+          .select({ userId: userData.userId })
+          .from(userData)
+          .where(
+            and(eq(userData.villageId, user.villageId), eq(userData.rank, "ELDER")),
+          ),
+      ]);
 
       if (updateRes.rowsAffected === 0)
         return errorResponse(
           "War declaration could not be cancelled — it may have already been resolved",
         );
-
-      // Notify elders of cancellation
-      const elders = await ctx.drizzle
-        .select({ userId: userData.userId })
-        .from(userData)
-        .where(and(eq(userData.villageId, user.villageId), eq(userData.rank, "ELDER")));
 
       if (elders.length > 0) {
         const notifyIds = elders.map((e) => e.userId);
@@ -1255,20 +1277,43 @@ export const warRouter = createTRPCRouter({
   // Elder votes on a pending war declaration
   voteOnWarDeclaration: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Vote on a pending war declaration as elder" },
+      mcp: {
+        enabled: true,
+        description: "Vote on a pending war declaration as elder",
+      },
     })
-    .input(z.object({ voteId: z.string(), vote: z.enum(["YES", "NO"]) }))
+    .input(
+      z.object({
+        voteId: z.string(),
+        vote: z.enum(["YES", "NO"]),
+        userVillageId: z.string(),
+      }),
+    )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [{ user }, voteRecord] = await Promise.all([
+      const [{ user }, voteRecord, attackerVillage, elderCount] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchElderVote(ctx.drizzle, input.voteId),
+        fetchVillage(ctx.drizzle, input.userVillageId),
+        ctx.drizzle
+          .select({ count: sql<number>`count(*)` })
+          .from(userData)
+          .where(
+            and(
+              eq(userData.villageId, input.userVillageId),
+              eq(userData.rank, "ELDER"),
+              eq(userData.isAi, false),
+            ),
+          )
+          .then(([r]) => r?.count ?? 0),
       ]);
 
       // Guards
       if (!user) return errorResponse("User not found");
       if (!user.villageId) return errorResponse("You must be in a village");
+      if (user.villageId !== input.userVillageId)
+        return errorResponse("Village mismatch — please refresh and try again");
       if (user.rank !== "ELDER") return errorResponse("Only elders can vote");
       if (!voteRecord) return errorResponse("Vote not found");
       if (voteRecord.status !== "PENDING")
@@ -1283,22 +1328,6 @@ export const warRouter = createTRPCRouter({
         );
       if (new Date() > voteRecord.endsAt)
         return errorResponse("Voting period has ended");
-      const alreadyVoted = voteRecord.entries.some((e) => e.userId === user.userId);
-      if (alreadyVoted) return errorResponse("You have already voted");
-
-      // Count elders (excluding vote initiator who may be the kage)
-      const elderCount = await ctx.drizzle
-        .select({ count: sql<number>`count(*)` })
-        .from(userData)
-        .where(
-          and(
-            eq(userData.villageId, user.villageId),
-            eq(userData.rank, "ELDER"),
-            eq(userData.isAi, false),
-            ne(userData.userId, voteRecord.initiatedByUserId),
-          ),
-        )
-        .then(([r]) => r?.count ?? 0);
 
       if (elderCount < ELDER_MIN_VOTING_COUNT) {
         return errorResponse(
@@ -1306,58 +1335,37 @@ export const warRouter = createTRPCRouter({
         );
       }
 
-      // Insert the vote entry — unique constraint on (voteId, userId) guards concurrent dupes
-      try {
-        await ctx.drizzle.insert(villageElderVoteEntry).values({
-          id: nanoid(),
-          voteId: input.voteId,
-          userId: user.userId,
-          vote: input.vote,
-        });
-      } catch (e) {
-        const isDupe =
-          typeof e === "object" && e !== null && "errno" in e && e.errno === 1062;
-        if (isDupe) return errorResponse("You have already voted");
-        throw e;
-      }
-
-      // Re-fetch entries from DB to avoid stale snapshot races
-      const freshEntries = await ctx.drizzle.query.villageElderVoteEntry.findMany({
-        where: eq(villageElderVoteEntry.voteId, input.voteId),
-      });
-      const yesCount = freshEntries.filter((e) => e.vote === "YES").length;
-      const noCount = freshEntries.filter((e) => e.vote === "NO").length;
-
-      const outcome = resolveElderVote(yesCount, noCount, elderCount);
+      // Insert the vote entry, re-fetch fresh entries, and resolve outcome
+      const voteResult = await castElderVoteEntry(
+        ctx.drizzle,
+        input.voteId,
+        user.userId,
+        input.vote,
+        elderCount,
+      );
+      if (!voteResult) return errorResponse("You have already voted");
+      const { outcome, freshEntries } = voteResult;
       if (outcome === "APPROVED") {
-        // Atomically claim the motion — only one concurrent request can proceed to side effects
-        const claimResult = await ctx.drizzle
-          .update(villageElderVote)
-          .set({ status: "APPROVED" })
-          .where(
-            and(
-              eq(villageElderVote.id, input.voteId),
-              eq(villageElderVote.status, "PENDING"),
+        // Atomically claim the motion and pre-fetch needed data in parallel
+        const [claimResult, defenderVillage, currentActiveWars] = await Promise.all([
+          ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "APPROVED" })
+            .where(
+              and(
+                eq(villageElderVote.id, input.voteId),
+                eq(villageElderVote.status, "PENDING"),
+              ),
             ),
-          );
+          ctx.drizzle.query.village.findFirst({
+            columns: { name: true, kageId: true },
+            where: eq(village.id, voteRecord.targetId),
+          }),
+          fetchActiveWars(ctx.drizzle),
+        ]);
         if (claimResult.rowsAffected === 0) {
           return errorResponse("Vote already processed");
         }
-
-        // Fetch village data and re-check war involvement in parallel
-        const [[attackerVillage, defenderVillage], currentActiveWars] =
-          await Promise.all([
-            Promise.all([
-              ctx.drizzle.query.village.findFirst({
-                where: eq(village.id, voteRecord.villageId),
-              }),
-              ctx.drizzle.query.village.findFirst({
-                columns: { name: true, kageId: true },
-                where: eq(village.id, voteRecord.targetId),
-              }),
-            ]),
-            fetchActiveWars(ctx.drizzle),
-          ]);
 
         // Re-check war involvement — a village may have entered a war during the voting window
         if (
@@ -1461,28 +1469,36 @@ export const warRouter = createTRPCRouter({
             .set({ unreadNotifications: sql`unreadNotifications + 1` })
             .where(inArray(userData.userId, notifyKageIds)),
         ]);
-        return { success: true, message: "War declaration approved. War has started!" };
+        return {
+          success: true,
+          message: "War declaration approved. War has started!",
+        };
       }
 
       if (outcome === "REJECTED") {
         // Atomically claim the rejection to prevent double notifications on concurrent votes.
         // Set endsAt = now so the cooldown window starts from the real resolution time.
-        const claimResult = await ctx.drizzle
-          .update(villageElderVote)
-          .set({ status: "REJECTED", endsAt: new Date() })
-          .where(
-            and(
-              eq(villageElderVote.id, input.voteId),
-              eq(villageElderVote.status, "PENDING"),
+        const [claimResult, targetVillage] = await Promise.all([
+          ctx.drizzle
+            .update(villageElderVote)
+            .set({ status: "REJECTED", endsAt: new Date() })
+            .where(
+              and(
+                eq(villageElderVote.id, input.voteId),
+                eq(villageElderVote.status, "PENDING"),
+              ),
             ),
-          );
+          ctx.drizzle.query.village.findFirst({
+            columns: { name: true },
+            where: eq(village.id, voteRecord.targetId),
+          }),
+        ]);
         if (claimResult.rowsAffected === 0) {
-          return { success: true, message: "War declaration vote already resolved" };
+          return {
+            success: true,
+            message: "War declaration vote already resolved",
+          };
         }
-        const targetVillage = await ctx.drizzle.query.village.findFirst({
-          columns: { name: true },
-          where: eq(village.id, voteRecord.targetId),
-        });
         await Promise.all([
           ctx.drizzle.insert(notification).values({
             userId: voteRecord.initiatedByUserId,
@@ -1493,12 +1509,15 @@ export const warRouter = createTRPCRouter({
             .set({ unreadNotifications: sql`unreadNotifications + 1` })
             .where(eq(userData.userId, voteRecord.initiatedByUserId)),
         ]);
-        return { success: true, message: "War declaration rejected by the elders" };
+        return {
+          success: true,
+          message: "War declaration rejected by the elders",
+        };
       }
 
       return {
         success: true,
-        message: `Vote recorded. Current tally: ${yesCount} YES, ${noCount} NO`,
+        message: `Vote recorded. Current tally: ${freshEntries.filter((e) => e.vote === "YES").length} YES, ${freshEntries.filter((e) => e.vote === "NO").length} NO`,
       };
     }),
 });
@@ -1656,7 +1675,9 @@ export const fetchElderVotes = async (client: DrizzleClient, villageId: string) 
     ),
     with: {
       entries: {
-        with: { user: { columns: { username: true, userId: true, avatar: true } } },
+        with: {
+          user: { columns: { username: true, userId: true, avatar: true } },
+        },
       },
       initiatedBy: { columns: { username: true, userId: true, avatar: true } },
     },
@@ -1732,9 +1753,37 @@ export const resolveElderVote = (
     // autoApprove (WAR_DECLARATION): war starts unless a majority actively blocked it
     if (autoApprove) return "APPROVED";
     // !autoApprove (KAGE_REMOVAL): removal requires a true majority, not just a plurality
-    return yesCount >= majority ? "APPROVED" : "REJECTED";
+    return "REJECTED";
   }
   return "PENDING";
+};
+
+/**
+ * Insert an elder vote entry, re-fetch the fresh entry list, and resolve the
+ * current outcome. Returns null when the user has already voted (duplicate).
+ */
+export const castElderVoteEntry = async (
+  client: DrizzleClient,
+  voteId: string,
+  userId: string,
+  vote: "YES" | "NO",
+  elderCount: number,
+): Promise<{
+  outcome: "APPROVED" | "REJECTED" | "PENDING";
+  freshEntries: NonNullable<Awaited<ReturnType<typeof fetchElderVote>>>["entries"];
+} | null> => {
+  const insertResult = await client
+    .insert(villageElderVoteEntry)
+    .values({ id: nanoid(), voteId, userId, vote })
+    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+  if (!insertResult.rowsAffected) return null;
+
+  const freshVote = await fetchElderVote(client, voteId);
+  const freshEntries = freshVote?.entries ?? [];
+  const yesCount = freshEntries.filter((e) => e.vote === "YES").length;
+  const noCount = freshEntries.filter((e) => e.vote === "NO").length;
+  const outcome = resolveElderVote(yesCount, noCount, elderCount);
+  return { outcome, freshEntries };
 };
 
 /**
