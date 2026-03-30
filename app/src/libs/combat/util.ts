@@ -1101,9 +1101,8 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
         : val.lifesteal_hp;
     }
     if (val.vampRatio) {
-      current.vampRatio = current.vampRatio
-        ? current.vampRatio + val.vampRatio
-        : val.vampRatio;
+      current.vampRatio = (current.vampRatio ?? 0) + val.vampRatio;
+      current.vampHeal = (current.vampHeal ?? 0) + val.vampRatio * (val.damage ?? 0);
     }
     if (val.preShieldDamage) {
       current.preShieldDamage = current.preShieldDamage
@@ -1150,6 +1149,9 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
       current.wound = current.wound ? current.wound + val.wound : val.wound;
     }
   } else {
+    if (val.vampRatio) {
+      val.vampHeal = (val.vampHeal ?? 0) + val.vampRatio * (val.damage ?? 0);
+    }
     acc.push(val);
   }
   return acc;

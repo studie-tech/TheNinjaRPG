@@ -642,17 +642,15 @@ export const applyEffects = (
           });
           // Vamp: heal the attacker based on the final damage dealt (post-boost, post-shield).
           // Intentional: this can trigger on killing blows (no target.curHealth > 0 guard).
-          if (c.vampRatio && c.vampRatio > 0 && c.damage > 0 && user.curHealth > 0) {
-            const preShieldDamage = c.preShieldDamage ?? c.damage;
+          const rawVampHeal = c.vampHeal ?? (c.vampRatio ?? 0) * (c.damage ?? 0);
+          if (rawVampHeal > 0 && user.curHealth > 0) {
+            const preShieldDamage = c.preShieldDamage ?? c.damage ?? 0;
             const maxVamp = preShieldDamage * 0.6;
-            const vampHeal = Math.min(
-              Math.floor(c.damage * c.vampRatio),
-              Math.floor(maxVamp),
-            );
+            const vampHeal = Math.min(Math.floor(rawVampHeal), Math.floor(maxVamp));
             if (vampHeal > 0) {
               user.curHealth = Math.min(user.maxHealth, user.curHealth + vampHeal);
               actionEffects.push({
-                txt: `${user.username} vamps ${vampHeal.toFixed(2)} damage as health`,
+                txt: `${user.username} vamps ${vampHeal} damage as health`,
                 color: "green",
               });
             }
@@ -770,7 +768,10 @@ export const applyEffects = (
             color: "red",
           });
         }
+        // Vamp and lifesteal are mutually exclusive: if vamp drained this packet, suppress lifesteal.
         if (
+          (c.vampRatio === undefined || c.vampRatio <= 0) &&
+          (c.vampHeal === undefined || c.vampHeal <= 0) &&
           c.lifesteal_hp !== undefined &&
           c.lifesteal_hp >= 0 &&
           target.curHealth > 0 &&
