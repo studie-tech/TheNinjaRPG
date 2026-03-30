@@ -1101,7 +1101,6 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
         : val.lifesteal_hp;
     }
     if (val.vampRatio) {
-      current.vampRatio = (current.vampRatio ?? 0) + val.vampRatio;
       current.vampHeal = (current.vampHeal ?? 0) + val.vampRatio * (val.damage ?? 0);
     }
     if (val.preShieldDamage) {
