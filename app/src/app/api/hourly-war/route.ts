@@ -470,10 +470,20 @@ async function processExpiredElderVotes() {
         }),
       ]);
       if (!attackerVillage || attackerVillage.tokens < WAR_DECLARATION_COST) {
-        await drizzleDB
-          .update(villageElderVote)
-          .set({ status: "REJECTED" })
-          .where(eq(villageElderVote.id, vote.id));
+        await Promise.all([
+          drizzleDB
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, vote.id)),
+          drizzleDB.insert(notification).values({
+            userId: vote.initiatedByUserId,
+            content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — village no longer has enough tokens.`,
+          }),
+          drizzleDB
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(eq(userData.userId, vote.initiatedByUserId)),
+        ]);
         continue;
       }
 
@@ -489,10 +499,20 @@ async function processExpiredElderVotes() {
           "WAR_RAID",
         ])
       ) {
-        await drizzleDB
-          .update(villageElderVote)
-          .set({ status: "REJECTED" })
-          .where(eq(villageElderVote.id, vote.id));
+        await Promise.all([
+          drizzleDB
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, vote.id)),
+          drizzleDB.insert(notification).values({
+            userId: vote.initiatedByUserId,
+            content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — a village is already involved in an active war.`,
+          }),
+          drizzleDB
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(eq(userData.userId, vote.initiatedByUserId)),
+        ]);
         continue;
       }
 
@@ -507,10 +527,20 @@ async function processExpiredElderVotes() {
           ),
         );
       if (tokenResult.rowsAffected === 0) {
-        await drizzleDB
-          .update(villageElderVote)
-          .set({ status: "REJECTED" })
-          .where(eq(villageElderVote.id, vote.id));
+        await Promise.all([
+          drizzleDB
+            .update(villageElderVote)
+            .set({ status: "REJECTED" })
+            .where(eq(villageElderVote.id, vote.id)),
+          drizzleDB.insert(notification).values({
+            userId: vote.initiatedByUserId,
+            content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — the village no longer has enough tokens.`,
+          }),
+          drizzleDB
+            .update(userData)
+            .set({ unreadNotifications: sql`unreadNotifications + 1` })
+            .where(eq(userData.userId, vote.initiatedByUserId)),
+        ]);
         continue;
       }
       const warId = crypto.randomUUID();

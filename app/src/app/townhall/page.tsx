@@ -185,6 +185,8 @@ const ElderHall: React.FC<{
   const eldersExcludingKage = elders?.filter((e) => e.userId !== kageId);
   const removalQuorum =
     Math.floor((eldersExcludingKage?.length ?? ELDER_MIN_VOTING_COUNT) / 2) + 1;
+  const hasMinimumRemovalElders =
+    (eldersExcludingKage?.length ?? 0) >= ELDER_MIN_VOTING_COUNT;
 
   // 4-day lock check: elders can only initiate removal after the kage has been in power for 4 days
   const leaderUpdatedAt = villageData?.villageData.leaderUpdatedAt;
@@ -470,7 +472,7 @@ const ElderHall: React.FC<{
                     {KAGE_ELDER_REMOVAL_LOCK_SECS / (24 * 3600)} days after a new kage
                     takes power.
                   </p>
-                ) : (
+                ) : hasMinimumRemovalElders ? (
                   <>
                     <p className="mb-3 text-muted-foreground text-sm">
                       If {removalQuorum} elders vote YES within{" "}
@@ -495,6 +497,11 @@ const ElderHall: React.FC<{
                       village prestige reset to 0.
                     </Confirm2>
                   </>
+                ) : (
+                  <p className="text-muted-foreground text-sm">
+                    At least {ELDER_MIN_VOTING_COUNT} eligible elders are required to
+                    initiate a kage removal vote.
+                  </p>
                 )}
               </div>
             )}

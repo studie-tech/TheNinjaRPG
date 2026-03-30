@@ -1402,7 +1402,7 @@ export const warRouter = createTRPCRouter({
           await Promise.all([
             ctx.drizzle
               .update(villageElderVote)
-              .set({ status: "REJECTED" })
+              .set({ status: "REJECTED", endsAt: new Date() })
               .where(eq(villageElderVote.id, input.voteId)),
             ctx.drizzle.insert(notification).values({
               userId: voteRecord.initiatedByUserId,

@@ -851,22 +851,37 @@ export const kageRouter = createTRPCRouter({
           `At least ${ELDER_MIN_VOTING_COUNT} elders are required for a vote`,
         );
 
-      // Insert vote entry, re-fetch fresh entries, resolve outcome — in parallel
-      // with fetching the replacement elder (independent of the vote insert)
-      const [voteResult, replacement] = await Promise.all([
-        castElderVoteEntry(
-          ctx.drizzle,
-          input.voteId,
-          user.userId,
-          input.vote,
-          elderCount,
-        ),
-        fetchKageReplacement(ctx.drizzle, user.villageId, voteRecord.targetId),
-      ]);
+      // Insert vote entry, re-fetch fresh entries, and resolve outcome
+      const voteResult = await castElderVoteEntry(
+        ctx.drizzle,
+        input.voteId,
+        user.userId,
+        input.vote,
+        elderCount,
+      );
       if (!voteResult) return errorResponse("You have already voted");
       const { outcome, freshEntries } = voteResult;
 
       if (outcome === "APPROVED") {
+        // Atomically claim the motion first — only one concurrent request proceeds to side effects
+        const claimResult = await ctx.drizzle
+          .update(villageElderVote)
+          .set({ status: "APPROVED" })
+          .where(
+            and(
+              eq(villageElderVote.id, input.voteId),
+              eq(villageElderVote.status, "PENDING"),
+            ),
+          );
+        if (claimResult.rowsAffected === 0) {
+          return errorResponse("Vote already processed");
+        }
+
+        const replacement = await fetchKageReplacement(
+          ctx.drizzle,
+          user.villageId,
+          voteRecord.targetId,
+        );
         if (!replacement) {
           // Revert only if we own the APPROVED state (safe conditional revert)
           await ctx.drizzle
@@ -880,30 +895,16 @@ export const kageRouter = createTRPCRouter({
             );
           return errorResponse("No eligible replacement elder found");
         }
-        // Atomically claim the motion first — only one concurrent request proceeds to side effects
-        const [claimResult, villageUpdateResult] = await Promise.all([
-          ctx.drizzle
-            .update(villageElderVote)
-            .set({ status: "APPROVED" })
-            .where(
-              and(
-                eq(villageElderVote.id, input.voteId),
-                eq(villageElderVote.status, "PENDING"),
-              ),
+
+        const villageUpdateResult = await ctx.drizzle
+          .update(village)
+          .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
+          .where(
+            and(
+              eq(village.id, user.villageId),
+              eq(village.kageId, voteRecord.targetId),
             ),
-          ctx.drizzle
-            .update(village)
-            .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
-            .where(
-              and(
-                eq(village.id, user.villageId),
-                eq(village.kageId, voteRecord.targetId),
-              ),
-            ),
-        ]);
-        if (claimResult.rowsAffected === 0) {
-          return errorResponse("Vote already processed");
-        }
+          );
         if (villageUpdateResult.rowsAffected === 0) {
           // Kage already changed via another path — revert our APPROVED claim
           await ctx.drizzle
