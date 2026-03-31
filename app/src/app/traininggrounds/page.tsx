@@ -82,6 +82,7 @@ import {
   calcJutsuTrainCost,
   calcJutsuTrainTime,
   canTrainJutsu,
+  canUseJutsu,
   checkJutsuBloodline,
   checkJutsuRank,
   checkJutsuVillage,
@@ -99,6 +100,9 @@ import { useRequireInVillage } from "@/utils/UserContext";
 import type { CaptchaVerifySchema } from "@/validators/misc";
 import { captchaVerifySchema } from "@/validators/misc";
 import { getSearchValidator } from "@/validators/register";
+
+const getJutsuLevelCap = (jutsu: { parentJutsuId?: string | null }) =>
+  jutsu.parentJutsuId ? JUTSU_TRAIN_LEVEL_CAP : JUTSU_LEVEL_CAP;
 
 export default function Training() {
   // Ensure user is in village
@@ -716,12 +720,10 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
 
-  // Collect all ancestor jutsu IDs that the user has evolved past (up to 3 levels deep)
-  // parentJutsuParentId (grandparent) is included in the user jutsu data from the server
+  // Collect all ancestor jutsu IDs that the user has evolved past
   const evolvedAncestorIds = new Set<string>();
   for (const uj of allUserJutsus ?? []) {
-    if (uj.jutsu.parentJutsuId) evolvedAncestorIds.add(uj.jutsu.parentJutsuId);
-    if (uj.parentJutsuParentId) evolvedAncestorIds.add(uj.parentJutsuParentId);
+    for (const id of uj.ancestorIds) evolvedAncestorIds.add(id);
   }
 
   // Filtering jutsus
@@ -729,7 +731,10 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     .flatMap((page) => page.data)
     .filter((j) => {
       if (j.parentJutsuId)
-        return allUserJutsus?.some((uj) => uj.jutsuId === j.id) ?? false;
+        return (
+          canUseJutsu(j, userData) &&
+          (allUserJutsus?.some((uj) => uj.jutsuId === j.id) ?? false)
+        );
       return canTrainJutsu(j, userData);
     })
     .filter((j) => !evolvedAncestorIds.has(j.id))
@@ -741,9 +746,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);
       return { ...j, level: uj?.level || 0 };
     })
-    .filter(
-      (j) => j.level < (j.parentJutsuId ? JUTSU_TRAIN_LEVEL_CAP : JUTSU_LEVEL_CAP),
-    )
+    .filter((j) => j.level < getJutsuLevelCap(j))
     .sort((a, b) => b.level - a.level);
 
   // Training time
@@ -763,8 +766,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const okVillage = checkJutsuVillage(jutsu, userData);
   const okBloodline = checkJutsuBloodline(jutsu, userData);
   const canAfford = userData && cost && userData.money >= cost;
-  const isCapped =
-    level >= (jutsu?.parentJutsuId ? JUTSU_TRAIN_LEVEL_CAP : JUTSU_LEVEL_CAP);
+  const isCapped = level >= (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
   const canTrain = okRank && okVillage && okBloodline && !isCapped && canAfford;
 
   // Label for proceed button

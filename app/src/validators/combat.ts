@@ -1155,6 +1155,16 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
 /**
  * Jutsu Type. Used for validating a jutsu object is set up properly
  */
+const makeCappedNullableNumber = (max: number) =>
+  z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((v) => v || null);
+
 export const JutsuValidatorRawSchema = z.object({
   name: z.string().trim(),
   image: z.string(),
@@ -1189,102 +1199,18 @@ export const JutsuValidatorRawSchema = z.object({
     .nullable()
     .optional()
     .transform((v) => (v === "" ? null : v) ?? null),
-  requiredNinjutsuOffence: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_STATS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredNinjutsuDefence: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_STATS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredGenjutsuOffence: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_STATS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredGenjutsuDefence: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_STATS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredTaijutsuOffence: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_STATS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredTaijutsuDefence: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_STATS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredBukijutsuOffence: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_STATS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredBukijutsuDefence: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_STATS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredStrength: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_GENS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredSpeed: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_GENS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredIntelligence: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_GENS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
-  requiredWillpower: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_GENS_CAP)
-    .nullable()
-    .optional()
-    .transform((v) => v || null),
+  requiredNinjutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredNinjutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredGenjutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredGenjutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredTaijutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredTaijutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredBukijutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredBukijutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredStrength: makeCappedNullableNumber(MAX_GENS_CAP),
+  requiredSpeed: makeCappedNullableNumber(MAX_GENS_CAP),
+  requiredIntelligence: makeCappedNullableNumber(MAX_GENS_CAP),
+  requiredWillpower: makeCappedNullableNumber(MAX_GENS_CAP),
 });
 
 // Final validator with additional cross-field checks

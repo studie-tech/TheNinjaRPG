@@ -1715,6 +1715,10 @@ export const fetchUserJutsus = async (
     activeReskin: result.JutsuReskin,
     // Grandparent ID — allows frontend to walk the full ancestor chain
     parentJutsuParentId: result.parentJutsu?.parentJutsuId ?? null,
+    ancestorIds: [
+      result.Jutsu.parentJutsuId,
+      result.parentJutsu?.parentJutsuId ?? null,
+    ].filter((id): id is string => !!id),
   }));
   // Then map to reskinned format
   return unskinnedUserJutsus.map((userjutsu) => getReskinnedUserJutsu(userjutsu));
