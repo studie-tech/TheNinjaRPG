@@ -732,89 +732,95 @@ export default function MyJutsu() {
                     )}
                   {availableEvolutions &&
                     availableEvolutions.length > 0 &&
-                    availableEvolutions.map((evo) => (
-                      <Confirm2
-                        key={evo.id}
-                        title={`Evolve to ${evo.name}`}
-                        button={
-                          <Button
-                            id={`evolve-${evo.id}`}
-                            variant="secondary"
-                            disabled={
-                              isPending ||
-                              !userData ||
-                              userjutsu.level < JUTSU_TRAIN_LEVEL_CAP ||
-                              !canEvolveJutsu(evo, userData) ||
-                              !hasRequiredRank(userData.rank, evo.requiredRank) ||
-                              !hasRequiredLevel(userData.level, evo.requiredLevel)
-                            }
-                          >
-                            <CircleFadingArrowUp className="h-6 w-6 sm:mr-2" />
-                            <p className="hidden sm:block">Evolve</p>
-                          </Button>
-                        }
-                        onAccept={(e) => {
-                          e.preventDefault();
-                          evolveJutsu({
-                            userJutsuId: userjutsu.id,
-                            evolutionJutsuId: evo.id,
-                          });
-                        }}
-                      >
-                        <p>
-                          Evolve <b>{userjutsu.jutsu.name}</b> into <b>{evo.name}</b>?
-                        </p>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          This will replace your current jutsu. The evolved jutsu starts
-                          at level 1 and can be trained to level {JUTSU_TRAIN_LEVEL_CAP}
-                          .
-                        </p>
-                        {userjutsu.level < JUTSU_TRAIN_LEVEL_CAP && (
-                          <p className="text-sm text-destructive">
-                            Required Jutsu Level: <b>{JUTSU_TRAIN_LEVEL_CAP}</b>{" "}
-                            (current: {userjutsu.level})
+                    availableEvolutions.map((evo) => {
+                      const effectiveLevel =
+                        userjutsu.finishTraining && userjutsu.finishTraining > now
+                          ? userjutsu.level - 1
+                          : userjutsu.level;
+                      return (
+                        <Confirm2
+                          key={evo.id}
+                          title={`Evolve to ${evo.name}`}
+                          button={
+                            <Button
+                              id={`evolve-${evo.id}`}
+                              variant="secondary"
+                              disabled={
+                                isPending ||
+                                !userData ||
+                                effectiveLevel < JUTSU_TRAIN_LEVEL_CAP ||
+                                !canEvolveJutsu(evo, userData) ||
+                                !hasRequiredRank(userData.rank, evo.requiredRank) ||
+                                !hasRequiredLevel(userData.level, evo.requiredLevel)
+                              }
+                            >
+                              <CircleFadingArrowUp className="h-6 w-6 sm:mr-2" />
+                              <p className="hidden sm:block">Evolve</p>
+                            </Button>
+                          }
+                          onAccept={(e) => {
+                            e.preventDefault();
+                            evolveJutsu({
+                              userJutsuId: userjutsu.id,
+                              evolutionJutsuId: evo.id,
+                            });
+                          }}
+                        >
+                          <p>
+                            Evolve <b>{userjutsu.jutsu.name}</b> into <b>{evo.name}</b>?
                           </p>
-                        )}
-                        {evo.requiredRank && (
-                          <p className="text-sm">
-                            Required Rank:{" "}
-                            <b>
-                              {showUserRank({
-                                rank: evo.requiredRank,
-                                isOutlaw: userData?.isOutlaw,
-                              })}
-                            </b>
+                          <p className="mt-2 text-muted-foreground text-sm">
+                            This will replace your current jutsu. The evolved jutsu
+                            starts at level 1 and can be trained to level{" "}
+                            {JUTSU_TRAIN_LEVEL_CAP}.
                           </p>
-                        )}
-                        {evo.requiredLevel > 1 && (
-                          <p className="text-sm">
-                            Required Level: <b>{evo.requiredLevel}</b>
-                          </p>
-                        )}
-                        {(
-                          [
-                            ["requiredNinjutsuOffence", "Ninjutsu Offence"],
-                            ["requiredNinjutsuDefence", "Ninjutsu Defence"],
-                            ["requiredTaijutsuOffence", "Taijutsu Offence"],
-                            ["requiredTaijutsuDefence", "Taijutsu Defence"],
-                            ["requiredGenjutsuOffence", "Genjutsu Offence"],
-                            ["requiredGenjutsuDefence", "Genjutsu Defence"],
-                            ["requiredBukijutsuOffence", "Bukijutsu Offence"],
-                            ["requiredBukijutsuDefence", "Bukijutsu Defence"],
-                            ["requiredStrength", "Strength"],
-                            ["requiredSpeed", "Speed"],
-                            ["requiredIntelligence", "Intelligence"],
-                            ["requiredWillpower", "Willpower"],
-                          ] as const
-                        )
-                          .filter(([key]) => evo[key] != null)
-                          .map(([key, label]) => (
-                            <p key={key} className="text-sm">
-                              Required {label}: <b>{evo[key]}</b>
+                          {effectiveLevel < JUTSU_TRAIN_LEVEL_CAP && (
+                            <p className="text-destructive text-sm">
+                              Required Jutsu Level: <b>{JUTSU_TRAIN_LEVEL_CAP}</b>{" "}
+                              (current: {effectiveLevel})
                             </p>
-                          ))}
-                      </Confirm2>
-                    ))}
+                          )}
+                          {evo.requiredRank && (
+                            <p className="text-sm">
+                              Required Rank:{" "}
+                              <b>
+                                {showUserRank({
+                                  rank: evo.requiredRank,
+                                  isOutlaw: userData?.isOutlaw,
+                                })}
+                              </b>
+                            </p>
+                          )}
+                          {evo.requiredLevel > 1 && (
+                            <p className="text-sm">
+                              Required Level: <b>{evo.requiredLevel}</b>
+                            </p>
+                          )}
+                          {(
+                            [
+                              ["requiredNinjutsuOffence", "Ninjutsu Offence"],
+                              ["requiredNinjutsuDefence", "Ninjutsu Defence"],
+                              ["requiredTaijutsuOffence", "Taijutsu Offence"],
+                              ["requiredTaijutsuDefence", "Taijutsu Defence"],
+                              ["requiredGenjutsuOffence", "Genjutsu Offence"],
+                              ["requiredGenjutsuDefence", "Genjutsu Defence"],
+                              ["requiredBukijutsuOffence", "Bukijutsu Offence"],
+                              ["requiredBukijutsuDefence", "Bukijutsu Defence"],
+                              ["requiredStrength", "Strength"],
+                              ["requiredSpeed", "Speed"],
+                              ["requiredIntelligence", "Intelligence"],
+                              ["requiredWillpower", "Willpower"],
+                            ] as const
+                          )
+                            .filter(([key]) => evo[key] != null)
+                            .map(([key, label]) => (
+                              <p key={key} className="text-sm">
+                                Required {label}: <b>{evo[key]}</b>
+                              </p>
+                            ))}
+                        </Confirm2>
+                      );
+                    })}
                   {userjutsu.activeReskin ? (
                     <Confirm2
                       title="Remove Reskin"

@@ -158,7 +158,7 @@ import {
 import { toDefenceStat, toOffenceStat } from "@/libs/stats";
 import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
-import { canTrainJutsu, checkJutsuItems } from "@/libs/train";
+import { canUseJutsu, checkJutsuItems } from "@/libs/train";
 import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
 import { findWarsWithUser } from "@/libs/war";
 import { fetchAiProfileById } from "@/routers/ai";
@@ -2613,17 +2613,13 @@ export const processUsersForBattle = async (
           if (!checkJutsuItems(userjutsu.jutsu, user.items) && !user.isAi) {
             return false;
           }
-          // Provide defaults for optional fields required by canTrainJutsu
+          // Provide defaults for optional fields required by canUseJutsu
           const userForCheck = {
             ...user,
             userQuests: user.userQuests ?? [],
             completedQuests: user.completedQuests ?? [],
           };
-          if (
-            !userjutsu.jutsu.parentJutsuId &&
-            !canTrainJutsu(userjutsu.jutsu, userForCheck) &&
-            !user.isAi
-          ) {
+          if (!canUseJutsu(userjutsu.jutsu, userForCheck) && !user.isAi) {
             return false;
           }
         }

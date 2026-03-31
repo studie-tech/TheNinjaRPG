@@ -13,6 +13,7 @@ import {
   ItemTypes,
   JutsuTypes,
   LetterRanks,
+  MAX_GENS_CAP,
   MAX_STATS_CAP,
   PoolTypes,
   SkillTreeEntryTypes,
@@ -1256,7 +1257,7 @@ export const JutsuValidatorRawSchema = z.object({
     .number()
     .int()
     .min(0)
-    .max(MAX_STATS_CAP)
+    .max(MAX_GENS_CAP)
     .nullable()
     .optional()
     .transform((v) => v || null),
@@ -1264,7 +1265,7 @@ export const JutsuValidatorRawSchema = z.object({
     .number()
     .int()
     .min(0)
-    .max(MAX_STATS_CAP)
+    .max(MAX_GENS_CAP)
     .nullable()
     .optional()
     .transform((v) => v || null),
@@ -1272,7 +1273,7 @@ export const JutsuValidatorRawSchema = z.object({
     .number()
     .int()
     .min(0)
-    .max(MAX_STATS_CAP)
+    .max(MAX_GENS_CAP)
     .nullable()
     .optional()
     .transform((v) => v || null),
@@ -1280,7 +1281,7 @@ export const JutsuValidatorRawSchema = z.object({
     .number()
     .int()
     .min(0)
-    .max(MAX_STATS_CAP)
+    .max(MAX_GENS_CAP)
     .nullable()
     .optional()
     .transform((v) => v || null),

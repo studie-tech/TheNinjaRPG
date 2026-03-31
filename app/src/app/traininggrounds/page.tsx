@@ -729,7 +729,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     .flatMap((page) => page.data)
     .filter((j) => {
       if (j.parentJutsuId)
-        return userJutsus?.some((uj) => uj.jutsuId === j.id) ?? false;
+        return allUserJutsus?.some((uj) => uj.jutsuId === j.id) ?? false;
       return canTrainJutsu(j, userData);
     })
     .filter((j) => !evolvedAncestorIds.has(j.id))

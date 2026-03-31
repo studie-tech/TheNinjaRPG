@@ -71,6 +71,8 @@ import type { ZodAllTags } from "@/validators/combat";
 import { JutsuValidator } from "@/validators/combat";
 import type { JutsuFilteringSchema } from "@/validators/jutsu";
 import {
+  evolveJutsuSchema,
+  getEvolutionsSchema,
   jutsuFilteringSchema,
   jutsuReskinCreateSchema,
   jutsuReskinUpdateSchema,
@@ -438,39 +440,35 @@ export const jutsuRouter = createTRPCRouter({
         description: "Get all evolution jutsus for a parent jutsu",
       },
     })
-    .input(z.object({ jutsuId: z.string() }))
+    .input(getEvolutionsSchema)
     .query(async ({ ctx, input }) => {
-      const user = ctx.userId
-        ? await ctx.drizzle.query.userData.findFirst({
-            where: eq(userData.userId, ctx.userId),
-            columns: { role: true },
-          })
-        : null;
-      const showHidden = user && canChangeContent(user.role);
-      return await ctx.drizzle.query.jutsu.findMany({
-        where: and(
-          eq(jutsu.parentJutsuId, input.jutsuId),
-          ...(showHidden ? [] : [eq(jutsu.hidden, false)]),
-        ),
-        orderBy: (table, { asc }) => [asc(table.requiredLevel)],
-      });
+      const [user, evolutions] = await Promise.all([
+        ctx.userId
+          ? ctx.drizzle.query.userData.findFirst({
+              where: eq(userData.userId, ctx.userId),
+              columns: { role: true },
+            })
+          : Promise.resolve(null),
+        ctx.drizzle.query.jutsu.findMany({
+          where: eq(jutsu.parentJutsuId, input.jutsuId),
+          orderBy: (table, { asc }) => [asc(table.requiredLevel)],
+        }),
+      ]);
+      const canViewHidden = !!user && canChangeContent(user.role);
+      return evolutions.filter((evolution) => !evolution.hidden || canViewHidden);
     }),
 
   evolveJutsu: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Evolve a jutsu into its evolution" } })
-    .input(
-      z.object({
-        userJutsuId: z.string(),
-        evolutionJutsuId: z.string(),
-      }),
-    )
+    .input(evolveJutsuSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user }, userJutsus, evolutionJutsu] = await Promise.all([
+      const [{ user }, userJutsus, evolutionJutsu, allLoadouts] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchJutsu(ctx.drizzle, input.evolutionJutsuId),
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
       ]);
       // Guards
       if (!user) return errorResponse("User not found");
@@ -506,7 +504,7 @@ export const jutsuRouter = createTRPCRouter({
         { task: "jutsus_mastered", increment: 1 },
       ]);
       // Mutate: compare-and-swap on jutsuId to prevent double-evolve on retry/double-submit.
-      // reskinId is intentionally kept — fetchUserJutsus joins on reskinId (not jutsuReskin.jutsuId)
+      // reskinId is intentionally kept - fetchUserJutsus joins on reskinId (not jutsuReskin.jutsuId)
       // so the cosmetic reskin carries over to the evolved jutsu without touching the reskin record.
       const evolveResult = await ctx.drizzle
         .update(userJutsu)
@@ -525,31 +523,59 @@ export const jutsuRouter = createTRPCRouter({
           ),
         );
       if (evolveResult.rowsAffected === 0)
-        return errorResponse("Evolution failed — jutsu may have already been evolved");
-      // Replace old jutsu ID with evolved ID across all user loadouts
+        return errorResponse("Evolution failed - jutsu may have already been evolved");
+      const isRestrictedEquipType =
+        evolutionJutsu.jutsuType === "EVENT" ||
+        evolutionJutsu.effects.some((effect) => effect.type === "pierce") ||
+        evolutionJutsu.effects.some((effect) => effect.type === "barrier") ||
+        evolutionJutsu.effects.some((effect) => effect.type === "stun") ||
+        evolutionJutsu.effects.some(
+          (effect) => "residualModifier" in effect && effect.residualModifier,
+        );
+      // Replace old jutsu ID with evolved ID across all user loadouts.
+      // Restricted equip types are force-unequipped post-evolution to avoid cap overflows.
       const oldJutsuId = userJutsuObj.jutsu.id;
-      const allLoadouts = await ctx.drizzle.query.jutsuLoadout.findMany({
-        where: eq(jutsuLoadout.userId, ctx.userId),
-      });
       const loadoutsToUpdate = allLoadouts
-        .filter((l) => l.jutsuIds.includes(oldJutsuId))
-        .map((l) => ({
-          id: l.id,
-          jutsuIds: l.jutsuIds.map((id) =>
-            id === oldJutsuId ? input.evolutionJutsuId : id,
-          ),
+        .filter(
+          (loadout) =>
+            loadout.jutsuIds.includes(oldJutsuId) ||
+            (isRestrictedEquipType &&
+              loadout.jutsuIds.includes(input.evolutionJutsuId)),
+        )
+        .map((loadout) => ({
+          id: loadout.id,
+          jutsuIds: isRestrictedEquipType
+            ? loadout.jutsuIds.filter(
+                (id) => id !== oldJutsuId && id !== input.evolutionJutsuId,
+              )
+            : loadout.jutsuIds.map((id) =>
+                id === oldJutsuId ? input.evolutionJutsuId : id,
+              ),
         }));
       await Promise.all([
         ctx.drizzle
           .update(userData)
           .set({ questData: trackers })
           .where(eq(userData.userId, ctx.userId)),
-        ...loadoutsToUpdate.map((l) =>
+        ...loadoutsToUpdate.map((loadout) =>
           ctx.drizzle
             .update(jutsuLoadout)
-            .set({ jutsuIds: l.jutsuIds })
-            .where(eq(jutsuLoadout.id, l.id)),
+            .set({ jutsuIds: loadout.jutsuIds })
+            .where(eq(jutsuLoadout.id, loadout.id)),
         ),
+        ...(isRestrictedEquipType
+          ? [
+              ctx.drizzle
+                .update(userJutsu)
+                .set({ equipped: false })
+                .where(
+                  and(
+                    eq(userJutsu.id, input.userJutsuId),
+                    eq(userJutsu.userId, ctx.userId),
+                  ),
+                ),
+            ]
+          : []),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
@@ -617,15 +643,24 @@ export const jutsuRouter = createTRPCRouter({
           "At least one effect must have both appearAnimation and appearSfx defined",
         );
       }
+      if (input.data.jutsuType === "AI" && input.data.parentJutsuId) {
+        return errorResponse("AI jutsus cannot be evolutions");
+      }
+      if (input.data.jutsuType === "AI" && relations.childEvolutions.length > 0) {
+        return errorResponse("AI jutsus cannot have evolution children");
+      }
       // Validate evolution chain constraints
       if (input.data.parentJutsuId) {
         if (input.data.parentJutsuId === input.id)
           return errorResponse("A jutsu cannot be its own parent");
-        const [parent, siblings] = await Promise.all([
+        const [parent, siblings, evolutionGraph] = await Promise.all([
           fetchJutsu(ctx.drizzle, input.data.parentJutsuId),
           ctx.drizzle.query.jutsu.findMany({
             columns: { id: true },
             where: eq(jutsu.parentJutsuId, input.data.parentJutsuId),
+          }),
+          ctx.drizzle.query.jutsu.findMany({
+            columns: { id: true, parentJutsuId: true },
           }),
         ]);
         if (!parent) return errorResponse("Parent jutsu not found");
@@ -635,31 +670,37 @@ export const jutsuRouter = createTRPCRouter({
         const siblingCount = siblings.filter((s) => s.id !== input.id).length;
         if (siblingCount >= 3)
           return errorResponse("A jutsu can have a maximum of 3 evolutions");
-        // Validate chain depth (max 3 levels: A → B → C).
+        // Validate chain depth (max 3 levels: A -> B -> C).
+        const jutsuById = new Map(
+          evolutionGraph.map((node) => [node.id, node] as const),
+        );
         // Walk upward from parent to get ancestor depth, checking for circular refs.
         let ancestorDepth = 1;
-        let ancestorNode: typeof parent | undefined = parent;
-        while (ancestorNode.parentJutsuId) {
-          if (ancestorNode.parentJutsuId === input.id)
+        let ancestorParentId = parent.parentJutsuId;
+        while (ancestorParentId) {
+          if (ancestorParentId === input.id)
             return errorResponse("Cannot create a circular evolution chain");
-          const nextAncestor = await fetchJutsu(
-            ctx.drizzle,
-            ancestorNode.parentJutsuId,
-          );
+          const nextAncestor = jutsuById.get(ancestorParentId);
           if (!nextAncestor) break;
-          ancestorNode = nextAncestor;
+          ancestorParentId = nextAncestor.parentJutsuId;
           ancestorDepth++;
         }
         // Walk downward from input.id to get the deepest descendant depth.
+        const childrenByParent = new Map<string, string[]>();
+        for (const node of evolutionGraph) {
+          if (!node.parentJutsuId) continue;
+          const children = childrenByParent.get(node.parentJutsuId) ?? [];
+          children.push(node.id);
+          childrenByParent.set(node.parentJutsuId, children);
+        }
         let descendantDepth = 1;
         let frontier = [input.id];
-        while (true) {
-          const children = await ctx.drizzle.query.jutsu.findMany({
-            columns: { id: true },
-            where: inArray(jutsu.parentJutsuId, frontier),
-          });
-          if (children.length === 0) break;
-          frontier = children.map((c) => c.id);
+        while (frontier.length > 0) {
+          const nextFrontier = frontier.flatMap(
+            (parentId) => childrenByParent.get(parentId) ?? [],
+          );
+          if (nextFrontier.length === 0) break;
+          frontier = nextFrontier;
           descendantDepth++;
         }
         if (ancestorDepth + descendantDepth > 3)

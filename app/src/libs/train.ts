@@ -233,9 +233,13 @@ export const canTrainJutsu = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
 ) => {
+  if (isJutsuEvolution(jutsu)) return false;
+  return canUseJutsu(jutsu, userdata);
+};
+
+export const canUseJutsu = (jutsu: Jutsu, userdata: NonNullable<UserWithRelations>) => {
   const userElements = new Set(getUserElements(userdata));
   if (userdata.isAi) return true;
-  if (isJutsuEvolution(jutsu)) return false;
   return (
     hasRequiredRank(userdata.rank, jutsu.requiredRank) &&
     hasRequiredLevel(userdata.level, jutsu.requiredLevel) &&

@@ -17,6 +17,15 @@ export const searchJutsuSchema = z.object({
 });
 export type SearchJutsuSchema = z.infer<typeof searchJutsuSchema>;
 
+export const getEvolutionsSchema = z.object({
+  jutsuId: z.string(),
+});
+
+export const evolveJutsuSchema = z.object({
+  userJutsuId: z.string(),
+  evolutionJutsuId: z.string(),
+});
+
 /**
  * Full filtering schema for jutsu,
  * including both "include" and "exclude" fields.
