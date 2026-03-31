@@ -874,10 +874,9 @@ export const jutsuRouter = createTRPCRouter({
 
       // Derived
       const userjutsuObj = userjutsus.find((j) => j.jutsuId === input.jutsuId);
-      const filteredJutsus = userjutsus.filter((uj) => canTrainJutsu(uj.jutsu, user));
-      const curEquip = filteredJutsus?.filter((j) => j.equipped).length || 0;
-      const maxEquip = userData && calcJutsuEquipLimit(user);
       const equippedJutsus = userjutsus.filter((uj) => uj.equipped);
+      const curEquip = equippedJutsus.length;
+      const maxEquip = userData && calcJutsuEquipLimit(user);
       const residualJutsus = equippedJutsus.filter((uj) =>
         uj.jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
       );
