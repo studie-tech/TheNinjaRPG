@@ -43,6 +43,7 @@ import {
   calcJutsuTrainTime,
   canEvolveJutsu,
   canTrainJutsu,
+  canUseJutsu,
   hasRequiredLevel,
   hasRequiredRank,
 } from "@/libs/train";
@@ -377,6 +378,7 @@ export const jutsuRouter = createTRPCRouter({
         relations.skillInjectors.length +
         relations.itemInjectors.length +
         relations.aiUsingJutsu.length +
+        relations.questsUsingJutsu.length +
         relations.childEvolutions.length;
       // Guard
       if (user.isBanned)
@@ -392,6 +394,7 @@ export const jutsuRouter = createTRPCRouter({
           ...relations.skillInjectors.map((s) => `Skill: ${s.name}`),
           ...relations.itemInjectors.map((i) => `Item: ${i.name}`),
           ...relations.aiUsingJutsu.map((a) => `AI: ${a.name}`),
+          ...relations.questsUsingJutsu.map((q) => `Quest: ${q.name}`),
           ...relations.childEvolutions.map((e) => `Evolution: ${e.name}`),
         ].join(", ");
         return errorResponse(
@@ -898,6 +901,8 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse(
           "Evolution jutsus can only be obtained by evolving the parent jutsu",
         );
+      if (info.parentJutsuId && userjutsuObj && !canUseJutsu(info, user))
+        return errorResponse("Jutsu not for you");
       if (
         userjutsus.some(
           (j) =>
@@ -1114,13 +1119,8 @@ export const jutsuRouter = createTRPCRouter({
       }
       if (!userjutsuObj) return errorResponse("Jutsu not found");
 
-      // Check if jutsu can be equipped (including bloodline check)
-      // Evolution jutsus (parentJutsuId set) bypass canTrainJutsu — they were earned via evolveJutsu
-      if (
-        !isEquipped &&
-        !userjutsuObj.jutsu.parentJutsuId &&
-        !canTrainJutsu(userjutsuObj.jutsu, user)
-      ) {
+      // Check if jutsu can be equipped
+      if (!isEquipped && !canUseJutsu(userjutsuObj.jutsu, user)) {
         return errorResponse("You cannot equip this jutsu due to missing requirements");
       }
 
@@ -1700,7 +1700,7 @@ export const fetchUserJutsus = async (
       and(
         eq(userJutsu.userId, userId),
         ne(jutsu.jutsuType, "AI"),
-        ...jutsuDatabaseFilter(input),
+        ...jutsuDatabaseFilter(input, true),
       ),
     )
     .orderBy(desc(userJutsu.level));
@@ -1726,7 +1726,10 @@ export const fetchUserJutsus = async (
 /**
  * Build the DB filtering array, including new EXCLUSIONS.
  */
-export const jutsuDatabaseFilter = (input?: JutsuFilteringSchema) => {
+export const jutsuDatabaseFilter = (
+  input?: JutsuFilteringSchema,
+  includeHidden = false,
+) => {
   return [
     // -----------------------------
     // Existing "include" conditions
@@ -1815,10 +1818,11 @@ export const jutsuDatabaseFilter = (input?: JutsuFilteringSchema) => {
       ? [eq(jutsu.actionCostPerc, input.actionCostPerc)]
       : []),
 
-    // If hidden not specified, show hidden=false
-    ...(input?.hidden !== undefined
-      ? [eq(jutsu.hidden, input.hidden)]
-      : [eq(jutsu.hidden, false)]),
+    ...(includeHidden
+      ? []
+      : input?.hidden !== undefined
+        ? [eq(jutsu.hidden, input.hidden)]
+        : [eq(jutsu.hidden, false)]),
 
     // ---------------------------
     // Exclude: Single-value cols

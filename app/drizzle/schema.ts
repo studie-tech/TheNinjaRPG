@@ -21,6 +21,7 @@ import {
   primaryKey,
   unique,
 } from "drizzle-orm/mysql-core";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import * as consts from "@/drizzle/constants";
 import { createInsertSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
@@ -1371,7 +1372,12 @@ export const jutsu = mysqlTable(
       .default("BOTH")
       .notNull(),
     // Evolution fields
-    parentJutsuId: varchar("parentJutsuId", { length: 191 }),
+    parentJutsuId: varchar("parentJutsuId", { length: 191 }).references(
+      (): AnyMySqlColumn => jutsu.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     requiredNinjutsuOffence: int("requiredNinjutsuOffence"),
     requiredNinjutsuDefence: int("requiredNinjutsuDefence"),
     requiredGenjutsuOffence: int("requiredGenjutsuOffence"),
@@ -1393,6 +1399,10 @@ export const jutsu = mysqlTable(
       villageIdIdx: index("Jutsu_villageId_idx").on(table.villageId),
       injectableIdx: index("Jutsu_injectable_idx").on(table.injectableInBattle),
       parentJutsuIdIdx: index("Jutsu_parentJutsuId_idx").on(table.parentJutsuId),
+      parentJutsuIdHiddenIdx: index("Jutsu_parentJutsuId_hidden_idx").on(
+        table.parentJutsuId,
+        table.hidden,
+      ),
     };
   },
 );

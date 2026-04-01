@@ -1163,7 +1163,7 @@ const makeCappedNullableNumber = (max: number) =>
     .max(max)
     .nullable()
     .optional()
-    .transform((v) => v || null);
+    .transform((v) => (v === null || v === undefined ? null : v));
 
 export const JutsuValidatorRawSchema = z.object({
   name: z.string().trim(),

@@ -751,7 +751,10 @@ export default function MyJutsu() {
                                 effectiveLevel < JUTSU_TRAIN_LEVEL_CAP ||
                                 !canEvolveJutsu(evo, userData) ||
                                 !hasRequiredRank(userData.rank, evo.requiredRank) ||
-                                !hasRequiredLevel(userData.level, evo.requiredLevel)
+                                !hasRequiredLevel(userData.level, evo.requiredLevel) ||
+                                !checkJutsuVillage(evo, userData) ||
+                                !checkJutsuBloodline(evo, userData) ||
+                                !checkJutsuElements(evo, userElements)
                               }
                             >
                               <CircleFadingArrowUp className="h-6 w-6 sm:mr-2" />
@@ -760,6 +763,13 @@ export default function MyJutsu() {
                           }
                           onAccept={(e) => {
                             e.preventDefault();
+                            if (!userData) return;
+                            if (
+                              !checkJutsuVillage(evo, userData) ||
+                              !checkJutsuBloodline(evo, userData) ||
+                              !checkJutsuElements(evo, userElements)
+                            )
+                              return;
                             evolveJutsu({
                               userJutsuId: userjutsu.id,
                               evolutionJutsuId: evo.id,

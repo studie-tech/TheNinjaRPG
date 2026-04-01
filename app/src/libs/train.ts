@@ -101,6 +101,8 @@ export const hasRequiredRank = (userRank?: UserRank, requiredRank?: UserRank) =>
       return ["CHUNIN", "JONIN", "ELDER", "ELITE JONIN"].includes(userRank);
     case "JONIN":
       return ["JONIN", "ELDER", "ELITE JONIN"].includes(userRank);
+    case "ELDER":
+      return ["ELDER", "ELITE JONIN"].includes(userRank);
     case "ELITE JONIN":
       return userRank === "ELITE JONIN";
   }
