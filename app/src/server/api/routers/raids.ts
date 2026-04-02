@@ -1,4 +1,17 @@
-import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  like,
+  lt,
+  lte,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -17,9 +30,11 @@ import {
   quest,
   raidDamageThreshold,
   raidParticipation,
+  rankedPvpQueue,
   sector,
   userData,
   userRaidBuff,
+  userRequest,
   war,
 } from "@/drizzle/schema";
 import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
@@ -109,7 +124,10 @@ export const raidsRouter = createTRPCRouter({
    */
   getAvailableRaids: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get available raids for current user" },
+      mcp: {
+        enabled: true,
+        description: "Get available raids for current user",
+      },
     })
     .input(z.object({ sector: z.number().optional() }).optional())
     .query(async ({ ctx, input }) => {
@@ -264,7 +282,9 @@ export const raidsRouter = createTRPCRouter({
    * Get detailed info about a specific raid
    */
   getRaidDetails: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get details for a specific raid" } })
+    .meta({
+      mcp: { enabled: true, description: "Get details for a specific raid" },
+    })
     .input(z.object({ questId: z.string() }))
     .query(async ({ ctx, input }) => {
       // Query - parallel fetch
@@ -313,7 +333,9 @@ export const raidsRouter = createTRPCRouter({
    * Get the raid leaderboard
    */
   getRaidLeaderboard: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get raid damage leaderboard" } })
+    .meta({
+      mcp: { enabled: true, description: "Get raid damage leaderboard" },
+    })
     .input(
       z.object({
         questId: z.string(),
@@ -364,7 +386,10 @@ export const raidsRouter = createTRPCRouter({
    */
   getUserRaidQueue: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get user's current raid queue status" },
+      mcp: {
+        enabled: true,
+        description: "Get user's current raid queue status",
+      },
     })
     .query(async ({ ctx }) => {
       // Query
@@ -392,6 +417,26 @@ export const raidsRouter = createTRPCRouter({
       if (!queue || queue.clanBattle?.battleType !== "RAID_BATTLE") {
         return { inQueue: false, queue: null, isClaiming: false };
       }
+
+      // Auto-cleanup if the raid has expired - user would be stuck otherwise
+      // Fetch quest explicitly here since attackerEntityId is only a quest ID for RAID_BATTLE entries
+      const raid = await ctx.drizzle.query.quest.findFirst({
+        where: eq(quest.id, queue.clanBattle.attackerEntityId),
+        columns: { raidEndsAt: true, raidBossCurrentHealth: true },
+      });
+      if (!raid) {
+        void checkAndCleanupExpiredRaid(ctx.drizzle, queue.clanBattle.attackerEntityId);
+        return { inQueue: false, queue: null, isClaiming: false };
+      }
+      const now = new Date();
+      const raidExpired =
+        (raid.raidEndsAt && raid.raidEndsAt < now) ||
+        (raid.raidBossCurrentHealth ?? 1) <= 0;
+      if (raidExpired) {
+        void checkAndCleanupExpiredRaid(ctx.drizzle, queue.clanBattle.attackerEntityId);
+        return { inQueue: false, queue: null, isClaiming: false };
+      }
+
       // Allow teams in "claiming-" state to be visible (they're stuck during battle initialization)
       const isClaimingState =
         queue.clanBattle.battleId?.startsWith("claiming-") ?? false;
@@ -418,7 +463,9 @@ export const raidsRouter = createTRPCRouter({
    * Get user's active raid buffs
    */
   getUserRaidBuffs: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's active raid buffs" } })
+    .meta({
+      mcp: { enabled: true, description: "Get user's active raid buffs" },
+    })
     .query(async ({ ctx }) => {
       // Derived
       const now = new Date();
@@ -446,7 +493,9 @@ export const raidsRouter = createTRPCRouter({
    * Get damage thresholds for a quest (admin use)
    */
   getQuestThresholds: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get damage thresholds for a raid" } })
+    .meta({
+      mcp: { enabled: true, description: "Get damage thresholds for a raid" },
+    })
     .input(z.object({ questId: z.string() }))
     .query(async ({ ctx, input }) => {
       const thresholds = await ctx.drizzle.query.raidDamageThreshold.findMany({
@@ -585,7 +634,9 @@ export const raidsRouter = createTRPCRouter({
    * Get active raid teams for a specific raid
    */
   getActiveRaidTeams: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get active teams for a raid" } })
+    .meta({
+      mcp: { enabled: true, description: "Get active teams for a raid" },
+    })
     .input(z.object({ questId: z.string() }))
     .query(async ({ ctx, input }) => {
       // Query - include teams in "claiming-" state (stuck during battle initialization)
@@ -634,10 +685,165 @@ export const raidsRouter = createTRPCRouter({
     }),
 
   /**
+   * Ready to queue - resets user status to AWAKE and clears any stuck queue entries
+   * so they can join a raid queue cleanly
+   */
+  readyToQueue: protectedProcedure
+    .use(ratelimitMiddleware)
+    .use(hasUserMiddleware)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      // Query
+      const [user, queueEntry] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.mpvpBattleUser.findFirst({
+          where: eq(mpvpBattleUser.userId, ctx.userId),
+          with: { clanBattle: { columns: { sector: true, battleType: true } } },
+        }),
+      ]);
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (user.status === "HOSPITALIZED") {
+        return errorResponse("You cannot ready up while hospitalized");
+      }
+      if (user.status === "BATTLE") {
+        return errorResponse("You cannot ready up while in an active battle");
+      }
+      if (user.status === "TRAVEL") {
+        return errorResponse("You cannot ready up while traveling");
+      }
+      if (user.status === "ASLEEP") {
+        return errorResponse("You cannot ready up while sleeping");
+      }
+      if (user.status === "KAGE_QUEUED") {
+        return errorResponse("You cannot ready up while challenging the Kage");
+      }
+      if (
+        user.status === "QUEUED" &&
+        queueEntry?.clanBattle?.battleType !== "RAID_BATTLE"
+      ) {
+        return errorResponse(
+          "You are in another battle queue. Please leave it before readying for a raid.",
+        );
+      }
+      const userId = user.userId;
+      // CAS: only transition from the status we read to avoid racing concurrent requests.
+      if (user.status !== "AWAKE") {
+        const updateResult = await ctx.drizzle
+          .update(userData)
+          .set({ status: "AWAKE", travelFinishAt: null, battleId: null })
+          .where(and(eq(userData.userId, userId), eq(userData.status, user.status)));
+        if (updateResult.rowsAffected === 0) {
+          return errorResponse(
+            "Failed to update status - your status may have changed",
+          );
+        }
+      } else {
+        // Already AWAKE: guard against clearing an active travel that hasn't finished yet.
+        const isTraveling = user.travelFinishAt && user.travelFinishAt > new Date();
+        if (isTraveling) {
+          return errorResponse("You cannot ready up while traveling");
+        }
+        // Clear any stale dirty fields. No rowsAffected check here — MySQL reports 0
+        // when the SET is a no-op (fields already null), which is indistinguishable
+        // from a concurrent status change. We already confirmed AWAKE above.
+        await ctx.drizzle
+          .update(userData)
+          .set({ travelFinishAt: null, battleId: null })
+          .where(and(eq(userData.userId, userId), eq(userData.status, "AWAKE")));
+      }
+      // Step 1: remove user from team + other independent cleanups in parallel.
+      // mpvpBattleUser must be deleted before the NOT EXISTS team-cleanup check in step 2.
+      await Promise.all([
+        // Only delete the exact mpvpBattleUser row we read — no broad userId fallback
+        ...(queueEntry
+          ? [
+              ctx.drizzle
+                .delete(mpvpBattleUser)
+                .where(
+                  and(
+                    eq(mpvpBattleUser.userId, userId),
+                    eq(mpvpBattleUser.id, queueEntry.id),
+                  ),
+                ),
+            ]
+          : []),
+        // Clear ranked PVP queue — being in it sets status to QUEUED which blocks raid joining
+        ctx.drizzle.delete(rankedPvpQueue).where(eq(rankedPvpQueue.userId, userId)),
+        // Cancel spar requests the user sent
+        ctx.drizzle
+          .update(userRequest)
+          .set({ status: "CANCELLED" })
+          .where(
+            and(
+              eq(userRequest.senderId, userId),
+              eq(userRequest.type, "SPAR"),
+              eq(userRequest.status, "PENDING"),
+            ),
+          ),
+        // Reject spar requests the user received
+        ctx.drizzle
+          .update(userRequest)
+          .set({ status: "REJECTED" })
+          .where(
+            and(
+              eq(userRequest.receiverId, userId),
+              eq(userRequest.type, "SPAR"),
+              eq(userRequest.status, "PENDING"),
+            ),
+          ),
+      ]);
+      // Step 2: team cleanup — safe to run after mpvpBattleUser row is gone.
+      // DELETE fires only when team is now empty (NOT EXISTS).
+      // UPDATE resets only stale claiming states (mirrors startRaidBattle staleness check).
+      if (queueEntry) {
+        await Promise.all([
+          ctx.drizzle
+            .delete(mpvpBattleQueue)
+            .where(
+              and(
+                eq(mpvpBattleQueue.id, queueEntry.clanBattleId),
+                eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
+                notExists(
+                  ctx.drizzle
+                    .select({ id: mpvpBattleUser.id })
+                    .from(mpvpBattleUser)
+                    .where(eq(mpvpBattleUser.clanBattleId, queueEntry.clanBattleId)),
+                ),
+              ),
+            ),
+          ctx.drizzle
+            .update(mpvpBattleQueue)
+            .set({ battleId: null })
+            .where(
+              and(
+                eq(mpvpBattleQueue.id, queueEntry.clanBattleId),
+                eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
+                like(mpvpBattleQueue.battleId, "claiming-%"),
+                lt(
+                  mpvpBattleQueue.createdAt,
+                  new Date(Date.now() - RAID_CLAIMING_TIMEOUT_MS),
+                ),
+              ),
+            ),
+        ]);
+      }
+      // Pusher - notify sector so other team members see the roster update in real-time
+      const teamSector = queueEntry?.clanBattle?.sector;
+      if (teamSector !== null && teamSector !== undefined) {
+        const pusher = getServerPusher();
+        void updateRaidTeamsOnSector(pusher, teamSector);
+      }
+      return { success: true, message: "You are ready to queue!" };
+    }),
+
+  /**
    * Join or create a raid team queue
    */
   joinRaidQueue: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Join or create a raid team queue" } })
+    .meta({
+      mcp: { enabled: true, description: "Join or create a raid team queue" },
+    })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(
@@ -978,7 +1184,9 @@ export const raidsRouter = createTRPCRouter({
    * Start a raid battle
    */
   startRaidBattle: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Start a raid battle with the team" } })
+    .meta({
+      mcp: { enabled: true, description: "Start a raid battle with the team" },
+    })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(z.object({ teamId: z.string() }))
@@ -1206,7 +1414,10 @@ export const raidsRouter = createTRPCRouter({
    */
   claimDamageReward: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Claim raid damage threshold rewards" },
+      mcp: {
+        enabled: true,
+        description: "Claim raid damage threshold rewards",
+      },
     })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
@@ -1407,27 +1618,77 @@ export const checkAndCleanupExpiredRaid = async (
 ): Promise<{ wasExpired: boolean; sectorCleaned: boolean }> => {
   const now = new Date();
 
+  // Match both time-expired and boss-defeated raids
   const raid = await client.query.quest.findFirst({
     where: and(
       eq(quest.id, raidId),
       eq(quest.questType, "raid"),
-      lt(quest.raidEndsAt, now),
-      gte(quest.raidBossCurrentHealth, 1), // Boss not defeated
+      or(lt(quest.raidEndsAt, now), lte(quest.raidBossCurrentHealth, 0)),
     ),
-    columns: { id: true, content: true },
+    columns: {
+      id: true,
+      content: true,
+      raidEndsAt: true,
+      raidBossCurrentHealth: true,
+    },
   });
 
   if (!raid) {
     return { wasExpired: false, sectorCleaned: false };
   }
 
-  const objective = raid.content?.objectives?.[0];
-  if (objective?.task === "exclusive_raid") {
-    const raidSector = (objective as RaidObjectiveType).sector;
-    if (raidSector !== null && raidSector !== undefined) {
-      // Delete sector - returns it to neutral ownership (syndicate)
-      const result = await client.delete(sector).where(eq(sector.sector, raidSector));
-      return { wasExpired: true, sectorCleaned: result.rowsAffected > 0 };
+  // Clean up only queued/claiming teams — skip teams already in an active battle
+  const queuedTeams = await client.query.mpvpBattleQueue.findMany({
+    where: and(
+      eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
+      eq(mpvpBattleQueue.attackerEntityId, raidId),
+      sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE 'claiming-%')`,
+    ),
+    with: { queue: { columns: { userId: true } } },
+  });
+
+  if (queuedTeams.length > 0) {
+    const teamIds = queuedTeams.map((t) => t.id);
+    const userIds = queuedTeams.flatMap((t) => t.queue.map((u) => u.userId));
+
+    await Promise.all([
+      client
+        .delete(mpvpBattleUser)
+        .where(inArray(mpvpBattleUser.clanBattleId, teamIds)),
+      client
+        .delete(mpvpBattleQueue)
+        .where(
+          and(
+            eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
+            eq(mpvpBattleQueue.attackerEntityId, raidId),
+            sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE 'claiming-%')`,
+          ),
+        ),
+      ...(userIds.length > 0
+        ? [
+            client
+              .update(userData)
+              .set({ status: "AWAKE", battleId: null })
+              .where(
+                and(eq(userData.status, "QUEUED"), inArray(userData.userId, userIds)),
+              ),
+          ]
+        : []),
+    ]);
+  }
+
+  // Sector cleanup only for time-expired exclusive raids where boss was not defeated
+  const timeExpired = raid.raidEndsAt && raid.raidEndsAt < now;
+  const bossDefeated = (raid.raidBossCurrentHealth ?? 1) <= 0;
+  if (timeExpired && !bossDefeated) {
+    const objective = raid.content?.objectives?.[0];
+    if (objective?.task === "exclusive_raid") {
+      const raidSector = (objective as RaidObjectiveType).sector;
+      if (raidSector !== null && raidSector !== undefined) {
+        // Delete sector - returns it to neutral ownership (syndicate)
+        const result = await client.delete(sector).where(eq(sector.sector, raidSector));
+        return { wasExpired: true, sectorCleaned: result.rowsAffected > 0 };
+      }
     }
   }
 
