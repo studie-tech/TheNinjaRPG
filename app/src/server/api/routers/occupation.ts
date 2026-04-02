@@ -372,6 +372,11 @@ export const occupationRouter = createTRPCRouter({
           `You have reached the maximum number of crystals for this item (${maxImbuedItems})`,
         );
       }
+      if (
+        targetUserItem.imbuements.some((imb) => imb.imbuementItemId === crystalItem.id)
+      ) {
+        return errorResponse(`This item already has a ${crystalItem.name} imbuement`);
+      }
       // Derived
       const imbuingTime = CRAFTING_TIMES_MINS[userCraftingRank][crystalItem.rarity];
       const finishTime = new Date(Date.now() + imbuingTime * 60 * 1000);

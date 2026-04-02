@@ -403,6 +403,12 @@ export default function OccupationCrafting() {
                               const crystal = userItem.item;
                               if (!crystal) return false;
 
+                              const alreadyOnItem =
+                                selectedImbuableItem.imbuements?.some(
+                                  (imb) => imb.imbuementItemId === crystal.id,
+                                );
+                              if (alreadyOnItem) return false;
+
                               // If crystal has no target types specified, it can be used on any item
                               if (!crystal.crystalTargetTypes) {
                                 return true;
