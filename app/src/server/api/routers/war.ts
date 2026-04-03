@@ -455,19 +455,61 @@ export const warRouter = createTRPCRouter({
       z.object({
         targetVillageId: z.string(),
         targetStructureRoute: z.string(),
+        userVillageId: z.string(),
       }),
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const [{ user }, activeWars, villages, relationships, structures] =
-        await Promise.all([
-          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-          fetchActiveWars(ctx.drizzle),
-          fetchVillages(ctx.drizzle),
-          fetchAlliances(ctx.drizzle),
-          fetchStructures(ctx.drizzle, input.targetVillageId),
-        ]);
+      // Single pre-fetch round: user, war state, village data, and elder/cooldown checks all in parallel
+      const [
+        { user },
+        activeWars,
+        villages,
+        relationships,
+        structures,
+        attackerMemberCount,
+        defenderMemberCount,
+        recentRejection,
+        existingPending,
+        elders,
+      ] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchActiveWars(ctx.drizzle),
+        fetchVillages(ctx.drizzle),
+        fetchAlliances(ctx.drizzle),
+        fetchStructures(ctx.drizzle, input.targetVillageId),
+        getVillageMemberCount(ctx.drizzle, input.userVillageId),
+        getVillageMemberCount(ctx.drizzle, input.targetVillageId),
+        ctx.drizzle.query.villageElderVote.findFirst({
+          columns: { endsAt: true },
+          where: and(
+            eq(villageElderVote.villageId, input.userVillageId),
+            eq(villageElderVote.type, "WAR_DECLARATION"),
+            eq(villageElderVote.status, "REJECTED"),
+            gte(
+              villageElderVote.endsAt,
+              secondsFromNow(-WAR_DECLARATION_COOLDOWN_HOURS * 3600),
+            ),
+          ),
+          orderBy: desc(villageElderVote.endsAt),
+        }),
+        ctx.drizzle.query.villageElderVote.findFirst({
+          columns: { id: true },
+          where: and(
+            eq(villageElderVote.villageId, input.userVillageId),
+            eq(villageElderVote.type, "WAR_DECLARATION"),
+            eq(villageElderVote.status, "PENDING"),
+          ),
+        }),
+        ctx.drizzle.query.userData.findMany({
+          columns: { userId: true },
+          where: and(
+            eq(userData.villageId, input.userVillageId),
+            eq(userData.rank, "ELDER"),
+            eq(userData.isAi, false),
+          ),
+        }),
+      ]);
       // Derived
       const now = new Date();
       const attackerVillage = villages.find((v) => v.id === user?.village?.id);
@@ -484,12 +526,9 @@ export const warRouter = createTRPCRouter({
       const warType = isRaid ? "WAR_RAID" : "VILLAGE_WAR";
       const relationshipStatus = isRaid ? "ENEMY" : relationship?.status;
       const structure = structures.find((s) => s.route === input.targetStructureRoute);
+      // Exclude the kage (war initiator) from the elder count
+      const eligibleElders = elders.filter((e) => e.userId !== user?.userId);
 
-      // Check minimum member count for war participation (after we know village IDs)
-      const [attackerMemberCount, defenderMemberCount] = await Promise.all([
-        attackerVillage ? getVillageMemberCount(ctx.drizzle, attackerVillage.id) : 0,
-        defenderVillage ? getVillageMemberCount(ctx.drizzle, defenderVillage.id) : 0,
-      ]);
       // Guard
       if (!user?.village) {
         return errorResponse("You must be in a village to declare war");
@@ -497,48 +536,15 @@ export const warRouter = createTRPCRouter({
       if (!user?.villageId) {
         return errorResponse("You must be in a village to declare war");
       }
+      if (user.villageId !== input.userVillageId) {
+        return errorResponse("Village mismatch — please refresh and try again");
+      }
       if (!structure) {
         return errorResponse("Structure not found");
       }
       if (user.userId !== user.village.kageId) {
         return errorResponse("Only the leader can declare war");
       }
-
-      // Check declaration cooldown, existing pending vote, and elders in parallel
-      // Use endsAt as the anchor — cron-rejected votes expire after the voting window,
-      // so createdAt would be older than the cooldown window and the check would silently pass.
-      const [recentRejection, existingPending, elders] = await Promise.all([
-        ctx.drizzle.query.villageElderVote.findFirst({
-          columns: { endsAt: true },
-          where: and(
-            eq(villageElderVote.villageId, user.villageId),
-            eq(villageElderVote.type, "WAR_DECLARATION"),
-            eq(villageElderVote.status, "REJECTED"),
-            gte(
-              villageElderVote.endsAt,
-              secondsFromNow(-WAR_DECLARATION_COOLDOWN_HOURS * 3600),
-            ),
-          ),
-          orderBy: desc(villageElderVote.endsAt),
-        }),
-        ctx.drizzle.query.villageElderVote.findFirst({
-          columns: { id: true },
-          where: and(
-            eq(villageElderVote.villageId, user.villageId),
-            eq(villageElderVote.type, "WAR_DECLARATION"),
-            eq(villageElderVote.status, "PENDING"),
-          ),
-        }),
-        ctx.drizzle.query.userData.findMany({
-          columns: { userId: true },
-          where: and(
-            eq(userData.villageId, user.villageId),
-            eq(userData.rank, "ELDER"),
-            eq(userData.isAi, false),
-            ne(userData.userId, user.userId),
-          ),
-        }),
-      ]);
       if (recentRejection) {
         const cooldownEnd = new Date(
           recentRejection.endsAt.getTime() +
@@ -678,36 +684,28 @@ export const warRouter = createTRPCRouter({
       }
 
       // Require minimum elder count to proceed with war declaration
-      if (elders.length < ELDER_MIN_VOTING_COUNT)
+      if (eligibleElders.length < ELDER_MIN_VOTING_COUNT)
         return errorResponse(
           `At least ${ELDER_MIN_VOTING_COUNT} elders must be in position before war can be declared`,
         );
 
-      // Insert vote first — unique constraint on (villageId, type, targetId, activeFlag) guards concurrent dupes
+      // Insert vote — existingPending guard above prevents concurrent dupes
       const voteId = nanoid();
       const endsAt = secondsFromNow(ELDER_WAR_VOTE_HOURS * 3600);
-      const voteInsertResult = await ctx.drizzle
-        .insert(villageElderVote)
-        .values({
-          id: voteId,
-          villageId: user.villageId,
-          type: "WAR_DECLARATION",
-          initiatedByUserId: user.userId,
-          targetId: input.targetVillageId,
-          warType: warType,
-          targetStructureRoute: structure.route,
-          status: "PENDING",
-          endsAt,
-        })
-        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-      if (!voteInsertResult.rowsAffected) {
-        return errorResponse(
-          "There is already a pending war declaration vote for your village",
-        );
-      }
+      await ctx.drizzle.insert(villageElderVote).values({
+        id: voteId,
+        villageId: user.villageId,
+        type: "WAR_DECLARATION",
+        initiatedByUserId: user.userId,
+        targetId: input.targetVillageId,
+        warType: warType,
+        targetStructureRoute: structure.route,
+        status: "PENDING",
+        endsAt,
+      });
       const elderContent = `${user.username} has submitted a war declaration against ${defenderVillage.name}. You have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
       const kageContent = `Your war declaration against ${defenderVillage.name} has been submitted. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
-      const elderUserIds = elders.map((e) => e.userId);
+      const elderUserIds = eligibleElders.map((e) => e.userId);
       const allNotifyIds = [user.userId, ...elderUserIds];
       await Promise.all([
         ctx.drizzle.insert(notification).values([

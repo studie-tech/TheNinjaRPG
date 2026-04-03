@@ -448,6 +448,7 @@ export const WarMap: React.FC<{
           declareVillageWarOrRaid({
             targetVillageId: sectorVillage.id,
             targetStructureRoute: structureRoute,
+            userVillageId: user.villageId ?? "",
           });
         };
       } else if (status === "ALLY" && relationship) {
@@ -472,6 +473,7 @@ export const WarMap: React.FC<{
           declareVillageWarOrRaid({
             targetVillageId: sectorVillage.id,
             targetStructureRoute: structureRoute,
+            userVillageId: user.villageId ?? "",
           });
         };
       }
