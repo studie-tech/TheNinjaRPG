@@ -29,6 +29,7 @@ import {
   villageElderVote,
   villageStructure,
 } from "@/drizzle/schema";
+import { castElderVoteEntry, fetchElderVote } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
 import { fetchClan } from "@/routers/clan";
 import { initiateBattle } from "@/routers/combat";
@@ -40,7 +41,7 @@ import {
   updateRequestState,
 } from "@/routers/sparring";
 import { fetchVillage } from "@/routers/village";
-import { castElderVoteEntry, fetchActiveWars, fetchElderVote } from "@/routers/war";
+import { fetchActiveWars } from "@/routers/war";
 import {
   baseServerResponse,
   createTRPCRouter,

@@ -20,6 +20,7 @@ import {
   villageStructure,
   war,
 } from "@/drizzle/schema";
+import { fetchExpiredElderVotes, resolveElderVote } from "@/libs/elder";
 import {
   getGameSetting,
   handleEndpointError,
@@ -29,11 +30,7 @@ import {
 import { handleWarEnd, isVillageInvolvedInAnyWar } from "@/libs/war";
 import { fetchKageReplacement } from "@/server/api/routers/kage";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
-import {
-  fetchActiveWars,
-  fetchExpiredElderVotes,
-  resolveElderVote,
-} from "@/server/api/routers/war";
+import { fetchActiveWars } from "@/server/api/routers/war";
 import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "hourly-war";
@@ -262,344 +259,320 @@ async function clearExpiredStructureBonuses(now: Date) {
  * - KAGE_REMOVAL: if majority YES when deadline passes, execute removal
  */
 async function processExpiredElderVotes() {
-  const [expiredVotes, allElders] = await Promise.all([
+  // Pre-fetch all required data before the loop to avoid DB roundtrips inside it
+  const [expiredVotes, allElders, allVillages, activeWars] = await Promise.all([
     fetchExpiredElderVotes(drizzleDB),
     drizzleDB
       .select({ userId: userData.userId, villageId: userData.villageId })
       .from(userData)
       .where(and(eq(userData.rank, "ELDER"), eq(userData.isAi, false))),
+    drizzleDB.query.village.findMany({
+      columns: { id: true, name: true, kageId: true, tokens: true },
+    }),
+    fetchActiveWars(drizzleDB),
   ]);
   if (expiredVotes.length === 0) return;
 
   const eldersByVillage = new Map<string, string[]>();
   for (const elder of allElders) {
     if (!elder.villageId) continue;
-    const villageElders = eldersByVillage.get(elder.villageId) ?? [];
-    villageElders.push(elder.userId);
-    eldersByVillage.set(elder.villageId, villageElders);
+    const list = eldersByVillage.get(elder.villageId) ?? [];
+    list.push(elder.userId);
+    eldersByVillage.set(elder.villageId, list);
   }
+  const villagesById = new Map(allVillages.map((v) => [v.id, v]));
 
+  // Build a promise per vote and run all in parallel
+  const promises: Promise<void>[] = [];
   for (const vote of expiredVotes) {
     if (vote.type === "WAR_DECLARATION") {
       const villageElderIds = eldersByVillage.get(vote.villageId) ?? [];
       const elderCount = villageElderIds.filter(
         (userId) => userId !== vote.initiatedByUserId,
       ).length;
-
       const yesCount = vote.entries.filter((e) => e.vote === "YES").length;
       const noCount = vote.entries.filter((e) => e.vote === "NO").length;
       const outcome = resolveElderVote(yesCount, noCount, elderCount, true, true);
-
-      // If rejected (majority NO blocks it), notify initiator
-      if (outcome === "REJECTED") {
-        const targetVillage = await drizzleDB.query.village.findFirst({
-          columns: { name: true },
-          where: eq(village.id, vote.targetId),
-        });
-        await Promise.all([
-          drizzleDB
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, vote.id)),
-          drizzleDB.insert(notification).values({
-            userId: vote.initiatedByUserId,
-            content: `War declaration against ${targetVillage?.name ?? "another village"} was rejected by the elders.`,
-          }),
-          drizzleDB
-            .update(userData)
-            .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(eq(userData.userId, vote.initiatedByUserId)),
-        ]);
-        continue;
-      }
-
-      // Block auto-approval if village no longer has minimum elder count
-      if (elderCount < ELDER_MIN_VOTING_COUNT) {
-        const targetVillage = await drizzleDB.query.village.findFirst({
-          columns: { name: true },
-          where: eq(village.id, vote.targetId),
-        });
-        await Promise.all([
-          drizzleDB
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, vote.id)),
-          drizzleDB.insert(notification).values({
-            userId: vote.initiatedByUserId,
-            content: `War declaration against ${targetVillage?.name ?? "another village"} was cancelled — not enough elders in position.`,
-          }),
-          drizzleDB
-            .update(userData)
-            .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(eq(userData.userId, vote.initiatedByUserId)),
-        ]);
-        continue;
-      }
-
-      // APPROVED → atomically claim the motion, then start war
-      const warClaimResult = await drizzleDB
-        .update(villageElderVote)
-        .set({ status: "APPROVED" })
-        .where(
-          and(eq(villageElderVote.id, vote.id), eq(villageElderVote.status, "PENDING")),
-        );
-      if (warClaimResult.rowsAffected === 0) continue;
-
-      const [attackerVillage, defenderVillage] = await Promise.all([
-        drizzleDB.query.village.findFirst({
-          where: eq(village.id, vote.villageId),
-        }),
-        drizzleDB.query.village.findFirst({
-          columns: { name: true, kageId: true },
-          where: eq(village.id, vote.targetId),
-        }),
-      ]);
-      if (!attackerVillage || attackerVillage.tokens < WAR_DECLARATION_COST) {
-        await Promise.all([
-          drizzleDB
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, vote.id)),
-          drizzleDB.insert(notification).values({
-            userId: vote.initiatedByUserId,
-            content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — village no longer has enough tokens.`,
-          }),
-          drizzleDB
-            .update(userData)
-            .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(eq(userData.userId, vote.initiatedByUserId)),
-        ]);
-        continue;
-      }
-
-      // Re-check war involvement before starting the war
-      const currentActiveWars = await fetchActiveWars(drizzleDB);
-      if (
-        isVillageInvolvedInAnyWar(currentActiveWars, vote.villageId, undefined, [
-          "VILLAGE_WAR",
-          "WAR_RAID",
-        ]) ||
-        isVillageInvolvedInAnyWar(currentActiveWars, vote.targetId, undefined, [
-          "VILLAGE_WAR",
-          "WAR_RAID",
-        ])
-      ) {
-        await Promise.all([
-          drizzleDB
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, vote.id)),
-          drizzleDB.insert(notification).values({
-            userId: vote.initiatedByUserId,
-            content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — a village is already involved in an active war.`,
-          }),
-          drizzleDB
-            .update(userData)
-            .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(eq(userData.userId, vote.initiatedByUserId)),
-        ]);
-        continue;
-      }
-
-      // Deduct tokens first with DB guard — if this fails, war is never inserted
-      const tokenResult = await drizzleDB
-        .update(village)
-        .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
-        .where(
-          and(
-            eq(village.id, vote.villageId),
-            gte(village.tokens, WAR_DECLARATION_COST),
-          ),
-        );
-      if (tokenResult.rowsAffected === 0) {
-        await Promise.all([
-          drizzleDB
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, vote.id)),
-          drizzleDB.insert(notification).values({
-            userId: vote.initiatedByUserId,
-            content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — the village no longer has enough tokens.`,
-          }),
-          drizzleDB
-            .update(userData)
-            .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(eq(userData.userId, vote.initiatedByUserId)),
-        ]);
-        continue;
-      }
-      const warId = nanoid();
-      const warContent = `${attackerVillage.name} has declared war on ${defenderVillage?.name ?? "another village"}!`;
-      const notifyKageIds = [vote.initiatedByUserId];
-      if (defenderVillage?.kageId) notifyKageIds.push(defenderVillage.kageId);
-      await Promise.all([
-        drizzleDB.insert(war).values({
-          id: warId,
-          attackerVillageId: vote.villageId,
-          defenderVillageId: vote.targetId,
-          status: "ACTIVE",
-          type: vote.warType ?? "VILLAGE_WAR",
-          targetStructureRoute: vote.targetStructureRoute ?? "/townhall",
-          attackerShrineHp: WAR_RAID_SHRINE_HP,
-          attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
-          attackerShrineStatus: "ACTIVE",
-          defenderShrineHp: WAR_RAID_SHRINE_HP,
-          defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
-          defenderShrineStatus: "ACTIVE",
-        }),
-        drizzleDB
-          .insert(notification)
-          .values(notifyKageIds.map((userId) => ({ userId, content: warContent }))),
-        drizzleDB
-          .update(userData)
-          .set({ unreadNotifications: sql`unreadNotifications + 1` })
-          .where(inArray(userData.userId, notifyKageIds)),
-      ]);
+      promises.push(
+        handleExpiredWarDeclaration(
+          vote,
+          outcome,
+          elderCount,
+          villagesById,
+          activeWars,
+        ),
+      );
     } else if (vote.type === "KAGE_REMOVAL") {
       const villageElderIds = eldersByVillage.get(vote.villageId) ?? [];
       const elderCount = villageElderIds.filter(
         (userId) => userId !== vote.targetId,
       ).length;
-
       const yesCount = vote.entries.filter((e) => e.vote === "YES").length;
       const noCount = vote.entries.filter((e) => e.vote === "NO").length;
       const outcome = resolveElderVote(yesCount, noCount, elderCount, true);
+      promises.push(handleExpiredKageRemoval(vote, outcome));
+    }
+  }
+  await Promise.all(promises);
+}
 
-      if (outcome === "APPROVED") {
-        // Atomically claim the motion first — only one concurrent request proceeds to side effects
-        const kageClaimResult = await drizzleDB
+type ExpiredElderVote = Awaited<ReturnType<typeof fetchExpiredElderVotes>>[number];
+type VillageSnapshot = {
+  id: string;
+  name: string;
+  kageId: string | null;
+  tokens: number;
+};
+
+/**
+ * Handle a single expired WAR_DECLARATION vote.
+ * Villages and active wars are pre-fetched to avoid extra DB roundtrips.
+ */
+async function handleExpiredWarDeclaration(
+  vote: ExpiredElderVote,
+  outcome: ReturnType<typeof resolveElderVote>,
+  elderCount: number,
+  villagesById: Map<string, VillageSnapshot>,
+  activeWars: FetchActiveWarsReturnType[],
+) {
+  const defenderVillage = villagesById.get(vote.targetId);
+  const attackerVillage = villagesById.get(vote.villageId);
+  const defenderName = defenderVillage?.name ?? "another village";
+
+  const rejectWithNotification = async (content: string) => {
+    await Promise.all([
+      drizzleDB
+        .update(villageElderVote)
+        .set({ status: "REJECTED" })
+        .where(eq(villageElderVote.id, vote.id)),
+      drizzleDB
+        .insert(notification)
+        .values({ userId: vote.initiatedByUserId, content }),
+      drizzleDB
+        .update(userData)
+        .set({ unreadNotifications: sql`unreadNotifications + 1` })
+        .where(eq(userData.userId, vote.initiatedByUserId)),
+    ]);
+  };
+
+  if (outcome === "REJECTED") {
+    await rejectWithNotification(
+      `War declaration against ${defenderName} was rejected by the elders.`,
+    );
+    return;
+  }
+
+  if (elderCount < ELDER_MIN_VOTING_COUNT) {
+    await rejectWithNotification(
+      `War declaration against ${defenderName} was cancelled — not enough elders in position.`,
+    );
+    return;
+  }
+
+  // APPROVED → atomically claim the motion, then start war
+  const warClaimResult = await drizzleDB
+    .update(villageElderVote)
+    .set({ status: "APPROVED" })
+    .where(
+      and(eq(villageElderVote.id, vote.id), eq(villageElderVote.status, "PENDING")),
+    );
+  if (warClaimResult.rowsAffected === 0) return;
+
+  if (!attackerVillage || attackerVillage.tokens < WAR_DECLARATION_COST) {
+    await rejectWithNotification(
+      `War declaration against ${defenderName} was cancelled — village no longer has enough tokens.`,
+    );
+    return;
+  }
+
+  // Use pre-fetched active wars for involvement check
+  if (
+    isVillageInvolvedInAnyWar(activeWars, vote.villageId, undefined, [
+      "VILLAGE_WAR",
+      "WAR_RAID",
+    ]) ||
+    isVillageInvolvedInAnyWar(activeWars, vote.targetId, undefined, [
+      "VILLAGE_WAR",
+      "WAR_RAID",
+    ])
+  ) {
+    await rejectWithNotification(
+      `War declaration against ${defenderName} was cancelled — a village is already involved in an active war.`,
+    );
+    return;
+  }
+
+  // Deduct tokens with DB guard — if this fails, war is never inserted
+  const tokenResult = await drizzleDB
+    .update(village)
+    .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
+    .where(
+      and(eq(village.id, vote.villageId), gte(village.tokens, WAR_DECLARATION_COST)),
+    );
+  if (tokenResult.rowsAffected === 0) {
+    await rejectWithNotification(
+      `War declaration against ${defenderName} was cancelled — the village no longer has enough tokens.`,
+    );
+    return;
+  }
+
+  const warId = nanoid();
+  const warContent = `${attackerVillage.name} has declared war on ${defenderName}!`;
+  const notifyKageIds = [vote.initiatedByUserId];
+  if (defenderVillage?.kageId) notifyKageIds.push(defenderVillage.kageId);
+  await Promise.all([
+    drizzleDB.insert(war).values({
+      id: warId,
+      attackerVillageId: vote.villageId,
+      defenderVillageId: vote.targetId,
+      status: "ACTIVE",
+      type: vote.warType ?? "VILLAGE_WAR",
+      targetStructureRoute: vote.targetStructureRoute ?? "/townhall",
+      attackerShrineHp: WAR_RAID_SHRINE_HP,
+      attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
+      attackerShrineStatus: "ACTIVE",
+      defenderShrineHp: WAR_RAID_SHRINE_HP,
+      defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
+      defenderShrineStatus: "ACTIVE",
+    }),
+    drizzleDB
+      .insert(notification)
+      .values(notifyKageIds.map((userId) => ({ userId, content: warContent }))),
+    drizzleDB
+      .update(userData)
+      .set({ unreadNotifications: sql`unreadNotifications + 1` })
+      .where(inArray(userData.userId, notifyKageIds)),
+  ]);
+}
+
+/**
+ * Handle a single expired KAGE_REMOVAL vote.
+ */
+async function handleExpiredKageRemoval(
+  vote: ExpiredElderVote,
+  outcome: ReturnType<typeof resolveElderVote>,
+) {
+  if (outcome === "APPROVED") {
+    // Atomically claim the motion first — only one concurrent request proceeds to side effects
+    const kageClaimResult = await drizzleDB
+      .update(villageElderVote)
+      .set({ status: "APPROVED" })
+      .where(
+        and(eq(villageElderVote.id, vote.id), eq(villageElderVote.status, "PENDING")),
+      );
+    if (kageClaimResult.rowsAffected === 0) return;
+
+    const replacement = await fetchKageReplacement(
+      drizzleDB,
+      vote.villageId,
+      vote.targetId,
+    );
+    if (!replacement) {
+      const voterIds = vote.entries.map((e) => e.userId);
+      await Promise.all([
+        drizzleDB
           .update(villageElderVote)
-          .set({ status: "APPROVED" })
+          .set({ status: "REJECTED" })
           .where(
             and(
               eq(villageElderVote.id, vote.id),
-              eq(villageElderVote.status, "PENDING"),
+              eq(villageElderVote.status, "APPROVED"),
             ),
-          );
-        if (kageClaimResult.rowsAffected === 0) continue;
-
-        const replacement = await fetchKageReplacement(
-          drizzleDB,
-          vote.villageId,
-          vote.targetId,
-        );
-        if (!replacement) {
-          const voterIds = vote.entries.map((e) => e.userId);
-          await Promise.all([
-            // Conditional revert — only touches our APPROVED state
-            drizzleDB
-              .update(villageElderVote)
-              .set({ status: "REJECTED" })
-              .where(
-                and(
-                  eq(villageElderVote.id, vote.id),
-                  eq(villageElderVote.status, "APPROVED"),
-                ),
-              ),
-            ...voterIds.map((userId) =>
-              drizzleDB.insert(notification).values({
-                userId,
-                content: `The vote to remove the Kage passed but no eligible replacement elder was found.`,
-              }),
-            ),
-            ...(voterIds.length > 0
-              ? [
-                  drizzleDB
-                    .update(userData)
-                    .set({ unreadNotifications: sql`unreadNotifications + 1` })
-                    .where(inArray(userData.userId, voterIds)),
-                ]
-              : []),
-          ]);
-          continue;
-        }
-
-        // Guarded village update — only succeeds if the target is still the current kage
-        const villageUpdateResult = await drizzleDB
-          .update(village)
-          .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
-          .where(
-            and(eq(village.id, vote.villageId), eq(village.kageId, vote.targetId)),
-          );
-        if (villageUpdateResult.rowsAffected === 0) {
-          // Kage already changed via another path — revert our APPROVED claim
-          await drizzleDB
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(
-              and(
-                eq(villageElderVote.id, vote.id),
-                eq(villageElderVote.status, "APPROVED"),
-              ),
-            );
-          continue;
-        }
-
-        const removedKage = await drizzleDB.query.userData.findFirst({
-          columns: { username: true },
-          where: eq(userData.userId, vote.targetId),
-        });
-        await Promise.all([
-          drizzleDB
-            .update(userData)
-            .set({ villagePrestige: 0 })
-            .where(eq(userData.userId, vote.targetId)),
-          // Notify the removed kage
-          drizzleDB.insert(notification).values({
-            userId: vote.targetId,
-            content: `You have been removed as Kage by the Elder Council. ${replacement.username} is the new Kage.`,
-          }),
-          // Notify the new kage
-          drizzleDB.insert(notification).values({
-            userId: replacement.userId,
-            content: `You have been appointed as the new Kage following the removal of ${removedKage?.username ?? "the previous Kage"}.`,
-          }),
-          // Notify elder voters of the outcome (excluding kage and replacement who have their own notifications)
-          ...vote.entries
-            .filter(
-              (e) => e.userId !== vote.targetId && e.userId !== replacement.userId,
-            )
-            .map((e) =>
-              drizzleDB.insert(notification).values({
-                userId: e.userId,
-                content: `The vote to remove the Kage has passed. ${replacement.username} is the new Kage.`,
-              }),
-            ),
-          // Increment unread for kage, replacement, and elder voters
-          drizzleDB
-            .update(userData)
-            .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(
-              inArray(userData.userId, [
-                vote.targetId,
-                replacement.userId,
-                ...vote.entries.map((e) => e.userId),
-              ]),
-            ),
-        ]);
-      } else {
-        const voterIds = vote.entries.map((e) => e.userId);
-        await Promise.all([
-          drizzleDB
-            .update(villageElderVote)
-            .set({ status: "REJECTED" })
-            .where(eq(villageElderVote.id, vote.id)),
-          ...voterIds.map((userId) =>
-            drizzleDB.insert(notification).values({
-              userId,
-              content: `The vote to remove the Kage did not pass.`,
-            }),
           ),
-          ...(voterIds.length > 0
-            ? [
-                drizzleDB
-                  .update(userData)
-                  .set({ unreadNotifications: sql`unreadNotifications + 1` })
-                  .where(inArray(userData.userId, voterIds)),
-              ]
-            : []),
-        ]);
-      }
+        ...voterIds.map((userId) =>
+          drizzleDB.insert(notification).values({
+            userId,
+            content: `The vote to remove the Kage passed but no eligible replacement elder was found.`,
+          }),
+        ),
+        ...(voterIds.length > 0
+          ? [
+              drizzleDB
+                .update(userData)
+                .set({ unreadNotifications: sql`unreadNotifications + 1` })
+                .where(inArray(userData.userId, voterIds)),
+            ]
+          : []),
+      ]);
+      return;
     }
+
+    // Guarded village update — only succeeds if the target is still the current kage
+    const villageUpdateResult = await drizzleDB
+      .update(village)
+      .set({ kageId: replacement.userId, leaderUpdatedAt: new Date() })
+      .where(and(eq(village.id, vote.villageId), eq(village.kageId, vote.targetId)));
+    if (villageUpdateResult.rowsAffected === 0) {
+      // Kage already changed via another path — revert our APPROVED claim
+      await drizzleDB
+        .update(villageElderVote)
+        .set({ status: "REJECTED" })
+        .where(
+          and(
+            eq(villageElderVote.id, vote.id),
+            eq(villageElderVote.status, "APPROVED"),
+          ),
+        );
+      return;
+    }
+
+    const removedKage = await drizzleDB.query.userData.findFirst({
+      columns: { username: true },
+      where: eq(userData.userId, vote.targetId),
+    });
+    await Promise.all([
+      drizzleDB
+        .update(userData)
+        .set({ villagePrestige: 0 })
+        .where(eq(userData.userId, vote.targetId)),
+      drizzleDB.insert(notification).values({
+        userId: vote.targetId,
+        content: `You have been removed as Kage by the Elder Council. ${replacement.username} is the new Kage.`,
+      }),
+      drizzleDB.insert(notification).values({
+        userId: replacement.userId,
+        content: `You have been appointed as the new Kage following the removal of ${removedKage?.username ?? "the previous Kage"}.`,
+      }),
+      ...vote.entries
+        .filter((e) => e.userId !== vote.targetId && e.userId !== replacement.userId)
+        .map((e) =>
+          drizzleDB.insert(notification).values({
+            userId: e.userId,
+            content: `The vote to remove the Kage has passed. ${replacement.username} is the new Kage.`,
+          }),
+        ),
+      drizzleDB
+        .update(userData)
+        .set({ unreadNotifications: sql`unreadNotifications + 1` })
+        .where(
+          inArray(userData.userId, [
+            vote.targetId,
+            replacement.userId,
+            ...vote.entries.map((e) => e.userId),
+          ]),
+        ),
+    ]);
+  } else {
+    const voterIds = vote.entries.map((e) => e.userId);
+    await Promise.all([
+      drizzleDB
+        .update(villageElderVote)
+        .set({ status: "REJECTED" })
+        .where(eq(villageElderVote.id, vote.id)),
+      ...voterIds.map((userId) =>
+        drizzleDB.insert(notification).values({
+          userId,
+          content: `The vote to remove the Kage did not pass.`,
+        }),
+      ),
+      ...(voterIds.length > 0
+        ? [
+            drizzleDB
+              .update(userData)
+              .set({ unreadNotifications: sql`unreadNotifications + 1` })
+              .where(inArray(userData.userId, voterIds)),
+          ]
+        : []),
+    ]);
   }
 }

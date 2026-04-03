@@ -383,7 +383,10 @@ const ElderHall: React.FC<{
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        cancelWarDeclaration({ voteId: pendingWarVote.id })
+                        cancelWarDeclaration({
+                          voteId: pendingWarVote.id,
+                          userVillageId: user.villageId ?? "",
+                        })
                       }
                     >
                       Cancel Declaration
