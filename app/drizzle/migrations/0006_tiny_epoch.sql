@@ -12,3 +12,4 @@ ALTER TABLE `Jutsu` ADD `requiredSpeed` int;
 ALTER TABLE `Jutsu` ADD `requiredIntelligence` int;
 ALTER TABLE `Jutsu` ADD `requiredWillpower` int;
 CREATE INDEX `Jutsu_parentJutsuId_idx` ON `Jutsu` (`parentJutsuId`);
+CREATE INDEX `Jutsu_parentJutsuId_hidden_idx` ON `Jutsu` (`parentJutsuId`,`hidden`);
