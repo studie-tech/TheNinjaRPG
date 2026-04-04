@@ -3,6 +3,7 @@
 import { differenceInDays, differenceInHours } from "date-fns";
 import { Info, Share2, Wrench } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -17,6 +18,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Loader from "@/layout/Loader";
 import Logbook from "@/layout/Logbook";
+import Modal2 from "@/layout/Modal2";
 import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { calcMedninRank } from "@/libs/hospital";
 import { calcLevelRequirements, showUserRank } from "@/libs/profile";
@@ -27,6 +29,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 export default function Profile() {
   // State
   const { data: userData, notifications } = useRequiredUserData();
+  const [pvpInfoModal, setPvpInfoModal] = useState<"activity" | "rank" | null>(null);
 
   // Query
   const { data: marriages } = api.marriage.getMarriedUsers.useQuery(
@@ -95,56 +98,70 @@ export default function Profile() {
             <p>Exp for lvl: {expRequired ? expRequired.toFixed(2) : "--"}</p>
             <p>PvE Fights: {userData.pveFights}</p>
             <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger>
-                  <div className="flex flex-row items-center justify-center gap-1">
-                    <p>PvP Activity: {userData.pvpActivity}</p>{" "}
-                    <Info className="mb-1 h-4 w-4" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div>
-                    <p>PVP Fights: {userData.pvpFights}</p>
-                    <p>PvP Streak: {userData.pvpStreak}</p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {topPlayers && (
-              <TooltipProvider delayDuration={50}>
+              <div className="flex flex-row items-center gap-1">
+                <p>PvP Activity: {userData.pvpActivity}</p>
                 <Tooltip>
-                  <TooltipTrigger>
-                    <div className="flex flex-row items-center justify-center gap-1">
-                      <p>
-                        PvP Rank:{" "}
-                        {getRankedRank(
-                          userData.rankedLp,
-                          topPlayers.map((x) => x.rankedLp),
-                        )}
-                      </p>{" "}
-                      <Info className="mb-1 h-4 w-4" />
-                    </div>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label="PvP activity details"
+                      onClick={() => setPvpInfoModal("activity")}
+                    >
+                      <Info className="mb-1 h-4 w-4 shrink-0" />
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent>
                     <div>
-                      <p>LP: {userData.rankedLp}</p>
-                      <p>Battles: {userData.rankedBattles}</p>
-                      <p>Wins: {userData.rankedWins}</p>
-                      <p>
-                        Win Rate:{" "}
-                        {userData.rankedBattles > 0
-                          ? (
-                              (userData.rankedWins / userData.rankedBattles) *
-                              100
-                            ).toFixed(1)
-                          : "0"}
-                        %
-                      </p>
-                      <p>Current Streak: {userData.rankedStreak}</p>
-                      <p>Seichi Silver: {userData.seichiSilver}</p>
+                      <p>PVP Fights: {userData.pvpFights}</p>
+                      <p>PvP Streak: {userData.pvpStreak}</p>
                     </div>
                   </TooltipContent>
                 </Tooltip>
+              </div>
+            </TooltipProvider>
+            {topPlayers && (
+              <TooltipProvider delayDuration={50}>
+                <div className="flex flex-row items-center gap-1">
+                  <p>
+                    PvP Rank:{" "}
+                    {getRankedRank(
+                      userData.rankedLp,
+                      topPlayers.map((x) => x.rankedLp),
+                    )}
+                  </p>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label="PvP rank details"
+                        onClick={() => setPvpInfoModal("rank")}
+                      >
+                        <Info className="mb-1 h-4 w-4 shrink-0" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div>
+                        <p>LP: {userData.rankedLp}</p>
+                        <p>Battles: {userData.rankedBattles}</p>
+                        <p>Wins: {userData.rankedWins}</p>
+                        <p>
+                          Win Rate:{" "}
+                          {userData.rankedBattles > 0
+                            ? (
+                                (userData.rankedWins / userData.rankedBattles) *
+                                100
+                              ).toFixed(1)
+                            : "0"}
+                          %
+                        </p>
+                        <p>Current Streak: {userData.rankedStreak}</p>
+                        <p>Seichi Silver: {userData.seichiSilver}</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </TooltipProvider>
             )}
             <p>Medical Exp: {userData.medicalExperience?.toLocaleString()}</p>
@@ -211,6 +228,75 @@ export default function Profile() {
         </div>
         <LevelUpBtn id="tutorial-level-up-btn" />
       </ContentBox>
+
+      <Modal2
+        title="PvP activity"
+        className="w-full max-w-[min(16rem,calc(100%-2rem))] gap-2 p-4 md:!max-w-[16rem]"
+        centerText
+        isOpen={pvpInfoModal === "activity"}
+        setIsOpen={(open) => setPvpInfoModal(open ? "activity" : null)}
+      >
+        <div className="space-y-1 text-sm">
+          <p>
+            <span className="text-muted-foreground">Activity score:</span>{" "}
+            {userData.pvpActivity}
+          </p>
+          <p>
+            <span className="text-muted-foreground">PVP fights:</span>{" "}
+            {userData.pvpFights}
+          </p>
+          <p>
+            <span className="text-muted-foreground">PvP streak:</span>{" "}
+            {userData.pvpStreak}
+          </p>
+        </div>
+      </Modal2>
+
+      {topPlayers && (
+        <Modal2
+          title="PvP rank"
+          className="w-full max-w-[min(17rem,calc(100%-2rem))] gap-2 p-4 md:!max-w-[17rem]"
+          centerText
+          isOpen={pvpInfoModal === "rank"}
+          setIsOpen={(open) => setPvpInfoModal(open ? "rank" : null)}
+        >
+          <div className="space-y-1 text-sm">
+            <p>
+              <span className="text-muted-foreground">Rank:</span>{" "}
+              {getRankedRank(
+                userData.rankedLp,
+                topPlayers.map((x) => x.rankedLp),
+              )}
+            </p>
+            <p>
+              <span className="text-muted-foreground">LP:</span> {userData.rankedLp}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Battles:</span>{" "}
+              {userData.rankedBattles}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Wins:</span> {userData.rankedWins}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Win rate:</span>{" "}
+              {userData.rankedBattles > 0
+                ? ((userData.rankedWins / userData.rankedBattles) * 100).toFixed(1)
+                : "0"}
+              %
+            </p>
+            <p>
+              <span className="text-muted-foreground">Current streak:</span>{" "}
+              {userData.rankedStreak}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Seichi Silver:</span>{" "}
+              {userData.seichiSilver}
+            </p>
+          </div>
+        </Modal2>
+      )}
+
       <StrengthWeaknesses />
       <Logbook />
     </>

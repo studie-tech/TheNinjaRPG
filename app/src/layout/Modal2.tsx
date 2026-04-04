@@ -31,6 +31,8 @@ interface Modal2Props {
       | React.KeyboardEvent<KeyboardEvent>,
   ) => void;
   onClose?: () => void;
+  /** Center title, body, and footer (e.g. compact info dialogs) */
+  centerText?: boolean;
 }
 
 const Modal2: React.FC<Modal2Props> = (props) => {
@@ -75,13 +77,19 @@ const Modal2: React.FC<Modal2Props> = (props) => {
         onEscapeKeyDown={handleDialogClose}
         onInteractOutside={handleDialogClose}
       >
-        <DialogHeader>
-          <DialogTitle>{props.title}</DialogTitle>
+        <DialogHeader
+          className={props.centerText ? "items-center text-center" : undefined}
+        >
+          <DialogTitle className={props.centerText ? "text-center" : undefined}>
+            {props.title}
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-2 py-4">{props.children}</div>
+        <div className={cn("space-y-2 py-4", props.centerText && "text-center")}>
+          {props.children}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className={props.centerText ? "sm:justify-center" : undefined}>
           {props.proceed_label && (
             <>
               <Button
