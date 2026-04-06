@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -6,6 +6,7 @@ import {
   CLAN_BOOST_PERCENT_PER_LEVEL,
   CONSUMABLE_CRAFTING_TIMES_MINS,
   CRAFTING_TIMES_MINS,
+  MAP_WAKE_ISLAND_SECTOR,
   OCCUPATION_CHANGE_COOLDOWN_DAYS,
   OCCUPATIONS,
 } from "@/drizzle/constants";
@@ -106,6 +107,12 @@ export const occupationRouter = createTRPCRouter({
       );
       // Guards
       if (!user) return errorResponse("User not found");
+      if (user.status !== "AWAKE") {
+        return errorResponse("User is not awake");
+      }
+      if (user.sector === MAP_WAKE_ISLAND_SECTOR) {
+        return errorResponse("Cannot craft items on Wake Island");
+      }
       if (user.occupation !== "CRAFTING") {
         return errorResponse("You must have the Crafting occupation to craft items");
       }
@@ -271,9 +278,23 @@ export const occupationRouter = createTRPCRouter({
           craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
           questData: trackers,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.status, "AWAKE"),
+            or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
+          ),
+        );
 
-      await Promise.all([...materialUpdates, ...craftingItemInserts, expUpdate]);
+      const [, expResult] = await Promise.all([
+        Promise.all([...materialUpdates, ...craftingItemInserts]),
+        expUpdate,
+      ]);
+      if (!expResult || expResult.rowsAffected !== 1) {
+        return errorResponse(
+          "Could not start crafting — you must be awake and not on Wake Island",
+        );
+      }
 
       return {
         success: true,
@@ -302,6 +323,12 @@ export const occupationRouter = createTRPCRouter({
       // Guards
       const user = updatedUserResult.user;
       if (!user) return errorResponse("User not found");
+      if (user.status !== "AWAKE") {
+        return errorResponse("User is not awake");
+      }
+      if (user.sector === MAP_WAKE_ISLAND_SECTOR) {
+        return errorResponse("Cannot imbue items on Wake Island");
+      }
 
       // Find target item and crystal from user items
       const targetUserItem = userItems.find((ui) => ui.id === input.userItemId);
@@ -438,9 +465,24 @@ export const occupationRouter = createTRPCRouter({
           craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
           questData: trackers,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.status, "AWAKE"),
+            or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
+          ),
+        );
 
-      await Promise.all([consumeCrystal, createImbuement, expUpdate]);
+      const [, , expResult] = await Promise.all([
+        consumeCrystal,
+        createImbuement,
+        expUpdate,
+      ]);
+      if (!expResult || expResult.rowsAffected !== 1) {
+        return errorResponse(
+          "Could not start imbuing — you must be awake and not on Wake Island",
+        );
+      }
 
       return {
         success: true,

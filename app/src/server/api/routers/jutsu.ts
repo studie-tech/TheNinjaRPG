@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gte, inArray, like, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -15,6 +15,7 @@ import {
   JUTSU_TRANSFER_DAYS,
   JUTSU_TRANSFER_MAX_LEVEL,
   JUTSU_TRANSFER_MINIMUM_LEVEL,
+  MAP_WAKE_ISLAND_SECTOR,
   RESKIN_LIMIT,
   TUTORIAL_JUTSU_ID,
 } from "@/drizzle/constants";
@@ -663,6 +664,9 @@ export const jutsuRouter = createTRPCRouter({
       if (!info) return errorResponse("Jutsu not found");
       if (!canTrainJutsu(info, user)) return errorResponse("Jutsu not for you");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
+      if (user.sector === MAP_WAKE_ISLAND_SECTOR) {
+        return errorResponse("Cannot train on Wake Island");
+      }
 
       const level = userjutsuObj ? userjutsuObj.level : 0;
       if (level >= JUTSU_LEVEL_CAP) {
@@ -692,9 +696,21 @@ export const jutsuRouter = createTRPCRouter({
       const moneyUpdate = await ctx.drizzle
         .update(userData)
         .set({ money: sql`${userData.money} - ${trainCost}`, questData: questData })
-        .where(and(eq(userData.userId, ctx.userId), gte(userData.money, trainCost)));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.money, trainCost),
+            eq(userData.status, "AWAKE"),
+            or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
+          ),
+        );
       if (moneyUpdate.rowsAffected !== 1) {
-        return errorResponse("You don't have enough money");
+        if (user.money < trainCost) {
+          return errorResponse("You don't have enough money");
+        }
+        return errorResponse(
+          "Could not start training — you must be awake and not on Wake Island",
+        );
       }
 
       // Insert or update user jutsu

@@ -1,6 +1,7 @@
-import { and, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
+  MAP_WAKE_ISLAND_SECTOR,
   MAX_DAILY_TRAININGS,
   TrainingSpeeds,
   UserStatNames,
@@ -51,6 +52,9 @@ export const trainRouter = createTRPCRouter({
       const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
       // Guard
       if (user.status !== "AWAKE") return errorResponse("Must be awake to train");
+      if (user.sector === MAP_WAKE_ISLAND_SECTOR) {
+        return errorResponse("Cannot train on Wake Island");
+      }
       if (!user.isOutlaw) {
         if (!inVillage) return errorResponse("Must be in your own village");
         if (user.sector !== user.village?.sector) return errorResponse("Wrong sector");
@@ -73,10 +77,13 @@ export const trainRouter = createTRPCRouter({
             eq(userData.userId, ctx.userId),
             isNull(userData.currentlyTraining),
             eq(userData.status, "AWAKE"),
+            or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
           ),
         );
       if (result.rowsAffected === 0) {
-        return errorResponse("You are already training");
+        return errorResponse(
+          "Could not start training — you may already be training, or cannot train on Wake Island",
+        );
       } else {
         return { success: true, message: `Started training`, data };
       }

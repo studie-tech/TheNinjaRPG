@@ -68,6 +68,7 @@ import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
+import { useAwake } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
@@ -77,6 +78,16 @@ import { getSearchValidator } from "@/validators/register";
 export default function AuctionHousePage() {
   // Settings
   const { userData, access } = useRequireInVillage("/auctionhouse");
+  const isAwake = useAwake(userData);
+
+  useEffect(() => {
+    if (userData && !isAwake) {
+      showMutationToast({
+        success: false,
+        message: "You must be awake to access the Auction House",
+      });
+    }
+  }, [userData, isAwake]);
 
   // State
   const [selectedStatus, setSelectedStatus] = useState<string>("ACTIVE");
@@ -84,6 +95,7 @@ export default function AuctionHousePage() {
   // Guards
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing Auction House" />;
+  if (!isAwake) return <Loader explanation="Redirecting because not awake" />;
 
   return (
     <ContentBox

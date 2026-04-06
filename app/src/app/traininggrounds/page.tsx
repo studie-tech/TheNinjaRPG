@@ -16,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
@@ -47,6 +48,7 @@ import {
   IMG_TRAIN_TAI_OFF,
   IMG_TRAIN_WILLPOWER,
   JUTSU_LEVEL_CAP,
+  MAP_WAKE_ISLAND_SECTOR,
   MAX_DAILY_TRAININGS,
   SENSEI_RANKS,
   STEALTH_SENSORY_CAP,
@@ -103,10 +105,24 @@ export default function Training() {
   // Ensure user is in village
   const { userData, timeDiff, access, updateUser } =
     useRequireInVillage("/traininggrounds");
+  const router = useRouter();
+
+  useEffect(() => {
+    if (userData?.sector === MAP_WAKE_ISLAND_SECTOR) {
+      showMutationToast({
+        success: false,
+        message: "You cannot train on Wake Island",
+      });
+      void router.push("/travel");
+    }
+  }, [userData?.sector, router]);
 
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing Training Grounds" />;
+  if (userData.sector === MAP_WAKE_ISLAND_SECTOR) {
+    return <Loader explanation="Training is not available on Wake Island" />;
+  }
 
   // Show sensei component
   const showSenseiSystem = [...SENSEI_RANKS, "GENIN"].includes(userData.rank);

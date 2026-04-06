@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { userData, villageAlliance } from "@/drizzle/schema";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/routers/profile";
@@ -15,6 +15,7 @@ const pusher = getServerPusher();
 
 import type { CovertTrainingType } from "@/drizzle/constants";
 import {
+  MAP_WAKE_ISLAND_SECTOR,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
@@ -329,6 +330,9 @@ export const stealthRouter = createTRPCRouter({
       // Guard
       if (!user) throw serverError("NOT_FOUND", "User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake to train");
+      if (user.sector === MAP_WAKE_ISLAND_SECTOR) {
+        return errorResponse("Cannot train on Wake Island");
+      }
       if (user.covertTrainingType) {
         return errorResponse("Already training covert skills");
       }
@@ -364,11 +368,14 @@ export const stealthRouter = createTRPCRouter({
             eq(userData.userId, ctx.userId),
             isNull(userData.covertTrainingType),
             eq(userData.status, "AWAKE"),
+            or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
           ),
         );
 
       if (result.rowsAffected === 0) {
-        return errorResponse(`Failed to start ${input.type} training`);
+        return errorResponse(
+          `Could not start ${input.type} training — you must be awake, not on Wake Island, and not already training covert skills`,
+        );
       }
 
       return {
