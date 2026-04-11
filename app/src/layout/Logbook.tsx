@@ -1,4 +1,4 @@
-import { Sparkles, X } from "lucide-react";
+import { Loader2, Sparkles, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -482,26 +482,35 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
           </div>
         )}
         {/* Dialog options */}
-        {activeObjective?.task === "dialog" && !isCheckingRewards && (
+        {activeObjective?.task === "dialog" && (
           <div className="w-full">
-            <h2 className="pl-2 font-bold text-lg">Dialog Options</h2>
+            <h2 className="flex items-center pl-2 font-bold text-lg">
+              Dialog Options
+              {isCheckingRewards && (
+                <Loader2
+                  className="ml-2 inline h-4 w-4 shrink-0 animate-spin"
+                  aria-label="Loading"
+                />
+              )}
+            </h2>
             <div className="pointer-events-auto flex w-full flex-wrap gap-1 px-2 pb-1">
-              {activeObjective.nextObjectiveId.map((entry) => (
-                <div key={entry.nextObjectiveId} className="flex justify-end">
-                  <button
-                    type="button"
-                    className="max-w-full cursor-pointer break-words rounded-lg border-2 bg-popover px-2 py-1 text-right text-xs shadow-lg hover:bg-poppopover sm:text-sm"
-                    onClick={() =>
-                      checkRewards({
-                        questId: quest.id,
-                        nextObjectiveId: entry.nextObjectiveId,
-                      })
-                    }
-                  >
-                    {entry.text}
-                  </button>
-                </div>
-              ))}
+              {!isCheckingRewards &&
+                activeObjective.nextObjectiveId.map((entry) => (
+                  <div key={entry.nextObjectiveId} className="flex justify-end">
+                    <button
+                      type="button"
+                      className="max-w-full cursor-pointer break-words rounded-lg border-2 bg-popover px-2 py-1 text-right text-xs shadow-lg hover:bg-poppopover sm:text-sm"
+                      onClick={() =>
+                        checkRewards({
+                          questId: quest.id,
+                          nextObjectiveId: entry.nextObjectiveId,
+                        })
+                      }
+                    >
+                      {entry.text}
+                    </button>
+                  </div>
+                ))}
             </div>
           </div>
         )}

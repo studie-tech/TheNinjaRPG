@@ -1,7 +1,7 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
-import { ArrowRight, Settings2, Sparkles, X } from "lucide-react";
+import { ArrowRight, Loader2, Settings2, Sparkles, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -1068,28 +1068,37 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                 </Button>
               </div>
             )}
-            {dialogOptions && !isCheckingRewards && (
+            {dialogOptions && (
               <div className="mt-3 md:mt-4">
-                <h3 className="mb-2 font-semibold text-sm">Dialog Options</h3>
+                <h3 className="mb-2 flex items-center font-semibold text-sm">
+                  Dialog Options
+                  {isCheckingRewards && (
+                    <Loader2
+                      className="ml-2 inline h-4 w-4 shrink-0 animate-spin"
+                      aria-label="Loading"
+                    />
+                  )}
+                </h3>
                 <div className="flex flex-wrap gap-2">
-                  {dialogOptions.options.map((entry) => (
-                    <Button
-                      key={entry.nextObjectiveId}
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        checkRewards({
-                          questId: dialogOptions.questId,
-                          nextObjectiveId: entry.nextObjectiveId,
-                        });
-                      }}
-                      className="min-w-[120px] flex-1"
-                    >
-                      {entry.text}
-                    </Button>
-                  ))}
+                  {!isCheckingRewards &&
+                    dialogOptions.options.map((entry) => (
+                      <Button
+                        key={entry.nextObjectiveId}
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          checkRewards({
+                            questId: dialogOptions.questId,
+                            nextObjectiveId: entry.nextObjectiveId,
+                          });
+                        }}
+                        className="min-w-[120px] flex-1"
+                      >
+                        {entry.text}
+                      </Button>
+                    ))}
                 </div>
               </div>
             )}
