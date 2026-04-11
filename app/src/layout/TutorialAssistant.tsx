@@ -1,7 +1,7 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
-import { ArrowRight, Loader2, Settings2, Sparkles, X } from "lucide-react";
+import { ArrowRight, Settings2, Sparkles, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -1068,7 +1068,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                 </Button>
               </div>
             )}
-            {dialogOptions && (
+            {dialogOptions && !isCheckingRewards && (
               <div className="mt-3 md:mt-4">
                 <h3 className="mb-2 font-semibold text-sm">Dialog Options</h3>
                 <div className="flex flex-wrap gap-2">
@@ -1077,24 +1077,17 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                       key={entry.nextObjectiveId}
                       variant="outline"
                       size="sm"
-                      disabled={isCheckingRewards}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (!isCheckingRewards) {
-                          checkRewards({
-                            questId: dialogOptions.questId,
-                            nextObjectiveId: entry.nextObjectiveId,
-                          });
-                        }
+                        checkRewards({
+                          questId: dialogOptions.questId,
+                          nextObjectiveId: entry.nextObjectiveId,
+                        });
                       }}
                       className="min-w-[120px] flex-1"
                     >
-                      {isCheckingRewards ? (
-                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                      ) : (
-                        entry.text
-                      )}
+                      {entry.text}
                     </Button>
                   ))}
                 </div>

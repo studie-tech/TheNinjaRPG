@@ -1,4 +1,4 @@
-import { Loader2, Sparkles, X } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -482,7 +482,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
           </div>
         )}
         {/* Dialog options */}
-        {activeObjective?.task === "dialog" && (
+        {activeObjective?.task === "dialog" && !isCheckingRewards && (
           <div className="w-full">
             <h2 className="pl-2 font-bold text-lg">Dialog Options</h2>
             <div className="pointer-events-auto flex w-full flex-wrap gap-1 px-2 pb-1">
@@ -492,18 +492,13 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                     type="button"
                     className="max-w-full cursor-pointer break-words rounded-lg border-2 bg-popover px-2 py-1 text-right text-xs shadow-lg hover:bg-poppopover sm:text-sm"
                     onClick={() =>
-                      !isCheckingRewards &&
                       checkRewards({
                         questId: quest.id,
                         nextObjectiveId: entry.nextObjectiveId,
                       })
                     }
                   >
-                    {isCheckingRewards ? (
-                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                    ) : (
-                      entry.text
-                    )}
+                    {entry.text}
                   </button>
                 </div>
               ))}
