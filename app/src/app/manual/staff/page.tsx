@@ -242,6 +242,13 @@ export default function Staff() {
                   jutsus, bloodlines, events etc.
                 </Information>
               </div>
+              <div className="rounded-lg bg-violet-500 p-1 font-bold">
+                Head Content
+                <UserList
+                  users={users.filter((user) => user.role === "HEAD_CONTENT")}
+                  expectedLength={1}
+                />
+              </div>
               <div className="rounded-lg bg-purple-400 p-1 font-bold">
                 Content
                 <UserList
@@ -266,6 +273,13 @@ export default function Staff() {
                   review, and implementation of new game elements such as quests, items,
                   jutsus, bloodlines, events etc.
                 </Information>
+              </div>
+              <div className="rounded-lg bg-amber-500 p-1 font-bold">
+                Head Event
+                <UserList
+                  users={users.filter((user) => user.role === "HEAD_EVENT")}
+                  expectedLength={1}
+                />
               </div>
               <div className="rounded-lg bg-orange-600 p-1 font-bold">
                 Event

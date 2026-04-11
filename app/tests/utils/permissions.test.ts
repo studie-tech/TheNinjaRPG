@@ -29,20 +29,32 @@ test("approval admins can approve and view staff applications", () => {
   expect(canViewAllApplications("OWNER")).toBe(true);
 });
 
+test("head leads may view all applications but cannot approve", () => {
+  expect(canViewAllApplications("HEAD_CONTENT")).toBe(true);
+  expect(canViewAllApplications("HEAD_EVENT")).toBe(true);
+  expect(canViewAllApplications("HEAD_MODERATOR")).toBe(true);
+  expect(canApproveApplications("HEAD_CONTENT")).toBe(false);
+  expect(canApproveApplications("HEAD_EVENT")).toBe(false);
+  expect(canApproveApplications("HEAD_MODERATOR")).toBe(false);
+});
+
 test("non-approval staff do not get application approval access", () => {
   expect(getApprovalGroup("CONTENT")).toBeNull();
+  expect(getApprovalGroup("HEAD_CONTENT")).toBeNull();
   expect(getApprovalGroup("EVENT")).toBeNull();
+  expect(getApprovalGroup("HEAD_EVENT")).toBeNull();
   expect(getApprovalGroup("HEAD_MODERATOR")).toBeNull();
   expect(getApprovalGroup("MODERATOR")).toBeNull();
   expect(getApprovalGroup("JR_MODERATOR")).toBeNull();
   expect(canApproveApplications("CONTENT")).toBe(false);
+  expect(canApproveApplications("HEAD_CONTENT")).toBe(false);
   expect(canApproveApplications("EVENT")).toBe(false);
+  expect(canApproveApplications("HEAD_EVENT")).toBe(false);
   expect(canApproveApplications("HEAD_MODERATOR")).toBe(false);
   expect(canApproveApplications("MODERATOR")).toBe(false);
   expect(canApproveApplications("JR_MODERATOR")).toBe(false);
   expect(canViewAllApplications("CONTENT")).toBe(false);
   expect(canViewAllApplications("EVENT")).toBe(false);
-  expect(canViewAllApplications("HEAD_MODERATOR")).toBe(false);
   expect(canViewAllApplications("MODERATOR")).toBe(false);
   expect(canViewAllApplications("JR_MODERATOR")).toBe(false);
 });

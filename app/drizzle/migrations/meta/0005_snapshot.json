@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "e8b4c2a0-7f91-4d3b-b2a6-1c9e8f7d6a5b",
-  "prevId": "fa4ffadf-2aac-4f55-ac19-97059242734a",
+  "id": "545c20b0-2fb4-4197-b3f0-07d1c107541e",
+  "prevId": "e8b4c2a0-7f91-4d3b-b2a6-1c9e8f7d6a5b",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",
@@ -1156,7 +1156,7 @@
         },
         "amount": {
           "name": "amount",
-          "type": "int",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -8412,7 +8412,7 @@
         },
         "targetRole": {
           "name": "targetRole",
-          "type": "enum('USER','OWNER','CODING-ADMIN','CONTENT-ADMIN','EVENT-ADMIN','MODERATOR-ADMIN','HEAD_MODERATOR','MODERATOR','JR_MODERATOR','CONTENT','EVENT','CODER')",
+          "type": "enum('USER','OWNER','CODING-ADMIN','CONTENT-ADMIN','EVENT-ADMIN','MODERATOR-ADMIN','HEAD_MODERATOR','MODERATOR','JR_MODERATOR','HEAD_CONTENT','CONTENT','HEAD_EVENT','EVENT','CODER')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -10631,7 +10631,7 @@
         },
         "role": {
           "name": "role",
-          "type": "enum('USER','OWNER','CODING-ADMIN','CONTENT-ADMIN','EVENT-ADMIN','MODERATOR-ADMIN','HEAD_MODERATOR','MODERATOR','JR_MODERATOR','CONTENT','EVENT','CODER')",
+          "type": "enum('USER','OWNER','CODING-ADMIN','CONTENT-ADMIN','EVENT-ADMIN','MODERATOR-ADMIN','HEAD_MODERATOR','MODERATOR','JR_MODERATOR','HEAD_CONTENT','CONTENT','HEAD_EVENT','EVENT','CODER')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -10999,6 +10999,14 @@
         },
         "dailyPvpMissions": {
           "name": "dailyPvpMissions",
+          "type": "smallint unsigned",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "dailyWarMissions": {
+          "name": "dailyWarMissions",
           "type": "smallint unsigned",
           "primaryKey": false,
           "notNull": true,
@@ -13452,6 +13460,17 @@
           "autoincrement": false,
           "default": "'PENDING'"
         },
+        "activeFlag": {
+          "name": "activeFlag",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "generated": {
+            "as": "CASE WHEN `status` = 'PENDING' THEN 1 ELSE NULL END",
+            "type": "stored"
+          }
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "datetime(3)",
@@ -13496,6 +13515,13 @@
             "endsAt"
           ],
           "isUnique": false
+        },
+        "VillageElderVote_initiatedByUserId_idx": {
+          "name": "VillageElderVote_initiatedByUserId_idx",
+          "columns": [
+            "initiatedByUserId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {},
@@ -13507,7 +13533,17 @@
           ]
         }
       },
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "VillageElderVote_active_pending_unique": {
+          "name": "VillageElderVote_active_pending_unique",
+          "columns": [
+            "villageId",
+            "type",
+            "targetId",
+            "activeFlag"
+          ]
+        }
+      },
       "checkConstraint": {}
     },
     "VillageElderVoteEntry": {
@@ -14033,7 +14069,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": 1000
+          "default": 500
         },
         "attackerShrineMaxHp": {
           "name": "attackerShrineMaxHp",
@@ -14041,7 +14077,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": 1000
+          "default": 500
         },
         "attackerShrineStatus": {
           "name": "attackerShrineStatus",

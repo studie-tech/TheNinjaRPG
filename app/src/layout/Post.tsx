@@ -92,10 +92,20 @@ const Post: React.FC<PostProps> = (props) => {
         "bg-linear-to-r from-emerald-700 via-emerald-500 to-emerald-700 bg-clip-text text-transparent";
       userRole = "bg-emerald-700";
       break;
+    case "HEAD_EVENT":
+      userColor =
+        "bg-linear-to-r from-amber-600 via-amber-500 to-amber-600 bg-clip-text text-transparent";
+      userRole = "bg-amber-500";
+      break;
     case "EVENT":
       userColor =
         "bg-linear-to-r from-orange-600 via-orange-500 to-orange-600 bg-clip-text text-transparent";
       userRole = "bg-orange-500";
+      break;
+    case "HEAD_CONTENT":
+      userColor =
+        "bg-linear-to-r from-purple-600 via-violet-500 to-purple-600 bg-clip-text text-transparent";
+      userRole = "bg-violet-500";
       break;
     case "CONTENT":
       userColor =

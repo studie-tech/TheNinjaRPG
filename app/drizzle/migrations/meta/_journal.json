@@ -36,6 +36,13 @@
       "when": 1774291788478,
       "tag": "0004_brave_black_cat",
       "breakpoints": false
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1775909948530,
+      "tag": "0005_great_rogue",
+      "breakpoints": false
     }
   ]
 }
