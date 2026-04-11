@@ -170,11 +170,11 @@ export const canChangeUserRolesTo = (role: UserRole): UserRole[] => {
   } else if (role === "HEAD_MODERATOR") {
     return ["USER", "MODERATOR", "JR_MODERATOR"];
   } else if (role === "HEAD_CONTENT") {
-    return ["USER", "CONTENT", "HEAD_CONTENT"];
+    return ["USER", "CONTENT"];
   } else if (role === "CONTENT") {
     return ["CONTENT"];
   } else if (role === "HEAD_EVENT") {
-    return ["USER", "EVENT", "HEAD_EVENT"];
+    return ["USER", "EVENT"];
   } else if (role === "EVENT") {
     return ["EVENT"];
   } else if (role === "CODER") {

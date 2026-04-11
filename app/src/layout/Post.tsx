@@ -165,7 +165,7 @@ const Post: React.FC<PostProps> = (props) => {
           ))}
         {props.user?.role !== "USER" && (
           <span
-            className={`${userRole} m-1 rounded-md p-1 ${["CODER", "MODERATOR", "JR_MODERATOR", "EVENT-ADMIN"].includes(props.user.role) ? "text-black" : ""}`}
+            className={`${userRole} m-1 rounded-md p-1 ${["CODER", "MODERATOR", "JR_MODERATOR", "EVENT-ADMIN", "HEAD_EVENT", "HEAD_CONTENT"].includes(props.user.role) ? "text-black" : ""}`}
           >
             {capitalizeFirstLetter(props.user?.role)}
           </span>

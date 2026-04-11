@@ -105,7 +105,6 @@ export const applicationsRouter = createTRPCRouter({
       const canViewAll = canViewAllApplications(user.role);
 
       // If onlyMine or user cannot view all applications, constrain to self
-      // If onlyMine or user cannot view all applications, constrain to self
       const baseConds = [
         ...(input.onlyMine || !canViewAll
           ? [eq(staffApplication.applicantUserId, user.userId)]
