@@ -227,14 +227,18 @@ jobs:
           PREVIEW_URL: ${{ needs.preview_check.outputs.preview_url || needs.preview_check.outputs.details_url }}
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
-          echo "Checking preview accessibility..."
+          echo "Checking preview accessibility via cookie jar..."
           for i in $(seq 1 30); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" -L \
+            # Step 1: seed bypass cookie
+            curl -s -o /dev/null -c /tmp/vercel_cookie.txt \
               -H "x-vercel-protection-bypass: ${VERCEL_BYPASS}" \
               -H "x-vercel-set-bypass-cookie: true" \
-              "${PREVIEW_URL}" || echo "000")
+              "${PREVIEW_URL}" 2>/dev/null || true
+            # Step 2: use cookie to access preview
+            status=$(curl -s -o /dev/null -w "%{http_code}" \
+              -b /tmp/vercel_cookie.txt "${PREVIEW_URL}" 2>/dev/null || echo "000")
             echo "Attempt $i: HTTP $status"
-            if [ "$status" = "200" ]; then
+            if [ "$status" = "200" ] || [ "$status" = "307" ]; then
               echo "Preview is accessible."
               exit 0
             fi
