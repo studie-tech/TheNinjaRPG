@@ -8,6 +8,7 @@ import {
 
 const PREVIEW_ENV_VALUE = "preview";
 const MACHINE_TOKEN_HEADER = "x-tnr-reviewer-token";
+export const dynamic = "force-dynamic";
 
 const getMachineToken = async () => {
   const requestHeaders = await headers();
@@ -29,7 +30,15 @@ export async function POST(request: Request) {
   const expectedToken = process.env.AI_TEST_USER_BROKER_TOKEN;
   if (!expectedToken) {
     return NextResponse.json(
-      { success: false, message: "AI test-user broker token is not configured" },
+      {
+        success: false,
+        message: "AI test-user broker token is not configured",
+        debug: {
+          vercelEnv: process.env.VERCEL_ENV ?? "unset",
+          nodeEnv: process.env.NODE_ENV ?? "unset",
+          hasToken: !!process.env.AI_TEST_USER_BROKER_TOKEN,
+        },
+      },
       { status: 500 },
     );
   }
