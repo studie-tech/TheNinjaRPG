@@ -189,36 +189,16 @@ jobs:
 
       - name: Configure Codex MCP and artifacts
         shell: bash
-        env:
-          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           mkdir -p .artifacts/tnr-review .artifacts/screenshots "$HOME/.codex"
 
-          # Playwright MCP config with Vercel bypass header
-          node -e "
-            const cfg = {
-              browser: {
-                headless: true,
-                contextOptions: {}
-              }
-            };
-            const bypass = process.env.VERCEL_BYPASS || '';
-            if (bypass) {
-              cfg.browser.contextOptions.extraHTTPHeaders = {
-                'x-vercel-protection-bypass': bypass,
-                'x-vercel-set-bypass-cookie': 'true'
-              };
-            }
-            require('fs').writeFileSync('/tmp/playwright-mcp-config.json', JSON.stringify(cfg, null, 2));
-          "
-          echo "Playwright MCP config:"
-          cat /tmp/playwright-mcp-config.json
-
-          # Codex MCP server config
+          # Codex MCP server config — no extraHTTPHeaders to avoid CORS issues
+          # with cross-origin requests (e.g. Clerk JS). Vercel bypass is handled
+          # via query params that set a cookie on first page load.
           printf '%s\n' \
             '[mcp_servers.playwright]' \
             'command = "npx"' \
-            'args = ["-y", "@playwright/mcp@latest", "--headless", "--config", "/tmp/playwright-mcp-config.json"]' \
+            'args = ["-y", "@playwright/mcp@latest", "--headless"]' \
             'startup_timeout_sec = 30' \
             'tool_timeout_sec = 120' \
             > "$HOME/.codex/config.toml"

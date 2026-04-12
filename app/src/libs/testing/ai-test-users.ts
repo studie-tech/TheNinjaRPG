@@ -81,12 +81,13 @@ const resolveVillage = async (profile: AiTestUserProfile) => {
 };
 
 const upsertClerkUser = async (
+  externalId: string,
   email: string,
   username: string,
   password: string,
 ): Promise<{ userId: string }> => {
   const existingUsers = (await fetchClerkApi(
-    `/users?limit=1&email_address[]=${encodeURIComponent(email)}`,
+    `/users?limit=1&external_id[]=${encodeURIComponent(externalId)}`,
     { method: "GET" },
   )) as Array<{ id: string }>;
 
@@ -107,6 +108,7 @@ const upsertClerkUser = async (
   const created = (await fetchClerkApi("/users", {
     method: "POST",
     body: JSON.stringify({
+      external_id: externalId,
       username,
       password,
       skip_password_checks: true,
@@ -205,9 +207,10 @@ export const provisionAiTestUsers = async (
         ? profile.preferredUsername
         : `tnr${runKey}${userKey}`;
       const username = createUsername(usernameBase);
+      const externalId = `tnr-test-${runKey}-${userKey}`;
       const email = `tnr-${runKey}-${userKey}@theninjarpg.test`;
 
-      const { userId } = await upsertClerkUser(email, username, password);
+      const { userId } = await upsertClerkUser(externalId, email, username, password);
       const [, signInToken] = await Promise.all([
         upsertUserData({
           userId,
