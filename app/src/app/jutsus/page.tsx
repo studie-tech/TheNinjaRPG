@@ -752,6 +752,7 @@ export default function MyJutsu() {
                                 !canEvolveJutsu(evo, userData) ||
                                 !hasRequiredRank(userData.rank, evo.requiredRank) ||
                                 !hasRequiredLevel(userData.level, evo.requiredLevel) ||
+                                !checkJutsuRank(evo.jutsuRank, userData.rank) ||
                                 !checkJutsuVillage(evo, userData) ||
                                 !checkJutsuBloodline(evo, userData) ||
                                 !checkJutsuElements(evo, userElements)
@@ -765,6 +766,7 @@ export default function MyJutsu() {
                             e.preventDefault();
                             if (!userData) return;
                             if (
+                              !checkJutsuRank(evo.jutsuRank, userData.rank) ||
                               !checkJutsuVillage(evo, userData) ||
                               !checkJutsuBloodline(evo, userData) ||
                               !checkJutsuElements(evo, userElements)

@@ -502,6 +502,10 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("You don't meet the level requirement for this evolution");
       if (!canEvolveJutsu(evolutionJutsu, user))
         return errorResponse("You don't meet the stat requirements for this evolution");
+      if (!canUseJutsu(evolutionJutsu, user))
+        return errorResponse(
+          "You don't meet all requirements for this evolution (village, bloodline, or element restrictions)",
+        );
       // Quest tracking
       const { trackers } = getNewTrackers(user, [
         { task: "jutsus_mastered", increment: 1 },
@@ -678,17 +682,22 @@ export const jutsuRouter = createTRPCRouter({
           evolutionGraph.map((node) => [node.id, node] as const),
         );
         // Walk upward from parent to get ancestor depth, checking for circular refs.
+        // visitedAncestors guards against pre-existing cycles already in the DB.
         let ancestorDepth = 1;
         let ancestorParentId = parent.parentJutsuId;
+        const visitedAncestors = new Set<string>([input.data.parentJutsuId]);
         while (ancestorParentId) {
           if (ancestorParentId === input.id)
             return errorResponse("Cannot create a circular evolution chain");
+          if (visitedAncestors.has(ancestorParentId)) break;
+          visitedAncestors.add(ancestorParentId);
           const nextAncestor = jutsuById.get(ancestorParentId);
           if (!nextAncestor) break;
           ancestorParentId = nextAncestor.parentJutsuId;
           ancestorDepth++;
         }
         // Walk downward from input.id to get the deepest descendant depth.
+        // visitedDescendants guards against pre-existing cycles in the DB.
         const childrenByParent = new Map<string, string[]>();
         for (const node of evolutionGraph) {
           if (!node.parentJutsuId) continue;
@@ -698,11 +707,13 @@ export const jutsuRouter = createTRPCRouter({
         }
         let descendantDepth = 1;
         let frontier = [input.id];
+        const visitedDescendants = new Set<string>([input.id]);
         while (frontier.length > 0) {
-          const nextFrontier = frontier.flatMap(
-            (parentId) => childrenByParent.get(parentId) ?? [],
-          );
+          const nextFrontier = frontier
+            .flatMap((parentId) => childrenByParent.get(parentId) ?? [])
+            .filter((id) => !visitedDescendants.has(id));
           if (nextFrontier.length === 0) break;
+          for (const id of nextFrontier) visitedDescendants.add(id);
           frontier = nextFrontier;
           descendantDepth++;
         }
@@ -879,7 +890,7 @@ export const jutsuRouter = createTRPCRouter({
       const userjutsuObj = userjutsus.find((j) => j.jutsuId === input.jutsuId);
       const equippedJutsus = userjutsus.filter((uj) => uj.equipped);
       const curEquip = equippedJutsus.length;
-      const maxEquip = userData && calcJutsuEquipLimit(user);
+      const maxEquip = calcJutsuEquipLimit(user);
       const residualJutsus = equippedJutsus.filter((uj) =>
         uj.jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
       );

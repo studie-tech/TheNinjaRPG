@@ -101,12 +101,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   // Get bloodline names for displaying bloodline requirements
   const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
 
-  // Get evolutions for jutsu items that are not themselves evolutions
-  const isParentJutsu =
-    "jutsuType" in item && !("parentJutsuId" in item && item.parentJutsuId);
+  // Get evolutions for any jutsu — middle-chain nodes (B in A→B→C) can have children too
+  const isJutsuItem = "jutsuType" in item;
   const { data: evolutionsData } = api.jutsu.getEvolutions.useQuery(
     { jutsuId: item.id },
-    { enabled: isParentJutsu && !hideData, staleTime: 5 * 60 * 1000 },
+    { enabled: isJutsuItem && !hideData, staleTime: 5 * 60 * 1000 },
   );
 
   // Setup clone mutations

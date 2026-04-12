@@ -1156,14 +1156,10 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
  * Jutsu Type. Used for validating a jutsu object is set up properly
  */
 const makeCappedNullableNumber = (max: number) =>
-  z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(max)
-    .nullable()
-    .optional()
-    .transform((v) => (v === null || v === undefined ? null : v));
+  z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? null : v),
+    z.coerce.number().int().min(0).max(max).nullable(),
+  );
 
 export const JutsuValidatorRawSchema = z.object({
   name: z.string().trim(),
