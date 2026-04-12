@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       success: true,
       users: provisioned.users,
       testingToken: provisioned.testingToken,
+      version: provisioned.version,
     });
     return NextResponse.json(responsePayload);
   } catch (error) {

@@ -43,6 +43,7 @@ export const aiTestUserResponseSchema = z.object({
     }),
   ),
   testingToken: z.string().optional(),
+  version: z.string().optional(),
 });
 
 export type AiTestUserRequest = z.infer<typeof aiTestUserRequestSchema>;

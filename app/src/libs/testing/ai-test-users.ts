@@ -80,43 +80,65 @@ const resolveVillage = async (profile: AiTestUserProfile) => {
   throw new Error(`Village not found for profile key ${profile.key}`);
 };
 
+const findUserByExternalId = async (externalId: string) => {
+  const users = (await fetchClerkApi(
+    `/users?limit=1&external_id=${encodeURIComponent(externalId)}`,
+    { method: "GET" },
+  )) as Array<{ id: string }>;
+  return users[0];
+};
+
+const findUserByEmail = async (email: string) => {
+  const users = (await fetchClerkApi(
+    `/users?limit=1&email_address=${encodeURIComponent(email)}`,
+    { method: "GET" },
+  )) as Array<{ id: string }>;
+  return users[0];
+};
+
 const upsertClerkUser = async (
   externalId: string,
   email: string,
   username: string,
   password: string,
 ): Promise<{ userId: string }> => {
-  const existingUsers = (await fetchClerkApi(
-    `/users?limit=1&external_id[]=${encodeURIComponent(externalId)}`,
-    { method: "GET" },
-  )) as Array<{ id: string }>;
-
-  const existingUser = existingUsers[0];
-  if (existingUser?.id) {
-    const updated = (await fetchClerkApi(`/users/${existingUser.id}`, {
+  const existingByExtId = await findUserByExternalId(externalId);
+  if (existingByExtId?.id) {
+    const updated = (await fetchClerkApi(`/users/${existingByExtId.id}`, {
       method: "PATCH",
-      body: JSON.stringify({
-        username,
-        password,
-        skip_password_checks: true,
-      }),
+      body: JSON.stringify({ username, password, skip_password_checks: true }),
     })) as { id: string };
-
     return { userId: updated.id };
   }
 
-  const created = (await fetchClerkApi("/users", {
-    method: "POST",
-    body: JSON.stringify({
-      external_id: externalId,
-      username,
-      password,
-      skip_password_checks: true,
-      email_address: [email],
-    }),
-  })) as { id: string };
-
-  return { userId: created.id };
+  try {
+    const created = (await fetchClerkApi("/users", {
+      method: "POST",
+      body: JSON.stringify({
+        external_id: externalId,
+        username,
+        password,
+        skip_password_checks: true,
+        email_address: [email],
+      }),
+    })) as { id: string };
+    return { userId: created.id };
+  } catch (_createError) {
+    const existingByEmail = await findUserByEmail(email);
+    if (existingByEmail?.id) {
+      const updated = (await fetchClerkApi(`/users/${existingByEmail.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          external_id: externalId,
+          username,
+          password,
+          skip_password_checks: true,
+        }),
+      })) as { id: string };
+      return { userId: updated.id };
+    }
+    throw _createError;
+  }
 };
 
 const upsertUserData = async ({
@@ -193,10 +215,16 @@ const createSignInToken = async (userId: string): Promise<string | undefined> =>
   }
 };
 
+const BROKER_VERSION = "v3-external-id";
+
 export const provisionAiTestUsers = async (
   profiles: AiTestUserProfile[],
   runId: string,
-): Promise<{ users: ProvisionedAiTestUser[]; testingToken?: string }> => {
+): Promise<{
+  users: ProvisionedAiTestUser[];
+  testingToken?: string;
+  version?: string;
+}> => {
   const users = await Promise.all(
     profiles.map(async (profile) => {
       const resolvedVillage = await resolveVillage(profile);
@@ -240,5 +268,5 @@ export const provisionAiTestUsers = async (
   );
 
   const testingToken = await createTestingToken();
-  return { users, testingToken };
+  return { users, testingToken, version: BROKER_VERSION };
 };
