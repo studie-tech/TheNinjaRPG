@@ -239,7 +239,7 @@ jobs:
           COMMAND_AUTHOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
           EXTRA_INSTRUCTIONS: ${{ needs.command_gate.outputs.extra_instructions }}
-          AI_TEST_USER_BROKER_URL: ${{ vars.TNR_AI_TEST_USER_BROKER_URL }}
+          AI_TEST_USER_BROKER_TOKEN: ${{ secrets.AI_TEST_USER_BROKER_TOKEN }}
 
       - name: Run Codex reviewer
         id: run_codex
