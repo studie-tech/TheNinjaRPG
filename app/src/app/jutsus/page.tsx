@@ -22,6 +22,7 @@ import type { ElementName } from "@/drizzle/constants";
 import {
   COST_EXTRA_JUTSU_SLOT,
   COST_RESKIN_JUTSU,
+  JUTSU_LEVEL_CAP,
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_TRANSFER_COST,
   JUTSU_TRANSFER_DAYS,
@@ -784,8 +785,9 @@ export default function MyJutsu() {
                           </p>
                           <p className="mt-2 text-muted-foreground text-sm">
                             This will replace your current jutsu. The evolved jutsu
-                            starts at level 1 and can be trained to level{" "}
-                            {JUTSU_TRAIN_LEVEL_CAP}.
+                            starts at level 1, can be trained to level {JUTSU_LEVEL_CAP}{" "}
+                            in the Training Grounds, and reaches level{" "}
+                            {JUTSU_TRAIN_LEVEL_CAP} through combat.
                           </p>
                           {effectiveLevel < JUTSU_TRAIN_LEVEL_CAP && (
                             <p className="text-destructive text-sm">
