@@ -467,12 +467,20 @@ export const jutsuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user }, userJutsus, evolutionJutsu, allLoadouts] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        fetchUserJutsus(ctx.drizzle, ctx.userId),
-        fetchJutsu(ctx.drizzle, input.evolutionJutsuId),
-        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
-      ]);
+      const [{ user }, userJutsus, evolutionJutsu, allLoadouts, conflictingReskin] =
+        await Promise.all([
+          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+          fetchUserJutsus(ctx.drizzle, ctx.userId),
+          fetchJutsu(ctx.drizzle, input.evolutionJutsuId),
+          fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+          ctx.drizzle.query.jutsuReskin.findFirst({
+            where: and(
+              eq(jutsuReskin.userId, ctx.userId),
+              eq(jutsuReskin.jutsuId, input.evolutionJutsuId),
+            ),
+            columns: { id: true },
+          }),
+        ]);
       // Guards
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE")
@@ -510,6 +518,16 @@ export const jutsuRouter = createTRPCRouter({
       const { trackers } = getNewTrackers(user, [
         { task: "jutsus_mastered", increment: 1 },
       ]);
+      // If the parent has an active reskin and there is already a historical
+      // jutsuReskin row for the evolution target (from a previously removed reskin),
+      // delete that orphaned row first. Without this, the reskin-sync UPDATE below
+      // would hit the unique index on (userId, jutsuId) after userJutsu has already
+      // been committed, leaving the account in a partially-evolved state.
+      if (userJutsuObj.reskinId && conflictingReskin) {
+        await ctx.drizzle
+          .delete(jutsuReskin)
+          .where(eq(jutsuReskin.id, conflictingReskin.id));
+      }
       // Mutate: compare-and-swap on jutsuId to prevent double-evolve on retry/double-submit.
       // reskinId is kept so the cosmetic reskin carries over to the evolved jutsu.
       // The jutsuReskin record's jutsuId is updated below to stay in sync.
