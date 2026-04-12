@@ -33,7 +33,7 @@ jobs:
     runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
     permissions:
       issues: write
-      pull-requests: read
+      pull-requests: write
       checks: read
       contents: read
     outputs:
@@ -108,6 +108,7 @@ jobs:
       - name: Post initial comment
         if: steps.parse.outputs.should_run == 'true'
         id: initial_comment
+        continue-on-error: true
         uses: actions/github-script@v8
         with:
           script: |
