@@ -970,8 +970,7 @@ export const jutsuRouter = createTRPCRouter({
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
 
       const level = userjutsuObj ? userjutsuObj.level : 0;
-      const levelCap = info.parentJutsuId ? JUTSU_TRAIN_LEVEL_CAP : JUTSU_LEVEL_CAP;
-      if (level >= levelCap) {
+      if (level >= JUTSU_LEVEL_CAP) {
         return errorResponse("Jutsu is already at max level");
       }
       if (info.hidden && !canChangeContent(user.role)) {

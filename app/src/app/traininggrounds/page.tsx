@@ -101,8 +101,7 @@ import type { CaptchaVerifySchema } from "@/validators/misc";
 import { captchaVerifySchema } from "@/validators/misc";
 import { getSearchValidator } from "@/validators/register";
 
-const getJutsuLevelCap = (jutsu: { parentJutsuId?: string | null }) =>
-  jutsu.parentJutsuId ? JUTSU_TRAIN_LEVEL_CAP : JUTSU_LEVEL_CAP;
+const getJutsuLevelCap = (_jutsu: { parentJutsuId?: string | null }) => JUTSU_LEVEL_CAP;
 
 export default function Training() {
   // Ensure user is in village
