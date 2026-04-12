@@ -49,7 +49,12 @@ const Modal2: React.FC<Modal2Props> = (props) => {
       const activeElement = document.activeElement;
       const isButton = activeElement?.tagName === "BUTTON";
 
-      if (event.key === "Enter" && props?.onAccept && !isButton) {
+      if (
+        event.key === "Enter" &&
+        props?.onAccept &&
+        !isButton &&
+        !props.proceedDisabled
+      ) {
         props.onAccept(event as unknown as React.KeyboardEvent<KeyboardEvent>);
       }
     };

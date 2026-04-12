@@ -511,8 +511,8 @@ export const jutsuRouter = createTRPCRouter({
         { task: "jutsus_mastered", increment: 1 },
       ]);
       // Mutate: compare-and-swap on jutsuId to prevent double-evolve on retry/double-submit.
-      // reskinId is intentionally kept - fetchUserJutsus joins on reskinId (not jutsuReskin.jutsuId)
-      // so the cosmetic reskin carries over to the evolved jutsu without touching the reskin record.
+      // reskinId is kept so the cosmetic reskin carries over to the evolved jutsu.
+      // The jutsuReskin record's jutsuId is updated below to stay in sync.
       const evolveResult = await ctx.drizzle
         .update(userJutsu)
         .set({
@@ -580,6 +580,21 @@ export const jutsuRouter = createTRPCRouter({
                   and(
                     eq(userJutsu.id, input.userJutsuId),
                     eq(userJutsu.userId, ctx.userId),
+                  ),
+                ),
+            ]
+          : []),
+        // Keep reskin record's jutsuId in sync with the evolved jutsu so that
+        // createReskin's lookup (find by jutsuId) still works after evolution.
+        ...(userJutsuObj.reskinId
+          ? [
+              ctx.drizzle
+                .update(jutsuReskin)
+                .set({ jutsuId: input.evolutionJutsuId, updatedAt: new Date() })
+                .where(
+                  and(
+                    eq(jutsuReskin.id, userJutsuObj.reskinId),
+                    eq(jutsuReskin.userId, ctx.userId),
                   ),
                 ),
             ]
