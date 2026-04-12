@@ -22,6 +22,7 @@ import type { ElementName } from "@/drizzle/constants";
 import {
   COST_EXTRA_JUTSU_SLOT,
   COST_RESKIN_JUTSU,
+  JUTSU_LEVEL_CAP,
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_TRANSFER_COST,
   JUTSU_TRANSFER_DAYS,
@@ -738,13 +739,16 @@ export default function MyJutsu() {
                         userjutsu.finishTraining && userjutsu.finishTraining > now
                           ? userjutsu.level - 1
                           : userjutsu.level;
+                      const requiredEvolveLevel = userjutsu.jutsu.parentJutsuId
+                        ? JUTSU_TRAIN_LEVEL_CAP
+                        : JUTSU_LEVEL_CAP;
                       return (
                         <Confirm2
                           key={evo.id}
                           title={`Evolve to ${evo.name}`}
                           confirmDisabled={
                             !userData ||
-                            effectiveLevel < JUTSU_TRAIN_LEVEL_CAP ||
+                            effectiveLevel < requiredEvolveLevel ||
                             !canEvolveJutsu(evo, userData) ||
                             !hasRequiredRank(userData.rank, evo.requiredRank) ||
                             !hasRequiredLevel(userData.level, evo.requiredLevel) ||
@@ -787,9 +791,9 @@ export default function MyJutsu() {
                             starts at level 1 and can be trained to level{" "}
                             {JUTSU_TRAIN_LEVEL_CAP}.
                           </p>
-                          {effectiveLevel < JUTSU_TRAIN_LEVEL_CAP && (
+                          {effectiveLevel < requiredEvolveLevel && (
                             <p className="text-destructive text-sm">
-                              Required Jutsu Level: <b>{JUTSU_TRAIN_LEVEL_CAP}</b>{" "}
+                              Required Jutsu Level: <b>{requiredEvolveLevel}</b>{" "}
                               (current: {effectiveLevel})
                             </p>
                           )}

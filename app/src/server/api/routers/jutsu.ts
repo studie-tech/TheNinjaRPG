@@ -496,9 +496,12 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse(
           "This jutsu is currently being trained. Wait for training to complete before evolving.",
         );
-      if (userJutsuObj.level < JUTSU_TRAIN_LEVEL_CAP)
+      const requiredEvolveLevel = userJutsuObj.jutsu.parentJutsuId
+        ? JUTSU_TRAIN_LEVEL_CAP
+        : JUTSU_LEVEL_CAP;
+      if (userJutsuObj.level < requiredEvolveLevel)
         return errorResponse(
-          `Jutsu must be at max level (${JUTSU_TRAIN_LEVEL_CAP}) to evolve`,
+          `Jutsu must be at max level (${requiredEvolveLevel}) to evolve`,
         );
       if (userJutsuObj.jutsuId !== evolutionJutsu.parentJutsuId)
         return errorResponse("This jutsu cannot evolve into the target evolution");
