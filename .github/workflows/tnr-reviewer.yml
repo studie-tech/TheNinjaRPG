@@ -189,16 +189,39 @@ jobs:
 
       - name: Configure Codex MCP and artifacts
         shell: bash
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           mkdir -p .artifacts/tnr-review .artifacts/screenshots "$HOME/.codex"
+
+          # Playwright MCP config with Vercel bypass header
+          node -e "
+            const cfg = {
+              browser: {
+                headless: true,
+                contextOptions: {}
+              }
+            };
+            const bypass = process.env.VERCEL_BYPASS || '';
+            if (bypass) {
+              cfg.browser.contextOptions.extraHTTPHeaders = {
+                'x-vercel-protection-bypass': bypass
+              };
+            }
+            require('fs').writeFileSync('/tmp/playwright-mcp-config.json', JSON.stringify(cfg, null, 2));
+          "
+          echo "Playwright MCP config:"
+          cat /tmp/playwright-mcp-config.json
+
+          # Codex MCP server config
           printf '%s\n' \
             '[mcp_servers.playwright]' \
             'command = "npx"' \
-            'args = ["-y", "@playwright/mcp@latest", "--headless"]' \
+            'args = ["-y", "@playwright/mcp@latest", "--headless", "--config", "/tmp/playwright-mcp-config.json"]' \
             'startup_timeout_sec = 30' \
             'tool_timeout_sec = 120' \
             > "$HOME/.codex/config.toml"
-          echo "Codex MCP config:"
+          echo "Codex config.toml:"
           cat "$HOME/.codex/config.toml"
 
       - name: Build review prompt
