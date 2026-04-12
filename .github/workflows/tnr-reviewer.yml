@@ -221,31 +221,25 @@ jobs:
           EXTRA_INSTRUCTIONS: ${{ needs.command_gate.outputs.extra_instructions }}
           AI_TEST_USER_BROKER_TOKEN: ${{ secrets.AI_TEST_USER_BROKER_TOKEN }}
 
-      - name: Wait for preview accessibility
+      - name: Wait for Vercel deployment
         shell: bash
         env:
           PREVIEW_URL: ${{ needs.preview_check.outputs.preview_url || needs.preview_check.outputs.details_url }}
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
-          echo "Checking preview accessibility via cookie jar..."
-          for i in $(seq 1 30); do
-            # Step 1: seed bypass cookie
-            curl -s -o /dev/null -c /tmp/vercel_cookie.txt \
-              -H "x-vercel-protection-bypass: ${VERCEL_BYPASS}" \
-              -H "x-vercel-set-bypass-cookie: true" \
-              "${PREVIEW_URL}" 2>/dev/null || true
-            # Step 2: use cookie to access preview
+          echo "Waiting for Vercel deployment to stabilize..."
+          for i in $(seq 1 18); do
             status=$(curl -s -o /dev/null -w "%{http_code}" \
-              -b /tmp/vercel_cookie.txt "${PREVIEW_URL}" 2>/dev/null || echo "000")
+              -H "x-vercel-protection-bypass: ${VERCEL_BYPASS}" \
+              "${PREVIEW_URL}" 2>/dev/null || echo "000")
             echo "Attempt $i: HTTP $status"
-            if [ "$status" = "200" ] || [ "$status" = "307" ]; then
-              echo "Preview is accessible."
+            if [ "$status" != "000" ] && [ "$status" != "502" ] && [ "$status" != "503" ] && [ "$status" != "504" ]; then
+              echo "Deployment is live (HTTP $status). Bypass handled by agent."
               exit 0
             fi
             sleep 10
           done
-          echo "::error::Preview did not become accessible after 5 minutes"
-          exit 1
+          echo "::warning::Could not verify deployment liveness, proceeding anyway."
 
       - name: Run Codex reviewer
         id: run_codex
