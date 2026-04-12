@@ -188,15 +188,16 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure Codex MCP and artifacts
+        shell: bash
         run: |
           mkdir -p .artifacts/tnr-review .artifacts/screenshots "$HOME/.codex"
-          cat > "$HOME/.codex/config.toml" <<'TOML'
-[mcp_servers.playwright]
-command = "npx"
-args = ["-y", "@playwright/mcp@latest", "--headless"]
-startup_timeout_sec = 30
-tool_timeout_sec = 120
-TOML
+          printf '%s\n' \
+            '[mcp_servers.playwright]' \
+            'command = "npx"' \
+            'args = ["-y", "@playwright/mcp@latest", "--headless"]' \
+            'startup_timeout_sec = 30' \
+            'tool_timeout_sec = 120' \
+            > "$HOME/.codex/config.toml"
           echo "Codex MCP config:"
           cat "$HOME/.codex/config.toml"
 
