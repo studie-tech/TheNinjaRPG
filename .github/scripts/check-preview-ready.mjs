@@ -46,7 +46,16 @@ const githubRequest = async (path) => {
 };
 
 const extractPreviewUrl = (checkRun) => {
-  const fromSummary = checkRun?.output?.summary?.match(/https:\/\/[^\s)]+/i)?.[0];
+  const summary = checkRun?.output?.summary ?? "";
+
+  // Vercel feedback URLs embed the deployment hostname after /open-feedback/
+  // e.g. https://vercel.live/open-feedback/my-app-git-branch.vercel.app?via=...
+  const feedbackMatch = summary.match(
+    /https:\/\/vercel\.live\/open-feedback\/([a-z0-9-]+\.vercel\.app)/i,
+  );
+  if (feedbackMatch) return `https://${feedbackMatch[1]}`;
+
+  const fromSummary = summary.match(/https:\/\/[^\s)]+/i)?.[0];
   if (fromSummary) return fromSummary;
   if (checkRun?.details_url?.includes("http")) return checkRun.details_url;
   return "";
