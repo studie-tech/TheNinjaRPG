@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import {
   RAID_BATTLE_LOBBY_SECONDS,
   RAID_BATTLE_MAX_USERS_PER_TEAM,
@@ -33,6 +34,7 @@ import { getRewardArray } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { calculatePercent } from "@/utils/math";
+import { parseHtml } from "@/utils/parse";
 import { secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -639,6 +641,10 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
               </div>
             )}
 
+            {!isViewingCompletedRaid && raidDetails.raidChatConversationId && (
+              <RaidChatPanel conversationId={raidDetails.raidChatConversationId} />
+            )}
+
             {/* Leaderboard */}
             {leaderboard.length > 0 && (
               <div className="rounded-lg border p-3">
@@ -717,6 +723,161 @@ interface RaidTeamMember {
   username: string;
   avatar: string | null;
 }
+
+interface RaidChatPanelProps {
+  conversationId: string;
+}
+
+const RaidChatPanel: React.FC<RaidChatPanelProps> = ({ conversationId }) => {
+  const { data: userData, pusher } = useRequiredUserData();
+  const util = api.useUtils();
+  const [message, setMessage] = useState("");
+
+  const queryKey = useMemo(
+    () => ({
+      convo_id: conversationId,
+      limit: 15,
+      refreshKey: 0,
+    }),
+    [conversationId],
+  );
+
+  const { data: commentsData, isPending } =
+    api.comments.getConversationComments.useInfiniteQuery(queryKey, {
+      enabled: !!conversationId,
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+    });
+
+  const { mutate: sendMessage, isPending: isSending } =
+    api.comments.createConversationComment.useMutation({
+      onSuccess: async (data) => {
+        if (!data.success) {
+          showMutationToast(data);
+          return;
+        }
+
+        setMessage("");
+        await util.comments.getConversationComments.invalidate(queryKey);
+      },
+    });
+
+  useEffect(() => {
+    if (!pusher || !conversationId) return;
+
+    const channel = pusher.subscribe(conversationId);
+    channel.bind("event", (data: { message?: string }) => {
+      if (data.message === "new") {
+        void util.comments.getConversationComments.invalidate(queryKey);
+      }
+    });
+
+    return () => {
+      pusher.unsubscribe(conversationId);
+    };
+  }, [conversationId, pusher, queryKey, util.comments.getConversationComments]);
+
+  const comments =
+    commentsData?.pages
+      .flatMap((page) => page.data)
+      .filter((comment, index, all) => {
+        return all.findIndex((candidate) => candidate.id === comment.id) === index;
+      }) ?? [];
+
+  const handleSendMessage = () => {
+    if (!conversationId) return;
+    const trimmedMessage = message.trim();
+    if (trimmedMessage.length < 4) {
+      showMutationToast({
+        success: false,
+        message: "Raid chat messages must be at least 4 characters long.",
+      });
+      return;
+    }
+
+    sendMessage({
+      object_id: conversationId,
+      comment: trimmedMessage,
+      quoteIds: null,
+      senderId: null,
+    });
+  };
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h4 className="font-medium">Raid Chat</h4>
+        <span className="text-muted-foreground text-xs">
+          Messages are shared live for this raid.
+        </span>
+      </div>
+
+      <div className="mb-3 max-h-72 space-y-2 overflow-y-auto rounded-md border bg-muted/30 p-3">
+        {isPending ? (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading chat...
+          </div>
+        ) : comments.length > 0 ? (
+          comments
+            .slice()
+            .reverse()
+            .map((comment) => (
+              <div
+                key={comment.id}
+                className={cn(
+                  "rounded-md border bg-background p-2 text-sm",
+                  comment.userId === userData?.userId && "border-primary/40",
+                )}
+              >
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="font-medium">{comment.username}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {new Date(comment.createdAt).toLocaleTimeString()}
+                  </span>
+                </div>
+                <div className="break-words text-foreground">
+                  {parseHtml(comment.content)}
+                </div>
+              </div>
+            ))
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            No messages yet. Coordinate your team here.
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Textarea
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          placeholder={
+            userData?.isBanned || userData?.isSilenced
+              ? "You cannot send messages while banned or silenced."
+              : "Write a message to everyone in this raid..."
+          }
+          disabled={isSending || userData?.isBanned || userData?.isSilenced}
+          className="min-h-24"
+          maxLength={5000}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground text-xs">Minimum 4 characters.</span>
+          <Button
+            onClick={handleSendMessage}
+            disabled={
+              isSending ||
+              userData?.isBanned ||
+              userData?.isSilenced ||
+              message.trim().length < 4
+            }
+          >
+            {isSending ? "Sending..." : "Send"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface RaidTeam {
   id: string;

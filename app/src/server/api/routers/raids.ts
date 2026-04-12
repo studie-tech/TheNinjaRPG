@@ -23,6 +23,7 @@ import {
 import {
   badge,
   bloodline,
+  conversation,
   item,
   jutsu,
   mpvpBattleQueue,
@@ -311,6 +312,11 @@ export const raidsRouter = createTRPCRouter({
 
       // Derived
       const raidData = getRaidObjectiveData(raid);
+      const raidChatConversationId = await ensureRaidChatConversation(
+        ctx.drizzle,
+        raid,
+        ctx.userId,
+      );
 
       return {
         raid: {
@@ -323,6 +329,7 @@ export const raidsRouter = createTRPCRouter({
           raidBossCurrentHealth: raid.raidBossCurrentHealth,
           raidEndsAt: raid.raidEndsAt,
           raidSector: raidData?.sector ?? null,
+          raidChatConversationId,
         },
         participation,
         thresholds,
@@ -703,6 +710,9 @@ export const raidsRouter = createTRPCRouter({
       ]);
       // Guard
       if (!user) return errorResponse("User not found");
+      if (user.isBanned) {
+        return errorResponse("You are banned and cannot queue for raids");
+      }
       if (user.status === "HOSPITALIZED") {
         return errorResponse("You cannot ready up while hospitalized");
       }
@@ -878,6 +888,9 @@ export const raidsRouter = createTRPCRouter({
 
       // Guard - basic validations
       if (!user) return errorResponse("User not found");
+      if (user.isBanned) {
+        return errorResponse("You are banned and cannot queue for raids");
+      }
       if (!raid) return errorResponse("Raid not found");
       if (existingQueueEntries.length > 0) {
         return errorResponse("Already in a battle queue");
@@ -1208,6 +1221,9 @@ export const raidsRouter = createTRPCRouter({
 
       // Guard - basic validations
       if (!user) return errorResponse("User not found");
+      if (user.isBanned) {
+        return errorResponse("You are banned and cannot queue for raids");
+      }
       if (!team) return errorResponse("Team not found");
 
       // Check battleId state - handle stale claiming states or already started battles
@@ -1693,4 +1709,34 @@ export const checkAndCleanupExpiredRaid = async (
   }
 
   return { wasExpired: true, sectorCleaned: false };
+};
+
+const getRaidChatConversationId = (raidId: string) => `raid-chat-${raidId}`;
+
+const ensureRaidChatConversation = async (
+  client: DrizzleClient,
+  raid: { id: string; name: string },
+  userId: string,
+) => {
+  const conversationId = getRaidChatConversationId(raid.id);
+  await client
+    .insert(conversation)
+    .values({
+      id: conversationId,
+      title: `${raid.name} Raid Chat`,
+      createdById: userId,
+      isPublic: true,
+      isLocked: false,
+      isEnabled: true,
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        title: `${raid.name} Raid Chat`,
+        isPublic: true,
+        isLocked: false,
+        isEnabled: true,
+      },
+    });
+
+  return conversationId;
 };

@@ -37,6 +37,7 @@ import {
   war,
   warKill,
 } from "@/drizzle/schema";
+import { stillInBattle } from "@/libs/combat/actions";
 import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
 import {
   getItem,
@@ -73,7 +74,14 @@ export const updateBattle = async (
   fetchedVersion: number,
 ) => {
   // Calculations
-  const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
+  const raidBossDefeated =
+    result &&
+    newBattle.battleType === "RAID" &&
+    !newBattle.usersState.some(
+      (u) => u.isAi && !u.isSummon && stillInBattle(u, newBattle.usersEffects),
+    );
+  const battleOver =
+    !!result && (result.friendsLeft + result.targetsLeft === 0 || raidBossDefeated);
 
   // Get user and other user
   const user = newBattle.usersState.find((u) => u.userId === userId && !u.isSummon);
