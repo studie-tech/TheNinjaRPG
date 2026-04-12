@@ -20,7 +20,6 @@ on:
 
 env:
   MODE: pr-review
-  MCP_PORT: "3025"
 
 jobs:
   command_gate:
@@ -188,33 +187,18 @@ jobs:
           fetch-depth: 1
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Configure Codex MCP settings
+      - name: Configure Codex MCP and artifacts
         run: |
-          mkdir -p "$HOME/.codex"
-          cat <<'EOF' > "$HOME/.codex/config.toml"
-          [mcp_servers.browser]
-          command = "npx"
-          args = ["-y", "@agentdeskai/browser-tools-server@1.2.0", "--port", "${MCP_PORT}"]
-          EOF
-
-      - name: Start browser MCP server
-        run: |
-          mkdir -p .artifacts/tnr-review .artifacts/screenshots
-          npx -y @agentdeskai/browser-tools-server@1.2.0 --port "${MCP_PORT}" > .artifacts/tnr-review/browser-mcp.log 2>&1 &
-          echo $! > .artifacts/tnr-review/browser-mcp.pid
-
-      - name: Wait for browser MCP health
-        run: |
-          for n in $(seq 1 30); do
-            if curl --silent --output /dev/null --max-time 2 "http://127.0.0.1:${MCP_PORT}/"; then
-              echo "Browser MCP is listening on port ${MCP_PORT}"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "Browser MCP did not become ready in time" >&2
-          cat .artifacts/tnr-review/browser-mcp.log || true
-          exit 1
+          mkdir -p .artifacts/tnr-review .artifacts/screenshots "$HOME/.codex"
+          cat > "$HOME/.codex/config.toml" <<'TOML'
+[mcp_servers.playwright]
+command = "npx"
+args = ["-y", "@playwright/mcp@latest", "--headless"]
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+TOML
+          echo "Codex MCP config:"
+          cat "$HOME/.codex/config.toml"
 
       - name: Build review prompt
         id: build_prompt
@@ -237,13 +221,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-          MCP_PORT: ${{ env.MCP_PORT }}
           AI_TEST_USER_BROKER_TOKEN: ${{ secrets.AI_TEST_USER_BROKER_TOKEN }}
         with:
           openai-api-key: ${{ secrets.AZURE_API_KEY }}
           responses-api-endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           model: "gpt-5.4-2026-03-05"
-          sandbox: "workspace-write"
+          sandbox: "danger-full-access"
           safety-strategy: "unsafe"
           allow-users: "MathiasGruber"
           prompt-file: ${{ steps.build_prompt.outputs.prompt_file }}
