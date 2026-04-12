@@ -231,6 +231,7 @@ jobs:
         env:
           PROMPT_FILE: /tmp/tnr-review-prompt.txt
           PREVIEW_URL: ${{ needs.preview_check.outputs.preview_url || needs.preview_check.outputs.details_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           PR_NUMBER: ${{ needs.command_gate.outputs.pr_number }}
           PR_TITLE: ${{ needs.command_gate.outputs.pr_title }}
           PR_BODY: ${{ needs.command_gate.outputs.pr_body }}
