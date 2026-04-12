@@ -23,6 +23,7 @@ interface Modal2Props {
   confirmClassName?: string;
   isValid?: boolean;
   isLoading?: boolean;
+  proceedDisabled?: boolean;
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   onAccept?: (
@@ -94,7 +95,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
             <>
               <Button
                 id={props.id ? `${props.id}-proceed` : undefined}
-                disabled={props.isLoading}
+                disabled={props.isLoading || props.proceedDisabled}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();

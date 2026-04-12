@@ -14,6 +14,7 @@ interface Confirm2Props {
   confirmClassName?: string;
   proceed_label?: string | null;
   isValid?: boolean;
+  confirmDisabled?: boolean;
   disabled?: boolean;
   onAccept?: (
     e:
@@ -63,6 +64,7 @@ const Confirm2: React.FC<Confirm2Props> = (props) => {
         onAccept={props.onAccept}
         className={props.className}
         isValid={props.isValid}
+        proceedDisabled={props.confirmDisabled}
         onClose={props.onClose}
       >
         {props.children}

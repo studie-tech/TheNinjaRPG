@@ -527,6 +527,7 @@ export const jutsuRouter = createTRPCRouter({
             eq(userJutsu.id, input.userJutsuId),
             eq(userJutsu.userId, ctx.userId),
             eq(userJutsu.jutsuId, userJutsuObj.jutsu.id),
+            eq(userJutsu.level, userJutsuObj.level),
           ),
         );
       if (evolveResult.rowsAffected === 0)

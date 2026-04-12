@@ -741,22 +741,22 @@ export default function MyJutsu() {
                         <Confirm2
                           key={evo.id}
                           title={`Evolve to ${evo.name}`}
+                          confirmDisabled={
+                            !userData ||
+                            effectiveLevel < JUTSU_TRAIN_LEVEL_CAP ||
+                            !canEvolveJutsu(evo, userData) ||
+                            !hasRequiredRank(userData.rank, evo.requiredRank) ||
+                            !hasRequiredLevel(userData.level, evo.requiredLevel) ||
+                            !checkJutsuRank(evo.jutsuRank, userData.rank) ||
+                            !checkJutsuVillage(evo, userData) ||
+                            !checkJutsuBloodline(evo, userData) ||
+                            !checkJutsuElements(evo, userElements)
+                          }
                           button={
                             <Button
                               id={`evolve-${evo.id}`}
                               variant="secondary"
-                              disabled={
-                                isPending ||
-                                !userData ||
-                                effectiveLevel < JUTSU_TRAIN_LEVEL_CAP ||
-                                !canEvolveJutsu(evo, userData) ||
-                                !hasRequiredRank(userData.rank, evo.requiredRank) ||
-                                !hasRequiredLevel(userData.level, evo.requiredLevel) ||
-                                !checkJutsuRank(evo.jutsuRank, userData.rank) ||
-                                !checkJutsuVillage(evo, userData) ||
-                                !checkJutsuBloodline(evo, userData) ||
-                                !checkJutsuElements(evo, userElements)
-                              }
+                              disabled={isPending}
                             >
                               <CircleFadingArrowUp className="h-6 w-6 sm:mr-2" />
                               <p className="hidden sm:block">Evolve</p>
@@ -764,8 +764,8 @@ export default function MyJutsu() {
                           }
                           onAccept={(e) => {
                             e.preventDefault();
-                            if (!userData) return;
                             if (
+                              !userData ||
                               !checkJutsuRank(evo.jutsuRank, userData.rank) ||
                               !checkJutsuVillage(evo, userData) ||
                               !checkJutsuBloodline(evo, userData) ||
