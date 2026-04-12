@@ -30,15 +30,7 @@ export async function POST(request: Request) {
   const expectedToken = process.env.AI_TEST_USER_BROKER_TOKEN;
   if (!expectedToken) {
     return NextResponse.json(
-      {
-        success: false,
-        message: "AI test-user broker token is not configured",
-        debug: {
-          vercelEnv: process.env.VERCEL_ENV ?? "unset",
-          nodeEnv: process.env.NODE_ENV ?? "unset",
-          hasToken: !!process.env.AI_TEST_USER_BROKER_TOKEN,
-        },
-      },
+      { success: false, message: "AI test-user broker token is not configured" },
       { status: 500 },
     );
   }

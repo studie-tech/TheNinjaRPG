@@ -39,6 +39,7 @@ export const aiTestUserResponseSchema = z.object({
       villageId: z.string(),
       villageName: z.string(),
       isBanned: z.boolean(),
+      signInToken: z.string().optional(),
     }),
   ),
   testingToken: z.string().optional(),

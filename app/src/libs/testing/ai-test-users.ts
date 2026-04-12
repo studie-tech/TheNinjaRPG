@@ -17,6 +17,7 @@ type ProvisionedAiTestUser = {
   villageId: string;
   villageName: string;
   isBanned: boolean;
+  signInToken?: string;
 };
 
 const CLERK_API_ENDPOINT = "https://api.clerk.com/v1";
@@ -178,6 +179,18 @@ const createTestingToken = async (): Promise<string | undefined> => {
   }
 };
 
+const createSignInToken = async (userId: string): Promise<string | undefined> => {
+  try {
+    const response = (await fetchClerkApi("/sign_in_tokens", {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId, expires_in_seconds: 300 }),
+    })) as { token?: string };
+    return response.token;
+  } catch (_error) {
+    return undefined;
+  }
+};
+
 export const provisionAiTestUsers = async (
   profiles: AiTestUserProfile[],
   runId: string,
@@ -192,17 +205,20 @@ export const provisionAiTestUsers = async (
         ? profile.preferredUsername
         : `tnr${runKey}${userKey}`;
       const username = createUsername(usernameBase);
-      const email = `tnr+${runKey}-${userKey}@theninjarpg.test`;
+      const email = `tnr-${runKey}-${userKey}@theninjarpg.test`;
 
       const { userId } = await upsertClerkUser(email, username, password);
-      await upsertUserData({
-        userId,
-        username,
-        level: profile.level,
-        rank: profile.rank,
-        villageId: resolvedVillage.id,
-        isBanned: profile.isBanned ?? false,
-      });
+      const [, signInToken] = await Promise.all([
+        upsertUserData({
+          userId,
+          username,
+          level: profile.level,
+          rank: profile.rank,
+          villageId: resolvedVillage.id,
+          isBanned: profile.isBanned ?? false,
+        }),
+        createSignInToken(userId),
+      ]);
 
       return {
         key: profile.key,
@@ -215,6 +231,7 @@ export const provisionAiTestUsers = async (
         villageId: resolvedVillage.id,
         villageName: resolvedVillage.name,
         isBanned: profile.isBanned ?? false,
+        signInToken,
       };
     }),
   );
