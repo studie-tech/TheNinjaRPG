@@ -657,7 +657,7 @@ export default function Travel() {
                               <FormControl>
                                 <Input
                                   className="w-full"
-                                  placeholder="Sector ID (0-492)"
+                                  placeholder="Sector ID (0-491)"
                                   type="number"
                                   {...field}
                                   value={field.value as number}
@@ -716,7 +716,7 @@ export default function Travel() {
                               <FormControl>
                                 <Input
                                   className="w-full"
-                                  placeholder="Sector ID (0-492)"
+                                  placeholder="Sector ID (0-491)"
                                   type="number"
                                   {...field}
                                   value={field.value as number}

@@ -408,6 +408,10 @@ export const travelRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const targetTile = (map as unknown as GlobalMapData).tiles[input.sector];
+      if (!targetTile) {
+        return { success: false, message: "Target sector does not exist" };
+      }
       let user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!isAtEdge({ x: user.longitude, y: user.latitude })) {
         return { success: false, message: "You are not at the edge of a sector" };

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const sectorIdSchema = z.coerce.number().int().min(0).max(492);
+export const sectorIdSchema = z.coerce.number().int().min(0).max(491);
 
 export const quickTravelSchema = z.object({ sector: sectorIdSchema });
 export type QuickTravelSchemaInput = z.input<typeof quickTravelSchema>;
