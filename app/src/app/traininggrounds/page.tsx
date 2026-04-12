@@ -845,7 +845,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                   You have {userData.money.toLocaleString()} ryo in your pocket
                 </p>
                 {!isPending && (
-                  <ItemWithEffects item={jutsu} key={jutsu.id} showStatistic="jutsu" />
+                  <ItemWithEffects
+                    item={jutsu}
+                    key={jutsu.id}
+                    showStatistic="jutsu"
+                    showEvolutions
+                  />
                 )}
                 {isPending && <Loader explanation={`Training ${jutsu.name}`} />}
               </div>

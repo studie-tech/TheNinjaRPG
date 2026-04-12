@@ -54,6 +54,7 @@ export interface ItemWithEffectsProps {
     | GameAsset
     | GenericObject;
   hideDetails?: boolean;
+  showEvolutions?: boolean;
   imageBorder?: boolean;
   imageExtra?: React.ReactNode;
   showEdit?:
@@ -88,6 +89,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     show3d,
     hideTitle,
     hideDetails,
+    showEvolutions,
     hideImage,
     hideEffects,
     hideDates,
@@ -101,11 +103,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   // Get bloodline names for displaying bloodline requirements
   const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
 
-  // Get evolutions for any jutsu — middle-chain nodes (B in A→B→C) can have children too
+  // Only fetch evolutions when the caller explicitly opts in, to avoid N+1 queries
+  // in list views. Pass showEvolutions={true} for single-item detail views (e.g.
+  // the jutsus/traininggrounds modals) where the evolution chain is meaningful.
   const isJutsuItem = "jutsuType" in item;
   const { data: evolutionsData } = api.jutsu.getEvolutions.useQuery(
     { jutsuId: item.id },
-    { enabled: isJutsuItem && !hideData, staleTime: 5 * 60 * 1000 },
+    { enabled: isJutsuItem && !hideData && !!showEvolutions, staleTime: 5 * 60 * 1000 },
   );
 
   // Setup clone mutations

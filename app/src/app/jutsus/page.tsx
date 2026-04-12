@@ -588,6 +588,7 @@ export default function MyJutsu() {
                   item={userjutsu.jutsu}
                   key={userjutsu.id}
                   showStatistic="jutsu"
+                  showEvolutions
                 />
                 {userReskins?.find((r) => r.jutsuId === userjutsu.jutsuId) &&
                   !userjutsu.activeReskin &&
