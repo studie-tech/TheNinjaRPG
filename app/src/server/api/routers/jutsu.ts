@@ -593,28 +593,19 @@ export const jutsuRouter = createTRPCRouter({
             ]
           : []),
         // Carry the active reskin forward to the evolved jutsu.
-        // Collision case: a historical jutsuReskin row already exists for
-        // (userId, evolutionJutsuId) from a previously removed reskin. Deleting
-        // it would violate the "keep for history + free future updates" contract
-        // in removeReskin. Instead, overwrite that row's visual data with the
-        // parent reskin's values and re-point userJutsu.reskinId to it. The
-        // parent's original reskin row is left as an orphaned historical record,
-        // consistent with how removeReskin treats it.
-        // No-collision case: simply update the existing reskin's jutsuId.
+        // No-collision: update the reskin row's jutsuId so createReskin's
+        // by-jutsuId lookup still works after evolution.
+        // Collision: a historical jutsuReskin row already exists for
+        // (userId, evolutionJutsuId) from a previously removed reskin. The unique
+        // index on (userId, jutsuId) makes updating the parent reskin's jutsuId
+        // impossible. Instead, re-point userJutsu.reskinId to the existing row —
+        // the user's evolved jutsu activates the slot they already own (free future
+        // updates intact). The parent reskin row is left as an orphaned historical
+        // record, consistent with removeReskin behaviour. No row content is
+        // overwritten or deleted in either path.
         ...(userJutsuObj.reskinId
           ? conflictingReskin
             ? [
-                ctx.drizzle
-                  .update(jutsuReskin)
-                  .set({
-                    name: userJutsuObj.activeReskin?.name ?? "",
-                    description: userJutsuObj.activeReskin?.description ?? "",
-                    battleDescription:
-                      userJutsuObj.activeReskin?.battleDescription ?? "",
-                    image: userJutsuObj.activeReskin?.image ?? "",
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(jutsuReskin.id, conflictingReskin.id)),
                 ctx.drizzle
                   .update(userJutsu)
                   .set({ reskinId: conflictingReskin.id, updatedAt: new Date() })
