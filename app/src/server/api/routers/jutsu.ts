@@ -518,16 +518,6 @@ export const jutsuRouter = createTRPCRouter({
       const { trackers } = getNewTrackers(user, [
         { task: "jutsus_mastered", increment: 1 },
       ]);
-      // If the parent has an active reskin and there is already a historical
-      // jutsuReskin row for the evolution target (from a previously removed reskin),
-      // delete that orphaned row first. Without this, the reskin-sync UPDATE below
-      // would hit the unique index on (userId, jutsuId) after userJutsu has already
-      // been committed, leaving the account in a partially-evolved state.
-      if (userJutsuObj.reskinId && conflictingReskin) {
-        await ctx.drizzle
-          .delete(jutsuReskin)
-          .where(eq(jutsuReskin.id, conflictingReskin.id));
-      }
       // Mutate: compare-and-swap on jutsuId to prevent double-evolve on retry/double-submit.
       // reskinId is kept so the cosmetic reskin carries over to the evolved jutsu.
       // The jutsuReskin record's jutsuId is updated below to stay in sync.
@@ -550,6 +540,18 @@ export const jutsuRouter = createTRPCRouter({
         );
       if (evolveResult.rowsAffected === 0)
         return errorResponse("Evolution failed - jutsu may have already been evolved");
+      // The CAS succeeded — evolution is now committed. If the parent had an active
+      // reskin and there is a historical jutsuReskin row for the evolution target
+      // (from a previously removed reskin), delete that orphaned row now so the
+      // reskin-sync UPDATE in the Promise.all below does not hit the unique index
+      // on (userId, jutsuId). Deletion is safe here: the row is orphaned (no
+      // userJutsu.reskinId points to it), and we only reach this point after the
+      // irreversible userJutsu update has been committed.
+      if (userJutsuObj.reskinId && conflictingReskin) {
+        await ctx.drizzle
+          .delete(jutsuReskin)
+          .where(eq(jutsuReskin.id, conflictingReskin.id));
+      }
       const isRestrictedEquipType =
         evolutionJutsu.jutsuType === "EVENT" ||
         evolutionJutsu.effects.some((effect) => effect.type === "pierce") ||

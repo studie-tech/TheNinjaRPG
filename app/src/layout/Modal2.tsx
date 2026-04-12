@@ -1,3 +1,4 @@
+"use client";
 /**
  * This is a modal that is used to display a modal.
  */
@@ -62,7 +63,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-  }, [props.isOpen, props.onAccept]);
+  }, [props.isOpen, props.onAccept, props.proceedDisabled]);
 
   const handleDialogClose = () => {
     if (props.onClose) props.onClose();
