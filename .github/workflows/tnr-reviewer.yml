@@ -205,7 +205,8 @@ jobs:
             const bypass = process.env.VERCEL_BYPASS || '';
             if (bypass) {
               cfg.browser.contextOptions.extraHTTPHeaders = {
-                'x-vercel-protection-bypass': bypass
+                'x-vercel-protection-bypass': bypass,
+                'x-vercel-set-bypass-cookie': 'true'
               };
             }
             require('fs').writeFileSync('/tmp/playwright-mcp-config.json', JSON.stringify(cfg, null, 2));
