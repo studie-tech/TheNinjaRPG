@@ -1,0 +1,259 @@
+name: TNR Reviewer
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to review"
+        required: true
+        type: number
+      extra_instructions:
+        description: "Optional additional test instructions for the reviewer"
+        required: false
+        type: string
+
+env:
+  MODE: pr-review
+  MCP_PORT: "3025"
+
+jobs:
+  command_gate:
+    if: >-
+      (github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '/tnr-review-now')) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    permissions:
+      issues: write
+      pull-requests: read
+      checks: read
+      contents: read
+    outputs:
+      should_run: ${{ steps.parse.outputs.should_run }}
+      pr_number: ${{ steps.parse.outputs.pr_number }}
+      issue_number: ${{ steps.parse.outputs.issue_number }}
+      comment_id: ${{ steps.initial_comment.outputs.comment_id }}
+      head_sha: ${{ steps.parse.outputs.head_sha }}
+      pr_title: ${{ steps.parse.outputs.pr_title }}
+      pr_body: ${{ steps.parse.outputs.pr_body }}
+      pr_author: ${{ steps.parse.outputs.pr_author }}
+      extra_instructions: ${{ steps.parse.outputs.extra_instructions }}
+    steps:
+      - name: Parse command and validate actor
+        id: parse
+        uses: actions/github-script@v8
+        env:
+          ALLOW_USERS: ${{ vars.TNR_REVIEWER_ALLOW_USERS }}
+        with:
+          script: |
+            const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
+            const actor = isWorkflowDispatch
+              ? context.actor
+              : context.payload.comment.user.login;
+            const issueNumber = isWorkflowDispatch
+              ? Number(context.payload.inputs?.pr_number)
+              : context.issue.number;
+            const body = isWorkflowDispatch
+              ? '/tnr-review-now ' + (context.payload.inputs?.extra_instructions ?? '')
+              : (context.payload.comment.body ?? '');
+            const match = body.match(/\/tnr-review-now\b([\s\S]*)/i);
+            if (!match || !Number.isInteger(issueNumber) || issueNumber <= 0) {
+              core.setOutput('should_run', 'false');
+              return;
+            }
+
+            const allowUsers = (process.env.ALLOW_USERS ?? '')
+              .split(',')
+              .map((value) => value.trim())
+              .filter(Boolean);
+            if (allowUsers.length > 0 && !allowUsers.includes(actor)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `@${actor} is not allowed to trigger \`/tnr-review-now\`.`,
+              });
+              core.setOutput('should_run', 'false');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: issueNumber,
+            });
+
+            core.setOutput('should_run', 'true');
+            core.setOutput('issue_number', String(issueNumber));
+            core.setOutput('pr_number', String(pr.number));
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('pr_title', pr.title ?? '');
+            core.setOutput('pr_body', pr.body ?? '');
+            core.setOutput('pr_author', pr.user?.login ?? '');
+            core.setOutput('extra_instructions', (match[1] ?? '').trim());
+
+      - name: Post initial comment
+        if: steps.parse.outputs.should_run == 'true'
+        id: initial_comment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const issueNumber = Number('${{ steps.parse.outputs.issue_number }}');
+            const { data: comment } = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: [
+                '## TNR reviewer started',
+                '',
+                'Mode: `pr-review`',
+                'Command: `/tnr-review-now`',
+                `Run: [View workflow run](${runUrl})`,
+                '',
+                '> This comment will be updated with findings and screenshot links.',
+              ].join('\n'),
+            });
+            core.setOutput('comment_id', String(comment.id));
+
+  preview_check:
+    needs: command_gate
+    if: needs.command_gate.outputs.should_run == 'true'
+    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    permissions:
+      checks: read
+      pull-requests: read
+      issues: write
+      contents: read
+    outputs:
+      is_ready: ${{ steps.check_preview.outputs.is_ready }}
+      preview_url: ${{ steps.check_preview.outputs.preview_url }}
+      reason: ${{ steps.check_preview.outputs.reason }}
+      check_name: ${{ steps.check_preview.outputs.check_name }}
+      details_url: ${{ steps.check_preview.outputs.details_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check Vercel preview health
+        id: check_preview
+        run: node .github/scripts/check-preview-ready.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.command_gate.outputs.pr_number }}
+          VERCEL_CHECK_NAME_PATTERN: ${{ vars.TNR_VERCEL_CHECK_PATTERN || 'vercel' }}
+
+      - name: Post blocked reason
+        if: steps.check_preview.outputs.is_ready != 'true'
+        run: node .github/scripts/post-tnr-result.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.command_gate.outputs.issue_number }}
+          COMMENT_ID: ${{ needs.command_gate.outputs.comment_id }}
+          RESULT: blocked
+          MODE: ${{ env.MODE }}
+          BLOCK_REASON: ${{ steps.check_preview.outputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  run_tnr_reviewer:
+    needs: [command_gate, preview_check]
+    if: needs.preview_check.outputs.is_ready == 'true'
+    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    concurrency:
+      group: tnr-reviewer-pr-${{ needs.command_gate.outputs.pr_number }}
+      cancel-in-progress: false
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      checks: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure Codex MCP settings
+        run: |
+          mkdir -p "$HOME/.codex"
+          cat <<'EOF' > "$HOME/.codex/config.toml"
+          [mcp_servers.browser]
+          command = "npx"
+          args = ["-y", "@agentdeskai/browser-tools-server@1.2.0", "--port", "${MCP_PORT}"]
+          EOF
+
+      - name: Start browser MCP server
+        run: |
+          mkdir -p .artifacts/tnr-review .artifacts/screenshots
+          npx -y @agentdeskai/browser-tools-server@1.2.0 --port "${MCP_PORT}" > .artifacts/tnr-review/browser-mcp.log 2>&1 &
+          echo $! > .artifacts/tnr-review/browser-mcp.pid
+
+      - name: Wait for browser MCP health
+        run: |
+          for n in $(seq 1 20); do
+            if curl --silent --show-error --fail "http://127.0.0.1:${MCP_PORT}/health" > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Browser MCP did not become ready in time" >&2
+          exit 1
+
+      - name: Build review prompt
+        id: build_prompt
+        run: node .github/scripts/build-tnr-review-prompt.mjs
+        env:
+          PROMPT_FILE: /tmp/tnr-review-prompt.txt
+          PREVIEW_URL: ${{ needs.preview_check.outputs.preview_url || needs.preview_check.outputs.details_url }}
+          PR_NUMBER: ${{ needs.command_gate.outputs.pr_number }}
+          PR_TITLE: ${{ needs.command_gate.outputs.pr_title }}
+          PR_BODY: ${{ needs.command_gate.outputs.pr_body }}
+          PR_AUTHOR: ${{ needs.command_gate.outputs.pr_author }}
+          COMMAND_AUTHOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          EXTRA_INSTRUCTIONS: ${{ needs.command_gate.outputs.extra_instructions }}
+          AI_TEST_USER_BROKER_URL: ${{ vars.TNR_AI_TEST_USER_BROKER_URL }}
+
+      - name: Run Codex reviewer
+        id: run_codex
+        uses: openai/codex-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          MCP_PORT: ${{ env.MCP_PORT }}
+          AI_TEST_USER_BROKER_TOKEN: ${{ secrets.AI_TEST_USER_BROKER_TOKEN }}
+        with:
+          openai-api-key: ${{ secrets.AZURE_API_KEY }}
+          responses-api-endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          model: "gpt-5.4-2026-03-05"
+          sandbox: "workspace-write"
+          safety-strategy: "unsafe"
+          allow-users: "MathiasGruber"
+          prompt-file: ${{ steps.build_prompt.outputs.prompt_file }}
+
+      - name: Upload TNR artifacts
+        if: always()
+        id: upload_artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tnr-reviewer-pr-${{ needs.command_gate.outputs.pr_number }}-${{ github.run_id }}
+          path: .artifacts
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Update PR comment with result
+        if: always()
+        run: node .github/scripts/post-tnr-result.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.command_gate.outputs.issue_number }}
+          COMMENT_ID: ${{ needs.command_gate.outputs.comment_id }}
+          RESULT: ${{ steps.run_codex.outcome == 'success' && 'success' || 'failed' }}
+          MODE: ${{ env.MODE }}
+          FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
+          ARTIFACT_URL: ${{ steps.upload_artifacts.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
