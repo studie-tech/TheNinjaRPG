@@ -215,7 +215,7 @@ const createSignInToken = async (userId: string): Promise<string | undefined> =>
   }
 };
 
-const BROKER_VERSION = "v3-external-id";
+const BROKER_VERSION = "v4-email-fix";
 
 export const provisionAiTestUsers = async (
   profiles: AiTestUserProfile[],
@@ -236,7 +236,7 @@ export const provisionAiTestUsers = async (
         : `tnr${runKey}${userKey}`;
       const username = createUsername(usernameBase);
       const externalId = `tnr-test-${runKey}-${userKey}`;
-      const email = `tnr-${runKey}-${userKey}@theninjarpg.test`;
+      const email = `tnr-${runKey}-${userKey}@tnr-ci.example.org`;
 
       const { userId } = await upsertClerkUser(externalId, email, username, password);
       const [, signInToken] = await Promise.all([
