@@ -540,18 +540,6 @@ export const jutsuRouter = createTRPCRouter({
         );
       if (evolveResult.rowsAffected === 0)
         return errorResponse("Evolution failed - jutsu may have already been evolved");
-      // The CAS succeeded — evolution is now committed. If the parent had an active
-      // reskin and there is a historical jutsuReskin row for the evolution target
-      // (from a previously removed reskin), delete that orphaned row now so the
-      // reskin-sync UPDATE in the Promise.all below does not hit the unique index
-      // on (userId, jutsuId). Deletion is safe here: the row is orphaned (no
-      // userJutsu.reskinId points to it), and we only reach this point after the
-      // irreversible userJutsu update has been committed.
-      if (userJutsuObj.reskinId && conflictingReskin) {
-        await ctx.drizzle
-          .delete(jutsuReskin)
-          .where(eq(jutsuReskin.id, conflictingReskin.id));
-      }
       const isRestrictedEquipType =
         evolutionJutsu.jutsuType === "EVENT" ||
         evolutionJutsu.effects.some((effect) => effect.type === "pierce") ||
@@ -604,20 +592,50 @@ export const jutsuRouter = createTRPCRouter({
                 ),
             ]
           : []),
-        // Keep reskin record's jutsuId in sync with the evolved jutsu so that
-        // createReskin's lookup (find by jutsuId) still works after evolution.
+        // Carry the active reskin forward to the evolved jutsu.
+        // Collision case: a historical jutsuReskin row already exists for
+        // (userId, evolutionJutsuId) from a previously removed reskin. Deleting
+        // it would violate the "keep for history + free future updates" contract
+        // in removeReskin. Instead, overwrite that row's visual data with the
+        // parent reskin's values and re-point userJutsu.reskinId to it. The
+        // parent's original reskin row is left as an orphaned historical record,
+        // consistent with how removeReskin treats it.
+        // No-collision case: simply update the existing reskin's jutsuId.
         ...(userJutsuObj.reskinId
-          ? [
-              ctx.drizzle
-                .update(jutsuReskin)
-                .set({ jutsuId: input.evolutionJutsuId, updatedAt: new Date() })
-                .where(
-                  and(
-                    eq(jutsuReskin.id, userJutsuObj.reskinId),
-                    eq(jutsuReskin.userId, ctx.userId),
+          ? conflictingReskin
+            ? [
+                ctx.drizzle
+                  .update(jutsuReskin)
+                  .set({
+                    name: userJutsuObj.activeReskin?.name ?? "",
+                    description: userJutsuObj.activeReskin?.description ?? "",
+                    battleDescription:
+                      userJutsuObj.activeReskin?.battleDescription ?? "",
+                    image: userJutsuObj.activeReskin?.image ?? "",
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(jutsuReskin.id, conflictingReskin.id)),
+                ctx.drizzle
+                  .update(userJutsu)
+                  .set({ reskinId: conflictingReskin.id, updatedAt: new Date() })
+                  .where(
+                    and(
+                      eq(userJutsu.id, input.userJutsuId),
+                      eq(userJutsu.userId, ctx.userId),
+                    ),
                   ),
-                ),
-            ]
+              ]
+            : [
+                ctx.drizzle
+                  .update(jutsuReskin)
+                  .set({ jutsuId: input.evolutionJutsuId, updatedAt: new Date() })
+                  .where(
+                    and(
+                      eq(jutsuReskin.id, userJutsuObj.reskinId),
+                      eq(jutsuReskin.userId, ctx.userId),
+                    ),
+                  ),
+              ]
           : []),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
