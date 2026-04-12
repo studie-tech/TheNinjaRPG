@@ -9,6 +9,7 @@ import {
   History,
   Loader2,
   MapPin,
+  MessageSquare,
   Skull,
   Swords,
   TimerOff,
@@ -25,6 +26,7 @@ import {
 } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
+import Conversation from "@/layout/Conversation";
 import Countdown from "@/layout/Countdown";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -84,6 +86,11 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   const { data: raidDetailsData } = api.raids.getRaidDetails.useQuery(
     { questId: selectedRaidId ?? "" },
     { enabled: !!selectedRaidId },
+  );
+
+  const { data: raidChatData } = api.raids.getRaidChat.useQuery(
+    { questId: selectedRaidId ?? "" },
+    { enabled: !!selectedRaidId && viewMode === "active" },
   );
 
   const { data: leaderboardData } = api.raids.getRaidLeaderboard.useQuery(
@@ -196,6 +203,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   const userQueueIsClaiming = userQueueData?.isClaiming ?? false;
   const userBuffs = userBuffsData?.buffs ?? [];
   const raidDetails = raidDetailsData?.raid;
+  const raidChat = raidChatData;
   const participation = raidDetailsData?.participation;
   const thresholds = raidDetailsData?.thresholds ?? [];
   const leaderboard = leaderboardData?.participations ?? [];
@@ -677,6 +685,22 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
           </div>
         </ContentBox>
       )}
+
+      {selectedRaidId &&
+        raidDetails &&
+        viewMode === "active" &&
+        raidChat?.conversationId && (
+          <Conversation
+            key={raidChat.conversationId}
+            convo_id={raidChat.conversationId}
+            title="Raid Chat"
+            subtitle="Coordinate with other raiders in this public channel"
+            initialBreak={true}
+            topRightContent={
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            }
+          />
+        )}
 
       {/* Active Buffs */}
       {userBuffs.length > 0 && (

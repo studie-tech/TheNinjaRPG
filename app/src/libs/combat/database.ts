@@ -891,6 +891,12 @@ export const updateRaidProgress = async (
     return;
   }
 
+  // If the shared boss was killed by another team, this battle was force-closed
+  // and should not award duplicate raid damage or participation credit.
+  if (curBattle.extraState.raidEndedExternally) {
+    return;
+  }
+
   const raidQuestId = curBattle.extraState.raidQuestId;
   const raidInitialBossHp = curBattle.extraState.raidInitialBossHp ?? 0;
 

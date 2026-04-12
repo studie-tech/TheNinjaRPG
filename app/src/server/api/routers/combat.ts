@@ -196,6 +196,49 @@ const debug = false;
 // Pusher instance
 const pusher = getServerPusher();
 
+const syncExternallyDefeatedRaidBattle = async (
+  client: DrizzleClient,
+  battleState: CompleteBattle,
+) => {
+  if (battleState.battleType !== "RAID" || !battleState.extraState.raidQuestId) {
+    return battleState;
+  }
+
+  const raidState = await client.query.quest.findFirst({
+    where: eq(quest.id, battleState.extraState.raidQuestId),
+    columns: { raidBossCurrentHealth: true },
+  });
+
+  if ((raidState?.raidBossCurrentHealth ?? 1) > 0) {
+    return battleState;
+  }
+
+  const hasLivingRaidAi = battleState.usersState.some(
+    (user) => user.isAi && !user.isSummon && user.curHealth > 0,
+  );
+  if (!hasLivingRaidAi) {
+    return battleState;
+  }
+
+  const syncedBattle = structuredClone(battleState);
+  syncedBattle.usersState = syncedBattle.usersState.map((user) =>
+    user.isAi && !user.isSummon
+      ? {
+          ...user,
+          curHealth: 0,
+          curChakra: 0,
+          curStamina: 0,
+        }
+      : user,
+  );
+  syncedBattle.extraState = {
+    ...syncedBattle.extraState,
+    raidEndedExternally: true,
+  };
+
+  return syncedBattle;
+};
+
 export const combatRouter = createTRPCRouter({
   getBattle: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get current battle state" } })
@@ -218,7 +261,10 @@ export const combatRouter = createTRPCRouter({
           attempts += 1;
 
           // Distinguish between public and non-public user state
-          const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
+          const fetchedBattle = await fetchBattle(ctx.drizzle, input.battleId);
+          const userBattle = fetchedBattle
+            ? await syncExternallyDefeatedRaidBattle(ctx.drizzle, fetchedBattle)
+            : null;
           if (!userBattle) {
             return { battle: null, result: null };
           }
@@ -534,7 +580,10 @@ export const combatRouter = createTRPCRouter({
       // The primary purpose here is that if the battle version was already updated, we retry the user's action
       while (true) {
         // Fetch battle from database
-        const battle = await fetchBattle(db, input.battleId);
+        const fetchedBattle = await fetchBattle(db, input.battleId);
+        const battle = fetchedBattle
+          ? await syncExternallyDefeatedRaidBattle(db, fetchedBattle)
+          : null;
         if (!battle) return { updateClient: true };
 
         // Create the grid for the battle
@@ -693,6 +742,7 @@ export const combatRouter = createTRPCRouter({
           // If battle state didn't change, just return without updating battle version
           if (
             !actionPerformed &&
+            !result &&
             newBattle.round === originalRound &&
             newBattle.activeUserId === originalActiveUserId
           ) {
@@ -1132,7 +1182,10 @@ export const combatRouter = createTRPCRouter({
         attempts++;
 
         // Fetch
-        const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
+        const fetchedBattle = await fetchBattle(ctx.drizzle, input.battleId);
+        const userBattle = fetchedBattle
+          ? await syncExternallyDefeatedRaidBattle(ctx.drizzle, fetchedBattle)
+          : null;
         const user = userBattle?.usersState.find((u) => u.userId === ctx.userId);
 
         // Guard

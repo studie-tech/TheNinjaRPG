@@ -23,6 +23,7 @@ import {
 import {
   badge,
   bloodline,
+  conversation,
   item,
   jutsu,
   mpvpBattleQueue,
@@ -327,6 +328,47 @@ export const raidsRouter = createTRPCRouter({
         participation,
         thresholds,
       };
+    }),
+
+  /**
+   * Get or create the public chat for a raid.
+   */
+  getRaidChat: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get the public chat for a specific raid" },
+    })
+    .input(z.object({ questId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const raid = await ctx.drizzle.query.quest.findFirst({
+        where: and(eq(quest.id, input.questId), eq(quest.questType, "raid")),
+        columns: { id: true, name: true, hidden: true },
+      });
+
+      if (!raid || raid.hidden) {
+        return { conversationId: null, title: null };
+      }
+
+      const conversationId = `raid-chat-${raid.id}`;
+      const title = `${raid.name} Raid Chat`;
+
+      const existingConversation = await ctx.drizzle.query.conversation.findFirst({
+        where: eq(conversation.id, conversationId),
+        columns: { id: true },
+      });
+
+      if (!existingConversation) {
+        await ctx.drizzle.insert(conversation).values({
+          id: conversationId,
+          title,
+          createdById: ctx.userId,
+          isPublic: true,
+          isLocked: false,
+          isStaffAvailable: false,
+          isEnabled: true,
+        });
+      }
+
+      return { conversationId, title };
     }),
 
   /**
@@ -703,6 +745,7 @@ export const raidsRouter = createTRPCRouter({
       ]);
       // Guard
       if (!user) return errorResponse("User not found");
+      if (user.isBanned) return errorResponse("You are banned");
       if (user.status === "HOSPITALIZED") {
         return errorResponse("You cannot ready up while hospitalized");
       }
@@ -879,6 +922,7 @@ export const raidsRouter = createTRPCRouter({
       // Guard - basic validations
       if (!user) return errorResponse("User not found");
       if (!raid) return errorResponse("Raid not found");
+      if (user.isBanned) return errorResponse("You are banned");
       if (existingQueueEntries.length > 0) {
         return errorResponse("Already in a battle queue");
       }
