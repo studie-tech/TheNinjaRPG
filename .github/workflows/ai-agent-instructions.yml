@@ -6,7 +6,7 @@ on:
 
 jobs:
   add-instructions:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       issues: write
     steps:

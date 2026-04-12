@@ -19,7 +19,7 @@ jobs:
         (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@codex')) ||
         (github.event_name == 'issues' && (contains(github.event.issue.body, '@codex') || contains(github.event.issue.title, '@codex')))
       )
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       contents: read
       issues: write
@@ -157,7 +157,7 @@ jobs:
           prompt-file: /tmp/codex_prompt.txt
 
   update_comment:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     needs: codex
     if: always() && needs.codex.outputs.comment_id != ''
     permissions:

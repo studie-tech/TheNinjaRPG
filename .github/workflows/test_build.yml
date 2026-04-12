@@ -3,7 +3,7 @@ on: pull_request
 jobs:
   test_build:
     name: test_build
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

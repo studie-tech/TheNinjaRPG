@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   secret-check:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       HAS_CLERK_KEY: ${{ steps.check-secret.outputs.hasSecret }}
     steps:
@@ -35,7 +35,7 @@ jobs:
         run: echo hasSecret=$CLERK_SECRET_KEY >> $GITHUB_OUTPUT
 
   analyze:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     needs: secret-check
     if: needs.secret-check.outputs.HAS_CLERK_KEY != ''
 
