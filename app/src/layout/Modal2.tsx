@@ -42,6 +42,8 @@ const Modal2: React.FC<Modal2Props> = (props) => {
     ? props.confirmClassName
     : "bg-blue-600 text-white hover:bg-blue-700";
 
+  const isProceedDisabled = props.isLoading || props.proceedDisabled;
+
   // Handle key-presses for Enter key only when this modal is open
   useEffect(() => {
     const onDocumentKeyDown = (event: KeyboardEvent) => {
@@ -50,12 +52,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
       const activeElement = document.activeElement;
       const isButton = activeElement?.tagName === "BUTTON";
 
-      if (
-        event.key === "Enter" &&
-        props?.onAccept &&
-        !isButton &&
-        !props.proceedDisabled
-      ) {
+      if (event.key === "Enter" && props.onAccept && !isButton && !isProceedDisabled) {
         props.onAccept(event as unknown as React.KeyboardEvent<KeyboardEvent>);
       }
     };
@@ -63,7 +60,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-  }, [props.isOpen, props.onAccept, props.proceedDisabled]);
+  }, [props.isOpen, props.onAccept, isProceedDisabled]);
 
   const handleDialogClose = () => {
     if (props.onClose) props.onClose();
@@ -101,7 +98,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
             <>
               <Button
                 id={props.id ? `${props.id}-proceed` : undefined}
-                disabled={props.isLoading || props.proceedDisabled}
+                disabled={isProceedDisabled}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();

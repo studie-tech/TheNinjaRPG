@@ -234,12 +234,15 @@ export const canEvolveJutsu = (
 export const canTrainJutsu = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
-) => {
+): boolean => {
   if (isJutsuEvolution(jutsu)) return false;
   return canUseJutsu(jutsu, userdata);
 };
 
-export const canUseJutsu = (jutsu: Jutsu, userdata: NonNullable<UserWithRelations>) => {
+export const canUseJutsu = (
+  jutsu: Jutsu,
+  userdata: NonNullable<UserWithRelations>,
+): boolean => {
   const userElements = new Set(getUserElements(userdata));
   if (userdata.isAi) return true;
   return (
@@ -248,7 +251,7 @@ export const canUseJutsu = (jutsu: Jutsu, userdata: NonNullable<UserWithRelation
     checkJutsuRank(jutsu.jutsuRank, userdata.rank) &&
     checkJutsuVillage(jutsu, userdata) &&
     checkJutsuBloodline(jutsu, userdata) &&
-    checkJutsuElements(jutsu, userElements)
+    !!checkJutsuElements(jutsu, userElements)
   );
 };
 

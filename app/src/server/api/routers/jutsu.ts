@@ -1137,7 +1137,7 @@ export const jutsuRouter = createTRPCRouter({
       const isEquipped = userjutsuObj?.equipped || false;
       const equippedJutsus = userjutsus.filter((j) => j.equipped);
       const curEquip = equippedJutsus.length || 0;
-      const maxEquip = userData && calcJutsuEquipLimit(user);
+      const maxEquip = calcJutsuEquipLimit(user);
       const pierceEquipped = equippedJutsus.filter((j) =>
         j.jutsu.effects.some((e) => e.type === "pierce"),
       ).length;
