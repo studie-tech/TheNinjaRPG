@@ -30,6 +30,11 @@ const sanitize = (html: string) => {
 
 export default sanitize;
 
+/**
+ * Removes quote wrappers and everything inside them from already-sanitized HTML.
+ * Do not call this on raw user input; it intentionally allows all tags so it can
+ * operate as a narrow post-processing step before re-wrapping quotes.
+ */
 export const stripBlockquotes = (html: string) => {
   return sanitizeHtml(html, {
     allowedTags: false,
