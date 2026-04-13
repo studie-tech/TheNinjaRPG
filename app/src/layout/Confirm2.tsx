@@ -27,29 +27,27 @@ interface Confirm2Props {
 
 const Confirm2: React.FC<Confirm2Props> = (props) => {
   const [showModal, setShowModal] = useState<boolean>(false);
-  const isTriggerDisabled = props.disabled || props.confirmDisabled;
-
   return (
     <>
       {/* biome-ignore lint/a11y/useSemanticElements: wrapper for button children - using button would create invalid nested buttons */}
       <div
         role="button"
-        tabIndex={isTriggerDisabled ? -1 : 0}
+        tabIndex={props.disabled ? -1 : 0}
         onClick={(e) => {
-          if (isTriggerDisabled) return;
+          if (props.disabled) return;
           e.preventDefault();
           e.stopPropagation();
           setShowModal(true);
         }}
         onKeyDown={(e) => {
-          if (isTriggerDisabled) return;
+          if (props.disabled) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             e.stopPropagation();
             setShowModal(true);
           }
         }}
-        className={`inline-block ${isTriggerDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+        className={`inline-block ${props.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
       >
         {props.button}
       </div>
