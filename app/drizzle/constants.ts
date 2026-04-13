@@ -1373,6 +1373,7 @@ export type MpvpBattleSide = (typeof MPVP_BATTLE_SIDES)[number];
 export const SHRINE_BATTLE_MIN_ATTACKERS = 2;
 export const SHRINE_BATTLE_MAX_USERS_PER_SIDE = 3;
 export const SHRINE_BATTLE_LOBBY_SECONDS = 60;
+export const SHRINE_BATTLE_STALE_LOBBY_SECONDS = 300; // 5 min grace past lobby window
 
 // Raid Battle Config
 export const RAID_BATTLE_MAX_USERS_PER_TEAM = 3;

@@ -1,7 +1,18 @@
-import { and, eq, gt, inArray, lte } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, lte } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { WAR_SHRINE_MAINTENANCE_DAYS } from "@/drizzle/constants";
-import { sector, shrineBoostSchedule, village } from "@/drizzle/schema";
+import {
+  SHRINE_BATTLE_LOBBY_SECONDS,
+  SHRINE_BATTLE_STALE_LOBBY_SECONDS,
+  WAR_SHRINE_MAINTENANCE_DAYS,
+} from "@/drizzle/constants";
+import {
+  mpvpBattleQueue,
+  mpvpBattleUser,
+  sector,
+  shrineBoostSchedule,
+  userData,
+  village,
+} from "@/drizzle/schema";
 import {
   handleEndpointError,
   lockWithDailyTimer,
@@ -9,11 +20,12 @@ import {
   updateGameSetting,
 } from "@/libs/gamesettings";
 import { fetchVillages } from "@/server/api/routers/village";
-import { drizzleDB } from "@/server/db";
+import { type DrizzleClient, drizzleDB } from "@/server/db";
 import { secondsFromDate } from "@/utils/time";
 
 const ENDPOINT_NAME = "shrine-maintenance";
 const ENDPOINT_NAME_DAILY = "shrine-maintenance-daily";
+type ShrineMaintenanceDb = Pick<DrizzleClient, "select" | "update" | "delete">;
 
 export async function GET() {
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
@@ -29,7 +41,10 @@ export async function GET() {
     const now = new Date();
 
     // Run shrine boost tick (every minute)
-    const boostResult = await runShrineBoostTick(now);
+    const [boostResult, staleLobbyResult] = await Promise.all([
+      runShrineBoostTick(now),
+      runStaleShrineLobbyCleanup(now),
+    ]);
 
     // Check daily timer for shrine downgrade maintenance
     dailyCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME_DAILY);
@@ -38,8 +53,8 @@ export async function GET() {
       : null;
 
     const message = maintenanceResult
-      ? `Shrine maintenance completed: boost tick (${boostResult.activeUpdated} activated, ${boostResult.expiredDeleted} expired), daily maintenance (${maintenanceResult.sectorsChecked} sectors checked, ${maintenanceResult.shrinesDowngraded} downgraded, ${maintenanceResult.shrinesDestroyed} destroyed)`
-      : `Shrine boost tick completed: ${boostResult.activeUpdated} activated, ${boostResult.expiredDeleted} expired`;
+      ? `Shrine maintenance completed: boost tick (${boostResult.activeUpdated} activated, ${boostResult.expiredDeleted} expired), stale lobbies cleared (${staleLobbyResult.lobbiesCleared}, ${staleLobbyResult.usersReset} users reset), daily maintenance (${maintenanceResult.sectorsChecked} sectors checked, ${maintenanceResult.shrinesDowngraded} downgraded, ${maintenanceResult.shrinesDestroyed} destroyed)`
+      : `Shrine boost tick completed: ${boostResult.activeUpdated} activated, ${boostResult.expiredDeleted} expired; stale lobbies cleared ${staleLobbyResult.lobbiesCleared} (${staleLobbyResult.usersReset} users reset)`;
 
     return new Response(message, { status: 200 });
   } catch (cause) {
@@ -235,6 +250,64 @@ async function runShrineBoostTick(now: Date = new Date()) {
   await Promise.all([...villageUpdates, deleteExpired]);
 
   return { activeUpdated, expiredDeleted: expiredScheduleIds.length };
+}
+
+/**
+ * Deletes shrine battle lobbies that never progressed into a real battle and
+ * resets users who are still marked as queued for those stale lobbies.
+ */
+export async function runStaleShrineLobbyCleanup(
+  now: Date,
+  db: ShrineMaintenanceDb = drizzleDB,
+) {
+  const cutoffSeconds = SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS;
+  const cutoff = new Date(now.getTime() - cutoffSeconds * 1000);
+
+  const staleLobbies = await db
+    .select({ id: mpvpBattleQueue.id })
+    .from(mpvpBattleQueue)
+    .where(
+      and(
+        eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+        isNull(mpvpBattleQueue.battleId),
+        lt(mpvpBattleQueue.createdAt, cutoff),
+      ),
+    );
+
+  if (staleLobbies.length === 0) {
+    return { lobbiesCleared: 0, usersReset: 0 };
+  }
+
+  const staleIds = staleLobbies.map((row) => row.id);
+  const queuedUsers = await db
+    .select({ userId: mpvpBattleUser.userId })
+    .from(mpvpBattleUser)
+    .where(inArray(mpvpBattleUser.clanBattleId, staleIds));
+  const userIds = [...new Set(queuedUsers.map((row) => row.userId))];
+
+  let usersReset = 0;
+  if (userIds.length > 0) {
+    const resetResult = await db
+      .update(userData)
+      .set({ status: "AWAKE" })
+      .where(and(inArray(userData.userId, userIds), eq(userData.status, "QUEUED")));
+    usersReset = resetResult.rowsAffected ?? 0;
+  }
+
+  await db.delete(mpvpBattleUser).where(inArray(mpvpBattleUser.clanBattleId, staleIds));
+
+  const deleteResult = await db
+    .delete(mpvpBattleQueue)
+    .where(
+      and(
+        inArray(mpvpBattleQueue.id, staleIds),
+        eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+        isNull(mpvpBattleQueue.battleId),
+        lt(mpvpBattleQueue.createdAt, cutoff),
+      ),
+    );
+
+  return { lobbiesCleared: deleteResult.rowsAffected ?? 0, usersReset };
 }
 
 /** Creates an updated shrineSettings object with new activeBoosts */
