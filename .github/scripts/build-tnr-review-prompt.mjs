@@ -107,7 +107,7 @@ const authBlock =
         "",
         "Each user in the response includes a `signInToken`. To authenticate in the browser, navigate Playwright to:",
         "```",
-        `${appendBypassParams(normalizedPreviewUrl + "/login?__clerk_ticket=<signInToken>")}`,
+        `${normalizedPreviewUrl}/login?__clerk_ticket=<signInToken>${bypassParams ? "&" + bypassParams : ""}`,
         "```",
         "This performs a one-time Clerk ticket sign-in. After navigation, wait a few seconds for the redirect to complete, then take a snapshot to confirm the user is logged in.",
         "",

@@ -258,7 +258,7 @@ jobs:
         run: node "$RUNNER_TEMP/tnr-scripts/build-tnr-review-prompt.mjs"
         env:
           PROMPT_FILE: /tmp/tnr-review-prompt.txt
-          PREVIEW_URL: ${{ needs.preview_check.outputs.preview_url || needs.preview_check.outputs.details_url }}
+          PREVIEW_URL: ${{ needs.preview_check.outputs.preview_url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           PR_NUMBER: ${{ needs.command_gate.outputs.pr_number }}
           PR_TITLE: ${{ needs.command_gate.outputs.pr_title }}
@@ -274,7 +274,7 @@ jobs:
       - name: Wait for Vercel deployment
         shell: bash
         env:
-          PREVIEW_URL: ${{ needs.preview_check.outputs.preview_url || needs.preview_check.outputs.details_url }}
+          PREVIEW_URL: ${{ needs.preview_check.outputs.preview_url }}
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           echo "Waiting for Vercel deployment to stabilize..."
