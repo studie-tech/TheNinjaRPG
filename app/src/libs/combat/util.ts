@@ -89,6 +89,30 @@ import type {
 } from "./types";
 
 // =============================================================================
+// ITEM DISPLAY HELPERS
+// =============================================================================
+
+/**
+ * Returns the display image for a user item, preferring the active variant image if set.
+ * Falls back to the base item image.
+ */
+export const getItemDisplayImage = (
+  source:
+    | {
+        activeVariantId?: string | null;
+        item: { image: string; variants?: { id: string; image: string }[] };
+      }
+    | { image: string },
+): string => {
+  if ("activeVariantId" in source && source.activeVariantId) {
+    const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
+    if (variant) return variant.image;
+  }
+  if ("item" in source) return source.item.image;
+  return source.image;
+};
+
+// =============================================================================
 // STATIC DATA LOOKUP FUNCTIONS
 // These functions retrieve full data from extraState using IDs.
 // Use these whenever you need the full object instead of just the reference.
