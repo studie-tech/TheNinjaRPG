@@ -1,10 +1,23 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { FileMinus, FilePlus } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import React, { use, useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { MAX_ITEM_VARIANTS, VARIANT_COST_TYPES } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import { useItemEditForm } from "@/hooks/item";
 import ChatInputField from "@/layout/ChatInputField";
@@ -22,6 +35,8 @@ import {
   ItemValidatorRawSchema,
   tagTypes,
 } from "@/validators/combat";
+import type { ZodItemVariantType } from "@/validators/item";
+import { ItemVariantValidator } from "@/validators/item";
 
 export default function ItemEdit(props: { params: Promise<{ itemid: string }> }) {
   const params = use(props.params);
@@ -151,6 +166,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
             onAccept={handleItemSubmit}
           />
         )}
+        {item && <ItemVariantsEditor itemId={item.id} />}
       </ContentBox>
 
       {validEffects.length === 0 && (
@@ -195,5 +211,243 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         );
       })}
     </>
+  );
+};
+
+interface ItemVariantsEditorProps {
+  itemId: string;
+}
+
+type VariantFormInput = {
+  id?: string;
+  name: string;
+  image: string;
+  costType: ZodItemVariantType["costType"];
+  cost: number | string;
+  order: number | string;
+};
+
+const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
+  const utils = api.useUtils();
+  const [editingVariant, setEditingVariant] = React.useState<ZodItemVariantType | null>(
+    null,
+  );
+  const [showForm, setShowForm] = React.useState(false);
+
+  const { data: variants } = api.item.getItemVariants.useQuery({ itemId });
+
+  const upsert = api.item.upsertItemVariant.useMutation({
+    onSuccess: async (result) => {
+      if (result.success) {
+        await utils.item.getItemVariants.invalidate({ itemId });
+        setShowForm(false);
+        setEditingVariant(null);
+      }
+    },
+  });
+
+  const remove = api.item.deleteItemVariant.useMutation({
+    onSuccess: async () => {
+      await utils.item.getItemVariants.invalidate({ itemId });
+    },
+  });
+
+  const form = useForm<VariantFormInput, unknown, ZodItemVariantType>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(ItemVariantValidator) as any,
+    defaultValues: editingVariant ?? {
+      name: "",
+      image: "",
+      costType: "MONEY",
+      cost: 0,
+      order: (variants?.length ?? 0) + 1,
+    },
+  });
+
+  useEffect(() => {
+    form.reset(
+      editingVariant ?? {
+        name: "",
+        image: "",
+        costType: "MONEY",
+        cost: 0,
+        order: (variants?.length ?? 0) + 1,
+      },
+    );
+  }, [editingVariant, form, variants?.length]);
+
+  const onSubmit = form.handleSubmit((data) => {
+    upsert.mutate({ itemId, variant: data });
+  });
+
+  return (
+    <div className="mt-6">
+      <h2 className="mb-2 font-semibold text-lg">
+        Item Variants (max {MAX_ITEM_VARIANTS})
+      </h2>
+
+      {variants && variants.length > 0 && (
+        <table className="mb-4 w-full text-sm">
+          <thead>
+            <tr className="border-b">
+              <th className="py-1 text-left">Order</th>
+              <th className="py-1 text-left">Name</th>
+              <th className="py-1 text-left">Cost Type</th>
+              <th className="py-1 text-left">Cost</th>
+              <th className="py-1 text-left">Preview</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {variants.map((v) => (
+              <tr key={v.id} className="border-b">
+                <td className="py-1">{v.order}</td>
+                <td className="py-1">{v.name}</td>
+                <td className="py-1">{v.costType}</td>
+                <td className="py-1">{v.cost}</td>
+                <td className="py-1">
+                  {v.image && (
+                    <Image
+                      src={v.image}
+                      alt={v.name}
+                      width={40}
+                      height={40}
+                      className="rounded"
+                    />
+                  )}
+                </td>
+                <td className="py-1">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingVariant(v);
+                        setShowForm(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => remove.mutate({ variantId: v.id })}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {!showForm && (variants?.length ?? 0) < MAX_ITEM_VARIANTS && (
+        <Button
+          variant="outline"
+          onClick={() => {
+            setEditingVariant(null);
+            setShowForm(true);
+          }}
+        >
+          + Add Variant
+        </Button>
+      )}
+
+      {showForm && (
+        <form onSubmit={onSubmit} className="mt-2 space-y-3 rounded border p-4">
+          <h3 className="font-medium">
+            {editingVariant ? "Edit Variant" : "New Variant"}
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="variant-name" className="font-medium text-sm">
+                Name
+              </label>
+              <Input
+                id="variant-name"
+                {...form.register("name")}
+                placeholder="e.g. Red Edition"
+              />
+            </div>
+            <div>
+              <label htmlFor="variant-order" className="font-medium text-sm">
+                Order (1–{MAX_ITEM_VARIANTS})
+              </label>
+              <Input
+                id="variant-order"
+                type="number"
+                {...form.register("order")}
+                min={1}
+                max={MAX_ITEM_VARIANTS}
+              />
+            </div>
+            <div>
+              <label htmlFor="variant-cost-type" className="font-medium text-sm">
+                Cost Type
+              </label>
+              <Controller
+                control={form.control}
+                name="costType"
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger id="variant-cost-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VARIANT_COST_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <div>
+              <label htmlFor="variant-cost" className="font-medium text-sm">
+                Cost
+              </label>
+              <Input
+                id="variant-cost"
+                type="number"
+                {...form.register("cost")}
+                min={0}
+              />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="variant-image" className="font-medium text-sm">
+              Image URL
+            </label>
+            <Input
+              id="variant-image"
+              {...form.register("image")}
+              placeholder="https://utfs.io/..."
+            />
+            <p className="mt-1 text-muted-foreground text-xs">
+              Upload via UploadThing and paste the URL here
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" disabled={upsert.isPending}>
+              {upsert.isPending ? "Saving..." : "Save Variant"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowForm(false);
+                setEditingVariant(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 };
