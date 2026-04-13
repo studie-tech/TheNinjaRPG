@@ -4,7 +4,6 @@
 # Triggers:
 #   • `/tnr-review-now [extra instructions]` comment on any PR
 #   • Manual workflow_dispatch with a PR number
-#   • Push to feature/agent_testing (temporary — remove after validation)
 #
 # Pipeline: command_gate → preview_check → run_tnr_reviewer
 #   1. command_gate: validates the trigger, checks actor permissions, fetches PR metadata
@@ -13,9 +12,6 @@
 name: TNR Reviewer
 
 on:
-  # TEMPORARY: push trigger for validating the workflow on feature/agent_testing
-  push:
-    branches: [feature/agent_testing]
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -36,14 +32,13 @@ jobs:
   # ── Job 1: Parse the trigger, enforce actor allowlist, fetch PR metadata ──
   command_gate:
     # Quick filter: only fire on PR comments containing the slash command,
-    # manual workflow_dispatch, or push events. This avoids spinning up
-    # runners for unrelated issue comments.
+    # or on manual workflow_dispatch. This avoids spinning up runners for
+    # unrelated issue comments.
     if: >-
       (github.event_name == 'issue_comment' &&
       github.event.issue.pull_request != null &&
       contains(github.event.comment.body, '/tnr-review-now')) ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push'
+      github.event_name == 'workflow_dispatch'
     runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
     permissions:
       issues: write
@@ -68,34 +63,7 @@ jobs:
           ALLOW_USERS: ${{ vars.TNR_REVIEWER_ALLOW_USERS }}
         with:
           script: |
-            const isPush = context.eventName === 'push';
             const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
-
-            // Push events: look up the open PR for this branch, skip allowlist
-            if (isPush) {
-              const branch = context.ref.replace('refs/heads/', '');
-              const { data: prs } = await github.rest.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                head: `${context.repo.owner}:${branch}`,
-                state: 'open',
-              });
-              if (prs.length === 0) {
-                core.info(`No open PR found for branch ${branch}`);
-                core.setOutput('should_run', 'false');
-                return;
-              }
-              const pr = prs[0];
-              core.setOutput('should_run', 'true');
-              core.setOutput('issue_number', String(pr.number));
-              core.setOutput('pr_number', String(pr.number));
-              core.setOutput('head_sha', pr.head.sha);
-              core.setOutput('pr_title', pr.title ?? '');
-              core.setOutput('pr_body', pr.body ?? '');
-              core.setOutput('pr_author', pr.user?.login ?? '');
-              core.setOutput('extra_instructions', '');
-              return;
-            }
 
             // Normalise the two trigger shapes into a single actor + body + PR number
             const actor = isWorkflowDispatch
@@ -256,6 +224,7 @@ jobs:
       - name: Cache trusted helper scripts
         run: |
           mkdir -p "$RUNNER_TEMP/tnr-scripts"
+          cp trusted-scripts/.github/scripts/ci-helpers.mjs "$RUNNER_TEMP/tnr-scripts/"
           cp trusted-scripts/.github/scripts/build-tnr-review-prompt.mjs "$RUNNER_TEMP/tnr-scripts/"
           cp trusted-scripts/.github/scripts/post-tnr-result.mjs "$RUNNER_TEMP/tnr-scripts/"
           cp trusted-scripts/.github/scripts/upload-screenshots.mjs "$RUNNER_TEMP/tnr-scripts/"

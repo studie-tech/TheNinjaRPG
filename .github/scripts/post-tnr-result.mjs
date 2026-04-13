@@ -11,6 +11,8 @@
  *   RESULT, FINAL_MESSAGE, ARTIFACT_URL, SCREENSHOT_MARKDOWN,
  *   BLOCK_REASON, MODE
  */
+import { createGithubClient } from "./ci-helpers.mjs";
+
 const githubToken = process.env.GITHUB_TOKEN;
 const repository = process.env.GITHUB_REPOSITORY;
 const issueNumber = Number(process.env.ISSUE_NUMBER);
@@ -36,27 +38,7 @@ if (!owner || !repo) {
   throw new Error(`Invalid GITHUB_REPOSITORY: ${repository}`);
 }
 
-/** Authenticated request against the GitHub REST API (supports GET, POST, PATCH). */
-const githubRequest = async (path, options = {}) => {
-  const response = await fetch(`https://api.github.com${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${githubToken}`,
-      Accept: "application/vnd.github+json",
-      "Content-Type": "application/json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": "tnr-reviewer-comment-updater",
-      ...(options.headers ?? {}),
-    },
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`GitHub API ${path} failed (${response.status}): ${body}`);
-  }
-
-  return response.json();
-};
+const githubRequest = createGithubClient(githubToken);
 
 /** Join lines, dropping null/undefined but keeping empty strings as spacers. */
 const joinLines = (lines) =>

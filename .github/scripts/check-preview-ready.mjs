@@ -14,7 +14,7 @@
  *   reason      — human-readable explanation when not ready
  *   check_name, details_url, head_sha, pr_url — supplementary metadata
  */
-import { appendFileSync } from "node:fs";
+import { setOutput, createGithubClient } from "./ci-helpers.mjs";
 
 const githubToken = process.env.GITHUB_TOKEN;
 const repository = process.env.GITHUB_REPOSITORY;
@@ -38,39 +38,7 @@ if (!owner || !repo) {
   throw new Error(`Invalid GITHUB_REPOSITORY: ${repository}`);
 }
 
-/** Write a key=value pair to $GITHUB_OUTPUT, using heredoc format for multiline values. */
-const setOutput = (key, value) => {
-  if (!process.env.GITHUB_OUTPUT) return;
-  const str = String(value ?? "");
-  if (str.includes("\n")) {
-    const delimiter = `ghadelimiter_${Date.now()}`;
-    appendFileSync(
-      process.env.GITHUB_OUTPUT,
-      `${key}<<${delimiter}\n${str}\n${delimiter}\n`,
-    );
-  } else {
-    appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${str}\n`);
-  }
-};
-
-/** Authenticated GET against the GitHub REST API. */
-const githubRequest = async (path) => {
-  const response = await fetch(`https://api.github.com${path}`, {
-    headers: {
-      Authorization: `Bearer ${githubToken}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": "tnr-reviewer-preview-check",
-    },
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`GitHub API ${path} failed (${response.status}): ${body}`);
-  }
-
-  return response.json();
-};
+const githubRequest = createGithubClient(githubToken);
 
 /** Validate that a URL is a trusted Vercel deployment (*.vercel.app over HTTPS). */
 const toTrustedPreviewUrl = (raw) => {

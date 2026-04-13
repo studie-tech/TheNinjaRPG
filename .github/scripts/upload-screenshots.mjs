@@ -13,8 +13,9 @@
  * Outputs (via GITHUB_OUTPUT):
  *   screenshot_markdown — rendered markdown with ![caption](raw-url) blocks
  */
-import { readdirSync, readFileSync, appendFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, extname } from "node:path";
+import { setOutput, createGithubClient } from "./ci-helpers.mjs";
 
 const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
 const repo = process.env.GITHUB_REPOSITORY;
@@ -30,37 +31,7 @@ if (!token || !repo) {
 const BRANCH = `tnr-screenshots/pr-${prNumber}/${runId}`;
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 
-const apiRequest = async (path, options = {}) => {
-  const response = await fetch(`https://api.github.com${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "Content-Type": "application/json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(options.headers ?? {}),
-    },
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`GitHub API ${path} failed (${response.status}): ${body}`);
-  }
-  return response.json();
-};
-
-const setOutput = (key, value) => {
-  if (!process.env.GITHUB_OUTPUT) return;
-  const str = String(value ?? "");
-  if (str.includes("\n")) {
-    const delimiter = `ghadelimiter_${Date.now()}`;
-    appendFileSync(
-      process.env.GITHUB_OUTPUT,
-      `${key}<<${delimiter}\n${str}\n${delimiter}\n`,
-    );
-  } else {
-    appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${str}\n`);
-  }
-};
+const apiRequest = createGithubClient(token);
 
 const main = async () => {
   let files;
