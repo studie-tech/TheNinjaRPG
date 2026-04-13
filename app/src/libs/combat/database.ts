@@ -134,6 +134,35 @@ export const updateBattle = async (
               ),
           ]
         : []),
+      // When raid boss is defeated, release all non-acting teammates from BATTLE status.
+      // updateUser only handles the acting player, so teammates would be stuck otherwise.
+      ...(raidBossDefeated
+        ? (() => {
+            const teammateIds = newBattle.usersState
+              .filter((u) => !u.isAi && !u.isSummon && u.userId !== userId)
+              .map((u) => u.userId);
+            return teammateIds.length > 0
+              ? [
+                  client
+                    .update(userData)
+                    .set({
+                      battleId: null,
+                      status: "AWAKE",
+                      regenAt: new Date(),
+                      stealthActive: false,
+                      stealthActivatedAt: null,
+                      stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
+                    })
+                    .where(
+                      and(
+                        inArray(userData.userId, teammateIds),
+                        eq(userData.battleId, newBattle.id),
+                      ),
+                    ),
+                ]
+              : [];
+          })()
+        : []),
     ]);
 
     // Delete queue entries AFTER the Promise.all to ensure mpvpBattleUser
