@@ -15,6 +15,7 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { setOutput } from "./ci-helpers.mjs";
 
 const outputPromptPath = process.env.PROMPT_FILE ?? "/tmp/tnr-review-prompt.txt";
 const rawPreviewUrl = process.env.PREVIEW_URL ?? "";
@@ -166,9 +167,4 @@ const prompt = [
 mkdirSync(dirname(outputPromptPath), { recursive: true });
 writeFileSync(outputPromptPath, prompt);
 
-// Expose the path as a GitHub Actions step output so subsequent steps can reference it
-if (process.env.GITHUB_OUTPUT) {
-  writeFileSync(process.env.GITHUB_OUTPUT, `prompt_file=${outputPromptPath}\n`, {
-    flag: "a",
-  });
-}
+setOutput("prompt_file", outputPromptPath);
