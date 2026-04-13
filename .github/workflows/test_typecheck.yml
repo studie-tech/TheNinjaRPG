@@ -3,7 +3,7 @@ on: pull_request
 jobs:
   test_typecheck:
     name: test_typecheck
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -13,3 +13,5 @@ jobs:
       - name: run typecheck
         run: bun run typecheck
         working-directory: ./app
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
