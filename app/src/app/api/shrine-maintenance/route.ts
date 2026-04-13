@@ -53,7 +53,7 @@ export async function GET() {
       : null;
 
     const message = maintenanceResult
-      ? `Shrine maintenance completed: boost tick (${boostResult.activeUpdated} activated, ${boostResult.expiredDeleted} expired), stale lobbies cleared (${staleLobbyResult.lobbiesCleared}, ${staleLobbyResult.usersReset} users reset), daily maintenance (${maintenanceResult.sectorsChecked} sectors checked, ${maintenanceResult.shrinesDowngraded} downgraded, ${maintenanceResult.shrinesDestroyed} destroyed)`
+      ? `Shrine maintenance completed: boost tick (${boostResult.activeUpdated} activated, ${boostResult.expiredDeleted} expired), stale lobbies cleared ${staleLobbyResult.lobbiesCleared} (${staleLobbyResult.usersReset} users reset), daily maintenance (${maintenanceResult.sectorsChecked} sectors checked, ${maintenanceResult.shrinesDowngraded} downgraded, ${maintenanceResult.shrinesDestroyed} destroyed)`
       : `Shrine boost tick completed: ${boostResult.activeUpdated} activated, ${boostResult.expiredDeleted} expired; stale lobbies cleared ${staleLobbyResult.lobbiesCleared} (${staleLobbyResult.usersReset} users reset)`;
 
     return new Response(message, { status: 200 });
@@ -279,24 +279,11 @@ export async function runStaleShrineLobbyCleanup(
   }
 
   const staleIds = staleLobbies.map((row) => row.id);
-  const queuedUsers = await db
-    .select({ userId: mpvpBattleUser.userId })
-    .from(mpvpBattleUser)
-    .where(inArray(mpvpBattleUser.clanBattleId, staleIds));
-  const userIds = [...new Set(queuedUsers.map((row) => row.userId))];
 
-  let usersReset = 0;
-  if (userIds.length > 0) {
-    const resetResult = await db
-      .update(userData)
-      .set({ status: "AWAKE" })
-      .where(and(inArray(userData.userId, userIds), eq(userData.status, "QUEUED")));
-    usersReset = resetResult.rowsAffected ?? 0;
-  }
-
-  // Gate the user-row delete on the parent queue row still being stale so a
-  // concurrent initiateShrineBattle claim (which sets battleId) cannot strand
-  // a live battle with zero mpvpBattleUser rows.
+  // Build the subquery once and reuse it for both the status reset and the
+  // delete, so both are guarded against a concurrent initiateShrineBattle
+  // CAS-claim (which sets battleId before initiateBattle transitions users
+  // to BATTLE — see the two-step sequence in initiateShrineBattle).
   const stillStaleQueues = db
     .select({ id: mpvpBattleQueue.id })
     .from(mpvpBattleQueue)
@@ -307,6 +294,19 @@ export async function runStaleShrineLobbyCleanup(
         lt(mpvpBattleQueue.createdAt, cutoff),
       ),
     );
+
+  const stillQueuedUsers = db
+    .select({ userId: mpvpBattleUser.userId })
+    .from(mpvpBattleUser)
+    .where(inArray(mpvpBattleUser.clanBattleId, stillStaleQueues));
+
+  const resetResult = await db
+    .update(userData)
+    .set({ status: "AWAKE" })
+    .where(
+      and(inArray(userData.userId, stillQueuedUsers), eq(userData.status, "QUEUED")),
+    );
+  const usersReset = resetResult.rowsAffected ?? 0;
 
   await db
     .delete(mpvpBattleUser)

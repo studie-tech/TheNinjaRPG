@@ -29,16 +29,18 @@ function createSelectChain<T>(rows: T[]) {
 }
 
 describe("runStaleShrineLobbyCleanup", () => {
-  it("resets queued users and clears stale shrine lobbies, gating user delete with a subquery", async () => {
+  it("resets queued users and clears stale shrine lobbies, gating both reset and delete with subqueries", async () => {
     const staleLobbies = createSelectChain([{ id: "lobby-1" }, { id: "lobby-2" }]);
-    const queuedUsers = createSelectChain([
-      { userId: "user-1" },
-      { userId: "user-1" },
-      { userId: "user-2" },
-    ]);
-    const stillStaleSubqueryChain = {
+    // stillStaleQueues subquery builder — not awaited
+    const stillStaleQueuesChain = {
       from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({ __subqueryBuilder: true }),
+        where: vi.fn().mockReturnValue({ __stillStaleQueues: true }),
+      }),
+    };
+    // stillQueuedUsers subquery builder — not awaited
+    const stillQueuedUsersChain = {
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ __stillQueuedUsers: true }),
       }),
     };
     const updateWhere = vi.fn().mockResolvedValue({ rowsAffected: 2 });
@@ -49,9 +51,9 @@ describe("runStaleShrineLobbyCleanup", () => {
     const db = {
       select: vi
         .fn()
-        .mockReturnValueOnce(staleLobbies.chain)
-        .mockReturnValueOnce(queuedUsers.chain)
-        .mockReturnValueOnce(stillStaleSubqueryChain),
+        .mockReturnValueOnce(staleLobbies.chain)       // 1: stale lobby fetch (awaited)
+        .mockReturnValueOnce(stillStaleQueuesChain)    // 2: stillStaleQueues subquery
+        .mockReturnValueOnce(stillQueuedUsersChain),   // 3: stillQueuedUsers subquery
       update: vi.fn().mockReturnValue({ set: updateSet }),
       delete: vi
         .fn()
@@ -66,10 +68,11 @@ describe("runStaleShrineLobbyCleanup", () => {
     expect(updateSet).toHaveBeenCalledWith({ status: "AWAKE" });
     expect(db.delete).toHaveBeenNthCalledWith(1, mpvpBattleUser);
     expect(db.delete).toHaveBeenNthCalledWith(2, mpvpBattleQueue);
-    // The user-row delete must be gated by a subquery (third db.select call),
-    // not a flat inArray(..., staleIds). If anyone reverts that, db.select
-    // will only be called twice and this assertion fails.
+    // Both the status reset and the user-row delete are gated by subqueries
+    // (calls 2 and 3). Reverting either to a flat inArray(..., staleIds)
+    // would reduce db.select to fewer calls.
     expect(db.select).toHaveBeenCalledTimes(3);
+    expect(updateWhere).toHaveBeenCalledTimes(1);
     expect(deleteLobbyUsersWhere).toHaveBeenCalledTimes(1);
   });
 
