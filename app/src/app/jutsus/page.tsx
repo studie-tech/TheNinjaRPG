@@ -298,6 +298,7 @@ export default function MyJutsu() {
           await Promise.all([
             utils.jutsu.getUserJutsus.invalidate(),
             utils.jutsu.getEvolutions.invalidate(),
+            utils.jutsu.getUserJutsuOwnership.invalidate(),
             utils.profile.getUser.invalidate(),
           ]);
           setIsOpen(false);

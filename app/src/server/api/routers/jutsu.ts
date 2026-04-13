@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gte, inArray, like, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, like, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -644,6 +644,7 @@ export const jutsuRouter = createTRPCRouter({
           input.data.parentJutsuId
             ? ctx.drizzle.query.jutsu.findMany({
                 columns: { id: true, parentJutsuId: true },
+                where: isNotNull(jutsu.parentJutsuId),
               })
             : Promise.resolve([]),
         ]);
