@@ -24,6 +24,7 @@ import { showMutationToast } from "@/libs/toast";
 import { getNewReactions, processMentions } from "@/utils/chat";
 import { parseHtml } from "@/utils/parse";
 import { canPostAsAi } from "@/utils/permissions";
+import { stripBlockquotes } from "@/utils/sanitize";
 import { secondsFromNow } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
@@ -388,7 +389,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
           ?.map((id) => {
             const quote = allComments?.find((c) => c.id === id);
             return quote
-              ? `<blockquote author="${quote.username || "Unknown"}" date="${format(quote.createdAt, "MM/dd/yyyy")}">${quote.content}</blockquote>`
+              ? `<blockquote author="${quote.username || "Unknown"}" date="${format(quote.createdAt, "MM/dd/yyyy")}">${stripBlockquotes(quote.content)}</blockquote>`
               : "";
           })
           .join("") || "";
@@ -685,7 +686,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                           );
                         }}
                       >
-                        {quote.content}
+                        {stripBlockquotes(quote.content)}
                       </Quote>
                     );
                   })}

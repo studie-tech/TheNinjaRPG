@@ -30,6 +30,15 @@ const sanitize = (html: string) => {
 
 export default sanitize;
 
+export const stripBlockquotes = (html: string) => {
+  return sanitizeHtml(html, {
+    allowedTags: false,
+    allowedAttributes: false,
+    allowVulnerableTags: true,
+    exclusiveFilter: (frame) => frame.tag === "blockquote",
+  });
+};
+
 export const capitalizeFirstLetter = (string: string) => {
   return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
 };

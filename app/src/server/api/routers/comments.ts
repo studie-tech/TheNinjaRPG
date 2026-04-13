@@ -42,7 +42,7 @@ import {
   canViewConversation,
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
-import sanitize from "@/utils/sanitize";
+import sanitize, { stripBlockquotes } from "@/utils/sanitize";
 import {
   createConversationSchema,
   deleteCommentSchema,
@@ -694,7 +694,7 @@ export const commentsRouter = createTRPCRouter({
         const quoteContent = quotes
           .map(
             (q) =>
-              `<blockquote author="${q.user?.username || "Unknown"}" date="${format(q.createdAt, "MM/dd/yyyy")}">${q.content}</blockquote>`,
+              `<blockquote author="${q.user?.username || "Unknown"}" date="${format(q.createdAt, "MM/dd/yyyy")}">${stripBlockquotes(q.content)}</blockquote>`,
           )
           .join("");
         content = `${quoteContent}\n\n${content}`;
