@@ -294,7 +294,23 @@ export async function runStaleShrineLobbyCleanup(
     usersReset = resetResult.rowsAffected ?? 0;
   }
 
-  await db.delete(mpvpBattleUser).where(inArray(mpvpBattleUser.clanBattleId, staleIds));
+  // Gate the user-row delete on the parent queue row still being stale so a
+  // concurrent initiateShrineBattle claim (which sets battleId) cannot strand
+  // a live battle with zero mpvpBattleUser rows.
+  const stillStaleQueues = db
+    .select({ id: mpvpBattleQueue.id })
+    .from(mpvpBattleQueue)
+    .where(
+      and(
+        inArray(mpvpBattleQueue.id, staleIds),
+        isNull(mpvpBattleQueue.battleId),
+        lt(mpvpBattleQueue.createdAt, cutoff),
+      ),
+    );
+
+  await db
+    .delete(mpvpBattleUser)
+    .where(inArray(mpvpBattleUser.clanBattleId, stillStaleQueues));
 
   const deleteResult = await db
     .delete(mpvpBattleQueue)

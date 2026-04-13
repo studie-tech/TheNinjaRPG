@@ -20,6 +20,24 @@ vi.mock("@/server/db", () => ({
   drizzleDB: {},
 }));
 
+// Partial-mock drizzle-orm so inArray() returns a distinctive sentinel when
+// called with a non-array (i.e., a subquery builder). This lets the test
+// assert that the stale-lobby cleanup gates its user-row delete through a
+// subquery — without which a concurrent initiateShrineBattle claim could
+// strand a live battle with zero mpvpBattleUser rows.
+vi.mock("drizzle-orm", async () => {
+  const actual = await vi.importActual<typeof import("drizzle-orm")>("drizzle-orm");
+  return {
+    ...actual,
+    inArray: (column: unknown, values: unknown) => {
+      if (Array.isArray(values)) {
+        return (actual.inArray as (c: unknown, v: unknown) => unknown)(column, values);
+      }
+      return { __isSubqueryGuard: true };
+    },
+  };
+});
+
 import { runStaleShrineLobbyCleanup } from "@/app/api/shrine-maintenance/route";
 
 function createSelectChain<T>(rows: T[]) {
@@ -29,13 +47,18 @@ function createSelectChain<T>(rows: T[]) {
 }
 
 describe("runStaleShrineLobbyCleanup", () => {
-  it("resets queued users and clears stale shrine lobbies", async () => {
+  it("resets queued users and clears stale shrine lobbies, gating user delete with a subquery", async () => {
     const staleLobbies = createSelectChain([{ id: "lobby-1" }, { id: "lobby-2" }]);
     const queuedUsers = createSelectChain([
       { userId: "user-1" },
       { userId: "user-1" },
       { userId: "user-2" },
     ]);
+    const stillStaleSubqueryChain = {
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ __subqueryBuilder: true }),
+      }),
+    };
     const updateWhere = vi.fn().mockResolvedValue({ rowsAffected: 2 });
     const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
     const deleteLobbyUsersWhere = vi.fn().mockResolvedValue({ rowsAffected: 3 });
@@ -45,7 +68,8 @@ describe("runStaleShrineLobbyCleanup", () => {
       select: vi
         .fn()
         .mockReturnValueOnce(staleLobbies.chain)
-        .mockReturnValueOnce(queuedUsers.chain),
+        .mockReturnValueOnce(queuedUsers.chain)
+        .mockReturnValueOnce(stillStaleSubqueryChain),
       update: vi.fn().mockReturnValue({ set: updateSet }),
       delete: vi
         .fn()
@@ -60,6 +84,12 @@ describe("runStaleShrineLobbyCleanup", () => {
     expect(updateSet).toHaveBeenCalledWith({ status: "AWAKE" });
     expect(db.delete).toHaveBeenNthCalledWith(1, mpvpBattleUser);
     expect(db.delete).toHaveBeenNthCalledWith(2, mpvpBattleQueue);
+    // The user-row delete must be gated by the subquery; regression guard
+    // against anyone reverting to inArray(..., staleIds) on this delete.
+    expect(db.select).toHaveBeenCalledTimes(3);
+    expect(deleteLobbyUsersWhere).toHaveBeenCalledWith(
+      expect.objectContaining({ __isSubqueryGuard: true }),
+    );
   });
 
   it("returns zero counts when no stale shrine lobbies exist", async () => {
