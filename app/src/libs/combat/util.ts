@@ -2457,8 +2457,21 @@ export const getAffectedTiles = (info: {
   const radius = action.range;
   const green = new Set<TerrainHex>();
   const red = new Set<TerrainHex>();
+  const seenTiles = new Set<string>();
   const user = users.find((u) => u.userId === userId);
   let tiles: Grid<TerrainHex> | undefined;
+
+  const addAffectedTile = (target: TerrainHex, isValid: boolean) => {
+    const key = `${target.col},${target.row}`;
+    if (seenTiles.has(key)) return;
+    seenTiles.add(key);
+
+    if (isValid) {
+      green.add(target);
+    } else {
+      red.add(target);
+    }
+  };
 
   // Get all ground effects which are barriers
   const barriers = info.ground.filter((g) => g.type === "barrier");
@@ -2547,19 +2560,19 @@ export const getAffectedTiles = (info: {
     if (tiles) tiles = tiles.filter((t) => t !== a);
   } else if (action.method === "ALL") {
     grid.forEach((target) => {
-      if (isValidMove({ action, target, user, users, barriers, clicked: b })) {
-        green.add(target);
-      }
+      addAffectedTile(
+        target,
+        isValidMove({ action, target, user, users, barriers, clicked: b }),
+      );
     });
   }
 
   // Return green for valid moves and red for unvalid moves
   tiles?.forEach((target) => {
-    if (isValidMove({ action, target, user, users, barriers, clicked: b })) {
-      green.add(target);
-    } else {
-      red.add(target);
-    }
+    addAffectedTile(
+      target,
+      isValidMove({ action, target, user, users, barriers, clicked: b }),
+    );
   });
 
   return { green, red };
