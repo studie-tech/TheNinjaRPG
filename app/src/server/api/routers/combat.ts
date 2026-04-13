@@ -1046,6 +1046,7 @@ export const combatRouter = createTRPCRouter({
               updatedAt: now,
               storedAtHome: false,
               isInAuction: false,
+              activeVariantId: null,
               craftingFinishedAt: null,
             };
           })
@@ -1643,6 +1644,7 @@ export const initiateBattle = async (
             storedAtHome: false,
             craftingFinishedAt: null,
             isInAuction: false,
+            activeVariantId: null,
             imbuements: [],
             dropChancePerc: 0,
             durability: 100,
