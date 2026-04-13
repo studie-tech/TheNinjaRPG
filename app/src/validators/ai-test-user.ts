@@ -32,8 +32,12 @@ export const aiTestUserProfileSchema = z
     path: ["villageId"],
   });
 
-/** Collapse non-alphanumeric chars so "Red Team" and "red_team" are treated as dupes. */
-const normalizeUserKey = (value: string) =>
+/**
+ * Collapse non-alphanumeric chars so "Red Team" and "red_team" are treated as dupes.
+ * Shared with ai-test-users.ts (imported as `sanitizeKey`) to ensure both validation
+ * and provisioning use the same normalisation — avoiding silent divergence.
+ */
+export const sanitizeKey = (value: string) =>
   value.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
 
 /** Broker request: one or more user profiles plus an optional run identifier. */
@@ -49,7 +53,7 @@ export const aiTestUserRequestSchema = z
     // to prevent race conditions in Clerk user creation
     const seen = new Set<string>();
     for (const [index, user] of users.entries()) {
-      const normalized = normalizeUserKey(user.key);
+      const normalized = sanitizeKey(user.key);
       if (seen.has(normalized)) {
         ctx.addIssue({
           code: "custom",

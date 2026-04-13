@@ -29,28 +29,34 @@ const repository = process.env.REPOSITORY ?? "";
 const extraInstructions = process.env.EXTRA_INSTRUCTIONS ?? "";
 
 /** Strip triple-backticks and cap length to limit prompt-injection surface. */
-const sanitize = (untrusted) =>
+const sanitize = (untrusted, maxLen = 4000) =>
   untrusted
     .replace(/```/g, "'''")
-    .slice(0, 4000);
+    .slice(0, maxLen);
 const prBody = sanitize(prBodyRaw);
+const prTitleSafe = sanitize(prTitle, 256);
 
 // Ensure the URL always has a protocol (Vercel check output sometimes omits it)
 const normalizedPreviewUrl = rawPreviewUrl
   ? rawPreviewUrl.startsWith("http") ? rawPreviewUrl : `https://${rawPreviewUrl}`
   : "";
 
-// Vercel deployment protection bypass: these query params make Vercel set a
-// cookie on the first response, so subsequent navigations work without them
+/** Append Vercel bypass query params to a URL using the URL API (handles existing query strings). */
+const appendBypassParams = (base) => {
+  if (!base || !vercelBypass) return base;
+  const url = new URL(base);
+  url.searchParams.set("x-vercel-protection-bypass", vercelBypass);
+  url.searchParams.set("x-vercel-set-bypass-cookie", "true");
+  return url.toString();
+};
+
+// Vercel deployment protection bypass as a raw query string (for embedding in prompt text)
 const bypassParams = vercelBypass
-  ? `x-vercel-protection-bypass=${vercelBypass}&x-vercel-set-bypass-cookie=true`
+  ? `x-vercel-protection-bypass=${encodeURIComponent(vercelBypass)}&x-vercel-set-bypass-cookie=true`
   : "";
 
 // Full preview URL with bypass params baked in for the agent's first navigation
-const previewUrl =
-  normalizedPreviewUrl && bypassParams
-    ? `${normalizedPreviewUrl}?${bypassParams}`
-    : normalizedPreviewUrl;
+const previewUrl = appendBypassParams(normalizedPreviewUrl);
 
 // Broker endpoint for provisioning test users on the preview deployment
 const brokerUrl = normalizedPreviewUrl
@@ -79,8 +85,8 @@ const authBlock =
         "",
         "To provision test users from shell, first seed a bypass cookie, then POST to the broker:",
         "```",
-        `curl -s -c /tmp/vercel.cookie "${normalizedPreviewUrl}?${bypassParams}" -o /dev/null`,
-        `curl -s -b /tmp/vercel.cookie -X POST "${brokerUrl}?${bypassParams}" \\`,
+        `curl -s -c /tmp/vercel.cookie "${appendBypassParams(normalizedPreviewUrl)}" -o /dev/null`,
+        `curl -s -b /tmp/vercel.cookie -X POST "${appendBypassParams(brokerUrl)}" \\`,
         `  -H "Content-Type: application/json" \\`,
         `  -H "x-tnr-reviewer-token: $AI_TEST_USER_BROKER_TOKEN" \\`,
         `  -d '{"users":[{"key":"player1","level":100,"rank":"JONIN","villageName":"Shine"}]}'`,
@@ -101,7 +107,7 @@ const authBlock =
         "",
         "Each user in the response includes a `signInToken`. To authenticate in the browser, navigate Playwright to:",
         "```",
-        `${normalizedPreviewUrl}/login?__clerk_ticket=<signInToken>&${bypassParams}`,
+        `${appendBypassParams(normalizedPreviewUrl + "/login?__clerk_ticket=<signInToken>")}`,
         "```",
         "This performs a one-time Clerk ticket sign-in. After navigation, wait a few seconds for the redirect to complete, then take a snapshot to confirm the user is logged in.",
         "",
@@ -147,7 +153,7 @@ const prompt = [
   `Command author: @${commandAuthor}`,
   `Preview URL: ${previewUrl}`,
   `Preview base URL: ${normalizedPreviewUrl}`,
-  `PR title: ${prTitle}`,
+  `PR title: ${prTitleSafe}`,
   "",
   "PR body:",
   prBody || "(empty)",

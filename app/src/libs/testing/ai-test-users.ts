@@ -8,13 +8,14 @@
  * User identity is keyed on a deterministic `external_id` derived from the
  * run ID and profile key, so repeated runs reuse/reset the same accounts.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-import type { UserRanks } from "@/drizzle/constants";
+import type { UserRank } from "@/drizzle/constants";
 import { userData, village } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
 import { drizzleDB } from "@/server/db";
 import type { AiTestUserProfile } from "@/validators/ai-test-user";
+import { sanitizeKey } from "@/validators/ai-test-user";
 
 /** Shape returned per user after successful provisioning. */
 type ProvisionedAiTestUser = {
@@ -24,7 +25,7 @@ type ProvisionedAiTestUser = {
   email: string;
   password: string;
   level: number;
-  rank: (typeof UserRanks)[number];
+  rank: UserRank;
   villageId: string;
   villageName: string;
   isBanned: boolean;
@@ -67,10 +68,6 @@ const fetchClerkApi = async (path: string, init: RequestInit = {}) => {
 
   return response.json();
 };
-
-/** Normalise a freeform key into a safe, lowercase identifier. */
-const sanitizeKey = (value: string) =>
-  value.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
 
 /** Satisfies Clerk's password policy: uppercase + lowercase + digit + special. */
 const createPassword = () => `Tnr!${randomBytes(10).toString("hex")}1A`;
@@ -193,7 +190,7 @@ const upsertUserData = async ({
   userId: string;
   username: string;
   level: number;
-  rank: (typeof UserRanks)[number];
+  rank: UserRank;
   villageId: string;
   isBanned: boolean;
 }) => {
@@ -289,9 +286,13 @@ export const provisionAiTestUsers = async (
 
       // Deterministic external_id so repeat runs reuse the same Clerk user
       const externalId = `tnr-test-${runKey}-${userKey}`;
-      // Capped at 64 chars to satisfy Clerk's email local-part limit.
-      // Uses example.org (RFC 2606) — Clerk rejects .test TLD.
-      const localPart = `tnr-${runKey}-${userKey}`.slice(0, 64);
+      // Use a hash-based local part to guarantee uniqueness even with long runKeys.
+      // Plain truncation could drop the userKey, aliasing multiple profiles to one email.
+      const emailHash = createHash("sha256")
+        .update(`${runKey}:${userKey}`)
+        .digest("hex")
+        .slice(0, 24);
+      const localPart = `tnr-${emailHash}`;
       const email = `${localPart}@tnr-ci.example.org`;
 
       const { userId } = await upsertClerkUser(externalId, email, username, password);

@@ -85,11 +85,21 @@ jobs:
               return;
             }
 
-            // Actor allowlist — empty list means "allow everyone"
+            // Actor allowlist — fail closed for issue_comment (require explicit config)
             const allowUsers = (process.env.ALLOW_USERS ?? '')
               .split(',')
               .map((value) => value.trim())
               .filter(Boolean);
+            if (!isWorkflowDispatch && allowUsers.length === 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: 'TNR reviewer is blocked: `TNR_REVIEWER_ALLOW_USERS` is not configured.',
+              });
+              core.setOutput('should_run', 'false');
+              return;
+            }
             if (allowUsers.length > 0 && !allowUsers.includes(actor)) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
@@ -203,9 +213,23 @@ jobs:
       checks: read
       actions: read
     steps:
-      # Check out the PR head commit (not the merge ref) so Codex sees the
-      # exact code the author pushed
-      - uses: actions/checkout@v5
+      # First checkout: default branch scripts (trusted — not PR-controlled).
+      # These run with secrets in env, so they MUST NOT come from the PR head.
+      - name: Checkout trusted scripts
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          path: trusted-scripts
+
+      - name: Cache trusted helper scripts
+        run: |
+          mkdir -p "$RUNNER_TEMP/tnr-scripts"
+          cp trusted-scripts/.github/scripts/build-tnr-review-prompt.mjs "$RUNNER_TEMP/tnr-scripts/"
+          cp trusted-scripts/.github/scripts/post-tnr-result.mjs "$RUNNER_TEMP/tnr-scripts/"
+
+      # Second checkout: PR head for Codex to inspect
+      - name: Checkout PR head
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
           token: ${{ secrets.PAT_TOKEN }}
@@ -228,9 +252,10 @@ jobs:
           echo "Codex config.toml:"
           cat "$HOME/.codex/config.toml"
 
+      # Use the trusted script copy, not the PR-head version
       - name: Build review prompt
         id: build_prompt
-        run: node .github/scripts/build-tnr-review-prompt.mjs
+        run: node "$RUNNER_TEMP/tnr-scripts/build-tnr-review-prompt.mjs"
         env:
           PROMPT_FILE: /tmp/tnr-review-prompt.txt
           PREVIEW_URL: ${{ needs.preview_check.outputs.preview_url || needs.preview_check.outputs.details_url }}
@@ -296,10 +321,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      # Replace the "started" comment with the final outcome (success/failure)
+      # Replace the "started" comment with the final outcome (success/failure).
+      # Uses the trusted script copy, not the PR-head version.
       - name: Update PR comment with result
         if: always()
-        run: node .github/scripts/post-tnr-result.mjs
+        run: node "$RUNNER_TEMP/tnr-scripts/post-tnr-result.mjs"
         env:
           GITHUB_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ needs.command_gate.outputs.issue_number }}

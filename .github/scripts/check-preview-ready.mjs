@@ -38,10 +38,19 @@ if (!owner || !repo) {
   throw new Error(`Invalid GITHUB_REPOSITORY: ${repository}`);
 }
 
-/** Write a key=value pair to $GITHUB_OUTPUT for downstream workflow steps. */
+/** Write a key=value pair to $GITHUB_OUTPUT, using heredoc format for multiline values. */
 const setOutput = (key, value) => {
   if (!process.env.GITHUB_OUTPUT) return;
-  appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${String(value ?? "")}\n`);
+  const str = String(value ?? "");
+  if (str.includes("\n")) {
+    const delimiter = `ghadelimiter_${Date.now()}`;
+    appendFileSync(
+      process.env.GITHUB_OUTPUT,
+      `${key}<<${delimiter}\n${str}\n${delimiter}\n`,
+    );
+  } else {
+    appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${str}\n`);
+  }
 };
 
 /** Authenticated GET against the GitHub REST API. */
@@ -63,6 +72,18 @@ const githubRequest = async (path) => {
   return response.json();
 };
 
+/** Validate that a URL is a trusted Vercel deployment (*.vercel.app over HTTPS). */
+const toTrustedPreviewUrl = (raw) => {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:") return "";
+    if (!parsed.hostname.endsWith(".vercel.app")) return "";
+    return parsed.origin;
+  } catch {
+    return "";
+  }
+};
+
 /** Parse the deployment URL out of a Vercel check run's output summary. */
 const extractPreviewUrl = (checkRun) => {
   const summary = checkRun?.output?.summary ?? "";
@@ -72,14 +93,22 @@ const extractPreviewUrl = (checkRun) => {
   const feedbackMatch = summary.match(
     /https:\/\/vercel\.live\/open-feedback\/([a-z0-9-]+\.vercel\.app)/i,
   );
-  if (feedbackMatch) return `https://${feedbackMatch[1]}`;
+  if (feedbackMatch) {
+    const trusted = toTrustedPreviewUrl(`https://${feedbackMatch[1]}`);
+    if (trusted) return trusted;
+  }
 
-  // Fallback: grab any URL from the summary text
+  // Fallback: grab any URL from the summary text, validate hostname
   const fromSummary = summary.match(/https:\/\/[^\s)]+/i)?.[0];
-  if (fromSummary) return fromSummary;
-  // Last resort: use the check run's details_url (often a Vercel dashboard link)
-  if (checkRun?.details_url && /^https?:\/\//.test(checkRun.details_url))
-    return checkRun.details_url;
+  if (fromSummary) {
+    const trusted = toTrustedPreviewUrl(fromSummary);
+    if (trusted) return trusted;
+  }
+  // Last resort: use the check run's details_url if it's a trusted Vercel host
+  if (checkRun?.details_url && /^https?:\/\//.test(checkRun.details_url)) {
+    const trusted = toTrustedPreviewUrl(checkRun.details_url);
+    if (trusted) return trusted;
+  }
   return "";
 };
 
