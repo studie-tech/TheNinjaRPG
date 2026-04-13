@@ -26,7 +26,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { COST_EXTRA_ITEM_SLOT, IMG_EQUIP_SILHOUETTE } from "@/drizzle/constants";
-import type { Item, ItemSlot, UserItem, UserItemWithRelations } from "@/drizzle/schema";
+import type {
+  Item,
+  ItemSlot,
+  ItemVariant,
+  UserItem,
+  UserItemWithRelations,
+} from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
@@ -562,6 +568,9 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   const [isSplitDialogOpen, setIsSplitDialogOpen] = useState<boolean>(false);
   const [quantityToKeep, setQuantityToKeep] = useState<string>("");
   const [isRepairModalOpen, setIsRepairModalOpen] = useState<boolean>(false);
+  const [variantItem, setVariantItem] = useState<UserItemWithVariants | undefined>(
+    undefined,
+  );
 
   // tRPC utility
   const utils = api.useUtils();
@@ -774,6 +783,14 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                     Use Repair Item
                   </Button>
                 )}
+              {((useritem as UserItemWithVariants).item.variants?.length ?? 0) > 0 && (
+                <Button
+                  variant="info"
+                  onClick={() => setVariantItem(useritem as UserItemWithVariants)}
+                >
+                  Variants
+                </Button>
+              )}
               <div className="grow"></div>
               <Confirm2
                 title="Security Confirmation"
@@ -872,6 +889,14 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         onRepairItem={mutateRepairItem}
         isPending={isUsingRepairItem}
       />
+      {/* Variant Modal */}
+      {variantItem && (
+        <ItemVariantModal
+          userItem={variantItem}
+          allUserItems={useritems}
+          onClose={() => setVariantItem(undefined)}
+        />
+      )}
     </>
   );
 };
@@ -1134,5 +1159,185 @@ const Equip: React.FC<EquipProps> = (props) => {
         <p className="opacity-100">{props.txt}</p>
       )}
     </button>
+  );
+};
+
+/**
+ * Type for user items that include variants on the nested item
+ */
+type UserItemWithVariants = UserItemWithRelations & {
+  item: UserItemWithRelations["item"] & { variants: ItemVariant[] };
+};
+
+/**
+ * Variant Modal for browsing, purchasing, and selecting item variants
+ */
+interface ItemVariantModalProps {
+  userItem: UserItemWithVariants;
+  allUserItems: UserItemWithRelations[] | undefined;
+  onClose: () => void;
+}
+
+const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
+  userItem,
+  allUserItems,
+  onClose,
+}) => {
+  const utils = api.useUtils();
+  const [isOpen, setIsOpen] = useState(true);
+  const variants = userItem.item.variants ?? [];
+
+  const { data: unlockedVariants } = api.item.getUserUnlockedVariants.useQuery({
+    itemId: userItem.item.id,
+  });
+  const unlockedIds = new Set(unlockedVariants?.map((u) => u.variantId) ?? []);
+
+  const variantTokens =
+    allUserItems?.filter((ui) =>
+      ui.item.effects.some((e) => e.type === "unlockitemvariant"),
+    ) ?? [];
+
+  const purchase = api.item.purchaseVariant.useMutation({
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      if (result.success) {
+        await Promise.all([
+          utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
+          utils.profile.getUser.invalidate(),
+        ]);
+      }
+    },
+  });
+
+  const consumeToken = api.item.consumeVariantToken.useMutation({
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      if (result.success) {
+        await Promise.all([
+          utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
+          utils.item.getUserItems.invalidate(),
+        ]);
+      }
+    },
+  });
+
+  const select = api.item.selectVariant.useMutation({
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      if (result.success) {
+        await utils.item.getUserItems.invalidate();
+        setIsOpen(false);
+        onClose();
+      }
+    },
+  });
+
+  const activeVariantId = userItem.activeVariantId;
+
+  const handleClose: React.Dispatch<React.SetStateAction<boolean>> = (value) => {
+    const nextOpen = typeof value === "function" ? value(isOpen) : value;
+    setIsOpen(nextOpen);
+    if (!nextOpen) onClose();
+  };
+
+  return (
+    <Modal2
+      title={`Variants — ${userItem.item.name}`}
+      isOpen={isOpen}
+      setIsOpen={handleClose}
+      isValid={false}
+    >
+      <p className="mb-4 text-muted-foreground text-sm">
+        Purchase and select a variant to change how this item appears.
+      </p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {/* Base look */}
+        <button
+          type="button"
+          className={`cursor-pointer rounded border p-2 ${!activeVariantId ? "ring-2 ring-primary" : ""}`}
+          onClick={() => select.mutate({ userItemId: userItem.id, variantId: null })}
+        >
+          <Image
+            src={userItem.item.image}
+            alt="Base"
+            width={80}
+            height={80}
+            className="mx-auto rounded"
+          />
+          <p className="mt-1 text-center font-medium text-xs">Base (Free)</p>
+          {!activeVariantId && (
+            <p className="text-center text-xs text-primary">Active</p>
+          )}
+        </button>
+
+        {variants.map((v) => {
+          const isUnlocked = unlockedIds.has(v.id);
+          const isActive = activeVariantId === v.id;
+          const needsToken = v.costType === "VARIANT_TOKEN";
+
+          return (
+            <div
+              key={v.id}
+              className={`rounded border p-2 ${isActive ? "ring-2 ring-primary" : ""} ${!isUnlocked ? "opacity-60" : "cursor-pointer"}`}
+            >
+              <Image
+                src={v.image}
+                alt={v.name}
+                width={80}
+                height={80}
+                className="mx-auto rounded"
+              />
+              <p className="mt-1 text-center font-medium text-xs">{v.name}</p>
+
+              {isUnlocked ? (
+                isActive ? (
+                  <p className="text-center text-xs text-primary">Active</p>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-1 w-full"
+                    onClick={() =>
+                      select.mutate({ userItemId: userItem.id, variantId: v.id })
+                    }
+                    disabled={select.isPending}
+                  >
+                    Select
+                  </Button>
+                )
+              ) : needsToken ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-1 w-full"
+                  disabled={variantTokens.length === 0 || consumeToken.isPending}
+                  onClick={() => {
+                    const token = variantTokens[0];
+                    if (token) {
+                      consumeToken.mutate({
+                        tokenUserItemId: token.id,
+                        variantId: v.id,
+                      });
+                    }
+                  }}
+                >
+                  {variantTokens.length > 0 ? "Use Token" : "Need Variant Token"}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-1 w-full"
+                  onClick={() => purchase.mutate({ variantId: v.id })}
+                  disabled={purchase.isPending}
+                >
+                  {`Buy: ${v.cost.toLocaleString()} ${v.costType}`}
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Modal2>
   );
 };
