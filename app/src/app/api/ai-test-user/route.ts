@@ -43,7 +43,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const payload = await request.json();
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return NextResponse.json(
+      { success: false, message: "Invalid JSON body" },
+      { status: 400 },
+    );
+  }
   const parsed = aiTestUserRequestSchema.safeParse(payload);
   if (!parsed.success) {
     return NextResponse.json(

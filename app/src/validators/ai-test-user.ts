@@ -20,10 +20,28 @@ export const aiTestUserProfileSchema = z
     path: ["villageId"],
   });
 
-export const aiTestUserRequestSchema = z.object({
-  runId: z.string().trim().min(1).max(64).optional(),
-  users: z.array(aiTestUserProfileSchema).min(1).max(4),
-});
+const normalizeUserKey = (value: string) =>
+  value.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
+
+export const aiTestUserRequestSchema = z
+  .object({
+    runId: z.string().trim().min(1).max(64).optional(),
+    users: z.array(aiTestUserProfileSchema).min(1).max(4),
+  })
+  .superRefine(({ users }, ctx) => {
+    const seen = new Set<string>();
+    for (const [index, user] of users.entries()) {
+      const normalized = normalizeUserKey(user.key);
+      if (seen.has(normalized)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Duplicate user key after normalization: "${normalized}"`,
+          path: ["users", index, "key"],
+        });
+      }
+      seen.add(normalized);
+    }
+  });
 
 export const aiTestUserResponseSchema = z.object({
   success: z.boolean(),

@@ -33,9 +33,12 @@ const buildMachineHeaders = () => {
   };
 };
 
+const CLERK_TIMEOUT_MS = 15_000;
+
 const fetchClerkApi = async (path: string, init: RequestInit = {}) => {
   const response = await fetch(`${CLERK_API_ENDPOINT}${path}`, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(CLERK_TIMEOUT_MS),
     headers: {
       ...buildMachineHeaders(),
       ...(init.headers ?? {}),
@@ -67,6 +70,9 @@ const resolveVillage = async (profile: AiTestUserProfile) => {
       columns: { id: true, name: true },
     });
     if (villageRecord) return villageRecord;
+    throw new Error(
+      `Village with id "${profile.villageId}" not found for profile key ${profile.key}`,
+    );
   }
 
   if (profile.villageName) {
@@ -236,7 +242,8 @@ export const provisionAiTestUsers = async (
         : `tnr${runKey}${userKey}`;
       const username = createUsername(usernameBase);
       const externalId = `tnr-test-${runKey}-${userKey}`;
-      const email = `tnr-${runKey}-${userKey}@tnr-ci.example.org`;
+      const localPart = `tnr-${runKey}-${userKey}`.slice(0, 64);
+      const email = `${localPart}@tnr-ci.example.org`;
 
       const { userId } = await upsertClerkUser(externalId, email, username, password);
       const [, signInToken] = await Promise.all([

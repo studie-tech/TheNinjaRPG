@@ -28,6 +28,7 @@ const githubRequest = async (path, options = {}) => {
     headers: {
       Authorization: `Bearer ${githubToken}`,
       Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
       "X-GitHub-Api-Version": "2022-11-28",
       "User-Agent": "tnr-reviewer-comment-updater",
       ...(options.headers ?? {}),
@@ -42,41 +43,38 @@ const githubRequest = async (path, options = {}) => {
   return response.json();
 };
 
+const joinLines = (lines) =>
+  lines.filter((line) => line !== null && line !== undefined).join("\n");
+
 const buildBody = () => {
   const normalizedFinalMessage = finalMessage.replace(/\\n/g, "\n").trim();
 
   if (result === "blocked") {
-    return [
+    return joinLines([
       "## TNR reviewer blocked",
       "",
       `Mode: \`${mode}\``,
       blockReason ? `Reason: ${blockReason}` : "Reason: unknown",
-      runUrl ? `Run: [View workflow run](${runUrl})` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+      runUrl ? `Run: [View workflow run](${runUrl})` : null,
+    ]);
   }
 
-  if (result === "success" && normalizedFinalMessage.length > 0) {
-    return [
-      normalizedFinalMessage,
+  if (result === "success") {
+    return joinLines([
+      normalizedFinalMessage || "## TNR reviewer completed",
       "",
-      artifactUrl ? `Artifacts (screenshots/logs): [Open artifact](${artifactUrl})` : "",
-      runUrl ? `Run: [View workflow run](${runUrl})` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+      artifactUrl ? `Artifacts (screenshots/logs): [Open artifact](${artifactUrl})` : null,
+      runUrl ? `Run: [View workflow run](${runUrl})` : null,
+    ]);
   }
 
-  return [
+  return joinLines([
     "## TNR reviewer failed",
     "",
     `Mode: \`${mode}\``,
-    runUrl ? `Run: [View workflow run](${runUrl})` : "",
-    artifactUrl ? `Partial artifacts: [Open artifact](${artifactUrl})` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+    runUrl ? `Run: [View workflow run](${runUrl})` : null,
+    artifactUrl ? `Partial artifacts: [Open artifact](${artifactUrl})` : null,
+  ]);
 };
 
 const main = async () => {

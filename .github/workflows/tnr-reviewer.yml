@@ -13,10 +13,6 @@ on:
         description: "Optional additional test instructions for the reviewer"
         required: false
         type: string
-  # TEMPORARY: auto-trigger on push to feature branch for testing — remove before merge
-  push:
-    branches:
-      - feature/agent_testing
 
 env:
   MODE: pr-review
@@ -27,8 +23,7 @@ jobs:
       (github.event_name == 'issue_comment' &&
       github.event.issue.pull_request != null &&
       contains(github.event.comment.body, '/tnr-review-now')) ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push'
+      github.event_name == 'workflow_dispatch'
     runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
     permissions:
       issues: write
@@ -54,19 +49,14 @@ jobs:
         with:
           script: |
             const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
-            const isPush = context.eventName === 'push';
-            const isNonComment = isWorkflowDispatch || isPush;
-            const actor = isNonComment
+            const actor = isWorkflowDispatch
               ? context.actor
               : context.payload.comment.user.login;
-            // TEMPORARY: hardcode PR 1317 for push-trigger testing
-            const issueNumber = isPush
-              ? 1317
-              : isWorkflowDispatch
-                ? Number(context.payload.inputs?.pr_number)
-                : context.issue.number;
-            const body = isNonComment
-              ? '/tnr-review-now Validate AI test-user provisioning + login flow. Post screenshot evidence.'
+            const issueNumber = isWorkflowDispatch
+              ? Number(context.payload.inputs?.pr_number)
+              : context.issue.number;
+            const body = isWorkflowDispatch
+              ? `/tnr-review-now ${context.payload.inputs?.extra_instructions ?? ''}`
               : (context.payload.comment.body ?? '');
             const match = body.match(/\/tnr-review-now\b([\s\S]*)/i);
             if (!match || !Number.isInteger(issueNumber) || issueNumber <= 0) {
@@ -186,6 +176,7 @@ jobs:
         with:
           fetch-depth: 1
           token: ${{ secrets.PAT_TOKEN }}
+          ref: refs/pull/${{ needs.command_gate.outputs.pr_number }}/head
 
       - name: Configure Codex MCP and artifacts
         shell: bash
@@ -254,7 +245,7 @@ jobs:
           model: "gpt-5.4-2026-03-05"
           sandbox: "danger-full-access"
           safety-strategy: "unsafe"
-          allow-users: "MathiasGruber"
+          allow-users: ${{ vars.TNR_CODEX_ALLOW_USERS || 'MathiasGruber' }}
           prompt-file: ${{ steps.build_prompt.outputs.prompt_file }}
 
       - name: Upload TNR artifacts

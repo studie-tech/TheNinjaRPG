@@ -57,7 +57,8 @@ const extractPreviewUrl = (checkRun) => {
 
   const fromSummary = summary.match(/https:\/\/[^\s)]+/i)?.[0];
   if (fromSummary) return fromSummary;
-  if (checkRun?.details_url?.includes("http")) return checkRun.details_url;
+  if (checkRun?.details_url && /^https?:\/\//.test(checkRun.details_url))
+    return checkRun.details_url;
   return "";
 };
 
@@ -103,6 +104,12 @@ const main = async () => {
 
   const previewUrl = extractPreviewUrl(latestSuccessfulCheck);
 
+  if (!previewUrl) {
+    setOutput("is_ready", "false");
+    setOutput("reason", "Vercel check succeeded but could not extract a preview URL");
+    return;
+  }
+
   setOutput("is_ready", "true");
   setOutput("reason", "");
   setOutput("preview_url", previewUrl);
@@ -117,5 +124,4 @@ main().catch((error) => {
   setOutput("is_ready", "false");
   setOutput("reason", message);
   console.error(message);
-  process.exitCode = 1;
 });
