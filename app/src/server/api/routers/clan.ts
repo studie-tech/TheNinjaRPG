@@ -379,14 +379,13 @@ export const clanRouter = createTRPCRouter({
     .input(clanGetRequestSchema)
     .query(async ({ ctx, input }) => {
       // Fetch
-      const [user, fetchedClan] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchClanByLeader(ctx.drizzle, input.clanLeaderId),
-      ]);
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Early Return For Non Clan User
       if (!user.clanId) {
         return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, ctx.userId);
       }
+      // Fetch clan by user's clanId (resilient to leader changes)
+      const fetchedClan = await fetchClan(ctx.drizzle, user.clanId);
       // Guards
       if (!fetchedClan) {
         return [];
@@ -462,15 +461,16 @@ export const clanRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const request = await fetchRequest(ctx.drizzle, input.id, "CLAN");
-      // Secondary fetches
-      const [fetchedClan, user] = await Promise.all([
-        fetchClanByLeader(ctx.drizzle, request.receiverId),
+      const [request, user] = await Promise.all([
+        fetchRequest(ctx.drizzle, input.id, "CLAN"),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Derived
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
       // Guards
+      if (!user.clanId) return errorResponse(`Not in a ${groupLabel}`);
+      // Secondary fetch using user's clanId (resilient to leader changes)
+      const fetchedClan = await fetchClan(ctx.drizzle, user.clanId);
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       const isLeader = user.userId === fetchedClan.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
@@ -505,21 +505,22 @@ export const clanRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const request = await fetchRequest(ctx.drizzle, input.id, "CLAN");
-      // Secondary fetches
-      const [fetchedClan, requester, leader, user] = await Promise.all([
-        fetchClanByLeader(ctx.drizzle, request.receiverId),
-        fetchUser(ctx.drizzle, request.senderId),
-        fetchUser(ctx.drizzle, request.receiverId),
+      const [request, user] = await Promise.all([
+        fetchRequest(ctx.drizzle, input.id, "CLAN"),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Derived
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
       const locationLabel = user?.isOutlaw ? "syndicate" : "village";
       // Guards
+      if (!user.clanId) return errorResponse(`Not in a ${groupLabel}`);
+      // Secondary fetches using user's clanId (resilient to leader changes)
+      const [fetchedClan, requester] = await Promise.all([
+        fetchClan(ctx.drizzle, user.clanId),
+        fetchUser(ctx.drizzle, request.senderId),
+      ]);
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (!requester) return errorResponse("Requester not found");
-      if (!leader) return errorResponse("Leader not found");
       const nMembers = fetchedClan.members.length || 0;
       const isLeader = user.userId === fetchedClan.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
@@ -534,13 +535,13 @@ export const clanRouter = createTRPCRouter({
       }
       if (
         !(
-          requester.villageId === leader.villageId ||
+          requester.villageId === fetchedClan.villageId ||
           (fetchedClan.hasHideout && requester.isOutlaw)
         )
       ) {
         return errorResponse(`!= ${locationLabel}`);
       }
-      if (!hasRequiredRank(leader.rank, CLAN_RANK_REQUIREMENT)) {
+      if (!hasRequiredRank(requester.rank, CLAN_RANK_REQUIREMENT)) {
         return errorResponse(`Rank must be at least ${CLAN_RANK_REQUIREMENT}`);
       }
       // Mutate
