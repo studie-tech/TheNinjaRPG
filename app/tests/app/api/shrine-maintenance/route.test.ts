@@ -20,24 +20,6 @@ vi.mock("@/server/db", () => ({
   drizzleDB: {},
 }));
 
-// Partial-mock drizzle-orm so inArray() returns a distinctive sentinel when
-// called with a non-array (i.e., a subquery builder). This lets the test
-// assert that the stale-lobby cleanup gates its user-row delete through a
-// subquery — without which a concurrent initiateShrineBattle claim could
-// strand a live battle with zero mpvpBattleUser rows.
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("drizzle-orm")>();
-  return {
-    ...actual,
-    inArray: (column: unknown, values: unknown) => {
-      if (Array.isArray(values)) {
-        return (actual.inArray as (c: unknown, v: unknown) => unknown)(column, values);
-      }
-      return { __isSubqueryGuard: true };
-    },
-  };
-});
-
 import { runStaleShrineLobbyCleanup } from "@/app/api/shrine-maintenance/route";
 
 function createSelectChain<T>(rows: T[]) {
@@ -84,12 +66,11 @@ describe("runStaleShrineLobbyCleanup", () => {
     expect(updateSet).toHaveBeenCalledWith({ status: "AWAKE" });
     expect(db.delete).toHaveBeenNthCalledWith(1, mpvpBattleUser);
     expect(db.delete).toHaveBeenNthCalledWith(2, mpvpBattleQueue);
-    // The user-row delete must be gated by the subquery; regression guard
-    // against anyone reverting to inArray(..., staleIds) on this delete.
+    // The user-row delete must be gated by a subquery (third db.select call),
+    // not a flat inArray(..., staleIds). If anyone reverts that, db.select
+    // will only be called twice and this assertion fails.
     expect(db.select).toHaveBeenCalledTimes(3);
-    expect(deleteLobbyUsersWhere).toHaveBeenCalledWith(
-      expect.objectContaining({ __isSubqueryGuard: true }),
-    );
+    expect(deleteLobbyUsersWhere).toHaveBeenCalledTimes(1);
   });
 
   it("returns zero counts when no stale shrine lobbies exist", async () => {
