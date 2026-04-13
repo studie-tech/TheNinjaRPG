@@ -4,6 +4,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   gte,
   inArray,
   isNull,
@@ -31,6 +32,8 @@ import {
   REGEN_SECONDS,
   RYO_CAP,
   SENSEI_MAX_STUDENT_LEVEL,
+  SHRINE_BATTLE_LOBBY_SECONDS,
+  SHRINE_BATTLE_STALE_LOBBY_SECONDS,
   SHRINE_BOOST_TYPES,
   SKILL_POINT_MAX_LEVEL,
   SKILL_POINT_MIN_LEVEL,
@@ -2226,6 +2229,15 @@ export const fetchUpdatedUser = async (props: {
   const { client, userId, userIp, hideInformation = true } = props;
   let { forceRegen } = props;
   const now = new Date();
+  // Shrine battle lobbies past this age are effectively dead — attackers
+  // had LOBBY_SECONDS to gather, then STALE_LOBBY_SECONDS to initiate; beyond
+  // that, the periodic cleanup will delete the row. Filter in the notification
+  // query so alerts clear the moment a lobby ages out, not up to a minute later
+  // when the cron tick actually runs.
+  const shrineLobbyStaleBefore = new Date(
+    now.getTime() -
+      (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
+  );
 
   // Ensure we can fetch the user
   const [
@@ -2316,11 +2328,15 @@ export const fetchUpdatedUser = async (props: {
         warAllies: true,
       },
     }),
-    // Fetch all active shrine battles (only those where battle hasn't started yet)
+    // Fetch all active shrine battles (only those where battle hasn't started
+    // yet AND the lobby hasn't aged past its natural lifetime — stale rows
+    // are cleaned up by the shrine-maintenance cron but we filter here too so
+    // notifications clear immediately rather than waiting on the next tick.
     client.query.mpvpBattleQueue.findMany({
       where: and(
         eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
         isNull(mpvpBattleQueue.battleId),
+        gt(mpvpBattleQueue.createdAt, shrineLobbyStaleBefore),
       ),
     }),
     // Fetch all active raids (boss not defeated, not ended)

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -8,6 +8,7 @@ import {
   SHRINE_BATTLE_LOBBY_SECONDS,
   SHRINE_BATTLE_MAX_USERS_PER_SIDE,
   SHRINE_BATTLE_MIN_ATTACKERS,
+  SHRINE_BATTLE_STALE_LOBBY_SECONDS,
   SHRINE_BOOST_COST,
   SHRINE_BOOST_DURATION_HOURS,
   SHRINE_BOOST_TYPES,
@@ -728,12 +729,19 @@ export const shrineRouter = createTRPCRouter({
     })
     .input(z.object({ sectorNumber: z.number() }))
     .query(async ({ ctx, input }) => {
+      // Exclude lobbies past their natural lifetime so abandoned shrine
+      // battles stop showing up in the lobby UI before the cron deletes them.
+      const shrineLobbyStaleBefore = new Date(
+        Date.now() -
+          (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
+      );
       // Fetch all battles with FIFO ordering (oldest first)
       const battles = await ctx.drizzle.query.mpvpBattleQueue.findMany({
         where: and(
           eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
           eq(mpvpBattleQueue.sector, input.sectorNumber),
           isNull(mpvpBattleQueue.battleId),
+          gt(mpvpBattleQueue.createdAt, shrineLobbyStaleBefore),
         ),
         with: {
           queue: {
