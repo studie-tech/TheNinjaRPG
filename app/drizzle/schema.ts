@@ -1314,13 +1314,15 @@ export const itemVariant = mysqlTable(
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
   },
-  (table) => ({
-    itemIdIdx: index("ItemVariant_itemId_idx").on(table.itemId),
-    itemOrderUniq: uniqueIndex("ItemVariant_itemId_order_key").on(
-      table.itemId,
-      table.order,
-    ),
-  }),
+  (table) => {
+    return {
+      itemIdIdx: index("ItemVariant_itemId_idx").on(table.itemId),
+      itemOrderUniq: uniqueIndex("ItemVariant_itemId_order_key").on(
+        table.itemId,
+        table.order,
+      ),
+    };
+  },
 );
 export type ItemVariant = InferSelectModel<typeof itemVariant>;
 
@@ -1341,15 +1343,25 @@ export const userItemVariant = mysqlTable(
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
   },
-  (table) => ({
-    userIdIdx: index("UserItemVariant_userId_idx").on(table.userId),
-    userVariantUniq: uniqueIndex("UserItemVariant_userId_variantId_key").on(
-      table.userId,
-      table.variantId,
-    ),
-  }),
+  (table) => {
+    return {
+      userIdIdx: index("UserItemVariant_userId_idx").on(table.userId),
+      userVariantUniq: uniqueIndex("UserItemVariant_userId_variantId_key").on(
+        table.userId,
+        table.variantId,
+      ),
+      variantIdIdx: index("UserItemVariant_variantId_idx").on(table.variantId),
+    };
+  },
 );
 export type UserItemVariant = InferSelectModel<typeof userItemVariant>;
+
+export const userItemVariantRelations = relations(userItemVariant, ({ one }) => ({
+  variant: one(itemVariant, {
+    fields: [userItemVariant.variantId],
+    references: [itemVariant.id],
+  }),
+}));
 
 export const craftingRequirement = mysqlTable(
   "CraftingRequirement",
