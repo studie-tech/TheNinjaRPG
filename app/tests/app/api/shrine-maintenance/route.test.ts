@@ -25,8 +25,8 @@ vi.mock("@/server/db", () => ({
 // assert that the stale-lobby cleanup gates its user-row delete through a
 // subquery — without which a concurrent initiateShrineBattle claim could
 // strand a live battle with zero mpvpBattleUser rows.
-vi.mock("drizzle-orm", async () => {
-  const actual = await vi.importActual<typeof import("drizzle-orm")>("drizzle-orm");
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
   return {
     ...actual,
     inArray: (column: unknown, values: unknown) => {
