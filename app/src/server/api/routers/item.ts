@@ -471,7 +471,7 @@ export const itemRouter = createTRPCRouter({
       return await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId);
     }),
   // Get all variants for an item
-  getItemVariants: publicProcedure
+  getItemVariants: protectedProcedure
     .input(z.object({ itemId: z.string() }))
     .query(async ({ ctx, input }) => {
       return await ctx.drizzle.query.itemVariant.findMany({
@@ -547,7 +547,16 @@ export const itemRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
-      await ctx.drizzle.delete(itemVariant).where(eq(itemVariant.id, input.variantId));
+      await Promise.all([
+        ctx.drizzle
+          .delete(userItemVariant)
+          .where(eq(userItemVariant.variantId, input.variantId)),
+        ctx.drizzle
+          .update(userItem)
+          .set({ activeVariantId: null })
+          .where(eq(userItem.activeVariantId, input.variantId)),
+        ctx.drizzle.delete(itemVariant).where(eq(itemVariant.id, input.variantId)),
+      ]);
       return { success: true, message: "Variant deleted" };
     }),
   // Purchase a variant with in-game currency
@@ -609,33 +618,41 @@ export const itemRouter = createTRPCRouter({
               ? { seichiSilver: sql`${userData.seichiSilver} - ${variant.cost}` }
               : { villagePrestige: sql`${userData.villagePrestige} - ${variant.cost}` };
 
-      // Mutate — attempt insert first (idempotent via unique constraint)
-      const insertResult = await ctx.drizzle
-        .insert(userItemVariant)
-        .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
-        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-
-      if (insertResult.rowsAffected === 0) {
-        return errorResponse("Variant already unlocked");
-      }
-
-      // Only deduct currency after confirming a genuine new unlock
+      // Mutate — deduct currency first with CAS guard
       const deductResult = await ctx.drizzle
         .update(userData)
         .set(currencySet)
         .where(and(eq(userData.userId, ctx.userId), currencyWhere));
 
       if (variant.cost > 0 && deductResult.rowsAffected !== 1) {
-        // Roll back the unlock we just inserted
-        await ctx.drizzle
-          .delete(userItemVariant)
-          .where(
-            and(
-              eq(userItemVariant.userId, ctx.userId),
-              eq(userItemVariant.variantId, input.variantId),
-            ),
-          );
         return errorResponse("Insufficient funds — please refresh and try again");
+      }
+
+      // Then insert unlock — idempotent via unique constraint
+      const insertResult = await ctx.drizzle
+        .insert(userItemVariant)
+        .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+
+      if (insertResult.rowsAffected === 0) {
+        // Already unlocked — refund the currency deducted above
+        if (variant.cost > 0) {
+          const refundSet: Record<string, unknown> = {};
+          if (variant.costType === "MONEY") {
+            refundSet.money = sql`${userData.money} + ${variant.cost}`;
+          } else if (variant.costType === "REPUTATION") {
+            refundSet.reputationPoints = sql`${userData.reputationPoints} + ${variant.cost}`;
+          } else if (variant.costType === "SEICHI_SILVER") {
+            refundSet.seichiSilver = sql`${userData.seichiSilver} + ${variant.cost}`;
+          } else {
+            refundSet.villagePrestige = sql`${userData.villagePrestige} + ${variant.cost}`;
+          }
+          await ctx.drizzle
+            .update(userData)
+            .set(refundSet)
+            .where(eq(userData.userId, ctx.userId));
+        }
+        return errorResponse("Variant already unlocked");
       }
 
       return { success: true, message: `Variant "${variant.name}" unlocked!` };

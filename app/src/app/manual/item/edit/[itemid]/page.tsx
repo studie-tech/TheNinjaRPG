@@ -21,6 +21,7 @@ import { MAX_ITEM_VARIANTS, VARIANT_COST_TYPES } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import { useItemEditForm } from "@/hooks/item";
 import ChatInputField from "@/layout/ChatInputField";
+import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import { ItemHelper } from "@/layout/ContentHelp";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
@@ -333,13 +334,20 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                     >
                       Edit
                     </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => remove.mutate({ variantId: v.id })}
+                    <Confirm2
+                      title="Delete Variant"
+                      button={
+                        <Button variant="destructive" size="sm">
+                          Delete
+                        </Button>
+                      }
+                      onAccept={() => remove.mutate({ variantId: v.id })}
                     >
-                      Delete
-                    </Button>
+                      <p>
+                        Delete this variant? Players who have already unlocked it will
+                        lose access.
+                      </p>
+                    </Confirm2>
                   </div>
                 </td>
               </tr>
