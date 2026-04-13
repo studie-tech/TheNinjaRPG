@@ -255,26 +255,31 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
   const form = useForm<VariantFormInput, unknown, ZodItemVariantType>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(ItemVariantValidator) as any,
-    defaultValues: editingVariant ?? {
+    defaultValues: {
       name: "",
       image: "",
       costType: "MONEY",
       cost: 0,
-      order: (variants?.length ?? 0) + 1,
+      order: 1,
     },
   });
 
   useEffect(() => {
-    form.reset(
-      editingVariant ?? {
+    if (editingVariant) {
+      form.reset(editingVariant);
+    } else {
+      form.reset({
         name: "",
         image: "",
         costType: "MONEY",
         cost: 0,
         order: (variants?.length ?? 0) + 1,
-      },
-    );
-  }, [editingVariant, form, variants?.length]);
+      });
+    }
+    // variants?.length intentionally omitted: order is computed once at form-open time,
+    // not on every background refetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingVariant, form]);
 
   const onSubmit = form.handleSubmit((data) => {
     upsert.mutate({ itemId, variant: data });
