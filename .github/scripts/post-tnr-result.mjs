@@ -63,17 +63,21 @@ const joinLines = (lines) =>
   lines.filter((line) => line !== null && line !== undefined).join("\n");
 
 /**
- * Strip local file-path image references (e.g. ![caption](./artifacts/screenshots/foo.png))
- * that the Codex agent may embed in its report. These are meaningless in a PR comment.
+ * Replace local file-path references that are meaningless in a PR comment:
+ * - Markdown images:  ![caption](./artifacts/...) or ![caption](/home/runner/...)
+ * - Markdown links:   [text](./artifacts/...) or [text](/home/runner/...)
+ * Converts them to plain text (keeps the link text, drops the dead URL).
  */
-const stripLocalImages = (text) =>
-  text.replace(/!\[[^\]]*\]\(\.?\/?\.?artifacts\/[^)]+\)/g, "").trim();
+const stripLocalPaths = (text) =>
+  text
+    .replace(/!?\[([^\]]*)\]\((?:\.?\/?\.?artifacts\/|\/home\/runner\/)[^)]+\)/g, "$1")
+    .trim();
 
 /** Build the markdown body for the PR comment based on the outcome. */
 const buildBody = () => {
   // Codex passes literal "\n" in the output — convert to real newlines
   const rawMessage = finalMessage.replace(/\\n/g, "\n").trim();
-  const cleanMessage = stripLocalImages(rawMessage);
+  const cleanMessage = stripLocalPaths(rawMessage);
 
   if (result === "blocked") {
     return joinLines([
