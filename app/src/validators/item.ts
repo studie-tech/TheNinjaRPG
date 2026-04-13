@@ -6,6 +6,7 @@ import {
   ItemRarities,
   ItemSlotTypes,
   ItemTypes,
+  VARIANT_COST_TYPES,
 } from "@/drizzle/constants";
 import { statFilters } from "@/libs/train";
 
@@ -37,3 +38,13 @@ export const itemFilteringSchema = z.object({
 });
 
 export type ItemFilteringSchema = z.infer<typeof itemFilteringSchema>;
+
+export const ItemVariantValidator = z.object({
+  id: z.string().optional(),
+  name: z.string().trim().min(1, "Name required"),
+  image: z.string().min(1, "Image required"),
+  costType: z.enum(VARIANT_COST_TYPES),
+  cost: z.coerce.number().int().min(0),
+  order: z.coerce.number().int().min(1).max(7),
+});
+export type ZodItemVariantType = z.infer<typeof ItemVariantValidator>;

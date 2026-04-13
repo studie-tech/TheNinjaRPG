@@ -1,1 +1,0 @@
-CREATE INDEX `UserItemVariant_variantId_idx` ON `UserItemVariant` (`variantId`);
