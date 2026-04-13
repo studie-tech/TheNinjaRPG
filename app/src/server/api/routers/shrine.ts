@@ -810,11 +810,17 @@ export const shrineRouter = createTRPCRouter({
         orderBy: desc(mpvpBattleUser.createdAt),
       });
 
+      const shrineLobbyStaleBefore = new Date(
+        Date.now() -
+          (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
+      );
+
       // Find the first active shrine battle (battleId IS NULL means not started)
       const activeEntry = queueEntries.find(
         (entry) =>
           entry.clanBattle?.battleType === "SHRINE_BATTLE" &&
-          entry.clanBattle?.battleId === null,
+          entry.clanBattle?.battleId === null &&
+          entry.clanBattle.createdAt > shrineLobbyStaleBefore,
       );
 
       // Return null if not in any active shrine battle queue
@@ -1018,6 +1024,11 @@ export const shrineRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      const shrineLobbyStaleBefore = new Date(
+        Date.now() -
+          (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
+      );
+
       // Fetch user and battle data
       const [{ user }, shrineBattle, existingUserBattles] = await Promise.all([
         fetchUpdatedUser({
@@ -1028,6 +1039,7 @@ export const shrineRouter = createTRPCRouter({
           where: and(
             eq(mpvpBattleQueue.id, input.shrineBattleId),
             eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+            gt(mpvpBattleQueue.createdAt, shrineLobbyStaleBefore),
           ),
           with: {
             queue: {
@@ -1237,6 +1249,11 @@ export const shrineRouter = createTRPCRouter({
     .input(z.object({ shrineBattleId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      const shrineLobbyStaleBefore = new Date(
+        Date.now() -
+          (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
+      );
+
       // Fetch user and battle data
       const [{ user }, shrineBattle, activeWars, relationships] = await Promise.all([
         fetchUpdatedUser({
@@ -1247,6 +1264,7 @@ export const shrineRouter = createTRPCRouter({
           where: and(
             eq(mpvpBattleQueue.id, input.shrineBattleId),
             eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+            gt(mpvpBattleQueue.createdAt, shrineLobbyStaleBefore),
           ),
           with: {
             queue: {
