@@ -468,7 +468,7 @@ export const itemRouter = createTRPCRouter({
   getUserItems: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get all user items" } })
     .query(async ({ ctx }) => {
-      return await fetchUserItems(ctx.drizzle, ctx.userId);
+      return await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId);
     }),
   // Get all variants for an item
   getItemVariants: publicProcedure
@@ -573,14 +573,6 @@ export const itemRouter = createTRPCRouter({
         );
       }
 
-      const alreadyUnlocked = await ctx.drizzle.query.userItemVariant.findFirst({
-        where: and(
-          eq(userItemVariant.userId, ctx.userId),
-          eq(userItemVariant.variantId, input.variantId),
-        ),
-      });
-      if (alreadyUnlocked) return errorResponse("Variant already unlocked");
-
       // Currency checks
       if (variant.costType === "MONEY" && user.money < variant.cost) {
         return errorResponse(`Insufficient Ryo. Need ${variant.cost}`);
@@ -617,19 +609,32 @@ export const itemRouter = createTRPCRouter({
               ? { seichiSilver: sql`${userData.seichiSilver} - ${variant.cost}` }
               : { villagePrestige: sql`${userData.villagePrestige} - ${variant.cost}` };
 
-      // Mutate — deduct currency with CAS guard, insert unlock
-      const [deductResult] = await Promise.all([
-        ctx.drizzle
-          .update(userData)
-          .set(currencySet)
-          .where(and(eq(userData.userId, ctx.userId), currencyWhere)),
-        ctx.drizzle
-          .insert(userItemVariant)
-          .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
-          .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
-      ]);
+      // Mutate — attempt insert first (idempotent via unique constraint)
+      const insertResult = await ctx.drizzle
+        .insert(userItemVariant)
+        .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
-      if (deductResult.rowsAffected !== 1) {
+      if (insertResult.rowsAffected === 0) {
+        return errorResponse("Variant already unlocked");
+      }
+
+      // Only deduct currency after confirming a genuine new unlock
+      const deductResult = await ctx.drizzle
+        .update(userData)
+        .set(currencySet)
+        .where(and(eq(userData.userId, ctx.userId), currencyWhere));
+
+      if (variant.cost > 0 && deductResult.rowsAffected !== 1) {
+        // Roll back the unlock we just inserted
+        await ctx.drizzle
+          .delete(userItemVariant)
+          .where(
+            and(
+              eq(userItemVariant.userId, ctx.userId),
+              eq(userItemVariant.variantId, input.variantId),
+            ),
+          );
         return errorResponse("Insufficient funds — please refresh and try again");
       }
 
@@ -647,7 +652,7 @@ export const itemRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       const [ui, unlock] = await Promise.all([
-        fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
+        fetchUserItemWithVariants(ctx.drizzle, ctx.userId, input.userItemId),
         input.variantId
           ? ctx.drizzle.query.userItemVariant.findFirst({
               where: and(
@@ -662,6 +667,14 @@ export const itemRouter = createTRPCRouter({
       if (!ui) return errorResponse("Item not found");
       if (input.variantId && !unlock) {
         return errorResponse("Variant not unlocked");
+      }
+      if (input.variantId) {
+        const variantBelongsToItem = ui.item.variants?.some(
+          (v) => v.id === input.variantId,
+        );
+        if (!variantBelongsToItem) {
+          return errorResponse("Variant does not belong to this item");
+        }
       }
 
       // Mutate
@@ -680,7 +693,7 @@ export const itemRouter = createTRPCRouter({
       // Query
       const [userResult, tokenItem, variant] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        fetchUserItem(ctx.drizzle, ctx.userId, input.tokenUserItemId),
+        fetchUserItemWithVariants(ctx.drizzle, ctx.userId, input.tokenUserItemId),
         ctx.drizzle.query.itemVariant.findFirst({
           where: eq(itemVariant.id, input.variantId),
         }),
@@ -701,28 +714,49 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("This item is not a Variant Token");
       }
 
-      const alreadyUnlocked = await ctx.drizzle.query.userItemVariant.findFirst({
-        where: and(
-          eq(userItemVariant.userId, ctx.userId),
-          eq(userItemVariant.variantId, input.variantId),
-        ),
-      });
-      if (alreadyUnlocked) return errorResponse("Variant already unlocked");
+      // Mutate — attempt insert first (idempotent via unique constraint)
+      const insertResult = await ctx.drizzle
+        .insert(userItemVariant)
+        .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
-      // Mutate — consume token item + insert unlock record
+      if (insertResult.rowsAffected === 0) {
+        return errorResponse("Variant already unlocked");
+      }
+
+      // Consume token item with CAS guard on quantity
       const newQty = tokenItem.quantity - 1;
-      await Promise.all([
-        newQty <= 0
-          ? ctx.drizzle.delete(userItem).where(eq(userItem.id, input.tokenUserItemId))
-          : ctx.drizzle
-              .update(userItem)
-              .set({ quantity: newQty })
-              .where(eq(userItem.id, input.tokenUserItemId)),
-        ctx.drizzle
-          .insert(userItemVariant)
-          .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
-          .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
-      ]);
+      const tokenResult = await (newQty <= 0
+        ? ctx.drizzle
+            .delete(userItem)
+            .where(
+              and(
+                eq(userItem.id, input.tokenUserItemId),
+                eq(userItem.quantity, tokenItem.quantity),
+              ),
+            )
+        : ctx.drizzle
+            .update(userItem)
+            .set({ quantity: newQty })
+            .where(
+              and(
+                eq(userItem.id, input.tokenUserItemId),
+                eq(userItem.quantity, tokenItem.quantity),
+              ),
+            ));
+
+      if (tokenResult.rowsAffected !== 1) {
+        // Roll back the unlock we just inserted
+        await ctx.drizzle
+          .delete(userItemVariant)
+          .where(
+            and(
+              eq(userItemVariant.userId, ctx.userId),
+              eq(userItemVariant.variantId, input.variantId),
+            ),
+          );
+        return errorResponse("Token item was modified concurrently — please try again");
+      }
 
       return {
         success: true,
@@ -2136,6 +2170,20 @@ export const fetchUserItems = async (client: DrizzleClient, userId: string) => {
   const useritems = await client.query.userItem.findMany({
     where: and(eq(userItem.userId, userId)),
     with: {
+      item: true,
+      imbuements: { with: { item: true } },
+    },
+  });
+  return useritems.filter((ui) => ui.item && !ui.item.hidden);
+};
+
+export const fetchUserItemsWithVariants = async (
+  client: DrizzleClient,
+  userId: string,
+) => {
+  const useritems = await client.query.userItem.findMany({
+    where: and(eq(userItem.userId, userId)),
+    with: {
       item: { with: { variants: true } },
       imbuements: { with: { item: true } },
     },
@@ -2144,6 +2192,17 @@ export const fetchUserItems = async (client: DrizzleClient, userId: string) => {
 };
 
 export const fetchUserItem = async (
+  client: DrizzleClient,
+  userId: string,
+  userItemId: string,
+) => {
+  return await client.query.userItem.findFirst({
+    where: and(eq(userItem.userId, userId), eq(userItem.id, userItemId)),
+    with: { item: true },
+  });
+};
+
+export const fetchUserItemWithVariants = async (
   client: DrizzleClient,
   userId: string,
   userItemId: string,
