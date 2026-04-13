@@ -383,6 +383,11 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                 {...form.register("name")}
                 placeholder="e.g. Red Edition"
               />
+              {form.formState.errors.name && (
+                <p className="mt-1 text-destructive text-xs">
+                  {form.formState.errors.name.message}
+                </p>
+              )}
             </div>
             <div>
               <label htmlFor="variant-order" className="font-medium text-sm">
@@ -395,6 +400,11 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                 min={1}
                 max={MAX_ITEM_VARIANTS}
               />
+              {form.formState.errors.order && (
+                <p className="mt-1 text-destructive text-xs">
+                  {form.formState.errors.order.message}
+                </p>
+              )}
             </div>
             <div>
               <label htmlFor="variant-cost-type" className="font-medium text-sm">
@@ -429,6 +439,11 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                 {...form.register("cost")}
                 min={0}
               />
+              {form.formState.errors.cost && (
+                <p className="mt-1 text-destructive text-xs">
+                  {form.formState.errors.cost.message}
+                </p>
+              )}
             </div>
           </div>
           <div>
@@ -440,6 +455,11 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
               {...form.register("image")}
               placeholder="https://utfs.io/..."
             />
+            {form.formState.errors.image && (
+              <p className="mt-1 text-destructive text-xs">
+                {form.formState.errors.image.message}
+              </p>
+            )}
             <p className="mt-1 text-muted-foreground text-xs">
               Upload via UploadThing and paste the URL here
             </p>

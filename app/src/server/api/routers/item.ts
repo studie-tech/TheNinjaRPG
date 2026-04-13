@@ -33,6 +33,7 @@ import {
   MAX_MARRIAGE_SLOTS,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
   TUTORIAL_ITEM_ID,
+  VARIANT_COST_TYPES,
 } from "@/drizzle/constants";
 import type {
   ItemLoadout,
@@ -473,6 +474,21 @@ export const itemRouter = createTRPCRouter({
   // Get all variants for an item
   getItemVariants: protectedProcedure
     .input(z.object({ itemId: z.string() }))
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          itemId: z.string(),
+          name: z.string(),
+          image: z.string(),
+          costType: z.enum(VARIANT_COST_TYPES),
+          cost: z.number(),
+          order: z.number(),
+          createdAt: z.date(),
+          updatedAt: z.date(),
+        }),
+      ),
+    )
     .query(async ({ ctx, input }) => {
       return await ctx.drizzle.query.itemVariant.findMany({
         where: eq(itemVariant.itemId, input.itemId),
@@ -482,6 +498,16 @@ export const itemRouter = createTRPCRouter({
   // Get unlocked variants for the current user for a given item
   getUserUnlockedVariants: protectedProcedure
     .input(z.object({ itemId: z.string() }))
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          userId: z.string(),
+          variantId: z.string(),
+          createdAt: z.date(),
+        }),
+      ),
+    )
     .query(async ({ ctx, input }) => {
       const variants = await ctx.drizzle.query.itemVariant.findMany({
         where: eq(itemVariant.itemId, input.itemId),
