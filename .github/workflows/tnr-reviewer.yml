@@ -245,7 +245,7 @@ jobs:
           printf '%s\n' \
             '[mcp_servers.playwright]' \
             'command = "npx"' \
-            'args = ["-y", "@playwright/mcp@latest", "--headless"]' \
+            'args = ["-y", "@playwright/mcp@0.0.70", "--headless"]' \
             'startup_timeout_sec = 30' \
             'tool_timeout_sec = 120' \
             > "$HOME/.codex/config.toml"

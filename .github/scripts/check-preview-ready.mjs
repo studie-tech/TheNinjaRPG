@@ -104,11 +104,6 @@ const extractPreviewUrl = (checkRun) => {
     const trusted = toTrustedPreviewUrl(fromSummary);
     if (trusted) return trusted;
   }
-  // Last resort: use the check run's details_url if it's a trusted Vercel host
-  if (checkRun?.details_url && /^https?:\/\//.test(checkRun.details_url)) {
-    const trusted = toTrustedPreviewUrl(checkRun.details_url);
-    if (trusted) return trusted;
-  }
   return "";
 };
 
