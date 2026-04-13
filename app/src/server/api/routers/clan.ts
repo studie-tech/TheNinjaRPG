@@ -387,11 +387,15 @@ export const clanRouter = createTRPCRouter({
       if (!user.clanId) {
         return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, ctx.userId);
       }
-      // Derived
-      const isLeader = user.userId === fetchedClan?.leaderId;
-      const isColeader = checkCoLeader(user.userId, fetchedClan);
       // Guards
-      if (!fetchedClan || (!isLeader && !isColeader)) {
+      if (!fetchedClan) {
+        return [];
+      }
+      // Derived
+      const isLeader = user.userId === fetchedClan.leaderId;
+      const isColeader = checkCoLeader(user.userId, fetchedClan);
+      // Authorization: verify calling user is leader or co-leader
+      if (!isLeader && !isColeader) {
         return [];
       }
       return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, input.clanLeaderId);
@@ -466,10 +470,10 @@ export const clanRouter = createTRPCRouter({
       ]);
       // Derived
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
-      const isLeader = user.userId === fetchedClan?.leaderId;
-      const isColeader = checkCoLeader(user.userId, fetchedClan);
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
+      const isLeader = user.userId === fetchedClan.leaderId;
+      const isColeader = checkCoLeader(user.userId, fetchedClan);
       if (!isLeader && !isColeader) {
         return errorResponse(
           `Only ${groupLabel} leader or co-leaders can reject requests`,
@@ -510,15 +514,15 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Derived
-      const nMembers = fetchedClan?.members.length || 0;
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
       const locationLabel = user?.isOutlaw ? "syndicate" : "village";
-      const isLeader = user.userId === fetchedClan?.leaderId;
-      const isColeader = checkCoLeader(user.userId, fetchedClan);
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (!requester) return errorResponse("Requester not found");
       if (!leader) return errorResponse("Leader not found");
+      const nMembers = fetchedClan.members.length || 0;
+      const isLeader = user.userId === fetchedClan.leaderId;
+      const isColeader = checkCoLeader(user.userId, fetchedClan);
       if (nMembers >= CLAN_MAX_MEMBERS) return errorResponse(`${groupLabel} is full`);
       if (!isLeader && !isColeader) {
         return errorResponse(
