@@ -8,7 +8,8 @@
  *
  * Env vars consumed:
  *   GITHUB_TOKEN, ISSUE_NUMBER, COMMENT_ID, RUN_URL,
- *   RESULT, FINAL_MESSAGE, ARTIFACT_URL, BLOCK_REASON, MODE
+ *   RESULT, FINAL_MESSAGE, ARTIFACT_URL, SCREENSHOT_MARKDOWN,
+ *   BLOCK_REASON, MODE
  */
 const githubToken = process.env.GITHUB_TOKEN;
 const repository = process.env.GITHUB_REPOSITORY;
@@ -20,6 +21,7 @@ const finalMessage = process.env.FINAL_MESSAGE ?? "";
 const artifactUrl = process.env.ARTIFACT_URL ?? "";
 const blockReason = process.env.BLOCK_REASON ?? "";
 const mode = process.env.MODE ?? "pr-review";
+const screenshotMarkdown = process.env.SCREENSHOT_MARKDOWN ?? "";
 
 if (!githubToken) {
   throw new Error("Missing GITHUB_TOKEN");
@@ -60,10 +62,18 @@ const githubRequest = async (path, options = {}) => {
 const joinLines = (lines) =>
   lines.filter((line) => line !== null && line !== undefined).join("\n");
 
+/**
+ * Strip local file-path image references (e.g. ![caption](./artifacts/screenshots/foo.png))
+ * that the Codex agent may embed in its report. These are meaningless in a PR comment.
+ */
+const stripLocalImages = (text) =>
+  text.replace(/!\[[^\]]*\]\(\.?\/?\.?artifacts\/[^)]+\)/g, "").trim();
+
 /** Build the markdown body for the PR comment based on the outcome. */
 const buildBody = () => {
   // Codex passes literal "\n" in the output — convert to real newlines
-  const normalizedFinalMessage = finalMessage.replace(/\\n/g, "\n").trim();
+  const rawMessage = finalMessage.replace(/\\n/g, "\n").trim();
+  const cleanMessage = stripLocalImages(rawMessage);
 
   if (result === "blocked") {
     return joinLines([
@@ -75,13 +85,22 @@ const buildBody = () => {
     ]);
   }
 
-  // On success, prefer the agent's own report; fall back to a generic header
+  const screenshotSection = screenshotMarkdown.trim()
+    ? ["", "---", "", "### Screenshots", "", screenshotMarkdown.trim()]
+    : [];
+
+  const footerLinks = [
+    "",
+    "---",
+    artifactUrl ? `Artifacts (screenshots/logs): [Download artifacts](${artifactUrl})` : null,
+    runUrl ? `Run: [View workflow run](${runUrl})` : null,
+  ];
+
   if (result === "success") {
     return joinLines([
-      normalizedFinalMessage || "## TNR reviewer completed",
-      "",
-      artifactUrl ? `Artifacts (screenshots/logs): [Open artifact](${artifactUrl})` : null,
-      runUrl ? `Run: [View workflow run](${runUrl})` : null,
+      cleanMessage || "## TNR reviewer completed",
+      ...screenshotSection,
+      ...footerLinks,
     ]);
   }
 
@@ -89,9 +108,10 @@ const buildBody = () => {
     "## TNR reviewer failed",
     "",
     `Mode: \`${mode}\``,
-    runUrl ? `Run: [View workflow run](${runUrl})` : null,
-    artifactUrl ? `Partial artifacts: [Open artifact](${artifactUrl})` : null,
-  ]);
+    cleanMessage ? ["", "Agent output:", "", cleanMessage] : null,
+    ...screenshotSection,
+    ...footerLinks,
+  ].flat());
 };
 
 const main = async () => {
