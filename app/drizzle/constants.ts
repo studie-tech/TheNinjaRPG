@@ -4,6 +4,17 @@ export type OccupationType = (typeof OCCUPATIONS)[number];
 export const CURRENCY_TYPES = ["MONEY", "REPUTATION", "SEICHI_SILVER"] as const;
 export type CurrencyType = (typeof CURRENCY_TYPES)[number];
 
+export const VARIANT_COST_TYPES = [
+  "MONEY",
+  "REPUTATION",
+  "SEICHI_SILVER",
+  "VILLAGE_PRESTIGE",
+  "VARIANT_TOKEN",
+] as const;
+export type VariantCostType = (typeof VARIANT_COST_TYPES)[number];
+
+export const MAX_ITEM_VARIANTS = 7;
+
 export const ActivityStreakTypes = ["RECURRING", "EVENT_PASS"] as const;
 export type ActivityStreakType = (typeof ActivityStreakTypes)[number];
 

@@ -312,6 +312,7 @@ export const hydrateUserForQuests = (battle: CompleteBattle, user: BattleUserSta
       storedAtHome: false,
       craftingFinishedAt: null,
       isInAuction: false,
+      activeVariantId: null,
       item: {
         id: bi.itemId,
         itemType: itemData?.itemType ?? "CONSUMABLE",

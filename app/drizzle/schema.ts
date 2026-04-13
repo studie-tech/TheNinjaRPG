@@ -1294,7 +1294,62 @@ export const itemRelations = relations(item, ({ one, many }) => ({
     fields: [item.bloodlineId],
     references: [bloodline.id],
   }),
+  variants: many(itemVariant),
 }));
+
+export const itemVariant = mysqlTable(
+  "ItemVariant",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    itemId: varchar("itemId", { length: 191 }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    image: varchar("image", { length: 191 }).notNull(),
+    costType: mysqlEnum("costType", consts.VARIANT_COST_TYPES).notNull(),
+    cost: int("cost").default(0).notNull(),
+    order: smallint("order", { unsigned: true }).default(1).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    itemIdIdx: index("ItemVariant_itemId_idx").on(table.itemId),
+    itemOrderUniq: uniqueIndex("ItemVariant_itemId_order_key").on(
+      table.itemId,
+      table.order,
+    ),
+  }),
+);
+export type ItemVariant = InferSelectModel<typeof itemVariant>;
+
+export const itemVariantRelations = relations(itemVariant, ({ one }) => ({
+  item: one(item, {
+    fields: [itemVariant.itemId],
+    references: [item.id],
+  }),
+}));
+
+export const userItemVariant = mysqlTable(
+  "UserItemVariant",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    variantId: varchar("variantId", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("UserItemVariant_userId_idx").on(table.userId),
+    userVariantUniq: uniqueIndex("UserItemVariant_userId_variantId_key").on(
+      table.userId,
+      table.variantId,
+    ),
+  }),
+);
+export type UserItemVariant = InferSelectModel<typeof userItemVariant>;
 
 export const craftingRequirement = mysqlTable(
   "CraftingRequirement",
@@ -2476,6 +2531,7 @@ export const userItem = mysqlTable(
     storedAtHome: boolean("storedAtHome").default(false).notNull(),
     craftingFinishedAt: datetime("craftingFinishedAt", { mode: "date", fsp: 3 }),
     isInAuction: boolean("isInAuction").default(false).notNull(),
+    activeVariantId: varchar("activeVariantId", { length: 191 }),
     dropChancePerc: smallint("dropChancePerc", { unsigned: true }).default(0).notNull(),
   },
   (table) => {
