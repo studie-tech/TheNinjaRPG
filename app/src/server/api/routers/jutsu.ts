@@ -1185,6 +1185,8 @@ export const jutsuRouter = createTRPCRouter({
         );
       }
       if (!userjutsuObj) return errorResponse("Jutsu not found");
+      if (userjutsuObj.jutsu.hidden && !canChangeContent(user.role))
+        return errorResponse("Jutsu is hidden, cannot be equipped");
 
       // Check if jutsu can be equipped
       if (!isEquipped && !canUseJutsu(userjutsuObj.jutsu, user)) {
