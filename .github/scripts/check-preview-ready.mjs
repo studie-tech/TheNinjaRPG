@@ -1,3 +1,19 @@
+/**
+ * Checks whether a Vercel preview deployment is ready for a given PR.
+ *
+ * Queries the GitHub Checks API for the PR's head SHA, finds Vercel check runs
+ * matching a configurable name pattern, and extracts the preview URL from the
+ * most recent successful check's output summary.
+ *
+ * Env vars consumed:
+ *   GITHUB_TOKEN, PR_NUMBER, VERCEL_CHECK_NAME_PATTERN
+ *
+ * Outputs (via GITHUB_OUTPUT):
+ *   is_ready    — "true" | "false"
+ *   preview_url — the extracted deployment URL (only when ready)
+ *   reason      — human-readable explanation when not ready
+ *   check_name, details_url, head_sha, pr_url — supplementary metadata
+ */
 import { appendFileSync } from "node:fs";
 
 const githubToken = process.env.GITHUB_TOKEN;
@@ -22,11 +38,13 @@ if (!owner || !repo) {
   throw new Error(`Invalid GITHUB_REPOSITORY: ${repository}`);
 }
 
+/** Write a key=value pair to $GITHUB_OUTPUT for downstream workflow steps. */
 const setOutput = (key, value) => {
   if (!process.env.GITHUB_OUTPUT) return;
   appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${String(value ?? "")}\n`);
 };
 
+/** Authenticated GET against the GitHub REST API. */
 const githubRequest = async (path) => {
   const response = await fetch(`https://api.github.com${path}`, {
     headers: {
@@ -45,6 +63,7 @@ const githubRequest = async (path) => {
   return response.json();
 };
 
+/** Parse the deployment URL out of a Vercel check run's output summary. */
 const extractPreviewUrl = (checkRun) => {
   const summary = checkRun?.output?.summary ?? "";
 
@@ -55,8 +74,10 @@ const extractPreviewUrl = (checkRun) => {
   );
   if (feedbackMatch) return `https://${feedbackMatch[1]}`;
 
+  // Fallback: grab any URL from the summary text
   const fromSummary = summary.match(/https:\/\/[^\s)]+/i)?.[0];
   if (fromSummary) return fromSummary;
+  // Last resort: use the check run's details_url (often a Vercel dashboard link)
   if (checkRun?.details_url && /^https?:\/\//.test(checkRun.details_url))
     return checkRun.details_url;
   return "";
@@ -65,6 +86,7 @@ const extractPreviewUrl = (checkRun) => {
 const main = async () => {
   const regex = new RegExp(checkNamePatternRaw, "i");
 
+  // Need the PR's head SHA to query the Checks API
   const pullRequest = await githubRequest(`/repos/${owner}/${repo}/pulls/${prNumber}`);
   const headSha = pullRequest?.head?.sha;
   const prUrl = pullRequest?.html_url ?? "";
@@ -75,6 +97,7 @@ const main = async () => {
     return;
   }
 
+  // Fetch all check runs for the head commit and filter to Vercel ones
   const checksResponse = await githubRequest(
     `/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`,
   );
@@ -84,6 +107,8 @@ const main = async () => {
   const successfulChecks = matchingChecks.filter(
     (checkRun) => checkRun?.status === "completed" && checkRun?.conclusion === "success",
   );
+
+  // Pick the most recently completed successful check (in case of re-deploys)
   const latestSuccessfulCheck = successfulChecks.sort((a, b) => {
     const aCompleted = Date.parse(a?.completed_at ?? "");
     const bCompleted = Date.parse(b?.completed_at ?? "");
@@ -91,6 +116,7 @@ const main = async () => {
   })[0];
 
   if (!latestSuccessfulCheck) {
+    // Give a diagnostic message distinguishing "no matches" from "matches but pending"
     const availableCheckNames = checks.map((checkRun) => checkRun?.name).filter(Boolean);
     const reason = matchingChecks.length
       ? `Found Vercel checks but none are successful yet for pattern ${checkNamePatternRaw}.`
@@ -119,6 +145,8 @@ const main = async () => {
   setOutput("pr_url", prUrl);
 };
 
+// Catch-all: surface the error as a "not ready" output rather than crashing
+// the workflow step, so the "Post blocked reason" step can still run
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
   setOutput("is_ready", "false");

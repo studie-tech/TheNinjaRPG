@@ -1,3 +1,15 @@
+/**
+ * Posts or updates the TNR reviewer result comment on the PR.
+ *
+ * If COMMENT_ID is set, updates that comment (PATCH); otherwise creates a new
+ * issue comment on ISSUE_NUMBER (POST). The comment body is built from RESULT
+ * (success | failed | blocked), the Codex agent's FINAL_MESSAGE, and links to
+ * the workflow run and uploaded artifacts.
+ *
+ * Env vars consumed:
+ *   GITHUB_TOKEN, ISSUE_NUMBER, COMMENT_ID, RUN_URL,
+ *   RESULT, FINAL_MESSAGE, ARTIFACT_URL, BLOCK_REASON, MODE
+ */
 const githubToken = process.env.GITHUB_TOKEN;
 const repository = process.env.GITHUB_REPOSITORY;
 const issueNumber = Number(process.env.ISSUE_NUMBER);
@@ -22,6 +34,7 @@ if (!owner || !repo) {
   throw new Error(`Invalid GITHUB_REPOSITORY: ${repository}`);
 }
 
+/** Authenticated request against the GitHub REST API (supports GET, POST, PATCH). */
 const githubRequest = async (path, options = {}) => {
   const response = await fetch(`https://api.github.com${path}`, {
     ...options,
@@ -43,10 +56,13 @@ const githubRequest = async (path, options = {}) => {
   return response.json();
 };
 
+/** Join lines, dropping null/undefined but keeping empty strings as spacers. */
 const joinLines = (lines) =>
   lines.filter((line) => line !== null && line !== undefined).join("\n");
 
+/** Build the markdown body for the PR comment based on the outcome. */
 const buildBody = () => {
+  // Codex passes literal "\n" in the output — convert to real newlines
   const normalizedFinalMessage = finalMessage.replace(/\\n/g, "\n").trim();
 
   if (result === "blocked") {
@@ -59,6 +75,7 @@ const buildBody = () => {
     ]);
   }
 
+  // On success, prefer the agent's own report; fall back to a generic header
   if (result === "success") {
     return joinLines([
       normalizedFinalMessage || "## TNR reviewer completed",
@@ -80,6 +97,7 @@ const buildBody = () => {
 const main = async () => {
   const body = buildBody();
 
+  // Preferred path: update the "started" comment in-place
   if (Number.isInteger(commentId) && commentId > 0) {
     await githubRequest(`/repos/${owner}/${repo}/issues/comments/${commentId}`, {
       method: "PATCH",
@@ -88,6 +106,7 @@ const main = async () => {
     return;
   }
 
+  // Fallback: create a new comment if the initial comment couldn't be posted
   if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
     throw new Error("Missing valid ISSUE_NUMBER for fallback comment creation");
   }

@@ -1,3 +1,18 @@
+/**
+ * Assembles the prompt file that drives the Codex reviewer agent.
+ *
+ * Reads PR metadata + secrets from env vars, then writes a single text file
+ * containing the agent's system instructions, Vercel preview URLs (with bypass
+ * query params), test-user broker usage examples, and the PR context.
+ *
+ * Env vars consumed:
+ *   PROMPT_FILE, PREVIEW_URL, VERCEL_AUTOMATION_BYPASS_SECRET,
+ *   AI_TEST_USER_BROKER_TOKEN, PR_NUMBER, PR_TITLE, PR_BODY, PR_AUTHOR,
+ *   COMMAND_AUTHOR, REPOSITORY, EXTRA_INSTRUCTIONS
+ *
+ * Outputs (via GITHUB_OUTPUT):
+ *   prompt_file — absolute path to the generated prompt file
+ */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -13,29 +28,36 @@ const commandAuthor = process.env.COMMAND_AUTHOR ?? "";
 const repository = process.env.REPOSITORY ?? "";
 const extraInstructions = process.env.EXTRA_INSTRUCTIONS ?? "";
 
+/** Strip triple-backticks and cap length to limit prompt-injection surface. */
 const sanitize = (untrusted) =>
   untrusted
     .replace(/```/g, "'''")
     .slice(0, 4000);
 const prBody = sanitize(prBodyRaw);
 
+// Ensure the URL always has a protocol (Vercel check output sometimes omits it)
 const normalizedPreviewUrl = rawPreviewUrl
   ? rawPreviewUrl.startsWith("http") ? rawPreviewUrl : `https://${rawPreviewUrl}`
   : "";
 
+// Vercel deployment protection bypass: these query params make Vercel set a
+// cookie on the first response, so subsequent navigations work without them
 const bypassParams = vercelBypass
   ? `x-vercel-protection-bypass=${vercelBypass}&x-vercel-set-bypass-cookie=true`
   : "";
 
+// Full preview URL with bypass params baked in for the agent's first navigation
 const previewUrl =
   normalizedPreviewUrl && bypassParams
     ? `${normalizedPreviewUrl}?${bypassParams}`
     : normalizedPreviewUrl;
 
+// Broker endpoint for provisioning test users on the preview deployment
 const brokerUrl = normalizedPreviewUrl
   ? new URL("/api/ai-test-user", normalizedPreviewUrl).toString()
   : "";
 
+// Extra instructions appended by the user after `/tnr-review-now <text>`
 const instructionsBlock = extraInstructions.trim()
   ? [
       "",
@@ -45,6 +67,8 @@ const instructionsBlock = extraInstructions.trim()
     ].join("\n")
   : "";
 
+// Auth block: only included when both broker URL and token are available,
+// teaching the agent how to provision test users and log in via Clerk tokens
 const authBlock =
   brokerUrl && brokerToken
     ? [
@@ -130,9 +154,11 @@ const prompt = [
   instructionsBlock,
 ].join("\n");
 
+// Write the assembled prompt to disk for the Codex action's `prompt-file` input
 mkdirSync(dirname(outputPromptPath), { recursive: true });
 writeFileSync(outputPromptPath, prompt);
 
+// Expose the path as a GitHub Actions step output so subsequent steps can reference it
 if (process.env.GITHUB_OUTPUT) {
   writeFileSync(process.env.GITHUB_OUTPUT, `prompt_file=${outputPromptPath}\n`, {
     flag: "a",

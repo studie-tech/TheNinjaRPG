@@ -1,3 +1,14 @@
+# TNR Reviewer — launches a Codex agent with Playwright MCP against a Vercel
+# preview deployment to smoke-test a PR from a player's perspective.
+#
+# Triggers:
+#   • `/tnr-review-now [extra instructions]` comment on any PR
+#   • Manual workflow_dispatch with a PR number
+#
+# Pipeline: command_gate → preview_check → run_tnr_reviewer
+#   1. command_gate: validates the trigger, checks actor permissions, fetches PR metadata
+#   2. preview_check: waits for a successful Vercel deployment check and extracts the URL
+#   3. run_tnr_reviewer: checks out the PR, builds a prompt, runs Codex, posts results
 name: TNR Reviewer
 
 on:
@@ -18,7 +29,11 @@ env:
   MODE: pr-review
 
 jobs:
+  # ── Job 1: Parse the trigger, enforce actor allowlist, fetch PR metadata ──
   command_gate:
+    # Quick filter: only fire on PR comments containing the slash command,
+    # or on manual workflow_dispatch. This avoids spinning up runners for
+    # unrelated issue comments.
     if: >-
       (github.event_name == 'issue_comment' &&
       github.event.issue.pull_request != null &&
@@ -49,21 +64,28 @@ jobs:
         with:
           script: |
             const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
+
+            // Normalise the two trigger shapes into a single actor + body + PR number
             const actor = isWorkflowDispatch
               ? context.actor
               : context.payload.comment.user.login;
             const issueNumber = isWorkflowDispatch
               ? Number(context.payload.inputs?.pr_number)
               : context.issue.number;
+            // For workflow_dispatch we synthesise a slash-command body so the
+            // same regex parsing works for both trigger types
             const body = isWorkflowDispatch
               ? `/tnr-review-now ${context.payload.inputs?.extra_instructions ?? ''}`
               : (context.payload.comment.body ?? '');
+
+            // Extract the command and any trailing extra instructions
             const match = body.match(/\/tnr-review-now\b([\s\S]*)/i);
             if (!match || !Number.isInteger(issueNumber) || issueNumber <= 0) {
               core.setOutput('should_run', 'false');
               return;
             }
 
+            // Actor allowlist — empty list means "allow everyone"
             const allowUsers = (process.env.ALLOW_USERS ?? '')
               .split(',')
               .map((value) => value.trim())
@@ -79,6 +101,7 @@ jobs:
               return;
             }
 
+            // Fetch full PR data (head SHA, title, body) for downstream jobs
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -94,6 +117,9 @@ jobs:
             core.setOutput('pr_author', pr.user?.login ?? '');
             core.setOutput('extra_instructions', (match[1] ?? '').trim());
 
+      # Post a "started" comment that will be updated in-place with results later.
+      # continue-on-error: true because GITHUB_TOKEN may lack issues:write on
+      # some forks — we don't want a missing comment to abort the whole run.
       - name: Post initial comment
         if: steps.parse.outputs.should_run == 'true'
         id: initial_comment
@@ -119,6 +145,7 @@ jobs:
             });
             core.setOutput('comment_id', String(comment.id));
 
+  # ── Job 2: Verify the Vercel preview is deployed and extract its URL ──
   preview_check:
     needs: command_gate
     if: needs.command_gate.outputs.should_run == 'true'
@@ -145,6 +172,8 @@ jobs:
           PR_NUMBER: ${{ needs.command_gate.outputs.pr_number }}
           VERCEL_CHECK_NAME_PATTERN: ${{ vars.TNR_VERCEL_CHECK_PATTERN || 'vercel' }}
 
+      # If the preview isn't ready, update the PR comment with the reason
+      # so the user knows why the review was skipped
       - name: Post blocked reason
         if: steps.check_preview.outputs.is_ready != 'true'
         run: node .github/scripts/post-tnr-result.mjs
@@ -157,10 +186,12 @@ jobs:
           BLOCK_REASON: ${{ steps.check_preview.outputs.reason }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
+  # ── Job 3: Check out the PR, run the Codex reviewer, and post results ──
   run_tnr_reviewer:
     needs: [command_gate, preview_check]
     if: needs.preview_check.outputs.is_ready == 'true'
     runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    # One reviewer per PR at a time; don't cancel in-progress to avoid partial reports
     concurrency:
       group: tnr-reviewer-pr-${{ needs.command_gate.outputs.pr_number }}
       cancel-in-progress: false
@@ -172,20 +203,21 @@ jobs:
       checks: read
       actions: read
     steps:
+      # Check out the PR head commit (not the merge ref) so Codex sees the
+      # exact code the author pushed
       - uses: actions/checkout@v5
         with:
           fetch-depth: 1
           token: ${{ secrets.PAT_TOKEN }}
           ref: refs/pull/${{ needs.command_gate.outputs.pr_number }}/head
 
+      # Set up Playwright MCP as a stdio server for Codex, plus artifact dirs.
+      # No extraHTTPHeaders — those leak into cross-origin requests (Clerk JS)
+      # and break auth. Vercel bypass is handled via query-param cookies instead.
       - name: Configure Codex MCP and artifacts
         shell: bash
         run: |
           mkdir -p .artifacts/tnr-review .artifacts/screenshots "$HOME/.codex"
-
-          # Codex MCP server config — no extraHTTPHeaders to avoid CORS issues
-          # with cross-origin requests (e.g. Clerk JS). Vercel bypass is handled
-          # via query params that set a cookie on first page load.
           printf '%s\n' \
             '[mcp_servers.playwright]' \
             'command = "npx"' \
@@ -212,6 +244,8 @@ jobs:
           EXTRA_INSTRUCTIONS: ${{ needs.command_gate.outputs.extra_instructions }}
           AI_TEST_USER_BROKER_TOKEN: ${{ secrets.AI_TEST_USER_BROKER_TOKEN }}
 
+      # Non-blocking liveness probe — accepts any non-5xx response.
+      # The Playwright agent handles Vercel bypass cookies natively.
       - name: Wait for Vercel deployment
         shell: bash
         env:
@@ -232,6 +266,9 @@ jobs:
           done
           echo "::warning::Could not verify deployment liveness, proceeding anyway."
 
+      # danger-full-access: Codex needs network + filesystem for Playwright MCP
+      # and writing artifacts. The prompt file contains security instructions to
+      # constrain what the agent actually does.
       - name: Run Codex reviewer
         id: run_codex
         uses: openai/codex-action@v1
@@ -248,6 +285,7 @@ jobs:
           allow-users: ${{ vars.TNR_CODEX_ALLOW_USERS || 'MathiasGruber' }}
           prompt-file: ${{ steps.build_prompt.outputs.prompt_file }}
 
+      # Always upload artifacts (screenshots, logs) even on failure for debugging
       - name: Upload TNR artifacts
         if: always()
         id: upload_artifacts
@@ -258,6 +296,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      # Replace the "started" comment with the final outcome (success/failure)
       - name: Update PR comment with result
         if: always()
         run: node .github/scripts/post-tnr-result.mjs
