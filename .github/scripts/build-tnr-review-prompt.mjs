@@ -63,12 +63,14 @@ const brokerUrl = normalizedPreviewUrl
   ? new URL("/api/ai-test-user", normalizedPreviewUrl).toString()
   : "";
 
-// Extra instructions appended by the user after `/tnr-review-now <text>`
-const instructionsBlock = extraInstructions.trim()
+// Extra instructions appended by the user after `/tnr-review-now <text>`.
+// Sanitized like prBody/prTitle since it's also user-supplied input.
+const extraInstructionsSafe = sanitize(extraInstructions, 2000);
+const instructionsBlock = extraInstructionsSafe.trim()
   ? [
       "",
       "Additional review instructions from command:",
-      extraInstructions.trim(),
+      extraInstructionsSafe.trim(),
       "",
     ].join("\n")
   : "";
