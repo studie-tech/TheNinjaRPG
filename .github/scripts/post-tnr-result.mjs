@@ -55,6 +55,14 @@ const stripLocalPaths = (text) =>
     .replace(/!?\[([^\]]*)\]\((?:\.?\/?\.?artifacts\/|\/home\/runner\/)[^)]+\)/g, "$1")
     .trim();
 
+/** Neutralise markdown/mention injection in externally-sourced strings (e.g. check run names). */
+const sanitizePlainText = (text, maxLen = 500) =>
+  String(text ?? "")
+    .replace(/@/g, "@ ")
+    .replace(/[[\]()!#`*_~>]/g, "")
+    .slice(0, maxLen)
+    .trim();
+
 /** Build the markdown body for the PR comment based on the outcome. */
 const buildBody = () => {
   // Codex passes literal "\n" in the output — convert to real newlines
@@ -66,7 +74,7 @@ const buildBody = () => {
       "## TNR reviewer blocked",
       "",
       `Mode: \`${mode}\``,
-      blockReason ? `Reason: ${blockReason}` : "Reason: unknown",
+      blockReason ? `Reason: ${sanitizePlainText(blockReason)}` : "Reason: unknown",
       runUrl ? `Run: [View workflow run](${runUrl})` : null,
     ]);
   }

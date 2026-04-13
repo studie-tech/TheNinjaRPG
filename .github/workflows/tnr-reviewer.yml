@@ -85,7 +85,9 @@ jobs:
               return;
             }
 
-            // Actor allowlist — fail closed for issue_comment (require explicit config)
+            // Actor allowlist — fail closed for issue_comment (require explicit config).
+            // workflow_dispatch intentionally skips the empty-list guard because it
+            // already requires repo write/admin access to trigger.
             const allowUsers = (process.env.ALLOW_USERS ?? '')
               .split(',')
               .map((value) => value.trim())
