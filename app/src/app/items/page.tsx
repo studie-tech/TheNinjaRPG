@@ -66,7 +66,6 @@ export default function MyItems() {
   const utils = api.useUtils();
 
   // Data from DB
-  useRequiredUserData();
   const { data: userItems, isFetching } = api.item.getUserItems.useQuery(undefined, {
     enabled: !!userData,
   });
@@ -786,7 +785,12 @@ const Backpack: React.FC<BackpackProps> = (props) => {
               {((useritem as UserItemWithVariants).item.variants?.length ?? 0) > 0 && (
                 <Button
                   variant="info"
-                  onClick={() => setVariantItem(useritem as UserItemWithVariants)}
+                  onClick={() => {
+                    const withVariants = useritem as UserItemWithVariants;
+                    if (withVariants.item.variants?.length) {
+                      setVariantItem(withVariants);
+                    }
+                  }}
                 >
                   Variants
                 </Button>
@@ -1167,6 +1171,7 @@ const Equip: React.FC<EquipProps> = (props) => {
  */
 type UserItemWithVariants = UserItemWithRelations & {
   item: UserItemWithRelations["item"] & { variants: ItemVariant[] };
+  activeVariantId?: string | null;
 };
 
 /**
