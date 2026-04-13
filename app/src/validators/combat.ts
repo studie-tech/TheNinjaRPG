@@ -799,6 +799,13 @@ export const NonCombatGainSkill = z.object({
   skillId: z.string().prefault(""),
 });
 
+export const UnlockItemVariantTag = z.object({
+  ...BaseAttributes,
+  type: z.literal("unlockitemvariant").prefault("unlockitemvariant"),
+  description: msg("Unlocks a token-locked item variant when used on an item"),
+});
+export type UnlockItemVariantTagType = z.infer<typeof UnlockItemVariantTag>;
+
 /******************** */
 /** UNIONS OF TAGS   **/
 /******************** */
@@ -869,6 +876,7 @@ export const AllTags = z.union([
   SummonTag.prefault({}),
   TimeCompressionTag.prefault({}),
   TimeDilationTag.prefault({}),
+  UnlockItemVariantTag.prefault({}),
   UnknownTag.prefault({}),
   VampTag.prefault({}),
   VisualTag.prefault({}),
