@@ -660,10 +660,14 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     api.jutsu.getUserJutsus.useQuery(getFilter(state), {
       enabled: !!userData,
     });
-  // Unfiltered user jutsus — used to check evolution ownership regardless of active search filters
-  const { data: allUserJutsus } = api.jutsu.getUserJutsus.useQuery(
-    {},
-    { enabled: !!userData },
+  // Lightweight unfiltered ownership set — used to check evolution ownership
+  // regardless of active search filters. Only includes jutsuId + ancestorIds
+  // so we don't transfer the full userJutsu rows over the wire.
+  const { data: userJutsuOwnership } = api.jutsu.getUserJutsuOwnership.useQuery(
+    undefined,
+    {
+      enabled: !!userData,
+    },
   );
   const userJutsuCounts = userJutsus?.map((userJutsu) => {
     return {
@@ -720,7 +724,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   // Collect all ancestor jutsu IDs that the user has evolved past
   const evolvedAncestorIds = new Set<string>();
-  for (const uj of allUserJutsus ?? []) {
+  for (const uj of userJutsuOwnership ?? []) {
     for (const id of uj.ancestorIds) evolvedAncestorIds.add(id);
   }
 
@@ -731,7 +735,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       if (j.parentJutsuId)
         return (
           canUseJutsu(j, userData) &&
-          (allUserJutsus?.some((uj) => uj.jutsuId === j.id) ?? false)
+          (userJutsuOwnership?.some((uj) => uj.jutsuId === j.id) ?? false)
         );
       return canTrainJutsu(j, userData);
     })

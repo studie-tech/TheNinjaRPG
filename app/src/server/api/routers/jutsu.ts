@@ -518,9 +518,20 @@ export const jutsuRouter = createTRPCRouter({
       const { trackers } = getNewTrackers(user, [
         { task: "jutsus_mastered", increment: 1 },
       ]);
-      // Mutate: compare-and-swap on jutsuId to prevent double-evolve on retry/double-submit.
-      // reskinId is kept so the cosmetic reskin carries over to the evolved jutsu.
-      // The jutsuReskin record's jutsuId is updated below to stay in sync.
+      const isRestrictedEquipType =
+        evolutionJutsu.jutsuType === "EVENT" ||
+        evolutionJutsu.effects.some((effect) => effect.type === "pierce") ||
+        evolutionJutsu.effects.some((effect) => effect.type === "barrier") ||
+        evolutionJutsu.effects.some((effect) => effect.type === "stun") ||
+        evolutionJutsu.effects.some(
+          (effect) => "residualModifier" in effect && effect.residualModifier,
+        );
+      // Single compare-and-swap update that applies every userJutsu-row change at once:
+      // - jutsuId/level/experience/finishTraining — the evolution itself
+      // - equipped — force off for restricted types to avoid cap overflows
+      // - reskinId — on reskin-collision, re-point to the existing historical row so
+      //   the user's evolved jutsu activates the slot they already own
+      // The CAS WHERE guards against double-evolve on retry/double-submit.
       const evolveResult = await ctx.drizzle
         .update(userJutsu)
         .set({
@@ -529,6 +540,10 @@ export const jutsuRouter = createTRPCRouter({
           experience: 0,
           finishTraining: null,
           updatedAt: new Date(),
+          ...(isRestrictedEquipType ? { equipped: false } : {}),
+          ...(userJutsuObj.reskinId && conflictingReskin
+            ? { reskinId: conflictingReskin.id }
+            : {}),
         })
         .where(
           and(
@@ -540,14 +555,6 @@ export const jutsuRouter = createTRPCRouter({
         );
       if (evolveResult.rowsAffected === 0)
         return errorResponse("Evolution failed - jutsu may have already been evolved");
-      const isRestrictedEquipType =
-        evolutionJutsu.jutsuType === "EVENT" ||
-        evolutionJutsu.effects.some((effect) => effect.type === "pierce") ||
-        evolutionJutsu.effects.some((effect) => effect.type === "barrier") ||
-        evolutionJutsu.effects.some((effect) => effect.type === "stun") ||
-        evolutionJutsu.effects.some(
-          (effect) => "residualModifier" in effect && effect.residualModifier,
-        );
       // Replace old jutsu ID with evolved ID across all user loadouts.
       // Restricted equip types are force-unequipped post-evolution to avoid cap overflows.
       const oldJutsuId = userJutsuObj.jutsu.id;
@@ -579,54 +586,24 @@ export const jutsuRouter = createTRPCRouter({
             .set({ jutsuIds: loadout.jutsuIds })
             .where(eq(jutsuLoadout.id, loadout.id)),
         ),
-        ...(isRestrictedEquipType
+        // No-collision reskin carry-forward: update the reskin row's jutsuId so
+        // createReskin's by-jutsuId lookup still works after evolution. (The
+        // collision case is already handled above in the merged userJutsu update,
+        // where reskinId is re-pointed to the pre-existing historical row. The
+        // parent reskin row is left as an orphaned historical record there,
+        // consistent with removeReskin behaviour.)
+        ...(userJutsuObj.reskinId && !conflictingReskin
           ? [
               ctx.drizzle
-                .update(userJutsu)
-                .set({ equipped: false })
+                .update(jutsuReskin)
+                .set({ jutsuId: input.evolutionJutsuId, updatedAt: new Date() })
                 .where(
                   and(
-                    eq(userJutsu.id, input.userJutsuId),
-                    eq(userJutsu.userId, ctx.userId),
+                    eq(jutsuReskin.id, userJutsuObj.reskinId),
+                    eq(jutsuReskin.userId, ctx.userId),
                   ),
                 ),
             ]
-          : []),
-        // Carry the active reskin forward to the evolved jutsu.
-        // No-collision: update the reskin row's jutsuId so createReskin's
-        // by-jutsuId lookup still works after evolution.
-        // Collision: a historical jutsuReskin row already exists for
-        // (userId, evolutionJutsuId) from a previously removed reskin. The unique
-        // index on (userId, jutsuId) makes updating the parent reskin's jutsuId
-        // impossible. Instead, re-point userJutsu.reskinId to the existing row —
-        // the user's evolved jutsu activates the slot they already own (free future
-        // updates intact). The parent reskin row is left as an orphaned historical
-        // record, consistent with removeReskin behaviour. No row content is
-        // overwritten or deleted in either path.
-        ...(userJutsuObj.reskinId
-          ? conflictingReskin
-            ? [
-                ctx.drizzle
-                  .update(userJutsu)
-                  .set({ reskinId: conflictingReskin.id, updatedAt: new Date() })
-                  .where(
-                    and(
-                      eq(userJutsu.id, input.userJutsuId),
-                      eq(userJutsu.userId, ctx.userId),
-                    ),
-                  ),
-              ]
-            : [
-                ctx.drizzle
-                  .update(jutsuReskin)
-                  .set({ jutsuId: input.evolutionJutsuId, updatedAt: new Date() })
-                  .where(
-                    and(
-                      eq(jutsuReskin.id, userJutsuObj.reskinId),
-                      eq(jutsuReskin.userId, ctx.userId),
-                    ),
-                  ),
-              ]
           : []),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
@@ -646,15 +623,30 @@ export const jutsuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query in parallel for performance
-      const [user, entry, relations, jutsuWithName] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchJutsu(ctx.drizzle, input.id),
-        getJutsuRelations(ctx.drizzle, input.id),
-        ctx.drizzle.query.jutsu.findFirst({
-          columns: { name: true, id: true },
-          where: eq(jutsu.name, input.data.name),
-        }),
-      ]);
+      const [user, entry, relations, jutsuWithName, parent, siblings, evolutionGraph] =
+        await Promise.all([
+          fetchUser(ctx.drizzle, ctx.userId),
+          fetchJutsu(ctx.drizzle, input.id),
+          getJutsuRelations(ctx.drizzle, input.id),
+          ctx.drizzle.query.jutsu.findFirst({
+            columns: { name: true, id: true },
+            where: eq(jutsu.name, input.data.name),
+          }),
+          input.data.parentJutsuId
+            ? fetchJutsu(ctx.drizzle, input.data.parentJutsuId)
+            : Promise.resolve(null),
+          input.data.parentJutsuId
+            ? ctx.drizzle.query.jutsu.findMany({
+                columns: { id: true },
+                where: eq(jutsu.parentJutsuId, input.data.parentJutsuId),
+              })
+            : Promise.resolve([]),
+          input.data.parentJutsuId
+            ? ctx.drizzle.query.jutsu.findMany({
+                columns: { id: true, parentJutsuId: true },
+              })
+            : Promise.resolve([]),
+        ]);
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
@@ -705,16 +697,6 @@ export const jutsuRouter = createTRPCRouter({
       if (input.data.parentJutsuId) {
         if (input.data.parentJutsuId === input.id)
           return errorResponse("A jutsu cannot be its own parent");
-        const [parent, siblings, evolutionGraph] = await Promise.all([
-          fetchJutsu(ctx.drizzle, input.data.parentJutsuId),
-          ctx.drizzle.query.jutsu.findMany({
-            columns: { id: true },
-            where: eq(jutsu.parentJutsuId, input.data.parentJutsuId),
-          }),
-          ctx.drizzle.query.jutsu.findMany({
-            columns: { id: true, parentJutsuId: true },
-          }),
-        ]);
         if (!parent) return errorResponse("Parent jutsu not found");
         if (parent.jutsuType === "AI")
           return errorResponse("AI jutsus cannot be evolution parents");
@@ -804,6 +786,35 @@ export const jutsuRouter = createTRPCRouter({
     .input(jutsuFilteringSchema)
     .query(async ({ ctx, input }) => {
       return await fetchUserJutsus(ctx.drizzle, ctx.userId, input);
+    }),
+  // Lightweight endpoint returning only what's needed to determine jutsu ownership
+  // and evolution ancestry. Used by UIs that need the full (unfiltered) owned set
+  // without transferring every column of every userJutsu row.
+  getUserJutsuOwnership: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Get current user's jutsu ownership (ids + ancestor ids)",
+      },
+    })
+    .query(async ({ ctx }) => {
+      const parentJutsuAlias = alias(jutsu, "parentJutsu");
+      const rows = await ctx.drizzle
+        .select({
+          jutsuId: userJutsu.jutsuId,
+          parentJutsuId: jutsu.parentJutsuId,
+          grandparentJutsuId: parentJutsuAlias.parentJutsuId,
+        })
+        .from(userJutsu)
+        .innerJoin(jutsu, eq(userJutsu.jutsuId, jutsu.id))
+        .leftJoin(parentJutsuAlias, eq(jutsu.parentJutsuId, parentJutsuAlias.id))
+        .where(and(eq(userJutsu.userId, ctx.userId), ne(jutsu.jutsuType, "AI")));
+      return rows.map((row) => ({
+        jutsuId: row.jutsuId,
+        ancestorIds: [row.parentJutsuId, row.grandparentJutsuId].filter(
+          (id): id is string => !!id,
+        ),
+      }));
     }),
   // Get jutsus of public user
   getPublicUserJutsus: protectedProcedure

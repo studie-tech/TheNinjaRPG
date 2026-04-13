@@ -739,21 +739,21 @@ export default function MyJutsu() {
                         userjutsu.finishTraining && userjutsu.finishTraining > now
                           ? userjutsu.level - 1
                           : userjutsu.level;
+                      const canEvolve =
+                        !!userData &&
+                        effectiveLevel >= JUTSU_TRAIN_LEVEL_CAP &&
+                        canEvolveJutsu(evo, userData) &&
+                        hasRequiredRank(userData.rank, evo.requiredRank) &&
+                        hasRequiredLevel(userData.level, evo.requiredLevel) &&
+                        checkJutsuRank(evo.jutsuRank, userData.rank) &&
+                        checkJutsuVillage(evo, userData) &&
+                        checkJutsuBloodline(evo, userData) &&
+                        checkJutsuElements(evo, userElements);
                       return (
                         <Confirm2
                           key={evo.id}
                           title={`Evolve to ${evo.name}`}
-                          confirmDisabled={
-                            !userData ||
-                            effectiveLevel < JUTSU_TRAIN_LEVEL_CAP ||
-                            !canEvolveJutsu(evo, userData) ||
-                            !hasRequiredRank(userData.rank, evo.requiredRank) ||
-                            !hasRequiredLevel(userData.level, evo.requiredLevel) ||
-                            !checkJutsuRank(evo.jutsuRank, userData.rank) ||
-                            !checkJutsuVillage(evo, userData) ||
-                            !checkJutsuBloodline(evo, userData) ||
-                            !checkJutsuElements(evo, userElements)
-                          }
+                          confirmDisabled={!canEvolve}
                           button={
                             <Button
                               id={`evolve-${evo.id}`}
@@ -766,14 +766,7 @@ export default function MyJutsu() {
                           }
                           onAccept={(e) => {
                             e.preventDefault();
-                            if (
-                              !userData ||
-                              !checkJutsuRank(evo.jutsuRank, userData.rank) ||
-                              !checkJutsuVillage(evo, userData) ||
-                              !checkJutsuBloodline(evo, userData) ||
-                              !checkJutsuElements(evo, userElements)
-                            )
-                              return;
+                            if (!canEvolve) return;
                             evolveJutsu({
                               userJutsuId: userjutsu.id,
                               evolutionJutsuId: evo.id,
