@@ -77,6 +77,7 @@ export const updateBattle = async (
   const raidBossDefeated =
     result &&
     newBattle.battleType === "RAID" &&
+    newBattle.usersState.some((u) => u.isAi && !u.isSummon) &&
     !newBattle.usersState.some(
       (u) => u.isAi && !u.isSummon && stillInBattle(u, newBattle.usersEffects),
     );

@@ -642,7 +642,10 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
             )}
 
             {!isViewingCompletedRaid && raidDetails.raidChatConversationId && (
-              <RaidChatPanel conversationId={raidDetails.raidChatConversationId} />
+              <RaidChatPanel
+                key={raidDetails.raidChatConversationId}
+                conversationId={raidDetails.raidChatConversationId}
+              />
             )}
 
             {/* Leaderboard */}

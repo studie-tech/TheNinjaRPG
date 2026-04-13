@@ -312,11 +312,13 @@ export const raidsRouter = createTRPCRouter({
 
       // Derived
       const raidData = getRaidObjectiveData(raid);
-      const raidChatConversationId = await ensureRaidChatConversation(
-        ctx.drizzle,
-        raid,
-        ctx.userId,
-      );
+      const raidChatConversationId = getRaidChatConversationId(raid.id);
+
+      // Check if conversation exists (created during joinRaidQueue)
+      const existingConvo = await ctx.drizzle.query.conversation.findFirst({
+        where: eq(conversation.id, raidChatConversationId),
+        columns: { id: true },
+      });
 
       return {
         raid: {
@@ -329,7 +331,7 @@ export const raidsRouter = createTRPCRouter({
           raidBossCurrentHealth: raid.raidBossCurrentHealth,
           raidEndsAt: raid.raidEndsAt,
           raidSector: raidData?.sector ?? null,
-          raidChatConversationId,
+          raidChatConversationId: existingConvo ? raidChatConversationId : null,
         },
         participation,
         thresholds,
@@ -779,7 +781,9 @@ export const raidsRouter = createTRPCRouter({
             ]
           : []),
         // Clear ranked PVP queue — being in it sets status to QUEUED which blocks raid joining
-        ctx.drizzle.delete(rankedPvpQueue).where(eq(rankedPvpQueue.userId, userId)),
+        ctx.drizzle
+          .delete(rankedPvpQueue)
+          .where(eq(rankedPvpQueue.userId, userId)),
         // Cancel spar requests the user sent
         ctx.drizzle
           .update(userRequest)
@@ -1098,6 +1102,9 @@ export const raidsRouter = createTRPCRouter({
         ]);
         return errorResponse("Failed to join team - slot may have been taken");
       }
+
+      // Ensure raid chat conversation exists (idempotent, only writes on first call)
+      await ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId);
 
       // Pusher - notify sector about team changes
       const pusher = getServerPusher();
@@ -1732,9 +1739,6 @@ const ensureRaidChatConversation = async (
     .onDuplicateKeyUpdate({
       set: {
         title: `${raid.name} Raid Chat`,
-        isPublic: true,
-        isLocked: false,
-        isEnabled: true,
       },
     });
 
