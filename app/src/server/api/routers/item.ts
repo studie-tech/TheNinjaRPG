@@ -1,4 +1,17 @@
-import { and, desc, eq, gte, isNull, like, lte, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  like,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -16,6 +29,7 @@ import {
   ItemSlots,
   ItemTypes,
   MAX_EXTRA_RESKIN_SLOTS,
+  MAX_ITEM_VARIANTS,
   MAX_MARRIAGE_SLOTS,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
   TUTORIAL_ITEM_ID,
@@ -32,10 +46,12 @@ import {
   craftingRequirement,
   item,
   itemLoadout,
+  itemVariant,
   quest,
   userData,
   userItem,
   userItemImbuement,
+  userItemVariant,
   userSkill,
 } from "@/drizzle/schema";
 import { filterRollableBloodlines } from "@/libs/bloodline";
@@ -65,7 +81,7 @@ import { getStrucBoost } from "@/utils/village";
 import type { ZodAllTags } from "@/validators/combat";
 import { HealTag, ItemValidator, NonCombatGainSkill } from "@/validators/combat";
 import type { ItemFilteringSchema } from "@/validators/item";
-import { itemFilteringSchema } from "@/validators/item";
+import { ItemVariantValidator, itemFilteringSchema } from "@/validators/item";
 import type { PostProcessedRewards } from "@/validators/rewards";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 import { updateRewards } from "./quests";
@@ -453,6 +469,265 @@ export const itemRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Get all user items" } })
     .query(async ({ ctx }) => {
       return await fetchUserItems(ctx.drizzle, ctx.userId);
+    }),
+  // Get all variants for an item
+  getItemVariants: publicProcedure
+    .input(z.object({ itemId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return await ctx.drizzle.query.itemVariant.findMany({
+        where: eq(itemVariant.itemId, input.itemId),
+        orderBy: asc(itemVariant.order),
+      });
+    }),
+  // Get unlocked variants for the current user for a given item
+  getUserUnlockedVariants: protectedProcedure
+    .input(z.object({ itemId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const variants = await ctx.drizzle.query.itemVariant.findMany({
+        where: eq(itemVariant.itemId, input.itemId),
+      });
+      if (variants.length === 0) return [];
+      const variantIds = variants.map((v) => v.id);
+      return await ctx.drizzle.query.userItemVariant.findMany({
+        where: and(
+          eq(userItemVariant.userId, ctx.userId),
+          inArray(userItemVariant.variantId, variantIds),
+        ),
+      });
+    }),
+  // Admin: create or update a variant
+  upsertItemVariant: protectedProcedure
+    .input(z.object({ itemId: z.string(), variant: ItemVariantValidator }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [user, existing] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.itemVariant.findMany({
+          where: eq(itemVariant.itemId, input.itemId),
+        }),
+      ]);
+      if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      if (!input.variant.id && existing.length >= MAX_ITEM_VARIANTS) {
+        return errorResponse(`Items can have at most ${MAX_ITEM_VARIANTS} variants`);
+      }
+      if (input.variant.id) {
+        await ctx.drizzle
+          .update(itemVariant)
+          .set({
+            name: input.variant.name,
+            image: input.variant.image,
+            costType: input.variant.costType,
+            cost: input.variant.cost,
+            order: input.variant.order,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(itemVariant.id, input.variant.id),
+              eq(itemVariant.itemId, input.itemId),
+            ),
+          );
+      } else {
+        await ctx.drizzle.insert(itemVariant).values({
+          id: nanoid(),
+          itemId: input.itemId,
+          name: input.variant.name,
+          image: input.variant.image,
+          costType: input.variant.costType,
+          cost: input.variant.cost,
+          order: input.variant.order,
+        });
+      }
+      return { success: true, message: "Variant saved" };
+    }),
+  // Admin: delete a variant
+  deleteItemVariant: protectedProcedure
+    .input(z.object({ variantId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      await ctx.drizzle.delete(itemVariant).where(eq(itemVariant.id, input.variantId));
+      return { success: true, message: "Variant deleted" };
+    }),
+  // Purchase a variant with in-game currency
+  purchaseVariant: protectedProcedure
+    .input(z.object({ variantId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [userResult, variant] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        ctx.drizzle.query.itemVariant.findFirst({
+          where: eq(itemVariant.id, input.variantId),
+        }),
+      ]);
+      const user = userResult.user;
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (!variant) return errorResponse("Variant not found");
+      if (variant.costType === "VARIANT_TOKEN") {
+        return errorResponse(
+          "This variant requires a Variant Token — use consumeVariantToken instead",
+        );
+      }
+
+      const alreadyUnlocked = await ctx.drizzle.query.userItemVariant.findFirst({
+        where: and(
+          eq(userItemVariant.userId, ctx.userId),
+          eq(userItemVariant.variantId, input.variantId),
+        ),
+      });
+      if (alreadyUnlocked) return errorResponse("Variant already unlocked");
+
+      // Currency checks
+      if (variant.costType === "MONEY" && user.money < variant.cost) {
+        return errorResponse(`Insufficient Ryo. Need ${variant.cost}`);
+      }
+      if (variant.costType === "REPUTATION" && user.reputationPoints < variant.cost) {
+        return errorResponse(`Insufficient Reputation. Need ${variant.cost}`);
+      }
+      if (variant.costType === "SEICHI_SILVER" && user.seichiSilver < variant.cost) {
+        return errorResponse(`Insufficient Seichi Silver. Need ${variant.cost}`);
+      }
+      if (
+        variant.costType === "VILLAGE_PRESTIGE" &&
+        user.villagePrestige < variant.cost
+      ) {
+        return errorResponse(`Insufficient Prestige. Need ${variant.cost}`);
+      }
+
+      // Build currency update
+      const currencyWhere =
+        variant.costType === "MONEY"
+          ? gte(userData.money, variant.cost)
+          : variant.costType === "REPUTATION"
+            ? gte(userData.reputationPoints, variant.cost)
+            : variant.costType === "SEICHI_SILVER"
+              ? gte(userData.seichiSilver, variant.cost)
+              : gte(userData.villagePrestige, variant.cost);
+
+      const currencySet =
+        variant.costType === "MONEY"
+          ? { money: sql`${userData.money} - ${variant.cost}` }
+          : variant.costType === "REPUTATION"
+            ? { reputationPoints: sql`${userData.reputationPoints} - ${variant.cost}` }
+            : variant.costType === "SEICHI_SILVER"
+              ? { seichiSilver: sql`${userData.seichiSilver} - ${variant.cost}` }
+              : { villagePrestige: sql`${userData.villagePrestige} - ${variant.cost}` };
+
+      // Mutate — deduct currency with CAS guard, insert unlock
+      const [deductResult] = await Promise.all([
+        ctx.drizzle
+          .update(userData)
+          .set(currencySet)
+          .where(and(eq(userData.userId, ctx.userId), currencyWhere)),
+        ctx.drizzle
+          .insert(userItemVariant)
+          .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
+          .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
+      ]);
+
+      if (deductResult.rowsAffected !== 1) {
+        return errorResponse("Insufficient funds — please refresh and try again");
+      }
+
+      return { success: true, message: `Variant "${variant.name}" unlocked!` };
+    }),
+  // Set the active variant on a user item (null to clear)
+  selectVariant: protectedProcedure
+    .input(
+      z.object({
+        userItemId: z.string(),
+        variantId: z.string().nullable(),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [ui, unlock] = await Promise.all([
+        fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
+        input.variantId
+          ? ctx.drizzle.query.userItemVariant.findFirst({
+              where: and(
+                eq(userItemVariant.userId, ctx.userId),
+                eq(userItemVariant.variantId, input.variantId),
+              ),
+            })
+          : Promise.resolve(undefined),
+      ]);
+
+      // Guards
+      if (!ui) return errorResponse("Item not found");
+      if (input.variantId && !unlock) {
+        return errorResponse("Variant not unlocked");
+      }
+
+      // Mutate
+      await ctx.drizzle
+        .update(userItem)
+        .set({ activeVariantId: input.variantId })
+        .where(and(eq(userItem.id, input.userItemId), eq(userItem.userId, ctx.userId)));
+
+      return { success: true, message: "Active variant updated" };
+    }),
+  // Consume a Variant Token item to unlock a VARIANT_TOKEN-gated variant
+  consumeVariantToken: protectedProcedure
+    .input(z.object({ tokenUserItemId: z.string(), variantId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [userResult, tokenItem, variant] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchUserItem(ctx.drizzle, ctx.userId, input.tokenUserItemId),
+        ctx.drizzle.query.itemVariant.findFirst({
+          where: eq(itemVariant.id, input.variantId),
+        }),
+      ]);
+      const user = userResult.user;
+
+      // Guards
+      if (!user) return errorResponse("User not found");
+      if (!tokenItem) return errorResponse("Token item not found");
+      if (!variant) return errorResponse("Variant not found");
+      if (variant.costType !== "VARIANT_TOKEN") {
+        return errorResponse("This variant does not require a Variant Token");
+      }
+      const hasVariantTokenEffect = tokenItem.item.effects.some(
+        (e) => e.type === "unlockitemvariant",
+      );
+      if (!hasVariantTokenEffect) {
+        return errorResponse("This item is not a Variant Token");
+      }
+
+      const alreadyUnlocked = await ctx.drizzle.query.userItemVariant.findFirst({
+        where: and(
+          eq(userItemVariant.userId, ctx.userId),
+          eq(userItemVariant.variantId, input.variantId),
+        ),
+      });
+      if (alreadyUnlocked) return errorResponse("Variant already unlocked");
+
+      // Mutate — consume token item + insert unlock record
+      const newQty = tokenItem.quantity - 1;
+      await Promise.all([
+        newQty <= 0
+          ? ctx.drizzle.delete(userItem).where(eq(userItem.id, input.tokenUserItemId))
+          : ctx.drizzle
+              .update(userItem)
+              .set({ quantity: newQty })
+              .where(eq(userItem.id, input.tokenUserItemId)),
+        ctx.drizzle
+          .insert(userItemVariant)
+          .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
+          .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
+      ]);
+
+      return {
+        success: true,
+        message: `Variant "${variant.name}" unlocked with token!`,
+      };
     }),
   getItemRelations: publicProcedure
     .meta({
@@ -1860,7 +2135,10 @@ export const fetchItemWithCraftingRequirements = async (
 export const fetchUserItems = async (client: DrizzleClient, userId: string) => {
   const useritems = await client.query.userItem.findMany({
     where: and(eq(userItem.userId, userId)),
-    with: { item: true, imbuements: { with: { item: true } } },
+    with: {
+      item: { with: { variants: true } },
+      imbuements: { with: { item: true } },
+    },
   });
   return useritems.filter((ui) => ui.item && !ui.item.hidden);
 };
@@ -1872,7 +2150,7 @@ export const fetchUserItem = async (
 ) => {
   return await client.query.userItem.findFirst({
     where: and(eq(userItem.userId, userId), eq(userItem.id, userItemId)),
-    with: { item: true },
+    with: { item: { with: { variants: true } } },
   });
 };
 
