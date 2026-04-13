@@ -720,9 +720,9 @@ export const jutsuRouter = createTRPCRouter({
           if (visitedAncestors.has(ancestorParentId)) break;
           visitedAncestors.add(ancestorParentId);
           const nextAncestor = jutsuById.get(ancestorParentId);
+          ancestorDepth++;
           if (!nextAncestor) break;
           ancestorParentId = nextAncestor.parentJutsuId;
-          ancestorDepth++;
         }
         // Walk downward from input.id to get the deepest descendant depth.
         // visitedDescendants guards against pre-existing cycles in the DB.
