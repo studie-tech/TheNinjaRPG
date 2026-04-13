@@ -781,9 +781,7 @@ export const raidsRouter = createTRPCRouter({
             ]
           : []),
         // Clear ranked PVP queue — being in it sets status to QUEUED which blocks raid joining
-        ctx.drizzle
-          .delete(rankedPvpQueue)
-          .where(eq(rankedPvpQueue.userId, userId)),
+        ctx.drizzle.delete(rankedPvpQueue).where(eq(rankedPvpQueue.userId, userId)),
         // Cancel spar requests the user sent
         ctx.drizzle
           .update(userRequest)
@@ -1229,7 +1227,7 @@ export const raidsRouter = createTRPCRouter({
       // Guard - basic validations
       if (!user) return errorResponse("User not found");
       if (user.isBanned) {
-        return errorResponse("You are banned and cannot queue for raids");
+        return errorResponse("You are banned and cannot start raid battles");
       }
       if (!team) return errorResponse("Team not found");
 
