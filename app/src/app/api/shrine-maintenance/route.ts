@@ -297,22 +297,22 @@ export async function runStaleShrineLobbyCleanup(
     .from(mpvpBattleUser)
     .where(inArray(mpvpBattleUser.clanBattleId, unclaimedSubquery));
 
-  // Step 1: children first — both gated by the isNull subquery so claimed
-  // lobbies are not touched even if they appear in deletedQueueIds.
-  const [resetResult] = await Promise.all([
-    db
-      .update(userData)
-      .set({ status: "AWAKE" })
-      .where(
-        and(
-          inArray(userData.userId, unclaimedUsersSubquery),
-          eq(userData.status, "QUEUED"),
-        ),
+  // Step 1a: reset user statuses while mpvpBattleUser rows still exist —
+  // the subquery reads from mpvpBattleUser, so the UPDATE must precede the DELETE.
+  const resetResult = await db
+    .update(userData)
+    .set({ status: "AWAKE" })
+    .where(
+      and(
+        inArray(userData.userId, unclaimedUsersSubquery),
+        eq(userData.status, "QUEUED"),
       ),
-    db
-      .delete(mpvpBattleUser)
-      .where(inArray(mpvpBattleUser.clanBattleId, unclaimedSubquery)),
-  ]);
+    );
+
+  // Step 1b: now safe to drop the child rows
+  await db
+    .delete(mpvpBattleUser)
+    .where(inArray(mpvpBattleUser.clanBattleId, unclaimedSubquery));
 
   // Step 2: parent delete with the same guard
   const deleteResult = await db

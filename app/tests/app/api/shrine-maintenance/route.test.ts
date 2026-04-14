@@ -29,7 +29,7 @@ function createSelectChain<T>(rows: T[]) {
 }
 
 describe("runStaleShrineLobbyCleanup", () => {
-  it("deletes children before parent, both gated by isNull(battleId) subquery", async () => {
+  it("resets user statuses before deleting children, both gated by isNull(battleId) subquery, parent last", async () => {
     const staleLobbies = createSelectChain([{ id: "lobby-1" }, { id: "lobby-2" }]);
     // unclaimedSubquery builder — not awaited
     const unclaimedChain = {
@@ -65,9 +65,10 @@ describe("runStaleShrineLobbyCleanup", () => {
 
     expect(result).toEqual({ lobbiesCleared: 2, usersReset: 2 });
 
-    // Children must be deleted BEFORE the parent — this is the correctness invariant.
-    // Deleting children first with the isNull(battleId) subquery ensures claimed
-    // lobbies are excluded; the parent delete then uses the same guard.
+    // userData must be reset BEFORE mpvpBattleUser is deleted — the update's
+    // subquery reads from mpvpBattleUser, so if the delete ran first the subquery
+    // would return zero rows and users would stay QUEUED permanently.
+    // mpvpBattleQueue (parent) must be deleted last.
     expect(db.delete).toHaveBeenNthCalledWith(1, mpvpBattleUser);
     expect(db.delete).toHaveBeenNthCalledWith(2, mpvpBattleQueue);
 
