@@ -177,6 +177,7 @@ import { fetchActiveWars } from "@/routers/war";
 import {
   fetchItemLoadouts,
   fetchUserItems,
+  fetchUserItemsWithVariants,
   selectItemLoadout,
 } from "@/server/api/routers/item";
 import {
@@ -921,7 +922,7 @@ export const combatRouter = createTRPCRouter({
         fetchBattle(ctx.drizzle, input.battleId),
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchUserItemsWithVariants(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
