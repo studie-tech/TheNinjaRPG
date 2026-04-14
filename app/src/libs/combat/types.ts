@@ -20,6 +20,7 @@ import type {
   GameSetting,
   Item,
   ItemSlot,
+  ItemVariant,
   Jutsu,
   JutsuReskin,
   Quest,
@@ -51,7 +52,7 @@ export type BattleWar = War & {
  * CombatQueryUserItem - Item type from DB query with relations
  */
 export type CombatQueryUserItem = UserItem & {
-  item: Item;
+  item: Item & { variants?: ItemVariant[] };
   imbuements: (UserItemImbuement & { item: Item })[];
 };
 
@@ -249,6 +250,8 @@ export type BattleUserItem = {
   dropChancePerc: number;
   lastUsedRound: number;
   originalCooldown: number;
+  activeVariantId?: string | null; // which variant is active (if any)
+  variantBattleDescription?: string | null; // pre-resolved from variant at battle init
 };
 
 /**

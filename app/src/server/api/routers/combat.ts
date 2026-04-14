@@ -1519,7 +1519,7 @@ export const initiateBattle = async (
         anbuSquad: true,
         items: {
           with: {
-            item: true,
+            item: { with: { variants: true } },
             imbuements: {
               with: { item: true },
               where: (imbuements) => lt(imbuements.craftingFinishedAt, new Date()),
@@ -1640,7 +1640,7 @@ export const initiateBattle = async (
             itemId: item.id,
             quantity: 1,
             equipped: "ITEM_1" as const,
-            item: item,
+            item: { ...item, variants: [] },
             storedAtHome: false,
             craftingFinishedAt: null,
             isInAuction: false,
@@ -3169,16 +3169,26 @@ export const processUsersForBattle = async (
     }));
 
     // Convert items to reference format
-    const itemsRef: BattleUserItem[] = user.items.map((ui) => ({
-      id: ui.id,
-      itemId: ui.itemId,
-      quantity: ui.quantity,
-      durability: ui.durability,
-      equipped: ui.equipped,
-      lastUsedRound: ui.lastUsedRound ?? -(ui.item?.cooldown ?? 0),
-      originalCooldown: ui.originalCooldown ?? ui.item?.cooldown ?? 0,
-      dropChancePerc: ui.dropChancePerc,
-    }));
+    const itemsRef: BattleUserItem[] = user.items.map((ui) => {
+      // Pre-resolve variant battleDescription if the user has an active variant
+      let variantBattleDescription: string | null = null;
+      if (ui.activeVariantId && ui.item?.variants) {
+        const activeVariant = ui.item.variants.find((v) => v.id === ui.activeVariantId);
+        variantBattleDescription = activeVariant?.battleDescription ?? null;
+      }
+      return {
+        id: ui.id,
+        itemId: ui.itemId,
+        quantity: ui.quantity,
+        durability: ui.durability,
+        equipped: ui.equipped,
+        lastUsedRound: ui.lastUsedRound ?? -(ui.item?.cooldown ?? 0),
+        originalCooldown: ui.originalCooldown ?? ui.item?.cooldown ?? 0,
+        dropChancePerc: ui.dropChancePerc,
+        activeVariantId: ui.activeVariantId ?? null,
+        variantBattleDescription,
+      };
+    });
 
     // Destructure to remove full objects that should become references
     // These fields are either stored in extraState or not needed in BattleUserState
