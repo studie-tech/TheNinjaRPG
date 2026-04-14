@@ -1307,6 +1307,8 @@ export const itemVariant = mysqlTable(
     costType: mysqlEnum("costType", consts.VARIANT_COST_TYPES).notNull(),
     cost: int("cost").default(0).notNull(),
     order: smallint("order", { unsigned: true }).default(1).notNull(),
+    description: text("description"),
+    battleDescription: text("battleDescription"),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
