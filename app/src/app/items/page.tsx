@@ -44,7 +44,11 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import NavTabs from "@/layout/NavTabs";
-import { getItemDisplayImage } from "@/libs/combat/util";
+import {
+  getItemDisplayDescription,
+  getItemDisplayImage,
+  getItemDisplayName,
+} from "@/libs/combat/util";
 import {
   calcItemSellingPrice,
   calcMaxEventItems,
@@ -727,6 +731,8 @@ const Backpack: React.FC<BackpackProps> = (props) => {
             item={{
               ...useritem.item,
               image: getItemDisplayImage(useritem as UserItemWithVariants),
+              name: getItemDisplayName(useritem as UserItemWithVariants),
+              description: getItemDisplayDescription(useritem as UserItemWithVariants),
               imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
               curDurability: useritem.durability,
             }}
