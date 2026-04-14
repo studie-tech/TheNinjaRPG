@@ -1186,6 +1186,14 @@ export const shrineRouter = createTRPCRouter({
           return errorResponse("Shrine battle already started - cannot leave");
         }
         if (battle && battle.createdAt <= shrineLobbyStaleBefore) {
+          // Lobby is confirmed stale — reset status immediately so the user
+          // isn't blocked until the cron tick clears it.
+          await ctx.drizzle
+            .update(userData)
+            .set({ status: "AWAKE" })
+            .where(
+              and(eq(userData.userId, user.userId), eq(userData.status, "QUEUED")),
+            );
           return errorResponse("Shrine battle expired");
         }
         return errorResponse("Not in this shrine battle queue");
