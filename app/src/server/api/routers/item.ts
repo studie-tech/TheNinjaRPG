@@ -486,6 +486,8 @@ export const itemRouter = createTRPCRouter({
           order: z.number(),
           createdAt: z.date(),
           updatedAt: z.date(),
+          description: z.string().nullish(),
+          battleDescription: z.string().nullish(),
         }),
       ),
     )
