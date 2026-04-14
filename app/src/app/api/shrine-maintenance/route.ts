@@ -276,53 +276,55 @@ export async function runStaleShrineLobbyCleanup(
     return { lobbiesCleared: 0, usersReset: 0 };
   }
 
-  const staleIds = staleLobbies.map((row) => row.id);
+  const deletedQueueIds = staleLobbies.map((row) => row.id);
 
-  // Build the subquery once and reuse it for both the status reset and the
-  // delete, so both are guarded against a concurrent initiateShrineBattle
-  // CAS-claim (which sets battleId before initiateBattle transitions users
-  // to BATTLE — see the two-step sequence in initiateShrineBattle).
-  const stillStaleQueues = db
-    .select({ id: mpvpBattleQueue.id })
-    .from(mpvpBattleQueue)
-    .where(
-      and(
-        inArray(mpvpBattleQueue.id, staleIds),
-        isNull(mpvpBattleQueue.battleId),
-        lt(mpvpBattleQueue.createdAt, cutoff),
-      ),
-    );
-
-  const stillQueuedUsers = db
-    .select({ userId: mpvpBattleUser.userId })
-    .from(mpvpBattleUser)
-    .where(inArray(mpvpBattleUser.clanBattleId, stillStaleQueues));
-
-  const [resetResult] = await Promise.all([
-    db
-      .update(userData)
-      .set({ status: "AWAKE" })
-      .where(
-        and(inArray(userData.userId, stillQueuedUsers), eq(userData.status, "QUEUED")),
-      ),
-    db
-      .delete(mpvpBattleUser)
-      .where(inArray(mpvpBattleUser.clanBattleId, stillStaleQueues)),
-  ]);
-  const usersReset = resetResult.rowsAffected ?? 0;
-
+  // Delete parent rows FIRST — this is the atomic gate that closes the race
+  // with concurrent initiateShrineBattle calls. Any claim CAS that runs after
+  // this point will find the row gone (rowsAffected=0) and abort. Queues
+  // already claimed before this delete have battleId set and are skipped by
+  // the isNull guard; their users will have been transitioned to BATTLE by
+  // initiateBattle, so the status CAS on the update below protects them.
   const deleteResult = await db
     .delete(mpvpBattleQueue)
     .where(
       and(
-        inArray(mpvpBattleQueue.id, staleIds),
+        inArray(mpvpBattleQueue.id, deletedQueueIds),
         eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
         isNull(mpvpBattleQueue.battleId),
         lt(mpvpBattleQueue.createdAt, cutoff),
       ),
     );
 
-  return { lobbiesCleared: deleteResult.rowsAffected ?? 0, usersReset };
+  if (deleteResult.rowsAffected === 0) {
+    return { lobbiesCleared: 0, usersReset: 0 };
+  }
+
+  // Clean up children of the deleted queues. Scope userData reset through a
+  // subquery on mpvpBattleUser so we only reset users actually in those queues.
+  const deletedUsersSubquery = db
+    .select({ userId: mpvpBattleUser.userId })
+    .from(mpvpBattleUser)
+    .where(inArray(mpvpBattleUser.clanBattleId, deletedQueueIds));
+
+  const [resetResult] = await Promise.all([
+    db
+      .update(userData)
+      .set({ status: "AWAKE" })
+      .where(
+        and(
+          inArray(userData.userId, deletedUsersSubquery),
+          eq(userData.status, "QUEUED"),
+        ),
+      ),
+    db
+      .delete(mpvpBattleUser)
+      .where(inArray(mpvpBattleUser.clanBattleId, deletedQueueIds)),
+  ]);
+
+  return {
+    lobbiesCleared: deleteResult.rowsAffected ?? 0,
+    usersReset: resetResult.rowsAffected ?? 0,
+  };
 }
 
 /** Creates an updated shrineSettings object with new activeBoosts */
