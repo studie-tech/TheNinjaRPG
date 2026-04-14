@@ -30,6 +30,7 @@ import {
   TUTORIAL_STARTER_QUEST_ID,
   VILLAGE_SYNDICATE_ID,
   WAR_MISSIONS_PER_DAY,
+  WAR_PARTICIPANT_SECS,
 } from "@/drizzle/constants";
 import type { Quest, UserData } from "@/drizzle/schema";
 import {
@@ -757,7 +758,10 @@ export const questsRouter = createTRPCRouter({
       if (questData.questType === "war") {
         const result = await ctx.drizzle
           .update(userData)
-          .set({ dailyWarMissions: sql`${userData.dailyWarMissions} + 1` })
+          .set({
+            dailyWarMissions: sql`${userData.dailyWarMissions} + 1`,
+            warParticipantUntil: sql`NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND`,
+          })
           .where(
             and(
               eq(userData.userId, user.userId),

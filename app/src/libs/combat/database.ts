@@ -9,6 +9,7 @@ import {
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   VILLAGE_SYNDICATE_ID,
+  WAR_PARTICIPANT_SECS,
   WAR_RECAPTURE_THRESHOLD,
   WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
@@ -558,6 +559,8 @@ export const updateWars = async (
   const processedWarHealthIds = new Set<string>();
   // Track sectors where SECTOR_WAR shrine HP crossed to 0 (for exclusive raid activation)
   const sectorsWithDefeatedShrine = new Set<number>();
+  // Deduplicate warParticipantUntil stamp — one write per killer, regardless of kill count
+  const stampedWarParticipantIds = new Set<string>();
 
   warResults.forEach((warResult) => {
     warResult.wars.forEach((w) => {
@@ -601,6 +604,19 @@ export const updateWars = async (
             killedAt: new Date(),
           }),
         );
+        // Mark killer as war participant — allows cross-bracket targeting for 2 hours.
+        // Deduplicate: one DB write per killer per battle.
+        if (!stampedWarParticipantIds.has(user.userId)) {
+          stampedWarParticipantIds.add(user.userId);
+          otherPromises.push(
+            client
+              .update(userData)
+              .set({
+                warParticipantUntil: sql`NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND`,
+              })
+              .where(eq(userData.userId, user.userId)),
+          );
+        }
       }
 
       // Update shrine HP in war table for sector wars only (no townhall damage for sector wars)
