@@ -1336,7 +1336,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
                   onClick={() => purchase.mutate({ variantId: v.id })}
                   disabled={purchase.isPending}
                 >
-                  {`Buy: ${v.cost.toLocaleString()} ${v.costType}`}
+                  {`Buy: ${v.cost.toLocaleString()} ${v.costType === "MONEY" ? "Ryo" : v.costType}`}
                 </Button>
               )}
             </div>
