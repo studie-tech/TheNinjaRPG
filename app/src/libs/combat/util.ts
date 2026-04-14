@@ -112,6 +112,72 @@ export const getItemDisplayImage = (
   return source.image;
 };
 
+/**
+ * Returns the display name for a user item, preferring the active variant name if set.
+ * Falls back to the base item name.
+ */
+export const getItemDisplayName = (
+  source:
+    | {
+        activeVariantId?: string | null;
+        item: { name: string; variants?: { id: string; name: string | null }[] };
+      }
+    | { name: string },
+): string => {
+  if ("activeVariantId" in source && source.activeVariantId) {
+    const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
+    if (variant?.name) return variant.name;
+  }
+  if ("item" in source) return source.item.name;
+  return source.name;
+};
+
+/**
+ * Returns the display description for a user item, preferring the active variant description if set.
+ * Falls back to the base item description.
+ */
+export const getItemDisplayDescription = (
+  source:
+    | {
+        activeVariantId?: string | null;
+        item: {
+          description: string;
+          variants?: { id: string; description?: string | null }[];
+        };
+      }
+    | { description: string },
+): string => {
+  if ("activeVariantId" in source && source.activeVariantId) {
+    const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
+    if (variant?.description) return variant.description;
+  }
+  if ("item" in source) return source.item.description;
+  return source.description;
+};
+
+/**
+ * Returns the battle description for a user item, preferring the active variant battleDescription if set.
+ * Falls back to the base item battleDescription.
+ */
+export const getItemDisplayBattleDescription = (
+  source:
+    | {
+        activeVariantId?: string | null;
+        item: {
+          battleDescription: string;
+          variants?: { id: string; battleDescription?: string | null }[];
+        };
+      }
+    | { battleDescription: string },
+): string => {
+  if ("activeVariantId" in source && source.activeVariantId) {
+    const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
+    if (variant?.battleDescription) return variant.battleDescription;
+  }
+  if ("item" in source) return source.item.battleDescription;
+  return source.battleDescription;
+};
+
 // =============================================================================
 // STATIC DATA LOOKUP FUNCTIONS
 // These functions retrieve full data from extraState using IDs.
