@@ -1293,6 +1293,11 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
                 className="mx-auto rounded"
               />
               <p className="mt-1 text-center font-medium text-xs">{v.name}</p>
+              {v.description && (
+                <p className="mt-0.5 text-center text-muted-foreground text-xs">
+                  {v.description}
+                </p>
+              )}
 
               {isUnlocked ? (
                 isActive ? (
