@@ -780,21 +780,28 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query — ownership check joins userItem→itemVariant in parallel (variantId known upfront)
-      const [userResult, tokenItem, variant, ownershipRows] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        fetchUserItemWithVariants(ctx.drizzle, ctx.userId, input.tokenUserItemId),
-        ctx.drizzle.query.itemVariant.findFirst({
-          where: eq(itemVariant.id, input.variantId),
-        }),
-        ctx.drizzle
-          .select({ id: userItem.id })
-          .from(userItem)
-          .innerJoin(itemVariant, eq(userItem.itemId, itemVariant.itemId))
-          .where(
-            and(eq(userItem.userId, ctx.userId), eq(itemVariant.id, input.variantId)),
-          )
-          .limit(1),
-      ]);
+      const [userResult, tokenItem, variant, ownershipRows, existingUnlock] =
+        await Promise.all([
+          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+          fetchUserItemWithVariants(ctx.drizzle, ctx.userId, input.tokenUserItemId),
+          ctx.drizzle.query.itemVariant.findFirst({
+            where: eq(itemVariant.id, input.variantId),
+          }),
+          ctx.drizzle
+            .select({ id: userItem.id })
+            .from(userItem)
+            .innerJoin(itemVariant, eq(userItem.itemId, itemVariant.itemId))
+            .where(
+              and(eq(userItem.userId, ctx.userId), eq(itemVariant.id, input.variantId)),
+            )
+            .limit(1),
+          ctx.drizzle.query.userItemVariant.findFirst({
+            where: and(
+              eq(userItemVariant.userId, ctx.userId),
+              eq(userItemVariant.variantId, input.variantId),
+            ),
+          }),
+        ]);
       const user = userResult.user;
 
       // Guards
@@ -811,6 +818,7 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("This item is not a Variant Token");
       }
       if (!ownershipRows.length) return errorResponse("You don't own this item");
+      if (existingUnlock) return errorResponse("Variant already unlocked");
 
       // Mutate — consume token first so a crash after this leaves the user
       // without the token but without the unlock (safe-failure direction: retryable).
@@ -839,15 +847,12 @@ export const itemRouter = createTRPCRouter({
       }
 
       // Insert unlock — idempotent via unique constraint; no rollback needed since
-      // the token is already consumed regardless of this result.
-      const insertResult = await ctx.drizzle
+      // the token is already consumed regardless of this result. The pre-check above
+      // handles the stale-state path so rowsAffected === 0 here is a narrow race.
+      await ctx.drizzle
         .insert(userItemVariant)
         .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
         .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-
-      if (insertResult.rowsAffected === 0) {
-        return errorResponse("Variant already unlocked");
-      }
 
       return {
         success: true,
