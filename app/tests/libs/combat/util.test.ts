@@ -239,12 +239,12 @@ describe("pre-resolution contract: getItemDisplayBattleDescription for reconnect
     expect(getItemDisplayBattleDescription(source)).toBe("%user swings a blade");
   });
 
-  it("pre-resolved value takes priority when passed as flat source (BattleUserItem simulation)", () => {
-    // Once variantBattleDescription is stored on BattleUserItem and used directly
-    // in userItemToAction, it bypasses the helper entirely. This test simulates
-    // the flat-object path that action processing uses.
+  it("pre-resolved variantBattleDescription takes priority (BattleUserItem simulation)", () => {
+    // variantBattleDescription is stored on BattleUserItem at battle-init time and
+    // used directly in userItemToAction, bypassing the runtime helper. This test
+    // exercises that pre-resolved field path.
     const preResolved = "%user swings the Crimson Blade";
-    const source = { battleDescription: preResolved };
+    const source = { variantBattleDescription: preResolved };
     expect(getItemDisplayBattleDescription(source)).toBe(preResolved);
   });
 });
