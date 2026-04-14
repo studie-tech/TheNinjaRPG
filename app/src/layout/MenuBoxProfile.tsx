@@ -421,6 +421,7 @@ const MenuBoxProfile: React.FC = () => {
                       totalSeconds={bracketImmunitySecsLeft}
                       initialSecondsLeft={bracketImmunitySecsLeft}
                       setState={setState}
+                      hideWhenDone
                     />
                   </div>
                 </TooltipTrigger>
@@ -671,6 +672,7 @@ interface CooldownProps {
   totalSeconds: number;
   createdAt: number;
   setState: React.Dispatch<React.SetStateAction<number>>;
+  hideWhenDone?: boolean;
 }
 
 /**
@@ -680,7 +682,7 @@ interface CooldownProps {
  * @returns The rendered `Cooldown` component.
  */
 const Cooldown: React.FC<CooldownProps> = (props) => {
-  const { createdAt, totalSeconds, initialSecondsLeft, setState } = props;
+  const { createdAt, totalSeconds, initialSecondsLeft, setState, hideWhenDone } = props;
   const [counter, setCounter] = useState<string>(() =>
     getTimeStr(initialSecondsLeft * 1000),
   );
@@ -710,10 +712,10 @@ const Cooldown: React.FC<CooldownProps> = (props) => {
           hasNotifiedRef.current = true;
           setState((prev) => prev + 1);
         }
-        setCounter(`Done`);
+        setCounter(hideWhenDone ? "" : "Done");
       }
     }
-  }, [totalSeconds, createdAt, initialSecondsLeft, setState]);
+  }, [totalSeconds, createdAt, initialSecondsLeft, setState, hideWhenDone]);
 
   return counter ? <>[{counter}]</> : null;
 };
