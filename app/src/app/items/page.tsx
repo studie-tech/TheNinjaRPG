@@ -726,6 +726,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           <ItemWithEffects
             item={{
               ...useritem.item,
+              image: getItemDisplayImage(useritem as UserItemWithVariants),
               imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
               curDurability: useritem.durability,
             }}
