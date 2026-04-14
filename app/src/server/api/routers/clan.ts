@@ -397,7 +397,12 @@ export const clanRouter = createTRPCRouter({
       if (!isLeader && !isColeader) {
         return [];
       }
-      return await fetchRequests(ctx.drizzle, ["CLAN"], 3600 * 12, input.clanLeaderId);
+      return await fetchRequests(
+        ctx.drizzle,
+        ["CLAN"],
+        3600 * 12,
+        fetchedClan.leaderId,
+      );
     }),
   searchClans: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Search clans/factions by name" } })
@@ -472,6 +477,9 @@ export const clanRouter = createTRPCRouter({
       // Secondary fetch using user's clanId (resilient to leader changes)
       const fetchedClan = await fetchClan(ctx.drizzle, user.clanId);
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
+      if (request.receiverId !== fetchedClan.leaderId) {
+        return errorResponse(`Request not directed at this ${groupLabel}`);
+      }
       const isLeader = user.userId === fetchedClan.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
       if (!isLeader && !isColeader) {
@@ -521,6 +529,9 @@ export const clanRouter = createTRPCRouter({
       ]);
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (!requester) return errorResponse("Requester not found");
+      if (request.receiverId !== fetchedClan.leaderId) {
+        return errorResponse(`Request not directed at this ${groupLabel}`);
+      }
       const nMembers = fetchedClan.members.length || 0;
       const isLeader = user.userId === fetchedClan.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
