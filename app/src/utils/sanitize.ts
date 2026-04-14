@@ -26,6 +26,17 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
       "style",
     ],
   },
+  allowedStyles: {
+    "*": {
+      color: [
+        /^(#[0-9a-fA-F]{3,8}|rgba?\(\s*[\d.]+[\s,]+[\d.]+[\s,]+[\d.]+[\s,\d.]*\)|hsla?\(\s*[\d.]+[\s,]+[\d.%]+[\s,]+[\d.%]+[\s,\d.]*\)|[a-zA-Z]+)$/,
+      ],
+      "text-align": [/^(left|right|center|justify)$/],
+      "font-weight": [/^\d+$|^bold$|^normal$/],
+      "font-style": [/^(italic|normal)$/],
+      "text-decoration": [/^(underline|line-through|none)$/],
+    },
+  },
 };
 
 const sanitize = (html: string) => sanitizeHtml(html, sanitizeOptions);

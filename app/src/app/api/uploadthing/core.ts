@@ -74,7 +74,7 @@ const adminMiddleware = async () => {
 };
 
 export const ourFileRouter = {
-  imageUploader: f({ image: { maxFileSize: "64KB" } })
+  imageUploader: f({ image: { maxFileSize: "512KB" } })
     .middleware(async () => await avatarMiddleware())
     .onUploadComplete(async ({ file }) => moderateUploadedImage(file)),
   conceptArtFrameUploader: f({ image: { maxFileSize: "256KB" } })

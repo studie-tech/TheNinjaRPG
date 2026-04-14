@@ -252,6 +252,8 @@ export type BattleUserItem = {
   originalCooldown: number;
   activeVariantId?: string | null; // which variant is active (if any)
   variantBattleDescription?: string | null; // pre-resolved from variant at battle init
+  variantImage?: string | null; // pre-resolved from variant at battle init
+  variantName?: string | null; // pre-resolved from variant at battle init
 };
 
 /**

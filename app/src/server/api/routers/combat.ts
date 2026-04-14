@@ -1049,6 +1049,8 @@ export const combatRouter = createTRPCRouter({
               isInAuction: false,
               activeVariantId: ref.activeVariantId ?? null,
               variantBattleDescription: ref.variantBattleDescription ?? null,
+              variantImage: ref.variantImage ?? null,
+              variantName: ref.variantName ?? null,
               craftingFinishedAt: null,
             };
           })
@@ -3172,11 +3174,15 @@ export const processUsersForBattle = async (
 
     // Convert items to reference format
     const itemsRef: BattleUserItem[] = user.items.map((ui) => {
-      // Pre-resolve variant battleDescription if the user has an active variant
+      // Pre-resolve variant fields if the user has an active variant
       let variantBattleDescription: string | null = null;
+      let variantImage: string | null = null;
+      let variantName: string | null = null;
       if (ui.activeVariantId && ui.item?.variants) {
         const activeVariant = ui.item.variants.find((v) => v.id === ui.activeVariantId);
         variantBattleDescription = activeVariant?.battleDescription ?? null;
+        variantImage = activeVariant?.image ?? null;
+        variantName = activeVariant?.name ?? null;
       }
       return {
         id: ui.id,
@@ -3189,6 +3195,8 @@ export const processUsersForBattle = async (
         dropChancePerc: ui.dropChancePerc,
         activeVariantId: ui.activeVariantId ?? null,
         variantBattleDescription,
+        variantImage,
+        variantName,
       };
     });
 

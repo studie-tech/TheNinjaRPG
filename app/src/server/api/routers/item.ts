@@ -538,6 +538,14 @@ export const itemRouter = createTRPCRouter({
       if (!input.variant.id && existing.length >= MAX_ITEM_VARIANTS) {
         return errorResponse(`Items can have at most ${MAX_ITEM_VARIANTS} variants`);
       }
+      const orderConflict = existing.find(
+        (v) => v.order === input.variant.order && v.id !== input.variant.id,
+      );
+      if (orderConflict) {
+        return errorResponse(
+          `Order ${input.variant.order} is already used by "${orderConflict.name}"`,
+        );
+      }
       if (input.variant.id) {
         await ctx.drizzle
           .update(itemVariant)

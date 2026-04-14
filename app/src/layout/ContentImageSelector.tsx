@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Edit, Sparkles } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { HistoricalAiAvatar } from "@/app/profile/edit/page";
@@ -49,6 +49,11 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
   // reflects the upload immediately (before the parent re-renders with the new prop).
   const [localImageUrl, setLocalImageUrl] = useState<string | null>(null);
 
+  // Clear local override when the parent updates imageUrl (e.g. form reset or variant switch).
+  useEffect(() => {
+    setLocalImageUrl(null);
+  }, [imageUrl]);
+
   // The displayed URL: prefer the locally-tracked upload, then the prop from the parent.
   const displayUrl = localImageUrl ?? imageUrl;
 
@@ -94,7 +99,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
   };
 
   const handleEditImage = (data: PromptFormSchema) => {
-    if (!imageUrl) {
+    if (!displayUrl) {
       showMutationToast({ success: false, message: "No image to edit" });
       return;
     } else if (!data.editPrompt) {
@@ -105,7 +110,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
       createImg({
         preprompt: data.systemPrompt,
         prompt: data.editPrompt,
-        previousImg: imageUrl,
+        previousImg: displayUrl,
         removeBg: ["item", "ai"].includes(props.type ?? ""),
         relationId: id,
         size: size,
