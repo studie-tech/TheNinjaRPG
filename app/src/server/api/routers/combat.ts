@@ -32,6 +32,7 @@ import {
   AutoBattleTypes,
   BATTLE_ARENA_DAILY_LIMIT,
   BattleTypes,
+  BRACKET_IMMUNITY_LIFT_SECS,
   type CombatBiome,
   DURABILITY_USABILITY_THR,
   GeneralTypes,
@@ -2154,6 +2155,10 @@ export const initiateBattle = async (
         immunityUntil: ["SPARRING", "COMBAT"].includes(battleType)
           ? sql`CASE WHEN ${inArray(userData.userId, userIds)} THEN NOW() ELSE ${userData.immunityUntil} END`
           : sql`immunityUntil`,
+        bracketImmunityLiftedUntil:
+          battleType === "COMBAT"
+            ? sql`CASE WHEN ${inArray(userData.userId, userIds)} THEN NOW() + INTERVAL ${BRACKET_IMMUNITY_LIFT_SECS} SECOND ELSE ${userData.bracketImmunityLiftedUntil} END`
+            : sql`bracketImmunityLiftedUntil`,
         // Break stealth when entering combat
         // Defenders (being attacked) always lose stealth
         // Attackers roll to keep stealth based on their stealth stat
