@@ -85,6 +85,23 @@ export const MAP_WAKE_ISLAND_SECTOR = 222;
 export const MAP_WAR_TORN_BATTLEGROUND_SECTOR = 335;
 export const MAP_GLOBAL_TRAVEL_TIME_CAP_SECS = 10;
 
+// XP Bracket system (issue #724)
+export const XP_BRACKETS = [
+  { bracket: 1, min: 0,         max: 500_000 },
+  { bracket: 2, min: 500_001,   max: 1_000_000 },
+  { bracket: 3, min: 1_000_001, max: 1_500_000 },
+  { bracket: 4, min: 1_500_001, max: 2_000_000 },
+  { bracket: 5, min: 2_000_001, max: 2_500_000 },
+  { bracket: 6, min: 2_500_001, max: 3_000_000 },
+  { bracket: 7, min: 3_000_001, max: Infinity },
+] as const;
+
+/** How long (seconds) a player's bracket immunity is lifted after they initiate any attack */
+export const BRACKET_IMMUNITY_LIFT_SECS = 300; // 5 minutes
+
+/** How long (seconds) a player is flagged as a war participant after a war kill or war-quest acceptance */
+export const WAR_PARTICIPANT_SECS = 7200; // 2 hours
+
 export const CoreVillages = [
   "Shirohana",
   "Tsukimori",

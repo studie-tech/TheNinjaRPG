@@ -7,6 +7,7 @@ import {
   HomeTypeDetails,
   HP_PER_LVL,
   SP_PER_LVL,
+  XP_BRACKETS,
 } from "@/drizzle/constants";
 import type {
   Bloodline,
@@ -51,6 +52,17 @@ export const calcLevel = (experience: number) => {
     }
   }
   return Math.min(level, 100);
+};
+
+/**
+ * Returns the XP bracket number (1–7) for a given experience value.
+ * Bracket 1 covers 0–500,000 XP; Bracket 7 covers 3,000,001+ XP.
+ */
+export const getExpBracket = (experience: number): number => {
+  for (const b of XP_BRACKETS) {
+    if (experience >= b.min && experience <= b.max) return b.bracket;
+  }
+  return 7;
 };
 
 export const calcHP = (level: number) => {
