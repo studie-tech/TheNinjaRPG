@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { BattleDataEntryType, BattleTypes } from "@/drizzle/constants";
 import {
+  BRACKET_IMMUNITY_LIFT_SECS,
   HOSPITAL_LAT,
   HOSPITAL_LONG,
   JUTSU_TRAIN_LEVEL_CAP,
@@ -1505,6 +1506,12 @@ export const updateUser = async (
           stealthActive: false,
           stealthActivatedAt: null,
           stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
+          // Stamp bracket immunity at battle end so the 5-min window starts from when combat finishes
+          ...(curBattle.battleType === "COMBAT"
+            ? {
+                bracketImmunityLiftedUntil: sql`NOW() + INTERVAL ${BRACKET_IMMUNITY_LIFT_SECS} SECOND`,
+              }
+            : {}),
         })
         .where(eq(userData.userId, userId)),
       // Handle dropped items transfer if present on result. Currently only AI have droppable items, so no need to delete from loser
