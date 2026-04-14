@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { MAX_ITEM_VARIANTS, VARIANT_COST_TYPES } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import { useItemEditForm } from "@/hooks/item";
@@ -226,6 +227,8 @@ type VariantFormInput = {
   costType: ZodItemVariantType["costType"];
   cost: number | string;
   order: number | string;
+  description?: string;
+  battleDescription?: string;
 };
 
 const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
@@ -275,6 +278,8 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
         costType: "MONEY",
         cost: 0,
         order: (variants?.length ?? 0) + 1,
+        description: "",
+        battleDescription: "",
       });
     }
     // variants?.length intentionally omitted: order is computed once at form-open time,
@@ -463,6 +468,28 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
             <p className="mt-1 text-muted-foreground text-xs">
               Upload via UploadThing and paste the URL here
             </p>
+          </div>
+          <div>
+            <label htmlFor="variant-description" className="font-medium text-sm">
+              Description (optional)
+            </label>
+            <Textarea
+              id="variant-description"
+              {...form.register("description")}
+              placeholder="Flavor text shown in the variant browser"
+              rows={3}
+            />
+          </div>
+          <div>
+            <label htmlFor="variant-battle-description" className="font-medium text-sm">
+              Battle Description (optional)
+            </label>
+            <Textarea
+              id="variant-battle-description"
+              {...form.register("battleDescription")}
+              placeholder="%user strikes with the Crimson Blade"
+              rows={2}
+            />
           </div>
           <div className="flex gap-2">
             <Button type="submit" disabled={upsert.isPending}>
