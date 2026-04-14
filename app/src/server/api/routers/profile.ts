@@ -32,11 +32,10 @@ import {
   REGEN_SECONDS,
   RYO_CAP,
   SENSEI_MAX_STUDENT_LEVEL,
-  SHRINE_BATTLE_LOBBY_SECONDS,
-  SHRINE_BATTLE_STALE_LOBBY_SECONDS,
   SHRINE_BOOST_TYPES,
   SKILL_POINT_MAX_LEVEL,
   SKILL_POINT_MIN_LEVEL,
+  shrineLobbyFreshAfter,
   TUTORIAL_STEPS_COUNT,
   UserRanks,
   UserRolesWithSkillTreeAccess,
@@ -2234,10 +2233,7 @@ export const fetchUpdatedUser = async (props: {
   // that, the periodic cleanup will delete the row. Filter in the notification
   // query so alerts clear the moment a lobby ages out, not up to a minute later
   // when the cron tick actually runs.
-  const shrineLobbyStaleBefore = new Date(
-    now.getTime() -
-      (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
-  );
+  const shrineLobbyStaleBefore = shrineLobbyFreshAfter(now);
 
   // Ensure we can fetch the user
   const [

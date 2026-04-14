@@ -8,7 +8,6 @@ import {
   SHRINE_BATTLE_LOBBY_SECONDS,
   SHRINE_BATTLE_MAX_USERS_PER_SIDE,
   SHRINE_BATTLE_MIN_ATTACKERS,
-  SHRINE_BATTLE_STALE_LOBBY_SECONDS,
   SHRINE_BOOST_COST,
   SHRINE_BOOST_DURATION_HOURS,
   SHRINE_BOOST_TYPES,
@@ -16,6 +15,7 @@ import {
   SHRINE_MAX_LEVEL,
   SHRINE_UPGRADE_COST,
   SHRINE_WEEKLY_MAINTENANCE_COST,
+  shrineLobbyFreshAfter,
   VILLAGE_SYNDICATE_ID,
   WAR_SHRINE_MAINTENANCE_DAYS,
 } from "@/drizzle/constants";
@@ -731,10 +731,7 @@ export const shrineRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       // Exclude lobbies past their natural lifetime so abandoned shrine
       // battles stop showing up in the lobby UI before the cron deletes them.
-      const shrineLobbyStaleBefore = new Date(
-        Date.now() -
-          (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
-      );
+      const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
       // Fetch all battles with FIFO ordering (oldest first)
       const battles = await ctx.drizzle.query.mpvpBattleQueue.findMany({
         where: and(
@@ -793,45 +790,23 @@ export const shrineRouter = createTRPCRouter({
   getUserQueuedShrineBattle: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get user's queued shrine battle" } })
     .query(async ({ ctx }) => {
-      // Query all queue entries for this user with their battle info
-      const queueEntries = await ctx.drizzle.query.mpvpBattleUser.findMany({
-        where: eq(mpvpBattleUser.userId, ctx.userId),
-        with: {
-          clanBattle: {
-            columns: {
-              id: true,
-              battleType: true,
-              sector: true,
-              battleId: true,
-              createdAt: true,
-            },
-          },
-        },
-        orderBy: desc(mpvpBattleUser.createdAt),
-      });
+      const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
+      const [activeEntry] = await ctx.drizzle
+        .select({ battleId: mpvpBattleQueue.id, sector: mpvpBattleQueue.sector })
+        .from(mpvpBattleUser)
+        .innerJoin(mpvpBattleQueue, eq(mpvpBattleUser.clanBattleId, mpvpBattleQueue.id))
+        .where(
+          and(
+            eq(mpvpBattleUser.userId, ctx.userId),
+            eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+            isNull(mpvpBattleQueue.battleId),
+            gt(mpvpBattleQueue.createdAt, shrineLobbyStaleBefore),
+          ),
+        )
+        .orderBy(desc(mpvpBattleUser.createdAt))
+        .limit(1);
 
-      const shrineLobbyStaleBefore = new Date(
-        Date.now() -
-          (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
-      );
-
-      // Find the first active shrine battle (battleId IS NULL means not started)
-      const activeEntry = queueEntries.find(
-        (entry) =>
-          entry.clanBattle?.battleType === "SHRINE_BATTLE" &&
-          entry.clanBattle?.battleId === null &&
-          entry.clanBattle.createdAt > shrineLobbyStaleBefore,
-      );
-
-      // Return null if not in any active shrine battle queue
-      if (!activeEntry || !activeEntry.clanBattle) {
-        return null;
-      }
-
-      return {
-        battleId: activeEntry.clanBattle.id,
-        sector: activeEntry.clanBattle.sector,
-      };
+      return activeEntry ?? null;
     }),
 
   // Challenge a shrine (create a new shrine battle queue)
@@ -1024,10 +999,7 @@ export const shrineRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const shrineLobbyStaleBefore = new Date(
-        Date.now() -
-          (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
-      );
+      const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
 
       // Fetch user and battle data
       const [{ user }, shrineBattle, existingUserBattles] = await Promise.all([
@@ -1180,7 +1152,9 @@ export const shrineRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       if (user.status !== "QUEUED") return errorResponse("Not queued");
 
-      // Use a subquery to only delete if the parent battle hasn't started
+      const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
+
+      // Use a subquery to only delete if the parent battle hasn't started and isn't stale
       // This ensures atomic check + delete for the mpvpBattleUser row
       const activeQueueSubquery = ctx.drizzle
         .select({ id: mpvpBattleQueue.id })
@@ -1189,6 +1163,7 @@ export const shrineRouter = createTRPCRouter({
           and(
             eq(mpvpBattleQueue.id, input.shrineBattleId),
             isNull(mpvpBattleQueue.battleId),
+            gt(mpvpBattleQueue.createdAt, shrineLobbyStaleBefore),
           ),
         );
 
@@ -1201,15 +1176,17 @@ export const shrineRouter = createTRPCRouter({
           ),
         );
 
-      // If no rows deleted, either user wasn't in queue or battle already started
+      // If no rows deleted, either user wasn't in queue, battle started, or lobby expired
       if (deleteResult.rowsAffected === 0) {
-        // Check why - was it because battle started?
         const battle = await ctx.drizzle.query.mpvpBattleQueue.findFirst({
           where: eq(mpvpBattleQueue.id, input.shrineBattleId),
-          columns: { battleId: true },
+          columns: { battleId: true, createdAt: true },
         });
         if (battle?.battleId) {
           return errorResponse("Shrine battle already started - cannot leave");
+        }
+        if (battle && battle.createdAt <= shrineLobbyStaleBefore) {
+          return errorResponse("Shrine battle expired");
         }
         return errorResponse("Not in this shrine battle queue");
       }
@@ -1249,10 +1226,7 @@ export const shrineRouter = createTRPCRouter({
     .input(z.object({ shrineBattleId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const shrineLobbyStaleBefore = new Date(
-        Date.now() -
-          (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
-      );
+      const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
 
       // Fetch user and battle data
       const [{ user }, shrineBattle, activeWars, relationships] = await Promise.all([

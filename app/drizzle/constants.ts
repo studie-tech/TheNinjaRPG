@@ -1375,6 +1375,13 @@ export const SHRINE_BATTLE_MAX_USERS_PER_SIDE = 3;
 export const SHRINE_BATTLE_LOBBY_SECONDS = 60;
 export const SHRINE_BATTLE_STALE_LOBBY_SECONDS = 300; // 5 min grace past lobby window
 
+/** Returns a Date before which shrine battle lobbies are considered stale/expired. */
+export function shrineLobbyFreshAfter(now: Date = new Date()): Date {
+  return new Date(
+    now.getTime() - (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000,
+  );
+}
+
 // Raid Battle Config
 export const RAID_BATTLE_MAX_USERS_PER_TEAM = 3;
 export const RAID_MAX_CONCURRENT_TEAMS = 5;

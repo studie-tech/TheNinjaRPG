@@ -1,8 +1,7 @@
 import { and, eq, gt, inArray, isNull, lt, lte } from "drizzle-orm";
 import { cookies } from "next/headers";
 import {
-  SHRINE_BATTLE_LOBBY_SECONDS,
-  SHRINE_BATTLE_STALE_LOBBY_SECONDS,
+  shrineLobbyFreshAfter,
   WAR_SHRINE_MAINTENANCE_DAYS,
 } from "@/drizzle/constants";
 import {
@@ -260,8 +259,7 @@ export async function runStaleShrineLobbyCleanup(
   now: Date,
   db: ShrineMaintenanceDb = drizzleDB,
 ) {
-  const cutoffSeconds = SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS;
-  const cutoff = new Date(now.getTime() - cutoffSeconds * 1000);
+  const cutoff = shrineLobbyFreshAfter(now);
 
   const staleLobbies = await db
     .select({ id: mpvpBattleQueue.id })
@@ -300,17 +298,18 @@ export async function runStaleShrineLobbyCleanup(
     .from(mpvpBattleUser)
     .where(inArray(mpvpBattleUser.clanBattleId, stillStaleQueues));
 
-  const resetResult = await db
-    .update(userData)
-    .set({ status: "AWAKE" })
-    .where(
-      and(inArray(userData.userId, stillQueuedUsers), eq(userData.status, "QUEUED")),
-    );
+  const [resetResult] = await Promise.all([
+    db
+      .update(userData)
+      .set({ status: "AWAKE" })
+      .where(
+        and(inArray(userData.userId, stillQueuedUsers), eq(userData.status, "QUEUED")),
+      ),
+    db
+      .delete(mpvpBattleUser)
+      .where(inArray(mpvpBattleUser.clanBattleId, stillStaleQueues)),
+  ]);
   const usersReset = resetResult.rowsAffected ?? 0;
-
-  await db
-    .delete(mpvpBattleUser)
-    .where(inArray(mpvpBattleUser.clanBattleId, stillStaleQueues));
 
   const deleteResult = await db
     .delete(mpvpBattleQueue)
