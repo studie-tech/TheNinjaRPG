@@ -2559,6 +2559,7 @@ export const userItem = mysqlTable(
         table.userId,
         table.equipped,
       ),
+      activeVariantIdIdx: index("UserItem_activeVariantId_idx").on(table.activeVariantId),
     };
   },
 );

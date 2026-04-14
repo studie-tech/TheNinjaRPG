@@ -54,6 +54,14 @@ export const ItemVariantValidator = z.object({
 });
 export type ZodItemVariantType = z.infer<typeof ItemVariantValidator>;
 
+const COST_TYPE_LABELS: Record<(typeof VARIANT_COST_TYPES)[number], string> = {
+  MONEY: "Ryo",
+  REPUTATION: "Reputation",
+  SEICHI_SILVER: "Seichi Silver",
+  VILLAGE_PRESTIGE: "Village Prestige",
+  VARIANT_TOKEN: "Variant Token",
+};
+
 /** Returns the human-readable label for a variant cost type. */
 export const displayCostType = (type: (typeof VARIANT_COST_TYPES)[number]): string =>
-  type === "MONEY" ? "Ryo" : type;
+  COST_TYPE_LABELS[type];
