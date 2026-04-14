@@ -559,7 +559,9 @@ export const updateWars = async (
   const processedWarHealthIds = new Set<string>();
   // Track sectors where SECTOR_WAR shrine HP crossed to 0 (for exclusive raid activation)
   const sectorsWithDefeatedShrine = new Set<number>();
-  // Deduplicate warParticipantUntil stamp — one write per killer, regardless of kill count
+  // Deduplicate warParticipantUntil stamp — one write per killer, regardless of kill count.
+  // This path also covers shrine AI kills: shrine AIs carry the defending village's villageId,
+  // so findWarsWithUser matches them and result.didWin triggers the stamp below.
   const stampedWarParticipantIds = new Set<string>();
 
   warResults.forEach((warResult) => {

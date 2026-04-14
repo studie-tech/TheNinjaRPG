@@ -1771,7 +1771,7 @@ export const initiateBattle = async (
       }
     }
 
-    // XP Bracket restrictions (replaces ±15 level check, issue #724)
+    // XP Bracket restrictions — same-bracket-only PvP with immunity lift and war-participant exemptions
     if (battleType === "COMBAT" && userIds.includes(user.userId)) {
       const now = new Date();
       const nonAiTargets = users.filter((u) => targetIds.includes(u.userId) && !u.isAi);
@@ -1814,6 +1814,8 @@ export const initiateBattle = async (
         );
 
         if (crossBracketTarget) {
+          const targetBracket = getExpBracket(crossBracketTarget.experience);
+
           // Guard 4 (allow): Target's bracket immunity is lifted (they attacked someone recently)
           const targetImmunityLifted =
             crossBracketTarget.bracketImmunityLiftedUntil > now;
@@ -1836,7 +1838,7 @@ export const initiateBattle = async (
             ) {
               return {
                 success: false,
-                message: `Cannot attack ${crossBracketTarget.username} — different combat bracket (${getExpBracket(user.experience)} vs ${getExpBracket(crossBracketTarget.experience)})`,
+                message: `Cannot attack ${crossBracketTarget.username} — different combat bracket (${attackerBracket} vs ${targetBracket})`,
               };
             }
           }
