@@ -32,6 +32,7 @@ import type {
   ItemVariant,
   UserItem,
   UserItemWithRelations,
+  UserItemWithVariants,
 } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm2 from "@/layout/Confirm2";
@@ -1184,14 +1185,6 @@ const Equip: React.FC<EquipProps> = (props) => {
       )}
     </button>
   );
-};
-
-/**
- * Type for user items that include variants on the nested item
- */
-type UserItemWithVariants = UserItemWithRelations & {
-  item: UserItemWithRelations["item"] & { variants: ItemVariant[] };
-  activeVariantId?: string | null;
 };
 
 /**

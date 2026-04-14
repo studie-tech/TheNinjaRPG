@@ -28,6 +28,7 @@ import ContentImageSelector from "@/layout/ContentImageSelector";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -243,6 +244,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
 
   const upsert = api.item.upsertItemVariant.useMutation({
     onSuccess: async (result) => {
+      showMutationToast(result);
       if (result.success) {
         await utils.item.getItemVariants.invalidate({ itemId });
         setShowForm(false);
@@ -252,10 +254,13 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
   });
 
   const remove = api.item.deleteItemVariant.useMutation({
-    onSuccess: async () => {
-      await utils.item.getItemVariants.invalidate({ itemId });
-      setEditingVariant(null);
-      setShowForm(false);
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      if (result.success) {
+        await utils.item.getItemVariants.invalidate({ itemId });
+        setEditingVariant(null);
+        setShowForm(false);
+      }
     },
   });
 
