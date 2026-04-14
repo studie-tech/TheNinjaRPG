@@ -457,6 +457,13 @@ export const itemRouter = createTRPCRouter({
   getUserItems: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get all user items" } })
     .query(async ({ ctx }) => {
+      return await fetchUserItems(ctx.drizzle, ctx.userId);
+    }),
+  getUserItemsWithVariants: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get all user items including variant data" },
+    })
+    .query(async ({ ctx }) => {
       return await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId);
     }),
   // Get all variants for an item
@@ -619,12 +626,20 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ variantId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const [userResult, variant] = await Promise.all([
+      // Query — ownership check joins userItem→itemVariant in parallel (variantId known upfront)
+      const [userResult, variant, ownershipRows] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         ctx.drizzle.query.itemVariant.findFirst({
           where: eq(itemVariant.id, input.variantId),
         }),
+        ctx.drizzle
+          .select({ id: userItem.id })
+          .from(userItem)
+          .innerJoin(itemVariant, eq(userItem.itemId, itemVariant.itemId))
+          .where(
+            and(eq(userItem.userId, ctx.userId), eq(itemVariant.id, input.variantId)),
+          )
+          .limit(1),
       ]);
       const user = userResult.user;
 
@@ -636,6 +651,7 @@ export const itemRouter = createTRPCRouter({
           "This variant requires a Variant Token — use consumeVariantToken instead",
         );
       }
+      if (!ownershipRows.length) return errorResponse("You don't own this item");
 
       // Currency checks
       if (variant.costType === "MONEY" && user.money < variant.cost) {
@@ -774,13 +790,21 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ tokenUserItemId: z.string(), variantId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const [userResult, tokenItem, variant] = await Promise.all([
+      // Query — ownership check joins userItem→itemVariant in parallel (variantId known upfront)
+      const [userResult, tokenItem, variant, ownershipRows] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchUserItemWithVariants(ctx.drizzle, ctx.userId, input.tokenUserItemId),
         ctx.drizzle.query.itemVariant.findFirst({
           where: eq(itemVariant.id, input.variantId),
         }),
+        ctx.drizzle
+          .select({ id: userItem.id })
+          .from(userItem)
+          .innerJoin(itemVariant, eq(userItem.itemId, itemVariant.itemId))
+          .where(
+            and(eq(userItem.userId, ctx.userId), eq(itemVariant.id, input.variantId)),
+          )
+          .limit(1),
       ]);
       const user = userResult.user;
 
@@ -797,6 +821,7 @@ export const itemRouter = createTRPCRouter({
       if (!hasVariantTokenEffect) {
         return errorResponse("This item is not a Variant Token");
       }
+      if (!ownershipRows.length) return errorResponse("You don't own this item");
 
       // Mutate — attempt insert first (idempotent via unique constraint)
       const insertResult = await ctx.drizzle

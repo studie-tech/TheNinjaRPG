@@ -73,9 +73,12 @@ export default function MyItems() {
   const utils = api.useUtils();
 
   // Data from DB
-  const { data: userItems, isFetching } = api.item.getUserItems.useQuery(undefined, {
-    enabled: !!userData,
-  });
+  const { data: userItems, isFetching } = api.item.getUserItemsWithVariants.useQuery(
+    undefined,
+    {
+      enabled: !!userData,
+    },
+  );
 
   // Mutations
   const { mutate: buyItemSlot, isPending } = api.blackmarket.buyItemSlot.useMutation({
@@ -92,7 +95,7 @@ export default function MyItems() {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.item.getUserItems.invalidate();
+          await utils.item.getUserItemsWithVariants.invalidate();
         }
       },
     });
@@ -102,7 +105,7 @@ export default function MyItems() {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.item.getUserItems.invalidate();
+          await utils.item.getUserItemsWithVariants.invalidate();
           await utils.profile.getUser.invalidate();
         }
       },
@@ -112,7 +115,7 @@ export default function MyItems() {
     api.item.mergeAllStacks.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        await utils.item.getUserItems.invalidate();
+        await utils.item.getUserItemsWithVariants.invalidate();
       },
       onError: (error) => {
         showMutationToast({
@@ -128,7 +131,7 @@ export default function MyItems() {
       onSuccess: async (data) => {
         showMutationToast(data);
         await Promise.all([
-          utils.item.getUserItems.invalidate(),
+          utils.item.getUserItemsWithVariants.invalidate(),
           utils.profile.getUser.invalidate(),
           utils.item.getItemLoadouts.invalidate(),
         ]);
@@ -592,7 +595,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   const { mutate: merge, isPending: isMerging } = api.item.mergeStacks.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await utils.item.getUserItems.invalidate();
+      await utils.item.getUserItemsWithVariants.invalidate();
     },
     onSettled,
   });
@@ -612,7 +615,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       }
       if (data.success) {
         await utils.profile.getUser.invalidate();
-        await utils.item.getUserItems.invalidate();
+        await utils.item.getUserItemsWithVariants.invalidate();
         await utils.bloodline.getItemRolls.invalidate();
       }
     },
@@ -623,7 +626,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.item.getUserItems.invalidate();
+        await utils.item.getUserItemsWithVariants.invalidate();
       }
     },
     onSettled,
@@ -633,7 +636,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.item.getUserItems.invalidate();
+        await utils.item.getUserItemsWithVariants.invalidate();
       }
     },
     onSettled,
@@ -644,7 +647,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.item.getUserItems.invalidate();
+          await utils.item.getUserItemsWithVariants.invalidate();
           setIsSplitDialogOpen(false);
           setQuantityToKeep("");
         }
@@ -658,7 +661,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         showMutationToast(data);
         if (data.success) {
           setIsRepairModalOpen(false);
-          await utils.item.getUserItems.invalidate();
+          await utils.item.getUserItemsWithVariants.invalidate();
           await utils.profile.getUser.invalidate();
         }
       },
@@ -970,7 +973,7 @@ const Character: React.FC<CharacterProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.item.getUserItems.invalidate();
+        await utils.item.getUserItemsWithVariants.invalidate();
       }
     },
     onSettled: () => {
@@ -987,7 +990,7 @@ const Character: React.FC<CharacterProps> = (props) => {
         showMutationToast(data);
         if (data.success) {
           setIsRepairModalOpen(false);
-          await utils.item.getUserItems.invalidate();
+          await utils.item.getUserItemsWithVariants.invalidate();
           await utils.profile.getUser.invalidate();
         }
       },
@@ -1237,7 +1240,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
       if (result.success) {
         await Promise.all([
           utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
-          utils.item.getUserItems.invalidate(),
+          utils.item.getUserItemsWithVariants.invalidate(),
         ]);
       }
     },
@@ -1247,7 +1250,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
     onSuccess: async (result) => {
       showMutationToast(result);
       if (result.success) {
-        await utils.item.getUserItems.invalidate();
+        await utils.item.getUserItemsWithVariants.invalidate();
         setIsOpen(false);
         onClose();
       }
@@ -1288,7 +1291,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
           />
           <p className="mt-1 text-center font-medium text-xs">Base (Free)</p>
           {!activeVariantId && (
-            <p className="text-center text-xs text-primary">Active</p>
+            <p className="text-center text-primary text-xs">Active</p>
           )}
         </button>
 
@@ -1320,7 +1323,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
 
               {isUnlocked ? (
                 isActive ? (
-                  <p className="text-center text-xs text-primary">Active</p>
+                  <p className="text-center text-primary text-xs">Active</p>
                 ) : (
                   <Button
                     size="sm"
