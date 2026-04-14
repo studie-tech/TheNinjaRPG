@@ -254,6 +254,8 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
   const remove = api.item.deleteItemVariant.useMutation({
     onSuccess: async () => {
       await utils.item.getItemVariants.invalidate({ itemId });
+      setEditingVariant(null);
+      setShowForm(false);
     },
   });
 

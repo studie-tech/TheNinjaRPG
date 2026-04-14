@@ -1,17 +1,4 @@
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNull,
-  like,
-  lte,
-  ne,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -512,30 +499,39 @@ export const itemRouter = createTRPCRouter({
       ),
     )
     .query(async ({ ctx, input }) => {
-      const variants = await ctx.drizzle.query.itemVariant.findMany({
-        where: eq(itemVariant.itemId, input.itemId),
-      });
-      if (variants.length === 0) return [];
-      const variantIds = variants.map((v) => v.id);
-      return await ctx.drizzle.query.userItemVariant.findMany({
-        where: and(
-          eq(userItemVariant.userId, ctx.userId),
-          inArray(userItemVariant.variantId, variantIds),
-        ),
-      });
+      return ctx.drizzle
+        .select({
+          id: userItemVariant.id,
+          userId: userItemVariant.userId,
+          variantId: userItemVariant.variantId,
+          createdAt: userItemVariant.createdAt,
+        })
+        .from(userItemVariant)
+        .innerJoin(itemVariant, eq(userItemVariant.variantId, itemVariant.id))
+        .where(
+          and(
+            eq(userItemVariant.userId, ctx.userId),
+            eq(itemVariant.itemId, input.itemId),
+          ),
+        );
     }),
   // Admin: create or update a variant
   upsertItemVariant: protectedProcedure
     .input(z.object({ itemId: z.string(), variant: ItemVariantValidator }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [user, existing] = await Promise.all([
+      const [user, existing, parentItem] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.itemVariant.findMany({
           where: eq(itemVariant.itemId, input.itemId),
         }),
+        ctx.drizzle.query.item.findFirst({
+          where: eq(item.id, input.itemId),
+          columns: { id: true },
+        }),
       ]);
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      if (!parentItem) return errorResponse("Item not found");
       if (!input.variant.id && existing.length >= MAX_ITEM_VARIANTS) {
         return errorResponse(`Items can have at most ${MAX_ITEM_VARIANTS} variants`);
       }
@@ -604,6 +600,7 @@ export const itemRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      // Step 1: remove user unlock records and clear active variant references in parallel
       await Promise.all([
         ctx.drizzle
           .delete(userItemVariant)
@@ -612,8 +609,9 @@ export const itemRouter = createTRPCRouter({
           .update(userItem)
           .set({ activeVariantId: null })
           .where(eq(userItem.activeVariantId, input.variantId)),
-        ctx.drizzle.delete(itemVariant).where(eq(itemVariant.id, input.variantId)),
       ]);
+      // Step 2: delete the variant row itself (after FK dependents are cleared)
+      await ctx.drizzle.delete(itemVariant).where(eq(itemVariant.id, input.variantId));
       return { success: true, message: "Variant deleted" };
     }),
   // Purchase a variant with in-game currency
@@ -686,29 +684,41 @@ export const itemRouter = createTRPCRouter({
       }
 
       // Then insert unlock — idempotent via unique constraint
-      const insertResult = await ctx.drizzle
-        .insert(userItemVariant)
-        .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
-        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+      const refundCurrency = async () => {
+        if (variant.cost <= 0) return;
+        const refundSet =
+          variant.costType === "MONEY"
+            ? { money: sql`${userData.money} + ${variant.cost}` }
+            : variant.costType === "REPUTATION"
+              ? {
+                  reputationPoints: sql`${userData.reputationPoints} + ${variant.cost}`,
+                }
+              : variant.costType === "SEICHI_SILVER"
+                ? { seichiSilver: sql`${userData.seichiSilver} + ${variant.cost}` }
+                : {
+                    villagePrestige: sql`${userData.villagePrestige} + ${variant.cost}`,
+                  };
+        await ctx.drizzle
+          .update(userData)
+          .set(refundSet)
+          .where(eq(userData.userId, ctx.userId));
+      };
+
+      let insertResult = { rowsAffected: -1 };
+      try {
+        insertResult = await ctx.drizzle
+          .insert(userItemVariant)
+          .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
+          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+      } catch {
+        // Unexpected DB error — refund the deducted currency
+        await refundCurrency();
+        return errorResponse("Failed to unlock variant — please try again");
+      }
 
       if (insertResult.rowsAffected === 0) {
         // Already unlocked — refund the currency deducted above
-        if (variant.cost > 0) {
-          const refundSet: Record<string, unknown> = {};
-          if (variant.costType === "MONEY") {
-            refundSet.money = sql`${userData.money} + ${variant.cost}`;
-          } else if (variant.costType === "REPUTATION") {
-            refundSet.reputationPoints = sql`${userData.reputationPoints} + ${variant.cost}`;
-          } else if (variant.costType === "SEICHI_SILVER") {
-            refundSet.seichiSilver = sql`${userData.seichiSilver} + ${variant.cost}`;
-          } else {
-            refundSet.villagePrestige = sql`${userData.villagePrestige} + ${variant.cost}`;
-          }
-          await ctx.drizzle
-            .update(userData)
-            .set(refundSet)
-            .where(eq(userData.userId, ctx.userId));
-        }
+        await refundCurrency();
         return errorResponse("Variant already unlocked");
       }
 
