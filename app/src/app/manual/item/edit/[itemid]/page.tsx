@@ -2,7 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FileMinus, FilePlus } from "lucide-react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import React, { use, useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
@@ -27,6 +26,7 @@ import ContentBox from "@/layout/ContentBox";
 import { ItemHelper } from "@/layout/ContentHelp";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
+import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { canChangeContent } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";

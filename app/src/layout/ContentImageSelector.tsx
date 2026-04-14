@@ -45,6 +45,12 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Tracks the URL of the most recently uploaded image so the dialog preview
+  // reflects the upload immediately (before the parent re-renders with the new prop).
+  const [localImageUrl, setLocalImageUrl] = useState<string | null>(null);
+
+  // The displayed URL: prefer the locally-tracked upload, then the prop from the parent.
+  const displayUrl = localImageUrl ?? imageUrl;
 
   // Form for the prompt inputs
   const promptForm = useForm<PromptFormSchema>({
@@ -61,6 +67,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
     {
       onSuccess: async (data) => {
         if (data.success && data.url) {
+          setLocalImageUrl(data.url);
           onUploadComplete(data.url);
           await utils.avatar.getHistoricalAvatars.invalidate();
         }
@@ -112,11 +119,17 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
       <Label>{label}</Label>
       <br />
 
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={(open) => {
+          if (!open) setLocalImageUrl(null);
+          setIsModalOpen(open);
+        }}
+      >
         <DialogTrigger asChild>
           <div className="group relative cursor-pointer">
             <AvatarImage
-              href={imageUrl ?? IMG_AVATAR_DEFAULT}
+              href={displayUrl ?? IMG_AVATAR_DEFAULT}
               alt={`${id}-avatar`}
               size={100}
               hover_effect={true}
@@ -144,7 +157,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
               {/* Left side - Image */}
               <div className="flex flex-shrink-0 flex-col items-center">
                 <AvatarImage
-                  href={imageUrl ?? IMG_AVATAR_DEFAULT}
+                  href={displayUrl ?? IMG_AVATAR_DEFAULT}
                   alt={`${id}-avatar`}
                   size={300}
                   hover_effect={false}
@@ -167,6 +180,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                       }
                       const url = serverData?.fileUrl;
                       if (url) {
+                        setLocalImageUrl(url);
                         onUploadComplete(url);
                         setIsModalOpen(false);
                       }
@@ -269,7 +283,10 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
             <HistoricalAiAvatar
               relationId={id}
               contentType={type}
-              onUpdate={onUploadComplete}
+              onUpdate={(url) => {
+                setLocalImageUrl(url);
+                onUploadComplete(url);
+              }}
               size={size}
             />
           </DialogContent>
