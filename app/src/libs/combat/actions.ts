@@ -528,7 +528,7 @@ export const userItemToAction = (
     id: item.id,
     name: item.name,
     image: item.image,
-    battleDescription: item.battleDescription,
+    battleDescription: useritem.variantBattleDescription ?? item.battleDescription,
     type: "item" as const,
     target: item.target,
     method: item.method,
