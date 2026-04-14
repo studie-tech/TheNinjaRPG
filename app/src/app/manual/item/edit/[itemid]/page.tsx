@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import React, { use, useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import ChatInputField from "@/layout/ChatInputField";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import { ItemHelper } from "@/layout/ContentHelp";
+import ContentImageSelector from "@/layout/ContentImageSelector";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
 import { canChangeContent } from "@/utils/permissions";
@@ -287,6 +288,8 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingVariant, form]);
 
+  const imageValue = useWatch({ control: form.control, name: "image" });
+
   const onSubmit = form.handleSubmit((data) => {
     upsert.mutate({ itemId, variant: data });
   });
@@ -456,22 +459,27 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
             </div>
           </div>
           <div>
-            <label htmlFor="variant-image" className="font-medium text-sm">
-              Image URL
-            </label>
-            <Input
-              id="variant-image"
-              {...form.register("image")}
-              placeholder="https://utfs.io/..."
+            <ContentImageSelector
+              label="Image"
+              imageUrl={imageValue || null}
+              id={editingVariant?.id ?? itemId}
+              prompt="Item variant image"
+              allowImageUpload={true}
+              type="item"
+              onUploadComplete={(url) => {
+                form.setValue("image", url, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }}
+              size="square"
+              maxDim={256}
             />
             {form.formState.errors.image && (
               <p className="mt-1 text-destructive text-xs">
                 {form.formState.errors.image.message}
               </p>
             )}
-            <p className="mt-1 text-muted-foreground text-xs">
-              Upload via UploadThing and paste the URL here
-            </p>
           </div>
           <div>
             <label htmlFor="variant-description" className="font-medium text-sm">
