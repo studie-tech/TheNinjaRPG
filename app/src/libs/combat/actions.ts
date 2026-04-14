@@ -526,8 +526,8 @@ export const userItemToAction = (
   if (!item) throw new Error(`Item not found: ${useritem.itemId}`);
   return {
     id: item.id,
-    name: item.name,
-    image: item.image,
+    name: useritem.variantName ?? item.name,
+    image: useritem.variantImage ?? item.image,
     battleDescription: useritem.variantBattleDescription ?? item.battleDescription,
     type: "item" as const,
     target: item.target,

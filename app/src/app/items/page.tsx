@@ -1070,6 +1070,11 @@ const Character: React.FC<CharacterProps> = (props) => {
             <ItemWithEffects
               item={{
                 ...useritem.item,
+                image: getItemDisplayImage(useritem as UserItemWithVariants),
+                name: getItemDisplayName(useritem as UserItemWithVariants),
+                description: getItemDisplayDescription(
+                  useritem as UserItemWithVariants,
+                ),
                 imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
                 curDurability: useritem.durability,
               }}
