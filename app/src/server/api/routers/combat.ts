@@ -1046,7 +1046,7 @@ export const combatRouter = createTRPCRouter({
               updatedAt: now,
               storedAtHome: false,
               isInAuction: false,
-              activeVariantId: null,
+              activeVariantId: ref.activeVariantId ?? null,
               craftingFinishedAt: null,
             };
           })
@@ -2944,7 +2944,7 @@ export const processUsersForBattle = async (
         village: true,
         items: {
           with: {
-            item: true,
+            item: { with: { variants: true } },
             imbuements: {
               with: { item: true },
               where: (imbuements) => lt(imbuements.craftingFinishedAt, new Date()),
