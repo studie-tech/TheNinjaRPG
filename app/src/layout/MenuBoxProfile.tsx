@@ -424,10 +424,7 @@ const MenuBoxProfile: React.FC = () => {
                     />
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>
-                  Bracket immunity lifted — any player can attack you regardless of XP
-                  bracket
-                </TooltipContent>
+                <TooltipContent>Bracket Immunity Lifted</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
