@@ -2280,7 +2280,7 @@ export const fetchUserItemsWithVariants = async (
   const useritems = await client.query.userItem.findMany({
     where: and(eq(userItem.userId, userId)),
     with: {
-      item: { with: { variants: true } },
+      item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } },
       imbuements: { with: { item: true } },
     },
   });
