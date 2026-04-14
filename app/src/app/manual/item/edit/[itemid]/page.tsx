@@ -333,7 +333,11 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        setEditingVariant(v);
+                        setEditingVariant({
+                          ...v,
+                          description: v.description ?? undefined,
+                          battleDescription: v.battleDescription ?? undefined,
+                        });
                         setShowForm(true);
                       }}
                     >
