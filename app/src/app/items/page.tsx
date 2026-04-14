@@ -60,7 +60,6 @@ import {
 import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
-import sanitize from "@/utils/sanitize";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { displayCostType } from "@/validators/item";
 
@@ -1334,8 +1333,8 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
               {v.description && (
                 <div
                   className="mt-0.5 text-center text-muted-foreground text-xs"
-                  // biome-ignore lint/security/noDangerouslySetInnerHtml: admin-entered content is sanitized before rendering
-                  dangerouslySetInnerHTML={{ __html: sanitize(v.description) }}
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: content is sanitized server-side before storage
+                  dangerouslySetInnerHTML={{ __html: v.description }}
                 />
               )}
 
