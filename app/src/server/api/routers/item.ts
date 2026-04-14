@@ -846,13 +846,19 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("Token item was modified concurrently — please try again");
       }
 
-      // Insert unlock — idempotent via unique constraint; no rollback needed since
-      // the token is already consumed regardless of this result. The pre-check above
-      // handles the stale-state path so rowsAffected === 0 here is a narrow race.
-      await ctx.drizzle
-        .insert(userItemVariant)
-        .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
-        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+      // Insert unlock — idempotent via unique constraint. Token is already consumed
+      // at this point; a DB error here is surfaced to the user so they can contact
+      // support (variant not unlocked, token gone — rare but handled).
+      try {
+        await ctx.drizzle
+          .insert(userItemVariant)
+          .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
+          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+      } catch {
+        return errorResponse(
+          "Token consumed but variant unlock failed — please contact support",
+        );
+      }
 
       return {
         success: true,
