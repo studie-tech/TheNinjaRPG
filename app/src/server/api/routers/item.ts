@@ -516,6 +516,7 @@ export const itemRouter = createTRPCRouter({
           columns: { id: true },
         }),
       ]);
+      if (user.isBanned) return errorResponse("You are banned");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (!parentItem) return errorResponse("Item not found");
       if (!input.variant.id && existing.length >= MAX_ITEM_VARIANTS) {
@@ -595,6 +596,7 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned) return errorResponse("You are banned");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       // Step 1: remove user unlock records and clear active variant references in parallel
       await Promise.all([

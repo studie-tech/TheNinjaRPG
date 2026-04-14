@@ -178,17 +178,16 @@ export const getItemDisplayBattleDescription = (
       }
     | { battleDescription: string },
 ): string => {
-  if ("variantBattleDescription" in source) {
-    // Return pre-resolved value if present; empty string if explicitly null/undefined
-    // (guards against fall-through to the battleDescription cast below).
-    return source.variantBattleDescription ?? "";
+  if ("variantBattleDescription" in source && source.variantBattleDescription != null) {
+    return source.variantBattleDescription;
   }
   if ("activeVariantId" in source && source.activeVariantId) {
     const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
     if (variant?.battleDescription != null) return variant.battleDescription;
   }
   if ("item" in source) return source.item.battleDescription;
-  return (source as { battleDescription: string }).battleDescription;
+  if ("battleDescription" in source) return source.battleDescription;
+  return "";
 };
 
 // =============================================================================

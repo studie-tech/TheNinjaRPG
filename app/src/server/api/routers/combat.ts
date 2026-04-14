@@ -1630,6 +1630,14 @@ export const initiateBattle = async (
     for (const user of fetchedUsers) {
       const userLoadout = info.forceLoadouts.find((l) => l.userId === user.userId);
       if (userLoadout) {
+        // Pre-group user items by itemId into queues so each slot gets its own
+        // UserItem (and thus its own activeVariantId) when duplicates exist.
+        const itemQueues = new Map<string, typeof user.items>();
+        for (const ui of user.items) {
+          const q = itemQueues.get(ui.itemId) ?? [];
+          q.push(ui);
+          itemQueues.set(ui.itemId, q);
+        }
         user.items = loadoutItems
           .filter((item) =>
             [userLoadout.loadout.weaponIds, userLoadout.loadout.consumableIds]
@@ -1637,7 +1645,8 @@ export const initiateBattle = async (
               .includes(item.id),
           )
           .map((item) => {
-            const existingItem = user.items.find((ui) => ui.itemId === item.id);
+            const queue = itemQueues.get(item.id) ?? [];
+            const existingItem = queue.shift();
             return {
               id: nanoid(),
               createdAt: new Date(),
