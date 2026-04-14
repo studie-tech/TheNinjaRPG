@@ -65,3 +65,24 @@ const COST_TYPE_LABELS: Record<(typeof VARIANT_COST_TYPES)[number], string> = {
 /** Returns the human-readable label for a variant cost type. */
 export const displayCostType = (type: (typeof VARIANT_COST_TYPES)[number]): string =>
   COST_TYPE_LABELS[type];
+
+export const ItemVariantResponseSchema = z.object({
+  id: z.string(),
+  itemId: z.string(),
+  name: z.string(),
+  image: z.string(),
+  costType: z.enum(VARIANT_COST_TYPES),
+  cost: z.number(),
+  order: z.number(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  description: z.string().nullish(),
+  battleDescription: z.string().nullish(),
+});
+
+export const UserUnlockedVariantResponseSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  variantId: z.string(),
+  createdAt: z.date(),
+});

@@ -1359,6 +1359,10 @@ export const userItemVariant = mysqlTable(
 export type UserItemVariant = InferSelectModel<typeof userItemVariant>;
 
 export const userItemVariantRelations = relations(userItemVariant, ({ one }) => ({
+  user: one(userData, {
+    fields: [userItemVariant.userId],
+    references: [userData.userId],
+  }),
   variant: one(itemVariant, {
     fields: [userItemVariant.variantId],
     references: [itemVariant.id],
@@ -2568,6 +2572,10 @@ export type ItemSlot = UserItem["equipped"];
 export type UserItemWithItem = UserItem & { item: Item };
 export type UserItemWithRelations = UserItem & {
   item: Item & { variants?: ItemVariant[] };
+  imbuements: (UserItemImbuement & { item: Item })[];
+};
+export type UserItemWithVariants = UserItem & {
+  item: Item & { variants: ItemVariant[] };
   imbuements: (UserItemImbuement & { item: Item })[];
 };
 

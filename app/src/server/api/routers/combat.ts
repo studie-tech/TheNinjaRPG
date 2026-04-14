@@ -1636,23 +1636,26 @@ export const initiateBattle = async (
               .flat()
               .includes(item.id),
           )
-          .map((item) => ({
-            id: nanoid(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            userId: user.userId,
-            itemId: item.id,
-            quantity: 1,
-            equipped: "ITEM_1" as const,
-            item: { ...item, variants: [] },
-            storedAtHome: false,
-            craftingFinishedAt: null,
-            isInAuction: false,
-            activeVariantId: null,
-            imbuements: [],
-            dropChancePerc: 0,
-            durability: 100,
-          }));
+          .map((item) => {
+            const existingItem = user.items.find((ui) => ui.itemId === item.id);
+            return {
+              id: nanoid(),
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              userId: user.userId,
+              itemId: item.id,
+              quantity: 1,
+              equipped: "ITEM_1" as const,
+              item: { ...item, variants: existingItem?.item?.variants ?? [] },
+              storedAtHome: false,
+              craftingFinishedAt: null,
+              isInAuction: false,
+              activeVariantId: existingItem?.activeVariantId ?? null,
+              imbuements: [],
+              dropChancePerc: 0,
+              durability: 100,
+            };
+          });
         user.jutsus = loadoutJutsus
           .filter((jutsu) => userLoadout.loadout.jutsuIds.includes(jutsu.id))
           .map((jutsu) => ({
