@@ -47,5 +47,7 @@ export const ItemVariantValidator = z.object({
   costType: z.enum(VARIANT_COST_TYPES),
   cost: z.coerce.number().int().min(0),
   order: z.coerce.number().int().min(1).max(MAX_ITEM_VARIANTS),
+  description: z.string().optional(),
+  battleDescription: z.string().optional(),
 });
 export type ZodItemVariantType = z.infer<typeof ItemVariantValidator>;
