@@ -29,47 +29,59 @@ function createSelectChain<T>(rows: T[]) {
 }
 
 describe("runStaleShrineLobbyCleanup", () => {
-  it("deletes mpvpBattleQueue before children, gating child cleanup on the deleted ID set", async () => {
+  it("deletes children before parent, both gated by isNull(battleId) subquery", async () => {
     const staleLobbies = createSelectChain([{ id: "lobby-1" }, { id: "lobby-2" }]);
-    // deletedUsersSubquery builder — not awaited, used as inArray subquery
-    const deletedUsersChain = {
+    // unclaimedSubquery builder — not awaited
+    const unclaimedChain = {
       from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({ __deletedUsersSubquery: true }),
+        where: vi.fn().mockReturnValue({ __unclaimedSubquery: true }),
+      }),
+    };
+    // unclaimedUsersSubquery builder — not awaited
+    const unclaimedUsersChain = {
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ __unclaimedUsersSubquery: true }),
       }),
     };
     const updateWhere = vi.fn().mockResolvedValue({ rowsAffected: 2 });
     const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
-    const deleteLobbiesWhere = vi.fn().mockResolvedValue({ rowsAffected: 2 });
     const deleteLobbyUsersWhere = vi.fn().mockResolvedValue({ rowsAffected: 3 });
+    const deleteLobbiesWhere = vi.fn().mockResolvedValue({ rowsAffected: 2 });
 
     const db = {
       select: vi
         .fn()
-        .mockReturnValueOnce(staleLobbies.chain)    // 1: initial stale lobby fetch (awaited)
-        .mockReturnValueOnce(deletedUsersChain),    // 2: deletedUsersSubquery (not awaited)
+        .mockReturnValueOnce(staleLobbies.chain)  // 1: initial stale lobby fetch (awaited)
+        .mockReturnValueOnce(unclaimedChain)       // 2: unclaimedSubquery (not awaited)
+        .mockReturnValueOnce(unclaimedUsersChain), // 3: unclaimedUsersSubquery (not awaited)
       update: vi.fn().mockReturnValue({ set: updateSet }),
       delete: vi
         .fn()
-        .mockReturnValueOnce({ where: deleteLobbiesWhere })   // 1st: mpvpBattleQueue (parent gate)
-        .mockReturnValueOnce({ where: deleteLobbyUsersWhere }),// 2nd: mpvpBattleUser (children)
+        .mockReturnValueOnce({ where: deleteLobbyUsersWhere }) // 1st: mpvpBattleUser (children)
+        .mockReturnValueOnce({ where: deleteLobbiesWhere }),   // 2nd: mpvpBattleQueue (parent)
     };
 
     const result = await runStaleShrineLobbyCleanup(new Date("2026-04-12T12:00:00.000Z"), db);
 
     expect(result).toEqual({ lobbiesCleared: 2, usersReset: 2 });
 
-    // Parent queue must be deleted FIRST — this is the atomic gate
-    expect(db.delete).toHaveBeenNthCalledWith(1, mpvpBattleQueue);
-    expect(db.delete).toHaveBeenNthCalledWith(2, mpvpBattleUser);
+    // Children must be deleted BEFORE the parent — this is the correctness invariant.
+    // Deleting children first with the isNull(battleId) subquery ensures claimed
+    // lobbies are excluded; the parent delete then uses the same guard.
+    expect(db.delete).toHaveBeenNthCalledWith(1, mpvpBattleUser);
+    expect(db.delete).toHaveBeenNthCalledWith(2, mpvpBattleQueue);
 
-    // userData reset must target the correct table
     expect(db.update).toHaveBeenCalledWith(userData);
     expect(updateSet).toHaveBeenCalledWith({ status: "AWAKE" });
 
-    // Both child operations must execute
-    expect(deleteLobbiesWhere).toHaveBeenCalledTimes(1);
     expect(deleteLobbyUsersWhere).toHaveBeenCalledTimes(1);
+    expect(deleteLobbiesWhere).toHaveBeenCalledTimes(1);
     expect(updateWhere).toHaveBeenCalledTimes(1);
+
+    // Three select calls: initial fetch + two subquery builders (unclaimedSubquery,
+    // unclaimedUsersSubquery). Both subqueries re-check isNull(battleId) at
+    // execution time, preventing child cleanup of concurrently-claimed lobbies.
+    expect(db.select).toHaveBeenCalledTimes(3);
   });
 
   it("returns zero counts when no stale shrine lobbies exist", async () => {
@@ -85,24 +97,5 @@ describe("runStaleShrineLobbyCleanup", () => {
     expect(result).toEqual({ lobbiesCleared: 0, usersReset: 0 });
     expect(db.update).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalled();
-  });
-
-  it("returns zero counts when all candidate lobbies were claimed before the delete", async () => {
-    const staleLobbies = createSelectChain([{ id: "lobby-1" }]);
-    const deleteLobbiesWhere = vi.fn().mockResolvedValue({ rowsAffected: 0 });
-
-    const db = {
-      select: vi.fn().mockReturnValueOnce(staleLobbies.chain),
-      update: vi.fn(),
-      delete: vi.fn().mockReturnValueOnce({ where: deleteLobbiesWhere }),
-    };
-
-    const result = await runStaleShrineLobbyCleanup(new Date("2026-04-12T12:00:00.000Z"), db);
-
-    expect(result).toEqual({ lobbiesCleared: 0, usersReset: 0 });
-    expect(db.delete).toHaveBeenCalledWith(mpvpBattleQueue);
-    expect(db.update).not.toHaveBeenCalled();
-    // mpvpBattleUser must NOT be deleted when parent delete affected 0 rows
-    expect(db.delete).toHaveBeenCalledTimes(1);
   });
 });
