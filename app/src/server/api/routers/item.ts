@@ -545,6 +545,8 @@ export const itemRouter = createTRPCRouter({
             costType: input.variant.costType,
             cost: input.variant.cost,
             order: input.variant.order,
+            description: input.variant.description ?? null,
+            battleDescription: input.variant.battleDescription ?? null,
             updatedAt: new Date(),
           })
           .where(
@@ -562,6 +564,8 @@ export const itemRouter = createTRPCRouter({
           costType: input.variant.costType,
           cost: input.variant.cost,
           order: input.variant.order,
+          description: input.variant.description ?? null,
+          battleDescription: input.variant.battleDescription ?? null,
         });
       }
       return { success: true, message: "Variant saved" };
