@@ -309,7 +309,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
               <tr key={v.id} className="border-b">
                 <td className="py-1">{v.order}</td>
                 <td className="py-1">{v.name}</td>
-                <td className="py-1">{v.costType}</td>
+                <td className="py-1">{v.costType === "MONEY" ? "Ryo" : v.costType}</td>
                 <td className="py-1">{v.cost}</td>
                 <td className="py-1">
                   {v.image && (
@@ -421,7 +421,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                     <SelectContent>
                       {VARIANT_COST_TYPES.map((t) => (
                         <SelectItem key={t} value={t}>
-                          {t}
+                          {t === "MONEY" ? "Ryo" : t}
                         </SelectItem>
                       ))}
                     </SelectContent>
