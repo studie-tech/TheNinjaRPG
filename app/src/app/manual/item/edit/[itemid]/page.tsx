@@ -291,9 +291,10 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
       });
     }
     // variants?.length intentionally omitted: order is computed once at form-open time,
-    // not on every background refetch
+    // not on every background refetch. showForm is included so the default order
+    // re-computes when the blank editor opens with the latest variants count.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingVariant, form]);
+  }, [editingVariant, form, showForm]);
 
   const imageValue = useWatch({ control: form.control, name: "image" });
 

@@ -1303,7 +1303,7 @@ export const itemVariant = mysqlTable(
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     itemId: varchar("itemId", { length: 191 }).notNull(),
     name: varchar("name", { length: 191 }).notNull(),
-    image: varchar("image", { length: 191 }).notNull(),
+    image: varchar("image", { length: 512 }).notNull(),
     costType: mysqlEnum("costType", consts.VARIANT_COST_TYPES).notNull(),
     cost: int("cost").default(0).notNull(),
     order: smallint("order", { unsigned: true }).default(1).notNull(),

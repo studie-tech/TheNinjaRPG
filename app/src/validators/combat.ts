@@ -1059,6 +1059,7 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
   const hasNonCombatConsumeReward = data.effects.find(
     (e) => e.type === "noncombatconsumereward",
   );
+  const hasUnlockItemVariant = data.effects.find((e) => e.type === "unlockitemvariant");
 
   // Cost validation - exactly one cost type must be set
   const costTypes = [
@@ -1094,6 +1095,20 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
     }
     if (data.method !== "SINGLE") {
       addIssue(ctx, "Items with bloodline roll must have single method");
+    }
+  }
+  if (hasUnlockItemVariant) {
+    if (data.itemType !== "CONSUMABLE") {
+      addIssue(ctx, "Items with unlockitemvariant must be consumable.");
+    }
+    if (data.target !== "SELF") {
+      addIssue(ctx, "Items with unlockitemvariant must target self");
+    }
+    if (data.method !== "SINGLE") {
+      addIssue(ctx, "Items with unlockitemvariant must have single method");
+    }
+    if (!data.destroyOnUse) {
+      addIssue(ctx, "Items with unlockitemvariant must be destroyed on use");
     }
   }
 };

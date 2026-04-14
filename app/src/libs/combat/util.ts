@@ -168,6 +168,7 @@ export const getItemDisplayDescription = (
  */
 export const getItemDisplayBattleDescription = (
   source:
+    | { variantBattleDescription: string | null | undefined }
     | {
         activeVariantId?: string | null;
         item: {
@@ -177,12 +178,15 @@ export const getItemDisplayBattleDescription = (
       }
     | { battleDescription: string },
 ): string => {
+  if ("variantBattleDescription" in source && source.variantBattleDescription != null) {
+    return source.variantBattleDescription;
+  }
   if ("activeVariantId" in source && source.activeVariantId) {
     const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
     if (variant?.battleDescription != null) return variant.battleDescription;
   }
   if ("item" in source) return source.item.battleDescription;
-  return source.battleDescription;
+  return (source as { battleDescription: string }).battleDescription;
 };
 
 // =============================================================================

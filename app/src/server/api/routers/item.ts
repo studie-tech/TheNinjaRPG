@@ -559,10 +559,11 @@ export const itemRouter = createTRPCRouter({
           );
         if (result.rowsAffected === 0) return errorResponse("Variant not found");
       } else {
+        const newVariantId = nanoid();
         const insertResult = await ctx.drizzle
           .insert(itemVariant)
           .values({
-            id: nanoid(),
+            id: newVariantId,
             itemId: input.itemId,
             name: input.variant.name,
             image: input.variant.image,
@@ -575,6 +576,15 @@ export const itemRouter = createTRPCRouter({
           .onDuplicateKeyUpdate({ set: { id: sql`id` } });
         if (insertResult.rowsAffected === 0) {
           return errorResponse(`Order ${input.variant.order} is already taken`);
+        }
+        // Re-count after insert to close the TOCTOU window on MAX_ITEM_VARIANTS
+        const [countRow] = await ctx.drizzle
+          .select({ n: sql<number>`COUNT(*)` })
+          .from(itemVariant)
+          .where(eq(itemVariant.itemId, input.itemId));
+        if ((countRow?.n ?? 0) > MAX_ITEM_VARIANTS) {
+          await ctx.drizzle.delete(itemVariant).where(eq(itemVariant.id, newVariantId));
+          return errorResponse(`Items can have at most ${MAX_ITEM_VARIANTS} variants`);
         }
       }
       return { success: true, message: "Variant saved" };
@@ -802,17 +812,8 @@ export const itemRouter = createTRPCRouter({
       }
       if (!ownershipRows.length) return errorResponse("You don't own this item");
 
-      // Mutate — attempt insert first (idempotent via unique constraint)
-      const insertResult = await ctx.drizzle
-        .insert(userItemVariant)
-        .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
-        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-
-      if (insertResult.rowsAffected === 0) {
-        return errorResponse("Variant already unlocked");
-      }
-
-      // Consume token item with CAS guard on quantity
+      // Mutate — consume token first so a crash after this leaves the user
+      // without the token but without the unlock (safe-failure direction: retryable).
       const newQty = tokenItem.quantity - 1;
       const tokenResult = await (newQty <= 0
         ? ctx.drizzle
@@ -834,16 +835,18 @@ export const itemRouter = createTRPCRouter({
             ));
 
       if (tokenResult.rowsAffected !== 1) {
-        // Roll back the unlock we just inserted
-        await ctx.drizzle
-          .delete(userItemVariant)
-          .where(
-            and(
-              eq(userItemVariant.userId, ctx.userId),
-              eq(userItemVariant.variantId, input.variantId),
-            ),
-          );
         return errorResponse("Token item was modified concurrently — please try again");
+      }
+
+      // Insert unlock — idempotent via unique constraint; no rollback needed since
+      // the token is already consumed regardless of this result.
+      const insertResult = await ctx.drizzle
+        .insert(userItemVariant)
+        .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+
+      if (insertResult.rowsAffected === 0) {
+        return errorResponse("Variant already unlocked");
       }
 
       return {

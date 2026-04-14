@@ -937,6 +937,9 @@ const Character: React.FC<CharacterProps> = (props) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [showItemDetails, setShowItemDetails] = useState<boolean>(false);
   const [isRepairModalOpen, setIsRepairModalOpen] = useState<boolean>(false);
+  const [variantItem, setVariantItem] = useState<UserItemWithVariants | undefined>(
+    undefined,
+  );
 
   // The item on the current slot
 
@@ -1108,6 +1111,20 @@ const Character: React.FC<CharacterProps> = (props) => {
                       Use Repair Item
                     </Button>
                   )}
+                {((useritem as UserItemWithVariants).item.variants?.length ?? 0) >
+                  0 && (
+                  <Button
+                    variant="info"
+                    onClick={() => {
+                      const withVariants = useritem as UserItemWithVariants;
+                      if (withVariants.item.variants?.length) {
+                        setVariantItem(withVariants);
+                      }
+                    }}
+                  >
+                    Variants
+                  </Button>
+                )}
                 <div className="grow"></div>
               </div>
             )}
@@ -1127,6 +1144,14 @@ const Character: React.FC<CharacterProps> = (props) => {
           onRepairItem={mutateRepairItem}
           isPending={isUsingRepairItem}
         />
+        {/* Variant Modal */}
+        {variantItem && (
+          <ItemVariantModal
+            userItem={variantItem}
+            allUserItems={useritems}
+            onClose={() => setVariantItem(undefined)}
+          />
+        )}
       </div>
     </div>
   );
