@@ -55,6 +55,7 @@ import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
+import { displayCostType } from "@/validators/item";
 
 export default function MyItems() {
   // State
@@ -1341,7 +1342,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
                   onClick={() => purchase.mutate({ variantId: v.id })}
                   disabled={purchase.isPending}
                 >
-                  {`Buy: ${v.cost.toLocaleString()} ${v.costType === "MONEY" ? "Ryo" : v.costType}`}
+                  {`Buy: ${v.cost.toLocaleString()} ${displayCostType(v.costType)}`}
                 </Button>
               )}
             </div>

@@ -115,6 +115,10 @@ export const getItemDisplayImage = (
 /**
  * Returns the display name for a user item, preferring the active variant name if set.
  * Falls back to the base item name.
+ *
+ * Intended for inventory and shop UI where the full item+variants object is available.
+ * In combat, battle descriptions are pre-resolved into BattleUserItem.variantBattleDescription
+ * at initiateBattle time — do not call this during action processing.
  */
 export const getItemDisplayName = (
   source:
@@ -135,6 +139,9 @@ export const getItemDisplayName = (
 /**
  * Returns the display description for a user item, preferring the active variant description if set.
  * Falls back to the base item description.
+ *
+ * Intended for inventory and shop UI where the full item+variants object is available.
+ * In combat, use the pre-resolved BattleUserItem fields instead.
  */
 export const getItemDisplayDescription = (
   source:

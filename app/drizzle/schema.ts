@@ -2566,7 +2566,7 @@ export type UserItem = InferSelectModel<typeof userItem>;
 export type ItemSlot = UserItem["equipped"];
 export type UserItemWithItem = UserItem & { item: Item };
 export type UserItemWithRelations = UserItem & {
-  item: Item;
+  item: Item & { variants?: ItemVariant[] };
   imbuements: (UserItemImbuement & { item: Item })[];
 };
 

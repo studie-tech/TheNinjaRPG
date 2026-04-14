@@ -1048,6 +1048,7 @@ export const combatRouter = createTRPCRouter({
               storedAtHome: false,
               isInAuction: false,
               activeVariantId: ref.activeVariantId ?? null,
+              variantBattleDescription: ref.variantBattleDescription ?? null,
               craftingFinishedAt: null,
             };
           })
