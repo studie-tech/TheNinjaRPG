@@ -39,7 +39,7 @@ import {
   tagTypes,
 } from "@/validators/combat";
 import type { ZodItemVariantType } from "@/validators/item";
-import { ItemVariantValidator } from "@/validators/item";
+import { displayCostType, ItemVariantValidator } from "@/validators/item";
 
 export default function ItemEdit(props: { params: Promise<{ itemid: string }> }) {
   const params = use(props.params);
@@ -317,7 +317,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
               <tr key={v.id} className="border-b">
                 <td className="py-1">{v.order}</td>
                 <td className="py-1">{v.name}</td>
-                <td className="py-1">{v.costType === "MONEY" ? "Ryo" : v.costType}</td>
+                <td className="py-1">{displayCostType(v.costType)}</td>
                 <td className="py-1">{v.cost}</td>
                 <td className="py-1">
                   {v.image && (
@@ -433,7 +433,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                     <SelectContent>
                       {VARIANT_COST_TYPES.map((t) => (
                         <SelectItem key={t} value={t}>
-                          {t === "MONEY" ? "Ryo" : t}
+                          {displayCostType(t)}
                         </SelectItem>
                       ))}
                     </SelectContent>

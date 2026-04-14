@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
+  getItemDisplayBattleDescription,
+  getItemDisplayDescription,
   getItemDisplayImage,
   getItemDisplayName,
-  getItemDisplayDescription,
-  getItemDisplayBattleDescription,
 } from "@/libs/combat/util";
 
 describe("getItemDisplayImage", () => {
@@ -201,5 +201,50 @@ describe("getItemDisplayBattleDescription", () => {
       },
     };
     expect(getItemDisplayBattleDescription(source)).toBe("%user swings a blade");
+  });
+});
+
+// ── reconnect / hydratedItems pre-resolution helpers ─────────────────────────
+//
+// These tests verify the pre-resolution contract used by the combat reconnect
+// path (hydratedItems in performAction).  At initiateBattle time, the active
+// variant's battleDescription is resolved and stored on BattleUserItem as
+// variantBattleDescription.  When a player reconnects, hydratedItems rebuilds
+// each item ref from extraState — it must carry variantBattleDescription forward
+// rather than re-deriving it (extraState.items has no variants array).
+//
+// The helpers below are the resolution primitives; these tests confirm their
+// contract so that a regression in the helpers would surface immediately.
+
+describe("pre-resolution contract: getItemDisplayBattleDescription for reconnect", () => {
+  it("resolves variant battleDescription when variants are available (initiateBattle path)", () => {
+    // At initiateBattle, the full item+variants object is available.
+    const source = {
+      activeVariantId: "v1",
+      item: {
+        battleDescription: "%user swings a blade",
+        variants: [{ id: "v1", battleDescription: "%user swings the Crimson Blade" }],
+      },
+    };
+    expect(getItemDisplayBattleDescription(source)).toBe("%user swings the Crimson Blade");
+  });
+
+  it("returns base battleDescription when variants array is absent (extraState.items path)", () => {
+    // extraState.items stores plain Item objects with no variants.
+    // If the pre-resolved value is lost, this is the fallback the combat system sees.
+    const source = {
+      activeVariantId: "v1",
+      item: { battleDescription: "%user swings a blade" },
+    };
+    expect(getItemDisplayBattleDescription(source)).toBe("%user swings a blade");
+  });
+
+  it("pre-resolved value takes priority when passed as flat source (BattleUserItem simulation)", () => {
+    // Once variantBattleDescription is stored on BattleUserItem and used directly
+    // in userItemToAction, it bypasses the helper entirely. This test simulates
+    // the flat-object path that action processing uses.
+    const preResolved = "%user swings the Crimson Blade";
+    const source = { battleDescription: preResolved };
+    expect(getItemDisplayBattleDescription(source)).toBe(preResolved);
   });
 });

@@ -47,7 +47,13 @@ export const ItemVariantValidator = z.object({
   costType: z.enum(VARIANT_COST_TYPES),
   cost: z.coerce.number().int().min(0),
   order: z.coerce.number().int().min(1).max(MAX_ITEM_VARIANTS),
+  // .optional() (string | undefined) is correct here: the form treats absent fields as
+  // undefined, not null. The tRPC output schema uses .nullish() because MySQL returns SQL NULL.
   description: z.string().optional(),
   battleDescription: z.string().optional(),
 });
 export type ZodItemVariantType = z.infer<typeof ItemVariantValidator>;
+
+/** Returns the human-readable label for a variant cost type. */
+export const displayCostType = (type: (typeof VARIANT_COST_TYPES)[number]): string =>
+  type === "MONEY" ? "Ryo" : type;
