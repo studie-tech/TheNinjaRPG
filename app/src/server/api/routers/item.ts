@@ -62,7 +62,7 @@ import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedItemLoadouts } from "@/utils/paypal";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
-import sanitize from "@/utils/sanitize";
+import sanitize, { sanitizeVariantText } from "@/utils/sanitize";
 import type { QueryCondition } from "@/utils/typeutils";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { getStrucBoost } from "@/utils/village";
@@ -530,13 +530,13 @@ export const itemRouter = createTRPCRouter({
           `Order ${input.variant.order} is already used by "${orderConflict.name}"`,
         );
       }
-      // Sanitize admin-entered HTML to prevent tracking pixels / arbitrary markup
+      // Use the strict variant sanitizer (no img/iframe) to prevent tracking pixels
       // in the combat log (battleDescription is rendered via parseHtml for all viewers).
       const safeDescription = input.variant.description
-        ? sanitize(input.variant.description)
+        ? sanitizeVariantText(input.variant.description)
         : null;
       const safeBattleDescription = input.variant.battleDescription
-        ? sanitize(input.variant.battleDescription)
+        ? sanitizeVariantText(input.variant.battleDescription)
         : null;
 
       if (input.variant.id) {
@@ -618,7 +618,7 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query — ownership check joins userItem→itemVariant in parallel (variantId known upfront)
-      const [userResult, variant, ownershipRows] = await Promise.all([
+      const [userResult, variant, ownershipRows, existingUnlock] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         ctx.drizzle.query.itemVariant.findFirst({
           where: eq(itemVariant.id, input.variantId),
@@ -631,11 +631,18 @@ export const itemRouter = createTRPCRouter({
             and(eq(userItem.userId, ctx.userId), eq(itemVariant.id, input.variantId)),
           )
           .limit(1),
+        ctx.drizzle.query.userItemVariant.findFirst({
+          where: and(
+            eq(userItemVariant.userId, ctx.userId),
+            eq(userItemVariant.variantId, input.variantId),
+          ),
+        }),
       ]);
       const user = userResult.user;
 
       // Guards
       if (!user) return errorResponse("User not found");
+      if (user.isBanned) return errorResponse("You are banned");
       if (!variant) return errorResponse("Variant not found");
       if (variant.costType === "VARIANT_TOKEN") {
         return errorResponse(
@@ -643,6 +650,7 @@ export const itemRouter = createTRPCRouter({
         );
       }
       if (!ownershipRows.length) return errorResponse("You don't own this item");
+      if (existingUnlock) return errorResponse("Variant already unlocked");
 
       // Currency checks
       if (variant.costType === "MONEY" && user.money < variant.cost) {
@@ -680,53 +688,45 @@ export const itemRouter = createTRPCRouter({
               ? { seichiSilver: sql`${userData.seichiSilver} - ${variant.cost}` }
               : { villagePrestige: sql`${userData.villagePrestige} - ${variant.cost}` };
 
-      // Mutate — deduct currency first with CAS guard
-      const deductResult = await ctx.drizzle
-        .update(userData)
-        .set(currencySet)
-        .where(and(eq(userData.userId, ctx.userId), currencyWhere));
+      // Mutate — deduct currency first with CAS guard (skip for free variants)
+      if (variant.cost > 0) {
+        const deductResult = await ctx.drizzle
+          .update(userData)
+          .set(currencySet)
+          .where(and(eq(userData.userId, ctx.userId), currencyWhere));
 
-      if (variant.cost > 0 && deductResult.rowsAffected !== 1) {
-        return errorResponse("Insufficient funds — please refresh and try again");
+        if (deductResult.rowsAffected !== 1) {
+          return errorResponse("Insufficient funds — please refresh and try again");
+        }
       }
 
-      // Then insert unlock — idempotent via unique constraint
-      const refundCurrency = async () => {
-        if (variant.cost <= 0) return;
-        const refundSet =
-          variant.costType === "MONEY"
-            ? { money: sql`${userData.money} + ${variant.cost}` }
-            : variant.costType === "REPUTATION"
-              ? {
-                  reputationPoints: sql`${userData.reputationPoints} + ${variant.cost}`,
-                }
-              : variant.costType === "SEICHI_SILVER"
-                ? { seichiSilver: sql`${userData.seichiSilver} + ${variant.cost}` }
-                : {
-                    villagePrestige: sql`${userData.villagePrestige} + ${variant.cost}`,
-                  };
-        await ctx.drizzle
-          .update(userData)
-          .set(refundSet)
-          .where(eq(userData.userId, ctx.userId));
-      };
-
-      let insertResult = { rowsAffected: -1 };
+      // Insert unlock — pre-check above ensures this is not a duplicate.
+      // On unexpected DB error, refund if currency was deducted.
       try {
-        insertResult = await ctx.drizzle
+        await ctx.drizzle
           .insert(userItemVariant)
           .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
           .onDuplicateKeyUpdate({ set: { id: sql`id` } });
       } catch {
-        // Unexpected DB error — refund the deducted currency
-        await refundCurrency();
+        if (variant.cost > 0) {
+          const refundSet =
+            variant.costType === "MONEY"
+              ? { money: sql`${userData.money} + ${variant.cost}` }
+              : variant.costType === "REPUTATION"
+                ? {
+                    reputationPoints: sql`${userData.reputationPoints} + ${variant.cost}`,
+                  }
+                : variant.costType === "SEICHI_SILVER"
+                  ? { seichiSilver: sql`${userData.seichiSilver} + ${variant.cost}` }
+                  : {
+                      villagePrestige: sql`${userData.villagePrestige} + ${variant.cost}`,
+                    };
+          await ctx.drizzle
+            .update(userData)
+            .set(refundSet)
+            .where(eq(userData.userId, ctx.userId));
+        }
         return errorResponse("Failed to unlock variant — please try again");
-      }
-
-      if (insertResult.rowsAffected === 0) {
-        // Already unlocked — refund the currency deducted above
-        await refundCurrency();
-        return errorResponse("Variant already unlocked");
       }
 
       return { success: true, message: `Variant "${variant.name}" unlocked!` };
@@ -742,7 +742,8 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [ui, unlock] = await Promise.all([
+      const [user, ui, unlock] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItemWithVariants(ctx.drizzle, ctx.userId, input.userItemId),
         input.variantId
           ? ctx.drizzle.query.userItemVariant.findFirst({
@@ -755,6 +756,7 @@ export const itemRouter = createTRPCRouter({
       ]);
 
       // Guards
+      if (user.isBanned) return errorResponse("You are banned");
       if (!ui) return errorResponse("Item not found");
       if (input.variantId && !unlock) {
         return errorResponse("Variant not unlocked");
@@ -808,6 +810,7 @@ export const itemRouter = createTRPCRouter({
 
       // Guards
       if (!user) return errorResponse("User not found");
+      if (user.isBanned) return errorResponse("You are banned");
       if (!tokenItem) return errorResponse("Token item not found");
       if (!variant) return errorResponse("Variant not found");
       if (variant.costType !== "VARIANT_TOKEN") {
@@ -2313,7 +2316,7 @@ export const fetchUserItemWithVariants = async (
 ) => {
   return await client.query.userItem.findFirst({
     where: and(eq(userItem.userId, userId), eq(userItem.id, userItemId)),
-    with: { item: { with: { variants: true } } },
+    with: { item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } } },
   });
 };
 

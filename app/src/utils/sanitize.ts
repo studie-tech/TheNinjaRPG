@@ -43,6 +43,17 @@ const sanitize = (html: string) => sanitizeHtml(html, sanitizeOptions);
 
 export default sanitize;
 
+/**
+ * Strict sanitizer for variant description/battleDescription fields.
+ * Uses sanitize-html defaults (no img or iframe) to prevent tracking pixels
+ * when the text is rendered via dangerouslySetInnerHTML in the combat log.
+ */
+export const sanitizeVariantText = (html: string) =>
+  sanitizeHtml(html, {
+    allowedTags: sanitizeHtml.defaults.allowedTags,
+    allowedAttributes: sanitizeHtml.defaults.allowedAttributes,
+  });
+
 export const stripBlockquotes = (html: string) =>
   sanitizeHtml(html, {
     ...sanitizeOptions,
