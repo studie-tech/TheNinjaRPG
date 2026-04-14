@@ -1808,9 +1808,11 @@ export const initiateBattle = async (
       if (!isInWarTornSector) {
         const attackerBracket = getExpBracket(user.experience);
 
-        // Find first target in a different bracket
+        // Find first target in a lower bracket — protection is one-directional:
+        // higher-bracket attackers cannot target lower-bracket players (without exemption),
+        // but lower-bracket players may freely attack higher-bracket players.
         const crossBracketTarget = nonAiTargets.find(
-          (t) => getExpBracket(t.experience) !== attackerBracket,
+          (t) => getExpBracket(t.experience) < attackerBracket,
         );
 
         if (crossBracketTarget) {
