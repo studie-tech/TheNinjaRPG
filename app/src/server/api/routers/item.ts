@@ -76,6 +76,7 @@ import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedItemLoadouts } from "@/utils/paypal";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
+import sanitize from "@/utils/sanitize";
 import type { QueryCondition } from "@/utils/typeutils";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { getStrucBoost } from "@/utils/village";
@@ -546,8 +547,17 @@ export const itemRouter = createTRPCRouter({
           `Order ${input.variant.order} is already used by "${orderConflict.name}"`,
         );
       }
+      // Sanitize admin-entered HTML to prevent tracking pixels / arbitrary markup
+      // in the combat log (battleDescription is rendered via parseHtml for all viewers).
+      const safeDescription = input.variant.description
+        ? sanitize(input.variant.description)
+        : null;
+      const safeBattleDescription = input.variant.battleDescription
+        ? sanitize(input.variant.battleDescription)
+        : null;
+
       if (input.variant.id) {
-        await ctx.drizzle
+        const result = await ctx.drizzle
           .update(itemVariant)
           .set({
             name: input.variant.name,
@@ -555,8 +565,8 @@ export const itemRouter = createTRPCRouter({
             costType: input.variant.costType,
             cost: input.variant.cost,
             order: input.variant.order,
-            description: input.variant.description ?? null,
-            battleDescription: input.variant.battleDescription ?? null,
+            description: safeDescription,
+            battleDescription: safeBattleDescription,
             updatedAt: new Date(),
           })
           .where(
@@ -565,18 +575,25 @@ export const itemRouter = createTRPCRouter({
               eq(itemVariant.itemId, input.itemId),
             ),
           );
+        if (result.rowsAffected === 0) return errorResponse("Variant not found");
       } else {
-        await ctx.drizzle.insert(itemVariant).values({
-          id: nanoid(),
-          itemId: input.itemId,
-          name: input.variant.name,
-          image: input.variant.image,
-          costType: input.variant.costType,
-          cost: input.variant.cost,
-          order: input.variant.order,
-          description: input.variant.description ?? null,
-          battleDescription: input.variant.battleDescription ?? null,
-        });
+        const insertResult = await ctx.drizzle
+          .insert(itemVariant)
+          .values({
+            id: nanoid(),
+            itemId: input.itemId,
+            name: input.variant.name,
+            image: input.variant.image,
+            costType: input.variant.costType,
+            cost: input.variant.cost,
+            order: input.variant.order,
+            description: safeDescription,
+            battleDescription: safeBattleDescription,
+          })
+          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+        if (insertResult.rowsAffected === 0) {
+          return errorResponse(`Order ${input.variant.order} is already taken`);
+        }
       }
       return { success: true, message: "Variant saved" };
     }),
