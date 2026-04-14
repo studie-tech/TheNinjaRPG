@@ -10,6 +10,7 @@ import {
   LayoutList,
   Moon,
   ScanSearch,
+  ShieldAlert,
   ShieldCheck,
   Star,
   Stethoscope,
@@ -199,6 +200,17 @@ const MenuBoxProfile: React.FC = () => {
   }, [userData?.immunityUntil]);
 
   const immunitySecsLeft = immunityData.secsLeft;
+
+  const bracketImmunityData = useMemo(() => {
+    const now = Date.now();
+    const secsLeft =
+      (userData?.bracketImmunityLiftedUntil &&
+        (userData.bracketImmunityLiftedUntil.getTime() - now) / 1000) ||
+      0;
+    return { createdAt: now, secsLeft };
+  }, [userData?.bracketImmunityLiftedUntil]);
+
+  const bracketImmunitySecsLeft = bracketImmunityData.secsLeft;
 
   // Battle user state
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
@@ -395,6 +407,27 @@ const MenuBoxProfile: React.FC = () => {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>Immune from PvP attacks</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {userData && bracketImmunitySecsLeft > 0 && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                  <div className="flex flex-row items-center text-orange-500">
+                    <ShieldAlert className="mr-2 h-6 w-6" />
+                    <Cooldown
+                      createdAt={bracketImmunityData.createdAt}
+                      totalSeconds={bracketImmunitySecsLeft}
+                      initialSecondsLeft={bracketImmunitySecsLeft}
+                      setState={setState}
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Bracket immunity lifted — any player can attack you regardless of XP
+                  bracket
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
