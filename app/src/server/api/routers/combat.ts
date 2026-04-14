@@ -152,6 +152,7 @@ import {
   calcLevelRequirements,
   calcSP,
   capUserStats,
+  getExpBracket,
   manuallyAssignUserStats,
   scaleUserStats,
 } from "@/libs/profile";
@@ -1769,45 +1770,72 @@ export const initiateBattle = async (
       }
     }
 
-    // Level restrictions - prevent attacking users more than 15 levels under or above (skip if in war-torn sector or at war)
+    // XP Bracket restrictions (replaces ±15 level check, issue #724)
     if (battleType === "COMBAT" && userIds.includes(user.userId)) {
+      const now = new Date();
+      const nonAiTargets = users.filter((u) => targetIds.includes(u.userId) && !u.isAi);
+
+      // Guard 1: Cannot attack members of your own village
+      const sameVillageTarget = nonAiTargets.find(
+        (t) => t.villageId !== null && t.villageId === user.villageId,
+      );
+      if (sameVillageTarget) {
+        return {
+          success: false,
+          message: `Cannot attack ${sameVillageTarget.username} — they are in your village`,
+        };
+      }
+
+      // Guard 2: Cannot attack members of allied villages
+      const alliedTarget = nonAiTargets.find((t) =>
+        relations.some(
+          (r) =>
+            r.status === "ALLY" &&
+            ((r.villageIdA === user.villageId && r.villageIdB === t.villageId) ||
+              (r.villageIdB === user.villageId && r.villageIdA === t.villageId)),
+        ),
+      );
+      if (alliedTarget) {
+        return {
+          success: false,
+          message: `Cannot attack ${alliedTarget.username} — their village is allied with yours`,
+        };
+      }
+
+      // Guard 3: War-Torn sector bypasses all bracket restrictions
       const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
       if (!isInWarTornSector) {
-        const attackerLevel = calcLevel(user.experience);
+        const attackerBracket = getExpBracket(user.experience);
 
-        // Check for non-compliant targets without creating copies
-        const nonCompliantTarget = users.find(
-          (u) =>
-            targetIds.includes(u.userId) &&
-            !u.isAi &&
-            Math.abs(attackerLevel - calcLevel(u.experience)) > 15,
+        // Find first target in a different bracket
+        const crossBracketTarget = nonAiTargets.find(
+          (t) => getExpBracket(t.experience) !== attackerBracket,
         );
 
-        if (nonCompliantTarget) {
-          // Check if attacker and target are at war - if so, bypass level restriction
-          const areAtWar =
-            findWarsWithUser(
-              activeWars,
-              activeWars,
-              nonCompliantTarget.villageId,
-              user.villageId,
-            ).length > 0;
+        if (crossBracketTarget) {
+          // Guard 4 (allow): Target's bracket immunity is lifted (they attacked someone recently)
+          const targetImmunityLifted =
+            crossBracketTarget.bracketImmunityLiftedUntil > now;
+          if (!targetImmunityLifted) {
+            // Guard 5 (allow): Both attacker and all non-AI targets are war participants on opposing sides
+            const attackerIsWarParticipant = user.warParticipantUntil > now;
+            const allTargetsAreWarParticipants = nonAiTargets.every(
+              (t) => t.warParticipantUntil > now,
+            );
+            const areAtWar =
+              nonAiTargets.length > 0 &&
+              nonAiTargets.every(
+                (t) =>
+                  findWarsWithUser(activeWars, activeWars, t.villageId, user.villageId)
+                    .length > 0,
+              );
 
-          if (!areAtWar) {
-            const targetLevel = calcLevel(nonCompliantTarget.experience);
-            const levelDifference = attackerLevel - targetLevel;
-
-            if (levelDifference > 15) {
+            if (
+              !(attackerIsWarParticipant && allTargetsAreWarParticipants && areAtWar)
+            ) {
               return {
                 success: false,
-                message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels below you (${levelDifference} level difference)`,
-              };
-            }
-
-            if (levelDifference < -15) {
-              return {
-                success: false,
-                message: `Cannot attack ${nonCompliantTarget.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)`,
+                message: `Cannot attack ${crossBracketTarget.username} — different combat bracket (${getExpBracket(user.experience)} vs ${getExpBracket(crossBracketTarget.experience)})`,
               };
             }
           }
