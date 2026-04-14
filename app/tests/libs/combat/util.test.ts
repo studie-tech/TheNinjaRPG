@@ -110,7 +110,7 @@ describe("getItemDisplayName", () => {
   it("falls back to item.name when variant name is null", () => {
     const source = {
       activeVariantId: "v1",
-      item: { name: "Base Sword", variants: [{ id: "v1", name: null as unknown as string }] },
+      item: { name: "Base Sword", variants: [{ id: "v1", name: null }] },
     };
     expect(getItemDisplayName(source)).toBe("Base Sword");
   });

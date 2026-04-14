@@ -120,13 +120,13 @@ export const getItemDisplayName = (
   source:
     | {
         activeVariantId?: string | null;
-        item: { name: string; variants?: { id: string; name: string | null }[] };
+        item: { name: string; variants?: { id: string; name?: string | null }[] };
       }
     | { name: string },
 ): string => {
   if ("activeVariantId" in source && source.activeVariantId) {
     const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
-    if (variant?.name) return variant.name;
+    if (variant?.name != null) return variant.name;
   }
   if ("item" in source) return source.item.name;
   return source.name;
@@ -149,7 +149,7 @@ export const getItemDisplayDescription = (
 ): string => {
   if ("activeVariantId" in source && source.activeVariantId) {
     const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
-    if (variant?.description) return variant.description;
+    if (variant?.description != null) return variant.description;
   }
   if ("item" in source) return source.item.description;
   return source.description;
@@ -172,7 +172,7 @@ export const getItemDisplayBattleDescription = (
 ): string => {
   if ("activeVariantId" in source && source.activeVariantId) {
     const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
-    if (variant?.battleDescription) return variant.battleDescription;
+    if (variant?.battleDescription != null) return variant.battleDescription;
   }
   if ("item" in source) return source.item.battleDescription;
   return source.battleDescription;
