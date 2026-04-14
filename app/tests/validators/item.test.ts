@@ -153,6 +153,11 @@ describe("ItemVariantValidator", () => {
       expect(result.success).toBe(true);
     });
 
+    it("accepts an empty string battleDescription", () => {
+      const result = ItemVariantValidator.safeParse({ ...valid, battleDescription: "" });
+      expect(result.success).toBe(true);
+    });
+
     it("accepts a non-empty battleDescription", () => {
       const result = ItemVariantValidator.safeParse({
         ...valid,
