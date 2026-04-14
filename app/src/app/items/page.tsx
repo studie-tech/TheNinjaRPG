@@ -44,6 +44,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import NavTabs from "@/layout/NavTabs";
+import { getItemDisplayImage } from "@/libs/combat/util";
 import {
   calcItemSellingPrice,
   calcMaxEventItems,
@@ -54,6 +55,7 @@ import {
 import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import sanitize from "@/utils/sanitize";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { displayCostType } from "@/validators/item";
 
@@ -670,6 +672,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   const items = useritems?.map((useritem) => ({
     ...useritem.item,
     ...useritem,
+    image: getItemDisplayImage(useritem as UserItemWithVariants),
   }));
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
   const repairItems = (useritems || []).filter(
@@ -930,6 +933,7 @@ const Character: React.FC<CharacterProps> = (props) => {
   const items = useritems?.map((useritem) => ({
     ...useritem.item,
     ...useritem,
+    image: getItemDisplayImage(useritem as UserItemWithVariants),
   }));
   const equipped = items?.find((item) => item.equipped === slot);
   const repairItems = (useritems || []).filter(
@@ -1295,9 +1299,11 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
               />
               <p className="mt-1 text-center font-medium text-xs">{v.name}</p>
               {v.description && (
-                <p className="mt-0.5 text-center text-muted-foreground text-xs">
-                  {v.description}
-                </p>
+                <div
+                  className="mt-0.5 text-center text-muted-foreground text-xs"
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: admin-entered content is sanitized before rendering
+                  dangerouslySetInnerHTML={{ __html: sanitize(v.description) }}
+                />
               )}
 
               {isUnlocked ? (

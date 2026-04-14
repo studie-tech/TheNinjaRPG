@@ -9,6 +9,8 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
   allowedAttributes: {
     ...sanitizeHtml.defaults.allowedAttributes,
     img: ["src"],
+    p: ["style"],
+    div: ["style"],
     span: ["style"],
     blockquote: ["author", "date"],
     iframe: [
