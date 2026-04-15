@@ -755,11 +755,12 @@ export const questsRouter = createTRPCRouter({
       }
 
       // Insert quest entry; for war quests guard the daily limit with a CAS counter update.
-      // Quest entry is upserted first (idempotent) so that if the counter update fails the
-      // user still receives the quest. PlanetScale does not support transactions, so this
-      // ordering minimises partial-state risk without sacrificing the atomic limit guard.
+      // CAS runs first so that a user at the daily limit is rejected before any quest entry
+      // is written. PlanetScale has no transactions, so this ordering means a crash between
+      // the CAS success and the upsert burns one daily slot without delivering the quest
+      // (acceptable), whereas the reverse order would deliver a quest when the limit is reached
+      // (unacceptable — creates orphaned quest entries the user cannot access).
       if (questData.questType === "war") {
-        await upsertQuestEntry(ctx.drizzle, user, questData);
         const result = await ctx.drizzle
           .update(userData)
           .set({
@@ -777,6 +778,7 @@ export const questsRouter = createTRPCRouter({
             `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
           );
         }
+        await upsertQuestEntry(ctx.drizzle, user, questData);
       } else {
         await Promise.all([
           upsertQuestEntry(ctx.drizzle, user, questData),

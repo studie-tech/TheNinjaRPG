@@ -1379,7 +1379,7 @@ export const updateUser = async (
         (u) => !u.isAggressor && !u.isSummon && !u.isAi,
       );
       return (
-        opponents.length === 0 ||
+        opponents.length > 0 &&
         opponents.every((t) => getExpBracket(t.experience) >= attackerBracket)
       );
     })();
