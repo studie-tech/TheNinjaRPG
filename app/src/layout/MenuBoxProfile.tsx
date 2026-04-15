@@ -212,6 +212,17 @@ const MenuBoxProfile: React.FC = () => {
 
   const bracketImmunitySecsLeft = bracketImmunityData.secsLeft;
 
+  const warParticipantData = useMemo(() => {
+    const now = Date.now();
+    const secsLeft =
+      (userData?.warParticipantUntil &&
+        (userData.warParticipantUntil.getTime() - now) / 1000) ||
+      0;
+    return { createdAt: now, secsLeft };
+  }, [userData?.warParticipantUntil]);
+
+  const warParticipantSecsLeft = warParticipantData.secsLeft;
+
   // Battle user state
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
 
@@ -426,6 +437,25 @@ const MenuBoxProfile: React.FC = () => {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>Bracket Immunity Lifted</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {userData && !userData.battleId && warParticipantSecsLeft > 0 && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                  <div className="flex flex-row items-center text-red-500">
+                    <Swords className="mr-2 h-6 w-6" />
+                    <Cooldown
+                      createdAt={warParticipantData.createdAt}
+                      totalSeconds={warParticipantSecsLeft}
+                      initialSecondsLeft={warParticipantSecsLeft}
+                      setState={setState}
+                      hideWhenDone
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>War Participant</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
