@@ -48,6 +48,7 @@ import {
   getWarsArray,
   hydrateUserForQuests,
 } from "@/libs/combat/util";
+import { getExpBracket } from "@/libs/profile";
 import type { PusherClient } from "@/libs/pusher";
 import { broadcastRaidAvailability, updateUserOnMap } from "@/libs/pusher";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
@@ -1506,8 +1507,21 @@ export const updateUser = async (
           stealthActive: false,
           stealthActivatedAt: null,
           stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
-          // Stamp bracket immunity at battle end so the 5-min window starts from when combat finishes
-          ...(curBattle.battleType === "COMBAT"
+          // Stamp bracket immunity at battle end — only when this user attacked upward (lower bracket
+          // attacking higher bracket or same bracket). Defenders and downward attackers (higher bracket
+          // attacking lower bracket) do not reset the countdown so the remaining window is preserved.
+          ...(curBattle.battleType === "COMBAT" &&
+          user.isAggressor &&
+          (() => {
+            const attackerBracket = getExpBracket(user.experience);
+            const opponents = curBattle.usersState.filter(
+              (u) => !u.isAggressor && !u.isSummon && !u.isAi,
+            );
+            return (
+              opponents.length === 0 ||
+              opponents.every((t) => getExpBracket(t.experience) >= attackerBracket)
+            );
+          })()
             ? {
                 bracketImmunityLiftedUntil: sql`NOW() + INTERVAL ${BRACKET_IMMUNITY_LIFT_SECS} SECOND`,
               }
