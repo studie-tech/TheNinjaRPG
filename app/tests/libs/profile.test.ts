@@ -13,6 +13,8 @@ test("Confirm that level<->experience calculations are consistent", () => {
 });
 
 test("getExpBracket returns correct bracket for boundary values", () => {
+  expect(getExpBracket(-1)).toBe(1);
+  expect(getExpBracket(-999_999)).toBe(1);
   expect(getExpBracket(0)).toBe(1);
   expect(getExpBracket(500_000)).toBe(1);
   expect(getExpBracket(500_001)).toBe(2);

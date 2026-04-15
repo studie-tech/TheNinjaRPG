@@ -59,10 +59,11 @@ export const calcLevel = (experience: number) => {
  * Bracket 1 covers 0–500,000 XP; Bracket 7 covers 3,000,001+ XP.
  */
 export const getExpBracket = (experience: number): number => {
+  const xp = Math.max(0, experience);
   for (const b of XP_BRACKETS) {
-    if (experience >= b.min && experience <= b.max) return b.bracket;
+    if (xp >= b.min && xp <= b.max) return b.bracket;
   }
-  return 7;
+  return XP_BRACKETS[XP_BRACKETS.length - 1]!.bracket;
 };
 
 export const calcHP = (level: number) => {
