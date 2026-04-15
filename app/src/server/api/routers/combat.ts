@@ -2238,16 +2238,6 @@ export const initiateBattle = async (
             ),
         ]
       : []),
-    ...(warAggressorIds.length > 0
-      ? [
-          client
-            .update(userData)
-            .set({
-              warParticipantUntil: sql`GREATEST(${userData.warParticipantUntil}, NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND)`,
-            })
-            .where(inArray(userData.userId, warAggressorIds)),
-        ]
-      : []),
   ]);
 
   // Check if expected number of users were updated - if not, rollback
@@ -2261,6 +2251,17 @@ export const initiateBattle = async (
       client.delete(battleHistory).where(eq(battleHistory.battleId, battleId)),
     ]);
     return { success: false, message: "Attack failed, did the target move?" };
+  }
+
+  // Stamp war participants only after battle creation succeeds — avoids leaking
+  // the timer on failed initiations (e.g. target moved before attack landed).
+  if (warAggressorIds.length > 0) {
+    await client
+      .update(userData)
+      .set({
+        warParticipantUntil: sql`GREATEST(${userData.warParticipantUntil}, NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND)`,
+      })
+      .where(inArray(userData.userId, warAggressorIds));
   }
 
   // Push websockets message to target
