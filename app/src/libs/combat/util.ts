@@ -2560,10 +2560,12 @@ export const getAffectedTiles = (info: {
     if (tiles) tiles = tiles.filter((t) => t !== a);
   } else if (action.method === "ALL") {
     grid.forEach((target) => {
-      addAffectedTile(
-        target,
-        isValidMove({ action, target, user, users, barriers, clicked: b }),
-      );
+      const key = `${target.col},${target.row}`;
+      if (seenTiles.has(key)) return;
+      seenTiles.add(key);
+      if (isValidMove({ action, target, user, users, barriers, clicked: b })) {
+        green.add(target);
+      }
     });
   }
 
