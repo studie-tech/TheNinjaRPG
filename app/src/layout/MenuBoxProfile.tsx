@@ -410,7 +410,7 @@ const MenuBoxProfile: React.FC = () => {
               </Tooltip>
             </TooltipProvider>
           )}
-          {userData && bracketImmunitySecsLeft > 0 && (
+          {userData && !userData.battleId && bracketImmunitySecsLeft > 0 && (
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger className="w-full">
@@ -703,7 +703,16 @@ const Cooldown: React.FC<CooldownProps> = (props) => {
       if (secondsLeft > 0) {
         const interval = setInterval(() => {
           const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
-          setCounter(getTimeStr(secondsLeft));
+          if (secondsLeft > 0) {
+            setCounter(getTimeStr(secondsLeft));
+          } else {
+            clearInterval(interval);
+            if (initialSecondsLeft > 0 && !hasNotifiedRef.current) {
+              hasNotifiedRef.current = true;
+              setState((prev) => prev + 1);
+            }
+            setCounter(hideWhenDone ? "" : "Done");
+          }
         }, 1000);
         return () => clearInterval(interval);
       } else {
