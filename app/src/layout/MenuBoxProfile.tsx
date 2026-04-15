@@ -201,27 +201,17 @@ const MenuBoxProfile: React.FC = () => {
 
   const immunitySecsLeft = immunityData.secsLeft;
 
-  const bracketImmunityData = useMemo(() => {
-    const now = Date.now();
-    const secsLeft =
-      (userData?.bracketImmunityLiftedUntil &&
-        (userData.bracketImmunityLiftedUntil.getTime() - now) / 1000) ||
-      0;
-    return { createdAt: now, secsLeft };
-  }, [userData?.bracketImmunityLiftedUntil]);
-
-  const bracketImmunitySecsLeft = bracketImmunityData.secsLeft;
-
-  const warParticipantData = useMemo(() => {
-    const now = Date.now();
-    const secsLeft =
-      (userData?.warParticipantUntil &&
-        (userData.warParticipantUntil.getTime() - now) / 1000) ||
-      0;
-    return { createdAt: now, secsLeft };
-  }, [userData?.warParticipantUntil]);
-
-  const warParticipantSecsLeft = warParticipantData.secsLeft;
+  // Recompute on every render (no memo) so the > 0 guard goes false as soon as the
+  // timestamp expires, unmounting the icon/tooltip row without waiting for fresh userData.
+  const timerNow = Date.now();
+  const bracketImmunitySecsLeft = Math.max(
+    0,
+    ((userData?.bracketImmunityLiftedUntil?.getTime() ?? 0) - timerNow) / 1000,
+  );
+  const warParticipantSecsLeft = Math.max(
+    0,
+    ((userData?.warParticipantUntil?.getTime() ?? 0) - timerNow) / 1000,
+  );
 
   // Battle user state
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
@@ -428,7 +418,7 @@ const MenuBoxProfile: React.FC = () => {
                   <div className="flex flex-row items-center text-orange-500">
                     <ShieldAlert className="mr-2 h-6 w-6" />
                     <Cooldown
-                      createdAt={bracketImmunityData.createdAt}
+                      createdAt={timerNow}
                       totalSeconds={bracketImmunitySecsLeft}
                       initialSecondsLeft={bracketImmunitySecsLeft}
                       setState={setState}
@@ -447,7 +437,7 @@ const MenuBoxProfile: React.FC = () => {
                   <div className="flex flex-row items-center text-red-500">
                     <Swords className="mr-2 h-6 w-6" />
                     <Cooldown
-                      createdAt={warParticipantData.createdAt}
+                      createdAt={timerNow}
                       totalSeconds={warParticipantSecsLeft}
                       initialSecondsLeft={warParticipantSecsLeft}
                       setState={setState}
