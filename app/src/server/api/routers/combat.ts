@@ -1775,36 +1775,37 @@ export const initiateBattle = async (
       const now = new Date();
       const nonAiTargets = users.filter((u) => targetIds.includes(u.userId) && !u.isAi);
 
-      // Guard 1: Cannot attack members of your own village
-      const sameVillageTarget = nonAiTargets.find(
-        (t) => t.villageId !== null && t.villageId === user.villageId,
-      );
-      if (sameVillageTarget) {
-        return {
-          success: false,
-          message: `Cannot attack ${sameVillageTarget.username} — they are in your village`,
-        };
-      }
-
-      // Guard 2: Cannot attack members of allied villages
-      const alliedTarget = nonAiTargets.find((t) =>
-        relations.some(
-          (r) =>
-            r.status === "ALLY" &&
-            ((r.villageIdA === user.villageId && r.villageIdB === t.villageId) ||
-              (r.villageIdB === user.villageId && r.villageIdA === t.villageId)),
-        ),
-      );
-      if (alliedTarget) {
-        return {
-          success: false,
-          message: `Cannot attack ${alliedTarget.username} — their village is allied with yours`,
-        };
-      }
-
-      // Guard 3: War-Torn sector bypasses all bracket restrictions
+      // War-Torn sector is a free-for-all — skip all village and bracket restrictions
       const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
       if (!isInWarTornSector) {
+        // Guard 1: Cannot attack members of your own village
+        const sameVillageTarget = nonAiTargets.find(
+          (t) => t.villageId !== null && t.villageId === user.villageId,
+        );
+        if (sameVillageTarget) {
+          return {
+            success: false,
+            message: `Cannot attack ${sameVillageTarget.username} — they are in your village`,
+          };
+        }
+
+        // Guard 2: Cannot attack members of allied villages
+        const alliedTarget = nonAiTargets.find((t) =>
+          relations.some(
+            (r) =>
+              r.status === "ALLY" &&
+              ((r.villageIdA === user.villageId && r.villageIdB === t.villageId) ||
+                (r.villageIdB === user.villageId && r.villageIdA === t.villageId)),
+          ),
+        );
+        if (alliedTarget) {
+          return {
+            success: false,
+            message: `Cannot attack ${alliedTarget.username} — their village is allied with yours`,
+          };
+        }
+
+        // Guard 3: Bracket restrictions
         const attackerBracket = getExpBracket(user.experience);
 
         // Collect every lower-bracket target — protection is one-directional:
