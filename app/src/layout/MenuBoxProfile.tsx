@@ -201,17 +201,33 @@ const MenuBoxProfile: React.FC = () => {
 
   const immunitySecsLeft = immunityData.secsLeft;
 
-  // Recompute on every render (no memo) so the > 0 guard goes false as soon as the
-  // timestamp expires, unmounting the icon/tooltip row without waiting for fresh userData.
-  const timerNow = Date.now();
-  const bracketImmunitySecsLeft = Math.max(
-    0,
-    ((userData?.bracketImmunityLiftedUntil?.getTime() ?? 0) - timerNow) / 1000,
-  );
-  const warParticipantSecsLeft = Math.max(
-    0,
-    ((userData?.warParticipantUntil?.getTime() ?? 0) - timerNow) / 1000,
-  );
+  // Memoized per-timestamp anchors — stable createdAt prevents Cooldown from tearing down
+  // and re-creating its setInterval on every parent render. secsLeft is recomputed only when
+  // the server-side timestamp changes. The > 0 visibility guard unmounts the row on expiry.
+  const bracketImmunityData = useMemo(() => {
+    const now = Date.now();
+    return {
+      createdAt: now,
+      secsLeft: Math.max(
+        0,
+        ((userData?.bracketImmunityLiftedUntil?.getTime() ?? 0) - now) / 1000,
+      ),
+    };
+  }, [userData?.bracketImmunityLiftedUntil]);
+
+  const warParticipantData = useMemo(() => {
+    const now = Date.now();
+    return {
+      createdAt: now,
+      secsLeft: Math.max(
+        0,
+        ((userData?.warParticipantUntil?.getTime() ?? 0) - now) / 1000,
+      ),
+    };
+  }, [userData?.warParticipantUntil]);
+
+  const bracketImmunitySecsLeft = bracketImmunityData.secsLeft;
+  const warParticipantSecsLeft = warParticipantData.secsLeft;
 
   // Battle user state
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
@@ -418,7 +434,7 @@ const MenuBoxProfile: React.FC = () => {
                   <div className="flex flex-row items-center text-orange-500">
                     <ShieldAlert className="mr-2 h-6 w-6" />
                     <Cooldown
-                      createdAt={timerNow}
+                      createdAt={bracketImmunityData.createdAt}
                       totalSeconds={bracketImmunitySecsLeft}
                       initialSecondsLeft={bracketImmunitySecsLeft}
                       setState={setState}
@@ -437,7 +453,7 @@ const MenuBoxProfile: React.FC = () => {
                   <div className="flex flex-row items-center text-red-500">
                     <Swords className="mr-2 h-6 w-6" />
                     <Cooldown
-                      createdAt={timerNow}
+                      createdAt={warParticipantData.createdAt}
                       totalSeconds={warParticipantSecsLeft}
                       initialSecondsLeft={warParticipantSecsLeft}
                       setState={setState}

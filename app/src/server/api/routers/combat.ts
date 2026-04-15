@@ -57,6 +57,7 @@ import {
   SECTOR_WIDTH,
   StatTypes,
   VILLAGE_SYNDICATE_ID,
+  WAR_PARTICIPANT_SECS,
 } from "@/drizzle/constants";
 import type {
   AiProfile,
@@ -1817,32 +1818,19 @@ export const initiateBattle = async (
 
         if (crossBracketTargets.length > 0) {
           const attackerIsWarParticipant = user.warParticipantUntil > now;
-          // Pre-compute attacker's wars once for the loop below
-          const userVillageWars = activeWars.filter(
-            (w) =>
-              w.attackerVillageId === user.villageId ||
-              w.defenderVillageId === user.villageId,
-          );
 
           // Each cross-bracket target needs its own exemption — check individually
           const blockedTarget = crossBracketTargets.find((t) => {
             // Guard 4 (allow): target's bracket immunity is lifted (they attacked recently)
             if (t.bracketImmunityLiftedUntil > now) return false;
 
-            // Guard 5 (allow): both are active war participants on opposing sides
+            // Guard 5 (allow): both are active war participants on opposing sides.
+            // Pass activeWars as both arguments so findWarsWithUser expands war allies
+            // correctly for ally-village players who are not the primary attacker/defender.
             const targetIsWarParticipant = t.warParticipantUntil > now;
-            const targetVillageWars = activeWars.filter(
-              (w) =>
-                w.attackerVillageId === t.villageId ||
-                w.defenderVillageId === t.villageId,
-            );
             const atWar =
-              findWarsWithUser(
-                targetVillageWars,
-                userVillageWars,
-                t.villageId,
-                user.villageId,
-              ).length > 0;
+              findWarsWithUser(activeWars, activeWars, t.villageId, user.villageId)
+                .length > 0;
             if (attackerIsWarParticipant && targetIsWarParticipant && atWar)
               return false;
 
@@ -2107,6 +2095,28 @@ export const initiateBattle = async (
     }
   }
 
+  // Identify COMBAT attackers engaging war enemies — stamp them as war participants for 2 hours.
+  // Covers: attacking enemy village members and their war allies.
+  const warAggressorIds =
+    battleType === "COMBAT"
+      ? userIds.filter((uid) => {
+          const attacker = users.find((u) => u.userId === uid);
+          return targetIds.some((tid) => {
+            const target = users.find((u) => u.userId === tid);
+            return (
+              !!attacker &&
+              !!target &&
+              findWarsWithUser(
+                activeWars,
+                activeWars,
+                target.villageId,
+                attacker.villageId,
+              ).length > 0
+            );
+          });
+        })
+      : [];
+
   // Run battle creation and user status updates in parallel for performance
   const [, , userResult] = await Promise.all([
     client.insert(battle).values({
@@ -2226,6 +2236,16 @@ export const initiateBattle = async (
                 ),
               ),
             ),
+        ]
+      : []),
+    ...(warAggressorIds.length > 0
+      ? [
+          client
+            .update(userData)
+            .set({
+              warParticipantUntil: sql`GREATEST(${userData.warParticipantUntil}, NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND)`,
+            })
+            .where(inArray(userData.userId, warAggressorIds)),
         ]
       : []),
   ]);

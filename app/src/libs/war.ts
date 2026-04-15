@@ -282,6 +282,14 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
       .update(war)
       .set({ status, endedAt })
       .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
+    // Clear war participant status for all players in involved villages so the timer
+    // disappears immediately and cross-bracket exemption cannot be exploited after war ends.
+    // Use epoch (new Date(0)) rather than now() to be unambiguously in the past regardless
+    // of any JS-to-DB clock skew or concurrent in-flight requests.
+    drizzleDB
+      .update(userData)
+      .set({ warParticipantUntil: new Date(0) })
+      .where(inArray(userData.villageId, involvedVillageIds)),
     drizzleDB.insert(notification).values({
       userId: TERR_BOT_ID,
       content: notificationContent,
