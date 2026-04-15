@@ -1807,41 +1807,53 @@ export const initiateBattle = async (
       if (!isInWarTornSector) {
         const attackerBracket = getExpBracket(user.experience);
 
-        // Find first target in a lower bracket — protection is one-directional:
+        // Collect every lower-bracket target — protection is one-directional:
         // higher-bracket attackers cannot target lower-bracket players (without exemption),
         // but lower-bracket players may freely attack higher-bracket players.
-        const crossBracketTarget = nonAiTargets.find(
+        const crossBracketTargets = nonAiTargets.filter(
           (t) => getExpBracket(t.experience) < attackerBracket,
         );
 
-        if (crossBracketTarget) {
-          const targetBracket = getExpBracket(crossBracketTarget.experience);
+        if (crossBracketTargets.length > 0) {
+          const attackerIsWarParticipant = user.warParticipantUntil > now;
+          // Pre-compute attacker's wars once for the loop below
+          const userVillageWars = activeWars.filter(
+            (w) =>
+              w.attackerVillageId === user.villageId ||
+              w.defenderVillageId === user.villageId,
+          );
 
-          // Guard 4 (allow): Target's bracket immunity is lifted (they attacked someone recently)
-          const targetImmunityLifted =
-            crossBracketTarget.bracketImmunityLiftedUntil > now;
-          if (!targetImmunityLifted) {
-            // Guard 5 (allow): Both attacker and all non-AI targets are war participants on opposing sides
-            const attackerIsWarParticipant = user.warParticipantUntil > now;
-            const allTargetsAreWarParticipants = nonAiTargets.every(
-              (t) => t.warParticipantUntil > now,
+          // Each cross-bracket target needs its own exemption — check individually
+          const blockedTarget = crossBracketTargets.find((t) => {
+            // Guard 4 (allow): target's bracket immunity is lifted (they attacked recently)
+            if (t.bracketImmunityLiftedUntil > now) return false;
+
+            // Guard 5 (allow): both are active war participants on opposing sides
+            const targetIsWarParticipant = t.warParticipantUntil > now;
+            const targetVillageWars = activeWars.filter(
+              (w) =>
+                w.attackerVillageId === t.villageId ||
+                w.defenderVillageId === t.villageId,
             );
-            const areAtWar =
-              nonAiTargets.length > 0 &&
-              nonAiTargets.every(
-                (t) =>
-                  findWarsWithUser(activeWars, activeWars, t.villageId, user.villageId)
-                    .length > 0,
-              );
+            const atWar =
+              findWarsWithUser(
+                targetVillageWars,
+                userVillageWars,
+                t.villageId,
+                user.villageId,
+              ).length > 0;
+            if (attackerIsWarParticipant && targetIsWarParticipant && atWar)
+              return false;
 
-            if (
-              !(attackerIsWarParticipant && allTargetsAreWarParticipants && areAtWar)
-            ) {
-              return {
-                success: false,
-                message: `Cannot attack ${crossBracketTarget.username} — different combat bracket (${attackerBracket} vs ${targetBracket})`,
-              };
-            }
+            return true; // no exemption — this target is blocked
+          });
+
+          if (blockedTarget) {
+            const targetBracket = getExpBracket(blockedTarget.experience);
+            return {
+              success: false,
+              message: `Cannot attack ${blockedTarget.username} — different combat bracket (${attackerBracket} vs ${targetBracket})`,
+            };
           }
         }
       }

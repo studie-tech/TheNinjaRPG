@@ -616,7 +616,7 @@ export const updateWars = async (
             client
               .update(userData)
               .set({
-                warParticipantUntil: sql`NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND`,
+                warParticipantUntil: sql`GREATEST(${userData.warParticipantUntil}, NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND)`,
               })
               .where(eq(userData.userId, user.userId)),
           );
@@ -1369,6 +1369,21 @@ export const updateUser = async (
       }
     }
 
+    // Determine whether to stamp bracketImmunityLiftedUntil at battle end.
+    // Stamp only when this user was the aggressor attacking same or higher bracket.
+    // Defenders and downward attackers (higher bracket vs lower) do not reset the countdown.
+    const shouldStampBracketImmunity = (() => {
+      if (curBattle.battleType !== "COMBAT" || !user.isAggressor) return false;
+      const attackerBracket = getExpBracket(user.experience);
+      const opponents = curBattle.usersState.filter(
+        (u) => !u.isAggressor && !u.isSummon && !u.isAi,
+      );
+      return (
+        opponents.length === 0 ||
+        opponents.every((t) => getExpBracket(t.experience) >= attackerBracket)
+      );
+    })();
+
     // Update user & user items
     await Promise.all([
       // Update bounties
@@ -1507,23 +1522,9 @@ export const updateUser = async (
           stealthActive: false,
           stealthActivatedAt: null,
           stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
-          // Stamp bracket immunity at battle end — only when this user attacked upward (lower bracket
-          // attacking higher bracket or same bracket). Defenders and downward attackers (higher bracket
-          // attacking lower bracket) do not reset the countdown so the remaining window is preserved.
-          ...(curBattle.battleType === "COMBAT" &&
-          user.isAggressor &&
-          (() => {
-            const attackerBracket = getExpBracket(user.experience);
-            const opponents = curBattle.usersState.filter(
-              (u) => !u.isAggressor && !u.isSummon && !u.isAi,
-            );
-            return (
-              opponents.length === 0 ||
-              opponents.every((t) => getExpBracket(t.experience) >= attackerBracket)
-            );
-          })()
+          ...(shouldStampBracketImmunity
             ? {
-                bracketImmunityLiftedUntil: sql`NOW() + INTERVAL ${BRACKET_IMMUNITY_LIFT_SECS} SECOND`,
+                bracketImmunityLiftedUntil: sql`GREATEST(${userData.bracketImmunityLiftedUntil}, NOW() + INTERVAL ${BRACKET_IMMUNITY_LIFT_SECS} SECOND)`,
               }
             : {}),
         })
