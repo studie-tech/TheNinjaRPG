@@ -1700,6 +1700,8 @@ export const profileRouter = createTRPCRouter({
             tavernMessages: true,
             staffAccount: true,
             bloodlineReskinId: true,
+            bracketImmunityLiftedUntil: true,
+            warParticipantUntil: true,
           },
           with: {
             village: true,
