@@ -1,0 +1,1 @@
+ALTER TABLE `VillageStructure` DROP COLUMN `baseCost`;

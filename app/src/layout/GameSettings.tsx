@@ -68,9 +68,9 @@ export const GlobalAudioProvider: React.FC<{
   let musicSrc = MUSIC_WELCOME_TO_SEICHI;
   if (userData?.village?.name === "Tsukimori") {
     musicSrc = MUSIC_TSUKIMORI_THEME;
-  } else if (userData?.village?.name === "Shine") {
+  } else if (userData?.village?.name === "Shirohana") {
     musicSrc = MUSIC_SHINE_THEME;
-  } else if (userData?.village?.name === "Current") {
+  } else if (userData?.village?.name === "Akikaze") {
     musicSrc = MUSIC_CURRENT_THEME;
   } else if (userData?.village?.name === "Syndicate") {
     musicSrc = MUSIC_SYNDICATE_THEME;

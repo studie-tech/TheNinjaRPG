@@ -26,11 +26,11 @@ export type PollOptionType = (typeof PollOptionTypes)[number];
 
 export const STARTER_VILLAGES = [
   "NONE",
-  "SHINE",
+  "SHIROHANA",
   "TSUKIMORI",
-  "GLACIER",
-  "SHROUD",
-  "CURRENT",
+  "HYORIN",
+  "AKASUMI",
+  "AKIKAZE",
 ] as const;
 export type StarterVillage = (typeof STARTER_VILLAGES)[number];
 
@@ -86,12 +86,25 @@ export const MAP_WAR_TORN_BATTLEGROUND_SECTOR = 335;
 export const MAP_GLOBAL_TRAVEL_TIME_CAP_SECS = 10;
 
 export const CoreVillages = [
-  "Shine",
+  "Shirohana",
   "Tsukimori",
+  "Hyorin",
+  "Akasumi",
+  "Akikaze",
+] as const;
+
+export const LegacyVillageNames = [
+  "Shine",
   "Glacier",
   "Shroud",
   "Current",
 ] as const;
+
+export const BUILDING_UPGRADE_BASE_COST = 200_000;
+export const BUILDING_UPGRADE_PER_LEVEL_COST = 150_000;
+
+export const HOSPITAL_BASE_HEAL_SECONDS = 600;
+export const HOSPITAL_RYO_PER_100_HP = 400;
 
 export const LetterRanks = ["D", "C", "B", "A", "S", "H"] as const;
 export type LetterRank = (typeof LetterRanks)[number];

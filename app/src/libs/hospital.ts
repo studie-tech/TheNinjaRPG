@@ -1,6 +1,8 @@
 import type { MEDNIN_RANK, PoolType } from "@/drizzle/constants";
 import {
   ANBU_HOSPITAL_DISCOUNT_PERC,
+  HOSPITAL_BASE_HEAL_SECONDS,
+  HOSPITAL_RYO_PER_100_HP,
   MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT,
   MEDNIN_EXP_CAP,
   MEDNIN_EXP_PER_IMPROVEMENT,
@@ -15,14 +17,18 @@ import { secondsFromNow, secondsPassed } from "@/utils/time";
 /**
  * Calculates the cost of healing for a user.
  * @param user - The user data.
+ * @param boost - The town hall hospital boost percentage (optional).
  * @returns The cost of healing.
  */
-export const calcHealCost = (user: UserData) => {
-  let cost = (user.maxHealth - user.curHealth) / 2.5;
+export const calcHealCost = (user: UserData, boost?: number) => {
+  const missingHp = user.maxHealth - user.curHealth;
+  let cost = (missingHp / 100) * HOSPITAL_RYO_PER_100_HP;
+  const factor = (100 - (boost ?? 0)) / 100;
+  cost *= factor;
   if (user.anbuId) {
     cost *= 1 - ANBU_HOSPITAL_DISCOUNT_PERC / 100;
   }
-  return cost;
+  return Math.ceil(cost);
 };
 
 /**
@@ -33,7 +39,7 @@ export const calcHealCost = (user: UserData) => {
  */
 const healSecondsLeft = (user: UserData, timeDiff?: number) => {
   const seconds = secondsPassed(new Date(user.regenAt), timeDiff);
-  const healedIn = Math.max(3 * 60 - seconds, 0);
+  const healedIn = Math.max(HOSPITAL_BASE_HEAL_SECONDS - seconds, 0);
   return healedIn;
 };
 

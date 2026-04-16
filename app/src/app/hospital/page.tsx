@@ -55,7 +55,7 @@ export default function Hospital() {
 
   // Heal finish time
   const healFinishAt = userData && calcHealFinish({ user: userData, timeDiff, boost });
-  const healCost = userData && calcHealCost(userData);
+  const healCost = userData && calcHealCost(userData, boost);
   const canAfford = userData && healCost && userData.money >= healCost;
   const canHealOthers = hasRequiredRank(userData?.rank, MEDNIN_MIN_RANK);
   // If user is fully healed, allow immediate checkout

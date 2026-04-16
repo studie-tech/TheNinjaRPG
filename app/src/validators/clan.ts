@@ -1,10 +1,15 @@
 import { z } from "zod";
-import { ClanBoostTypes, CoreVillages } from "@/drizzle/constants";
+import { ClanBoostTypes, CoreVillages, LegacyVillageNames } from "@/drizzle/constants";
 import type { Clan } from "@/drizzle/schema";
 
 export const clanBoostTypeSchema = z.enum(ClanBoostTypes);
 
-const bannedNames = ["Freedom State", "Horizon", ...CoreVillages];
+const bannedNames = [
+  "Freedom State",
+  "Horizon",
+  ...CoreVillages,
+  ...LegacyVillageNames,
+];
 
 export const clanCreateSchema = z.object({
   villageId: z.string(),
@@ -34,6 +39,9 @@ export const factionEditSchema = z.object({
     .trim()
     .min(3)
     .max(88)
+    .regex(/^[a-zA-Z0-9_]+$/, {
+      error: "Alphanumeric, no spaces",
+    })
     .refine(
       (name) =>
         !bannedNames.some((banned) => banned.toLowerCase() === name.toLowerCase()),

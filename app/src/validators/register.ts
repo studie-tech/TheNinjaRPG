@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FederalStatuses, UserRanks } from "@/drizzle/constants";
+import { FederalStatuses, LegacyVillageNames, UserRanks } from "@/drizzle/constants";
 
 // List of possible attributes
 export const attributes = [
@@ -43,7 +43,12 @@ export const usernameSchema = z
     error: "Alphanumeric, no spaces",
   })
   .min(2)
-  .max(12);
+  .max(12)
+  .refine(
+    (name) =>
+      !LegacyVillageNames.some((legacy) => legacy.toLowerCase() === name.toLowerCase()),
+    { error: "This name is reserved." },
+  );
 
 export const utmSourceSchema = z
   .string()
