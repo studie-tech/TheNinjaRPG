@@ -1393,6 +1393,7 @@ export const jutsu = mysqlTable(
     requiredSpeed: int("requiredSpeed"),
     requiredIntelligence: int("requiredIntelligence"),
     requiredWillpower: int("requiredWillpower"),
+    requiredBloodlineItemId: varchar("requiredBloodlineItemId", { length: 191 }),
   },
   (table) => {
     return {
@@ -1414,6 +1415,10 @@ export const jutsuRelations = relations(jutsu, ({ one, many }) => ({
   bloodline: one(bloodline, {
     fields: [jutsu.bloodlineId],
     references: [bloodline.id],
+  }),
+  requiredBloodlineItem: one(item, {
+    fields: [jutsu.requiredBloodlineItemId],
+    references: [item.id],
   }),
   reskins: many(jutsuReskin, { relationName: "jutsuReskins" }),
   parentJutsu: one(jutsu, {
