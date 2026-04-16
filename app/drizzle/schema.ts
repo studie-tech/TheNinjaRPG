@@ -1407,6 +1407,9 @@ export const jutsu = mysqlTable(
         table.parentJutsuId,
         table.hidden,
       ),
+      requiredBloodlineItemIdIdx: index("Jutsu_requiredBloodlineItemId_idx").on(
+        table.requiredBloodlineItemId,
+      ),
     };
   },
 );
