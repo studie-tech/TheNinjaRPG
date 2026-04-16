@@ -42,6 +42,8 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     api.bloodline.getAllNames.useQuery(undefined);
   const { data: villages, isPending: l2 } = api.village.getAllNames.useQuery(undefined);
   const { data: jutsus, isPending: l4 } = api.jutsu.getAllNames.useQuery(undefined);
+  const { data: bloodlineItems, isPending: l5 } =
+    api.item.getBloodlineItemNames.useQuery(undefined);
 
   // Mutation for updating jutsu
   const { mutate: updateJutsu, isPending: l3 } = api.jutsu.update.useMutation({
@@ -75,7 +77,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   };
 
   // Are we loading data
-  const loading = l1 || l2 || l3 || l4;
+  const loading = l1 || l2 || l3 || l4 || l5;
 
   // Watch for changes to avatar
   const imageUrl = useWatch({
@@ -103,6 +105,13 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     { id: "requiredLevel", type: "number" },
     { id: "jutsuType", type: "str_array", values: JutsuTypes },
     { id: "bloodlineId", type: "db_values", values: bloodlines, resetButton: true },
+    {
+      id: "requiredBloodlineItemId",
+      label: "Required Bloodline Item",
+      type: "db_values",
+      values: bloodlineItems,
+      resetButton: true,
+    },
     { id: "villageId", type: "db_values", values: villages, resetButton: true },
     { id: "jutsuWeapon", type: "str_array", values: WeaponTypes },
     { id: "method", type: "str_array", values: AttackMethods },
