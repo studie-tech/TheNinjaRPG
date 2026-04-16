@@ -1187,6 +1187,7 @@ export const JutsuValidatorRawSchema = z.object({
   actionCostPerc: z.coerce.number().int().min(10).max(100),
   cooldown: z.coerce.number().int().min(0).max(300),
   bloodlineId: z.string().nullable(),
+  requiredBloodlineItemId: z.string().nullable(),
   villageId: z.string().nullable(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
   battleUsageType: z.enum(BattleUsageTypes).prefault("BOTH"),
