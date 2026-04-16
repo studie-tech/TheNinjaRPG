@@ -50,6 +50,7 @@ import {
   calcJutsuEquipLimit,
   canEvolveJutsu,
   checkJutsuBloodline,
+  checkJutsuBloodlineItem,
   checkJutsuElements,
   checkJutsuItems,
   checkJutsuRank,
@@ -358,6 +359,9 @@ export default function MyJutsu() {
           }
           if (!checkJutsuBloodline(uj.jutsu, userData)) {
             warning = "You do not have the required bloodline to use this jutsu.";
+          }
+          if (!checkJutsuBloodlineItem(uj.jutsu, userItems)) {
+            warning = "Required bloodline item is not equipped.";
           }
         }
         return {
@@ -1261,6 +1265,7 @@ const categorizeJutsus = (
     // Check if user can equip this jutsu
     const canEquipJutsu =
       checkJutsuItems(uj.jutsu, userItems) &&
+      checkJutsuBloodlineItem(uj.jutsu, userItems) &&
       checkJutsuElements(uj.jutsu, userElements) &&
       hasRequiredRank(
         userData.rank as Parameters<typeof hasRequiredRank>[0],
