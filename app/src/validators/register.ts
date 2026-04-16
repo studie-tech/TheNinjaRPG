@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { FederalStatuses, LegacyVillageNames, UserRanks } from "@/drizzle/constants";
+import {
+  CoreVillages,
+  FederalStatuses,
+  LegacyVillageNames,
+  UserRanks,
+} from "@/drizzle/constants";
 
 // List of possible attributes
 export const attributes = [
@@ -36,17 +41,21 @@ export type SkinColor = (typeof skin_colors)[number];
 export const genders = ["Male", "Female", "Other"] as const;
 export type Gender = (typeof genders)[number];
 
+const reservedUsernames = [...LegacyVillageNames, ...CoreVillages];
+
 export const usernameSchema = z
   .string()
   .trim()
   .regex(/^[a-zA-Z0-9_]+$/, {
-    error: "Alphanumeric, no spaces",
+    error: "Alphanumeric and underscores only",
   })
   .min(2)
   .max(12)
   .refine(
     (name) =>
-      !LegacyVillageNames.some((legacy) => legacy.toLowerCase() === name.toLowerCase()),
+      !reservedUsernames.some(
+        (reserved) => reserved.toLowerCase() === name.toLowerCase(),
+      ),
     { error: "This name is reserved." },
   );
 

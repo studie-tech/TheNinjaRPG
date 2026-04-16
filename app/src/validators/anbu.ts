@@ -14,7 +14,7 @@ const anbuNameField = z
   .min(3)
   .max(88)
   .regex(/^[a-zA-Z0-9_]+$/, {
-    error: "Alphanumeric, no spaces",
+    error: "Alphanumeric and underscores only",
   })
   .refine(
     (name) =>

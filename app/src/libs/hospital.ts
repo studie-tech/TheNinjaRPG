@@ -21,9 +21,9 @@ import { secondsFromNow, secondsPassed } from "@/utils/time";
  * @returns The cost of healing.
  */
 export const calcHealCost = (user: UserData, boost?: number) => {
-  const missingHp = user.maxHealth - user.curHealth;
+  const missingHp = Math.max(0, user.maxHealth - user.curHealth);
   let cost = (missingHp / 100) * HOSPITAL_RYO_PER_100_HP;
-  const factor = (100 - (boost ?? 0)) / 100;
+  const factor = (100 - Math.min(100, Math.max(0, boost ?? 0))) / 100;
   cost *= factor;
   if (user.anbuId) {
     cost *= 1 - ANBU_HOSPITAL_DISCOUNT_PERC / 100;
@@ -57,7 +57,7 @@ export const calcHealFinish = (info: {
   boost?: number;
 }) => {
   const { user, timeDiff, boost } = info;
-  const factor = (100 - (boost ?? 0)) / 100;
+  const factor = (100 - Math.min(100, Math.max(0, boost ?? 0))) / 100;
   const timeLeft = healSecondsLeft(user, timeDiff) * factor;
   const healedAt = secondsFromNow(timeLeft);
   return healedAt;

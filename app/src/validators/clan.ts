@@ -19,7 +19,7 @@ export const clanCreateSchema = z.object({
     .min(3)
     .max(88)
     .regex(/^[a-zA-Z0-9_]+$/, {
-      error: "Alphanumeric, no spaces",
+      error: "Alphanumeric and underscores only",
     })
     .refine(
       (name) =>
@@ -40,7 +40,7 @@ export const factionEditSchema = z.object({
     .min(3)
     .max(88)
     .regex(/^[a-zA-Z0-9_]+$/, {
-      error: "Alphanumeric, no spaces",
+      error: "Alphanumeric and underscores only",
     })
     .refine(
       (name) =>
