@@ -150,12 +150,18 @@ const STRUCTURE_BONUSES: {
   key: keyof VillageStructure;
   label: string;
   unit: string;
+  scale?: number;
 }[] = [
   { key: "anbuSquadsPerLvl", label: "ANBU squads", unit: "" },
   { key: "arenaRewardPerLvl", label: "arena reward", unit: "%" },
   { key: "bankInterestPerLvl", label: "bank interest", unit: "%" },
   { key: "blackDiscountPerLvl", label: "black market discount", unit: "%" },
-  { key: "clansPerLvl", label: "clan slots", unit: "" },
+  {
+    key: "clansPerLvl",
+    label: "clan slots",
+    unit: "",
+    scale: CLANS_PER_STRUCTURE_LEVEL,
+  },
   { key: "hospitalSpeedupPerLvl", label: "hospital speedup", unit: "%" },
   { key: "itemDiscountPerLvl", label: "item shop discount", unit: "%" },
   { key: "missionRewardPerLvl", label: "mission reward", unit: "%" },
@@ -238,7 +244,7 @@ const UpgradeButton = ({
                 <ul className="mt-1 list-inside list-disc text-sm">
                   {bonuses.map((b) => (
                     <li key={b.key}>
-                      +{structure[b.key] as number}
+                      +{(structure[b.key] as number) * (b.scale ?? 1)}
                       {b.unit} {b.label}
                     </li>
                   ))}
