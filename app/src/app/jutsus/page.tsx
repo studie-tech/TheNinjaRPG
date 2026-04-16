@@ -357,11 +357,11 @@ export default function MyJutsu() {
           if (!checkJutsuVillage(uj.jutsu, userData)) {
             warning = "You do not have the required village to use this jutsu.";
           }
+          if (!checkJutsuBloodlineItem(uj.jutsu, userItems)) {
+            warning = "You do not have the required bloodline item equipped.";
+          }
           if (!checkJutsuBloodline(uj.jutsu, userData)) {
             warning = "You do not have the required bloodline to use this jutsu.";
-          }
-          if (!checkJutsuBloodlineItem(uj.jutsu, userItems)) {
-            warning = "Required bloodline item is not equipped.";
           }
         }
         return {

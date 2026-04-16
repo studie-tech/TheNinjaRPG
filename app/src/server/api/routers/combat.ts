@@ -2734,6 +2734,8 @@ export const processUsersForBattle = async (
           .forEach((e) => {
             if ("aiId" in e) allSummons.push(e.aiId);
           });
+        // Bloodline item enforcement applies to all battle types including ranked,
+        // mirroring bloodline check behavior (unlike checkJutsuItems which is waived in ranked).
         // Not if required bloodline item is not equipped
         if (!checkJutsuBloodlineItem(userjutsu.jutsu, user.items) && !user.isAi) {
           return false;
