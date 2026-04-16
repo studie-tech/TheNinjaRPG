@@ -204,6 +204,16 @@ export const checkJutsuItems = (
   return true;
 };
 
+export const checkJutsuBloodlineItem = (
+  jutsu: Jutsu,
+  userItems: UserItemWithItem[] | undefined,
+): boolean => {
+  if (!jutsu.requiredBloodlineItemId) return true;
+  return !!userItems?.some(
+    (ui) => ui.itemId === jutsu.requiredBloodlineItemId && ui.equipped !== "NONE",
+  );
+};
+
 export const isJutsuEvolution = (jutsu: Jutsu): boolean => {
   return !!jutsu.parentJutsuId;
 };
