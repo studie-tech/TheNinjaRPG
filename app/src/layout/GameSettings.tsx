@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import {
-  MUSIC_CURRENT_THEME,
-  MUSIC_SHINE_THEME,
+  MUSIC_AKIKAZE_THEME,
+  MUSIC_SHIROHANA_THEME,
   MUSIC_SYNDICATE_THEME,
   MUSIC_TSUKIMORI_THEME,
   MUSIC_WELCOME_TO_SEICHI,
@@ -69,9 +69,9 @@ export const GlobalAudioProvider: React.FC<{
   if (userData?.village?.name === "Tsukimori") {
     musicSrc = MUSIC_TSUKIMORI_THEME;
   } else if (userData?.village?.name === "Shirohana") {
-    musicSrc = MUSIC_SHINE_THEME;
+    musicSrc = MUSIC_SHIROHANA_THEME;
   } else if (userData?.village?.name === "Akikaze") {
-    musicSrc = MUSIC_CURRENT_THEME;
+    musicSrc = MUSIC_AKIKAZE_THEME;
   } else if (userData?.village?.name === "Syndicate") {
     musicSrc = MUSIC_SYNDICATE_THEME;
   }
