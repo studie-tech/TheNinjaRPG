@@ -2155,11 +2155,11 @@ export const MUSIC_SHADOW_OF_THE_BLADE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQCH0mJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
 export const MUSIC_WELCOME_TO_SEICHI =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrwIzM2huJPmdY8zI2ptZXAoEj1c6BMKvrQOx";
-export const MUSIC_SHINE_THEME =
+export const MUSIC_SHIROHANA_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnL3NqnmojJ0EqeDCvBrNmZaXVdY97gSpOWiA";
 export const MUSIC_TSUKIMORI_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE9b6CNLfKL5D7TAFe29bymSaPCIQ846MdzGg";
-export const MUSIC_CURRENT_THEME =
+export const MUSIC_AKIKAZE_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJY9DJWIOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
 export const MUSIC_SYNDICATE_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxrcAPUWZsq9k0Von5rUfP6OgQ2TyptCKHS4u";
