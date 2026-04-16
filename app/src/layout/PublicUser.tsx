@@ -2209,10 +2209,10 @@ const CombatHistoryTab: React.FC<TabComponentProps> = ({
 
 interface BracketEligibilityBadgeProps {
   viewerExperience: number;
-  viewerWarParticipantUntil: Date | null;
+  viewerWarParticipantUntil: Date;
   targetExperience: number;
-  targetBracketImmunityLiftedUntil: Date | null;
-  targetWarParticipantUntil: Date | null;
+  targetBracketImmunityLiftedUntil: Date;
+  targetWarParticipantUntil: Date;
 }
 
 const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
@@ -2225,13 +2225,9 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
   const now = Date.now();
   const attackerBracket = getExpBracket(viewerExperience);
   const targetBracket = getExpBracket(targetExperience);
-  const immunityLifted =
-    targetBracketImmunityLiftedUntil != null &&
-    targetBracketImmunityLiftedUntil.getTime() > now;
+  const immunityLifted = targetBracketImmunityLiftedUntil.getTime() > now;
   const bothWarParticipants =
-    viewerWarParticipantUntil != null &&
     viewerWarParticipantUntil.getTime() > now &&
-    targetWarParticipantUntil != null &&
     targetWarParticipantUntil.getTime() > now;
 
   if (attackerBracket <= targetBracket) {
@@ -2251,7 +2247,8 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
   if (bothWarParticipants) {
     return (
       <p className="font-medium text-sm text-yellow-600">
-        ~ May be attackable (both are war participants — server decides)
+        ~ May be attackable (both war participants — requires active village war, server
+        decides)
       </p>
     );
   }
