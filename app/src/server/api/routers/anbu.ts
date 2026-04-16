@@ -42,7 +42,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { secondsFromDate } from "@/utils/time";
 import { getEffectiveStructureLevel } from "@/utils/village";
-import { anbuCreateSchema } from "@/validators/anbu";
+import { anbuCreateSchema, anbuEditSchema } from "@/validators/anbu";
 
 const pusher = getServerPusher();
 
@@ -309,7 +309,7 @@ export const anbuRouter = createTRPCRouter({
     }),
   editSquad: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Edit ANBU squad name and image" } })
-    .input(z.object({ squadId: z.string(), name: z.string(), image: z.string() }))
+    .input(anbuEditSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch

@@ -38,7 +38,7 @@ import { getUnique } from "@/utils/grouping";
 import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { secondsPassed } from "@/utils/time";
-import { getShrineBoost } from "@/utils/village";
+import { getShrineBoost, getStrucBoost } from "@/utils/village";
 import type {
   AllObjectivesType,
   AllObjectiveTask,
@@ -155,6 +155,9 @@ export const getReward = (
     const sectors = user.village?.sectors?.length || 0;
     const errandsBoost = getShrineBoost(sectors, "Errands", user.village);
     const missionBoost = getShrineBoost(sectors, "Mission", user.village);
+    // Village mission hall boost (percentage as decimal), applies to missions and errands
+    const villageMissionBoost =
+      getStrucBoost("missionRewardPerLvl", user.village?.structures) / 100;
     // Get clan mission reward boost (percentage as decimal)
     // Only apply for real clans, not outlaw factions/towns
     const clanMissionBoost = user.isOutlaw
@@ -163,9 +166,10 @@ export const getReward = (
     let boostFactor = 1;
     if (userQuest?.quest.questType) {
       if (["mission", "crime", "medical"].includes(userQuest.quest.questType)) {
-        boostFactor = 1 + missionBoost + clanMissionBoost;
+        boostFactor = 1 + missionBoost + clanMissionBoost + villageMissionBoost;
       } else if (userQuest.quest.questType === "errand") {
-        boostFactor = 1 + errandsBoost;
+        // clanMissionBoost intentionally excluded from errands; only shrine + village hall apply
+        boostFactor = 1 + errandsBoost + villageMissionBoost;
       }
     }
     // Get rewards

@@ -1,5 +1,7 @@
 import type { SHRINE_BOOST_TYPE, StructureRoute } from "@/drizzle/constants";
 import {
+  BUILDING_UPGRADE_BASE_COST,
+  BUILDING_UPGRADE_PER_LEVEL_COST,
   FED_GOLD_BANK_INTEREST,
   FED_NORMAL_BANK_INTEREST,
   FED_SILVER_BANK_INTEREST,
@@ -71,6 +73,7 @@ export type StructureAttribute =
   | "clansPerLvl"
   | "hospitalSpeedupPerLvl"
   | "itemDiscountPerLvl"
+  | "missionRewardPerLvl"
   | "patrolsPerLvl"
   | "ramenDiscountPerLvl"
   | "regenIncreasePerLvl"
@@ -170,7 +173,8 @@ export const calcStructureUpgrade = (
   village: Village & { structures: VillageStructure[] },
 ) => {
   // Base cost (uses base level, not effective level - upgrades are based on permanent level)
-  const cost = Math.floor(structure.baseCost * (structure.level + 1));
+  const cost =
+    BUILDING_UPGRADE_BASE_COST + BUILDING_UPGRADE_PER_LEVEL_COST * structure.level;
   // Village tax
   const population = village.populationCount;
   const hundredsOver200 = Math.max(Math.floor((population - 200) / 100), 0);

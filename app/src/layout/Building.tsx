@@ -272,6 +272,11 @@ export const StructureRewardEntries = (structure: VillageStructure) => {
     if (structure.itemDiscountPerLvl > 0) {
       msgs.push(`Item discount: ${formatValue(structure.itemDiscountPerLvl, "%")}`);
     }
+    if (structure.missionRewardPerLvl > 0) {
+      msgs.push(
+        `Mission/Errand Rewards: +${formatValue(structure.missionRewardPerLvl, "%")}`,
+      );
+    }
     if (structure.patrolsPerLvl > 0) {
       msgs.push(
         `Patrol attacking enemies: +${formatValue(structure.patrolsPerLvl, "%")}`,

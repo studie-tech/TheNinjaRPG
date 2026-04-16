@@ -83,6 +83,7 @@ import {
   clanBoostTypeSchema,
   clanCreateSchema,
   clanGetRequestSchema,
+  factionEditSchema,
 } from "@/validators/clan";
 
 const pusher = getServerPusher();
@@ -637,7 +638,7 @@ export const clanRouter = createTRPCRouter({
     }),
   editClan: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Edit clan/faction name and image" } })
-    .input(z.object({ clanId: z.string(), name: z.string(), image: z.string() }))
+    .input(factionEditSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch

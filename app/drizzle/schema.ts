@@ -2976,8 +2976,7 @@ export const villageStructure = mysqlTable(
     maxSp: int("maxSp").default(100).notNull(),
     allyAccess: tinyint("allyAccess").default(1).notNull(),
     showInVillagePage: boolean("showInVillagePage").default(true).notNull(),
-    // upgrade cust & current level
-    baseCost: int("baseCost").default(10000).notNull(),
+    // upgrade current level
     level: int("level").default(1).notNull(),
     maxLevel: int("maxLevel").default(10).notNull(),
     lastUpgradedAt: datetime("lastUpgradedAt", { mode: "date", fsp: 3 }),
@@ -2989,6 +2988,7 @@ export const villageStructure = mysqlTable(
     clansPerLvl: tinyint("clansPerLvl").default(0).notNull(),
     hospitalSpeedupPerLvl: tinyint("hospitalSpeedupPerLvl").default(0).notNull(),
     itemDiscountPerLvl: tinyint("itemDiscountPerLvl").default(0).notNull(),
+    missionRewardPerLvl: tinyint("missionRewardPerLvl").default(0).notNull(),
     patrolsPerLvl: tinyint("patrolsPerLvl").default(0).notNull(),
     ramenDiscountPerLvl: tinyint("ramenDiscountPerLvl").default(0).notNull(),
     regenIncreasePerLvl: tinyint("regenIncreasePerLvl").default(0).notNull(),
