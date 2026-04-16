@@ -61,7 +61,7 @@ import { sealCheck } from "@/libs/combat/tags";
 import type { GroundEffect, UserEffect } from "@/libs/combat/types";
 import { getPreventTypeName, isEffectActive } from "@/libs/combat/util";
 import { useGameMenu } from "@/libs/menus";
-import { calcLevelRequirements } from "@/libs/profile";
+import { calcLevelRequirements, getExpBracket } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { calcCovertTrainingFinishAt } from "@/libs/stealth";
 import { trainingSpeedSeconds } from "@/libs/train";
@@ -374,6 +374,23 @@ const MenuBoxProfile: React.FC = () => {
                 {userData.village.name}
               </Link>
             </p>
+          )}
+          {userData && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <p className="cursor-default">
+                    <b>Bracket: </b>
+                    {getExpBracket(userData.experience)}/7
+                  </p>
+                </TooltipTrigger>
+                <TooltipContent>
+                  PvP bracket based on experience. You can freely attack players in your
+                  bracket or higher. Players below your bracket are protected unless
+                  their immunity is lifted or both sides are active war participants.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           <p suppressHydrationWarning>
             <b>Time: </b> {gameTime}
