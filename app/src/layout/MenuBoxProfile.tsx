@@ -47,6 +47,7 @@ import {
   MEDICAL_MISSIONS_PER_DAY,
   MISSIONS_PER_DAY,
   PVP_MISSIONS_PER_DAY,
+  XP_BRACKETS,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
@@ -381,7 +382,7 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger asChild>
                   <p className="cursor-default">
                     <b>Bracket: </b>
-                    {getExpBracket(userData.experience)}/7
+                    {getExpBracket(userData.experience)}/{XP_BRACKETS.length}
                   </p>
                 </TooltipTrigger>
                 <TooltipContent>
