@@ -1,4 +1,16 @@
-import { and, desc, eq, gte, isNull, like, lte, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  isNotNull,
+  isNull,
+  like,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -87,6 +99,13 @@ export const itemRouter = createTRPCRouter({
         orderBy: (table, { asc }) => [asc(table.name)],
       });
     }),
+  getBloodlineNames: publicProcedure.query(async ({ ctx }) => {
+    return await ctx.drizzle.query.item.findMany({
+      columns: { id: true, name: true },
+      where: (table) => isNotNull(table.bloodlineId),
+      orderBy: (table, { asc }) => [asc(table.name)],
+    });
+  }),
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a specific item by ID" } })
     .input(z.object({ id: z.string() }))
