@@ -146,6 +146,28 @@ const RestoreStructureButton = ({ structureId }: { structureId: string }) => {
   );
 };
 
+const STRUCTURE_BONUSES: {
+  key: keyof VillageStructure;
+  label: string;
+  unit: string;
+}[] = [
+  { key: "anbuSquadsPerLvl", label: "ANBU squads", unit: "" },
+  { key: "arenaRewardPerLvl", label: "arena reward", unit: "%" },
+  { key: "bankInterestPerLvl", label: "bank interest", unit: "%" },
+  { key: "blackDiscountPerLvl", label: "black market discount", unit: "%" },
+  { key: "clansPerLvl", label: "clan slots", unit: "" },
+  { key: "hospitalSpeedupPerLvl", label: "hospital speedup", unit: "%" },
+  { key: "itemDiscountPerLvl", label: "item shop discount", unit: "%" },
+  { key: "missionRewardPerLvl", label: "mission reward", unit: "%" },
+  { key: "patrolsPerLvl", label: "patrol slots", unit: "" },
+  { key: "ramenDiscountPerLvl", label: "ramen discount", unit: "%" },
+  { key: "regenIncreasePerLvl", label: "regen increase", unit: "%" },
+  { key: "sleepRegenPerLvl", label: "sleep regen", unit: "%" },
+  { key: "structureDiscountPerLvl", label: "structure upgrade discount", unit: "%" },
+  { key: "trainBoostPerLvl", label: "training boost", unit: "%" },
+  { key: "villageDefencePerLvl", label: "village defence", unit: "%" },
+];
+
 const UpgradeButton = ({
   structure,
   village,
@@ -205,6 +227,25 @@ const UpgradeButton = ({
             level).
           </p>
           <p>You currently have {currentFunds} village tokens.</p>
+          {(() => {
+            const bonuses = STRUCTURE_BONUSES.filter(
+              (b) => ((structure[b.key] as number) ?? 0) > 0,
+            );
+            if (bonuses.length === 0) return null;
+            return (
+              <div className="mt-2">
+                <p className="text-sm font-semibold">Next level provides:</p>
+                <ul className="mt-1 list-inside list-disc text-sm">
+                  {bonuses.map((b) => (
+                    <li key={b.key}>
+                      +{structure[b.key] as number}
+                      {b.unit} {b.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
         </Confirm2>
       )}
     </div>
