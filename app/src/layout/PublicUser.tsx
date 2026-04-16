@@ -70,6 +70,7 @@ import {
   BattleTypes,
   IMG_AVATAR_DEFAULT,
   TrainingSpeeds,
+  XP_BRACKETS,
 } from "@/drizzle/constants";
 import type { Badge, Jutsu, UserBadge, UserRank } from "@/drizzle/schema";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
@@ -97,7 +98,7 @@ import StatusBar from "@/layout/StatusBar";
 import { publicUserText } from "@/layout/seoTexts";
 import Table from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { showUserRank } from "@/libs/profile";
+import { getExpBracket, showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import { groupBy } from "@/utils/grouping";
 import { parseHtml } from "@/utils/parse";
@@ -709,12 +710,24 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             <br />
             <b>Experience</b>
             <p>Experience: {profile.experience}</p>
+            <p>
+              PvP Bracket: {getExpBracket(profile.experience)}/{XP_BRACKETS.length}
+            </p>
             {canSeeSecrets && <p>Unclaimed Exp: {profile.earnedExperience}</p>}
             <p>Experience for lvl: ---</p>
             <p>
               PVE Fights: {`${profile.pveFights} (+${profile.battleHistory.length})`}
             </p>
             <p>Yapper Rank: {profile.tavernMessages}</p>
+            {userData && userData.userId !== profile.userId && !profile.isAi && (
+              <BracketEligibilityBadge
+                viewerExperience={userData.experience}
+                viewerWarParticipantUntil={userData.warParticipantUntil}
+                targetExperience={profile.experience}
+                targetBracketImmunityLiftedUntil={profile.bracketImmunityLiftedUntil}
+                targetWarParticipantUntil={profile.warParticipantUntil}
+              />
+            )}
             <br />
             <b>Special</b>
             <p>Reputation points: {profile.reputationPoints}</p>
@@ -2191,5 +2204,60 @@ const CombatHistoryTab: React.FC<TabComponentProps> = ({
         />
       )}
     </ContentBox>
+  );
+};
+
+interface BracketEligibilityBadgeProps {
+  viewerExperience: number;
+  viewerWarParticipantUntil: Date | null;
+  targetExperience: number;
+  targetBracketImmunityLiftedUntil: Date | null;
+  targetWarParticipantUntil: Date | null;
+}
+
+const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
+  viewerExperience,
+  viewerWarParticipantUntil,
+  targetExperience,
+  targetBracketImmunityLiftedUntil,
+  targetWarParticipantUntil,
+}) => {
+  const now = Date.now();
+  const attackerBracket = getExpBracket(viewerExperience);
+  const targetBracket = getExpBracket(targetExperience);
+  const immunityLifted =
+    targetBracketImmunityLiftedUntil != null &&
+    targetBracketImmunityLiftedUntil.getTime() > now;
+  const bothWarParticipants =
+    viewerWarParticipantUntil != null &&
+    viewerWarParticipantUntil.getTime() > now &&
+    targetWarParticipantUntil != null &&
+    targetWarParticipantUntil.getTime() > now;
+
+  if (attackerBracket <= targetBracket) {
+    return (
+      <p className="font-medium text-green-600 text-sm">
+        ✓ Attackable (same or higher bracket)
+      </p>
+    );
+  }
+  if (immunityLifted) {
+    return (
+      <p className="font-medium text-orange-500 text-sm">
+        ✓ Attackable (their immunity is lifted)
+      </p>
+    );
+  }
+  if (bothWarParticipants) {
+    return (
+      <p className="font-medium text-sm text-yellow-600">
+        ~ May be attackable (both are war participants — server decides)
+      </p>
+    );
+  }
+  return (
+    <p className="font-medium text-red-500 text-sm">
+      ✗ Protected (lower bracket — {targetBracket} vs your {attackerBracket})
+    </p>
   );
 };
