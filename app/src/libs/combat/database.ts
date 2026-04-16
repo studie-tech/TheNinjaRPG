@@ -1380,7 +1380,7 @@ export const updateUser = async (
       );
       return (
         opponents.length > 0 &&
-        opponents.every((t) => getExpBracket(t.experience) >= attackerBracket)
+        opponents.some((t) => getExpBracket(t.experience) >= attackerBracket)
       );
     })();
 
