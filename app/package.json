@@ -134,7 +134,7 @@
     "react-hook-form": "7.72.1",
     "react-html-parser": "2.0.2",
     "replicate": "^1.4.0",
-    "sanitize-html": "2.17.2",
+    "sanitize-html": "2.17.3",
     "sharp": "0.34.5",
     "simplex-noise": "4.0.3",
     "sonner": "^2.0.7",
