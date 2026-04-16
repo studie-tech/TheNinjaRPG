@@ -99,13 +99,20 @@ export const itemRouter = createTRPCRouter({
         orderBy: (table, { asc }) => [asc(table.name)],
       });
     }),
-  getBloodlineNames: publicProcedure.query(async ({ ctx }) => {
-    return await ctx.drizzle.query.item.findMany({
-      columns: { id: true, name: true },
-      where: (table) => isNotNull(table.bloodlineId),
-      orderBy: (table, { asc }) => [asc(table.name)],
-    });
-  }),
+  getBloodlineItemNames: publicProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Get names of items associated with a bloodline",
+      },
+    })
+    .query(async ({ ctx }) => {
+      return await ctx.drizzle.query.item.findMany({
+        columns: { id: true, name: true },
+        where: (table) => isNotNull(table.bloodlineId),
+        orderBy: (table, { asc }) => [asc(table.name)],
+      });
+    }),
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a specific item by ID" } })
     .input(z.object({ id: z.string() }))
