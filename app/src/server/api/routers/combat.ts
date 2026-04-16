@@ -164,7 +164,7 @@ import {
 import { toDefenceStat, toOffenceStat } from "@/libs/stats";
 import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
-import { canUseJutsu, checkJutsuItems } from "@/libs/train";
+import { canUseJutsu, checkJutsuBloodlineItem, checkJutsuItems } from "@/libs/train";
 import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
 import {
   extendWarParticipantSql,
@@ -2734,6 +2734,10 @@ export const processUsersForBattle = async (
           .forEach((e) => {
             if ("aiId" in e) allSummons.push(e.aiId);
           });
+        // Not if required bloodline item is not equipped
+        if (!checkJutsuBloodlineItem(userjutsu.jutsu, user.items) && !user.isAi) {
+          return false;
+        }
         // Not if not the right bloodline
         return (
           userjutsu.jutsu.bloodlineId === "" ||
