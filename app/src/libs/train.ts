@@ -207,7 +207,7 @@ export const checkJutsuItems = (
 
 export const checkJutsuBloodlineItem = (
   jutsu: Jutsu,
-  userItems: UserItemWithItem[] | undefined,
+  userItems: Pick<UserItemWithItem, "itemId" | "equipped" | "durability">[] | undefined,
 ): boolean => {
   if (!jutsu.requiredBloodlineItemId) return true;
   return !!userItems?.some(

@@ -44,6 +44,7 @@ import {
   canEvolveJutsu,
   canTrainJutsu,
   canUseJutsu,
+  checkJutsuBloodlineItem,
   hasRequiredLevel,
   hasRequiredRank,
 } from "@/libs/train";
@@ -513,6 +514,10 @@ export const jutsuRouter = createTRPCRouter({
       if (!canUseJutsu(evolutionJutsu, user))
         return errorResponse(
           "You don't meet all requirements for this evolution (village, bloodline, or element restrictions)",
+        );
+      if (!checkJutsuBloodlineItem(evolutionJutsu, user.items))
+        return errorResponse(
+          "You don't have the required bloodline item equipped for this evolution",
         );
       // Quest tracking
       const { trackers } = getNewTrackers(user, [
@@ -1196,6 +1201,11 @@ export const jutsuRouter = createTRPCRouter({
       // Check if jutsu can be equipped
       if (!isEquipped && !canUseJutsu(userjutsuObj.jutsu, user)) {
         return errorResponse("You cannot equip this jutsu due to missing requirements");
+      }
+      if (!isEquipped && !checkJutsuBloodlineItem(userjutsuObj.jutsu, user.items)) {
+        return errorResponse(
+          "You don't have the required bloodline item equipped for this jutsu",
+        );
       }
 
       if (!isEquipped && curEquip >= maxEquip) {
