@@ -5,6 +5,7 @@ import type {
   TrainingSpeed,
 } from "@/drizzle/constants";
 import {
+  DURABILITY_USABILITY_THR,
   ElementNames,
   FED_GOLD_JUTSU_SLOTS,
   FED_NORMAL_JUTSU_SLOTS,
@@ -210,7 +211,10 @@ export const checkJutsuBloodlineItem = (
 ): boolean => {
   if (!jutsu.requiredBloodlineItemId) return true;
   return !!userItems?.some(
-    (ui) => ui.itemId === jutsu.requiredBloodlineItemId && ui.equipped !== "NONE",
+    (ui) =>
+      ui.itemId === jutsu.requiredBloodlineItemId &&
+      ui.equipped !== "NONE" &&
+      ui.durability > DURABILITY_USABILITY_THR,
   );
 };
 

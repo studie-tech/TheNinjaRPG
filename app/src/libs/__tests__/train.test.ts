@@ -3,7 +3,7 @@ import type { Item, Jutsu, UserItem } from "@/drizzle/schema";
 import { checkJutsuBloodlineItem } from "@/libs/train";
 
 type MinimalJutsu = Pick<Jutsu, "requiredBloodlineItemId">;
-type MinimalUserItemWithItem = Pick<UserItem, "itemId" | "equipped"> & {
+type MinimalUserItemWithItem = Pick<UserItem, "itemId" | "equipped" | "durability"> & {
   item: Pick<Item, "id">;
 };
 
@@ -15,8 +15,9 @@ const makeJutsu = (requiredBloodlineItemId: string | null): MinimalJutsu =>
 const makeUserItem = (
   itemId: string,
   equipped: UserItem["equipped"],
+  durability = 100,
 ): MinimalUserItemWithItem =>
-  ({ itemId, equipped, item: { id: itemId } }) as MinimalUserItemWithItem;
+  ({ itemId, equipped, durability, item: { id: itemId } }) as MinimalUserItemWithItem;
 
 describe("checkJutsuBloodlineItem", () => {
   it("returns true when no requiredBloodlineItemId is set (null)", () => {
@@ -43,13 +44,22 @@ describe("checkJutsuBloodlineItem", () => {
     expect(result).toBe(false);
   });
 
-  it("returns true when required item is equipped in a non-NONE slot", () => {
-    const items = [makeUserItem(ITEM_ID, "HAND_1")];
+  it("returns true when required item is equipped in a non-NONE slot with durability", () => {
+    const items = [makeUserItem(ITEM_ID, "HAND_1", 50)];
     const result = checkJutsuBloodlineItem(
       makeJutsu(ITEM_ID) as Jutsu,
       items as Parameters<typeof checkJutsuBloodlineItem>[1],
     );
     expect(result).toBe(true);
+  });
+
+  it("returns false when required item is equipped but durability is zero (broken)", () => {
+    const items = [makeUserItem(ITEM_ID, "HAND_1", 0)];
+    const result = checkJutsuBloodlineItem(
+      makeJutsu(ITEM_ID) as Jutsu,
+      items as Parameters<typeof checkJutsuBloodlineItem>[1],
+    );
+    expect(result).toBe(false);
   });
 
   it("returns false when a different item is equipped but not the required one", () => {

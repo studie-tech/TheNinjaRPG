@@ -20,9 +20,9 @@ interface RichInputProps {
   placeholder?: string;
   error?: string;
   disabled?: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: generic form control accepting any form shape
   control: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: generic form control accepting any form shape
   onSubmit?: (e: any) => void;
   isDirty?: boolean;
   enableMentions?: boolean;
