@@ -2913,6 +2913,13 @@ export const village = mysqlTable(
         unlockedAiIds: string[];
         activeBoosts: Record<string, string>; // boost type -> expiry ISO string
         activeAiIds: string[];
+        boostTemplate?: Array<{
+          boostType: string;
+          dayOfWeek: number; // 0 = Sunday, 6 = Saturday (UTC)
+          slotIndex: number; // 0–11, maps to hours 0–22 in steps of 2
+        }>;
+        boostTemplateUpdatedBy?: string; // userId of last editor
+        boostTemplateUpdatedAt?: string; // ISO timestamp of last edit
       }>()
       .default({ unlockedAiIds: [], activeBoosts: {}, activeAiIds: [] })
       .notNull(),
