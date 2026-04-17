@@ -2914,7 +2914,7 @@ export const village = mysqlTable(
         activeBoosts: Record<string, string>; // boost type -> expiry ISO string
         activeAiIds: string[];
         boostTemplate?: Array<{
-          boostType: string;
+          boostType: consts.SHRINE_BOOST_TYPE;
           dayOfWeek: number; // 0 = Sunday, 6 = Saturday (UTC)
           slotIndex: number; // 0–11, maps to hours 0–22 in steps of 2
         }>;

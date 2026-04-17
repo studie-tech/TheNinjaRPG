@@ -794,12 +794,12 @@ export const shrineRouter = createTRPCRouter({
       await ctx.drizzle
         .update(village)
         .set({
-          shrineSettings: {
-            ...targetVillage.shrineSettings,
-            boostTemplate: input.template,
-            boostTemplateUpdatedBy: ctx.userId,
-            boostTemplateUpdatedAt: new Date().toISOString(),
-          },
+          shrineSettings: sql`JSON_SET(
+            COALESCE(${village.shrineSettings}, JSON_OBJECT()),
+            '$.boostTemplate', CAST(${JSON.stringify(input.template)} AS JSON),
+            '$.boostTemplateUpdatedBy', ${user.username},
+            '$.boostTemplateUpdatedAt', ${new Date().toISOString()}
+          )`,
         })
         .where(eq(village.id, input.villageId));
 
