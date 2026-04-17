@@ -31,7 +31,7 @@ import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
-import { formatDateTimeShort, secondsFromDate, secondsFromNow } from "@/utils/time";
+import { secondsFromDate, secondsFromNow } from "@/utils/time";
 import { boostTemplateSchema } from "@/validators/shrine";
 import {
   baseServerResponse,
