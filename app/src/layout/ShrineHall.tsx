@@ -893,7 +893,6 @@ const BoostTemplateGrid = ({
   const [openCell, setOpenCell] = useState<{ day: number; slot: number } | null>(null);
   const [openAllDay, setOpenAllDay] = useState<number | null>(null);
   const [allDayBoosts, setAllDayBoosts] = useState<string[]>([]);
-  const [allDayFilledDays, setAllDayFilledDays] = useState<Set<number>>(new Set());
   const [isDirty, setIsDirty] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -915,6 +914,17 @@ const BoostTemplateGrid = ({
     document.addEventListener("mousedown", handleMouseDown);
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, []);
+
+  const allDayFilledDays = useMemo(() => {
+    const filled = new Set<number>();
+    for (let day = 0; day < 7; day++) {
+      const dayEntries = localTemplate.filter((e) => e.dayOfWeek === day);
+      if (dayEntries.length > 0 && dayEntries.length % 12 === 0) {
+        filled.add(day);
+      }
+    }
+    return filled;
+  }, [localTemplate]);
 
   const templateBySlot = useMemo(() => {
     const map = new Map<string, BoostTemplateEntry[]>();
@@ -958,11 +968,6 @@ const BoostTemplateGrid = ({
         },
       ];
     });
-    setAllDayFilledDays((prev) => {
-      const next = new Set(prev);
-      next.delete(day);
-      return next;
-    });
     setIsDirty(true);
   };
 
@@ -981,15 +986,6 @@ const BoostTemplateGrid = ({
       }
       return [...filtered, ...newEntries];
     });
-    setAllDayFilledDays((prev) => {
-      const next = new Set(prev);
-      if (boosts.length > 0) {
-        next.add(day);
-      } else {
-        next.delete(day);
-      }
-      return next;
-    });
     setIsDirty(true);
     setOpenAllDay(null);
     setAllDayBoosts([]);
@@ -997,7 +993,6 @@ const BoostTemplateGrid = ({
 
   const clearAll = () => {
     setLocalTemplate([]);
-    setAllDayFilledDays(new Set());
     setIsDirty(true);
     setClearConfirm(false);
   };
@@ -1210,7 +1205,11 @@ const BoostTemplateGrid = ({
                     );
                   })}
                 </div>
-                <Button size="sm" onClick={() => fillAllDay(openAllDay, allDayBoosts)}>
+                <Button
+                  size="sm"
+                  disabled={allDayBoosts.length === 0}
+                  onClick={() => fillAllDay(openAllDay, allDayBoosts)}
+                >
                   Fill Day
                 </Button>
               </div>
