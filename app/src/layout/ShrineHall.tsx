@@ -367,7 +367,11 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   // Base 10% with 1+ shrines, plus ~3.33% per additional shrine (10-20% range)
   const boostPercentage =
     level3Shrines > 0
-      ? SHRINE_BOOST_BASE_PERC + (level3Shrines - 1) * SHRINE_BOOST_PER_SHRINE_PERC
+      ? Math.round(
+          (SHRINE_BOOST_BASE_PERC +
+            (level3Shrines - 1) * SHRINE_BOOST_PER_SHRINE_PERC) *
+            10,
+        ) / 10
       : 0;
 
   return (
