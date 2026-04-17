@@ -23,6 +23,7 @@ import {
 import { fetchVillages } from "@/server/api/routers/village";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
 import { getSlotIndex, isNewSlotDue, secondsFromDate } from "@/utils/time";
+import type { BoostTemplateEntry } from "@/validators/shrine";
 
 const ENDPOINT_NAME = "shrine-maintenance";
 const ENDPOINT_NAME_DAILY = "shrine-maintenance-daily";
@@ -116,12 +117,6 @@ async function runShrineMaintenance(now: Date) {
   };
 }
 
-type BoostTemplateEntry = {
-  boostType: string;
-  dayOfWeek: number;
-  slotIndex: number;
-};
-
 type ShrineSettings = {
   unlockedAiIds?: string[];
   activeBoosts?: Record<string, string>;
@@ -144,7 +139,7 @@ export function computeTemplateActivations(params: {
   shrineSettings: ShrineSettings | null;
   villagesWithLevel3Shrine: Set<string>;
   boostCost: number;
-}): { boostType: string; newEndAt: string }[] {
+}): { boostType: BoostTemplateEntry["boostType"]; newEndAt: string }[] {
   const {
     now,
     prevTime,
@@ -155,7 +150,8 @@ export function computeTemplateActivations(params: {
     boostCost,
   } = params;
 
-  // Only fire at slot boundaries
+  // Defensive guard: callers already gate on slot boundaries, but keeping the
+  // check here makes direct callers safe as well.
   if (!isNewSlotDue(now, prevTime)) return [];
 
   // Village must control at least one Level 3 shrine
@@ -170,12 +166,13 @@ export function computeTemplateActivations(params: {
   // Find matching template entries for current slot
   const matchingEntries = template
     .filter((e) => e.dayOfWeek === currentDayOfWeek && e.slotIndex === currentSlotIndex)
-    .map((e) => e.boostType)
+    .map((e) => e.boostType as BoostTemplateEntry["boostType"])
     .sort(); // alphabetical for deterministic partial activation
 
   const activeBoosts = shrineSettings?.activeBoosts ?? {};
   const boostDurationMs = SHRINE_BOOST_DURATION_HOURS * 60 * 60 * 1000;
-  const results: { boostType: string; newEndAt: string }[] = [];
+  const results: { boostType: BoostTemplateEntry["boostType"]; newEndAt: string }[] =
+    [];
   let remainingTokens = villageTokens;
 
   for (const boostType of matchingEntries) {
@@ -285,7 +282,7 @@ async function runShrineBoostTick(
 
   let activeUpdated = 0;
   const baseUpdates: Promise<unknown>[] = [];
-  const templateUpdates: Promise<unknown>[] = [];
+  const templateUpdates: Promise<number>[] = [];
 
   for (const villageId of allAffectedVillageIds) {
     const villageData = villageMap.get(villageId);
@@ -337,23 +334,27 @@ async function runShrineBoostTick(
       villagesWithLevel3Shrine,
       boostCost: SHRINE_BOOST_COST,
     });
-    activeUpdated += templateActivations.length;
-
     if (templateActivations.length > 0) {
-      const tokenCost = templateActivations.length * SHRINE_BOOST_COST;
-      // Use nested JSON_SET to add only the new boost keys — avoids overwriting base changes
-      let jsonExpr: ReturnType<typeof sql> = sql`${village.shrineSettings}`;
-      for (const { boostType, newEndAt } of templateActivations) {
-        jsonExpr = sql`JSON_SET(${jsonExpr}, ${`$.activeBoosts.${boostType}`}, ${newEndAt})`;
-      }
       templateUpdates.push(
-        drizzleDB
-          .update(village)
-          .set({
-            shrineSettings: jsonExpr,
-            tokens: sql`${village.tokens} - ${tokenCost}`,
-          })
-          .where(and(eq(village.id, villageId), gte(village.tokens, tokenCost))),
+        (async () => {
+          let activatedCount = 0;
+
+          for (const { boostType, newEndAt } of templateActivations) {
+            const updateResult = await drizzleDB
+              .update(village)
+              .set({
+                shrineSettings: withActivatedBoost(boostType, newEndAt),
+                tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
+              })
+              .where(
+                and(eq(village.id, villageId), gte(village.tokens, SHRINE_BOOST_COST)),
+              );
+
+            activatedCount += updateResult.rowsAffected ?? 0;
+          }
+
+          return activatedCount;
+        })(),
       );
     }
   }
@@ -372,7 +373,9 @@ async function runShrineBoostTick(
           .where(inArray(shrineBoostSchedule.id, expiredScheduleIds))
       : Promise.resolve();
 
-  await Promise.all([...templateUpdates, deleteExpired]);
+  const activatedByTemplate = await Promise.all(templateUpdates);
+  activeUpdated += activatedByTemplate.reduce((total, count) => total + count, 0);
+  await deleteExpired;
 
   return { activeUpdated, expiredDeleted: expiredScheduleIds.length };
 }
@@ -469,5 +472,20 @@ function withUpdatedBoosts(
     '$.activeBoosts', CAST(${JSON.stringify(activeBoosts)} AS JSON),
     '$.unlockedAiIds', CAST(${JSON.stringify(settings?.unlockedAiIds ?? [])} AS JSON),
     '$.activeAiIds', CAST(${JSON.stringify(settings?.activeAiIds ?? [])} AS JSON)
+  )`;
+}
+
+function withActivatedBoost(
+  boostType: BoostTemplateEntry["boostType"],
+  newEndAt: string,
+): ReturnType<typeof sql> {
+  return sql`JSON_SET(
+    JSON_SET(
+      COALESCE(${village.shrineSettings}, JSON_OBJECT()),
+      '$.activeBoosts',
+      COALESCE(JSON_EXTRACT(${village.shrineSettings}, '$.activeBoosts'), JSON_OBJECT())
+    ),
+    ${`$.activeBoosts.${boostType}`},
+    ${newEndAt}
   )`;
 }

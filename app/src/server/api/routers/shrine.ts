@@ -219,7 +219,11 @@ export const shrineRouter = createTRPCRouter({
         .set({
           tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
           shrineSettings: sql`JSON_SET(
-            COALESCE(${village.shrineSettings}, JSON_OBJECT()),
+            JSON_SET(
+              COALESCE(${village.shrineSettings}, JSON_OBJECT()),
+              '$.activeBoosts',
+              COALESCE(JSON_EXTRACT(${village.shrineSettings}, '$.activeBoosts'), JSON_OBJECT())
+            ),
             ${boostPath}, ${boostExpiry.toISOString()}
           )`,
         })
@@ -460,6 +464,9 @@ export const shrineRouter = createTRPCRouter({
         }),
       ]);
 
+      if (!user) {
+        throw serverError("NOT_FOUND", "User not found");
+      }
       if (!targetVillage) {
         throw serverError("NOT_FOUND", "Village not found");
       }
@@ -491,12 +498,8 @@ export const shrineRouter = createTRPCRouter({
     .input(z.object({ villageId: z.string(), template: boostTemplateSchema }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, targetVillage, level3Shrines] = await Promise.all([
+      const [{ user }, level3Shrines] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        ctx.drizzle.query.village.findFirst({
-          where: eq(village.id, input.villageId),
-          columns: { id: true, shrineSettings: true },
-        }),
         ctx.drizzle.query.sector.findMany({
           where: and(eq(sector.villageId, input.villageId), eq(sector.shrineLevel, 3)),
         }),
@@ -511,7 +514,6 @@ export const shrineRouter = createTRPCRouter({
       if (user.village.kageId !== user.userId && user.rank !== "ELDER") {
         return errorResponse("Only the Kage or Elders can set boost templates");
       }
-      if (!targetVillage) return errorResponse("Village not found");
       if (level3Shrines.length === 0) {
         return errorResponse(
           "Need at least one Level 3 shrine to set a boost template",
