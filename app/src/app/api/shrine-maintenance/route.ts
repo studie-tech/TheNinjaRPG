@@ -1,6 +1,8 @@
 import { and, eq, gt, inArray, isNull, lt, lte } from "drizzle-orm";
 import { cookies } from "next/headers";
 import {
+  SHRINE_BOOST_COST,
+  SHRINE_BOOST_DURATION_HOURS,
   shrineLobbyFreshAfter,
   WAR_SHRINE_MAINTENANCE_DAYS,
 } from "@/drizzle/constants";
@@ -20,7 +22,7 @@ import {
 } from "@/libs/gamesettings";
 import { fetchVillages } from "@/server/api/routers/village";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
-import { secondsFromDate } from "@/utils/time";
+import { getSlotIndex, isNewSlotDue, secondsFromDate } from "@/utils/time";
 
 const ENDPOINT_NAME = "shrine-maintenance";
 const ENDPOINT_NAME_DAILY = "shrine-maintenance-daily";
@@ -41,7 +43,7 @@ export async function GET() {
 
     // Run shrine boost tick (every minute)
     const [boostResult, staleLobbyResult] = await Promise.all([
-      runShrineBoostTick(now),
+      runShrineBoostTick(now, minuteCheck.prevTime),
       runStaleShrineLobbyCleanup(now),
     ]);
 
@@ -139,32 +141,113 @@ type RequiredShrineSettings = {
 };
 
 /**
+ * Returns the set of boost types to activate from the template for a village.
+ * Skips boosts already active, skips if no Level 3 shrine in the village sector,
+ * activates alphabetically until tokens run out.
+ */
+export function computeTemplateActivations(params: {
+  now: Date;
+  prevTime: Date;
+  villageId: string;
+  villageSector: number;
+  villageTokens: number;
+  shrineSettings: ShrineSettings | null;
+  level3SectorNumbers: Set<number>;
+  boostCost: number;
+}): { boostType: string; newEndAt: string }[] {
+  const {
+    now,
+    prevTime,
+    villageId: _villageId,
+    villageSector,
+    villageTokens,
+    shrineSettings,
+    level3SectorNumbers,
+    boostCost,
+  } = params;
+
+  // Only fire at slot boundaries
+  if (!isNewSlotDue(now, prevTime)) return [];
+
+  // Village must have a Level 3 shrine
+  if (!level3SectorNumbers.has(villageSector)) return [];
+
+  const template = shrineSettings?.boostTemplate ?? [];
+  if (template.length === 0) return [];
+
+  const currentDayOfWeek = now.getUTCDay();
+  const currentSlotIndex = getSlotIndex(now.getUTCHours());
+
+  // Find matching template entries for current slot
+  const matchingEntries = template
+    .filter((e) => e.dayOfWeek === currentDayOfWeek && e.slotIndex === currentSlotIndex)
+    .map((e) => e.boostType)
+    .sort(); // alphabetical for deterministic partial activation
+
+  const activeBoosts = shrineSettings?.activeBoosts ?? {};
+  const boostDurationMs = SHRINE_BOOST_DURATION_HOURS * 60 * 60 * 1000;
+  const results: { boostType: string; newEndAt: string }[] = [];
+  let remainingTokens = villageTokens;
+
+  for (const boostType of matchingEntries) {
+    // Skip if already active with future expiry
+    const existingExpiry = activeBoosts[boostType];
+    if (existingExpiry) {
+      const expiryMs = Date.parse(existingExpiry);
+      if (Number.isFinite(expiryMs) && expiryMs > now.getTime()) continue;
+    }
+
+    // Skip if insufficient tokens
+    if (remainingTokens < boostCost) break;
+
+    remainingTokens -= boostCost;
+    results.push({
+      boostType,
+      newEndAt: new Date(now.getTime() + boostDurationMs).toISOString(),
+    });
+  }
+
+  return results;
+}
+
+/**
  * Processes shrine boost schedules:
  * 1. Activates scheduled boosts that have started
  * 2. Removes expired boosts from villages
  * 3. Deletes expired schedule records
  */
-async function runShrineBoostTick(now: Date = new Date()) {
-  // Fetch all schedules and all villages in parallel
-  const [activeSchedules, expiredSchedules, allVillages] = await Promise.all([
-    drizzleDB
-      .select()
-      .from(shrineBoostSchedule)
-      .where(
-        and(lte(shrineBoostSchedule.startAt, now), gt(shrineBoostSchedule.endAt, now)),
-      ),
-    drizzleDB
-      .select()
-      .from(shrineBoostSchedule)
-      .where(lte(shrineBoostSchedule.endAt, now)),
-    drizzleDB.query.village.findMany({
-      columns: { id: true, shrineSettings: true },
-    }),
-  ]);
+async function runShrineBoostTick(
+  now: Date = new Date(),
+  prevTime: Date = new Date(0),
+) {
+  // Fetch all schedules, villages, and level-3 sectors in parallel
+  const [activeSchedules, expiredSchedules, allVillages, level3Sectors] =
+    await Promise.all([
+      drizzleDB
+        .select()
+        .from(shrineBoostSchedule)
+        .where(
+          and(
+            lte(shrineBoostSchedule.startAt, now),
+            gt(shrineBoostSchedule.endAt, now),
+          ),
+        ),
+      drizzleDB
+        .select()
+        .from(shrineBoostSchedule)
+        .where(lte(shrineBoostSchedule.endAt, now)),
+      drizzleDB.query.village.findMany({
+        columns: { id: true, shrineSettings: true, tokens: true, sector: true },
+      }),
+      drizzleDB
+        .select({ sector: sector.sector })
+        .from(sector)
+        .where(eq(sector.shrineLevel, 3)),
+    ]);
 
-  const villageMap = new Map(
-    allVillages.map((v) => [v.id, v.shrineSettings as ShrineSettings | null]),
-  );
+  const level3SectorNumbers = new Set(level3Sectors.map((s) => s.sector));
+
+  const villageMap = new Map(allVillages.map((v) => [v.id, v]));
 
   // Find the latest endAt for each village+boostType among active schedules
   const latestActiveByKey = new Map<
@@ -186,8 +269,9 @@ async function runShrineBoostTick(now: Date = new Date()) {
   // Collect expired boost types per village (only if stored endAt has passed)
   const expiredByVillage = new Map<string, Set<string>>();
   for (const schedule of expiredSchedules) {
-    const settings = villageMap.get(schedule.villageId);
-    const storedEndAt = settings?.activeBoosts?.[schedule.boostType];
+    const villageData = villageMap.get(schedule.villageId);
+    const storedEndAt = (villageData?.shrineSettings as ShrineSettings | null)
+      ?.activeBoosts?.[schedule.boostType];
     if (!storedEndAt) continue;
 
     const storedEndAtMs = Date.parse(storedEndAt);
@@ -199,17 +283,19 @@ async function runShrineBoostTick(now: Date = new Date()) {
     expiredByVillage.get(schedule.villageId)?.add(schedule.boostType);
   }
 
-  // Merge active and expired updates per village to avoid race conditions
+  // Merge active, expired, and all villages (for template activations) to avoid race conditions
   const allAffectedVillageIds = new Set([
     ...[...latestActiveByKey.values()].map((v) => v.villageId),
     ...expiredByVillage.keys(),
+    ...allVillages.map((v) => v.id),
   ]);
 
   let activeUpdated = 0;
   const villageUpdates: Promise<unknown>[] = [];
 
   for (const villageId of allAffectedVillageIds) {
-    const settings = villageMap.get(villageId);
+    const villageData = villageMap.get(villageId);
+    const settings = villageData?.shrineSettings as ShrineSettings | null;
     const currentBoosts = { ...(settings?.activeBoosts ?? {}) };
     let hasChanges = false;
 
@@ -233,6 +319,23 @@ async function runShrineBoostTick(now: Date = new Date()) {
         hasChanges = true;
         activeUpdated++;
       }
+    }
+
+    // Template activations
+    const templateActivations = computeTemplateActivations({
+      now,
+      prevTime,
+      villageId,
+      villageSector: villageData?.sector ?? 0,
+      villageTokens: villageData?.tokens ?? 0,
+      shrineSettings: settings,
+      level3SectorNumbers,
+      boostCost: SHRINE_BOOST_COST,
+    });
+    for (const { boostType, newEndAt } of templateActivations) {
+      currentBoosts[boostType] = newEndAt;
+      hasChanges = true;
+      activeUpdated++;
     }
 
     if (hasChanges) {
