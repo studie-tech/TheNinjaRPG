@@ -54,6 +54,7 @@ import {
   DAY_S,
   formatDateTimeShort,
   getDaysHoursMinutesSeconds,
+  getSlotIndex,
   getTimeLeftStr,
   secondsFromNow,
 } from "@/utils/time";
@@ -1170,7 +1171,7 @@ const BoostTemplateGrid = ({
   const utils = api.useUtils();
   const now = new Date();
   const currentDayOfWeek = now.getUTCDay();
-  const currentSlotIndex = Math.floor(now.getUTCHours() / 2);
+  const currentSlotIndex = getSlotIndex(now.getUTCHours());
 
   const { data: templateData, isLoading } = api.shrine.getBoostTemplate.useQuery(
     { villageId },
@@ -1183,16 +1184,18 @@ const BoostTemplateGrid = ({
   const [clearConfirm, setClearConfirm] = useState(false);
 
   useEffect(() => {
-    if (templateData?.boostTemplate) {
+    if (templateData?.boostTemplate && !isDirty) {
       setLocalTemplate(templateData.boostTemplate as BoostTemplateEntry[]);
     }
-  }, [templateData]);
+  }, [templateData, isDirty]);
 
   const { mutate: saveTemplate, isPending: isSaving } =
     api.shrine.setBoostTemplate.useMutation({
-      onSuccess: () => {
-        void utils.shrine.getBoostTemplate.invalidate({ villageId });
-        setIsDirty(false);
+      onSuccess: (res) => {
+        if (res.success) {
+          void utils.shrine.getBoostTemplate.invalidate({ villageId });
+          setIsDirty(false);
+        }
       },
     });
 

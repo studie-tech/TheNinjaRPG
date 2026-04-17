@@ -22,10 +22,12 @@ function prevBefore(now: Date): Date {
   return prev;
 }
 
+const VILLAGE_ID = "village_abc";
+
 const BASE_PARAMS = {
-  villageSector: 5,
+  villageId: VILLAGE_ID,
   villageTokens: 100_000,
-  level3SectorNumbers: new Set([5]),
+  villagesWithLevel3Shrine: new Set([VILLAGE_ID]),
   boostCost: 15_000,
 };
 
@@ -96,7 +98,7 @@ describe("computeTemplateActivations", () => {
     const prevTime = utcDate(1, 3, 59);
     const result = computeTemplateActivations({
       ...BASE_PARAMS,
-      villageSector: 99, // not in level3SectorNumbers
+      villagesWithLevel3Shrine: new Set(["other_village"]), // village not in set
       now,
       prevTime,
       shrineSettings: {

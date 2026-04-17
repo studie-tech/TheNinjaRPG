@@ -131,15 +131,6 @@ type ShrineSettings = {
   boostTemplateUpdatedAt?: string;
 };
 
-type RequiredShrineSettings = {
-  unlockedAiIds: string[];
-  activeBoosts: Record<string, string>;
-  activeAiIds: string[];
-  boostTemplate: BoostTemplateEntry[];
-  boostTemplateUpdatedBy?: string;
-  boostTemplateUpdatedAt?: string;
-};
-
 /**
  * Returns the set of boost types to activate from the template for a village.
  * Skips boosts already active, skips if no Level 3 shrine in the village sector,
@@ -148,27 +139,27 @@ type RequiredShrineSettings = {
 export function computeTemplateActivations(params: {
   now: Date;
   prevTime: Date;
-  villageSector: number;
+  villageId: string;
   villageTokens: number;
   shrineSettings: ShrineSettings | null;
-  level3SectorNumbers: Set<number>;
+  villagesWithLevel3Shrine: Set<string>;
   boostCost: number;
 }): { boostType: string; newEndAt: string }[] {
   const {
     now,
     prevTime,
-    villageSector,
+    villageId,
     villageTokens,
     shrineSettings,
-    level3SectorNumbers,
+    villagesWithLevel3Shrine,
     boostCost,
   } = params;
 
   // Only fire at slot boundaries
   if (!isNewSlotDue(now, prevTime)) return [];
 
-  // Village must have a Level 3 shrine
-  if (!level3SectorNumbers.has(villageSector)) return [];
+  // Village must control at least one Level 3 shrine
+  if (!villagesWithLevel3Shrine.has(villageId)) return [];
 
   const template = shrineSettings?.boostTemplate ?? [];
   if (template.length === 0) return [];
@@ -218,7 +209,9 @@ async function runShrineBoostTick(
   now: Date = new Date(),
   prevTime: Date = new Date(0),
 ) {
-  // Fetch all schedules, villages, and level-3 sectors in parallel
+  const isSlotBoundary = isNewSlotDue(now, prevTime);
+
+  // Fetch all schedules, villages, and (conditionally) level-3 sectors in parallel
   const [activeSchedules, expiredSchedules, allVillages, level3Sectors] =
     await Promise.all([
       drizzleDB
@@ -237,13 +230,15 @@ async function runShrineBoostTick(
       drizzleDB.query.village.findMany({
         columns: { id: true, shrineSettings: true, tokens: true, sector: true },
       }),
-      drizzleDB
-        .select({ sector: sector.sector })
-        .from(sector)
-        .where(eq(sector.shrineLevel, 3)),
+      isSlotBoundary
+        ? drizzleDB
+            .select({ villageId: sector.villageId })
+            .from(sector)
+            .where(eq(sector.shrineLevel, 3))
+        : Promise.resolve([]),
     ]);
 
-  const level3SectorNumbers = new Set(level3Sectors.map((s) => s.sector));
+  const villagesWithLevel3Shrine = new Set(level3Sectors.map((s) => s.villageId));
 
   const villageMap = new Map(allVillages.map((v) => [v.id, v]));
 
@@ -281,82 +276,93 @@ async function runShrineBoostTick(
     expiredByVillage.get(schedule.villageId)?.add(schedule.boostType);
   }
 
-  // Merge active, expired, and all villages (for template activations) to avoid race conditions
+  // Batch per-village updates: base (expiry + scheduled, always) and template (CAS, separate)
   const allAffectedVillageIds = new Set([
     ...[...latestActiveByKey.values()].map((v) => v.villageId),
     ...expiredByVillage.keys(),
-    ...allVillages.map((v) => v.id),
+    ...(isSlotBoundary ? allVillages.map((v) => v.id) : []),
   ]);
 
   let activeUpdated = 0;
-  const villageUpdates: Promise<unknown>[] = [];
+  const baseUpdates: Promise<unknown>[] = [];
+  const templateUpdates: Promise<unknown>[] = [];
 
   for (const villageId of allAffectedVillageIds) {
     const villageData = villageMap.get(villageId);
     const settings = villageData?.shrineSettings as ShrineSettings | null;
-    const currentBoosts = { ...(settings?.activeBoosts ?? {}) };
-    let hasChanges = false;
+    const currentBoostsBase = { ...(settings?.activeBoosts ?? {}) };
+    let hasBaseChanges = false;
 
     // Remove expired boosts
     const expired = expiredByVillage.get(villageId);
     if (expired) {
       for (const boostType of expired) {
-        if (boostType in currentBoosts) {
-          delete currentBoosts[boostType];
-          hasChanges = true;
+        if (boostType in currentBoostsBase) {
+          delete currentBoostsBase[boostType];
+          hasBaseChanges = true;
         }
       }
     }
 
-    // Add/update active boosts
+    // Add/update active boosts from schedule
     for (const { villageId: vid, boostType, endAt } of latestActiveByKey.values()) {
       if (vid !== villageId) continue;
       const newEndAt = endAt.toISOString();
-      if (currentBoosts[boostType] !== newEndAt) {
-        currentBoosts[boostType] = newEndAt;
-        hasChanges = true;
+      if (currentBoostsBase[boostType] !== newEndAt) {
+        currentBoostsBase[boostType] = newEndAt;
+        hasBaseChanges = true;
         activeUpdated++;
       }
     }
 
-    // Template activations
+    // Base update (always succeeds, no CAS): expiry cleanup + scheduled boosts
+    if (hasBaseChanges) {
+      baseUpdates.push(
+        drizzleDB
+          .update(village)
+          .set({
+            shrineSettings: withUpdatedBoosts(settings ?? null, currentBoostsBase),
+          })
+          .where(eq(village.id, villageId)),
+      );
+    }
+
+    // Template activations — separate CAS update so expiry cleanup is never blocked by tokens
     const templateActivations = computeTemplateActivations({
       now,
       prevTime,
-      villageSector: villageData?.sector ?? 0,
+      villageId,
       villageTokens: villageData?.tokens ?? 0,
       shrineSettings: settings,
-      level3SectorNumbers,
+      villagesWithLevel3Shrine,
       boostCost: SHRINE_BOOST_COST,
     });
-    for (const { boostType, newEndAt } of templateActivations) {
-      currentBoosts[boostType] = newEndAt;
-      hasChanges = true;
-      activeUpdated++;
-    }
+    activeUpdated += templateActivations.length;
 
-    if (hasChanges) {
+    if (templateActivations.length > 0) {
       const tokenCost = templateActivations.length * SHRINE_BOOST_COST;
-      villageUpdates.push(
-        tokenCost > 0
-          ? drizzleDB
-              .update(village)
-              .set({
-                shrineSettings: withUpdatedBoosts(settings ?? null, currentBoosts),
-                tokens: sql`${village.tokens} - ${tokenCost}`,
-              })
-              .where(and(eq(village.id, villageId), gte(village.tokens, tokenCost)))
-          : drizzleDB
-              .update(village)
-              .set({
-                shrineSettings: withUpdatedBoosts(settings ?? null, currentBoosts),
-              })
-              .where(eq(village.id, villageId)),
+      // Use nested JSON_SET to add only the new boost keys — avoids overwriting base changes
+      let jsonExpr: ReturnType<typeof sql> = sql`${village.shrineSettings}`;
+      for (const { boostType, newEndAt } of templateActivations) {
+        jsonExpr = sql`JSON_SET(${jsonExpr}, ${`$.activeBoosts.${boostType}`}, ${newEndAt})`;
+      }
+      templateUpdates.push(
+        drizzleDB
+          .update(village)
+          .set({
+            shrineSettings: jsonExpr,
+            tokens: sql`${village.tokens} - ${tokenCost}`,
+          })
+          .where(and(eq(village.id, villageId), gte(village.tokens, tokenCost))),
       );
     }
   }
 
-  // Delete expired schedule records
+  // Round 1: base updates always succeed (no CAS guard) — ensures expiry cleanup is committed
+  await Promise.all(baseUpdates);
+
+  // Round 2: template CAS updates + delete expired schedule records
+  // Expired schedule deletion runs after base cleanup is committed
   type ScheduleType = (typeof expiredSchedules)[number];
   const expiredScheduleIds = expiredSchedules.map((s: ScheduleType) => s.id);
   const deleteExpired =
@@ -366,8 +372,7 @@ async function runShrineBoostTick(
           .where(inArray(shrineBoostSchedule.id, expiredScheduleIds))
       : Promise.resolve();
 
-  // Execute all mutations in parallel
-  await Promise.all([...villageUpdates, deleteExpired]);
+  await Promise.all([...templateUpdates, deleteExpired]);
 
   return { activeUpdated, expiredDeleted: expiredScheduleIds.length };
 }
@@ -453,17 +458,16 @@ export async function runStaleShrineLobbyCleanup(
   };
 }
 
-/** Creates an updated shrineSettings object with new activeBoosts */
+/** Builds a JSON_SET expression that updates only activeBoosts/unlockedAiIds/activeAiIds,
+ *  leaving boostTemplate and related fields untouched to prevent concurrent-write races. */
 function withUpdatedBoosts(
   settings: ShrineSettings | null,
   activeBoosts: Record<string, string>,
-): RequiredShrineSettings {
-  return {
-    unlockedAiIds: settings?.unlockedAiIds ?? [],
-    activeBoosts,
-    activeAiIds: settings?.activeAiIds ?? [],
-    boostTemplate: settings?.boostTemplate ?? [],
-    boostTemplateUpdatedBy: settings?.boostTemplateUpdatedBy,
-    boostTemplateUpdatedAt: settings?.boostTemplateUpdatedAt,
-  };
+): ReturnType<typeof sql> {
+  return sql`JSON_SET(
+    COALESCE(${village.shrineSettings}, JSON_OBJECT()),
+    '$.activeBoosts', CAST(${JSON.stringify(activeBoosts)} AS JSON),
+    '$.unlockedAiIds', CAST(${JSON.stringify(settings?.unlockedAiIds ?? [])} AS JSON),
+    '$.activeAiIds', CAST(${JSON.stringify(settings?.activeAiIds ?? [])} AS JSON)
+  )`;
 }
