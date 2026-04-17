@@ -325,3 +325,29 @@ export const getFirstOfNextMonth = (): Date => {
     ),
   );
 };
+
+/**
+ * Returns the slot index (0–11) for a given UTC hour.
+ * Each slot covers a 2-hour window: slot 0 = 00:00–02:00, slot 11 = 22:00–00:00.
+ */
+export const getSlotIndex = (utcHour: number): number => Math.floor(utcHour / 2);
+
+/**
+ * Returns a Date set to the start of the 2-hour UTC slot containing `d`.
+ * Minutes, seconds, and milliseconds are zeroed.
+ */
+export const getCurrentSlotBoundary = (d: Date = new Date()): Date => {
+  const boundary = new Date(d);
+  boundary.setUTCHours(Math.floor(d.getUTCHours() / 2) * 2, 0, 0, 0);
+  return boundary;
+};
+
+/**
+ * Returns true if a slot boundary falls in the half-open window (prevTime, now].
+ * Use this in the cron to determine whether a new slot just started,
+ * even if the cron fired slightly late.
+ */
+export const isNewSlotDue = (now: Date, prevTime: Date): boolean => {
+  const boundary = getCurrentSlotBoundary(now);
+  return boundary > prevTime && boundary <= now;
+};
