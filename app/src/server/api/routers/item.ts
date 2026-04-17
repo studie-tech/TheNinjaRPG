@@ -106,10 +106,14 @@ export const itemRouter = createTRPCRouter({
         description: "Get names of items associated with a bloodline",
       },
     })
-    .query(async ({ ctx }) => {
+    .input(z.object({ bloodlineId: z.string().nullish() }))
+    .query(async ({ ctx, input }) => {
       return await ctx.drizzle.query.item.findMany({
         columns: { id: true, name: true },
-        where: (table) => isNotNull(table.bloodlineId),
+        where: (table, { and, eq }) =>
+          input.bloodlineId
+            ? eq(table.bloodlineId, input.bloodlineId)
+            : isNotNull(table.bloodlineId),
         orderBy: (table, { asc }) => [asc(table.name)],
       });
     }),

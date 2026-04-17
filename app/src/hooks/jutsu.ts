@@ -42,8 +42,14 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     api.bloodline.getAllNames.useQuery(undefined);
   const { data: villages, isPending: l2 } = api.village.getAllNames.useQuery(undefined);
   const { data: jutsus, isPending: l4 } = api.jutsu.getAllNames.useQuery(undefined);
+
+  // Watch bloodlineId to filter bloodline items to only those for the selected bloodline
+  const selectedBloodlineId = useWatch({
+    control: form.control,
+    name: "bloodlineId",
+  });
   const { data: bloodlineItems, isPending: l5 } =
-    api.item.getBloodlineItemNames.useQuery(undefined);
+    api.item.getBloodlineItemNames.useQuery({ bloodlineId: selectedBloodlineId });
 
   // Mutation for updating jutsu
   const { mutate: updateJutsu, isPending: l3 } = api.jutsu.update.useMutation({
