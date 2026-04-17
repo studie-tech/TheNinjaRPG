@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNull, lt, lte } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import {
   SHRINE_BOOST_COST,
@@ -339,13 +339,22 @@ async function runShrineBoostTick(
     }
 
     if (hasChanges) {
+      const tokenCost = templateActivations.length * SHRINE_BOOST_COST;
       villageUpdates.push(
-        drizzleDB
-          .update(village)
-          .set({
-            shrineSettings: withUpdatedBoosts(settings ?? null, currentBoosts),
-          })
-          .where(eq(village.id, villageId)),
+        tokenCost > 0
+          ? drizzleDB
+              .update(village)
+              .set({
+                shrineSettings: withUpdatedBoosts(settings ?? null, currentBoosts),
+                tokens: sql`${village.tokens} - ${tokenCost}`,
+              })
+              .where(and(eq(village.id, villageId), gte(village.tokens, tokenCost)))
+          : drizzleDB
+              .update(village)
+              .set({
+                shrineSettings: withUpdatedBoosts(settings ?? null, currentBoosts),
+              })
+              .where(eq(village.id, villageId)),
       );
     }
   }
