@@ -1,13 +1,12 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, CalendarClock, Clock, Coins, Shield, X } from "lucide-react";
+import { AlertTriangle, Clock, Coins, Shield } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Card,
   CardContent,
@@ -15,8 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -50,13 +47,10 @@ import { showMutationToast } from "@/libs/toast";
 import { getShrineHpByLevel } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import {
-  combineUTCDateTime,
-  DAY_S,
   formatDateTimeShort,
   getDaysHoursMinutesSeconds,
   getSlotIndex,
   getTimeLeftStr,
-  secondsFromNow,
 } from "@/utils/time";
 import type { BoostTemplateEntry } from "@/validators/shrine";
 
@@ -314,48 +308,15 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
     { enabled: isActive && !!user.villageId },
   );
 
-  const { data: scheduledBoosts } = api.shrine.getScheduledBoosts.useQuery(
-    { villageId: user.villageId || "" },
-    { enabled: isActive && !!user.villageId },
-  );
-
   const { mutate: activateBoost, isPending: isActivatingBoost } =
     api.shrine.activateBoost.useMutation({
       onSuccess: (res) => {
         showMutationToast(res);
         if (res.success) {
           void utils.profile.getUser.invalidate();
-          void utils.shrine.getScheduledBoosts.invalidate();
         }
       },
     });
-
-  const { mutate: scheduleBoost, isPending: isSchedulingBoost } =
-    api.shrine.scheduleBoost.useMutation({
-      onSuccess: (res) => {
-        showMutationToast(res);
-        if (res.success) {
-          void utils.profile.getUser.invalidate();
-          void utils.shrine.getScheduledBoosts.invalidate();
-          setSchedulingBoostType(null);
-          setScheduleDate(undefined);
-          setScheduleTime("");
-        }
-      },
-    });
-
-  const { mutate: cancelScheduledBoost, isPending: isCancellingBoost } =
-    api.shrine.cancelScheduledBoost.useMutation({
-      onSuccess: (res) => {
-        showMutationToast(res);
-        if (res.success) void utils.shrine.getScheduledBoosts.invalidate();
-      },
-    });
-
-  const [schedulingBoostType, setSchedulingBoostType] = useState<string | null>(null);
-  const [scheduleDate, setScheduleDate] = useState<Date | undefined>(undefined);
-  const [scheduleTime, setScheduleTime] = useState<string>(""); // "HH:MM"
-  const maxScheduleDate = useMemo(() => secondsFromNow(7 * DAY_S), []);
 
   // Track previously active boost types for notifications (initialise with current state so
   // we only fire toasts for boosts that become active after this component mounts)
@@ -387,31 +348,6 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
     }
     prevActiveBoostTypesRef.current = currentTypes;
   }, [user.village?.shrineSettings?.activeBoosts]);
-
-  // Refresh user data when boosts become active
-  useEffect(() => {
-    if (!scheduledBoosts) return;
-    const now = new Date();
-
-    // Boosts whose window has started but not yet ended
-    const hasDue = scheduledBoosts.some(
-      (s) => new Date(s.startAt) <= now && new Date(s.endAt) > now,
-    );
-
-    if (hasDue) void utils.profile.getUser.invalidate();
-
-    // Fire exactly at the nearest upcoming startAt
-    const nextStart = scheduledBoosts
-      .map((s) => new Date(s.startAt))
-      .filter((d) => d > now)
-      .sort((a, b) => a.getTime() - b.getTime())[0];
-    if (!nextStart) return;
-    const timer = setTimeout(
-      () => void utils.profile.getUser.invalidate(),
-      nextStart.getTime() - now.getTime(),
-    );
-    return () => clearTimeout(timer);
-  }, [scheduledBoosts, utils]);
 
   if (!sectorData) return <Loader explanation="Loading shrine data" />;
 
@@ -475,7 +411,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
       {user.villageId && (isKage || isElder) && (
         <Card>
           <CardHeader>
-            <CardTitle>Activate or Schedule a Boost</CardTitle>
+            <CardTitle>Activate a Boost</CardTitle>
             <CardDescription>
               Requires Level 3 shrine • Cost: {SHRINE_BOOST_COST.toLocaleString()}{" "}
               tokens
@@ -489,263 +425,31 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
               </p>
             ) : (
               <>
-                <p className="text-muted-foreground text-xs">
-                  Scheduling uses <span className="font-medium">UTC time</span> (server
-                  time).
-                </p>
-
                 {SHRINE_BOOST_TYPES.map((boostType, i) => {
                   const currentlyActive = activeBoosts.some(
                     ({ boostType: activeType }) => activeType === boostType,
                   );
 
-                  const isScheduling = schedulingBoostType === boostType;
-
-                  const schedulesForType =
-                    scheduledBoosts?.filter((s) => s.boostType === boostType) ?? [];
-
                   return (
                     <div key={`${boostType}-${i}`} className="space-y-2">
-                      <div className="flex gap-2">
-                        <Button
-                          className="flex-1 justify-between"
-                          variant={currentlyActive ? "secondary" : "default"}
-                          disabled={
-                            isActivatingBoost || isSchedulingBoost || currentlyActive
+                      <Button
+                        className="w-full justify-between"
+                        variant={currentlyActive ? "secondary" : "default"}
+                        disabled={isActivatingBoost || currentlyActive}
+                        onClick={() => {
+                          if (user.villageId) {
+                            activateBoost({
+                              boostType,
+                              villageId: user.villageId,
+                            });
                           }
-                          onClick={() => {
-                            if (user.villageId) {
-                              activateBoost({
-                                boostType,
-                                villageId: user.villageId,
-                              });
-                            }
-                          }}
-                        >
-                          <span>
-                            {boostType} [+{boostPercentage}%]
-                          </span>
-                          <span className="ml-2 text-xs">Activate Now</span>
-                        </Button>
-
-                        <Popover
-                          open={isScheduling}
-                          onOpenChange={(open) => {
-                            if (!open) {
-                              if (schedulingBoostType === boostType) {
-                                setSchedulingBoostType(null);
-                                setScheduleDate(undefined);
-                                setScheduleTime("");
-                              }
-                              return;
-                            }
-
-                            setSchedulingBoostType(boostType);
-
-                            const d = new Date();
-                            d.setUTCHours(d.getUTCHours() + 1, d.getUTCMinutes(), 0, 0);
-                            setScheduleDate(d);
-
-                            const hh = String(d.getUTCHours()).padStart(2, "0");
-                            const mm = String(d.getUTCMinutes()).padStart(2, "0");
-                            setScheduleTime(`${hh}:${mm}`);
-                          }}
-                        >
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant={isScheduling ? "secondary" : "outline"}
-                              disabled={isActivatingBoost || isSchedulingBoost}
-                              aria-label={
-                                isScheduling
-                                  ? `Close scheduling for ${boostType}`
-                                  : `Schedule ${boostType}`
-                              }
-                            >
-                              <CalendarClock className="h-4 w-4" />
-                            </Button>
-                          </PopoverTrigger>
-
-                          <PopoverContent align="end" className="w-auto p-3">
-                            <div className="space-y-3">
-                              <div className="font-medium text-muted-foreground text-xs">
-                                Scheduling (UTC time)
-                              </div>
-                              <p className="text-muted-foreground text-xs">
-                                Schedule at least{" "}
-                                <span className="font-semibold">1 hour in advance</span>
-                                . Boosts last{" "}
-                                <span className="font-semibold">
-                                  {SHRINE_BOOST_DURATION_HOURS} hours
-                                </span>{" "}
-                                from the scheduled start time.
-                              </p>
-
-                              <div className="space-y-2">
-                                <Label className="text-sm">Start Date</Label>
-                                <Calendar
-                                  mode="single"
-                                  selected={scheduleDate}
-                                  onSelect={setScheduleDate}
-                                  disabled={(date) => {
-                                    const end = new Date(maxScheduleDate);
-                                    end.setHours(23, 59, 59, 999);
-                                    if (date > end) return true;
-                                    // If a valid time is already entered, disable dates whose
-                                    // combined UTC datetime is already in the past
-                                    if (
-                                      scheduleTime &&
-                                      /^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime)
-                                    ) {
-                                      try {
-                                        return (
-                                          combineUTCDateTime(date, scheduleTime) <=
-                                          new Date()
-                                        );
-                                      } catch {
-                                        // fall through to date-only check
-                                      }
-                                    }
-                                    const startOfToday = new Date();
-                                    startOfToday.setHours(0, 0, 0, 0);
-                                    return date < startOfToday;
-                                  }}
-                                />
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label
-                                  htmlFor={`time-${boostType}`}
-                                  className="text-sm"
-                                >
-                                  Start Time
-                                </Label>
-                                <Input
-                                  id={`time-${boostType}`}
-                                  type="text"
-                                  placeholder="HH:MM"
-                                  pattern="^([01]\d|2[0-3]):[0-5]\d$"
-                                  maxLength={5}
-                                  value={scheduleTime}
-                                  onChange={(e) => {
-                                    const v = e.target.value.replace(/[^0-9:]/g, "");
-                                    setScheduleTime(v);
-                                  }}
-                                />
-                              </div>
-
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  disabled={
-                                    isSchedulingBoost ||
-                                    !scheduleDate ||
-                                    !/^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime) ||
-                                    (() => {
-                                      try {
-                                        return (
-                                          combineUTCDateTime(
-                                            scheduleDate,
-                                            scheduleTime,
-                                          ) <= new Date()
-                                        );
-                                      } catch {
-                                        return true;
-                                      }
-                                    })()
-                                  }
-                                  onClick={() => {
-                                    if (!scheduleDate || !scheduleTime) return;
-
-                                    const startAtLocal = combineUTCDateTime(
-                                      scheduleDate,
-                                      scheduleTime,
-                                    );
-
-                                    if (user.villageId) {
-                                      scheduleBoost({
-                                        boostType,
-                                        villageId: user.villageId,
-                                        startAt: startAtLocal.toISOString(),
-                                      });
-                                    }
-                                  }}
-                                >
-                                  Submit
-                                </Button>
-
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    setSchedulingBoostType(null);
-                                    setScheduleDate(undefined);
-                                    setScheduleTime("");
-                                  }}
-                                >
-                                  Close
-                                </Button>
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      {/* Scheduled boosts list: under the boost type row (NOT in popup) */}
-                      {schedulesForType.length > 0 && (
-                        <div className="space-y-2 rounded-md border bg-muted/30 p-2">
-                          <div className="font-medium text-sm">Scheduled Boosts</div>
-
-                          <div className="space-y-2">
-                            {schedulesForType.map((schedule) => {
-                              const now = new Date();
-                              const startDate = new Date(schedule.startAt);
-                              const endDate = new Date(schedule.endAt);
-                              const hasStarted = startDate <= now;
-                              const isPast = endDate < now;
-
-                              return (
-                                <div
-                                  key={schedule.id}
-                                  className="flex items-center justify-between rounded bg-muted p-2 text-sm"
-                                >
-                                  <div className="flex-1">
-                                    <div className="font-medium">
-                                      {formatDateTimeShort(startDate)} UTC -{" "}
-                                      {formatDateTimeShort(endDate)} UTC
-                                    </div>
-                                    {isPast && (
-                                      <div className="text-muted-foreground text-xs">
-                                        (Expired)
-                                      </div>
-                                    )}
-                                    {hasStarted && !isPast && (
-                                      <div className="text-xs text-green-600">
-                                        (Active)
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {!hasStarted && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      disabled={isCancellingBoost}
-                                      onClick={() =>
-                                        cancelScheduledBoost({
-                                          scheduleId: schedule.id,
-                                        })
-                                      }
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                        }}
+                      >
+                        <span>
+                          {boostType} [+{boostPercentage}%]
+                        </span>
+                        <span className="ml-2 text-xs">Activate Now</span>
+                      </Button>
                     </div>
                   );
                 })}
