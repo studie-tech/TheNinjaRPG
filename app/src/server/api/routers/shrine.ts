@@ -209,21 +209,19 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse(`${input.boostType} boost is already active`);
       }
 
-      // Update active boosts
+      // Update active boosts — JSON_SET targets only the specific boost key to avoid
+      // race conditions with concurrent cron writes to other boost keys.
       const boostExpiry = secondsFromNow(SHRINE_BOOST_DURATION_HOURS * 60 * 60);
-      const updatedBoosts = {
-        ...currentBoosts,
-        [input.boostType]: boostExpiry.toISOString(),
-      };
+      const boostPath = `$.activeBoosts.${input.boostType}`;
 
       const updateRes = await ctx.drizzle
         .update(village)
         .set({
           tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
-          shrineSettings: {
-            ...user.village.shrineSettings,
-            activeBoosts: updatedBoosts,
-          },
+          shrineSettings: sql`JSON_SET(
+            COALESCE(${village.shrineSettings}, JSON_OBJECT()),
+            ${boostPath}, ${boostExpiry.toISOString()}
+          )`,
         })
         .where(
           and(eq(village.id, user.villageId), gte(village.tokens, SHRINE_BOOST_COST)),
