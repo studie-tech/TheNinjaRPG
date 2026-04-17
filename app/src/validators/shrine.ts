@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { SHRINE_BOOST_TYPES } from "@/drizzle/constants";
 
+const MAX_BOOST_TEMPLATE_ENTRIES = 7 * 12 * SHRINE_BOOST_TYPES.length;
+
 export const boostTemplateEntrySchema = z.object({
   boostType: z.enum(SHRINE_BOOST_TYPES),
   dayOfWeek: z.number().int().min(0).max(6), // 0 = Sunday (UTC)
@@ -11,7 +13,10 @@ export type BoostTemplateEntry = z.infer<typeof boostTemplateEntrySchema>;
 
 export const boostTemplateSchema = z
   .array(boostTemplateEntrySchema)
-  .max(168, "Template cannot exceed 168 entries")
+  .max(
+    MAX_BOOST_TEMPLATE_ENTRIES,
+    `Template cannot exceed ${MAX_BOOST_TEMPLATE_ENTRIES} entries`,
+  )
   .refine(
     (entries) => {
       const keys = entries.map((e) => `${e.boostType}:${e.dayOfWeek}:${e.slotIndex}`);

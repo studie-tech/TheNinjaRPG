@@ -296,6 +296,8 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 
 const BoostsTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
+  const now = useUtcNow(isActive, 60_000);
+  const nowMs = now.getTime();
 
   const { data: sectorData } = api.travel.getSectorData.useQuery(
     { sector: user.sector ?? 0 },
@@ -322,7 +324,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const prevActiveBoostTypesRef = useRef<Set<string>>(
     new Set(
       Object.entries(user.village?.shrineSettings?.activeBoosts ?? {})
-        .filter(([, expiry]) => expiry && new Date(expiry).getTime() > Date.now())
+        .filter(([, expiry]) => expiry && new Date(expiry).getTime() > nowMs)
         .map(([boostType]) => boostType),
     ),
   );
@@ -330,10 +332,9 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   // Show notification when a scheduled boost becomes active
   useEffect(() => {
     const currentBoosts = user.village?.shrineSettings?.activeBoosts ?? {};
-    const now = Date.now();
     const currentTypes = new Set(
       Object.entries(currentBoosts)
-        .filter(([, expiry]) => expiry && new Date(expiry).getTime() > now)
+        .filter(([, expiry]) => expiry && new Date(expiry).getTime() > nowMs)
         .map(([boostType]) => boostType),
     );
     for (const type of currentTypes) {
@@ -346,7 +347,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
       }
     }
     prevActiveBoostTypesRef.current = currentTypes;
-  }, [user.village?.shrineSettings?.activeBoosts]);
+  }, [nowMs, user.village?.shrineSettings?.activeBoosts]);
 
   if (!sectorData) return <Loader explanation="Loading shrine data" />;
 
@@ -360,7 +361,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const boostSettings = user.village?.shrineSettings?.activeBoosts;
   const activeBoosts = Object.entries(boostSettings || {})
     .map(([boostType, expiry]) => {
-      const secondsLeft = expiry ? new Date(expiry).getTime() - Date.now() : 0;
+      const secondsLeft = expiry ? new Date(expiry).getTime() - nowMs : 0;
       return { boostType, secondsLeft };
     })
     .filter(({ secondsLeft }) => secondsLeft > 0);
@@ -427,36 +428,34 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
                 Need at least one Level 3 shrine to activate boosts
               </p>
             ) : (
-              <>
-                {SHRINE_BOOST_TYPES.map((boostType, i) => {
-                  const currentlyActive = activeBoosts.some(
-                    ({ boostType: activeType }) => activeType === boostType,
-                  );
+              SHRINE_BOOST_TYPES.map((boostType, i) => {
+                const currentlyActive = activeBoosts.some(
+                  ({ boostType: activeType }) => activeType === boostType,
+                );
 
-                  return (
-                    <div key={`${boostType}-${i}`} className="space-y-2">
-                      <Button
-                        className="w-full justify-between"
-                        variant={currentlyActive ? "secondary" : "default"}
-                        disabled={isActivatingBoost || currentlyActive}
-                        onClick={() => {
-                          if (user.villageId) {
-                            activateBoost({
-                              boostType,
-                              villageId: user.villageId,
-                            });
-                          }
-                        }}
-                      >
-                        <span>
-                          {boostType} [+{boostPercentage}%]
-                        </span>
-                        <span className="ml-2 text-xs">Activate Now</span>
-                      </Button>
-                    </div>
-                  );
-                })}
-              </>
+                return (
+                  <div key={`${boostType}-${i}`} className="space-y-2">
+                    <Button
+                      className="w-full justify-between"
+                      variant={currentlyActive ? "secondary" : "default"}
+                      disabled={isActivatingBoost || currentlyActive}
+                      onClick={() => {
+                        if (user.villageId) {
+                          activateBoost({
+                            boostType,
+                            villageId: user.villageId,
+                          });
+                        }
+                      }}
+                    >
+                      <span>
+                        {boostType} [+{boostPercentage}%]
+                      </span>
+                      <span className="ml-2 text-xs">Activate Now</span>
+                    </Button>
+                  </div>
+                );
+              })
             )}
           </CardContent>
         </Card>
@@ -836,6 +835,23 @@ const StatsCard = ({ icon: Icon, label, value }: StatsCardProps) => (
   </div>
 );
 
+const useUtcNow = (enabled: boolean, intervalMs: number) => {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    setNow(new Date());
+    const intervalId = window.setInterval(() => {
+      setNow(new Date());
+    }, intervalMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [enabled, intervalMs]);
+
+  return now;
+};
+
 /* -------------------------------------------------------------------------- */
 /*                         Boost Template Grid                                */
 /* -------------------------------------------------------------------------- */
@@ -884,7 +900,7 @@ const BoostTemplateGrid = ({
   isActive,
 }: BoostTemplateGridProps) => {
   const utils = api.useUtils();
-  const now = new Date();
+  const now = useUtcNow(isActive, 60_000);
   const currentDayOfWeek = now.getUTCDay();
   const currentSlotIndex = getSlotIndex(now.getUTCHours());
 
