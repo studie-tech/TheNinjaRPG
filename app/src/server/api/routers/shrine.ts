@@ -34,6 +34,7 @@ import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
 import { formatDateTimeShort, secondsFromDate, secondsFromNow } from "@/utils/time";
+import { boostTemplateSchema } from "@/validators/shrine";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -717,6 +718,92 @@ export const shrineRouter = createTRPCRouter({
         success: true,
         message: `Weekly maintenance paid for sector ${targetSector.sector}: ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens`,
       };
+    }),
+
+  // Get the boost template for a village
+  getBoostTemplate: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get boost template for a village" } })
+    .input(z.object({ villageId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [user, targetVillage] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.village.findFirst({
+          where: eq(village.id, input.villageId),
+          columns: { id: true, shrineSettings: true },
+        }),
+      ]);
+
+      if (!targetVillage) {
+        throw serverError("NOT_FOUND", "Village not found");
+      }
+
+      if (user.villageId !== input.villageId && !canSeeSecretData(user.role)) {
+        throw serverError(
+          "FORBIDDEN",
+          "You can only view boost templates for your own village",
+        );
+      }
+
+      return {
+        boostTemplate: targetVillage.shrineSettings.boostTemplate ?? [],
+        boostTemplateUpdatedBy:
+          targetVillage.shrineSettings.boostTemplateUpdatedBy ?? null,
+        boostTemplateUpdatedAt:
+          targetVillage.shrineSettings.boostTemplateUpdatedAt ?? null,
+      };
+    }),
+
+  // Set the boost template for a village (Kage or Elder only)
+  setBoostTemplate: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Set boost template for a village (Kage/Elder only)",
+      },
+    })
+    .input(z.object({ villageId: z.string(), template: boostTemplateSchema }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [{ user }, targetVillage, level3Shrines] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        ctx.drizzle.query.village.findFirst({
+          where: eq(village.id, input.villageId),
+          columns: { id: true, shrineSettings: true },
+        }),
+        ctx.drizzle.query.sector.findMany({
+          where: and(eq(sector.villageId, input.villageId), eq(sector.shrineLevel, 3)),
+        }),
+      ]);
+
+      // Guards
+      if (!user?.villageId) return errorResponse("You must be in a village");
+      if (user.villageId !== input.villageId) {
+        return errorResponse("You can only set boost templates for your own village");
+      }
+      if (!user.village) return errorResponse("Village not found");
+      if (user.village.kageId !== user.userId && user.rank !== "ELDER") {
+        return errorResponse("Only the Kage or Elders can set boost templates");
+      }
+      if (!targetVillage) return errorResponse("Village not found");
+      if (level3Shrines.length === 0) {
+        return errorResponse(
+          "Need at least one Level 3 shrine to set a boost template",
+        );
+      }
+
+      await ctx.drizzle
+        .update(village)
+        .set({
+          shrineSettings: {
+            ...targetVillage.shrineSettings,
+            boostTemplate: input.template,
+            boostTemplateUpdatedBy: ctx.userId,
+            boostTemplateUpdatedAt: new Date().toISOString(),
+          },
+        })
+        .where(eq(village.id, input.villageId));
+
+      return { success: true, message: "Boost template saved" };
     }),
 
   // ============================================
