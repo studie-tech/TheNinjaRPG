@@ -909,6 +909,7 @@ const BoostTemplateGrid = ({
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpenCell(null);
         setOpenAllDay(null);
+        setAllDayBoosts([]);
       }
     };
     document.addEventListener("mousedown", handleMouseDown);
@@ -919,7 +920,8 @@ const BoostTemplateGrid = ({
     const filled = new Set<number>();
     for (let day = 0; day < 7; day++) {
       const dayEntries = localTemplate.filter((e) => e.dayOfWeek === day);
-      if (dayEntries.length > 0 && dayEntries.length % 12 === 0) {
+      const filledSlots = new Set(dayEntries.map((e) => e.slotIndex));
+      if (filledSlots.size === 12) {
         filled.add(day);
       }
     }
