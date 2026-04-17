@@ -1285,28 +1285,40 @@ const BoostTemplateGrid = ({ villageId, canEdit }: BoostTemplateGridProps) => {
                             )}
                           >
                             <div className="flex min-h-[32px] flex-wrap gap-0.5 rounded p-0.5">
-                              {cellBoosts.map((entry) => (
-                                <Badge
-                                  key={entry.boostType}
-                                  className={cn(
-                                    "cursor-pointer px-1 py-0 text-[10px] text-white",
-                                    BOOST_TYPE_COLORS[entry.boostType] ?? "bg-gray-500",
-                                    canEdit && "hover:opacity-70",
-                                  )}
-                                  onClick={
-                                    canEdit
-                                      ? () =>
-                                          toggleBoostInCell(
-                                            dayIdx,
-                                            slotIdx,
-                                            entry.boostType,
-                                          )
-                                      : undefined
-                                  }
-                                >
-                                  {entry.boostType}
-                                </Badge>
-                              ))}
+                              {cellBoosts.map((entry) =>
+                                canEdit ? (
+                                  <button
+                                    key={entry.boostType}
+                                    type="button"
+                                    onClick={() =>
+                                      toggleBoostInCell(
+                                        dayIdx,
+                                        slotIdx,
+                                        entry.boostType,
+                                      )
+                                    }
+                                    aria-label={`Remove ${entry.boostType} from ${DAY_LABELS[dayIdx] ?? ""} ${slotLabel}`}
+                                    className={cn(
+                                      "cursor-pointer rounded px-1 py-0 text-[10px] text-white hover:opacity-70",
+                                      BOOST_TYPE_COLORS[entry.boostType] ??
+                                        "bg-gray-500",
+                                    )}
+                                  >
+                                    {entry.boostType}
+                                  </button>
+                                ) : (
+                                  <Badge
+                                    key={entry.boostType}
+                                    className={cn(
+                                      "px-1 py-0 text-[10px]",
+                                      BOOST_TYPE_COLORS[entry.boostType] ??
+                                        "bg-gray-500",
+                                    )}
+                                  >
+                                    {entry.boostType}
+                                  </Badge>
+                                ),
+                              )}
 
                               {canEdit && availableBoosts.length > 0 && (
                                 <Popover
