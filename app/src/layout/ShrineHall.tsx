@@ -3,7 +3,7 @@
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, Clock, Coins, Shield } from "lucide-react";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -838,11 +837,19 @@ const StatsCard = ({ icon: Icon, label, value }: StatsCardProps) => (
 /* -------------------------------------------------------------------------- */
 
 const BOOST_TYPE_COLORS: Record<string, string> = {
-  Training: "bg-blue-500",
-  PVP: "bg-red-500",
-  Mission: "bg-yellow-500",
-  Errands: "bg-green-500",
-  Crafting: "bg-purple-500",
+  Training: "bg-green-700 text-green-200",
+  PVP: "bg-purple-700 text-purple-200",
+  Mission: "bg-orange-700 text-orange-200",
+  Errands: "bg-red-700 text-red-200",
+  Crafting: "bg-cyan-700 text-cyan-200",
+};
+
+const BOOST_PILL_ABBREV: Record<string, string> = {
+  Training: "Trn",
+  PVP: "PVP",
+  Mission: "Mis",
+  Errands: "Err",
+  Crafting: "Crf",
 };
 
 const SLOT_LABELS = [
@@ -884,8 +891,12 @@ const BoostTemplateGrid = ({
 
   const [localTemplate, setLocalTemplate] = useState<BoostTemplateEntry[]>([]);
   const [openCell, setOpenCell] = useState<{ day: number; slot: number } | null>(null);
+  const [openAllDay, setOpenAllDay] = useState<number | null>(null);
+  const [allDayBoosts, setAllDayBoosts] = useState<string[]>([]);
+  const [allDayFilledDays, setAllDayFilledDays] = useState<Set<number>>(new Set());
   const [isDirty, setIsDirty] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (templateData?.boostTemplate && !isDirty) {
@@ -893,9 +904,33 @@ const BoostTemplateGrid = ({
     }
   }, [templateData, isDirty]);
 
+  // Close panels on outside click
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpenCell(null);
+        setOpenAllDay(null);
+      }
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, []);
+
+  const templateBySlot = useMemo(() => {
+    const map = new Map<string, BoostTemplateEntry[]>();
+    for (const entry of localTemplate) {
+      const key = `${entry.dayOfWeek}-${entry.slotIndex}`;
+      const existing = map.get(key) ?? [];
+      existing.push(entry);
+      map.set(key, existing);
+    }
+    return map;
+  }, [localTemplate]);
+
   const { mutate: saveTemplate, isPending: isSaving } =
     api.shrine.setBoostTemplate.useMutation({
       onSuccess: (res) => {
+        showMutationToast(res);
         if (res.success) {
           void utils.shrine.getBoostTemplate.invalidate({ villageId });
           setIsDirty(false);
@@ -923,11 +958,46 @@ const BoostTemplateGrid = ({
         },
       ];
     });
+    setAllDayFilledDays((prev) => {
+      const next = new Set(prev);
+      next.delete(day);
+      return next;
+    });
     setIsDirty(true);
+  };
+
+  const fillAllDay = (day: number, boosts: string[]) => {
+    setLocalTemplate((prev) => {
+      const filtered = prev.filter((e) => e.dayOfWeek !== day);
+      const newEntries: BoostTemplateEntry[] = [];
+      for (let slot = 0; slot < 12; slot++) {
+        for (const bt of boosts) {
+          newEntries.push({
+            boostType: bt as BoostTemplateEntry["boostType"],
+            dayOfWeek: day,
+            slotIndex: slot,
+          });
+        }
+      }
+      return [...filtered, ...newEntries];
+    });
+    setAllDayFilledDays((prev) => {
+      const next = new Set(prev);
+      if (boosts.length > 0) {
+        next.add(day);
+      } else {
+        next.delete(day);
+      }
+      return next;
+    });
+    setIsDirty(true);
+    setOpenAllDay(null);
+    setAllDayBoosts([]);
   };
 
   const clearAll = () => {
     setLocalTemplate([]);
+    setAllDayFilledDays(new Set());
     setIsDirty(true);
     setClearConfirm(false);
   };
@@ -946,144 +1016,115 @@ const BoostTemplateGrid = ({
       <CardHeader>
         <CardTitle>Weekly Boost Template</CardTitle>
         <CardDescription>
-          Schedule recurring boosts by slot (each slot = 2 UTC hours). The cron
-          auto-activates scheduled boosts when a new slot starts.
+          Auto-activates at each 2-hour UTC slot boundary · requires tokens
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (
           <Loader explanation="Loading boost template..." />
         ) : (
-          <>
-            {/* Grid: rows = slots (time), cols = days */}
+          <div ref={containerRef}>
+            {/* 7×12 grid */}
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr>
-                    <th className="w-14 py-1 pr-2 text-right text-muted-foreground">
+                    <th className="w-14 py-1 pr-2 text-right text-muted-foreground font-normal text-[10px]">
                       UTC
                     </th>
-                    {DAY_LABELS.map((day) => (
-                      <th
-                        key={day}
-                        className="min-w-[72px] py-1 text-center font-medium"
-                      >
-                        {day}
+                    {DAY_LABELS.map((day, dayIdx) => (
+                      <th key={day} className="min-w-[72px] py-1 text-center">
+                        <div
+                          className={cn(
+                            "mb-1 text-[11px] font-semibold",
+                            dayIdx === currentDayOfWeek
+                              ? "text-amber-400"
+                              : "text-foreground",
+                          )}
+                        >
+                          {day}
+                        </div>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenAllDay(openAllDay === dayIdx ? null : dayIdx);
+                              setAllDayBoosts([]);
+                              setOpenCell(null);
+                            }}
+                            className={cn(
+                              "w-full rounded border px-1 py-0.5 text-[9px] transition-colors",
+                              allDayFilledDays.has(dayIdx)
+                                ? "border-blue-700 bg-blue-700 text-blue-200"
+                                : "border-border bg-muted text-muted-foreground hover:border-blue-500",
+                            )}
+                          >
+                            {allDayFilledDays.has(dayIdx) ? "✓ All Day" : "All Day"}
+                          </button>
+                        )}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {SLOT_LABELS.map((slotLabel, slotIdx) => (
-                    <tr key={slotIdx} className="border-border/40 border-t">
-                      <td className="py-1 pr-2 text-right text-muted-foreground">
+                    <tr
+                      key={slotIdx}
+                      className={cn(
+                        "border-t border-border/40",
+                        slotIdx === currentSlotIndex && "bg-amber-950/30",
+                      )}
+                    >
+                      <td className="py-1 pr-2 text-right text-[10px] text-muted-foreground">
                         {slotLabel}
                       </td>
                       {DAY_LABELS.map((_, dayIdx) => {
-                        const cellBoosts = localTemplate.filter(
-                          (e) => e.dayOfWeek === dayIdx && e.slotIndex === slotIdx,
-                        );
+                        const key = `${dayIdx}-${slotIdx}`;
+                        const cellBoosts = templateBySlot.get(key) ?? [];
                         const isCurrentCell =
                           dayIdx === currentDayOfWeek && slotIdx === currentSlotIndex;
                         const isCellOpen =
                           openCell?.day === dayIdx && openCell?.slot === slotIdx;
-
-                        const availableBoosts = SHRINE_BOOST_TYPES.filter(
-                          (bt) => !cellBoosts.some((e) => e.boostType === bt),
-                        );
+                        const isAllDayCol = allDayFilledDays.has(dayIdx);
 
                         return (
                           <td
                             key={dayIdx}
-                            className={cn(
-                              "min-h-[32px] p-0.5",
-                              isCurrentCell && "ring-2 ring-white ring-offset-1",
-                            )}
+                            className={cn("p-0.5", isAllDayCol && "bg-blue-950/20")}
                           >
-                            <div className="flex min-h-[32px] flex-wrap gap-0.5 rounded p-0.5">
-                              {cellBoosts.map((entry) =>
-                                canEdit ? (
-                                  <button
-                                    key={entry.boostType}
-                                    type="button"
-                                    onClick={() =>
-                                      toggleBoostInCell(
-                                        dayIdx,
-                                        slotIdx,
-                                        entry.boostType,
-                                      )
-                                    }
-                                    aria-label={`Remove ${entry.boostType} from ${DAY_LABELS[dayIdx] ?? ""} ${slotLabel}`}
-                                    className={cn(
-                                      "cursor-pointer rounded px-1 py-0 text-[10px] text-white hover:opacity-70",
-                                      BOOST_TYPE_COLORS[entry.boostType] ??
-                                        "bg-gray-500",
-                                    )}
-                                  >
-                                    {entry.boostType}
-                                  </button>
-                                ) : (
-                                  <Badge
-                                    key={entry.boostType}
-                                    className={cn(
-                                      "px-1 py-0 text-[10px]",
-                                      BOOST_TYPE_COLORS[entry.boostType] ??
-                                        "bg-gray-500",
-                                    )}
-                                  >
-                                    {entry.boostType}
-                                  </Badge>
-                                ),
+                            <button
+                              type="button"
+                              disabled={!canEdit}
+                              onClick={() => {
+                                setOpenCell(
+                                  isCellOpen ? null : { day: dayIdx, slot: slotIdx },
+                                );
+                                setOpenAllDay(null);
+                              }}
+                              className={cn(
+                                "flex min-h-[32px] w-full flex-wrap gap-0.5 rounded p-0.5 text-left transition-colors",
+                                isCellOpen && "ring-2 ring-amber-400 ring-offset-1",
+                                isCurrentCell &&
+                                  !isCellOpen &&
+                                  "ring-1 ring-amber-400/40",
+                                canEdit && "cursor-pointer hover:bg-muted/40",
                               )}
-
-                              {canEdit && availableBoosts.length > 0 && (
-                                <Popover
-                                  open={isCellOpen}
-                                  onOpenChange={(open) => {
-                                    setOpenCell(
-                                      open ? { day: dayIdx, slot: slotIdx } : null,
-                                    );
-                                  }}
+                              aria-label={`${DAY_LABELS[dayIdx]} ${slotLabel} boost slot`}
+                            >
+                              {cellBoosts.map((entry) => (
+                                <span
+                                  key={entry.boostType}
+                                  className={cn(
+                                    "rounded px-1 py-0 text-[10px]",
+                                    BOOST_TYPE_COLORS[entry.boostType] ??
+                                      "bg-gray-700 text-gray-200",
+                                  )}
                                 >
-                                  <PopoverTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-40 hover:bg-muted hover:opacity-100"
-                                      aria-label={`Add boost to ${DAY_LABELS[dayIdx]} ${slotLabel}`}
-                                    >
-                                      +
-                                    </button>
-                                  </PopoverTrigger>
-                                  <PopoverContent
-                                    align="start"
-                                    side="bottom"
-                                    className="w-auto p-2"
-                                  >
-                                    <div className="space-y-1">
-                                      <p className="mb-1 font-medium text-muted-foreground text-xs">
-                                        Add boost
-                                      </p>
-                                      {availableBoosts.map((bt) => (
-                                        <button
-                                          type="button"
-                                          key={bt}
-                                          className={cn(
-                                            "flex w-full items-center gap-2 rounded px-2 py-1 text-left text-white text-xs hover:opacity-80",
-                                            BOOST_TYPE_COLORS[bt] ?? "bg-gray-500",
-                                          )}
-                                          onClick={() => {
-                                            toggleBoostInCell(dayIdx, slotIdx, bt);
-                                            setOpenCell(null);
-                                          }}
-                                        >
-                                          {bt}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
-                              )}
-                            </div>
+                                  {BOOST_PILL_ABBREV[entry.boostType] ??
+                                    entry.boostType}
+                                </span>
+                              ))}
+                            </button>
                           </td>
                         );
                       })}
@@ -1093,36 +1134,124 @@ const BoostTemplateGrid = ({
               </table>
             </div>
 
-            {/* Controls */}
-            {canEdit && (
-              <div className="flex items-center gap-3">
-                <Button size="sm" disabled={!isDirty || isSaving} onClick={handleSave}>
-                  {isSaving ? "Saving..." : "Save Template"}
-                </Button>
+            {/* Persistent cell panel */}
+            {canEdit && openCell && (
+              <div className="mt-3 rounded-lg border border-amber-500/50 bg-muted p-3">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-amber-400">
+                    {DAY_LABELS[openCell.day]} · {SLOT_LABELS[openCell.slot]} –{" "}
+                    {`${String(((openCell.slot + 1) * 2) % 24).padStart(2, "0")}:00`}{" "}
+                    UTC
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    click away to close
+                  </span>
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  {SHRINE_BOOST_TYPES.map((bt) => {
+                    const checked = (
+                      templateBySlot.get(`${openCell.day}-${openCell.slot}`) ?? []
+                    ).some((e) => e.boostType === bt);
+                    return (
+                      <button
+                        key={bt}
+                        type="button"
+                        onClick={() =>
+                          toggleBoostInCell(openCell.day, openCell.slot, bt)
+                        }
+                        className={cn(
+                          "flex flex-col items-center gap-1 rounded-md px-2 py-3 text-center text-xs transition-colors",
+                          checked
+                            ? (BOOST_TYPE_COLORS[bt] ?? "bg-gray-700 text-gray-200")
+                            : "border border-border bg-background text-muted-foreground hover:border-muted-foreground",
+                        )}
+                      >
+                        {checked && <span>✓</span>}
+                        <span>{bt}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    if (clearConfirm) {
-                      clearAll();
-                    } else {
-                      setClearConfirm(true);
-                    }
-                  }}
-                  onBlur={() => setClearConfirm(false)}
-                >
-                  {clearConfirm ? "Confirm Clear?" : "Clear All"}
+            {/* All Day panel */}
+            {canEdit && openAllDay !== null && (
+              <div className="mt-3 rounded-lg border border-blue-500/50 bg-muted p-3">
+                <div className="mb-3">
+                  <span className="text-sm font-semibold text-blue-400">
+                    {DAY_LABELS[openAllDay]} · All Day (fills all 12 slots)
+                  </span>
+                </div>
+                <div className="mb-3 grid grid-cols-5 gap-2">
+                  {SHRINE_BOOST_TYPES.map((bt) => {
+                    const checked = allDayBoosts.includes(bt);
+                    return (
+                      <button
+                        key={bt}
+                        type="button"
+                        onClick={() => {
+                          setAllDayBoosts((prev) =>
+                            prev.includes(bt)
+                              ? prev.filter((b) => b !== bt)
+                              : [...prev, bt],
+                          );
+                        }}
+                        className={cn(
+                          "flex flex-col items-center gap-1 rounded-md px-2 py-3 text-center text-xs transition-colors",
+                          checked
+                            ? (BOOST_TYPE_COLORS[bt] ?? "bg-gray-700 text-gray-200")
+                            : "border border-border bg-background text-muted-foreground hover:border-muted-foreground",
+                        )}
+                      >
+                        {checked && <span>✓</span>}
+                        <span>{bt}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <Button size="sm" onClick={() => fillAllDay(openAllDay, allDayBoosts)}>
+                  Fill Day
                 </Button>
               </div>
             )}
 
-            {updatedAt && updatedBy && (
-              <p className="text-muted-foreground text-xs">
-                Last updated by {updatedBy} on {formatDateTimeShort(updatedAt)} UTC
-              </p>
-            )}
-          </>
+            {/* Footer */}
+            <div className="mt-4 flex items-center justify-between">
+              {updatedAt && updatedBy ? (
+                <p className="text-xs text-muted-foreground">
+                  Last saved by {updatedBy} · {formatDateTimeShort(updatedAt)} UTC
+                </p>
+              ) : (
+                <span />
+              )}
+              {canEdit && (
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (clearConfirm) {
+                        clearAll();
+                      } else {
+                        setClearConfirm(true);
+                      }
+                    }}
+                    onBlur={() => setClearConfirm(false)}
+                  >
+                    {clearConfirm ? "Confirm Clear?" : "Clear All"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!isDirty || isSaving}
+                    onClick={handleSave}
+                  >
+                    {isSaving ? "Saving..." : "Save Template"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>
