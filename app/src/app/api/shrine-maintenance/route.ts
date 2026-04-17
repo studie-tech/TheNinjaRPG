@@ -148,7 +148,6 @@ type RequiredShrineSettings = {
 export function computeTemplateActivations(params: {
   now: Date;
   prevTime: Date;
-  villageId: string;
   villageSector: number;
   villageTokens: number;
   shrineSettings: ShrineSettings | null;
@@ -158,7 +157,6 @@ export function computeTemplateActivations(params: {
   const {
     now,
     prevTime,
-    villageId: _villageId,
     villageSector,
     villageTokens,
     shrineSettings,
@@ -325,7 +323,6 @@ async function runShrineBoostTick(
     const templateActivations = computeTemplateActivations({
       now,
       prevTime,
-      villageId,
       villageSector: villageData?.sector ?? 0,
       villageTokens: villageData?.tokens ?? 0,
       shrineSettings: settings,
