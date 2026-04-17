@@ -114,16 +114,28 @@ async function runShrineMaintenance(now: Date) {
   };
 }
 
+type BoostTemplateEntry = {
+  boostType: string;
+  dayOfWeek: number;
+  slotIndex: number;
+};
+
 type ShrineSettings = {
   unlockedAiIds?: string[];
   activeBoosts?: Record<string, string>;
   activeAiIds?: string[];
+  boostTemplate?: BoostTemplateEntry[];
+  boostTemplateUpdatedBy?: string;
+  boostTemplateUpdatedAt?: string;
 };
 
 type RequiredShrineSettings = {
   unlockedAiIds: string[];
   activeBoosts: Record<string, string>;
   activeAiIds: string[];
+  boostTemplate: BoostTemplateEntry[];
+  boostTemplateUpdatedBy?: string;
+  boostTemplateUpdatedAt?: string;
 };
 
 /**
@@ -341,5 +353,8 @@ function withUpdatedBoosts(
     unlockedAiIds: settings?.unlockedAiIds ?? [],
     activeBoosts,
     activeAiIds: settings?.activeAiIds ?? [],
+    boostTemplate: settings?.boostTemplate ?? [],
+    boostTemplateUpdatedBy: settings?.boostTemplateUpdatedBy,
+    boostTemplateUpdatedAt: settings?.boostTemplateUpdatedAt,
   };
 }
