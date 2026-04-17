@@ -755,7 +755,11 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
       )}
 
       {user.villageId && (
-        <BoostTemplateGrid villageId={user.villageId} canEdit={isKage || isElder} />
+        <BoostTemplateGrid
+          villageId={user.villageId}
+          canEdit={isKage || isElder}
+          isActive={isActive}
+        />
       )}
     </div>
   );
@@ -1155,9 +1159,14 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 interface BoostTemplateGridProps {
   villageId: string;
   canEdit: boolean;
+  isActive: boolean;
 }
 
-const BoostTemplateGrid = ({ villageId, canEdit }: BoostTemplateGridProps) => {
+const BoostTemplateGrid = ({
+  villageId,
+  canEdit,
+  isActive,
+}: BoostTemplateGridProps) => {
   const utils = api.useUtils();
   const now = new Date();
   const currentDayOfWeek = now.getUTCDay();
@@ -1165,7 +1174,7 @@ const BoostTemplateGrid = ({ villageId, canEdit }: BoostTemplateGridProps) => {
 
   const { data: templateData, isLoading } = api.shrine.getBoostTemplate.useQuery(
     { villageId },
-    { enabled: !!villageId },
+    { enabled: !!villageId && isActive },
   );
 
   const [localTemplate, setLocalTemplate] = useState<BoostTemplateEntry[]>([]);

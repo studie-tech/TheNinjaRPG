@@ -37,7 +37,6 @@ describe("computeTemplateActivations", () => {
       ...BASE_PARAMS,
       now,
       prevTime,
-      villageId: "v1",
       shrineSettings: {
         boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
       },
@@ -52,7 +51,6 @@ describe("computeTemplateActivations", () => {
       ...BASE_PARAMS,
       now,
       prevTime,
-      villageId: "v1",
       shrineSettings: {
         boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
       },
@@ -69,7 +67,6 @@ describe("computeTemplateActivations", () => {
       ...BASE_PARAMS,
       now,
       prevTime,
-      villageId: "v1",
       shrineSettings: {
         activeBoosts: { Training: futureExpiry },
         boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
@@ -86,7 +83,6 @@ describe("computeTemplateActivations", () => {
       ...BASE_PARAMS,
       now,
       prevTime,
-      villageId: "v1",
       shrineSettings: {
         activeBoosts: { Training: pastExpiry },
         boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
@@ -103,7 +99,6 @@ describe("computeTemplateActivations", () => {
       villageSector: 99, // not in level3SectorNumbers
       now,
       prevTime,
-      villageId: "v1",
       shrineSettings: {
         boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
       },
@@ -119,7 +114,6 @@ describe("computeTemplateActivations", () => {
       villageTokens: 5_000, // less than boostCost
       now,
       prevTime,
-      villageId: "v1",
       shrineSettings: {
         boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
       },
@@ -135,7 +129,6 @@ describe("computeTemplateActivations", () => {
       villageTokens: 20_000, // enough for 1 boost at 15_000
       now,
       prevTime,
-      villageId: "v1",
       shrineSettings: {
         boostTemplate: [
           { boostType: "PVP", dayOfWeek: 1, slotIndex: 2 },
@@ -155,7 +148,6 @@ describe("computeTemplateActivations", () => {
       ...BASE_PARAMS,
       now,
       prevTime,
-      villageId: "v1",
       shrineSettings: { boostTemplate: [] },
     });
     expect(result).toHaveLength(0);
@@ -168,7 +160,6 @@ describe("computeTemplateActivations", () => {
       ...BASE_PARAMS,
       now,
       prevTime,
-      villageId: "v1",
       shrineSettings: {
         boostTemplate: [
           { boostType: "Training", dayOfWeek: 1, slotIndex: 2 }, // matches
@@ -189,7 +180,6 @@ describe("computeTemplateActivations", () => {
       ...BASE_PARAMS,
       now,
       prevTime,
-      villageId: "v1",
       shrineSettings: {
         boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
       },
