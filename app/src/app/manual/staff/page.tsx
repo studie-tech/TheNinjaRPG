@@ -242,7 +242,7 @@ export default function Staff() {
                   jutsus, bloodlines, events etc.
                 </Information>
               </div>
-              <div className="rounded-lg bg-violet-500 p-1 font-bold">
+              <div className="rounded-lg bg-sky-600 p-1 font-bold">
                 Head Content
                 <UserList
                   users={users.filter((user) => user.role === "HEAD_CONTENT")}
@@ -274,7 +274,7 @@ export default function Staff() {
                   jutsus, bloodlines, events etc.
                 </Information>
               </div>
-              <div className="rounded-lg bg-amber-500 p-1 font-bold">
+              <div className="rounded-lg bg-pink-600 p-1 font-bold">
                 Head Event
                 <UserList
                   users={users.filter((user) => user.role === "HEAD_EVENT")}
