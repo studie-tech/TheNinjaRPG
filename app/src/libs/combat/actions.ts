@@ -1151,44 +1151,6 @@ export const actionPointsAfterAction = (
     return { apAfter: 0, apAvailableAfter: 0, canAct: false, availableActionPoints: 0 };
   const stunReduction = calcApReduction(battle, user.userId);
 
-  // Helper: count applicable temporal effects and get AP delta (10 per effect)
-  const getTemporalApDelta = (type: "timecompression" | "timedilation") => {
-    if (action?.id === "wait") return 0;
-    // Time dilation and time compression should not affect basic actions or items
-    if (action?.type === "basic" || action?.type === "item") return 0;
-    const effects = battle.usersEffects.filter((e): e is UserEffect => {
-      return (
-        e.type === type &&
-        e.targetId === user.userId &&
-        !e.castThisRound &&
-        isEffectActive(e)
-      );
-    });
-    const appliesByElements = (effect: UserEffect) => {
-      // No elements specified on the effect → applies to all actions
-      if (!("elements" in effect) || !effect.elements || effect.elements.length === 0) {
-        return true;
-      }
-      // For jutsu: apply only if there is an overlap with the action's elements
-      if (action?.type === "jutsu" && action.data && "effects" in action.data) {
-        const actionElements = new Set(
-          action.data.effects.flatMap((eff) =>
-            "elements" in eff && eff.elements ? eff.elements : [],
-          ),
-        );
-        return actionElements.size === 0
-          ? false
-          : effect.elements.some((el: ElementName) => actionElements.has(el));
-      }
-      return true;
-    };
-    const applicable = effects.filter(appliesByElements);
-    return applicable.length * 10;
-  };
-
-  const timeCompressionApIncrease = getTemporalApDelta("timecompression");
-  const timeDilationApDecrease = getTemporalApDelta("timedilation");
-
   const availableActionPoints = Math.max(0, user.actionPoints - stunReduction);
 
   // If no action is provided, just return current available AP
@@ -1201,10 +1163,7 @@ export const actionPointsAfterAction = (
     };
   }
 
-  const actionCost = Math.max(
-    0,
-    (action.actionCostPerc || 0) + timeCompressionApIncrease - timeDilationApDecrease,
-  );
+  const actionCost = getActionPointCost(user.userId, battle, action);
   const apAfter = Math.max(0, user.actionPoints - actionCost); // stored AP after spending
   const apAvailableAfter = availableActionPoints - actionCost; // gating with stun etc.
   return {
@@ -1213,6 +1172,83 @@ export const actionPointsAfterAction = (
     canAct: apAvailableAfter >= 0,
     availableActionPoints,
   };
+};
+
+const elementsFromJutsuTags = (tags: CombatAction["effects"]): ElementName[] =>
+  tags.flatMap((eff) =>
+    "elements" in eff && eff.elements && eff.elements.length > 0 ? eff.elements : [],
+  );
+
+/** Union of tag elements on the action (normalized `effects` plus embedded jutsu `data.effects` when present). */
+const collectJutsuActionElements = (action: CombatAction): Set<ElementName> => {
+  const acc = new Set(elementsFromJutsuTags(action.effects));
+  if (action.data && "effects" in action.data && Array.isArray(action.data.effects)) {
+    for (const el of elementsFromJutsuTags(action.data.effects)) {
+      acc.add(el);
+    }
+  }
+  return acc;
+};
+
+const getTemporalApDelta = (
+  battle: ReturnedBattle,
+  userId: string,
+  action: CombatAction,
+  type: "timecompression" | "timedilation",
+) => {
+  if (action.id === "wait") return 0;
+  // Time dilation and time compression should not affect basic actions or items
+  if (action.type === "basic" || action.type === "item") return 0;
+  const effects = battle.usersEffects.filter((e): e is UserEffect => {
+    return (
+      e.type === type && e.targetId === userId && !e.castThisRound && isEffectActive(e)
+    );
+  });
+  const appliesByElements = (effect: UserEffect) => {
+    // No elements specified on the effect -> applies to all actions
+    if (!effect.elements || effect.elements.length === 0) {
+      return true;
+    }
+    // Element-scoped temporal effects only apply to jutsu that declare matching elements
+    if (action.type !== "jutsu") {
+      return true;
+    }
+    const actionElements = collectJutsuActionElements(action);
+    if (actionElements.size === 0) {
+      return false;
+    }
+    return effect.elements.some((el: ElementName) => actionElements.has(el));
+  };
+  const applicable = effects.filter(appliesByElements);
+  return applicable.length * 10;
+};
+
+export const getActionPointCost = (
+  userId?: string | null,
+  battle?: ReturnedBattle | null,
+  action?: CombatAction,
+) => {
+  if (!userId || !battle || !action) {
+    return Math.max(0, action?.actionCostPerc || 0);
+  }
+
+  const timeCompressionApIncrease = getTemporalApDelta(
+    battle,
+    userId,
+    action,
+    "timecompression",
+  );
+  const timeDilationApDecrease = getTemporalApDelta(
+    battle,
+    userId,
+    action,
+    "timedilation",
+  );
+
+  return Math.max(
+    0,
+    (action.actionCostPerc || 0) + timeCompressionApIncrease - timeDilationApDecrease,
+  );
 };
 
 /**

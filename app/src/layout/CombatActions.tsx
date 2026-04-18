@@ -13,6 +13,8 @@ import type { Bloodline, Item, ItemRarity, Jutsu } from "@/drizzle/schema";
 import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import { getActionPointCost } from "@/libs/combat/actions";
+import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
@@ -61,6 +63,8 @@ interface ActionSelectorSettingsProps {
   showInfoIcon?: boolean;
   combatMode?: boolean;
   userActionPoints?: number;
+  battle?: ReturnedBattle | null;
+  userId?: string;
 }
 
 interface ActionSelectorProps extends ActionSelectorSettingsProps {
@@ -119,16 +123,30 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
       selectedItem.lastUsedRound !== undefined &&
       currentRound - selectedItem.lastUsedRound < selectedItem.cooldown;
 
+    const effectiveActionCost =
+      combatMode && props.battle && props.userId
+        ? getActionPointCost(props.userId, props.battle, selectedItem as CombatAction)
+        : selectedItem.actionCostPerc;
+
     // Check if user has insufficient AP
     const insufficientAP =
       userActionPoints !== undefined &&
-      selectedItem.actionCostPerc !== undefined &&
-      userActionPoints < selectedItem.actionCostPerc;
+      effectiveActionCost !== undefined &&
+      userActionPoints < effectiveActionCost;
 
     if (isOnCooldown || insufficientAP) {
       onClick(selectedId);
     }
-  }, [combatMode, selectedId, currentRound, userActionPoints, onClick, filtered]);
+  }, [
+    combatMode,
+    selectedId,
+    currentRound,
+    userActionPoints,
+    onClick,
+    filtered,
+    props.battle,
+    props.userId,
+  ]);
 
   return (
     <>
@@ -230,13 +248,17 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   const elements = item.effects
     ? item.effects.flatMap((e) => ("elements" in e && e.elements ? e.elements : []))
     : [];
+  const effectiveActionCost =
+    settings.combatMode && settings.battle && settings.userId
+      ? getActionPointCost(settings.userId, settings.battle, item as CombatAction)
+      : actionCostPerc;
 
   // Check if user has insufficient AP (only in combat mode)
   const insufficientAP =
     settings.combatMode &&
     settings.userActionPoints !== undefined &&
-    actionCostPerc !== undefined &&
-    settings.userActionPoints < actionCostPerc;
+    effectiveActionCost !== undefined &&
+    settings.userActionPoints < effectiveActionCost;
 
   // Handler that prevents selection when AP is insufficient
   const handleClick = () => {

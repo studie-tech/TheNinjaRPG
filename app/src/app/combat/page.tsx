@@ -214,6 +214,8 @@ export default function CombatPage() {
         selectedId={actionId}
         combatMode={true}
         userActionPoints={user?.actionPoints}
+        battle={battle}
+        userId={userId}
         gridClassNameOverwrite={actionGridClass}
         aspectRatioClass={actionAspect}
         onClick={handleActionClick}
