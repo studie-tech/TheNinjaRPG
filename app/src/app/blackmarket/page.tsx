@@ -95,7 +95,7 @@ export default function BlackMarket() {
               <i> - Have a bloodline genetically infused.</i>
             </li>
             <li>
-              <i> - Special items with Seichi silver or Reputation points.</i>
+              <i> - Special items with silver or Reputation points.</i>
             </li>
             <li>
               <i> - Exchange ryo for reputation points.</i>
@@ -113,15 +113,31 @@ export default function BlackMarket() {
             initialBreak={true}
             minRepsCost={1}
             title="Reputation Shop"
-            subtitle="Buy rare items"
+            subtitle="Browse categories, search the catalog, then open a card to buy."
+            useItemTypeTabs
+            seichiSilverUi="silver"
+            catalogHeroTitle="Reputation catalog"
+            catalogHeroDescription="Spend reputation on rare stock. Category tabs and search match the village shop; filters refine rarity, slot, and effects."
+            catalogHeroBadgeCatalog="Reputation pricing"
+            catalogSearchId="blackmarket-rep-catalog-search"
+            catalogTutorialId={false}
+            filterPopoverTriggerId="blackmarket-rep-filter"
           />
           <Shop
             userData={userData}
             defaultType="CONSUMABLE"
             initialBreak={true}
             minSeichiSilverCost={1}
-            title="Seichi Silver Shop"
-            subtitle="Buy rare items"
+            title="Silver Shop"
+            subtitle="Browse categories, search the catalog, then open a card to buy."
+            useItemTypeTabs
+            seichiSilverUi="silver"
+            catalogHeroTitle="Silver catalog"
+            catalogHeroDescription="Spend silver on exclusive goods. Use tabs and search, then tap a card to review and purchase."
+            catalogHeroBadgeCatalog="Silver pricing"
+            catalogSearchId="blackmarket-seichi-catalog-search"
+            catalogTutorialId={false}
+            filterPopoverTriggerId="blackmarket-seichi-filter"
           />
           {PITY_SYSTEM_ENABLED && <PityBloodlineRoll userData={userData} />}
         </>

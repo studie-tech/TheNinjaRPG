@@ -22,6 +22,8 @@ export default function ItemShop() {
       defaultType="WEAPON"
       defaultBackHref={"/village"}
       eventItems={false}
+      subtitle="Browse gear and supplies — open a card to inspect and buy."
+      useItemTypeTabs
     />
   );
 }

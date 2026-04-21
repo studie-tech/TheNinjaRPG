@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   BattleUsageTypes,
   ItemRarities,
@@ -19,19 +20,28 @@ interface ItemShopFilteringProps {
   state: ItemShopFilteringState;
   defaultType: ItemType;
   restrictTypes?: ItemType[];
+  /** When true, item type is controlled elsewhere (e.g. shop tabs); omit Type from the filter popover. */
+  hideItemTypeField?: boolean;
+  /** Popover trigger button id (unique when several shops on one page). */
+  filterTriggerId?: string;
 }
 
-const makeItemShopSchema = (types: readonly string[]) =>
-  defineFilteringSchema({
+const makeItemShopSchema = (types: readonly string[], itemTypeDefault?: ItemType) => {
+  const first = (types[0] ?? "WEAPON") as ItemType;
+  const initialItemType =
+    itemTypeDefault && types.includes(itemTypeDefault) ? itemTypeDefault : first;
+  return defineFilteringSchema({
     fields: [
       {
         id: "itemType",
         label: "Type",
         type: "single-select",
-        defaultValue: types[0] ?? "WEAPON",
+        defaultValue: initialItemType,
         includeNone: false,
         emptyValues: [],
         options: types.map((t) => ({ value: t, label: t })),
+        visibleIf: (ctx) =>
+          !(ctx as { hideItemType?: boolean } | undefined)?.hideItemType,
       },
       { id: "name", label: "Name", type: "text", defaultValue: "" },
       {
@@ -82,17 +92,25 @@ const makeItemShopSchema = (types: readonly string[]) =>
       },
     ] as const,
   });
+};
 
 const ItemShopFiltering: React.FC<ItemShopFilteringProps> = (props) => {
-  let categories = Object.values(ItemTypes) as string[];
-  if (props.restrictTypes)
-    categories = categories.filter((t) => props.restrictTypes?.includes(t as ItemType));
-  const schema = makeItemShopSchema(categories);
+  const restrictKey = props.restrictTypes?.join() ?? "";
+  const schema = useMemo(() => {
+    let categories = Object.values(ItemTypes) as string[];
+    if (props.restrictTypes?.length) {
+      categories = categories.filter((t) =>
+        props.restrictTypes?.includes(t as ItemType),
+      );
+    }
+    return makeItemShopSchema(categories, props.defaultType);
+  }, [restrictKey, props.defaultType]);
   return (
     <ContentFiltering
       schema={schema}
       state={props.state.cf}
-      triggerButtonId="filter-item"
+      triggerButtonId={props.filterTriggerId ?? "filter-item"}
+      context={{ hideItemType: props.hideItemTypeField }}
     />
   );
 };
@@ -103,12 +121,11 @@ export const getShopFilter = (state: ItemShopFilteringState) =>
   buildFilter(state.cf, makeItemShopSchema(Object.values(ItemTypes)));
 
 export const useShopFiltering = (defaultType: ItemType) => {
-  const cf = useContentFiltering(makeItemShopSchema(Object.values(ItemTypes)));
-  if (!cf.values.itemType) {
-    (cf.setters.itemType as React.Dispatch<React.SetStateAction<ItemType>>)(
-      defaultType,
-    );
-  }
+  const schema = useMemo(
+    () => makeItemShopSchema(Object.values(ItemTypes), defaultType),
+    [defaultType],
+  );
+  const cf = useContentFiltering(schema);
   return {
     ...cf.values,
     cf,
