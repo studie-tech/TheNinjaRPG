@@ -119,6 +119,8 @@ const SHOP_ITEM_TYPE_TAB_LABEL: Record<ItemType, string> = {
   OTHER: "Other",
 };
 
+const MIN_ITEM_SHOP_DISCOUNT_FACTOR = 0.05;
+
 function categoryTabIcon(type: ItemType) {
   const cls = "h-4 w-4 shrink-0 opacity-90";
   const Icon = SHOP_ITEM_TYPE_TAB_ICON[type] ?? LayoutGrid;
@@ -133,7 +135,10 @@ function shopItemDiscountFactor(
   const healDiscount = item.effects.some((e) => e.type === "heal")
     ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC
     : 0;
-  return (100 - structureDiscountPerc - anbuDiscountPerc - healDiscount) / 100;
+  return Math.max(
+    MIN_ITEM_SHOP_DISCOUNT_FACTOR,
+    (100 - structureDiscountPerc - anbuDiscountPerc - healDiscount) / 100,
+  );
 }
 
 function ShopCatalogCard({

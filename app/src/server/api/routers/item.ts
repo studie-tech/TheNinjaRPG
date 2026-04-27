@@ -69,6 +69,8 @@ import type { PostProcessedRewards } from "@/validators/rewards";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 import { updateRewards } from "./quests";
 
+const MIN_ITEM_SHOP_DISCOUNT_FACTOR = 0.05;
+
 export const itemRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get all item names and images" } })
@@ -1433,7 +1435,10 @@ export const itemRouter = createTRPCRouter({
       const hDiscount = info?.effects.find((e) => e.type === "heal")
         ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC
         : 0;
-      const factor = (100 - sDiscount - aDiscount - hDiscount) / 100;
+      const factor = Math.max(
+        MIN_ITEM_SHOP_DISCOUNT_FACTOR,
+        (100 - sDiscount - aDiscount - hDiscount) / 100,
+      );
       // Guard
       if (user.villageId !== input.villageId) return errorResponse("Wrong village");
       if (!info) return errorResponse("Item not found");
