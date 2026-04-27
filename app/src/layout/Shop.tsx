@@ -355,7 +355,8 @@ const Shop: React.FC<ShopProps> = (props) => {
   const catalogHeroBadge =
     catalog?.heroBadge ?? (props.eventItems ? "Event catalog" : "Village pricing");
 
-  const tabHint = SHOP_ITEM_TYPE_TAB_HINT[filteringState.itemType];
+  const selectedItemType = filteringState.itemType as ItemType;
+  const tabHint = SHOP_ITEM_TYPE_TAB_HINT[selectedItemType];
 
   if (!isAwake) return <Loader explanation="Redirecting because not awake" />;
 
@@ -535,15 +536,15 @@ const Shop: React.FC<ShopProps> = (props) => {
                         key={t}
                         type="button"
                         role="tab"
-                        aria-selected={filteringState.itemType === t}
+                        aria-selected={selectedItemType === t}
                         className={cn(
                           "flex flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-1.5 font-semibold text-[10px] transition-all sm:flex-row sm:gap-2 sm:rounded-lg sm:px-1 sm:py-3 sm:text-xs",
-                          filteringState.itemType === t
+                          selectedItemType === t
                             ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
                             : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
                         )}
                         onClick={() => {
-                          if (filteringState.itemType === t) return;
+                          if (selectedItemType === t) return;
                           filteringState.setItemType(t);
                           setItem(undefined);
                           setStacksize(1);
