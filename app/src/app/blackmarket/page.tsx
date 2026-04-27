@@ -95,7 +95,7 @@ export default function BlackMarket() {
               <i> - Have a bloodline genetically infused.</i>
             </li>
             <li>
-              <i> - Special items with silver or Reputation points.</i>
+              <i> - Buy special items with silver or reputation points.</i>
             </li>
             <li>
               <i> - Exchange ryo for reputation points.</i>
@@ -114,14 +114,16 @@ export default function BlackMarket() {
             minRepsCost={1}
             title="Reputation Shop"
             subtitle="Browse categories, search the catalog, then open a card to buy."
-            useItemTypeTabs
-            seichiSilverUi="silver"
-            catalogHeroTitle="Reputation catalog"
-            catalogHeroDescription="Spend reputation on rare stock. Category tabs and search match the village shop; filters refine rarity, slot, and effects."
-            catalogHeroBadgeCatalog="Reputation pricing"
-            catalogSearchId="blackmarket-rep-catalog-search"
-            catalogTutorialId={false}
-            filterPopoverTriggerId="blackmarket-rep-filter"
+            catalog={{
+              silverLabel: "silver",
+              heroTitle: "Reputation catalog",
+              heroDescription:
+                "Spend reputation on rare stock. Category tabs and search match the village shop; filters refine rarity, slot, and effects.",
+              heroBadge: "Reputation pricing",
+              searchId: "blackmarket-rep-catalog-search",
+              listId: false,
+              filterTriggerId: "blackmarket-rep-filter",
+            }}
           />
           <Shop
             userData={userData}
@@ -130,14 +132,16 @@ export default function BlackMarket() {
             minSeichiSilverCost={1}
             title="Silver Shop"
             subtitle="Browse categories, search the catalog, then open a card to buy."
-            useItemTypeTabs
-            seichiSilverUi="silver"
-            catalogHeroTitle="Silver catalog"
-            catalogHeroDescription="Spend silver on exclusive goods. Use tabs and search, then tap a card to review and purchase."
-            catalogHeroBadgeCatalog="Silver pricing"
-            catalogSearchId="blackmarket-seichi-catalog-search"
-            catalogTutorialId={false}
-            filterPopoverTriggerId="blackmarket-seichi-filter"
+            catalog={{
+              silverLabel: "silver",
+              heroTitle: "Silver catalog",
+              heroDescription:
+                "Spend silver on exclusive goods. Use tabs and search, then tap a card to review and purchase.",
+              heroBadge: "Silver pricing",
+              searchId: "blackmarket-seichi-catalog-search",
+              listId: false,
+              filterTriggerId: "blackmarket-seichi-filter",
+            }}
           />
           {PITY_SYSTEM_ENABLED && <PityBloodlineRoll userData={userData} />}
         </>

@@ -23,7 +23,6 @@ export default function ItemShop() {
       defaultBackHref={"/village"}
       eventItems={false}
       subtitle="Browse gear and supplies — open a card to inspect and buy."
-      useItemTypeTabs
     />
   );
 }

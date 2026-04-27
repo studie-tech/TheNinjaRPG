@@ -26,7 +26,6 @@ export default function ItemShop() {
       defaultBackHref={"/village"}
       eventItems={true}
       subtitle="Limited-run souvenirs — search, filter, then open a card to purchase."
-      useItemTypeTabs
     />
   );
 }

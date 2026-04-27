@@ -26,6 +26,8 @@ interface ItemShopFilteringProps {
   filterTriggerId?: string;
 }
 
+type ItemShopFilterContext = { hideItemType?: boolean };
+
 const makeItemShopSchema = (types: readonly string[], itemTypeDefault?: ItemType) => {
   const first = (types[0] ?? "WEAPON") as ItemType;
   const initialItemType =
@@ -40,8 +42,7 @@ const makeItemShopSchema = (types: readonly string[], itemTypeDefault?: ItemType
         includeNone: false,
         emptyValues: [],
         options: types.map((t) => ({ value: t, label: t })),
-        visibleIf: (ctx) =>
-          !(ctx as { hideItemType?: boolean } | undefined)?.hideItemType,
+        visibleIf: (ctx) => !(ctx as ItemShopFilterContext).hideItemType,
       },
       { id: "name", label: "Name", type: "text", defaultValue: "" },
       {

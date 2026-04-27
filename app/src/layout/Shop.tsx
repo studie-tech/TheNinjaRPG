@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import {
   Check,
   CircleAlert,
@@ -26,7 +27,6 @@ import {
 } from "@/drizzle/constants";
 import type { Item, ItemType } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
-import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
 import Image from "@/layout/Image";
@@ -43,8 +43,20 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake } from "@/utils/routing";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { getStrucBoost } from "@/utils/village";
+
+/** Optional overrides for the catalog UI (e.g. black market uses several at once). */
+export interface ShopCatalogOverrides {
+  heroTitle?: string;
+  heroDescription?: string;
+  heroBadge?: string;
+  searchId?: string;
+  /** `false` omits the catalog list wrapper id; string overrides. Default: tutorial-itemshop when not `eventItems`. */
+  listId?: string | false;
+  filterTriggerId?: string;
+  /** User-facing Seichi silver wording (`silver` on black market; default village: seichi). */
+  silverLabel?: "silver" | "seichi";
+}
 
 interface ShopProps {
   userData: NonNullable<UserWithRelations>;
@@ -59,42 +71,58 @@ interface ShopProps {
   minCost?: number;
   minRepsCost?: number;
   minSeichiSilverCost?: number;
-  /** Village item shop / souvenirs: auction-style floor layout, category tabs, card grid. */
-  useItemTypeTabs?: boolean;
-  /** When useItemTypeTabs: overrides hero headline (default: village / souvenir copy). */
-  catalogHeroTitle?: string;
-  catalogHeroDescription?: string;
-  catalogHeroBadgeCatalog?: string;
-  /** When useItemTypeTabs: id for search field + label (avoid duplicates if multiple shops on one page). */
-  catalogSearchId?: string;
-  /** Catalog list wrapper id; use `false` to omit (e.g. black market). Default village: tutorial-itemshop. */
-  catalogTutorialId?: string | false;
-  /** Id for the filter popover trigger when multiple shops share a page. */
-  filterPopoverTriggerId?: string;
-  /** User-facing label for Seichi silver (`silver` on black market, default village wording otherwise). */
-  seichiSilverUi?: "seichi" | "silver";
+  catalog?: ShopCatalogOverrides;
 }
+
+const SILVER_COPY = {
+  seichi: {
+    catalog: "seichi",
+    purchase: "seichi silver",
+    wallet: "Seichi Silver:",
+  },
+  silver: {
+    catalog: "silver",
+    purchase: "silver",
+    wallet: "Silver:",
+  },
+} as const;
+
+const SHOP_ITEM_TYPE_TAB_ICON: Partial<Record<ItemType, LucideIcon>> = {
+  WEAPON: Sword,
+  CONSUMABLE: FlaskConical,
+  ARMOR: Shield,
+  ACCESSORY: Sparkles,
+  MATERIAL: Package,
+  KEYSTONE: Gem,
+  CRYSTAL: Diamond,
+};
+
+const SHOP_ITEM_TYPE_TAB_HINT: Record<ItemType, string> = {
+  WEAPON: "Weapons — damage tags, stat scaling, and battle usage vary by piece.",
+  CONSUMABLE: "Consumables — scrolls, pills, and one-off tools for combat and travel.",
+  ARMOR: "Armor — defensive layers and resistances for your build.",
+  ACCESSORY: "Accessories — rings, charms, and extras that tweak your kit.",
+  MATERIAL: "Materials — crafting and upgrade components.",
+  KEYSTONE: "Keystones — slot upgrades and build-defining modifiers.",
+  CRYSTAL: "Crystals — special slot items and enhancements.",
+  OTHER: "Other — miscellaneous goods in stock.",
+};
+
+const SHOP_ITEM_TYPE_TAB_LABEL: Record<ItemType, string> = {
+  WEAPON: "Weapon",
+  CONSUMABLE: "Consumable",
+  ARMOR: "Armor",
+  ACCESSORY: "Accessory",
+  MATERIAL: "Material",
+  KEYSTONE: "Keystone",
+  CRYSTAL: "Crystal",
+  OTHER: "Other",
+};
 
 function categoryTabIcon(type: ItemType) {
   const cls = "h-4 w-4 shrink-0 opacity-90";
-  switch (type) {
-    case "WEAPON":
-      return <Sword className={cls} />;
-    case "CONSUMABLE":
-      return <FlaskConical className={cls} />;
-    case "ARMOR":
-      return <Shield className={cls} />;
-    case "ACCESSORY":
-      return <Sparkles className={cls} />;
-    case "MATERIAL":
-      return <Package className={cls} />;
-    case "KEYSTONE":
-      return <Gem className={cls} />;
-    case "CRYSTAL":
-      return <Diamond className={cls} />;
-    default:
-      return <LayoutGrid className={cls} />;
-  }
+  const Icon = SHOP_ITEM_TYPE_TAB_ICON[type] ?? LayoutGrid;
+  return <Icon className={cls} />;
 }
 
 function shopItemDiscountFactor(
@@ -149,7 +177,6 @@ function ShopCatalogCard({
             rarity={item.rarity ?? undefined}
             hideBorder
             className="h-full w-full max-h-full max-w-full object-contain"
-            onClick={onSelect}
           />
         </div>
       </div>
@@ -200,12 +227,9 @@ function ShopCatalogCard({
 }
 
 const Shop: React.FC<ShopProps> = (props) => {
-  const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost } = props;
-  const useModern = !!props.useItemTypeTabs;
-  const seichiUi = props.seichiSilverUi ?? "seichi";
-  const seichiCatalogWord = seichiUi === "silver" ? "silver" : "seichi";
-  const seichiPurchasePhrase = seichiUi === "silver" ? "silver" : "seichi silver";
-  const seichiWalletLabel = seichiUi === "silver" ? "Silver:" : "Seichi Silver:";
+  const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost, catalog } =
+    props;
+  const silverCopy = SILVER_COPY[catalog?.silverLabel ?? "seichi"];
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [item, setItem] = useState<Item | undefined>(undefined);
@@ -213,10 +237,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   const filteringState = useShopFiltering(defaultType);
   const isAwake = useAwake(userData);
   const itemTypeTabOptions = useMemo(
-    () =>
-      (props.restrictTypes?.length
-        ? props.restrictTypes
-        : [...ItemTypes]) as ItemType[],
+    () => (props.restrictTypes?.length ? props.restrictTypes : ItemTypes) as ItemType[],
     [props.restrictTypes],
   );
 
@@ -236,6 +257,7 @@ const Shop: React.FC<ShopProps> = (props) => {
     },
     {
       enabled: userData !== undefined,
+      staleTime: Infinity,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },
@@ -273,7 +295,9 @@ const Shop: React.FC<ShopProps> = (props) => {
   const hDiscount = item?.effects?.find((e) => e.type === "heal")
     ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC
     : 0;
-  const factor = (100 - sDiscount - aDiscount - hDiscount) / 100;
+  const selectedItemFactor = item
+    ? shopItemDiscountFactor(item, sDiscount, aDiscount)
+    : 1;
 
   const discounts = [
     ...(sDiscount > 0 ? [{ label: "village structures", value: sDiscount }] : []),
@@ -282,7 +306,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   ];
   const totalDiscount = discounts.reduce((acc, d) => acc + d.value, 0);
 
-  const ryoCost = Math.ceil((item?.cost ?? 0) * stacksize * factor);
+  const ryoCost = Math.ceil((item?.cost ?? 0) * stacksize * selectedItemFactor);
   const repsCost = Math.ceil((item?.repsCost ?? 0) * stacksize);
   const seichiSilverCost = Math.ceil((item?.seichiSilverCost ?? 0) * stacksize);
   const canAfford =
@@ -293,7 +317,7 @@ const Shop: React.FC<ShopProps> = (props) => {
     ...(ryoCost > 0 ? [`${ryoCost.toLocaleString()} ryo`] : []),
     ...(repsCost > 0 ? [`${repsCost.toLocaleString()} reputation points`] : []),
     ...(seichiSilverCost > 0
-      ? [`${seichiSilverCost.toLocaleString()} ${seichiPurchasePhrase}`]
+      ? [`${seichiSilverCost.toLocaleString()} ${silverCopy.purchase}`]
       : []),
   ];
   const missing = [
@@ -307,48 +331,31 @@ const Shop: React.FC<ShopProps> = (props) => {
       : []),
     ...(seichiSilverCost > userData.seichiSilver
       ? [
-          `${(seichiSilverCost - userData.seichiSilver).toLocaleString()} more ${seichiPurchasePhrase}`,
+          `${(seichiSilverCost - userData.seichiSilver).toLocaleString()} more ${silverCopy.purchase}`,
         ]
       : []),
   ];
   const costString = `Buy for ${costs.join(", ")}`;
   const missingString = `Need ${missing.join(", ")}`;
 
-  const catalogSearchId = props.catalogSearchId ?? "shop-catalog-search";
+  const catalogSearchId = catalog?.searchId ?? "shop-catalog-search";
   const catalogListDomId =
-    props.catalogTutorialId === false
+    catalog?.listId === false
       ? undefined
-      : (props.catalogTutorialId ??
-        (props.eventItems ? undefined : "tutorial-itemshop"));
+      : (catalog?.listId ?? (props.eventItems ? undefined : "tutorial-itemshop"));
 
   const catalogHeroTitle =
-    props.catalogHeroTitle ??
+    catalog?.heroTitle ??
     (props.eventItems ? "Souvenir counter" : "Village storefront");
   const catalogHeroDescription =
-    props.catalogHeroDescription ??
+    catalog?.heroDescription ??
     (props.eventItems
       ? "Limited-run goods for ryo. Use filters to narrow rarity and effects, then open a card to review and purchase."
       : "Open categories to browse village stock. Filters stack with search — your discounts apply at checkout.");
-  const catalogHeroBadgeCatalog =
-    props.catalogHeroBadgeCatalog ??
-    (props.eventItems ? "Event catalog" : "Village pricing");
+  const catalogHeroBadge =
+    catalog?.heroBadge ?? (props.eventItems ? "Event catalog" : "Village pricing");
 
-  const tabHint =
-    filteringState.itemType === "WEAPON"
-      ? "Weapons — damage tags, stat scaling, and battle usage vary by piece."
-      : filteringState.itemType === "CONSUMABLE"
-        ? "Consumables — scrolls, pills, and one-off tools for combat and travel."
-        : filteringState.itemType === "ARMOR"
-          ? "Armor — defensive layers and resistances for your build."
-          : filteringState.itemType === "ACCESSORY"
-            ? "Accessories — rings, charms, and extras that tweak your kit."
-            : filteringState.itemType === "MATERIAL"
-              ? "Materials — crafting and upgrade components."
-              : filteringState.itemType === "KEYSTONE"
-                ? "Keystones — slot upgrades and build-defining modifiers."
-                : filteringState.itemType === "CRYSTAL"
-                  ? "Crystals — special slot items and enhancements."
-                  : "Other — miscellaneous goods in stock.";
+  const tabHint = SHOP_ITEM_TYPE_TAB_HINT[filteringState.itemType];
 
   if (!isAwake) return <Loader explanation="Redirecting because not awake" />;
 
@@ -393,7 +400,7 @@ const Shop: React.FC<ShopProps> = (props) => {
             </div>
             {userData.seichiSilver > 0 && (
               <div className="flex justify-between">
-                <span>{seichiWalletLabel}</span>
+                <span>{silverCopy.wallet}</span>
                 <span className="font-mono">
                   {userData.seichiSilver.toLocaleString()}
                 </span>
@@ -451,9 +458,7 @@ const Shop: React.FC<ShopProps> = (props) => {
           title={props.title ?? "Item Shop"}
           subtitle={
             props.subtitle ??
-            (useModern
-              ? "Browse categories, search the catalog, then open a card to buy."
-              : "Buy items")
+            "Browse categories, search the catalog, then open a card to buy."
           }
           defaultBackHref={props.defaultBackHref}
           initialBreak={props.initialBreak}
@@ -464,8 +469,8 @@ const Shop: React.FC<ShopProps> = (props) => {
                 state={filteringState}
                 defaultType={defaultType}
                 restrictTypes={props.restrictTypes}
-                hideItemTypeField={useModern}
-                filterTriggerId={props.filterPopoverTriggerId}
+                hideItemTypeField
+                filterTriggerId={catalog?.filterTriggerId}
               />
             </div>
           }
@@ -481,7 +486,7 @@ const Shop: React.FC<ShopProps> = (props) => {
             />
           )}
 
-          {useModern && userData && (
+          {userData && (
             <>
               <div className="relative overflow-hidden border-b bg-linear-to-br from-amber-950/25 via-card to-card px-3 py-4 md:px-6 md:py-8">
                 <div className="pointer-events-none absolute -top-24 right-0 h-48 w-48 rounded-full bg-amber-500/10 blur-3xl" />
@@ -503,7 +508,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                           className="gap-1 border-amber-500/25 bg-background/60 font-normal"
                         >
                           <Tag className="h-3 w-3" />
-                          {catalogHeroBadgeCatalog}
+                          {catalogHeroBadge}
                         </Badge>
                         <Badge
                           variant="secondary"
@@ -538,6 +543,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                             : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
                         )}
                         onClick={() => {
+                          if (filteringState.itemType === t) return;
                           filteringState.setItemType(t);
                           setItem(undefined);
                           setStacksize(1);
@@ -546,7 +552,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                       >
                         {categoryTabIcon(t)}
                         <span className="text-center leading-tight">
-                          {capitalizeFirstLetter(t.toLowerCase())}
+                          {SHOP_ITEM_TYPE_TAB_LABEL[t]}
                         </span>
                       </button>
                     ))}
@@ -603,12 +609,13 @@ const Shop: React.FC<ShopProps> = (props) => {
                   <>
                     <ul className="mx-auto grid max-w-7xl list-none grid-cols-3 gap-1 sm:gap-2 md:grid-cols-4 md:gap-3 lg:grid-cols-6">
                       {allItems.map((row) => {
-                        const factor = shopItemDiscountFactor(
+                        const rowFactor = shopItemDiscountFactor(
                           row,
                           sDiscount,
                           aDiscount,
                         );
-                        const ryoDue = row.cost > 0 ? Math.ceil(row.cost * factor) : 0;
+                        const ryoDue =
+                          row.cost > 0 ? Math.ceil(row.cost * rowFactor) : 0;
                         const repsDue = Math.ceil(row.repsCost ?? 0);
                         const seichiDue = Math.ceil(row.seichiSilverCost ?? 0);
                         const canAffordRow =
@@ -620,9 +627,9 @@ const Shop: React.FC<ShopProps> = (props) => {
                             <ShopCatalogCard
                               item={row}
                               selected={item?.id === row.id}
-                              previewFactor={factor}
+                              previewFactor={rowFactor}
                               canAfford={canAffordRow}
-                              seichiCatalogWord={seichiCatalogWord}
+                              seichiCatalogWord={silverCopy.catalog}
                               onSelect={() => {
                                 if (item?.id === row.id) {
                                   setItem(undefined);
@@ -647,34 +654,6 @@ const Shop: React.FC<ShopProps> = (props) => {
                   </>
                 )}
               </div>
-            </>
-          )}
-
-          {!useModern && (
-            <>
-              {isFetching && <Loader explanation="Loading data" />}
-              {!isFetching && userData && (
-                <div className="p-2">
-                  <ActionSelector
-                    items={allItems}
-                    selectedId={item?.id}
-                    labelSingles={true}
-                    onClick={(id) => {
-                      if (id === item?.id) {
-                        setItem(undefined);
-                        setStacksize(1);
-                        setIsOpen(false);
-                      } else {
-                        setItem(allItems?.find((row) => row.id === id));
-                        setStacksize(1);
-                        setIsOpen(true);
-                      }
-                    }}
-                    showBgColor={false}
-                    showLabels={true}
-                  />
-                </div>
-              )}
             </>
           )}
 
