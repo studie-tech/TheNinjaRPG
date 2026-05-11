@@ -54,13 +54,15 @@ const createBarrier = (longitude: number, latitude: number): GroundEffect =>
 
 describe("getAffectedTiles", () => {
   it("deduplicates the shared start tile for aoe wall shoot", () => {
-    // AOE_WALL_SHOOT traverses two lines both starting at b, so b appears twice
+    // AOE_WALL_SHOOT traverses two lines both starting at b. Use a second
+    // distinct object at the same coords so reference equality on Set<TerrainHex>
+    // does NOT filter it — only the coordinate-keyed seenTiles dedup can.
     const b = createTile(3, 4);
+    const bDup = createTile(3, 4);
     const northTile = createTile(3, 3);
     const southTile = createTile(3, 5);
-    // Simulate two line traversals that both include b
     const grid = {
-      traverse: () => [b, northTile, b, southTile],
+      traverse: () => [b, northTile, bDup, southTile],
     } as unknown as Grid<TerrainHex>;
 
     const action = {
