@@ -288,8 +288,9 @@ export const raidsRouter = createTRPCRouter({
     })
     .input(z.object({ questId: z.string() }))
     .query(async ({ ctx, input }) => {
-      // Query - parallel fetch
-      const [raid, participation, thresholds] = await Promise.all([
+      // Query - parallel fetch (single round-trip)
+      const raidChatConversationId = getRaidChatConversationId(input.questId);
+      const [raid, participation, thresholds, existingConvo] = await Promise.all([
         ctx.drizzle.query.quest.findFirst({
           where: and(eq(quest.id, input.questId), eq(quest.questType, "raid")),
         }),
@@ -303,6 +304,10 @@ export const raidsRouter = createTRPCRouter({
           where: eq(raidDamageThreshold.questId, input.questId),
           orderBy: raidDamageThreshold.sortOrder,
         }),
+        ctx.drizzle.query.conversation.findFirst({
+          where: eq(conversation.id, raidChatConversationId),
+          columns: { id: true },
+        }),
       ]);
 
       // Guard
@@ -312,13 +317,6 @@ export const raidsRouter = createTRPCRouter({
 
       // Derived
       const raidData = getRaidObjectiveData(raid);
-      const raidChatConversationId = getRaidChatConversationId(raid.id);
-
-      // Check if conversation exists (created during joinRaidQueue)
-      const existingConvo = await ctx.drizzle.query.conversation.findFirst({
-        where: eq(conversation.id, raidChatConversationId),
-        columns: { id: true },
-      });
 
       return {
         raid: {
@@ -1101,8 +1099,12 @@ export const raidsRouter = createTRPCRouter({
         return errorResponse("Failed to join team - slot may have been taken");
       }
 
-      // Ensure raid chat conversation exists (idempotent, only writes on first call)
-      await ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId);
+      // Only the first user of a new team creates the chat conversation;
+      // joiners of existing teams reuse the row created previously. Fire-and-forget
+      // so the response doesn't block on a write whose result we don't read.
+      if (createdNewTeam) {
+        void ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId);
+      }
 
       // Pusher - notify sector about team changes
       const pusher = getServerPusher();
@@ -1724,6 +1726,8 @@ const ensureRaidChatConversation = async (
   userId: string,
 ) => {
   const conversationId = getRaidChatConversationId(raid.id);
+  // No-op self-assignment on conflict — title/state never changes after the
+  // first insert, so subsequent calls must not rewrite the row.
   await client
     .insert(conversation)
     .values({
@@ -1734,11 +1738,7 @@ const ensureRaidChatConversation = async (
       isLocked: false,
       isEnabled: true,
     })
-    .onDuplicateKeyUpdate({
-      set: {
-        title: `${raid.name} Raid Chat`,
-      },
-    });
+    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
   return conversationId;
 };

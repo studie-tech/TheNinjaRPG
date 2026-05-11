@@ -136,32 +136,32 @@ export const updateBattle = async (
         : []),
       // When raid boss is defeated, release all non-acting teammates from BATTLE status.
       // updateUser only handles the acting player, so teammates would be stuck otherwise.
+      // Mirror the pool sync (curHealth/curStamina/curChakra) the acting user gets so
+      // teammates who took damage don't revert to pre-battle pool values on release.
       ...(raidBossDefeated
-        ? (() => {
-            const teammateIds = newBattle.usersState
-              .filter((u) => !u.isAi && !u.isSummon && u.userId !== userId)
-              .map((u) => u.userId);
-            return teammateIds.length > 0
-              ? [
-                  client
-                    .update(userData)
-                    .set({
-                      battleId: null,
-                      status: "AWAKE",
-                      regenAt: new Date(),
-                      stealthActive: false,
-                      stealthActivatedAt: null,
-                      stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
-                    })
-                    .where(
-                      and(
-                        inArray(userData.userId, teammateIds),
-                        eq(userData.battleId, newBattle.id),
-                      ),
-                    ),
-                ]
-              : [];
-          })()
+        ? newBattle.usersState
+            .filter((u) => !u.isAi && !u.isSummon && u.userId !== userId)
+            .map((teammate) =>
+              client
+                .update(userData)
+                .set({
+                  battleId: null,
+                  status: "AWAKE",
+                  regenAt: new Date(),
+                  curHealth: teammate.curHealth,
+                  curStamina: teammate.curStamina,
+                  curChakra: teammate.curChakra,
+                  stealthActive: false,
+                  stealthActivatedAt: null,
+                  stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
+                })
+                .where(
+                  and(
+                    eq(userData.userId, teammate.userId),
+                    eq(userData.battleId, newBattle.id),
+                  ),
+                ),
+            )
         : []),
     ]);
 
