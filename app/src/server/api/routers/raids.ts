@@ -1100,10 +1100,29 @@ export const raidsRouter = createTRPCRouter({
       }
 
       // Only the first user of a new team creates the chat conversation;
-      // joiners of existing teams reuse the row created previously. Fire-and-forget
-      // so the response doesn't block on a write whose result we don't read.
+      // joiners of existing teams reuse the row created previously. Await so a
+      // transient insert failure can be rolled back instead of leaving the raid
+      // permanently without a chat row.
       if (createdNewTeam) {
-        void ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId);
+        try {
+          await ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId);
+        } catch {
+          await Promise.all([
+            ctx.drizzle
+              .delete(mpvpBattleUser)
+              .where(eq(mpvpBattleUser.userId, ctx.userId)),
+            ctx.drizzle
+              .update(userData)
+              .set({ status: "AWAKE" })
+              .where(eq(userData.userId, ctx.userId)),
+            teamId
+              ? ctx.drizzle
+                  .delete(mpvpBattleQueue)
+                  .where(eq(mpvpBattleQueue.id, teamId))
+              : Promise.resolve(),
+          ]);
+          return errorResponse("Failed to create raid chat - please try again");
+        }
       }
 
       // Pusher - notify sector about team changes
