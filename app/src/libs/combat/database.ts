@@ -138,15 +138,18 @@ export const updateBattle = async (
       // updateUser only handles the acting player, so teammates would be stuck otherwise.
       // Mirror the pool sync (curHealth/curStamina/curChakra) the acting user gets so
       // teammates who took damage don't revert to pre-battle pool values on release.
+      // Mirror the HOSPITALIZED handling from updateUser: teammates whose curHealth
+      // dropped to 0 from boss AoE must be sent to the hospital, not released as AWAKE.
       ...(raidBossDefeated
         ? newBattle.usersState
             .filter((u) => !u.isAi && !u.isSummon && u.userId !== userId)
-            .map((teammate) =>
-              client
+            .map((teammate) => {
+              const sendToHospital =
+                !newBattle.forceKeepPools && teammate.curHealth <= 0;
+              return client
                 .update(userData)
                 .set({
                   battleId: null,
-                  status: "AWAKE",
                   regenAt: new Date(),
                   curHealth: teammate.curHealth,
                   curStamina: teammate.curStamina,
@@ -154,14 +157,24 @@ export const updateBattle = async (
                   stealthActive: false,
                   stealthActivatedAt: null,
                   stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
+                  ...(sendToHospital
+                    ? {
+                        status: "HOSPITALIZED",
+                        longitude: HOSPITAL_LONG,
+                        latitude: HOSPITAL_LAT,
+                        sector: teammate.allyVillage
+                          ? teammate.sector
+                          : getVillage(newBattle, teammate.villageId)?.sector,
+                      }
+                    : { status: "AWAKE" }),
                 })
                 .where(
                   and(
                     eq(userData.userId, teammate.userId),
                     eq(userData.battleId, newBattle.id),
                   ),
-                ),
-            )
+                );
+            })
         : []),
     ]);
 
