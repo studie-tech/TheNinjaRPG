@@ -768,8 +768,9 @@ const RaidChatPanel: React.FC<RaidChatPanelProps> = ({ conversationId }) => {
     if (!pusher || !conversationId) return;
 
     const channel = pusher.subscribe(conversationId);
-    channel.bind("event", (data: { message?: string }) => {
-      if (data.message === "new") {
+    channel.bind("event", (data: { message?: string; fromId?: string }) => {
+      // Skip the echo of our own send — onSuccess already invalidated.
+      if (data.message === "new" && data.fromId !== userData?.userId) {
         void util.comments.getConversationComments.invalidate(queryKey);
       }
     });
@@ -777,7 +778,13 @@ const RaidChatPanel: React.FC<RaidChatPanelProps> = ({ conversationId }) => {
     return () => {
       pusher.unsubscribe(conversationId);
     };
-  }, [conversationId, pusher, queryKey, util.comments.getConversationComments]);
+  }, [
+    conversationId,
+    pusher,
+    queryKey,
+    userData?.userId,
+    util.comments.getConversationComments,
+  ]);
 
   const comments =
     commentsData?.pages
