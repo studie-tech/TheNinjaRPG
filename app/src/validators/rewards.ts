@@ -2,6 +2,21 @@ import { z } from "zod";
 import { STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
 import { idsWithNumberField } from "@/validators/base";
 
+// Maps legacy STARTER_VILLAGES enum keys to their current renames so quest
+// content JSON stored before the townhall rename still parses. Without this,
+// ObjectiveReward.parse() throws at reward-collection time for any quest whose
+// content has reward_village_membership set to an old name.
+const LEGACY_STARTER_VILLAGE_KEYS = ["SHINE", "GLACIER", "SHROUD", "CURRENT"] as const;
+const LEGACY_STARTER_VILLAGE_MAP: Record<
+  (typeof LEGACY_STARTER_VILLAGE_KEYS)[number],
+  (typeof STARTER_VILLAGES)[number]
+> = {
+  SHINE: "SHIROHANA",
+  GLACIER: "HYORIN",
+  SHROUD: "AKASUMI",
+  CURRENT: "AKIKAZE",
+};
+
 export const rewardFields = {
   reward_hunter_items: z.boolean().prefault(false),
   reward_hunter_items_ids: z.array(z.string()).prefault([]),
@@ -17,7 +32,14 @@ export const rewardFields = {
   reward_reputation: z.coerce.number().prefault(0),
   reward_skillpoints: z.coerce.number().prefault(0),
   reward_rank: z.enum(UserRanks).prefault("NONE"),
-  reward_village_membership: z.enum(STARTER_VILLAGES).prefault("NONE"),
+  reward_village_membership: z
+    .union([
+      z.enum(STARTER_VILLAGES),
+      z
+        .enum(LEGACY_STARTER_VILLAGE_KEYS)
+        .transform((legacy) => LEGACY_STARTER_VILLAGE_MAP[legacy]),
+    ])
+    .prefault("NONE"),
   reward_items: idsWithNumberField,
   reward_jutsus: z.array(z.string()).prefault([]),
   reward_bloodlines: z.array(z.string()).prefault([]),
