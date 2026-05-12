@@ -2461,14 +2461,18 @@ export const getAffectedTiles = (info: {
   const user = users.find((u) => u.userId === userId);
   let tiles: Grid<TerrainHex> | undefined;
 
-  const addAffectedTile = (target: TerrainHex, getIsValid: () => boolean) => {
+  const addAffectedTile = (
+    target: TerrainHex,
+    getIsValid: () => boolean,
+    options?: { skipRed?: boolean },
+  ) => {
     const key = `${target.col},${target.row}`;
     if (seenTiles.has(key)) return;
     seenTiles.add(key);
 
     if (getIsValid()) {
       green.add(target);
-    } else {
+    } else if (!options?.skipRed) {
       red.add(target);
     }
   };
@@ -2560,12 +2564,11 @@ export const getAffectedTiles = (info: {
     if (tiles) tiles = tiles.filter((t) => t !== a);
   } else if (action.method === "ALL") {
     grid.forEach((target) => {
-      const key = `${target.col},${target.row}`;
-      if (seenTiles.has(key)) return;
-      seenTiles.add(key);
-      if (isValidMove({ action, target, user, users, barriers, clicked: b })) {
-        green.add(target);
-      }
+      addAffectedTile(
+        target,
+        () => isValidMove({ action, target, user, users, barriers, clicked: b }),
+        { skipRed: true },
+      );
     });
   }
 
