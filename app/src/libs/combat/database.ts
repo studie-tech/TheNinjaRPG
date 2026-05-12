@@ -72,6 +72,7 @@ export const updateBattle = async (
   userId: string,
   newBattle: CompleteBattle,
   fetchedVersion: number,
+  pusher?: PusherClient,
 ) => {
   // Calculations
   const raidBossDefeated =
@@ -184,6 +185,25 @@ export const updateBattle = async (
       await client
         .delete(mpvpBattleQueue)
         .where(eq(mpvpBattleQueue.battleId, newBattle.id));
+    }
+
+    // Notify the sector that surviving raid teammates are back on the map.
+    // Mirrors the `result.curHealth > 0` gate in updateUser so other clients
+    // see them transition out of BATTLE without waiting for the next poll.
+    if (pusher && raidBossDefeated) {
+      newBattle.usersState
+        .filter((u) => !u.isAi && !u.isSummon && u.userId !== userId)
+        .forEach((teammate) => {
+          const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
+          if (sendToHospital) return;
+          void updateUserOnMap(pusher, teammate.sector, {
+            ...teammate,
+            longitude: teammate.originalLongitude,
+            latitude: teammate.originalLatitude,
+            status: "AWAKE",
+            battleId: null,
+          });
+        });
     }
   } else {
     const result = await client
