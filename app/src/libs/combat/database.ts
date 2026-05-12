@@ -204,6 +204,8 @@ export const updateBattle = async (
       throw new Error(`Failure. Version: ${fetchedVersion}, Battle: ${newBattle.id}`);
     }
   }
+
+  return { battleOver };
 };
 
 /**
