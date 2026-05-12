@@ -44,6 +44,19 @@ export type Gender = (typeof genders)[number];
 
 const reservedUsernames = [...LegacyVillageNames, ...CoreVillages];
 
+// Format-only validator (no reserved-name refine). Used for username inputs
+// and result parsing on search/lookup paths so that legacy players who
+// registered with a now-reserved name remain searchable and parseable.
+export const usernameFormatSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-zA-Z0-9_]+$/, {
+    error: "Alphanumeric and underscores only",
+  })
+  .min(2)
+  .max(12);
+
+// Strict registration validator: rejects reserved names for new sign-ups.
 export const usernameSchema = createReservedNameField({
   reserved: reservedUsernames,
   minLength: 2,
@@ -108,18 +121,18 @@ export const registrationSchema = z
 export type RegistrationSchema = z.infer<typeof registrationSchema>;
 
 export const userSearchSchema = z.object({
-  username: usernameSchema,
+  username: usernameFormatSchema,
 });
 export type UserSearchSchema = z.infer<typeof userSearchSchema>;
 
 export const getSearchValidator = (props: { max: number }) => {
   return z.object({
-    username: usernameSchema,
+    username: usernameFormatSchema,
     users: z
       .array(
         z.object({
           userId: z.string(),
-          username: usernameSchema,
+          username: usernameFormatSchema,
           avatar: z.url().optional().nullish(),
           rank: z.enum(UserRanks),
           level: z.number(),
