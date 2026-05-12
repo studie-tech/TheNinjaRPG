@@ -1378,6 +1378,18 @@ export const SHRINE_BOOST_TYPES = [
   "Crafting",
 ] as const;
 export type SHRINE_BOOST_TYPE = (typeof SHRINE_BOOST_TYPES)[number];
+// Display metadata co-located with the canonical type list. Adding a new entry to
+// SHRINE_BOOST_TYPES will produce a TS error here until matching display data is provided.
+export const SHRINE_BOOST_DISPLAY: Record<
+  SHRINE_BOOST_TYPE,
+  { color: string; abbrev: string }
+> = {
+  Training: { color: "bg-green-700 text-green-200", abbrev: "Trn" },
+  PVP: { color: "bg-purple-700 text-purple-200", abbrev: "PVP" },
+  Mission: { color: "bg-orange-700 text-orange-200", abbrev: "Mis" },
+  Errands: { color: "bg-red-700 text-red-200", abbrev: "Err" },
+  Crafting: { color: "bg-cyan-700 text-cyan-200", abbrev: "Crf" },
+};
 export const MAX_BOOSTS_PER_SHRINE = 50;
 export type WarType = (typeof WAR_TYPES)[number];
 export type WarState = (typeof WAR_STATES)[number];

@@ -274,10 +274,18 @@ async function runShrineBoostTick(
   }
 
   // Batch per-village updates: base (expiry + scheduled, always) and template (CAS, separate)
+  // On slot boundaries we only need to revisit villages that actually have a template configured —
+  // iterating every village would scale work with total villages instead of template users.
+  const villagesWithTemplate = isSlotBoundary
+    ? allVillages.filter(
+        (v) =>
+          ((v.shrineSettings as ShrineSettings | null)?.boostTemplate?.length ?? 0) > 0,
+      )
+    : [];
   const allAffectedVillageIds = new Set([
     ...[...latestActiveByKey.values()].map((v) => v.villageId),
     ...expiredByVillage.keys(),
-    ...(isSlotBoundary ? allVillages.map((v) => v.id) : []),
+    ...villagesWithTemplate.map((v) => v.id),
   ]);
 
   let activeUpdated = 0;
@@ -324,13 +332,17 @@ async function runShrineBoostTick(
       );
     }
 
-    // Template activations — separate CAS update so expiry cleanup is never blocked by tokens
+    // Template activations — separate CAS update so expiry cleanup is never blocked by tokens.
+    // Pass the merged activeBoosts (post Round 1 expiry + scheduled merge) so the "already active
+    // with future expiry" check respects scheduled windows that Round 1 is about to write.
     const templateActivations = computeTemplateActivations({
       now,
       prevTime,
       villageId,
       villageTokens: villageData?.tokens ?? 0,
-      shrineSettings: settings,
+      shrineSettings: settings
+        ? { ...settings, activeBoosts: currentBoostsBase }
+        : { activeBoosts: currentBoostsBase },
       villagesWithLevel3Shrine,
       boostCost: SHRINE_BOOST_COST,
     });
