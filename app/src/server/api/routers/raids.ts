@@ -1740,6 +1740,8 @@ const rollbackJoinRaidQueue = async ({
   deleteTeam: boolean;
   deleteUserRow: boolean;
 }) => {
+  // Delete our user row and reset status first, so the team-empty check below
+  // sees the row we may have inserted as already gone.
   await Promise.all([
     ...(deleteUserRow
       ? [
@@ -1754,10 +1756,20 @@ const rollbackJoinRaidQueue = async ({
         ]
       : []),
     client.update(userData).set({ status: "AWAKE" }).where(eq(userData.userId, userId)),
-    ...(deleteTeam
-      ? [client.delete(mpvpBattleQueue).where(eq(mpvpBattleQueue.id, teamId))]
-      : []),
   ]);
+  // Only delete the team if no other queue rows still reference it. A concurrent
+  // joiner could have inserted into mpvpBattleUser during the await window
+  // before this rollback fired; deleting the team unconditionally would orphan
+  // that joiner.
+  if (deleteTeam) {
+    const remaining = await client.query.mpvpBattleUser.findFirst({
+      where: eq(mpvpBattleUser.clanBattleId, teamId),
+      columns: { id: true },
+    });
+    if (!remaining) {
+      await client.delete(mpvpBattleQueue).where(eq(mpvpBattleQueue.id, teamId));
+    }
+  }
 };
 
 const getRaidChatConversationId = (raidId: string) => `raid-chat-${raidId}`;

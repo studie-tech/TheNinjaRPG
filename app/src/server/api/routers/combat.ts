@@ -718,6 +718,7 @@ export const combatRouter = createTRPCRouter({
               suid,
               newBattle,
               battle.version,
+              pusher,
             );
             const [logEntries, { updatedQuestIds }] = await Promise.all([
               createAction(db, newBattle, history),
