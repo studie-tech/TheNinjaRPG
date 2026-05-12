@@ -1,2 +1,10 @@
 ALTER TABLE `VillageStructure` ADD `missionRewardPerLvl` tinyint DEFAULT 0 NOT NULL;
 ALTER TABLE `VillageStructure` DROP COLUMN `baseCost`;
+UPDATE `Village` SET `name` = 'Akikaze' WHERE `name` = 'Current';
+UPDATE `Village` SET `name` = 'Hyorin' WHERE `name` = 'Glacier';
+UPDATE `Village` SET `name` = 'Akasumi' WHERE `name` = 'Shroud';
+UPDATE `Village` SET `name` = 'Shirohana' WHERE `name` = 'Shine';
+UPDATE `Conversation` SET `title` = 'Akikaze' WHERE `title` = 'Current';
+UPDATE `Conversation` SET `title` = 'Hyorin' WHERE `title` = 'Glacier';
+UPDATE `Conversation` SET `title` = 'Akasumi' WHERE `title` = 'Shroud';
+UPDATE `Conversation` SET `title` = 'Shirohana' WHERE `title` = 'Shine';
