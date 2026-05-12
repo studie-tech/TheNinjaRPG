@@ -120,7 +120,7 @@
     "meshoptimizer": "^1.1.0",
     "mysql2": "^3.22.0",
     "nanoid": "^5.1.7",
-    "next": "16.2.3",
+    "next": "16.2.6",
     "node-html-markdown": "^2.0.0",
     "openai": "^6.34.0",
     "pusher-js": "8.5.0",
