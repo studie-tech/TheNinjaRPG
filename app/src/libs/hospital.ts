@@ -17,14 +17,11 @@ import { secondsFromNow, secondsPassed } from "@/utils/time";
 /**
  * Calculates the cost of healing for a user.
  * @param user - The user data.
- * @param boost - The town hall hospital boost percentage (optional).
  * @returns The cost of healing.
  */
-export const calcHealCost = (user: UserData, boost?: number) => {
+export const calcHealCost = (user: UserData) => {
   const missingHp = Math.max(0, user.maxHealth - user.curHealth);
   let cost = (missingHp / 100) * HOSPITAL_RYO_PER_100_HP;
-  const factor = (100 - Math.min(100, Math.max(0, boost ?? 0))) / 100;
-  cost *= factor;
   if (user.anbuId) {
     cost *= 1 - ANBU_HOSPITAL_DISCOUNT_PERC / 100;
   }

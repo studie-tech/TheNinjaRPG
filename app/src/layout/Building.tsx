@@ -146,33 +146,71 @@ const RestoreStructureButton = ({ structureId }: { structureId: string }) => {
   );
 };
 
-const STRUCTURE_BONUSES: {
-  key: keyof VillageStructure;
+type StructureBonusKey =
+  | "anbuSquadsPerLvl"
+  | "arenaRewardPerLvl"
+  | "bankInterestPerLvl"
+  | "blackDiscountPerLvl"
+  | "clansPerLvl"
+  | "hospitalSpeedupPerLvl"
+  | "itemDiscountPerLvl"
+  | "missionRewardPerLvl"
+  | "patrolsPerLvl"
+  | "ramenDiscountPerLvl"
+  | "regenIncreasePerLvl"
+  | "sleepRegenPerLvl"
+  | "structureDiscountPerLvl"
+  | "trainBoostPerLvl"
+  | "villageDefencePerLvl";
+
+interface StructureBonus {
+  key: StructureBonusKey;
   label: string;
   unit: string;
   scale?: number;
-}[] = [
-  { key: "anbuSquadsPerLvl", label: "ANBU squads", unit: "" },
-  { key: "arenaRewardPerLvl", label: "arena reward", unit: "%" },
-  { key: "bankInterestPerLvl", label: "bank interest", unit: "%" },
-  { key: "blackDiscountPerLvl", label: "black market discount", unit: "%" },
+  /**
+   * Total displayed value at the given level. Defaults to perLvl * level * scale.
+   * Override for non-linear bonuses such as bank interest.
+   */
+  valueAt?: (perLvl: number, level: number) => number;
+  /** Formats a single number for display. Defaults to whole numbers. */
+  format?: (n: number) => string;
+}
+
+const STRUCTURE_BONUSES: StructureBonus[] = [
+  { key: "anbuSquadsPerLvl", label: "Anbu Squads", unit: "" },
+  { key: "arenaRewardPerLvl", label: "Arena Rewards", unit: "%" },
+  {
+    key: "bankInterestPerLvl",
+    label: "Bank Interest",
+    unit: "%",
+    valueAt: (perLvl, level) => calcBankInterest(perLvl * level),
+    format: (n) => (Number.isInteger(n) ? `${n}` : n.toFixed(1).replace(/\.0$/, "")),
+  },
+  { key: "blackDiscountPerLvl", label: "Market Discount", unit: "%" },
   {
     key: "clansPerLvl",
-    label: "clan slots",
+    label: "Clan Slots",
     unit: "",
     scale: CLANS_PER_STRUCTURE_LEVEL,
   },
-  { key: "hospitalSpeedupPerLvl", label: "hospital speedup", unit: "%" },
-  { key: "itemDiscountPerLvl", label: "item shop discount", unit: "%" },
-  { key: "missionRewardPerLvl", label: "mission reward", unit: "%" },
-  { key: "patrolsPerLvl", label: "patrol slots", unit: "" },
-  { key: "ramenDiscountPerLvl", label: "ramen discount", unit: "%" },
-  { key: "regenIncreasePerLvl", label: "regen increase", unit: "%" },
-  { key: "sleepRegenPerLvl", label: "sleep regen", unit: "%" },
-  { key: "structureDiscountPerLvl", label: "structure upgrade discount", unit: "%" },
-  { key: "trainBoostPerLvl", label: "training boost", unit: "%" },
-  { key: "villageDefencePerLvl", label: "village defence", unit: "%" },
+  { key: "hospitalSpeedupPerLvl", label: "Hospital Speed", unit: "%" },
+  { key: "itemDiscountPerLvl", label: "Item Discount", unit: "%" },
+  { key: "missionRewardPerLvl", label: "Mission/Errand Rewards", unit: "%" },
+  { key: "patrolsPerLvl", label: "Patrol Attacking Enemies", unit: "%" },
+  { key: "ramenDiscountPerLvl", label: "Ramen Discount", unit: "%" },
+  { key: "regenIncreasePerLvl", label: "Regen In Village", unit: "%" },
+  { key: "sleepRegenPerLvl", label: "Sleep Regen", unit: "%" },
+  { key: "structureDiscountPerLvl", label: "Structure Discount", unit: "%" },
+  { key: "trainBoostPerLvl", label: "Training Boost", unit: "%" },
+  { key: "villageDefencePerLvl", label: "Village Defence", unit: "%" },
 ];
+
+const formatNumber = (bonus: StructureBonus, n: number) =>
+  (bonus.format ?? ((v: number) => `${v}`))(n);
+
+const computeBonusValue = (bonus: StructureBonus, perLvl: number, level: number) =>
+  bonus.valueAt ? bonus.valueAt(perLvl, level) : perLvl * level * (bonus.scale ?? 1);
 
 const UpgradeButton = ({
   structure,
@@ -268,90 +306,22 @@ export const StructureRewardEntries = (structure: VillageStructure) => {
   const effectiveLevel = getEffectiveStructureLevel(structure);
   const bonusLevel = effectiveLevel - baseLevel;
 
-  // Helper to format value with bonus
-  const formatValue = (perLvl: number, suffix: string = "") => {
-    const baseValue = perLvl * baseLevel;
-    const bonusValue = perLvl * bonusLevel;
-    if (bonusLevel > 0) {
-      return `${baseValue}${suffix} (+${bonusValue}${suffix})`;
-    } else if (bonusLevel < 0) {
-      return `${baseValue}${suffix} (−${Math.abs(bonusValue)}${suffix})`;
-    }
-    return `${baseValue}${suffix}`;
-  };
-
-  const msgs: React.ReactNode[] = [];
+  const msgs: string[] = [];
   if (effectiveLevel > 0) {
-    if (structure.anbuSquadsPerLvl > 0) {
-      msgs.push(`Anbu Squads: +${formatValue(structure.anbuSquadsPerLvl)}`);
-    }
-    if (structure.arenaRewardPerLvl > 0) {
-      msgs.push(`Arena Rewards: +${formatValue(structure.arenaRewardPerLvl, "%")}`);
-    }
-    if (structure.bankInterestPerLvl > 0) {
-      const baseInterest = calcBankInterest(structure.bankInterestPerLvl * baseLevel);
-      const effectiveInterest = calcBankInterest(
-        structure.bankInterestPerLvl * effectiveLevel,
-      );
-      const bonusInterest = effectiveInterest - baseInterest;
-      if (bonusInterest > 0) {
-        msgs.push(`Bank Interest: +${baseInterest}% (+${bonusInterest.toFixed(1)}%)`);
-      } else if (bonusInterest < 0) {
-        msgs.push(
-          `Bank Interest: +${baseInterest}% (−${Math.abs(bonusInterest).toFixed(1)}%)`,
-        );
-      } else {
-        msgs.push(`Bank Interest: +${baseInterest}%`);
+    for (const bonus of STRUCTURE_BONUSES) {
+      const perLvl = (structure[bonus.key] as number) ?? 0;
+      if (perLvl <= 0) continue;
+      const baseValue = computeBonusValue(bonus, perLvl, baseLevel);
+      const effectiveValue = computeBonusValue(bonus, perLvl, effectiveLevel);
+      const bonusValue = effectiveValue - baseValue;
+      const suffix = bonus.unit;
+      let valueText = `${formatNumber(bonus, baseValue)}${suffix}`;
+      if (bonusLevel > 0 && bonusValue !== 0) {
+        valueText += ` (+${formatNumber(bonus, Math.abs(bonusValue))}${suffix})`;
+      } else if (bonusLevel < 0 && bonusValue !== 0) {
+        valueText += ` (−${formatNumber(bonus, Math.abs(bonusValue))}${suffix})`;
       }
-    }
-    if (structure.blackDiscountPerLvl > 0) {
-      msgs.push(`Market discount: ${formatValue(structure.blackDiscountPerLvl, "%")}`);
-    }
-    if (structure.clansPerLvl > 0) {
-      const clansPerLvl = structure.clansPerLvl * CLANS_PER_STRUCTURE_LEVEL;
-      msgs.push(`Clans: +${formatValue(clansPerLvl)}`);
-    }
-    if (structure.hospitalSpeedupPerLvl > 0) {
-      msgs.push(
-        `Hospital Speed: +${formatValue(structure.hospitalSpeedupPerLvl, "%")}`,
-      );
-    }
-    if (structure.itemDiscountPerLvl > 0) {
-      msgs.push(`Item discount: ${formatValue(structure.itemDiscountPerLvl, "%")}`);
-    }
-    if (structure.missionRewardPerLvl > 0) {
-      msgs.push(
-        `Mission/Errand Rewards: +${formatValue(structure.missionRewardPerLvl, "%")}`,
-      );
-    }
-    if (structure.patrolsPerLvl > 0) {
-      msgs.push(
-        `Patrol attacking enemies: +${formatValue(structure.patrolsPerLvl, "%")}`,
-      );
-    }
-    if (structure.ramenDiscountPerLvl > 0) {
-      msgs.push(`Ramen discount: ${formatValue(structure.ramenDiscountPerLvl, "%")}`);
-    }
-    if (structure.regenIncreasePerLvl > 0) {
-      msgs.push(
-        `Regen in Village: +${formatValue(structure.regenIncreasePerLvl, "%")}`,
-      );
-    }
-    if (structure.sleepRegenPerLvl > 0) {
-      msgs.push(`Sleep Regen: +${formatValue(structure.sleepRegenPerLvl, "%")}`);
-    }
-    if (structure.structureDiscountPerLvl > 0) {
-      msgs.push(
-        `Structure Discount: ${formatValue(structure.structureDiscountPerLvl, "%")}`,
-      );
-    }
-    if (structure.trainBoostPerLvl > 0) {
-      msgs.push(`Training Boost: +${formatValue(structure.trainBoostPerLvl, "%")}`);
-    }
-    if (structure.villageDefencePerLvl > 0) {
-      msgs.push(
-        `Village Defence: +${formatValue(structure.villageDefencePerLvl, "%")}`,
-      );
+      msgs.push(`${bonus.label}: +${valueText}`);
     }
   }
   if (msgs.length === 0) msgs.push("No rewards for this structure");

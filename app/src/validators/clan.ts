@@ -1,54 +1,29 @@
 import { z } from "zod";
-import { ClanBoostTypes, CoreVillages, LegacyVillageNames } from "@/drizzle/constants";
+import { ClanBoostTypes } from "@/drizzle/constants";
 import type { Clan } from "@/drizzle/schema";
+import {
+  createReservedNameField,
+  looseFactionNameField,
+  RESERVED_FACTION_NAMES,
+} from "@/validators/reservedName";
 
 export const clanBoostTypeSchema = z.enum(ClanBoostTypes);
 
-const bannedNames = [
-  "Freedom State",
-  "Horizon",
-  ...CoreVillages,
-  ...LegacyVillageNames,
-];
+export const strictClanNameField = createReservedNameField({
+  reserved: RESERVED_FACTION_NAMES,
+  errorMessage: "This clan name is not allowed.",
+});
 
 export const clanCreateSchema = z.object({
   villageId: z.string(),
-  name: z
-    .string()
-    .trim()
-    .min(3)
-    .max(88)
-    .regex(/^[a-zA-Z0-9_]+$/, {
-      error: "Alphanumeric and underscores only",
-    })
-    .refine(
-      (name) =>
-        !bannedNames.some((banned) => banned.toLowerCase() === name.toLowerCase()),
-      {
-        error: "This clan name is not allowed.",
-      },
-    ),
+  name: strictClanNameField,
 });
 
 export type ClanCreateSchema = z.infer<typeof clanCreateSchema>;
 
 export const factionEditSchema = z.object({
   clanId: z.string(),
-  name: z
-    .string()
-    .trim()
-    .min(3)
-    .max(88)
-    .regex(/^[a-zA-Z0-9_]+$/, {
-      error: "Alphanumeric and underscores only",
-    })
-    .refine(
-      (name) =>
-        !bannedNames.some((banned) => banned.toLowerCase() === name.toLowerCase()),
-      {
-        error: "This clan name is not allowed.",
-      },
-    ),
+  name: looseFactionNameField,
   image: z.string(),
 });
 
