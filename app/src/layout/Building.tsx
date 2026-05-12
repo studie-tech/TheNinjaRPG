@@ -280,12 +280,18 @@ const UpgradeButton = ({
               <div className="mt-2">
                 <p className="text-sm font-semibold">Next level provides:</p>
                 <ul className="mt-1 list-inside list-disc text-sm">
-                  {bonuses.map((b) => (
-                    <li key={b.key}>
-                      +{(structure[b.key] as number) * (b.scale ?? 1)}
-                      {b.unit} {b.label}
-                    </li>
-                  ))}
+                  {bonuses.map((b) => {
+                    const perLvl = structure[b.key] as number;
+                    const delta =
+                      computeBonusValue(b, perLvl, structure.level + 1) -
+                      computeBonusValue(b, perLvl, structure.level);
+                    return (
+                      <li key={b.key}>
+                        +{formatNumber(b, delta)}
+                        {b.unit} {b.label}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             );
