@@ -105,6 +105,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
         showMutationToast(data);
         void util.raids.getUserRaidQueue.invalidate();
         void util.raids.getActiveRaidTeams.invalidate();
+        void util.raids.getRaidDetails.invalidate();
         void util.profile.getUser.invalidate();
       },
     });
