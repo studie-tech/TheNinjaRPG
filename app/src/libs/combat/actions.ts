@@ -786,7 +786,7 @@ export const insertAction = (info: {
       } else {
         // ADD USER EFFECTS
         const target = getTargetUser(alive, action.target, tile, user.userId);
-        action.effects.forEach((tag) => {
+        action.effects.forEach((tag, tagIndex) => {
           const effect = realizeTag({
             tag: tag as UserEffect,
             user: user,
@@ -827,11 +827,12 @@ export const insertAction = (info: {
             // Extra: If no target, check if there is a barrier & apply damage only
             if (["damage", "pierce"].includes(tag.type)) {
               barriers.forEach((barrier) => {
-                // Key by tag.type (not effect.id) so a single barrier is hit
-                // at most once per (barrier, tag) per cast. realizeTag assigns
-                // a fresh nanoid to effect.id on every iteration, so including
-                // it in the key would defeat the dedup across affected tiles.
-                const idx = `${barrier.id}-${tag.type}`;
+                // Key by tag's array position within this cast so distinct tags
+                // (even of the same type) each land once per barrier, while
+                // still deduping across affected tiles. realizeTag assigns a
+                // fresh nanoid to effect.id every iteration, so it cannot be
+                // used as part of the key.
+                const idx = `${barrier.id}-${tagIndex}`;
                 if (!barrierAttacks.includes(idx)) {
                   barrierAttacks.push(idx);
                   targetUsernames.push("barrier");
