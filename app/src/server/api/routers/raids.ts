@@ -1086,16 +1086,13 @@ export const raidsRouter = createTRPCRouter({
           slot: availableSlot,
         });
       } catch {
-        // Rollback - status and team on failure
-        await Promise.all([
-          ctx.drizzle
-            .update(userData)
-            .set({ status: "AWAKE" })
-            .where(eq(userData.userId, ctx.userId)),
-          createdNewTeam && teamId
-            ? ctx.drizzle.delete(mpvpBattleQueue).where(eq(mpvpBattleQueue.id, teamId))
-            : Promise.resolve(),
-        ]);
+        await rollbackJoinRaidQueue({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          teamId,
+          deleteTeam: createdNewTeam,
+          deleteUserRow: false,
+        });
         return errorResponse("Failed to join team - slot may have been taken");
       }
 
@@ -1107,20 +1104,13 @@ export const raidsRouter = createTRPCRouter({
         try {
           await ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId);
         } catch {
-          await Promise.all([
-            ctx.drizzle
-              .delete(mpvpBattleUser)
-              .where(eq(mpvpBattleUser.userId, ctx.userId)),
-            ctx.drizzle
-              .update(userData)
-              .set({ status: "AWAKE" })
-              .where(eq(userData.userId, ctx.userId)),
-            teamId
-              ? ctx.drizzle
-                  .delete(mpvpBattleQueue)
-                  .where(eq(mpvpBattleQueue.id, teamId))
-              : Promise.resolve(),
-          ]);
+          await rollbackJoinRaidQueue({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            teamId,
+            deleteTeam: true,
+            deleteUserRow: true,
+          });
           return errorResponse("Failed to create raid chat - please try again");
         }
       }
@@ -1735,6 +1725,39 @@ export const checkAndCleanupExpiredRaid = async (
   }
 
   return { wasExpired: true, sectorCleaned: false };
+};
+
+const rollbackJoinRaidQueue = async ({
+  client,
+  userId,
+  teamId,
+  deleteTeam,
+  deleteUserRow,
+}: {
+  client: DrizzleClient;
+  userId: string;
+  teamId: string;
+  deleteTeam: boolean;
+  deleteUserRow: boolean;
+}) => {
+  await Promise.all([
+    ...(deleteUserRow
+      ? [
+          client
+            .delete(mpvpBattleUser)
+            .where(
+              and(
+                eq(mpvpBattleUser.userId, userId),
+                eq(mpvpBattleUser.clanBattleId, teamId),
+              ),
+            ),
+        ]
+      : []),
+    client.update(userData).set({ status: "AWAKE" }).where(eq(userData.userId, userId)),
+    ...(deleteTeam
+      ? [client.delete(mpvpBattleQueue).where(eq(mpvpBattleQueue.id, teamId))]
+      : []),
+  ]);
 };
 
 const getRaidChatConversationId = (raidId: string) => `raid-chat-${raidId}`;

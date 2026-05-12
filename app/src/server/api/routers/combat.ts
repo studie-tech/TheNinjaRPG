@@ -699,9 +699,6 @@ export const combatRouter = createTRPCRouter({
             return { notification: `Battle state was not changed` };
           }
 
-          // Optimistic update for all other users before we process request. Also increment version
-          const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
-
           // Only keep visual tags that are newer than original round
           newBattle.groundEffects = newBattle.groundEffects.filter(
             (e) => e.type !== "visual" || e.createdRound >= originalRound,
@@ -712,7 +709,16 @@ export const combatRouter = createTRPCRouter({
            */
           try {
             newBattle.version = newBattle.version + nActions;
-            await updateBattle(db, result, suid, newBattle, battle.version);
+            // updateBattle returns the authoritative battleOver — it covers raid
+            // boss defeats where surviving teammates exist as friends, which the
+            // simple friendsLeft + targetsLeft check would miss.
+            const { battleOver } = await updateBattle(
+              db,
+              result,
+              suid,
+              newBattle,
+              battle.version,
+            );
             const [logEntries, { updatedQuestIds }] = await Promise.all([
               createAction(db, newBattle, history),
               updateUser(db, pusher, newBattle, result, suid),
