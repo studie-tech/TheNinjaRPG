@@ -721,7 +721,7 @@ export const insertAction = (info: {
     let targetUsernames: string[] = [];
     let targetGenders: string[] = [];
     const appliedEffects = new Set<string>();
-    const barrierAttacks: string[] = [];
+    const barrierAttacks = new Set<string>();
     // Path finder on grid
     const aStar = new PathCalculator(grid);
     // For each affected tile, apply the effects
@@ -833,8 +833,8 @@ export const insertAction = (info: {
                 // fresh nanoid to effect.id every iteration, so it cannot be
                 // used as part of the key.
                 const idx = `${barrier.id}-${tagIndex}`;
-                if (!barrierAttacks.includes(idx)) {
-                  barrierAttacks.push(idx);
+                if (!barrierAttacks.has(idx)) {
+                  barrierAttacks.add(idx);
                   targetUsernames.push("barrier");
                   targetGenders.push("it");
                   const barrierEffect = structuredClone(effect);
