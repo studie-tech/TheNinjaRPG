@@ -787,12 +787,17 @@ const RaidChatPanel: React.FC<RaidChatPanelProps> = ({ conversationId }) => {
     util.comments.getConversationComments,
   ]);
 
-  const comments =
-    commentsData?.pages
+  const comments = useMemo(() => {
+    if (!commentsData?.pages) return [];
+    const seen = new Set<string>();
+    return commentsData.pages
       .flatMap((page) => page.data)
-      .filter((comment, index, all) => {
-        return all.findIndex((candidate) => candidate.id === comment.id) === index;
-      }) ?? [];
+      .filter((comment) => {
+        if (seen.has(comment.id)) return false;
+        seen.add(comment.id);
+        return true;
+      });
+  }, [commentsData?.pages]);
 
   const handleSendMessage = () => {
     if (!conversationId) return;
