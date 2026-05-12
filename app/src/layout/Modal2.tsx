@@ -19,6 +19,8 @@ interface Modal2Props {
   title: string;
   children: string | React.ReactNode;
   className?: string;
+  /** Merges into the scrollable body wrapper (default `space-y-2 py-4`). */
+  bodyClassName?: string;
   proceed_label?: string | null;
   proceed_loading_label?: string | null;
   confirmClassName?: string;
@@ -35,6 +37,8 @@ interface Modal2Props {
   onClose?: () => void;
   /** Center title, body, and footer (e.g. compact info dialogs) */
   centerText?: boolean;
+  /** Extra controls before the Close button (e.g. cancel listing). */
+  footerExtra?: React.ReactNode;
 }
 
 const Modal2: React.FC<Modal2Props> = (props) => {
@@ -89,7 +93,13 @@ const Modal2: React.FC<Modal2Props> = (props) => {
           </DialogTitle>
         </DialogHeader>
 
-        <div className={cn("space-y-2 py-4", props.centerText && "text-center")}>
+        <div
+          className={cn(
+            "space-y-2 py-4",
+            props.bodyClassName,
+            props.centerText && "text-center",
+          )}
+        >
           {props.children}
         </div>
 
@@ -116,6 +126,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
               <div className="grow"></div>
             </>
           )}
+          {props.footerExtra}
           <Button
             id={props.id ? `${props.id}-close` : undefined}
             onClick={(e) => {

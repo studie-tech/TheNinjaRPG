@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type React from "react";
 import { Button } from "@/components/ui/button";
 import AvatarImage from "@/layout/Avatar";
+import { cn } from "@/libs/shadui";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { secondsPassed } from "@/utils/time";
 
@@ -35,24 +36,38 @@ type TableProps<T, K extends keyof T> = {
   }[];
   onRowClick?: (row: T) => void;
   setLastElement?: (element: HTMLDivElement | null) => void;
+  /** Tighter padding and smaller avatars (e.g. modals, side panels). */
+  compact?: boolean;
 };
 
 const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
   const { data, columns } = props;
   const router = useRouter();
+  const compact = props.compact === true;
+  const avatarSize = compact ? 36 : 100;
+  const avatarWrap = compact ? "w-9" : "w-20";
 
   return (
     <div className="relative min-w-0 flex-1 overflow-x-scroll">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-primary text-white text-xs uppercase">
+      <table className={cn("w-full text-left", compact ? "text-xs" : "text-sm")}>
+        <thead
+          className={cn(
+            "bg-primary text-white uppercase",
+            compact ? "text-[10px]" : "text-xs",
+          )}
+        >
           <tr>
             {columns.map((column) => (
-              <th key={String(column.key)} scope="col" className="px-3 py-3">
+              <th
+                key={String(column.key)}
+                scope="col"
+                className={compact ? "px-2 py-1.5" : "px-3 py-3"}
+              >
                 {column.header}
               </th>
             ))}
             {props.buttons && (
-              <th scope="col" className="px-3 py-3">
+              <th scope="col" className={compact ? "px-2 py-1.5" : "px-3 py-3"}>
                 Actions
               </th>
             )}
@@ -82,18 +97,18 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
               {columns.map((column) => (
                 <td
                   key={String(column.key)}
-                  className={`px-3 py-2`}
+                  className={compact ? "px-2 py-1" : "px-3 py-2"}
                   style={{
                     width: column.width ? `${column.width}rem` : "auto",
                     minWidth: column.width ? `${column.width}rem` : "auto",
                   }}
                 >
                   {column.type === "avatar" && (
-                    <div className="w-20">
+                    <div className={avatarWrap}>
                       <AvatarImage
                         href={row[column.key] as string}
                         alt={row[column.key] as string}
-                        size={100}
+                        size={avatarSize}
                         hover_effect={true}
                         priority
                       />
@@ -103,7 +118,7 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                     <AvatarImage
                       href={row[column.key] as string}
                       alt={row[column.key] as string}
-                      size={100}
+                      size={avatarSize}
                       hover_effect={true}
                       priority
                     />
@@ -130,7 +145,7 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                 </td>
               ))}
               {props.buttons && (
-                <td className="px-6 py-4">
+                <td className={compact ? "px-2 py-1" : "px-6 py-4"}>
                   {props.buttons.map((button) => (
                     <Button
                       id={`button-${button.label}`}

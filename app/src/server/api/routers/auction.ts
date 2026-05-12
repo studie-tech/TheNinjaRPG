@@ -1,15 +1,36 @@
-import { and, desc, eq, gte, inArray, isNull, like, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNull,
+  like,
+  lt,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import {
+  AUCTION_BIDDER_LEVEL_MAX,
+  AUCTION_BIDDER_LEVEL_MIN,
+} from "@/drizzle/constants";
 import {
   actionLog,
   auctionBid,
   auctionListing,
   item,
+  notification,
   userData,
   userItem,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import type { QueryCondition } from "@/utils/typeutils";
 import {
   createAuctionListingSchema,
   getAuctionListingsSchema,
@@ -28,47 +49,63 @@ export const auctionRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const { auctionId } = input;
 
-      const listing = await ctx.drizzle.query.auctionListing.findFirst({
-        where: eq(auctionListing.id, auctionId),
-        with: {
-          userItem: {
-            with: {
-              item: true,
-              imbuements: {
-                with: {
-                  item: true,
+      const [listing, caller] = await Promise.all([
+        ctx.drizzle.query.auctionListing.findFirst({
+          where: eq(auctionListing.id, auctionId),
+          with: {
+            userItem: {
+              with: {
+                item: true,
+                imbuements: {
+                  with: {
+                    item: true,
+                  },
                 },
               },
             },
-          },
-          seller: {
-            columns: {
-              userId: true,
-              username: true,
-              avatar: true,
-            },
-          },
-          targetUser: {
-            columns: {
-              userId: true,
-              username: true,
-              avatar: true,
-            },
-          },
-          bids: {
-            with: {
-              bidder: {
-                columns: {
-                  userId: true,
-                  username: true,
-                  avatar: true,
-                },
+            seller: {
+              columns: {
+                userId: true,
+                username: true,
+                avatar: true,
               },
             },
-            orderBy: desc(auctionBid.createdAt),
+            targetUser: {
+              columns: {
+                userId: true,
+                username: true,
+                avatar: true,
+              },
+            },
+            bids: {
+              with: {
+                bidder: {
+                  columns: {
+                    userId: true,
+                    username: true,
+                    avatar: true,
+                  },
+                },
+              },
+              orderBy: desc(auctionBid.createdAt),
+            },
           },
-        },
-      });
+        }),
+        ctx.drizzle.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+          columns: { role: true },
+        }),
+      ]);
+
+      if (
+        listing &&
+        caller?.role === "USER" &&
+        listing.listingType === "DIRECT" &&
+        listing.sellerId !== ctx.userId &&
+        listing.targetUserId !== ctx.userId
+      ) {
+        return null;
+      }
 
       return listing;
     }),
@@ -82,14 +119,22 @@ export const auctionRouter = createTRPCRouter({
         cursor,
         limit = 20,
         itemName,
+        sellerSearch,
         listingType,
         minPrice,
         maxPrice,
+        onlyMine,
+        onlyBidOn,
         status,
       } = input;
 
+      const listingCallerUser = alias(userData, "auctionListingCaller");
+      const applyUserListingPrivacy = !onlyMine && !onlyBidOn;
+
       // Build where conditions
-      const whereConditions = [eq(auctionListing.status, status || "ACTIVE")];
+      const whereConditions: QueryCondition[] = [
+        eq(auctionListing.status, status || "ACTIVE"),
+      ];
 
       // Only filter by expire time for ACTIVE listings
       // Other statuses (SOLD, EXPIRED, CANCELLED) should show even after expiration
@@ -97,7 +142,26 @@ export const auctionRouter = createTRPCRouter({
         whereConditions.push(gte(auctionListing.expiresAt, new Date()));
       }
 
-      if (listingType) {
+      if (onlyMine) {
+        whereConditions.push(eq(auctionListing.sellerId, ctx.userId));
+      }
+
+      if (onlyBidOn) {
+        whereConditions.push(eq(auctionListing.listingType, "AUCTION"));
+        whereConditions.push(
+          exists(
+            ctx.drizzle
+              .select({ id: auctionBid.id })
+              .from(auctionBid)
+              .where(
+                and(
+                  eq(auctionBid.auctionId, auctionListing.id),
+                  eq(auctionBid.bidderId, ctx.userId),
+                ),
+              ),
+          ),
+        );
+      } else if (listingType) {
         whereConditions.push(eq(auctionListing.listingType, listingType));
       }
 
@@ -114,15 +178,57 @@ export const auctionRouter = createTRPCRouter({
         whereConditions.push(like(item.name, `%${itemName}%`));
       }
 
+      const sellerSearchTrimmed = sellerSearch?.trim();
+      const filterSellerByUsername = !!sellerSearchTrimmed;
+      if (filterSellerByUsername) {
+        whereConditions.push(like(userData.username, `%${sellerSearchTrimmed}%`));
+      }
+
+      if (applyUserListingPrivacy) {
+        // Role/level read via join (no extra round-trip). Non-USER roles bypass both filters.
+        // Direct: only parties. Auctions: level band or own listing.
+        whereConditions.push(
+          or(
+            ne(listingCallerUser.role, "USER"),
+            ne(auctionListing.listingType, "DIRECT"),
+            eq(auctionListing.sellerId, ctx.userId),
+            eq(auctionListing.targetUserId, ctx.userId),
+          ),
+        );
+        whereConditions.push(
+          or(
+            ne(listingCallerUser.role, "USER"),
+            ne(auctionListing.listingType, "AUCTION"),
+            eq(auctionListing.sellerId, ctx.userId),
+            and(
+              eq(auctionListing.listingType, "AUCTION"),
+              lte(auctionListing.bidderMinLevel, listingCallerUser.level),
+              gte(auctionListing.bidderMaxLevel, listingCallerUser.level),
+            ),
+          ),
+        );
+      }
+
       // Get auction listings with joins for filtering
       const currentCursor = cursor ?? 0;
       const skip = currentCursor * limit;
-      const listings = await ctx.drizzle
+      const whereClause = and(...whereConditions);
+
+      let q = ctx.drizzle
         .select({ id: auctionListing.id })
         .from(auctionListing)
         .innerJoin(userItem, eq(auctionListing.userItemId, userItem.id))
-        .innerJoin(item, eq(userItem.itemId, item.id))
-        .where(and(...whereConditions))
+        .innerJoin(item, eq(userItem.itemId, item.id));
+
+      if (filterSellerByUsername) {
+        q = q.innerJoin(userData, eq(auctionListing.sellerId, userData.userId));
+      }
+      if (applyUserListingPrivacy) {
+        q = q.innerJoin(listingCallerUser, eq(listingCallerUser.userId, ctx.userId));
+      }
+
+      const listings = await q
+        .where(whereClause)
         .orderBy(desc(auctionListing.expiresAt))
         .limit(limit)
         .offset(skip);
@@ -145,6 +251,13 @@ export const auctionRouter = createTRPCRouter({
                   },
                 },
                 seller: {
+                  columns: {
+                    userId: true,
+                    username: true,
+                    avatar: true,
+                  },
+                },
+                targetUser: {
                   columns: {
                     userId: true,
                     username: true,
@@ -183,7 +296,14 @@ export const auctionRouter = createTRPCRouter({
         targetUserId,
         currencyType,
         quantity,
+        bidderMinLevel,
+        bidderMaxLevel,
       } = input;
+
+      const storedBidderMinLevel =
+        listingType === "AUCTION" ? bidderMinLevel : AUCTION_BIDDER_LEVEL_MIN;
+      const storedBidderMaxLevel =
+        listingType === "AUCTION" ? bidderMaxLevel : AUCTION_BIDDER_LEVEL_MAX;
 
       // Check if user item exists and get the item data
       const [userItemData, user] = await Promise.all([
@@ -321,6 +441,8 @@ export const auctionRouter = createTRPCRouter({
           currentPrice: startingPrice,
           currencyType,
           expiresAt,
+          bidderMinLevel: storedBidderMinLevel,
+          bidderMaxLevel: storedBidderMaxLevel,
         }),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
@@ -335,6 +457,8 @@ export const auctionRouter = createTRPCRouter({
             startingPrice,
             buyoutPrice,
             expiresAt,
+            bidderMinLevel: storedBidderMinLevel,
+            bidderMaxLevel: storedBidderMaxLevel,
           }),
           relatedId: auctionId,
         }),
@@ -349,7 +473,7 @@ export const auctionRouter = createTRPCRouter({
     .input(
       z.object({
         auctionId: z.string(),
-        amount: z.number().min(0.01),
+        amount: z.number().int().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -380,6 +504,16 @@ export const auctionRouter = createTRPCRouter({
       if (user.isTradeBanned) {
         return errorResponse("You are banned from trading");
       }
+      if (auction.listingType === "AUCTION") {
+        if (
+          user.level < auction.bidderMinLevel ||
+          user.level > auction.bidderMaxLevel
+        ) {
+          return errorResponse(
+            `This auction is only open to characters between level ${auction.bidderMinLevel} and ${auction.bidderMaxLevel}.`,
+          );
+        }
+      }
       if (amount <= auction.currentPrice) {
         return errorResponse("Bid must be higher than current price");
       }
@@ -400,9 +534,43 @@ export const auctionRouter = createTRPCRouter({
       }
 
       // Check if bid meets or exceeds buyout price
-      const isBuyoutBid = auction.buyoutPrice && amount >= auction.buyoutPrice;
+      const isBuyoutBid = auction.buyoutPrice != null && amount >= auction.buyoutPrice;
 
-      // Deduct currency from the user (or full amount if first bid)
+      let outbidUserId: string | null = null;
+      if (auction.bids.length > 0) {
+        const sortedBids = [...auction.bids].sort((a, b) => b.amount - a.amount);
+        const [previousTopBid] = sortedBids;
+        if (
+          previousTopBid !== undefined &&
+          previousTopBid.bidderId !== ctx.userId &&
+          (amount > previousTopBid.amount || isBuyoutBid)
+        ) {
+          outbidUserId = previousTopBid.bidderId;
+        }
+      }
+
+      const itemLabel = auction.userItem?.item?.name ?? "An auction lot";
+      const outbidNotifyPromises: Promise<unknown>[] =
+        outbidUserId === null
+          ? []
+          : [
+              ctx.drizzle.insert(notification).values({
+                userId: outbidUserId,
+                content: isBuyoutBid
+                  ? `Someone bought out "${itemLabel}" — you were the previous high bidder.`
+                  : `You were outbid on "${itemLabel}" in the auction.`,
+              }),
+              ctx.drizzle
+                .update(userData)
+                .set({ unreadNotifications: sql`unreadNotifications + 1` })
+                .where(eq(userData.userId, outbidUserId)),
+            ];
+
+      // Deduct only what the raise costs; WHERE guards concurrent bids (no negative bank/rep).
+      const balanceGuard =
+        auction.currencyType === "MONEY"
+          ? sql`${userData.bank} >= ${amountToDeduct}`
+          : sql`${userData.reputationPoints} >= ${amountToDeduct}`;
       const result = await ctx.drizzle
         .update(userData)
         .set(
@@ -412,10 +580,12 @@ export const auctionRouter = createTRPCRouter({
                 reputationPoints: sql`${userData.reputationPoints} - ${amountToDeduct}`,
               },
         )
-        .where(eq(userData.userId, ctx.userId));
+        .where(and(eq(userData.userId, ctx.userId), balanceGuard));
       if (result.rowsAffected === 0) {
         return errorResponse(
-          `Failed to deduct ${auction.currencyType === "MONEY" ? "money" : "reputation"} from user`,
+          auction.currencyType === "MONEY"
+            ? "Insufficient funds in bank (balance may have changed — try again)"
+            : "Insufficient reputation points (balance may have changed — try again)",
         );
       }
 
@@ -448,6 +618,7 @@ export const auctionRouter = createTRPCRouter({
             }),
             relatedId: existingBid.id,
           }),
+          ...outbidNotifyPromises,
         ]);
       } else {
         // Create new bid
@@ -477,6 +648,7 @@ export const auctionRouter = createTRPCRouter({
             }),
             relatedId: bidId,
           }),
+          ...outbidNotifyPromises,
         ]);
         // Force insert bid into auction object
         auction.bids.push({
@@ -487,6 +659,11 @@ export const auctionRouter = createTRPCRouter({
           createdAt: new Date(),
           status: "ACTIVE",
         });
+      }
+
+      // completeAuctionInternal reads bid amounts from this object; keep in sync with DB.
+      if (existingBid) {
+        existingBid.amount = amount;
       }
 
       // If this is a buyout bid, complete the auction immediately
@@ -544,48 +721,77 @@ export const auctionRouter = createTRPCRouter({
       };
     }),
 
-  // Cancel auction (only by seller)
+  // Cancel listing (seller only, no bids — atomic guard so a race cannot cancel after a bid)
   cancelAuction: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Cancel your auction listing" } })
+    .meta({
+      mcp: { enabled: true, description: "Cancel your auction listing with no bids" },
+    })
     .input(z.object({ auctionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { auctionId } = input;
 
-      // Query
-      const auction = await fetchAuctionListing(ctx.drizzle, auctionId);
+      const auction = await ctx.drizzle.query.auctionListing.findFirst({
+        where: and(
+          eq(auctionListing.id, auctionId),
+          eq(auctionListing.sellerId, ctx.userId),
+        ),
+        columns: {
+          userItemId: true,
+          status: true,
+        },
+      });
 
-      // Guard
       if (!auction) {
-        return errorResponse("Auction not found");
-      }
-      if (auction.sellerId !== ctx.userId) {
-        return errorResponse("You can only cancel your own auctions");
+        return errorResponse("Listing not found");
       }
       if (auction.status !== "ACTIVE") {
-        return errorResponse("Auction is not active");
+        return errorResponse("Listing is not active");
       }
-      if (auction.bids.length > 0) {
-        return errorResponse("Cannot cancel auction with existing bids");
-      }
-      // Return item to seller and update auction status in parallel
-      await Promise.all([
-        ctx.drizzle
-          .update(userItem)
-          .set({
-            isInAuction: false,
-            updatedAt: new Date(),
-          })
-          .where(eq(userItem.id, auction.userItemId)),
-        ctx.drizzle
-          .update(auctionListing)
-          .set({
-            status: "CANCELLED",
-            updatedAt: new Date(),
-          })
-          .where(eq(auctionListing.id, auction.id)),
-      ]);
 
-      return { success: true, message: "Auction cancelled successfully" };
+      // Single statement: cancel listing and clear isInAuction together (PlanetScale has no transactions).
+      const cancelRes = await ctx.drizzle.execute(sql`
+        UPDATE \`AuctionListing\` AS al
+        INNER JOIN \`UserItem\` AS ui ON ui.\`id\` = al.\`userItemId\`
+        SET al.\`status\` = 'CANCELLED',
+            al.\`updatedAt\` = CURRENT_TIMESTAMP(3),
+            ui.\`isInAuction\` = 0,
+            ui.\`updatedAt\` = CURRENT_TIMESTAMP(3)
+        WHERE al.\`id\` = ${auctionId}
+          AND al.\`sellerId\` = ${ctx.userId}
+          AND al.\`status\` = 'ACTIVE'
+          AND NOT EXISTS (
+            SELECT 1 FROM \`AuctionBid\` AS ab WHERE ab.\`auctionId\` = al.\`id\`
+          )
+      `);
+
+      const cancelledRows = Number(cancelRes.rowsAffected ?? 0);
+      if (cancelledRows === 0) {
+        const anyBid = await ctx.drizzle.query.auctionBid.findFirst({
+          where: eq(auctionBid.auctionId, auctionId),
+          columns: { id: true },
+        });
+        if (anyBid) {
+          return errorResponse("Cannot cancel: a bid was placed on this listing");
+        }
+        return errorResponse("Could not cancel listing");
+      }
+
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "auctionListing",
+        changes: JSON.stringify({
+          action: "CANCEL_AUCTION",
+          auctionId,
+          userItemId: auction.userItemId,
+        }),
+        relatedId: auctionId,
+      });
+
+      return {
+        success: true,
+        message: "Listing cancelled — the item is back in your inventory.",
+      };
     }),
 });
 
@@ -603,7 +809,13 @@ export const fetchAuctionListing = async (
     where: eq(auctionListing.id, auctionId),
     with: {
       bids: true,
-      userItem: true,
+      userItem: {
+        with: {
+          item: {
+            columns: { name: true },
+          },
+        },
+      },
       targetUser: {
         columns: {
           userId: true,
@@ -632,7 +844,11 @@ export const completeAuctionInternal = async (
   // Derived
   const winningBid = winnerId
     ? auction.bids.find((b) => b.bidderId === winnerId)
-    : auction.bids.sort((a, b) => b.amount - a.amount)[0];
+    : (() => {
+        const sorted = [...auction.bids].sort((a, b) => b.amount - a.amount);
+        const [highest] = sorted;
+        return highest;
+      })();
 
   const bidsToRefund =
     auction.bids.filter((b) => b.bidderId !== winningBid?.bidderId) || [];

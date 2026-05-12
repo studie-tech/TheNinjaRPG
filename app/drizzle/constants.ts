@@ -2204,6 +2204,10 @@ export type AuctionListingState = (typeof AUCTION_LISTING_STATES)[number];
 export const AUCTION_LISTING_TYPES = ["AUCTION", "DIRECT"] as const;
 export type AuctionListingType = (typeof AUCTION_LISTING_TYPES)[number];
 
+/** Allowed bidder character level range for open auctions (absolute bounds). */
+export const AUCTION_BIDDER_LEVEL_MIN = 1;
+export const AUCTION_BIDDER_LEVEL_MAX = 100;
+
 export const AUCTION_BID_STATES = ["ACTIVE", "REFUNDED", "WON"] as const;
 export type AuctionBidState = (typeof AUCTION_BID_STATES)[number];
 

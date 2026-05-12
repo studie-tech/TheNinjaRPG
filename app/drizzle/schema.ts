@@ -2551,6 +2551,13 @@ export const auctionListing = mysqlTable(
     status: mysqlEnum("status", consts.AUCTION_LISTING_STATES)
       .default("ACTIVE")
       .notNull(),
+    /** Open auctions only; direct listings store defaults (1–100). */
+    bidderMinLevel: int("bidderMinLevel")
+      .default(consts.AUCTION_BIDDER_LEVEL_MIN)
+      .notNull(),
+    bidderMaxLevel: int("bidderMaxLevel")
+      .default(consts.AUCTION_BIDDER_LEVEL_MAX)
+      .notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -2566,6 +2573,10 @@ export const auctionListing = mysqlTable(
       targetUserIdIdx: index("AuctionListing_targetUserId_idx").on(table.targetUserId),
       statusIdx: index("AuctionListing_status_idx").on(table.status),
       expiresAtIdx: index("AuctionListing_expiresAt_idx").on(table.expiresAt),
+      /** Supports browse + USER bidder-level visibility (status, type, min/max band). */
+      statusListingBidderLevelsIdx: index(
+        "AuctionListing_status_listingType_bidderLevels_idx",
+      ).on(table.status, table.listingType, table.bidderMinLevel, table.bidderMaxLevel),
     };
   },
 );
