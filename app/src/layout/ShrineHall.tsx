@@ -26,6 +26,7 @@ import {
   SHRINE_AI_UNLOCK_COST,
   SHRINE_BOOST_BASE_PERC,
   SHRINE_BOOST_COST,
+  SHRINE_BOOST_DISPLAY,
   SHRINE_BOOST_DURATION_HOURS,
   SHRINE_BOOST_PER_SHRINE_PERC,
   SHRINE_BOOST_TYPES,
@@ -856,22 +857,6 @@ const useUtcNow = (enabled: boolean, intervalMs: number) => {
 /*                         Boost Template Grid                                */
 /* -------------------------------------------------------------------------- */
 
-const BOOST_TYPE_COLORS: Record<string, string> = {
-  Training: "bg-green-700 text-green-200",
-  PVP: "bg-purple-700 text-purple-200",
-  Mission: "bg-orange-700 text-orange-200",
-  Errands: "bg-red-700 text-red-200",
-  Crafting: "bg-cyan-700 text-cyan-200",
-};
-
-const BOOST_PILL_ABBREV: Record<string, string> = {
-  Training: "Trn",
-  PVP: "PVP",
-  Mission: "Mis",
-  Errands: "Err",
-  Crafting: "Crf",
-};
-
 const SLOT_LABELS = [
   "00:00",
   "02:00",
@@ -994,6 +979,9 @@ const BoostTemplateGrid = ({
   };
 
   const fillAllDay = (day: number, boosts: string[]) => {
+    // Defense in depth: the UI disables Fill Day when boosts is empty, but never let a
+    // future caller silently wipe a day by passing an empty list.
+    if (boosts.length === 0) return;
     setLocalTemplate((prev) => {
       const filtered = prev.filter((e) => e.dayOfWeek !== day);
       const newEntries: BoostTemplateEntry[] = [];
@@ -1128,19 +1116,23 @@ const BoostTemplateGrid = ({
                               )}
                               aria-label={`${DAY_LABELS[dayIdx]} ${slotLabel} boost slot`}
                             >
-                              {cellBoosts.map((entry) => (
-                                <span
-                                  key={entry.boostType}
-                                  className={cn(
-                                    "rounded px-1 py-0 text-[10px]",
-                                    BOOST_TYPE_COLORS[entry.boostType] ??
-                                      "bg-gray-700 text-gray-200",
-                                  )}
-                                >
-                                  {BOOST_PILL_ABBREV[entry.boostType] ??
-                                    entry.boostType}
-                                </span>
-                              ))}
+                              {cellBoosts.map((entry) => {
+                                // Defensive lookup: `templateData.boostTemplate` is type-cast
+                                // from JSON without runtime validation, so a stale DB row could
+                                // contain a boostType outside SHRINE_BOOST_TYPES.
+                                const display = SHRINE_BOOST_DISPLAY[entry.boostType];
+                                return (
+                                  <span
+                                    key={entry.boostType}
+                                    className={cn(
+                                      "rounded px-1 py-0 text-[10px]",
+                                      display?.color ?? "bg-gray-700 text-gray-200",
+                                    )}
+                                  >
+                                    {display?.abbrev ?? entry.boostType}
+                                  </span>
+                                );
+                              })}
                             </button>
                           </td>
                         );
@@ -1157,8 +1149,7 @@ const BoostTemplateGrid = ({
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-sm font-semibold text-amber-400">
                     {DAY_LABELS[openCell.day]} · {SLOT_LABELS[openCell.slot]} –{" "}
-                    {`${String(((openCell.slot + 1) * 2) % 24).padStart(2, "0")}:00`}{" "}
-                    UTC
+                    {`${String((openCell.slot + 1) * 2).padStart(2, "0")}:00`} UTC
                   </span>
                   <span className="text-xs text-muted-foreground">
                     click away to close
@@ -1179,7 +1170,7 @@ const BoostTemplateGrid = ({
                         className={cn(
                           "flex flex-col items-center gap-1 rounded-md px-2 py-3 text-center text-xs transition-colors",
                           checked
-                            ? (BOOST_TYPE_COLORS[bt] ?? "bg-gray-700 text-gray-200")
+                            ? SHRINE_BOOST_DISPLAY[bt].color
                             : "border border-border bg-background text-muted-foreground hover:border-muted-foreground",
                         )}
                       >
@@ -1217,7 +1208,7 @@ const BoostTemplateGrid = ({
                         className={cn(
                           "flex flex-col items-center gap-1 rounded-md px-2 py-3 text-center text-xs transition-colors",
                           checked
-                            ? (BOOST_TYPE_COLORS[bt] ?? "bg-gray-700 text-gray-200")
+                            ? SHRINE_BOOST_DISPLAY[bt].color
                             : "border border-border bg-background text-muted-foreground hover:border-muted-foreground",
                         )}
                       >

@@ -2918,7 +2918,7 @@ export const village = mysqlTable(
           dayOfWeek: number; // 0 = Sunday, 6 = Saturday (UTC)
           slotIndex: number; // 0–11, maps to hours 0–22 in steps of 2
         }>;
-        boostTemplateUpdatedBy?: string; // userId of last editor
+        boostTemplateUpdatedBy?: string; // username of last editor
         boostTemplateUpdatedAt?: string; // ISO timestamp of last edit
       }>()
       .default({ unlockedAiIds: [], activeBoosts: {}, activeAiIds: [] })
