@@ -84,6 +84,7 @@ import {
   clanCreateSchema,
   clanGetRequestSchema,
   factionEditSchema,
+  strictClanNameField,
 } from "@/validators/clan";
 
 const pusher = getServerPusher();
@@ -665,11 +666,22 @@ export const clanRouter = createTRPCRouter({
       if (fetchedClan.villageId !== user.villageId)
         return errorResponse(`!= ${locationLabel}`);
       if (user.clanId !== fetchedClan.id) return errorResponse(`Wrong ${groupLabel}`);
-      // Mutate
-      await ctx.drizzle
+      if (input.name !== fetchedClan.name) {
+        const validated = strictClanNameField.safeParse(input.name);
+        if (!validated.success) {
+          return errorResponse(
+            validated.error.issues[0]?.message ?? "Invalid clan name",
+          );
+        }
+      }
+      // Mutate (CAS on current name to avoid clobbering a concurrent rename)
+      const result = await ctx.drizzle
         .update(clan)
         .set({ name: input.name, image: image.avatar })
-        .where(eq(clan.id, fetchedClan.id));
+        .where(and(eq(clan.id, fetchedClan.id), eq(clan.name, fetchedClan.name)));
+      if (result.rowsAffected === 0) {
+        return errorResponse(`${groupLabel} was modified, please try again`);
+      }
       // Create
       return { success: true, message: `${groupLabel} updated` };
     }),

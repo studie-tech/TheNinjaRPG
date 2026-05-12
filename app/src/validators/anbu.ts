@@ -1,39 +1,25 @@
 import { z } from "zod";
-import { CoreVillages, LegacyVillageNames } from "@/drizzle/constants";
+import {
+  createReservedNameField,
+  looseFactionNameField,
+  RESERVED_FACTION_NAMES,
+} from "@/validators/reservedName";
 
-const bannedAnbuNames = [
-  "Freedom State",
-  "Horizon",
-  ...CoreVillages,
-  ...LegacyVillageNames,
-];
-
-const anbuNameField = z
-  .string()
-  .trim()
-  .min(3)
-  .max(88)
-  .regex(/^[a-zA-Z0-9_]+$/, {
-    error: "Alphanumeric and underscores only",
-  })
-  .refine(
-    (name) =>
-      !bannedAnbuNames.some((banned) => banned.toLowerCase() === name.toLowerCase()),
-    {
-      error: "This squad name is not allowed.",
-    },
-  );
+export const strictAnbuNameField = createReservedNameField({
+  reserved: RESERVED_FACTION_NAMES,
+  errorMessage: "This squad name is not allowed.",
+});
 
 export const anbuCreateSchema = z.object({
   leaderId: z.string(),
   villageId: z.string(),
-  name: anbuNameField,
+  name: strictAnbuNameField,
 });
 
 export type AnbuCreateSchema = z.infer<typeof anbuCreateSchema>;
 
 export const anbuRenameSchema = z.object({
-  name: anbuNameField,
+  name: looseFactionNameField,
   image: z.string(),
 });
 

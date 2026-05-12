@@ -5,6 +5,7 @@ import {
   LegacyVillageNames,
   UserRanks,
 } from "@/drizzle/constants";
+import { createReservedNameField } from "@/validators/reservedName";
 
 // List of possible attributes
 export const attributes = [
@@ -43,21 +44,12 @@ export type Gender = (typeof genders)[number];
 
 const reservedUsernames = [...LegacyVillageNames, ...CoreVillages];
 
-export const usernameSchema = z
-  .string()
-  .trim()
-  .regex(/^[a-zA-Z0-9_]+$/, {
-    error: "Alphanumeric and underscores only",
-  })
-  .min(2)
-  .max(12)
-  .refine(
-    (name) =>
-      !reservedUsernames.some(
-        (reserved) => reserved.toLowerCase() === name.toLowerCase(),
-      ),
-    { error: "This name is reserved." },
-  );
+export const usernameSchema = createReservedNameField({
+  reserved: reservedUsernames,
+  minLength: 2,
+  maxLength: 12,
+  errorMessage: "This name is reserved.",
+});
 
 export const utmSourceSchema = z
   .string()

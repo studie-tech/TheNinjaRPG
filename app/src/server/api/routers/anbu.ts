@@ -42,7 +42,11 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { secondsFromDate } from "@/utils/time";
 import { getEffectiveStructureLevel } from "@/utils/village";
-import { anbuCreateSchema, anbuEditSchema } from "@/validators/anbu";
+import {
+  anbuCreateSchema,
+  anbuEditSchema,
+  strictAnbuNameField,
+} from "@/validators/anbu";
 
 const pusher = getServerPusher();
 
@@ -335,11 +339,22 @@ export const anbuRouter = createTRPCRouter({
       if (squad.leaderId !== user.userId) return errorResponse("Not squad leader");
       if (squad.villageId !== user.villageId) return errorResponse("Wrong village");
       if (user.anbuId !== squad.id) return errorResponse("Wrong squad");
-      // Mutate
-      await ctx.drizzle
+      if (input.name !== squad.name) {
+        const validated = strictAnbuNameField.safeParse(input.name);
+        if (!validated.success) {
+          return errorResponse(
+            validated.error.issues[0]?.message ?? "Invalid squad name",
+          );
+        }
+      }
+      // Mutate (CAS on current name to avoid clobbering a concurrent rename)
+      const result = await ctx.drizzle
         .update(anbuSquad)
         .set({ name: input.name, image: image.avatar })
-        .where(eq(anbuSquad.id, squad.id));
+        .where(and(eq(anbuSquad.id, squad.id), eq(anbuSquad.name, squad.name)));
+      if (result.rowsAffected === 0) {
+        return errorResponse("Squad was modified, please try again");
+      }
       // Create
       return { success: true, message: "Squad name changed" };
     }),

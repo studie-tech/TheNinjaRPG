@@ -272,7 +272,7 @@ export const hospitalRouter = createTRPCRouter({
             and(eq(userData.userId, ctx.userId), eq(userData.status, "HOSPITALIZED")),
           );
       } else {
-        cost = calcHealCost(user, boost);
+        cost = calcHealCost(user);
         if (user.money < cost) {
           return errorResponse("You don't have enough money");
         }
