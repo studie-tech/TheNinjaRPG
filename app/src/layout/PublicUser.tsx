@@ -2233,14 +2233,14 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
   if (attackerBracket <= targetBracket) {
     return (
       <p className="font-medium text-green-600 text-sm">
-        ✓ Attackable (same or higher bracket)
+        ✓ Bracket-eligible (same or higher bracket — server-side checks still apply)
       </p>
     );
   }
   if (immunityLifted) {
     return (
       <p className="font-medium text-orange-500 text-sm">
-        ✓ Attackable (their immunity is lifted)
+        ✓ Bracket-eligible (their immunity is lifted — server-side checks still apply)
       </p>
     );
   }

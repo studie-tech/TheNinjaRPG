@@ -759,13 +759,14 @@ export const questsRouter = createTRPCRouter({
       // is written. PlanetScale has no transactions, so this ordering means a crash between
       // the CAS success and the upsert burns one daily slot without delivering the quest
       // (acceptable), whereas the reverse order would deliver a quest when the limit is reached
-      // (unacceptable — creates orphaned quest entries the user cannot access).
+      // (unacceptable — creates orphaned quest entries the user cannot access). The
+      // warParticipantUntil stamp is applied only after upsertQuestEntry succeeds so a failed
+      // quest creation cannot leak cross-bracket targetability without an active war quest.
       if (questData.questType === "war") {
         const result = await ctx.drizzle
           .update(userData)
           .set({
             dailyWarMissions: sql`${userData.dailyWarMissions} + 1`,
-            warParticipantUntil: extendWarParticipantSql(),
           })
           .where(
             and(
@@ -779,6 +780,10 @@ export const questsRouter = createTRPCRouter({
           );
         }
         await upsertQuestEntry(ctx.drizzle, user, questData);
+        await ctx.drizzle
+          .update(userData)
+          .set({ warParticipantUntil: extendWarParticipantSql() })
+          .where(eq(userData.userId, user.userId));
       } else {
         await Promise.all([
           upsertQuestEntry(ctx.drizzle, user, questData),
