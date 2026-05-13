@@ -1,12 +1,14 @@
 import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { WarState, WarType } from "@/drizzle/constants";
 import {
+  BRACKET_IMMUNITY_LIFT_SECS,
   SHRINE_HP_BY_LEVEL,
   TERR_BOT_ID,
   WAR_ATTACKER_EXHAUSTION_MULTIPLIER,
   WAR_DEFEAT_STRUCTURE_PENALTY_DAYS,
   WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
   WAR_LOSING_COOLDOWN_DAYS,
+  WAR_PARTICIPANT_SECS,
   WAR_SECTOR_LOSS_TOWNHALL_DAMAGE,
   WAR_VICTORY_BOOSTED_STRUCTURES,
   WAR_VICTORY_STRUCTURE_BOOST_DAYS,
@@ -35,6 +37,20 @@ import { drizzleDB } from "@/server/db";
 import { findRelationship } from "@/utils/alliance";
 import { getUnique } from "@/utils/grouping";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
+
+/**
+ * SQL fragment that extends `userData.warParticipantUntil` to the larger of its current
+ * value and `NOW() + WAR_PARTICIPANT_SECS`, so an existing longer stamp is never shortened.
+ */
+export const extendWarParticipantSql = () =>
+  sql`GREATEST(${userData.warParticipantUntil}, NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND)`;
+
+/**
+ * SQL fragment that lifts `userData.bracketImmunityLiftedUntil` to the larger of its current
+ * value and `NOW() + BRACKET_IMMUNITY_LIFT_SECS`, so an existing longer lift is never shortened.
+ */
+export const liftBracketImmunitySql = () =>
+  sql`GREATEST(${userData.bracketImmunityLiftedUntil}, NOW() + INTERVAL ${BRACKET_IMMUNITY_LIFT_SECS} SECOND)`;
 
 /**
  * Convenience method which checks target wars, and sees if the user village ID is in the war.
@@ -282,14 +298,31 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
       .update(war)
       .set({ status, endedAt })
       .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
-    // Clear war participant status for all players in involved villages so the timer
-    // disappears immediately and cross-bracket exemption cannot be exploited after war ends.
-    // Use epoch (new Date(0)) rather than now() to be unambiguously in the past regardless
-    // of any JS-to-DB clock skew or concurrent in-flight requests.
+    // Clear war participant status only for users whose village is no longer in any other
+    // active war. Without this scoping, ending one of several concurrent wars would strip
+    // cross-bracket exemption from the remaining wars. Use epoch (new Date(0)) rather than
+    // now() to be unambiguously in the past regardless of JS-to-DB clock skew.
     drizzleDB
       .update(userData)
       .set({ warParticipantUntil: new Date(0) })
-      .where(inArray(userData.villageId, involvedVillageIds)),
+      .where(
+        and(
+          inArray(userData.villageId, involvedVillageIds),
+          sql`NOT EXISTS (
+            SELECT 1 FROM War w
+            WHERE w.endedAt IS NULL
+              AND w.id != ${activeWar.id}
+              AND (w.attackerVillageId = ${userData.villageId} OR w.defenderVillageId = ${userData.villageId})
+          )`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM WarAlly wa
+            INNER JOIN War w ON wa.warId = w.id
+            WHERE w.endedAt IS NULL
+              AND w.id != ${activeWar.id}
+              AND wa.villageId = ${userData.villageId}
+          )`,
+        ),
+      ),
     drizzleDB.insert(notification).values({
       userId: TERR_BOT_ID,
       content: notificationContent,

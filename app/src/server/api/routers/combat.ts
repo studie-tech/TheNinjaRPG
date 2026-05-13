@@ -57,7 +57,6 @@ import {
   SECTOR_WIDTH,
   StatTypes,
   VILLAGE_SYNDICATE_ID,
-  WAR_PARTICIPANT_SECS,
 } from "@/drizzle/constants";
 import type {
   AiProfile,
@@ -167,7 +166,7 @@ import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
 import { canUseJutsu, checkJutsuItems } from "@/libs/train";
 import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
-import { findWarsWithUser } from "@/libs/war";
+import { extendWarParticipantSql, findWarsWithUser } from "@/libs/war";
 import { fetchAiProfileById } from "@/routers/ai";
 import { fetchSectorVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
@@ -2095,8 +2094,8 @@ export const initiateBattle = async (
     }
   }
 
-  // Identify COMBAT attackers engaging war enemies — stamp them as war participants for 2 hours.
-  // Covers: attacking enemy village members and their war allies.
+  // Identify COMBAT attackers engaging war enemies — stamp them as war participants for 2 hours
+  // inside the main userData update below. Covers attacking enemy village members and their war allies.
   const warAggressorIds =
     battleType === "COMBAT"
       ? userIds.filter((uid) => {
@@ -2192,6 +2191,14 @@ export const initiateBattle = async (
           stealthBreakUserIds.length > 0
             ? sql`CASE WHEN userId IN (${stealthBreakUserIds.map((id) => `"${id}"`).join(", ")}) THEN NULL ELSE stealthActivatedAt END`
             : sql`stealthActivatedAt`,
+        // Stamp war aggressors in the same update so the WHERE guard (status/sector match) gates
+        // both the battle entry and the participant timer atomically. GREATEST never shortens an
+        // existing longer stamp, and any leak on the rollback path is bounded to ~2h.
+        ...(warAggressorIds.length > 0
+          ? {
+              warParticipantUntil: sql`CASE WHEN ${inArray(userData.userId, warAggressorIds)} THEN ${extendWarParticipantSql()} ELSE ${userData.warParticipantUntil} END`,
+            }
+          : {}),
       })
       .where(
         and(
@@ -2251,17 +2258,6 @@ export const initiateBattle = async (
       client.delete(battleHistory).where(eq(battleHistory.battleId, battleId)),
     ]);
     return { success: false, message: "Attack failed, did the target move?" };
-  }
-
-  // Stamp war participants only after battle creation succeeds — avoids leaking
-  // the timer on failed initiations (e.g. target moved before attack landed).
-  if (warAggressorIds.length > 0) {
-    await client
-      .update(userData)
-      .set({
-        warParticipantUntil: sql`GREATEST(${userData.warParticipantUntil}, NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND)`,
-      })
-      .where(inArray(userData.userId, warAggressorIds));
   }
 
   // Push websockets message to target

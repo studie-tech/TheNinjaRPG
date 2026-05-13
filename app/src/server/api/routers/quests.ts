@@ -30,7 +30,6 @@ import {
   TUTORIAL_STARTER_QUEST_ID,
   VILLAGE_SYNDICATE_ID,
   WAR_MISSIONS_PER_DAY,
-  WAR_PARTICIPANT_SECS,
 } from "@/drizzle/constants";
 import type { Quest, UserData } from "@/drizzle/schema";
 import {
@@ -74,6 +73,7 @@ import {
 } from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
+import { extendWarParticipantSql } from "@/libs/war";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
 import type { UserWithRelations } from "@/routers/profile";
@@ -765,7 +765,7 @@ export const questsRouter = createTRPCRouter({
           .update(userData)
           .set({
             dailyWarMissions: sql`${userData.dailyWarMissions} + 1`,
-            warParticipantUntil: sql`GREATEST(${userData.warParticipantUntil}, NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND)`,
+            warParticipantUntil: extendWarParticipantSql(),
           })
           .where(
             and(

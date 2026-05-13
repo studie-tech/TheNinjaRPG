@@ -2,7 +2,6 @@ import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { BattleDataEntryType, BattleTypes } from "@/drizzle/constants";
 import {
-  BRACKET_IMMUNITY_LIFT_SECS,
   HOSPITAL_LAT,
   HOSPITAL_LONG,
   JUTSU_TRAIN_LEVEL_CAP,
@@ -10,7 +9,6 @@ import {
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   VILLAGE_SYNDICATE_ID,
-  WAR_PARTICIPANT_SECS,
   WAR_RECAPTURE_THRESHOLD,
   WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
@@ -57,7 +55,11 @@ import {
   prepareExclusiveRaidActivation,
 } from "@/libs/raids";
 import { battleJutsuExp } from "@/libs/train";
-import { findWarsWithUser } from "@/libs/war";
+import {
+  extendWarParticipantSql,
+  findWarsWithUser,
+  liftBracketImmunitySql,
+} from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
@@ -616,7 +618,7 @@ export const updateWars = async (
             client
               .update(userData)
               .set({
-                warParticipantUntil: sql`GREATEST(${userData.warParticipantUntil}, NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND)`,
+                warParticipantUntil: extendWarParticipantSql(),
               })
               .where(eq(userData.userId, user.userId)),
           );
@@ -1524,7 +1526,7 @@ export const updateUser = async (
           stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
           ...(shouldStampBracketImmunity
             ? {
-                bracketImmunityLiftedUntil: sql`GREATEST(${userData.bracketImmunityLiftedUntil}, NOW() + INTERVAL ${BRACKET_IMMUNITY_LIFT_SECS} SECOND)`,
+                bracketImmunityLiftedUntil: liftBracketImmunitySql(),
               }
             : {}),
         })
