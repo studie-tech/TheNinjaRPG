@@ -218,9 +218,12 @@ export const updateBattle = async (
     // Notify the sector that surviving raid teammates are back on the map.
     // Mirrors the `result.curHealth > 0` gate in updateUser so other clients
     // see them transition out of BATTLE without waiting for the next poll.
+    // Skip teammates who already fled: their DB UPDATE above no-ops via the
+    // battleId guard, so broadcasting here would overwrite their actual
+    // sector/coords in other clients' map views with stale battle data.
     if (pusher && raidBossDefeated) {
       humanTeammates
-        .filter((u) => u.userId !== userId)
+        .filter((u) => u.userId !== userId && !u.fledBattle)
         .forEach((teammate) => {
           const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
           if (sendToHospital) return;

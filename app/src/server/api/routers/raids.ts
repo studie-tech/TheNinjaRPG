@@ -1109,45 +1109,31 @@ export const raidsRouter = createTRPCRouter({
         }
       }
 
-      // Mutation - insert user into queue
-      try {
-        await ctx.drizzle.insert(mpvpBattleUser).values({
+      // Mutation - insert user into queue and ensure chat conversation in parallel.
+      // ensureRaidChatConversation targets different tables (conversation,
+      // user2conversation) and has no data dependency on the mpvpBattleUser
+      // insert, so we run them concurrently to avoid a sequential round-trip.
+      const [userInsertResult, chatResult] = await Promise.allSettled([
+        ctx.drizzle.insert(mpvpBattleUser).values({
           id: nanoid(),
           clanBattleId: teamId,
           userId: ctx.userId,
           side: "ATTACKER",
           slot: availableSlot,
-        });
-      } catch {
-        await rollbackJoinRaidQueue({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          teamId,
-          raidQuestId: input.questId,
-          deleteTeam: createdNewTeam,
-          deleteUserRow: false,
-        });
-        return errorResponse("Failed to join team - slot may have been taken");
-      }
+        }),
+        ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId),
+      ]);
 
-      // Ensure the chat conversation exists and grant this joiner membership
-      // (user2conversation) so they pass canViewConversation. The first joiner
-      // of a new team creates the row; subsequent joiners only insert their
-      // own membership row (idempotent on conflict). Await so a transient
-      // failure can be rolled back instead of leaving the user queued without
-      // chat access.
-      try {
-        await ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId);
-      } catch {
+      if (userInsertResult.status === "rejected" || chatResult.status === "rejected") {
         await rollbackJoinRaidQueue({
           client: ctx.drizzle,
           userId: ctx.userId,
           teamId,
           raidQuestId: input.questId,
           deleteTeam: createdNewTeam,
-          deleteUserRow: true,
+          deleteUserRow: userInsertResult.status === "fulfilled",
         });
-        return errorResponse("Failed to create raid chat - please try again");
+        return errorResponse("Failed to join raid - please try again");
       }
 
       // Pusher - notify sector about team changes
