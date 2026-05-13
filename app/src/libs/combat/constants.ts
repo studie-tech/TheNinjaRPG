@@ -18,6 +18,8 @@ export const COMBAT_LOBBY_SECONDS = 15;
 
 export const SPAR_EXPIRY_SECONDS = 120;
 
+export const BARRIER_DAMAGE_TAG_TYPES = new Set<string>(["damage", "pierce"]);
+
 /**
  * Default damage configuration
  */
