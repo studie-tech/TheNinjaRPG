@@ -61,6 +61,7 @@ import { defineHex } from "../hexgrid";
 import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
 import {
   allState,
+  BARRIER_DAMAGE_TAG_TYPES,
   damageReductionTypes,
   POST_PIERCE_TAGS,
   publicState,
@@ -2420,7 +2421,7 @@ export const isValidMove = (info: {
     }
 
     // Otherwise, only allow damage/pierce actions to target barriers
-    if (action.effects.find((e) => ["damage", "pierce"].includes(e.type))) {
+    if (action.effects.find((e) => BARRIER_DAMAGE_TAG_TYPES.has(e.type))) {
       return true;
     }
   }

@@ -22,7 +22,7 @@ import {
   QuestBattleTypes,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
-import { COMBAT_SECONDS } from "@/libs/combat/constants";
+import { BARRIER_DAMAGE_TAG_TYPES, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
 import { getPower, realizeTag, updateStatUsage } from "@/libs/combat/tags";
 import type {
@@ -825,17 +825,19 @@ export const insertAction = (info: {
               }
             }
             // Extra: If no target, check if there is a barrier & apply damage only
-            if (["damage", "pierce"].includes(tag.type)) {
+            if (BARRIER_DAMAGE_TAG_TYPES.has(tag.type)) {
               barriers.forEach((barrier) => {
                 const idx = `${barrier.id}-${tagIndex}`;
                 if (!barrierAttacks.has(idx)) {
                   barrierAttacks.add(idx);
                   targetUsernames.push("barrier");
                   targetGenders.push("it");
-                  const barrierEffect = structuredClone(effect);
-                  barrierEffect.targetType = "barrier";
-                  barrierEffect.targetId = barrier.id;
-                  barrierEffect.id = nanoid();
+                  const barrierEffect: UserEffect = {
+                    ...effect,
+                    targetType: "barrier",
+                    targetId: barrier.id,
+                    id: nanoid(),
+                  };
                   if ("absorbPercentage" in barrier) {
                     barrierEffect.barrierAbsorb = barrier.absorbPercentage;
                   }
