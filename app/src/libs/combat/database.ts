@@ -29,6 +29,7 @@ import {
   quest,
   raidParticipation,
   tournamentMatch,
+  user2conversation,
   userData,
   userItem,
   userItemImbuement,
@@ -134,6 +135,31 @@ export const updateBattle = async (
                 ),
               ),
           ]
+        : []),
+      // Purge raid-chat memberships on boss kill. The conversation ID is stable
+      // across raid resets (`raid-chat-${raidQuestId}`), so stale memberships
+      // would let former participants read the next team's private channel.
+      ...(raidBossDefeated && newBattle.extraState.raidQuestId
+        ? (() => {
+            const humanUserIds = newBattle.usersState
+              .filter((u) => !u.isAi && !u.isSummon)
+              .map((u) => u.userId);
+            return humanUserIds.length > 0
+              ? [
+                  client
+                    .delete(user2conversation)
+                    .where(
+                      and(
+                        eq(
+                          user2conversation.conversationId,
+                          `raid-chat-${newBattle.extraState.raidQuestId}`,
+                        ),
+                        inArray(user2conversation.userId, humanUserIds),
+                      ),
+                    ),
+                ]
+              : [];
+          })()
         : []),
       // When raid boss is defeated, release all non-acting teammates from BATTLE status.
       // updateUser only handles the acting player, so teammates would be stuck otherwise.
