@@ -10,6 +10,7 @@ import {
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
 import {
+  BARRIER_DAMAGE_TAG_TYPES,
   damageBoostTypes,
   damageModifierTypes,
   damageReductionTypes,
@@ -1013,7 +1014,7 @@ export const applySingleEffect = (
       effect.fromType === "armor";
   // Special cases
   if (
-    ["damage", "pierce"].includes(effect.type) &&
+    BARRIER_DAMAGE_TAG_TYPES.has(effect.type) &&
     effect.targetType === "barrier" &&
     curUser
   ) {
