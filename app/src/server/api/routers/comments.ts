@@ -18,6 +18,7 @@ import {
 import { resolveSenderId } from "@/libs/comments";
 import { moderateContent } from "@/libs/moderator";
 import { getServerPusher } from "@/libs/pusher";
+import { isRaidChatConversationId } from "@/libs/raids";
 import { fetchThread } from "@/routers/forum";
 import { fetchUser } from "@/routers/profile";
 import { fetchUserReport } from "@/routers/reports";
@@ -706,6 +707,10 @@ export const commentsRouter = createTRPCRouter({
 
       // Derived
       const usersIdsInConvo = convo.users.map((u) => u.userId);
+      // Raid-chat conversations use user2conversation only for read scoping;
+      // messages are ephemeral team coordination and must not bump teammates'
+      // inboxNews counter or fan out `newInbox` pusher events.
+      const skipInboxNotifications = isRaidChatConversationId(convo.id);
 
       // Extract quoted user IDs - filter out null/undefined values
       const quotedUserIds = quotes
@@ -737,7 +742,7 @@ export const commentsRouter = createTRPCRouter({
           .set({ updatedAt: new Date() })
           .where(eq(conversation.id, convo.id)),
         // Inbox news (database update)
-        ...(usersIdsInConvo.length > 0 && !convo.isPublic
+        ...(usersIdsInConvo.length > 0 && !convo.isPublic && !skipInboxNotifications
           ? [
               ctx.drizzle
                 .update(userData)
@@ -779,7 +784,7 @@ export const commentsRouter = createTRPCRouter({
           commentId: commentId,
         }),
         // Inbox news (pusher notifications)
-        ...(usersIdsInConvo.length > 0 && !convo.isPublic
+        ...(usersIdsInConvo.length > 0 && !convo.isPublic && !skipInboxNotifications
           ? usersIdsInConvo
               .filter((id) => id !== effectiveUserId)
               .map((userId) => pusher.trigger(userId, "event", { type: "newInbox" }))

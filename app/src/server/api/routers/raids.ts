@@ -41,7 +41,11 @@ import {
 } from "@/drizzle/schema";
 import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest";
-import { getRaidObjectiveData, validateRaidIsActive } from "@/libs/raids";
+import {
+  getRaidChatConversationId,
+  getRaidObjectiveData,
+  validateRaidIsActive,
+} from "@/libs/raids";
 import { fetchActiveUserMpvpBattles } from "@/routers/clan";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
@@ -1840,8 +1844,6 @@ const rollbackJoinRaidQueue = async ({
   }
 };
 
-const getRaidChatConversationId = (raidId: string) => `raid-chat-${raidId}`;
-
 const ensureRaidChatConversation = async (
   client: DrizzleClient,
   raid: { id: string; name: string },
@@ -1851,26 +1853,26 @@ const ensureRaidChatConversation = async (
   // Chat is scoped to the raid team via user2conversation membership rows
   // (isPublic: false), so canViewConversation falls through to the
   // inConversation branch and only joined users can read or post.
-  // No-op self-assignment on conflict — title/state never changes after the
-  // first insert, so subsequent calls must not rewrite the row.
-  await client
-    .insert(conversation)
-    .values({
-      id: conversationId,
-      title: `${raid.name} Raid Chat`,
-      createdById: userId,
-      isPublic: false,
-      isLocked: false,
-      isEnabled: true,
-    })
-    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-
-  // Membership grant for the joining user. Idempotent on the composite PK so
-  // re-joins / retries don't fail.
-  await client
-    .insert(user2conversation)
-    .values({ conversationId, userId })
-    .onDuplicateKeyUpdate({ set: { conversationId: sql`conversationId` } });
+  // PlanetScale doesn't enforce FKs, so user2conversation does not need to
+  // wait for the conversation row — both upserts are idempotent and target
+  // different tables, so run them in parallel to halve the latency.
+  await Promise.all([
+    client
+      .insert(conversation)
+      .values({
+        id: conversationId,
+        title: `${raid.name} Raid Chat`,
+        createdById: userId,
+        isPublic: false,
+        isLocked: false,
+        isEnabled: true,
+      })
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
+    client
+      .insert(user2conversation)
+      .values({ conversationId, userId })
+      .onDuplicateKeyUpdate({ set: { conversationId: sql`conversationId` } }),
+  ]);
 
   return conversationId;
 };

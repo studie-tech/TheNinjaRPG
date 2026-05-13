@@ -2,6 +2,14 @@ import type { Quest } from "@/drizzle/schema";
 import type { RaidObjectiveType } from "@/validators/objectives";
 import { RaidObjective } from "@/validators/objectives";
 
+const RAID_CHAT_CONVERSATION_PREFIX = "raid-chat-";
+
+export const getRaidChatConversationId = (raidId: string) =>
+  `${RAID_CHAT_CONVERSATION_PREFIX}${raidId}`;
+
+export const isRaidChatConversationId = (conversationId: string) =>
+  conversationId.startsWith(RAID_CHAT_CONVERSATION_PREFIX);
+
 /**
  * Helper to extract raid objective data from a quest.
  * Raid type is implicit from the objective task (open_raid or exclusive_raid).
