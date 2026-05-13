@@ -33,6 +33,7 @@ import {
   raidParticipation,
   rankedPvpQueue,
   sector,
+  user2conversation,
   userData,
   userRaidBuff,
   userRequest,
@@ -288,9 +289,12 @@ export const raidsRouter = createTRPCRouter({
     })
     .input(z.object({ questId: z.string() }))
     .query(async ({ ctx, input }) => {
-      // Query - parallel fetch (single round-trip)
+      // Query - parallel fetch (single round-trip). chatMembership is the
+      // user's user2conversation row for the raid chat — the chat ID is only
+      // exposed to members so non-team users cannot eavesdrop on or post to
+      // raid coordination via the public conversation endpoints.
       const raidChatConversationId = getRaidChatConversationId(input.questId);
-      const [raid, participation, thresholds, existingConvo] = await Promise.all([
+      const [raid, participation, thresholds, chatMembership] = await Promise.all([
         ctx.drizzle.query.quest.findFirst({
           where: and(eq(quest.id, input.questId), eq(quest.questType, "raid")),
         }),
@@ -304,9 +308,12 @@ export const raidsRouter = createTRPCRouter({
           where: eq(raidDamageThreshold.questId, input.questId),
           orderBy: raidDamageThreshold.sortOrder,
         }),
-        ctx.drizzle.query.conversation.findFirst({
-          where: eq(conversation.id, raidChatConversationId),
-          columns: { id: true },
+        ctx.drizzle.query.user2conversation.findFirst({
+          where: and(
+            eq(user2conversation.conversationId, raidChatConversationId),
+            eq(user2conversation.userId, ctx.userId),
+          ),
+          columns: { conversationId: true },
         }),
       ]);
 
@@ -329,7 +336,7 @@ export const raidsRouter = createTRPCRouter({
           raidBossCurrentHealth: raid.raidBossCurrentHealth,
           raidEndsAt: raid.raidEndsAt,
           raidSector: raidData?.sector ?? null,
-          raidChatConversationId: existingConvo ? raidChatConversationId : null,
+          raidChatConversationId: chatMembership ? raidChatConversationId : null,
         },
         participation,
         thresholds,
@@ -705,7 +712,11 @@ export const raidsRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.mpvpBattleUser.findFirst({
           where: eq(mpvpBattleUser.userId, ctx.userId),
-          with: { clanBattle: { columns: { sector: true, battleType: true } } },
+          with: {
+            clanBattle: {
+              columns: { sector: true, battleType: true, attackerEntityId: true },
+            },
+          },
         }),
       ]);
       // Guard
@@ -764,6 +775,12 @@ export const raidsRouter = createTRPCRouter({
       }
       // Step 1: remove user from team + other independent cleanups in parallel.
       // mpvpBattleUser must be deleted before the NOT EXISTS team-cleanup check in step 2.
+      // If the cleared queue entry was a raid, also drop the user's raid chat
+      // membership so they lose access to that team's coordination chat.
+      const clearedRaidChatConversationId =
+        queueEntry?.clanBattle?.battleType === "RAID_BATTLE"
+          ? getRaidChatConversationId(queueEntry.clanBattle.attackerEntityId)
+          : null;
       await Promise.all([
         // Only delete the exact mpvpBattleUser row we read — no broad userId fallback
         ...(queueEntry
@@ -774,6 +791,18 @@ export const raidsRouter = createTRPCRouter({
                   and(
                     eq(mpvpBattleUser.userId, userId),
                     eq(mpvpBattleUser.id, queueEntry.id),
+                  ),
+                ),
+            ]
+          : []),
+        ...(clearedRaidChatConversationId
+          ? [
+              ctx.drizzle
+                .delete(user2conversation)
+                .where(
+                  and(
+                    eq(user2conversation.conversationId, clearedRaidChatConversationId),
+                    eq(user2conversation.userId, userId),
                   ),
                 ),
             ]
@@ -1090,29 +1119,31 @@ export const raidsRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
           teamId,
+          raidQuestId: input.questId,
           deleteTeam: createdNewTeam,
           deleteUserRow: false,
         });
         return errorResponse("Failed to join team - slot may have been taken");
       }
 
-      // Only the first user of a new team creates the chat conversation;
-      // joiners of existing teams reuse the row created previously. Await so a
-      // transient insert failure can be rolled back instead of leaving the raid
-      // permanently without a chat row.
-      if (createdNewTeam) {
-        try {
-          await ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId);
-        } catch {
-          await rollbackJoinRaidQueue({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            teamId,
-            deleteTeam: true,
-            deleteUserRow: true,
-          });
-          return errorResponse("Failed to create raid chat - please try again");
-        }
+      // Ensure the chat conversation exists and grant this joiner membership
+      // (user2conversation) so they pass canViewConversation. The first joiner
+      // of a new team creates the row; subsequent joiners only insert their
+      // own membership row (idempotent on conflict). Await so a transient
+      // failure can be rolled back instead of leaving the user queued without
+      // chat access.
+      try {
+        await ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId);
+      } catch {
+        await rollbackJoinRaidQueue({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          teamId,
+          raidQuestId: input.questId,
+          deleteTeam: createdNewTeam,
+          deleteUserRow: true,
+        });
+        return errorResponse("Failed to create raid chat - please try again");
       }
 
       // Pusher - notify sector about team changes
@@ -1170,14 +1201,25 @@ export const raidsRouter = createTRPCRouter({
 
       // Store sector before operations for Pusher notification
       const teamSector = queueEntry.clanBattle.sector;
+      const raidQuestId = queueEntry.clanBattle.attackerEntityId;
+      const raidChatConversationId = getRaidChatConversationId(raidQuestId);
 
-      // Mutation - delete queue entry, update user status, and cleanup claiming ID in parallel
+      // Mutation - delete queue entry, update user status, drop chat
+      // membership, and cleanup claiming ID in parallel.
       await Promise.all([
         ctx.drizzle.delete(mpvpBattleUser).where(eq(mpvpBattleUser.id, queueEntry.id)),
         ctx.drizzle
           .update(userData)
           .set({ status: "AWAKE" })
           .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "QUEUED"))),
+        ctx.drizzle
+          .delete(user2conversation)
+          .where(
+            and(
+              eq(user2conversation.conversationId, raidChatConversationId),
+              eq(user2conversation.userId, ctx.userId),
+            ),
+          ),
         // Clean up claiming ID if present
         isClaimingState
           ? ctx.drizzle
@@ -1682,6 +1724,7 @@ export const checkAndCleanupExpiredRaid = async (
   if (queuedTeams.length > 0) {
     const teamIds = queuedTeams.map((t) => t.id);
     const userIds = queuedTeams.flatMap((t) => t.queue.map((u) => u.userId));
+    const raidChatConversationId = getRaidChatConversationId(raidId);
 
     await Promise.all([
       client
@@ -1696,6 +1739,20 @@ export const checkAndCleanupExpiredRaid = async (
             sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE 'claiming-%')`,
           ),
         ),
+      // Drop chat memberships for all queued users on this raid so they lose
+      // access once cleanup yanks them out of the queue.
+      ...(userIds.length > 0
+        ? [
+            client
+              .delete(user2conversation)
+              .where(
+                and(
+                  eq(user2conversation.conversationId, raidChatConversationId),
+                  inArray(user2conversation.userId, userIds),
+                ),
+              ),
+          ]
+        : []),
       ...(userIds.length > 0
         ? [
             client
@@ -1731,17 +1788,20 @@ const rollbackJoinRaidQueue = async ({
   client,
   userId,
   teamId,
+  raidQuestId,
   deleteTeam,
   deleteUserRow,
 }: {
   client: DrizzleClient;
   userId: string;
   teamId: string;
+  raidQuestId: string;
   deleteTeam: boolean;
   deleteUserRow: boolean;
 }) => {
-  // Delete our user row and reset status first, so the team-empty check below
-  // sees the row we may have inserted as already gone.
+  // Delete our user row, drop chat membership, and reset status first, so the
+  // team-empty check below sees the row we may have inserted as already gone.
+  const raidChatConversationId = getRaidChatConversationId(raidQuestId);
   await Promise.all([
     ...(deleteUserRow
       ? [
@@ -1755,6 +1815,14 @@ const rollbackJoinRaidQueue = async ({
             ),
         ]
       : []),
+    client
+      .delete(user2conversation)
+      .where(
+        and(
+          eq(user2conversation.conversationId, raidChatConversationId),
+          eq(user2conversation.userId, userId),
+        ),
+      ),
     client.update(userData).set({ status: "AWAKE" }).where(eq(userData.userId, userId)),
   ]);
   // Only delete the team if no other queue rows still reference it. A concurrent
@@ -1780,6 +1848,9 @@ const ensureRaidChatConversation = async (
   userId: string,
 ) => {
   const conversationId = getRaidChatConversationId(raid.id);
+  // Chat is scoped to the raid team via user2conversation membership rows
+  // (isPublic: false), so canViewConversation falls through to the
+  // inConversation branch and only joined users can read or post.
   // No-op self-assignment on conflict — title/state never changes after the
   // first insert, so subsequent calls must not rewrite the row.
   await client
@@ -1788,11 +1859,18 @@ const ensureRaidChatConversation = async (
       id: conversationId,
       title: `${raid.name} Raid Chat`,
       createdById: userId,
-      isPublic: true,
+      isPublic: false,
       isLocked: false,
       isEnabled: true,
     })
     .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+
+  // Membership grant for the joining user. Idempotent on the composite PK so
+  // re-joins / retries don't fail.
+  await client
+    .insert(user2conversation)
+    .values({ conversationId, userId })
+    .onDuplicateKeyUpdate({ set: { conversationId: sql`conversationId` } });
 
   return conversationId;
 };
