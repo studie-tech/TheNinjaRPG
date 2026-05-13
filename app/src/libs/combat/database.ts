@@ -50,7 +50,10 @@ import {
 import type { PusherClient } from "@/libs/pusher";
 import { broadcastRaidAvailability, updateUserOnMap } from "@/libs/pusher";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
-import { prepareExclusiveRaidActivation } from "@/libs/raids";
+import {
+  getRaidChatConversationId,
+  prepareExclusiveRaidActivation,
+} from "@/libs/raids";
 import { battleJutsuExp } from "@/libs/train";
 import { findWarsWithUser } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
@@ -100,6 +103,13 @@ export const updateBattle = async (
     }
   }
 
+  // Surviving non-summon humans, used both to purge raid-chat memberships
+  // and to release/notify teammates when the raid boss is defeated.
+  const humanTeammates = raidBossDefeated
+    ? newBattle.usersState.filter((u) => !u.isAi && !u.isSummon)
+    : [];
+  const humanUserIds = humanTeammates.map((u) => u.userId);
+
   // Update the battle, return undefined if the battle was updated by another process
   if (battleOver) {
     await Promise.all([
@@ -137,29 +147,24 @@ export const updateBattle = async (
           ]
         : []),
       // Purge raid-chat memberships on boss kill. The conversation ID is stable
-      // across raid resets (`raid-chat-${raidQuestId}`), so stale memberships
-      // would let former participants read the next team's private channel.
-      ...(raidBossDefeated && newBattle.extraState.raidQuestId
-        ? (() => {
-            const humanUserIds = newBattle.usersState
-              .filter((u) => !u.isAi && !u.isSummon)
-              .map((u) => u.userId);
-            return humanUserIds.length > 0
-              ? [
-                  client
-                    .delete(user2conversation)
-                    .where(
-                      and(
-                        eq(
-                          user2conversation.conversationId,
-                          `raid-chat-${newBattle.extraState.raidQuestId}`,
-                        ),
-                        inArray(user2conversation.userId, humanUserIds),
-                      ),
-                    ),
-                ]
-              : [];
-          })()
+      // across raid resets, so stale memberships would let former participants
+      // read the next team's private channel.
+      ...(raidBossDefeated &&
+      newBattle.extraState.raidQuestId &&
+      humanUserIds.length > 0
+        ? [
+            client
+              .delete(user2conversation)
+              .where(
+                and(
+                  eq(
+                    user2conversation.conversationId,
+                    getRaidChatConversationId(newBattle.extraState.raidQuestId),
+                  ),
+                  inArray(user2conversation.userId, humanUserIds),
+                ),
+              ),
+          ]
         : []),
       // When raid boss is defeated, release all non-acting teammates from BATTLE status.
       // updateUser only handles the acting player, so teammates would be stuck otherwise.
@@ -167,42 +172,39 @@ export const updateBattle = async (
       // teammates who took damage don't revert to pre-battle pool values on release.
       // Mirror the HOSPITALIZED handling from updateUser: teammates whose curHealth
       // dropped to 0 from boss AoE must be sent to the hospital, not released as AWAKE.
-      ...(raidBossDefeated
-        ? newBattle.usersState
-            .filter((u) => !u.isAi && !u.isSummon && u.userId !== userId)
-            .map((teammate) => {
-              const sendToHospital =
-                !newBattle.forceKeepPools && teammate.curHealth <= 0;
-              return client
-                .update(userData)
-                .set({
-                  battleId: null,
-                  regenAt: new Date(),
-                  curHealth: teammate.curHealth,
-                  curStamina: teammate.curStamina,
-                  curChakra: teammate.curChakra,
-                  stealthActive: false,
-                  stealthActivatedAt: null,
-                  stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
-                  ...(sendToHospital
-                    ? {
-                        status: "HOSPITALIZED",
-                        longitude: HOSPITAL_LONG,
-                        latitude: HOSPITAL_LAT,
-                        sector: teammate.allyVillage
-                          ? teammate.sector
-                          : getVillage(newBattle, teammate.villageId)?.sector,
-                      }
-                    : { status: "AWAKE" }),
-                })
-                .where(
-                  and(
-                    eq(userData.userId, teammate.userId),
-                    eq(userData.battleId, newBattle.id),
-                  ),
-                );
+      ...humanTeammates
+        .filter((u) => u.userId !== userId)
+        .map((teammate) => {
+          const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
+          return client
+            .update(userData)
+            .set({
+              battleId: null,
+              regenAt: new Date(),
+              curHealth: teammate.curHealth,
+              curStamina: teammate.curStamina,
+              curChakra: teammate.curChakra,
+              stealthActive: false,
+              stealthActivatedAt: null,
+              stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
+              ...(sendToHospital
+                ? {
+                    status: "HOSPITALIZED",
+                    longitude: HOSPITAL_LONG,
+                    latitude: HOSPITAL_LAT,
+                    sector: teammate.allyVillage
+                      ? teammate.sector
+                      : getVillage(newBattle, teammate.villageId)?.sector,
+                  }
+                : { status: "AWAKE" }),
             })
-        : []),
+            .where(
+              and(
+                eq(userData.userId, teammate.userId),
+                eq(userData.battleId, newBattle.id),
+              ),
+            );
+        }),
     ]);
 
     // Delete queue entries AFTER the Promise.all to ensure mpvpBattleUser
@@ -217,8 +219,8 @@ export const updateBattle = async (
     // Mirrors the `result.curHealth > 0` gate in updateUser so other clients
     // see them transition out of BATTLE without waiting for the next poll.
     if (pusher && raidBossDefeated) {
-      newBattle.usersState
-        .filter((u) => !u.isAi && !u.isSummon && u.userId !== userId)
+      humanTeammates
+        .filter((u) => u.userId !== userId)
         .forEach((teammate) => {
           const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
           if (sendToHospital) return;
