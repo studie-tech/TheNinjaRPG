@@ -1813,7 +1813,10 @@ const rollbackJoinRaidQueue = async ({
           eq(user2conversation.userId, userId),
         ),
       ),
-    client.update(userData).set({ status: "AWAKE" }).where(eq(userData.userId, userId)),
+    client
+      .update(userData)
+      .set({ status: "AWAKE" })
+      .where(and(eq(userData.userId, userId), eq(userData.status, "QUEUED"))),
   ]);
   // Only delete the team if no other queue rows still reference it. A concurrent
   // joiner could have inserted into mpvpBattleUser during the await window
