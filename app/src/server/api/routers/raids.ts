@@ -1169,14 +1169,28 @@ export const raidsRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       if (!queueEntry) return errorResponse("You are not in a queue");
       if (!queueEntry.clanBattle) {
-        // Queue entry exists but clan battle was deleted - clean up orphaned entry
-        await ctx.drizzle
-          .delete(mpvpBattleUser)
-          .where(eq(mpvpBattleUser.id, queueEntry.id));
-        await ctx.drizzle
-          .update(userData)
-          .set({ status: "AWAKE" })
-          .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "QUEUED")));
+        // Queue entry exists but clan battle was deleted - clean up orphaned entry.
+        // The deterministic raid-chat conversation id is not recoverable from
+        // here (the parent queue row holding attackerEntityId is gone), so purge
+        // every raid-chat membership row this user owns to drop access to any
+        // stale conversation that survived a prior raid reset.
+        await Promise.all([
+          ctx.drizzle
+            .delete(mpvpBattleUser)
+            .where(eq(mpvpBattleUser.id, queueEntry.id)),
+          ctx.drizzle
+            .update(userData)
+            .set({ status: "AWAKE" })
+            .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "QUEUED"))),
+          ctx.drizzle
+            .delete(user2conversation)
+            .where(
+              and(
+                eq(user2conversation.userId, ctx.userId),
+                like(user2conversation.conversationId, "raid-chat-%"),
+              ),
+            ),
+        ]);
         return { success: true, message: "Left the queue" };
       }
       if (queueEntry.clanBattle.battleType !== "RAID_BATTLE") {
@@ -1416,58 +1430,24 @@ export const raidsRouter = createTRPCRouter({
             battleId: result.battleId,
           };
         } else {
-          // Rollback - release claim, reset statuses, delete users in parallel
-          await Promise.all([
-            ctx.drizzle
-              .update(mpvpBattleQueue)
-              .set({ battleId: null })
-              .where(
-                and(
-                  eq(mpvpBattleQueue.id, input.teamId),
-                  eq(mpvpBattleQueue.battleId, claimId),
-                ),
-              ),
-            ctx.drizzle
-              .update(userData)
-              .set({ status: "AWAKE" })
-              .where(
-                and(
-                  inArray(userData.userId, attackerUserIds),
-                  eq(userData.status, "QUEUED"),
-                ),
-              ),
-            ctx.drizzle
-              .delete(mpvpBattleUser)
-              .where(eq(mpvpBattleUser.clanBattleId, input.teamId)),
-          ]);
+          await rollbackStartRaidBattle({
+            client: ctx.drizzle,
+            teamId: input.teamId,
+            claimId,
+            attackerUserIds,
+            raidId: raid.id,
+          });
 
           return errorResponse(result.message ?? "Failed to start battle");
         }
       } catch (err) {
-        // Rollback - release claim, reset statuses, delete users in parallel
-        await Promise.all([
-          ctx.drizzle
-            .update(mpvpBattleQueue)
-            .set({ battleId: null })
-            .where(
-              and(
-                eq(mpvpBattleQueue.id, input.teamId),
-                eq(mpvpBattleQueue.battleId, claimId),
-              ),
-            ),
-          ctx.drizzle
-            .update(userData)
-            .set({ status: "AWAKE" })
-            .where(
-              and(
-                inArray(userData.userId, attackerUserIds),
-                eq(userData.status, "QUEUED"),
-              ),
-            ),
-          ctx.drizzle
-            .delete(mpvpBattleUser)
-            .where(eq(mpvpBattleUser.clanBattleId, input.teamId)),
-        ]);
+        await rollbackStartRaidBattle({
+          client: ctx.drizzle,
+          teamId: input.teamId,
+          claimId,
+          attackerUserIds,
+          raidId: raid.id,
+        });
 
         throw err;
       }
@@ -1831,6 +1811,48 @@ const rollbackJoinRaidQueue = async ({
       await client.delete(mpvpBattleQueue).where(eq(mpvpBattleQueue.id, teamId));
     }
   }
+};
+
+const rollbackStartRaidBattle = async ({
+  client,
+  teamId,
+  claimId,
+  attackerUserIds,
+  raidId,
+}: {
+  client: DrizzleClient;
+  teamId: string;
+  claimId: string;
+  attackerUserIds: string[];
+  raidId: string;
+}) => {
+  // Release claim, reset statuses, drop queue rows, and purge chat memberships
+  // for every attacker so a failed battle start doesn't leave anyone with
+  // lingering access to the stable raid-chat conversation across raid resets.
+  const raidChatConversationId = getRaidChatConversationId(raidId);
+  await Promise.all([
+    client
+      .update(mpvpBattleQueue)
+      .set({ battleId: null })
+      .where(
+        and(eq(mpvpBattleQueue.id, teamId), eq(mpvpBattleQueue.battleId, claimId)),
+      ),
+    client
+      .update(userData)
+      .set({ status: "AWAKE" })
+      .where(
+        and(inArray(userData.userId, attackerUserIds), eq(userData.status, "QUEUED")),
+      ),
+    client.delete(mpvpBattleUser).where(eq(mpvpBattleUser.clanBattleId, teamId)),
+    client
+      .delete(user2conversation)
+      .where(
+        and(
+          eq(user2conversation.conversationId, raidChatConversationId),
+          inArray(user2conversation.userId, attackerUserIds),
+        ),
+      ),
+  ]);
 };
 
 const ensureRaidChatConversation = async (
