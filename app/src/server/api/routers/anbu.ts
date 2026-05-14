@@ -347,6 +347,11 @@ export const anbuRouter = createTRPCRouter({
           );
         }
       }
+      // Short-circuit no-op submits so PlanetScale's rowsAffected=0 on
+      // unchanged UPDATE isn't misread as a concurrent-rename conflict.
+      if (input.name === squad.name && image.avatar === squad.image) {
+        return { success: true, message: "Squad unchanged" };
+      }
       // Mutate (CAS on current name to avoid clobbering a concurrent rename)
       const result = await ctx.drizzle
         .update(anbuSquad)

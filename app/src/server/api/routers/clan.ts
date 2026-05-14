@@ -674,6 +674,11 @@ export const clanRouter = createTRPCRouter({
           );
         }
       }
+      // Short-circuit no-op submits so PlanetScale's rowsAffected=0 on
+      // unchanged UPDATE isn't misread as a concurrent-rename conflict.
+      if (input.name === fetchedClan.name && image.avatar === fetchedClan.image) {
+        return { success: true, message: `${groupLabel} unchanged` };
+      }
       // Mutate (CAS on current name to avoid clobbering a concurrent rename)
       const result = await ctx.drizzle
         .update(clan)
