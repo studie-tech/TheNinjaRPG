@@ -51,6 +51,10 @@ import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { updateRewards } from "@/routers/quests";
 import type { DrizzleClient } from "@/server/db";
+import {
+  purgeAllRaidChatMembershipsForUser,
+  purgeRaidChatMembership,
+} from "@/server/utils/raidChat";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import { AllTags } from "@/validators/combat";
@@ -801,14 +805,11 @@ export const raidsRouter = createTRPCRouter({
           : []),
         ...(clearedRaidChatConversationId
           ? [
-              ctx.drizzle
-                .delete(user2conversation)
-                .where(
-                  and(
-                    eq(user2conversation.conversationId, clearedRaidChatConversationId),
-                    eq(user2conversation.userId, userId),
-                  ),
-                ),
+              purgeRaidChatMembership(
+                ctx.drizzle,
+                clearedRaidChatConversationId,
+                userId,
+              ),
             ]
           : []),
         // Clear ranked PVP queue — being in it sets status to QUEUED which blocks raid joining
@@ -1182,14 +1183,7 @@ export const raidsRouter = createTRPCRouter({
             .update(userData)
             .set({ status: "AWAKE" })
             .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "QUEUED"))),
-          ctx.drizzle
-            .delete(user2conversation)
-            .where(
-              and(
-                eq(user2conversation.userId, ctx.userId),
-                like(user2conversation.conversationId, "raid-chat-%"),
-              ),
-            ),
+          purgeAllRaidChatMembershipsForUser(ctx.drizzle, ctx.userId),
         ]);
         return { success: true, message: "Left the queue" };
       }
@@ -1216,14 +1210,7 @@ export const raidsRouter = createTRPCRouter({
           .update(userData)
           .set({ status: "AWAKE" })
           .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "QUEUED"))),
-        ctx.drizzle
-          .delete(user2conversation)
-          .where(
-            and(
-              eq(user2conversation.conversationId, raidChatConversationId),
-              eq(user2conversation.userId, ctx.userId),
-            ),
-          ),
+        purgeRaidChatMembership(ctx.drizzle, raidChatConversationId, ctx.userId),
         // Clean up claiming ID if present
         isClaimingState
           ? ctx.drizzle
@@ -1712,16 +1699,7 @@ export const checkAndCleanupExpiredRaid = async (
       // Drop chat memberships for all queued users on this raid so they lose
       // access once cleanup yanks them out of the queue.
       ...(userIds.length > 0
-        ? [
-            client
-              .delete(user2conversation)
-              .where(
-                and(
-                  eq(user2conversation.conversationId, raidChatConversationId),
-                  inArray(user2conversation.userId, userIds),
-                ),
-              ),
-          ]
+        ? [purgeRaidChatMembership(client, raidChatConversationId, userIds)]
         : []),
       ...(userIds.length > 0
         ? [
@@ -1785,14 +1763,7 @@ const rollbackJoinRaidQueue = async ({
             ),
         ]
       : []),
-    client
-      .delete(user2conversation)
-      .where(
-        and(
-          eq(user2conversation.conversationId, raidChatConversationId),
-          eq(user2conversation.userId, userId),
-        ),
-      ),
+    purgeRaidChatMembership(client, raidChatConversationId, userId),
     client
       .update(userData)
       .set({ status: "AWAKE" })
@@ -1844,14 +1815,7 @@ const rollbackStartRaidBattle = async ({
         and(inArray(userData.userId, attackerUserIds), eq(userData.status, "QUEUED")),
       ),
     client.delete(mpvpBattleUser).where(eq(mpvpBattleUser.clanBattleId, teamId)),
-    client
-      .delete(user2conversation)
-      .where(
-        and(
-          eq(user2conversation.conversationId, raidChatConversationId),
-          inArray(user2conversation.userId, attackerUserIds),
-        ),
-      ),
+    purgeRaidChatMembership(client, raidChatConversationId, attackerUserIds),
   ]);
 };
 

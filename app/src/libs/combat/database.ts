@@ -29,7 +29,6 @@ import {
   quest,
   raidParticipation,
   tournamentMatch,
-  user2conversation,
   userData,
   userItem,
   userItemImbuement,
@@ -58,6 +57,7 @@ import { battleJutsuExp } from "@/libs/train";
 import { findWarsWithUser } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { purgeRaidChatMembership } from "@/server/utils/raidChat";
 
 type DataBattleAction = {
   type: (typeof BattleDataEntryType)[number];
@@ -66,6 +66,18 @@ type DataBattleAction = {
   battleWon: number;
   relatedBloodlineId?: string;
 };
+
+/**
+ * A raid is "boss defeated" when the boss AI exists in the battle and no
+ * remaining boss AI is still in fighting condition. Summons don't count as
+ * the boss; teammates' AI summons must not block the defeat condition.
+ */
+const isRaidBossDefeated = (battle: CompleteBattle) =>
+  battle.battleType === "RAID" &&
+  battle.usersState.some((u) => u.isAi && !u.isSummon) &&
+  battle.usersState.every(
+    (u) => !u.isAi || u.isSummon || !stillInBattle(u, battle.usersEffects),
+  );
 
 /**
  * Update the battle state with raw queries for speed
@@ -79,13 +91,7 @@ export const updateBattle = async (
   pusher?: PusherClient,
 ) => {
   // Calculations
-  const raidBossDefeated =
-    result &&
-    newBattle.battleType === "RAID" &&
-    newBattle.usersState.some((u) => u.isAi && !u.isSummon) &&
-    !newBattle.usersState.some(
-      (u) => u.isAi && !u.isSummon && stillInBattle(u, newBattle.usersEffects),
-    );
+  const raidBossDefeated = !!result && isRaidBossDefeated(newBattle);
   const battleOver =
     !!result && (result.friendsLeft + result.targetsLeft === 0 || raidBossDefeated);
   const isRaidBattleOver = battleOver && newBattle.battleType === "RAID";
@@ -156,17 +162,11 @@ export const updateBattle = async (
       newBattle.extraState.raidQuestId &&
       humanUserIds.length > 0
         ? [
-            client
-              .delete(user2conversation)
-              .where(
-                and(
-                  eq(
-                    user2conversation.conversationId,
-                    getRaidChatConversationId(newBattle.extraState.raidQuestId),
-                  ),
-                  inArray(user2conversation.userId, humanUserIds),
-                ),
-              ),
+            purgeRaidChatMembership(
+              client,
+              getRaidChatConversationId(newBattle.extraState.raidQuestId),
+              humanUserIds,
+            ),
           ]
         : []),
       // When raid boss is defeated, release all non-acting teammates from BATTLE status.
