@@ -1,0 +1,42 @@
+import { and, eq, inArray, like } from "drizzle-orm";
+import { user2conversation } from "@/drizzle/schema";
+import type { DrizzleClient } from "@/server/db";
+
+/**
+ * Delete user2conversation rows for a single raid-chat conversation,
+ * scoped to one user or a set of users. Returns the Drizzle query so callers
+ * can batch it inside their own `Promise.all`.
+ */
+export const purgeRaidChatMembership = (
+  client: DrizzleClient,
+  conversationId: string,
+  userIds: string | string[],
+) => {
+  const ids = Array.isArray(userIds) ? userIds : [userIds];
+  return client
+    .delete(user2conversation)
+    .where(
+      and(
+        eq(user2conversation.conversationId, conversationId),
+        inArray(user2conversation.userId, ids),
+      ),
+    );
+};
+
+/**
+ * Drop every raid-chat membership owned by a single user. Used when the
+ * specific raid id is not recoverable (orphaned queue rows) and we have to
+ * conservatively clear all stale raid-chat access.
+ */
+export const purgeAllRaidChatMembershipsForUser = (
+  client: DrizzleClient,
+  userId: string,
+) =>
+  client
+    .delete(user2conversation)
+    .where(
+      and(
+        eq(user2conversation.userId, userId),
+        like(user2conversation.conversationId, "raid-chat-%"),
+      ),
+    );
