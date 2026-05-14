@@ -88,6 +88,7 @@ export const updateBattle = async (
     );
   const battleOver =
     !!result && (result.friendsLeft + result.targetsLeft === 0 || raidBossDefeated);
+  const isRaidBattleOver = battleOver && newBattle.battleType === "RAID";
 
   // Get user and other user
   const user = newBattle.usersState.find((u) => u.userId === userId && !u.isSummon);
@@ -103,9 +104,10 @@ export const updateBattle = async (
     }
   }
 
-  // Surviving non-summon humans, used both to purge raid-chat memberships
-  // and to release/notify teammates when the raid boss is defeated.
-  const humanTeammates = raidBossDefeated
+  // Non-summon humans in this raid battle. Used to purge raid-chat memberships
+  // on any raid battle-over (boss kill OR team wipe) and to release/notify
+  // teammates when the raid boss is defeated.
+  const humanTeammates = isRaidBattleOver
     ? newBattle.usersState.filter((u) => !u.isAi && !u.isSummon)
     : [];
   const humanUserIds = humanTeammates.map((u) => u.userId);
@@ -146,10 +148,11 @@ export const updateBattle = async (
               ),
           ]
         : []),
-      // Purge raid-chat memberships on boss kill. The conversation ID is stable
-      // across raid resets, so stale memberships would let former participants
-      // read the next team's private channel.
-      ...(raidBossDefeated &&
+      // Purge raid-chat memberships on any raid battle-over (boss kill OR team
+      // wipe). The conversation ID is stable across raid resets, so stale
+      // memberships would let former participants read the next team's private
+      // channel.
+      ...(isRaidBattleOver &&
       newBattle.extraState.raidQuestId &&
       humanUserIds.length > 0
         ? [
@@ -172,7 +175,7 @@ export const updateBattle = async (
       // teammates who took damage don't revert to pre-battle pool values on release.
       // Mirror the HOSPITALIZED handling from updateUser: teammates whose curHealth
       // dropped to 0 from boss AoE must be sent to the hospital, not released as AWAKE.
-      ...humanTeammates
+      ...(raidBossDefeated ? humanTeammates : [])
         .filter((u) => u.userId !== userId)
         .map((teammate) => {
           const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
