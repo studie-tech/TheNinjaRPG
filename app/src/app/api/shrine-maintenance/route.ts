@@ -290,7 +290,11 @@ async function runShrineBoostTick(
 
   let activeUpdated = 0;
   const baseUpdates: Promise<unknown>[] = [];
-  const templateUpdates: Promise<number>[] = [];
+  const pendingTemplateActivations: {
+    villageId: string;
+    boostType: BoostTemplateEntry["boostType"];
+    newEndAt: string;
+  }[] = [];
 
   for (const villageId of allAffectedVillageIds) {
     const villageData = villageMap.get(villageId);
@@ -346,48 +350,44 @@ async function runShrineBoostTick(
       villagesWithLevel3Shrine,
       boostCost: SHRINE_BOOST_COST,
     });
-    if (templateActivations.length > 0) {
-      templateUpdates.push(
-        (async () => {
-          let activatedCount = 0;
-
-          for (const { boostType, newEndAt } of templateActivations) {
-            const updateResult = await drizzleDB
-              .update(village)
-              .set({
-                shrineSettings: withActivatedBoost(boostType, newEndAt),
-                tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
-              })
-              .where(
-                and(eq(village.id, villageId), gte(village.tokens, SHRINE_BOOST_COST)),
-              );
-
-            activatedCount += updateResult.rowsAffected ?? 0;
-          }
-
-          return activatedCount;
-        })(),
-      );
+    for (const activation of templateActivations) {
+      pendingTemplateActivations.push({ villageId, ...activation });
     }
   }
 
-  // Round 1: base updates always succeed (no CAS guard) — ensures expiry cleanup is committed
+  // Round 1: base updates always succeed (no CAS guard) — ensures expiry cleanup is committed.
+  // We must await this fully before dispatching template UPDATEs, otherwise withUpdatedBoosts
+  // (which writes the entire activeBoosts blob via CAST(... AS JSON)) can race with and clobber
+  // a template-written key that was deducted from tokens via CAS.
   await Promise.all(baseUpdates);
 
-  // Round 2: template CAS updates + delete expired schedule records
-  // Expired schedule deletion runs after base cleanup is committed
+  // Round 2: template CAS updates run in parallel (MySQL row-level locking still serializes
+  // writes to the same village row, but we stop paying network RTT per statement) +
+  // delete expired schedule records.
   type ScheduleType = (typeof expiredSchedules)[number];
   const expiredScheduleIds = expiredSchedules.map((s: ScheduleType) => s.id);
-  const deleteExpired =
-    expiredScheduleIds.length > 0
-      ? drizzleDB
-          .delete(shrineBoostSchedule)
-          .where(inArray(shrineBoostSchedule.id, expiredScheduleIds))
-      : Promise.resolve();
 
-  const activatedByTemplate = await Promise.all(templateUpdates);
-  activeUpdated += activatedByTemplate.reduce((total, count) => total + count, 0);
-  await deleteExpired;
+  const templateUpdateResults = await Promise.all(
+    pendingTemplateActivations.map(({ villageId, boostType, newEndAt }) =>
+      drizzleDB
+        .update(village)
+        .set({
+          shrineSettings: withActivatedBoost(boostType, newEndAt),
+          tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
+        })
+        .where(and(eq(village.id, villageId), gte(village.tokens, SHRINE_BOOST_COST))),
+    ),
+  );
+  activeUpdated += templateUpdateResults.reduce(
+    (total, res) => total + (res.rowsAffected ?? 0),
+    0,
+  );
+
+  if (expiredScheduleIds.length > 0) {
+    await drizzleDB
+      .delete(shrineBoostSchedule)
+      .where(inArray(shrineBoostSchedule.id, expiredScheduleIds));
+  }
 
   return { activeUpdated, expiredDeleted: expiredScheduleIds.length };
 }
