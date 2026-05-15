@@ -832,12 +832,10 @@ export const insertAction = (info: {
                   barrierAttacks.add(idx);
                   targetUsernames.push("barrier");
                   targetGenders.push("it");
-                  const barrierEffect: UserEffect = {
-                    ...effect,
-                    targetType: "barrier",
-                    targetId: barrier.id,
-                    id: nanoid(),
-                  };
+                  const barrierEffect = structuredClone(effect);
+                  barrierEffect.targetType = "barrier";
+                  barrierEffect.targetId = barrier.id;
+                  barrierEffect.id = nanoid();
                   if ("absorbPercentage" in barrier) {
                     barrierEffect.barrierAbsorb = barrier.absorbPercentage;
                   }
