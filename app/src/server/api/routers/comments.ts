@@ -500,7 +500,7 @@ export const commentsRouter = createTRPCRouter({
           convo_title: z.string().min(1).max(30).optional(),
           cursor: z.number().nullish(),
           limit: z.number().min(1).max(100),
-          refreshKey: z.number(),
+          refreshKey: z.number().optional(),
           searchQuery: z.string().optional(),
         })
         .refine(

@@ -729,9 +729,8 @@ export const raidsRouter = createTRPCRouter({
       ]);
       // Guard
       if (!user) return errorResponse("User not found");
-      if (user.isBanned) {
-        return errorResponse("You are banned and cannot queue for raids");
-      }
+      const bannedReady = guardNotBannedFromRaids(user, "queue for raids");
+      if (bannedReady) return bannedReady;
       if (user.status === "HOSPITALIZED") {
         return errorResponse("You cannot ready up while hospitalized");
       }
@@ -922,9 +921,8 @@ export const raidsRouter = createTRPCRouter({
 
       // Guard - basic validations
       if (!user) return errorResponse("User not found");
-      if (user.isBanned) {
-        return errorResponse("You are banned and cannot queue for raids");
-      }
+      const bannedJoin = guardNotBannedFromRaids(user, "queue for raids");
+      if (bannedJoin) return bannedJoin;
       if (!raid) return errorResponse("Raid not found");
       if (existingQueueEntries.length > 0) {
         return errorResponse("Already in a battle queue");
@@ -1270,9 +1268,8 @@ export const raidsRouter = createTRPCRouter({
 
       // Guard - basic validations
       if (!user) return errorResponse("User not found");
-      if (user.isBanned) {
-        return errorResponse("You are banned and cannot start raid battles");
-      }
+      const bannedStart = guardNotBannedFromRaids(user, "start raid battles");
+      if (bannedStart) return bannedStart;
       if (!team) return errorResponse("Team not found");
 
       // Check battleId state - handle stale claiming states or already started battles
@@ -1782,6 +1779,22 @@ const rollbackJoinRaidQueue = async ({
       await client.delete(mpvpBattleQueue).where(eq(mpvpBattleQueue.id, teamId));
     }
   }
+};
+
+/**
+ * Centralized ban-policy guard for raid participation endpoints.
+ * Returns an errorResponse when the user is banned, or null to continue.
+ * Keeps the policy in one place so future changes (ban-expiry, silenced
+ * users, etc.) only need to be made here.
+ */
+const guardNotBannedFromRaids = (
+  user: { isBanned: boolean },
+  action: string,
+) => {
+  if (user.isBanned) {
+    return errorResponse(`You are banned and cannot ${action}`);
+  }
+  return null;
 };
 
 const rollbackStartRaidBattle = async ({

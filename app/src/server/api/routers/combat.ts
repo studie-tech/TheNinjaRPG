@@ -275,6 +275,7 @@ export const combatRouter = createTRPCRouter({
                   ctx.userId,
                   newBattle,
                   fetchedVersion,
+                  pusher,
                 ),
                 createAction(ctx.drizzle, newBattle, [
                   {
@@ -294,6 +295,7 @@ export const combatRouter = createTRPCRouter({
                 ctx.userId,
                 userBattle,
                 fetchedVersion,
+                pusher,
               );
             }
           }
