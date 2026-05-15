@@ -231,7 +231,15 @@ export const copy = (
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
-      const excludedFromTypes = ["bloodline", "armor", "item", "village", "skill"];
+      const excludedFromTypes = [
+        "bloodline",
+        "armor",
+        "accessory",
+        "keystone",
+        "item",
+        "village",
+        "skill",
+      ];
       const allowedEffectTypes = [
         "increasedamagegiven",
         "increasestat",
@@ -316,7 +324,15 @@ export const mirror = (
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
-      const excludedFromTypes = ["bloodline", "armor", "item", "village", "skill"];
+      const excludedFromTypes = [
+        "bloodline",
+        "armor",
+        "accessory",
+        "keystone",
+        "item",
+        "village",
+        "skill",
+      ];
       const excludedEffectTypes = [
         "damage",
         "pierce",
@@ -952,6 +968,29 @@ export const decreaseDamageTaken = (
   return adjustDamageTaken(effect, usersEffects, consequences, target);
 };
 
+/** Single prevent roll for pipeline + combat log (matches increase/decreaseDamage* wrappers). */
+export const getDamageModifierPreventState = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+): { blocked: boolean; info: ActionEffect | undefined } => {
+  const preventType =
+    effect.type === "increasedamagegiven" || effect.type === "decreasedamagetaken"
+      ? "buffprevent"
+      : effect.type === "decreasedamagegiven" || effect.type === "increasedamagetaken"
+        ? "debuffprevent"
+        : null;
+  if (!preventType) return { blocked: false, info: undefined };
+
+  const { pass, preventTag } = preventCheck(usersEffects, preventType, target);
+  if (preventTag && preventTag.createdRound < effect.createdRound && !pass) {
+    const message =
+      preventType === "buffprevent" ? "cannot be buffed" : "cannot be debuffed";
+    return { blocked: true, info: preventResponse(effect, target, message) };
+  }
+  return { blocked: false, info: undefined };
+};
+
 /** Adjust ability to heal other of target */
 export const adjustHealGiven = (
   effect: UserEffect,
@@ -1069,6 +1108,8 @@ const removeEffects = (
       .filter((e) => e.targetId === effect.targetId)
       .filter((e) => e.fromType !== "bloodline")
       .filter((e) => e.fromType !== "armor")
+      .filter((e) => e.fromType !== "accessory")
+      .filter((e) => e.fromType !== "keystone")
       .filter((e) => e.fromType !== "skill")
       .filter((e) => e.fromType !== "ranked")
       .filter(type === "positive" ? isPositiveUserEffect : isNegativeUserEffect)
@@ -3167,7 +3208,7 @@ export const getStatTypeFromStat = (stat: (typeof StatNames)[number]) => {
  * Returns a ratio between 0 to 1, 0 indicating e.g. that none of the stats in LHS are
  * matched in the RHS, whereas a ratio of 1 means everything is matched by a value in RHS
  */
-const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) => {
+export const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) => {
   // Force reflect for pierce damage, bypassing tag matching
   if (dmgEffect.type === "pierce") return 1;
   // We need to get the list of dmgEffect stats/gens/elements and effect stats/gens/elements

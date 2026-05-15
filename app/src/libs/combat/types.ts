@@ -293,6 +293,18 @@ export type BasicActions = {
   basicFlee: CombatAction;
 };
 
+/** Per-user pre-battle armor/accessory/keystone % damage mods (percentage points). */
+export type PreBattleGearModifiers = {
+  incDamageGivenFromGear: number;
+  incDamageTakenFromGear: number;
+  drTakenFromGear: number;
+  drGivenFromGear: number;
+  incDamageGivenFromKeystone: number;
+  incDamageTakenFromKeystone: number;
+  drTakenFromKeystone: number;
+  drGivenFromKeystone: number;
+};
+
 /**
  * Extra battle state containing static data and battle settings.
  * Static data is stored once at battle initiation and looked up by ID.
@@ -318,6 +330,8 @@ export type ExtraState = {
   bountySignups: Record<string, CombatQueryBountySignup[]>; // controllerId -> array of bounty signups
   // Battle settings
   dmgConfig?: DmgConfig;
+  /** Per-user pre-battle gear/keystone % mods folded into the damage pipeline at battle start. */
+  preBattleGearModifiers?: Record<string, PreBattleGearModifiers>;
   settings?: GameSetting[];
   textureAssets?: string[];
   sfxAssets?: string[];
@@ -363,6 +377,9 @@ export type ReturnedUserState = Pick<BattleUserState, (typeof publicState)[numbe
 export type ReturnedBattle = Omit<CompleteBattle, "usersState"> & {
   usersState: ReturnedUserState[];
 };
+
+/** Minimal battle context for per-round effect logic (e.g. castThisRound). */
+export type BattleRoundContext = Pick<ReturnedBattle, "round">;
 
 /**
  * Dynamic battle state - only the fields that change during battle.
@@ -477,10 +494,6 @@ export type Consequence = {
   rawResidual?: number;
   /** Base damage value used for additive percentage modifier calculations (e.g., increaseDamageGiven) */
   baseDamageForModifiers?: number;
-  /** Base damage after Stage 1 (equipment/pre-battle) modifiers are applied */
-  baseDamageAfterStage1?: number;
-  /** Base damage after ALL boost modifiers (Stage 1 + Stage 2 increases) are applied, before any reductions */
-  baseDamageAfterBoosts?: number;
   wound?: number;
   reflect?: number;
   recoil?: number;
@@ -534,6 +547,8 @@ export type UserEffect = BattleEffect & {
   fromType?:
     | "jutsu"
     | "armor"
+    | "accessory"
+    | "keystone"
     | "item"
     | "basic"
     | "bloodline"

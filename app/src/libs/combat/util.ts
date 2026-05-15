@@ -69,6 +69,7 @@ import {
 import { checkFriendlyFire } from "./process";
 import { getPower } from "./tags";
 import type {
+  BattleRoundContext,
   BattleUserState,
   BattleWar,
   CombatAction,
@@ -823,7 +824,7 @@ export const calcApplyRatio = (
  */
 export const calcEffectRoundInfo = (
   effect: UserEffect | GroundEffect,
-  battle: ReturnedBattle,
+  battle: BattleRoundContext,
 ) => {
   if (effect.rounds !== undefined && effect.createdRound !== undefined) {
     return { startRound: effect.createdRound, curRound: battle.round };
@@ -852,7 +853,7 @@ export const isEffectActive = (effect: UserEffect | GroundEffect) => {
  * apply first (Stage 1), then in-battle effects apply to the result (Stage 2).
  */
 export const getEffectStage = (effect: UserEffect | GroundEffect): 1 | 2 => {
-  const stage1Types = ["armor", "skill", "village", "ranked"];
+  const stage1Types = ["armor", "accessory", "keystone", "skill", "village", "ranked"];
   if (
     "fromType" in effect &&
     effect.fromType &&
@@ -874,34 +875,14 @@ export const getBaseDamageForModifier = (
     damage?: number;
     residual?: number;
     baseDamageForModifiers?: number;
-    baseDamageAfterStage1?: number;
-    baseDamageAfterBoosts?: number;
   },
 ): number => {
-  // For damage REDUCTIONS, use the fully boosted damage.
-  // baseDamageAfterBoosts is snapshotted in Phase 2 of process.ts and must
-  // always be present before any reduction effect reaches this function.
-  if (damageReductionTypes.includes(effect.type)) {
-    if (consequence.baseDamageAfterBoosts === undefined) {
-      console.warn(
-        "getBaseDamageForModifier: baseDamageAfterBoosts missing for reduction effect",
-      );
-    }
-    return consequence.baseDamageAfterBoosts ?? consequence.baseDamageForModifiers ?? 0;
-  }
-
-  // For damage INCREASES, use staged base
-  const effectStage = getEffectStage(effect);
-  return effectStage === 1
-    ? (consequence.baseDamageForModifiers ??
-        consequence.damage ??
-        consequence.residual ??
-        0)
-    : (consequence.baseDamageAfterStage1 ??
-        consequence.baseDamageForModifiers ??
-        consequence.damage ??
-        consequence.residual ??
-        0);
+  return (
+    consequence.baseDamageForModifiers ??
+    consequence.damage ??
+    consequence.residual ??
+    0
+  );
 };
 
 /**

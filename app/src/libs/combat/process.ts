@@ -4,7 +4,11 @@ import {
   DMG_REDUCTION_CAP,
   DURABILITY_USABILITY_THR,
   ID_ANIMATION_SMOKE,
+  isPreBattleGearFromType,
+  isPreBattleKeystoneFromType,
   NO_DURABILITY_LOSS_COMBATS,
+  OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
+  OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
   POST_DAMAGE_MODIFIER_TYPES,
 } from "@/drizzle/constants";
 import type { ShieldTagType } from "@/validators/combat";
@@ -18,6 +22,8 @@ import {
 } from "./constants";
 import {
   absorb,
+  adjustDamageGiven,
+  adjustDamageTaken,
   afterburn,
   buffPrevent,
   calcDmgModifier,
@@ -42,6 +48,9 @@ import {
   finalStand,
   flee,
   fleePrevent,
+  getDamageModifierPreventState,
+  getEfficiencyRatio,
+  getPower,
   heal,
   healPrevent,
   immunity,
@@ -89,7 +98,9 @@ import type {
   CombatAction,
   CompleteBattle,
   Consequence,
+  ExtraState,
   GroundEffect,
+  PreBattleGearModifiers,
   UserEffect,
 } from "./types";
 import {
@@ -352,39 +363,6 @@ export const applyEffects = (
     (e) => e.type === "increaseheal" || e.type === "decreaseheal",
   );
 
-  // Separate damage boosts (increases) from reductions (decreases)
-  // We'll apply boosts first, then capture a snapshot, then apply reductions
-  const stage1DamageBoosts = usersEffects
-    .filter((e) => damageBoostTypes.includes(e.type))
-    .filter((e) => getEffectStage(e) === 1);
-
-  // Bloodline damage boosts/decreases run last (Phase 4, after non-bloodline reductions + cap); multiplicative; exclude bloodline boosts from Stage 2
-  const bloodlineDamageBoosts = usersEffects.filter(
-    (e) =>
-      "fromType" in e &&
-      e.fromType === "bloodline" &&
-      (e.type === "increasedamagetaken" || e.type === "increasedamagegiven"),
-  );
-
-  const bloodlineDamageReductions = usersEffects.filter(
-    (e) =>
-      "fromType" in e &&
-      e.fromType === "bloodline" &&
-      (e.type === "decreasedamagetaken" || e.type === "decreasedamagegiven"),
-  );
-
-  const stage2DamageBoosts = usersEffects
-    .filter((e) => damageBoostTypes.includes(e.type))
-    .filter((e) => getEffectStage(e) === 2)
-    .filter(
-      (e) =>
-        !(
-          "fromType" in e &&
-          e.fromType === "bloodline" &&
-          (e.type === "increasedamagetaken" || e.type === "increasedamagegiven")
-        ),
-    );
-
   // Apply non-damage-modifier effects first (maintains existing ordering)
   nonDamageModifierEffects.sort(sortEffects).forEach((effect) => {
     applySingleEffect(
@@ -401,125 +379,98 @@ export const applyEffects = (
     );
   });
 
-  // Phase 1: Apply Stage 1 damage BOOSTS (equipment/pre-battle: armor, skill, village, ranked)
-  // These modify damage before in-battle effects
-  stage1DamageBoosts.sort(sortEffects).forEach((effect) => {
-    applySingleEffect(
-      consequences,
-      newUsersState,
-      newUsersEffects,
-      newGroundEffects,
-      actionEffects,
-      appliedEffects,
-      battle,
-      actorId,
-      effect,
-      action,
-    );
-  });
-
-  // Capture baseDamageAfterStage1 for all damage consequences, including DOT
-  // This becomes the base for Stage 2 percentage calculations
-  consequences.forEach((consequence) => {
-    const stagedDamage = consequence.damage ?? consequence.residual;
-    if (stagedDamage !== undefined) {
-      consequence.baseDamageAfterStage1 = stagedDamage;
-    }
-  });
-
-  // Phase 2: Apply Stage 2 damage BOOSTS (in-battle: bloodline, jutsu, item, basic)
-  // These stack on top of Stage 1 boosts
-  stage2DamageBoosts.sort(sortEffects).forEach((effect) => {
-    applySingleEffect(
-      consequences,
-      newUsersState,
-      newUsersEffects,
-      newGroundEffects,
-      actionEffects,
-      appliedEffects,
-      battle,
-      actorId,
-      effect,
-      action,
-    );
-  });
-
-  // Capture baseDamageAfterBoosts for reduction calculations, including DOT
-  // This is the fully boosted damage that reductions will use as their base
-  consequences.forEach((consequence) => {
-    const boostedDamage = consequence.damage ?? consequence.residual;
-    if (boostedDamage !== undefined) {
-      consequence.baseDamageAfterBoosts = boostedDamage;
-    }
-  });
-
-  // Phase 3: Apply non-bloodline damage REDUCTIONS (from any stage)
-  // Bloodline decreasedamagetaken / decreasedamagegiven run in Phase 4 with bloodline increases
-  // Reductions are calculated as percentages of the FULLY BOOSTED damage
-  // This ensures damage reduction is effective against amplified damage
-  // Note: reductions intentionally apply to both direct and residual (DOT) damage
-  const allDamageReductions = usersEffects.filter(
-    (e) =>
-      damageReductionTypes.includes(e.type) &&
-      !(
-        "fromType" in e &&
-        e.fromType === "bloodline" &&
-        (e.type === "decreasedamagetaken" || e.type === "decreasedamagegiven")
-      ),
+  const sealEffects = getActiveSealEffects(usersEffects);
+  const usersStateById = new Map(newUsersState.map((u) => [u.userId, u]));
+  const damageModifierEligibilityById = buildDamageModifierEligibilityById(
+    usersEffects,
+    battle.round,
+    usersStateById,
   );
 
-  allDamageReductions.sort(sortEffects).forEach((effect) => {
-    applySingleEffect(
-      consequences,
-      newUsersState,
-      newUsersEffects,
-      newGroundEffects,
-      actionEffects,
-      appliedEffects,
-      battle,
-      actorId,
-      effect,
-      action,
-    );
+  // Consolidated damage pipeline: multiplicative inc buckets, shared sequential % DR, static DR, BL inc
+  applyDamageModifierPipelineToConsequences({
+    consequences,
+    usersEffects,
+    extraState: battle.extraState,
+    battleRound: battle.round,
+    sealEffects,
+    eligibilityById: damageModifierEligibilityById,
   });
 
-  // Enforce damage reduction cap: damage cannot be reduced below (1 - DMG_REDUCTION_CAP) of boosted pre-reduction damage
-  consequences.forEach((consequence) => {
-    if (
-      consequence.damage !== undefined &&
-      consequence.baseDamageAfterBoosts !== undefined
-    ) {
-      const minDamage = consequence.baseDamageAfterBoosts * (1 - DMG_REDUCTION_CAP);
-      consequence.damage = Math.max(consequence.damage, minDamage);
-    }
-    if (
-      consequence.residual !== undefined &&
-      consequence.baseDamageAfterBoosts !== undefined
-    ) {
-      const minResidual = consequence.baseDamageAfterBoosts * (1 - DMG_REDUCTION_CAP);
-      consequence.residual = Math.max(consequence.residual, minResidual);
-    }
-  });
-
-  // Phase 4: Bloodline damage modifiers (decreasedamagetaken, decreasedamagegiven,
-  // increasedamagetaken, increasedamagegiven) apply after the cap, in sortEffects order
-  // (decreases before increases). Same timing for offensive and defensive bloodline modifiers.
-  [...bloodlineDamageReductions, ...bloodlineDamageBoosts]
+  const modifierInfoConsequences = new Map<string, Consequence>();
+  usersEffects
+    .filter((e) => damageModifierTypes.includes(e.type))
+    .filter((e) => !sealCheck(e, sealEffects))
     .sort(sortEffects)
     .forEach((effect) => {
-      applySingleEffect(
-        consequences,
-        newUsersState,
-        newUsersEffects,
-        newGroundEffects,
-        actionEffects,
-        appliedEffects,
-        battle,
-        actorId,
-        effect,
-        action,
-      );
+      const targetUser = usersStateById.get(effect.targetId);
+      if (!targetUser) return;
+
+      const eligibility = damageModifierEligibilityById.get(effect.id);
+      if (eligibility?.preventInfo) {
+        actionEffects.push(eligibility.preventInfo);
+        return;
+      }
+
+      let info: ActionEffect | undefined;
+      switch (effect.type) {
+        case "increasedamagegiven":
+          info = adjustDamageGiven(
+            effect,
+            usersEffects,
+            modifierInfoConsequences,
+            targetUser,
+          );
+          break;
+        case "decreasedamagegiven":
+          effect.power = -Math.abs(effect.power);
+          effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
+          info = adjustDamageGiven(
+            effect,
+            usersEffects,
+            modifierInfoConsequences,
+            targetUser,
+          );
+          break;
+        case "increasedamagetaken":
+          info = adjustDamageTaken(
+            effect,
+            usersEffects,
+            modifierInfoConsequences,
+            targetUser,
+          );
+          break;
+        case "decreasedamagetaken":
+          effect.power = -Math.abs(effect.power);
+          effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
+          info = adjustDamageTaken(
+            effect,
+            usersEffects,
+            modifierInfoConsequences,
+            targetUser,
+          );
+          break;
+        default:
+          break;
+      }
+      if (info) actionEffects.push(info);
     });
+
+  // Damage modifier tags are excluded from applySingleEffect; carry them forward so they
+  // persist in the outgoing snapshot (pierce / post-damage tags have dedicated passes later).
+  const presentEffectIds = new Set(newUsersEffects.map((e) => e.id));
+  for (const e of usersEffects) {
+    if (
+      !damageModifierTypes.includes(e.type) ||
+      presentEffectIds.has(e.id) ||
+      !((isEffectActive(e) && !e.fromGround) || e.type === "visual")
+    ) {
+      continue;
+    }
+    e.isNew = false;
+    newUsersEffects.push(e);
+    presentEffectIds.add(e.id);
+  }
 
   // Apply pierce effects AFTER damage modifiers but BEFORE post-damage modifiers
   // Pierce adds damage that should be included in post-damage calculations (lifesteal, etc.)
@@ -1011,7 +962,7 @@ export const applySingleEffect = (
     ? true
     : !appliedEffects.has(idx) ||
       effect.fromType === "bloodline" ||
-      effect.fromType === "armor";
+      isPreBattleGearFromType(effect.fromType);
   // Special cases
   if (
     BARRIER_DAMAGE_TAG_TYPES.has(effect.type) &&
@@ -1235,5 +1186,522 @@ export const applySingleEffect = (
         round,
       ),
     );
+  }
+};
+
+// ─── Consolidated damage modifier pipeline (battle damage packets) ─────────────
+
+export type { PreBattleGearModifiers };
+
+export const emptyPreBattleGearModifiers = (): PreBattleGearModifiers => ({
+  incDamageGivenFromGear: 0,
+  incDamageTakenFromGear: 0,
+  drTakenFromGear: 0,
+  drGivenFromGear: 0,
+  incDamageGivenFromKeystone: 0,
+  incDamageTakenFromKeystone: 0,
+  drTakenFromKeystone: 0,
+  drGivenFromKeystone: 0,
+});
+
+/** Armor/accessory/keystone percentage mods fold into preBattleGearModifiers at battle start. */
+export const isConsolidatedStage1PercentageModifier = (effect: UserEffect): boolean => {
+  if (
+    !damageBoostTypes.includes(effect.type) &&
+    !damageReductionTypes.includes(effect.type)
+  ) {
+    return false;
+  }
+  if (!("fromType" in effect)) {
+    return false;
+  }
+  const { fromType } = effect;
+  if (!isPreBattleGearFromType(fromType) && !isPreBattleKeystoneFromType(fromType)) {
+    return false;
+  }
+  return effect.calculation === "percentage";
+};
+
+/** True when percentage mods are folded into preBattleGearModifiers (not pipeline lists). */
+const isPreBattleConsolidatedPercentageFromType = (
+  fromType: string | undefined,
+): boolean =>
+  isPreBattleGearFromType(fromType) || isPreBattleKeystoneFromType(fromType);
+
+/** Stage-1 percentage modifiers from skill/village/ranked stay in usersEffects for the pipeline. */
+const isStage1NonGearPercentageModifier = (effect: UserEffect): boolean => {
+  if (
+    !damageBoostTypes.includes(effect.type) &&
+    !damageReductionTypes.includes(effect.type)
+  ) {
+    return false;
+  }
+  if (getEffectStage(effect) !== 1 || effect.calculation !== "percentage") {
+    return false;
+  }
+  if (
+    "fromType" in effect &&
+    isPreBattleConsolidatedPercentageFromType(effect.fromType)
+  ) {
+    return false;
+  }
+  return true;
+};
+
+const applyPercentageDrMultiplier = (damage: number, drFraction: number): number =>
+  damage * Math.max(0, 1 - drFraction);
+
+export const buildPreBattleGearModifiersForUser = (
+  userEffects: UserEffect[],
+  userId: string,
+): PreBattleGearModifiers => {
+  const mods = emptyPreBattleGearModifiers();
+
+  for (const effect of userEffects) {
+    if (effect.targetId !== userId) continue;
+    if (!isConsolidatedStage1PercentageModifier(effect)) continue;
+
+    const { power } = getPower(effect);
+    const isKeystone =
+      "fromType" in effect && isPreBattleKeystoneFromType(effect.fromType);
+    if (effect.type === "increasedamagegiven") {
+      if (isKeystone) mods.incDamageGivenFromKeystone += power;
+      else mods.incDamageGivenFromGear += power;
+    } else if (effect.type === "increasedamagetaken") {
+      if (isKeystone) mods.incDamageTakenFromKeystone += power;
+      else mods.incDamageTakenFromGear += power;
+    } else if (effect.type === "decreasedamagetaken") {
+      if (isKeystone) mods.drTakenFromKeystone += Math.abs(power);
+      else mods.drTakenFromGear += Math.abs(power);
+    } else if (effect.type === "decreasedamagegiven") {
+      if (isKeystone) mods.drGivenFromKeystone += Math.abs(power);
+      else mods.drGivenFromGear += Math.abs(power);
+    }
+  }
+
+  return mods;
+};
+
+export const consolidatePreBattleDamageModifiers = (
+  userEffects: UserEffect[],
+  userIds: string[],
+): {
+  preBattleGearModifiers: Record<string, PreBattleGearModifiers>;
+  filteredEffects: UserEffect[];
+} => {
+  const preBattleGearModifiers: Record<string, PreBattleGearModifiers> = {};
+  for (const userId of userIds) {
+    preBattleGearModifiers[userId] = buildPreBattleGearModifiersForUser(
+      userEffects,
+      userId,
+    );
+  }
+
+  const filteredEffects = userEffects.filter(
+    (e) => !isConsolidatedStage1PercentageModifier(e),
+  );
+
+  return { preBattleGearModifiers, filteredEffects };
+};
+
+const isBloodlineDamageMod = (effect: UserEffect): boolean =>
+  "fromType" in effect && effect.fromType === "bloodline";
+
+const getActiveSealEffects = (usersEffects: UserEffect[]) =>
+  usersEffects.filter((e) => e.type === "seal" && !e.isNew && isEffectActive(e));
+
+/** Which packet id field to compare against effect.targetId (pair-dependent). */
+type DamageModifierPacketSide = "attacker" | "defender";
+
+export type DamageModifierEligibility = {
+  targetId: string;
+  increaseSide: DamageModifierPacketSide | null;
+  decreaseSide: DamageModifierPacketSide | null;
+  /** Set when prevent RNG blocks the modifier; reused for combat log (no second roll). */
+  preventInfo?: ActionEffect;
+};
+
+/** Pair-independent timing + modifier type; built once per performAction round. */
+export const buildDamageModifierEligibilityById = (
+  usersEffects: UserEffect[],
+  battleRound: number,
+  usersStateById?: Map<string, BattleUserState>,
+): Map<string, DamageModifierEligibility> => {
+  const eligibilityById = new Map<string, DamageModifierEligibility>();
+  const roundCtx = { round: battleRound };
+
+  for (const effect of usersEffects) {
+    const isBoost = damageBoostTypes.includes(effect.type);
+    const isDr = damageReductionTypes.includes(effect.type);
+    if (!isBoost && !isDr) continue;
+
+    // Same condition as adjustDamageGiven / adjustDamageTaken after applySingleEffect
+    // assigns `effect.castThisRound = (startRound === curRound)`.
+    const { startRound, curRound } = calcEffectRoundInfo(effect, roundCtx);
+    const passesTiming = !effect.isNew && startRound !== curRound;
+
+    const targetUser = usersStateById?.get(effect.targetId);
+    const preventState = targetUser
+      ? getDamageModifierPreventState(effect, usersEffects, targetUser)
+      : { blocked: false, info: undefined };
+
+    let increaseSide: DamageModifierPacketSide | null = null;
+    let decreaseSide: DamageModifierPacketSide | null = null;
+    if (passesTiming && !preventState.blocked) {
+      if (effect.type === "increasedamagegiven") increaseSide = "attacker";
+      else if (effect.type === "increasedamagetaken") increaseSide = "defender";
+      if (effect.type === "decreasedamagegiven") decreaseSide = "attacker";
+      else if (effect.type === "decreasedamagetaken") decreaseSide = "defender";
+    }
+
+    eligibilityById.set(effect.id, {
+      targetId: effect.targetId,
+      increaseSide,
+      decreaseSide,
+      preventInfo: preventState.info,
+    });
+  }
+
+  return eligibilityById;
+};
+
+const modifierAppliesToDamagePacketPair = (
+  eligibility: DamageModifierEligibility | undefined,
+  attackerId: string,
+  defenderId: string,
+  kind: "increase" | "decrease",
+): boolean => {
+  if (!eligibility) return false;
+  const side =
+    kind === "increase" ? eligibility.increaseSide : eligibility.decreaseSide;
+  if (!side) return false;
+  const id = side === "attacker" ? attackerId : defenderId;
+  return id === eligibility.targetId;
+};
+
+const allowBloodlineDamageModifier = (
+  damageEffect: UserEffect,
+  modEffect: UserEffect,
+  power: number,
+): boolean => {
+  if (!isBloodlineDamageMod(modEffect)) return true;
+  if (
+    !("allowBloodlineDamageIncrease" in damageEffect) ||
+    !("allowBloodlineDamageDecrease" in damageEffect)
+  ) {
+    return true;
+  }
+  if (power > 0 && !damageEffect.allowBloodlineDamageIncrease) return false;
+  if (power < 0 && !damageEffect.allowBloodlineDamageDecrease) return false;
+  return true;
+};
+
+const getSignedDrModifierPower = (effect: UserEffect): number => {
+  const { power } = getPower(effect);
+  if (effect.type === "decreasedamagetaken" || effect.type === "decreasedamagegiven") {
+    return -Math.abs(power);
+  }
+  return power;
+};
+
+export type DamagePacketModifierLists = {
+  stage1PreBattleIncreases: UserEffect[];
+  inBattleIncreases: UserEffect[];
+  stage1PreBattleDrEffects: UserEffect[];
+  inCombatDrEffects: UserEffect[];
+  staticIncEffects: UserEffect[];
+  staticDrEffects: UserEffect[];
+  bloodlineIncreases: UserEffect[];
+  bloodlineDrEffects: UserEffect[];
+};
+
+/** Bucket damage modifiers once per attacker–defender pair (reuse across consequences). */
+export const buildDamagePacketModifierLists = (
+  usersEffects: UserEffect[],
+  attackerId: string,
+  defenderId: string,
+  eligibilityById: Map<string, DamageModifierEligibility>,
+): DamagePacketModifierLists => {
+  const applies = (effect: UserEffect, kind: "increase" | "decrease") =>
+    modifierAppliesToDamagePacketPair(
+      eligibilityById.get(effect.id),
+      attackerId,
+      defenderId,
+      kind,
+    );
+
+  const stage1PreBattleIncreases: UserEffect[] = [];
+  const inBattleIncreases: UserEffect[] = [];
+  const stage1PreBattleDrEffects: UserEffect[] = [];
+  const inCombatDrEffects: UserEffect[] = [];
+  const staticIncEffects: UserEffect[] = [];
+  const staticDrEffects: UserEffect[] = [];
+  const bloodlineIncreases: UserEffect[] = [];
+  const bloodlineDrEffects: UserEffect[] = [];
+
+  for (const effect of usersEffects) {
+    const isBoost = damageBoostTypes.includes(effect.type);
+    const isDr = damageReductionTypes.includes(effect.type);
+    if (!isBoost && !isDr) continue;
+
+    const isBloodline = isBloodlineDamageMod(effect);
+    const isStatic = effect.calculation === "static";
+    const isPercentage = effect.calculation === "percentage";
+
+    if (isBoost && applies(effect, "increase")) {
+      if (isStatic) {
+        staticIncEffects.push(effect);
+      } else if (isPercentage && isBloodline) {
+        bloodlineIncreases.push(effect);
+      } else if (isPercentage && isStage1NonGearPercentageModifier(effect)) {
+        stage1PreBattleIncreases.push(effect);
+      } else if (isPercentage && getEffectStage(effect) === 2 && !isBloodline) {
+        inBattleIncreases.push(effect);
+      }
+      continue;
+    }
+
+    if (isDr && applies(effect, "decrease")) {
+      if (isStatic) {
+        staticDrEffects.push(effect);
+      } else if (isPercentage && isBloodline) {
+        bloodlineDrEffects.push(effect);
+      } else if (isPercentage && isStage1NonGearPercentageModifier(effect)) {
+        stage1PreBattleDrEffects.push(effect);
+      } else if (isPercentage && getEffectStage(effect) !== 1 && !isBloodline) {
+        inCombatDrEffects.push(effect);
+      }
+    }
+  }
+
+  stage1PreBattleIncreases.sort(sortEffects);
+  inBattleIncreases.sort(sortEffects);
+  stage1PreBattleDrEffects.sort(sortEffects);
+  inCombatDrEffects.sort(sortEffects);
+  staticIncEffects.sort(sortEffects);
+  staticDrEffects.sort(sortEffects);
+  bloodlineIncreases.sort(sortEffects);
+  bloodlineDrEffects.sort(sortEffects);
+
+  return {
+    stage1PreBattleIncreases,
+    inBattleIncreases,
+    stage1PreBattleDrEffects,
+    inCombatDrEffects,
+    staticIncEffects,
+    staticDrEffects,
+    bloodlineIncreases,
+    bloodlineDrEffects,
+  };
+};
+
+type DamagePacketComputeContext = {
+  rawDamage: number;
+  damageEffect: UserEffect;
+  usersEffects: UserEffect[];
+  attackerId: string;
+  defenderId: string;
+  preBattleGearModifiers: Record<string, PreBattleGearModifiers>;
+  battleRound: number;
+  modifierLists?: DamagePacketModifierLists;
+  sealEffects?: UserEffect[];
+};
+
+export const computeDamagePacket = (
+  ctx: DamagePacketComputeContext,
+): { damage: number } => {
+  const {
+    damageEffect,
+    usersEffects,
+    attackerId,
+    defenderId,
+    preBattleGearModifiers,
+    battleRound,
+  } = ctx;
+  const modifierLists =
+    ctx.modifierLists ??
+    buildDamagePacketModifierLists(
+      usersEffects,
+      attackerId,
+      defenderId,
+      buildDamageModifierEligibilityById(usersEffects, battleRound),
+    );
+  const sealEffects = ctx.sealEffects ?? getActiveSealEffects(usersEffects);
+  const attackerGear =
+    preBattleGearModifiers[attackerId] ?? emptyPreBattleGearModifiers();
+  const defenderGear =
+    preBattleGearModifiers[defenderId] ?? emptyPreBattleGearModifiers();
+
+  let damage = ctx.rawDamage;
+
+  for (const effect of modifierLists.stage1PreBattleIncreases) {
+    const ratio = getEfficiencyRatio(damageEffect, effect);
+    if (ratio === 0) continue;
+    const { power } = getPower(effect);
+    damage *= 1 + (power / 100) * ratio;
+  }
+
+  const incPoints =
+    OUT_OF_COMBAT_BASE_DAMAGE_INCREASE +
+    attackerGear.incDamageGivenFromGear +
+    defenderGear.incDamageTakenFromGear;
+  damage *= 1 + incPoints / 100;
+
+  for (const effect of modifierLists.inBattleIncreases) {
+    const ratio = getEfficiencyRatio(damageEffect, effect);
+    if (ratio === 0) continue;
+    const { power } = getPower(effect);
+    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
+    damage *= 1 + (power / 100) * ratio;
+  }
+
+  const baseDamageAfterBoosts = damage;
+
+  const drPoints =
+    OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION +
+    defenderGear.drTakenFromGear +
+    attackerGear.drGivenFromGear;
+  damage = applyPercentageDrMultiplier(damage, drPoints / 100);
+
+  for (const effect of modifierLists.stage1PreBattleDrEffects) {
+    const ratio = getEfficiencyRatio(damageEffect, effect);
+    if (ratio === 0) continue;
+    const power = getSignedDrModifierPower(effect);
+    damage = applyPercentageDrMultiplier(damage, (Math.abs(power) / 100) * ratio);
+  }
+
+  for (const effect of modifierLists.inCombatDrEffects) {
+    const ratio = getEfficiencyRatio(damageEffect, effect);
+    if (ratio === 0) continue;
+    const power = getSignedDrModifierPower(effect);
+    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
+    damage = applyPercentageDrMultiplier(damage, (Math.abs(power) / 100) * ratio);
+  }
+
+  const minDamage = baseDamageAfterBoosts * (1 - DMG_REDUCTION_CAP);
+  damage = Math.max(damage, minDamage);
+
+  let totalStaticIncrease = 0;
+  for (const effect of modifierLists.staticIncEffects) {
+    if (sealCheck(effect, sealEffects)) continue;
+    const ratio = getEfficiencyRatio(damageEffect, effect);
+    if (ratio === 0) continue;
+    const { power } = getPower(effect);
+    if (
+      isBloodlineDamageMod(effect) &&
+      !allowBloodlineDamageModifier(damageEffect, effect, power)
+    ) {
+      continue;
+    }
+    totalStaticIncrease += power * ratio;
+  }
+  damage += totalStaticIncrease;
+
+  let totalStaticReduction = 0;
+  for (const effect of modifierLists.staticDrEffects) {
+    if (sealCheck(effect, sealEffects)) continue;
+    const ratio = getEfficiencyRatio(damageEffect, effect);
+    if (ratio === 0) continue;
+    const { power } = getPower(effect);
+    totalStaticReduction += Math.abs(power) * ratio;
+  }
+  damage = Math.max(minDamage, damage - totalStaticReduction);
+
+  const keystoneIncPoints =
+    (attackerGear.incDamageGivenFromKeystone ?? 0) +
+    (defenderGear.incDamageTakenFromKeystone ?? 0);
+  damage *= 1 + keystoneIncPoints / 100;
+
+  const keystoneDrPoints =
+    (defenderGear.drTakenFromKeystone ?? 0) + (attackerGear.drGivenFromKeystone ?? 0);
+  damage = applyPercentageDrMultiplier(damage, keystoneDrPoints / 100);
+  damage = Math.max(minDamage, damage);
+
+  for (const effect of modifierLists.bloodlineIncreases) {
+    if (sealCheck(effect, sealEffects)) continue;
+    const ratio = getEfficiencyRatio(damageEffect, effect);
+    if (ratio === 0) continue;
+    const { power } = getPower(effect);
+    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
+    damage *= 1 + (power / 100) * ratio;
+  }
+
+  for (const effect of modifierLists.bloodlineDrEffects) {
+    if (sealCheck(effect, sealEffects)) continue;
+    const ratio = getEfficiencyRatio(damageEffect, effect);
+    if (ratio === 0) continue;
+    const power = getSignedDrModifierPower(effect);
+    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
+    damage = applyPercentageDrMultiplier(damage, (Math.abs(power) / 100) * ratio);
+  }
+
+  return { damage: Math.max(minDamage, damage) };
+};
+
+export const applyDamageModifierPipelineToConsequences = ({
+  consequences,
+  usersEffects,
+  extraState,
+  battleRound,
+  sealEffects: sealEffectsInput,
+  eligibilityById: eligibilityByIdInput,
+  usersStateById,
+}: {
+  consequences: Map<string, Consequence>;
+  usersEffects: UserEffect[];
+  extraState: ExtraState;
+  battleRound: number;
+  sealEffects?: UserEffect[];
+  eligibilityById?: Map<string, DamageModifierEligibility>;
+  /** @deprecated Prefer passing eligibilityById from applyEffects. */
+  usersStateById?: Map<string, BattleUserState>;
+}) => {
+  const preBattleGearModifiers = extraState.preBattleGearModifiers ?? {};
+  const sealEffects = sealEffectsInput ?? getActiveSealEffects(usersEffects);
+  const effectById = new Map(usersEffects.map((e) => [e.id, e]));
+  const eligibilityById =
+    eligibilityByIdInput ??
+    buildDamageModifierEligibilityById(usersEffects, battleRound, usersStateById);
+  const modifierListsByPair = new Map<string, DamagePacketModifierLists>();
+
+  for (const [effectId, consequence] of consequences) {
+    const damageKey =
+      consequence.damage !== undefined
+        ? "damage"
+        : consequence.residual !== undefined
+          ? "residual"
+          : undefined;
+    if (!damageKey) continue;
+
+    const dmgEffect = effectById.get(effectId);
+    if (!dmgEffect) continue;
+
+    const pairKey = `${consequence.userId}\0${consequence.targetId}`;
+    let modifierLists = modifierListsByPair.get(pairKey);
+    if (!modifierLists) {
+      modifierLists = buildDamagePacketModifierLists(
+        usersEffects,
+        consequence.userId,
+        consequence.targetId,
+        eligibilityById,
+      );
+      modifierListsByPair.set(pairKey, modifierLists);
+    }
+
+    const rawDamage = consequence[damageKey] ?? 0;
+    const { damage } = computeDamagePacket({
+      rawDamage,
+      damageEffect: dmgEffect,
+      usersEffects,
+      attackerId: consequence.userId,
+      defenderId: consequence.targetId,
+      preBattleGearModifiers,
+      battleRound,
+      modifierLists,
+      sealEffects,
+    });
+
+    consequence[damageKey] = damage;
+    consequence.baseDamageForModifiers ??= rawDamage;
   }
 };
