@@ -91,10 +91,12 @@ export const updateBattle = async (
   pusher?: PusherClient,
 ) => {
   // Calculations
+  // raidBossDefeated: the boss specifically died (kill).
+  // raidEnded: raid is over for ANY reason on this battle — boss kill OR full team wipe.
   const raidBossDefeated = !!result && isRaidBossDefeated(newBattle);
   const battleOver =
     !!result && (result.friendsLeft + result.targetsLeft === 0 || raidBossDefeated);
-  const isRaidBattleOver = battleOver && newBattle.battleType === "RAID";
+  const raidEnded = battleOver && newBattle.battleType === "RAID";
 
   // Get user and other user
   const user = newBattle.usersState.find((u) => u.userId === userId && !u.isSummon);
@@ -113,7 +115,7 @@ export const updateBattle = async (
   // Non-summon humans in this raid battle. Used to purge raid-chat memberships
   // on any raid battle-over (boss kill OR team wipe) and to release/notify
   // teammates when the raid boss is defeated.
-  const humanTeammates = isRaidBattleOver
+  const humanTeammates = raidEnded
     ? newBattle.usersState.filter((u) => !u.isAi && !u.isSummon)
     : [];
   const humanUserIds = humanTeammates.map((u) => u.userId);
@@ -158,7 +160,7 @@ export const updateBattle = async (
       // wipe). The conversation ID is stable across raid resets, so stale
       // memberships would let former participants read the next team's private
       // channel.
-      ...(isRaidBattleOver &&
+      ...(raidEnded &&
       newBattle.extraState.raidQuestId &&
       humanUserIds.length > 0
         ? [

@@ -2,7 +2,9 @@ import type { Quest } from "@/drizzle/schema";
 import type { RaidObjectiveType } from "@/validators/objectives";
 import { RaidObjective } from "@/validators/objectives";
 
-const RAID_CHAT_CONVERSATION_PREFIX = "raid-chat-";
+export const RAID_CHAT_CONVERSATION_PREFIX = "raid-chat-";
+
+export const RAID_CHAT_CONVERSATION_LIKE_PATTERN = `${RAID_CHAT_CONVERSATION_PREFIX}%`;
 
 export const getRaidChatConversationId = (raidId: string) =>
   `${RAID_CHAT_CONVERSATION_PREFIX}${raidId}`;

@@ -742,7 +742,6 @@ const RaidChatPanel: React.FC<RaidChatPanelProps> = ({ conversationId }) => {
     () => ({
       convo_id: conversationId,
       limit: 15,
-      refreshKey: 0,
     }),
     [conversationId],
   );

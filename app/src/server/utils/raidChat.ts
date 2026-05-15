@@ -1,5 +1,6 @@
 import { and, eq, inArray, like } from "drizzle-orm";
 import { user2conversation } from "@/drizzle/schema";
+import { RAID_CHAT_CONVERSATION_LIKE_PATTERN } from "@/libs/raids";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -37,6 +38,6 @@ export const purgeAllRaidChatMembershipsForUser = (
     .where(
       and(
         eq(user2conversation.userId, userId),
-        like(user2conversation.conversationId, "raid-chat-%"),
+        like(user2conversation.conversationId, RAID_CHAT_CONVERSATION_LIKE_PATTERN),
       ),
     );
