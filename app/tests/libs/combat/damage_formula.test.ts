@@ -311,8 +311,8 @@ describe("damage reduction cap", () => {
     ...overrides,
   });
 
-  it("DMG_REDUCTION_CAP is 80%", () => {
-    expect(DMG_REDUCTION_CAP).toBe(0.8);
+  it("DMG_REDUCTION_CAP is 90%", () => {
+    expect(DMG_REDUCTION_CAP).toBe(0.9);
   });
 
   it("does not alter damage that is above the floor", () => {
@@ -322,28 +322,28 @@ describe("damage reduction cap", () => {
     expect(consequences.get("e1")!.damage).toBe(60);
   });
 
-  it("caps damage at 20% of base when fully reduced to 0", () => {
+  it("caps damage at 10% of base when fully reduced to 0", () => {
     const consequences = new Map<string, Consequence>();
     consequences.set("e1", makeConsequence({ damage: 0, baseDamageForModifiers: 100 }));
     applyReductionCap(consequences);
-    expect(consequences.get("e1")!.damage).toBeCloseTo(20, 5);
+    expect(consequences.get("e1")!.damage).toBeCloseTo(10, 5);
   });
 
-  it("caps damage at 20% of base when reduced below the floor", () => {
+  it("caps damage at 10% of base when reduced below the floor", () => {
     const consequences = new Map<string, Consequence>();
     consequences.set("e1", makeConsequence({ damage: 5, baseDamageForModifiers: 100 }));
     applyReductionCap(consequences);
-    expect(consequences.get("e1")!.damage).toBeCloseTo(20, 5);
+    expect(consequences.get("e1")!.damage).toBeCloseTo(10, 5);
   });
 
-  it("caps negative damage (over-reduction) at 20% of base", () => {
+  it("caps negative damage (over-reduction) at 10% of base", () => {
     const consequences = new Map<string, Consequence>();
     consequences.set(
       "e1",
       makeConsequence({ damage: -50, baseDamageForModifiers: 100 }),
     );
     applyReductionCap(consequences);
-    expect(consequences.get("e1")!.damage).toBeCloseTo(20, 5);
+    expect(consequences.get("e1")!.damage).toBeCloseTo(10, 5);
   });
 
   it("does not affect consequences without baseDamageForModifiers", () => {
@@ -367,7 +367,7 @@ describe("damage reduction cap", () => {
       makeConsequence({ damage: 80, baseDamageForModifiers: 200 }),
     );
     applyReductionCap(consequences);
-    expect(consequences.get("e1")!.damage).toBeCloseTo(40, 5);
+    expect(consequences.get("e1")!.damage).toBeCloseTo(20, 5);
     expect(consequences.get("e2")!.damage).toBe(80);
   });
 });

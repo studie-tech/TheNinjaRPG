@@ -2523,7 +2523,29 @@ export const DMG_EP_NORMALIZATION = 40; // Standard EP for normalization
 export const DMG_GEN_WEIGHT = 2.0; // Weight multiplier for general stats in advantage calc
 export const DMG_ADVANTAGE_MIN = 0.01; // Minimum advantage modifier (prevents zero damage)
 export const DMG_ADVANTAGE_MAX = 10.0; // Maximum advantage modifier (prevents extreme damage spikes)
-export const DMG_REDUCTION_CAP = 0.8; // Max fraction damage can be reduced by (80% cap, so 20% always gets through)
+export const DMG_REDUCTION_CAP = 0.9; // Max fraction damage can be reduced by (90% cap, so 10% always gets through)
+export const OUT_OF_COMBAT_BASE_DAMAGE_INCREASE = 60; // Percentage points added to pre-battle damage increase pool
+export const OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION = 50; // Percentage points added to pre-battle DR pool
+
+/** Armor/accessory folded into early pre-battle inc/DR pools in the damage pipeline. */
+export const preBattleGearFromTypes = ["armor", "accessory"] as const;
+export type PreBattleGearFromType = (typeof preBattleGearFromTypes)[number];
+
+/** Keystone % damage mods are consolidated at battle start but applied pre-bloodline. */
+export const preBattleKeystoneFromTypes = ["keystone"] as const;
+export type PreBattleKeystoneFromType = (typeof preBattleKeystoneFromTypes)[number];
+
+export const isPreBattleGearFromType = (
+  fromType?: string,
+): fromType is PreBattleGearFromType =>
+  fromType !== undefined &&
+  (preBattleGearFromTypes as readonly string[]).includes(fromType);
+
+export const isPreBattleKeystoneFromType = (
+  fromType?: string,
+): fromType is PreBattleKeystoneFromType =>
+  fromType !== undefined &&
+  (preBattleKeystoneFromTypes as readonly string[]).includes(fromType);
 
 // Map of DMG setting names to their default values (for gameSetting table storage)
 export const DMG_SETTING_DEFAULTS: Record<string, number> = {

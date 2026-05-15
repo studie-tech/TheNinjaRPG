@@ -111,7 +111,12 @@ import {
   updateVillageAnbuClan,
   updateWars,
 } from "@/libs/combat/database";
-import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
+import {
+  applyEffects,
+  checkFriendlyFire,
+  consolidatePreBattleDamageModifiers,
+  emptyPreBattleGearModifiers,
+} from "@/libs/combat/process";
 import { realizeTag } from "@/libs/combat/tags";
 import type {
   ActionEffect,
@@ -1092,9 +1097,17 @@ export const combatRouter = createTRPCRouter({
       userBattle.extraState.jutsus = userBattle.extraState.jutsus || {};
       userBattle.extraState.jutsuReskins = userBattle.extraState.jutsuReskins || {};
       userBattle.extraState.items = userBattle.extraState.items || {};
+      userBattle.extraState.preBattleGearModifiers =
+        userBattle.extraState.preBattleGearModifiers || {};
       Object.assign(userBattle.extraState.jutsus, extraState.jutsus);
       Object.assign(userBattle.extraState.jutsuReskins, extraState.jutsuReskins);
       Object.assign(userBattle.extraState.items, extraState.items);
+      const updatedBattleUserId = usersState[0]?.userId;
+      if (updatedBattleUserId) {
+        userBattle.extraState.preBattleGearModifiers[updatedBattleUserId] =
+          extraState.preBattleGearModifiers?.[updatedBattleUserId] ??
+          emptyPreBattleGearModifiers();
+      }
 
       // Mutate
       const result = await ctx.drizzle
@@ -2735,7 +2748,12 @@ export const processUsersForBattle = async (
                     level: user.level,
                   });
                   realized.isNew = false;
-                  realized.fromType = "armor";
+                  realized.fromType =
+                    itemType === "ACCESSORY"
+                      ? "accessory"
+                      : itemType === "KEYSTONE"
+                        ? "keystone"
+                        : "armor";
                   realized.castThisRound = false;
                   realized.targetId = user.userId;
                   userEffects.push(realized);
@@ -2891,33 +2909,6 @@ export const processUsersForBattle = async (
           }
         }
       }
-    }
-  }
-
-  // Apply decreasedamagetaken to all users in ranked PvP battles
-  if (battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING") {
-    for (const user of usersState) {
-      const effect = DecreaseDamageTakenTag.parse({
-        target: "SELF",
-        statTypes: StatTypes,
-        generalTypes: GeneralTypes,
-        type: "decreasedamagetaken",
-        power: 150,
-        calculation: "static",
-        rounds: undefined,
-      }) as unknown as UserEffect;
-      const realized = realizeTag({
-        tag: effect,
-        user: user,
-        actionId: "ranked_pvp",
-        target: user,
-        level: user.level,
-      });
-      realized.isNew = false;
-      realized.castThisRound = false;
-      realized.targetId = user.userId;
-      realized.fromType = "ranked";
-      userEffects.push(realized);
     }
   }
 
@@ -3147,8 +3138,13 @@ export const processUsersForBattle = async (
     Object.assign(extraState.clans, summonExtraState.clans);
   }
 
+  const userIds = convertedUsersState.map((u) => u.userId);
+  const { preBattleGearModifiers, filteredEffects } =
+    consolidatePreBattleDamageModifiers(userEffects, userIds);
+  extraState.preBattleGearModifiers = preBattleGearModifiers;
+
   return {
-    userEffects,
+    userEffects: filteredEffects,
     usersState: convertedUsersState,
     extraState,
     initialDurability,
