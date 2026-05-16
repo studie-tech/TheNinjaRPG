@@ -331,7 +331,7 @@ async function runShrineBoostTick(
         drizzleDB
           .update(village)
           .set({
-            shrineSettings: withUpdatedBoosts(settings ?? null, currentBoostsBase),
+            shrineSettings: withUpdatedBoosts(currentBoostsBase),
           })
           .where(eq(village.id, villageId)),
       );
@@ -478,16 +478,14 @@ export async function runStaleShrineLobbyCleanup(
   };
 }
 
-/** Builds a JSON_SET expression that updates only activeBoosts/unlockedAiIds/activeAiIds,
- *  leaving boostTemplate and related fields untouched to prevent concurrent-write races. */
+/** Builds a JSON_SET expression that overwrites only $.activeBoosts, leaving every
+ *  other shrineSettings key untouched. Critical for not clobbering concurrent
+ *  AI defender or boost-template writes that target other keys on the same column. */
 function withUpdatedBoosts(
-  settings: ShrineSettings | null,
   activeBoosts: Record<string, string>,
 ): ReturnType<typeof sql> {
   return sql`JSON_SET(
     COALESCE(${village.shrineSettings}, JSON_OBJECT()),
-    '$.activeBoosts', CAST(${JSON.stringify(activeBoosts)} AS JSON),
-    '$.unlockedAiIds', CAST(${JSON.stringify(settings?.unlockedAiIds ?? [])} AS JSON),
-    '$.activeAiIds', CAST(${JSON.stringify(settings?.activeAiIds ?? [])} AS JSON)
+    '$.activeBoosts', CAST(${JSON.stringify(activeBoosts)} AS JSON)
   )`;
 }
