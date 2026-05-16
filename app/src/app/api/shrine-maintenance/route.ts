@@ -22,6 +22,7 @@ import {
 } from "@/libs/gamesettings";
 import { fetchVillages } from "@/server/api/routers/village";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
+import { setActiveBoostExpression } from "@/server/utils/shrine";
 import { getSlotIndex, isNewSlotDue, secondsFromDate } from "@/utils/time";
 import type { BoostTemplateEntry } from "@/validators/shrine";
 
@@ -361,33 +362,37 @@ async function runShrineBoostTick(
   // a template-written key that was deducted from tokens via CAS.
   await Promise.all(baseUpdates);
 
-  // Round 2: template CAS updates run in parallel (MySQL row-level locking still serializes
-  // writes to the same village row, but we stop paying network RTT per statement) +
-  // delete expired schedule records.
+  // Round 2: template CAS updates run in parallel with the expired-schedule DELETE.
+  // The DELETE targets a different table (shrineBoostSchedule), so it's independent of
+  // the per-village UPDATEs and can ride the same round-trip batch. MySQL row-level
+  // locking still serializes writes to the same village row for correctness.
   type ScheduleType = (typeof expiredSchedules)[number];
   const expiredScheduleIds = expiredSchedules.map((s: ScheduleType) => s.id);
 
-  const templateUpdateResults = await Promise.all(
-    pendingTemplateActivations.map(({ villageId, boostType, newEndAt }) =>
-      drizzleDB
-        .update(village)
-        .set({
-          shrineSettings: withActivatedBoost(boostType, newEndAt),
-          tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
-        })
-        .where(and(eq(village.id, villageId), gte(village.tokens, SHRINE_BOOST_COST))),
+  const [templateUpdateResults] = await Promise.all([
+    Promise.all(
+      pendingTemplateActivations.map(({ villageId, boostType, newEndAt }) =>
+        drizzleDB
+          .update(village)
+          .set({
+            shrineSettings: setActiveBoostExpression(boostType, newEndAt),
+            tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
+          })
+          .where(
+            and(eq(village.id, villageId), gte(village.tokens, SHRINE_BOOST_COST)),
+          ),
+      ),
     ),
-  );
+    expiredScheduleIds.length > 0
+      ? drizzleDB
+          .delete(shrineBoostSchedule)
+          .where(inArray(shrineBoostSchedule.id, expiredScheduleIds))
+      : Promise.resolve(),
+  ]);
   activeUpdated += templateUpdateResults.reduce(
     (total, res) => total + (res.rowsAffected ?? 0),
     0,
   );
-
-  if (expiredScheduleIds.length > 0) {
-    await drizzleDB
-      .delete(shrineBoostSchedule)
-      .where(inArray(shrineBoostSchedule.id, expiredScheduleIds));
-  }
 
   return { activeUpdated, expiredDeleted: expiredScheduleIds.length };
 }
@@ -484,20 +489,5 @@ function withUpdatedBoosts(
     '$.activeBoosts', CAST(${JSON.stringify(activeBoosts)} AS JSON),
     '$.unlockedAiIds', CAST(${JSON.stringify(settings?.unlockedAiIds ?? [])} AS JSON),
     '$.activeAiIds', CAST(${JSON.stringify(settings?.activeAiIds ?? [])} AS JSON)
-  )`;
-}
-
-function withActivatedBoost(
-  boostType: BoostTemplateEntry["boostType"],
-  newEndAt: string,
-): ReturnType<typeof sql> {
-  return sql`JSON_SET(
-    JSON_SET(
-      COALESCE(${village.shrineSettings}, JSON_OBJECT()),
-      '$.activeBoosts',
-      COALESCE(JSON_EXTRACT(${village.shrineSettings}, '$.activeBoosts'), JSON_OBJECT())
-    ),
-    ${`$.activeBoosts.${boostType}`},
-    ${newEndAt}
   )`;
 }

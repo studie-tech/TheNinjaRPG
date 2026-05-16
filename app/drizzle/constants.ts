@@ -1390,7 +1390,6 @@ export const SHRINE_BOOST_DISPLAY: Record<
   Errands: { color: "bg-red-700 text-red-200", abbrev: "Err" },
   Crafting: { color: "bg-cyan-700 text-cyan-200", abbrev: "Crf" },
 };
-export const MAX_BOOSTS_PER_SHRINE = 50;
 export type WarType = (typeof WAR_TYPES)[number];
 export type WarState = (typeof WAR_STATES)[number];
 
