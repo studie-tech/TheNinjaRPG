@@ -2458,7 +2458,13 @@ export const getAffectedTiles = (info: {
   const radius = action.range;
   const green = new Set<TerrainHex>();
   const red = new Set<TerrainHex>();
-  const seenTiles = new Set<string>();
+  // Only the two-line wall traversals can yield the same coordinate twice
+  // (both lines start at `b`). For every other method a single `grid.traverse`
+  // call visits each hex at most once, so we skip the coord-key dedup overhead
+  // on the hot rendering/targeting path.
+  const needsDedup =
+    action.method === "AOE_WALL_SHOOT" || action.method === "AOE_LARGE_WALL_SHOOT";
+  const seenTiles = needsDedup ? new Set<string>() : null;
   const user = users.find((u) => u.userId === userId);
   let tiles: Grid<TerrainHex> | undefined;
 
@@ -2467,9 +2473,11 @@ export const getAffectedTiles = (info: {
     getIsValid: () => boolean,
     options?: { skipRed?: boolean },
   ) => {
-    const key = `${target.col},${target.row}`;
-    if (seenTiles.has(key)) return;
-    seenTiles.add(key);
+    if (seenTiles) {
+      const key = `${target.col},${target.row}`;
+      if (seenTiles.has(key)) return;
+      seenTiles.add(key);
+    }
 
     if (getIsValid()) {
       green.add(target);
