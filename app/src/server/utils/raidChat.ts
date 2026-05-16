@@ -7,6 +7,11 @@ import type { DrizzleClient } from "@/server/db";
  * Delete user2conversation rows for a single raid-chat conversation,
  * scoped to one user or a set of users. Returns the Drizzle query so callers
  * can batch it inside their own `Promise.all`.
+ *
+ * Guards against an empty `userIds` array — Drizzle's `inArray` emits invalid
+ * `IN ()` SQL on an empty list, which MySQL rejects. Callers (e.g. rollback
+ * paths) may legitimately pass an empty attacker list, so resolve to undefined
+ * in that case to keep the call site's `Promise.all` shape intact.
  */
 export const purgeRaidChatMembership = (
   client: DrizzleClient,
@@ -14,6 +19,7 @@ export const purgeRaidChatMembership = (
   userIds: string | string[],
 ) => {
   const ids = Array.isArray(userIds) ? userIds : [userIds];
+  if (ids.length === 0) return Promise.resolve(undefined);
   return client
     .delete(user2conversation)
     .where(
