@@ -23,7 +23,12 @@ import {
 import { fetchVillages } from "@/server/api/routers/village";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
 import { setActiveBoostExpression } from "@/server/utils/shrine";
-import { getSlotIndex, isNewSlotDue, secondsFromDate } from "@/utils/time";
+import {
+  getCurrentSlotBoundary,
+  getSlotIndex,
+  isNewSlotDue,
+  secondsFromDate,
+} from "@/utils/time";
 import type { BoostTemplateEntry } from "@/validators/shrine";
 
 const ENDPOINT_NAME = "shrine-maintenance";
@@ -172,6 +177,10 @@ export function computeTemplateActivations(params: {
 
   const activeBoosts = shrineSettings?.activeBoosts ?? {};
   const boostDurationMs = SHRINE_BOOST_DURATION_HOURS * 60 * 60 * 1000;
+  // Anchor expiry to the slot start, not the (possibly-jittered) cron firing time,
+  // so the expiry lands exactly on the next slot boundary. Otherwise a late tick
+  // pushes the expiry past the next boundary and the following slot gets skipped.
+  const slotStartMs = getCurrentSlotBoundary(now).getTime();
   const results: { boostType: BoostTemplateEntry["boostType"]; newEndAt: string }[] =
     [];
   let remainingTokens = villageTokens;
@@ -190,7 +199,7 @@ export function computeTemplateActivations(params: {
     remainingTokens -= boostCost;
     results.push({
       boostType,
-      newEndAt: new Date(now.getTime() + boostDurationMs).toISOString(),
+      newEndAt: new Date(slotStartMs + boostDurationMs).toISOString(),
     });
   }
 
