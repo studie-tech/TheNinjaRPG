@@ -92,10 +92,25 @@ export const updateBattle = async (
 ) => {
   // Calculations
   // raidBossDefeated: the boss specifically died (kill).
+  // raidTeamWiped: every human in this raid is out of stillInBattle while the
+  // boss is still alive. `result.friendsLeft` is keyed on the per-user
+  // `leftBattle` flag which is only set when each user's own action triggers
+  // calcBattleResult, so a teammate killed by boss AoE on someone else's turn
+  // is not yet counted. Checking stillInBattle directly catches the wipe in
+  // the same tick.
   // raidEnded: raid is over for ANY reason on this battle — boss kill OR full team wipe.
   const raidBossDefeated = !!result && isRaidBossDefeated(newBattle);
+  const raidTeamWiped =
+    !!result &&
+    newBattle.battleType === "RAID" &&
+    newBattle.usersState
+      .filter((u) => !u.isAi && !u.isSummon)
+      .every((u) => !stillInBattle(u, newBattle.usersEffects));
   const battleOver =
-    !!result && (result.friendsLeft + result.targetsLeft === 0 || raidBossDefeated);
+    !!result &&
+    (result.friendsLeft + result.targetsLeft === 0 ||
+      raidBossDefeated ||
+      raidTeamWiped);
   const raidEnded = battleOver && newBattle.battleType === "RAID";
 
   // Get user and other user
@@ -160,9 +175,7 @@ export const updateBattle = async (
       // wipe). The conversation ID is stable across raid resets, so stale
       // memberships would let former participants read the next team's private
       // channel.
-      ...(raidEnded &&
-      newBattle.extraState.raidQuestId &&
-      humanUserIds.length > 0
+      ...(raidEnded && newBattle.extraState.raidQuestId && humanUserIds.length > 0
         ? [
             purgeRaidChatMembership(
               client,

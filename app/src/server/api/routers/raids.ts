@@ -1787,10 +1787,7 @@ const rollbackJoinRaidQueue = async ({
  * Keeps the policy in one place so future changes (ban-expiry, silenced
  * users, etc.) only need to be made here.
  */
-const guardNotBannedFromRaids = (
-  user: { isBanned: boolean },
-  action: string,
-) => {
+const guardNotBannedFromRaids = (user: { isBanned: boolean }, action: string) => {
   if (user.isBanned) {
     return errorResponse(`You are banned and cannot ${action}`);
   }
@@ -1813,11 +1810,12 @@ const rollbackStartRaidBattle = async ({
   // Release claim, reset statuses, drop queue rows, and purge chat memberships
   // for every attacker so a failed battle start doesn't leave anyone with
   // lingering access to the stable raid-chat conversation across raid resets.
+  // The parent mpvpBattleQueue row is deleted (gated on the claim ID) so a
+  // failed start doesn't leave a phantom empty team behind in getActiveRaidTeams.
   const raidChatConversationId = getRaidChatConversationId(raidId);
   await Promise.all([
     client
-      .update(mpvpBattleQueue)
-      .set({ battleId: null })
+      .delete(mpvpBattleQueue)
       .where(
         and(eq(mpvpBattleQueue.id, teamId), eq(mpvpBattleQueue.battleId, claimId)),
       ),
