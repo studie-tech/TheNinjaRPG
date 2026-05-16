@@ -187,5 +187,8 @@ describe("computeTemplateActivations", () => {
       },
     });
     expect(result).toHaveLength(1);
+    // Expiry must anchor to the slot start (04:00 + 2h = 06:00), not to `now`,
+    // so the next slot tick at 06:00 doesn't skip this boost type.
+    expect(result[0]?.newEndAt).toBe("2024-01-01T06:00:00.000Z");
   });
 });
