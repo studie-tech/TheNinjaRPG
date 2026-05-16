@@ -29,6 +29,7 @@ import { getServerPusher } from "@/libs/pusher";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { setActiveBoostExpression } from "@/server/utils/shrine";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
@@ -212,20 +213,15 @@ export const shrineRouter = createTRPCRouter({
       // Update active boosts — JSON_SET targets only the specific boost key to avoid
       // race conditions with concurrent cron writes to other boost keys.
       const boostExpiry = secondsFromNow(SHRINE_BOOST_DURATION_HOURS * 60 * 60);
-      const boostPath = `$.activeBoosts.${input.boostType}`;
 
       const updateRes = await ctx.drizzle
         .update(village)
         .set({
           tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
-          shrineSettings: sql`JSON_SET(
-            JSON_SET(
-              COALESCE(${village.shrineSettings}, JSON_OBJECT()),
-              '$.activeBoosts',
-              COALESCE(JSON_EXTRACT(${village.shrineSettings}, '$.activeBoosts'), JSON_OBJECT())
-            ),
-            ${boostPath}, ${boostExpiry.toISOString()}
-          )`,
+          shrineSettings: setActiveBoostExpression(
+            input.boostType,
+            boostExpiry.toISOString(),
+          ),
         })
         .where(
           and(eq(village.id, user.villageId), gte(village.tokens, SHRINE_BOOST_COST)),
