@@ -100,12 +100,12 @@ export const updateBattle = async (
   // the same tick.
   // raidEnded: raid is over for ANY reason on this battle — boss kill OR full team wipe.
   const raidBossDefeated = !!result && isRaidBossDefeated(newBattle);
+  const humanFighters = newBattle.usersState.filter((u) => !u.isAi && !u.isSummon);
   const raidTeamWiped =
     !!result &&
     newBattle.battleType === "RAID" &&
-    newBattle.usersState
-      .filter((u) => !u.isAi && !u.isSummon)
-      .every((u) => !stillInBattle(u, newBattle.usersEffects));
+    humanFighters.length > 0 &&
+    humanFighters.every((u) => !stillInBattle(u, newBattle.usersEffects));
   const battleOver =
     !!result &&
     (result.friendsLeft + result.targetsLeft === 0 ||
