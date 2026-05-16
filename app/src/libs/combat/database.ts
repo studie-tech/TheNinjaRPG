@@ -184,13 +184,15 @@ export const updateBattle = async (
             ),
           ]
         : []),
-      // When raid boss is defeated, release all non-acting teammates from BATTLE status.
-      // updateUser only handles the acting player, so teammates would be stuck otherwise.
+      // When a raid ends (boss defeated OR team wipe), release all non-acting
+      // teammates from BATTLE status. updateUser only handles the acting player,
+      // so teammates would be stuck pointing at a deleted battle row otherwise —
+      // readyToQueue hard-blocks BATTLE status and would lock them out.
       // Mirror the pool sync (curHealth/curStamina/curChakra) the acting user gets so
       // teammates who took damage don't revert to pre-battle pool values on release.
       // Mirror the HOSPITALIZED handling from updateUser: teammates whose curHealth
       // dropped to 0 from boss AoE must be sent to the hospital, not released as AWAKE.
-      ...(raidBossDefeated ? humanTeammates : [])
+      ...(raidBossDefeated || raidTeamWiped ? humanTeammates : [])
         .filter((u) => u.userId !== userId)
         .map((teammate) => {
           const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
