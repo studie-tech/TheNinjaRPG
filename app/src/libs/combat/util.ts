@@ -2458,33 +2458,8 @@ export const getAffectedTiles = (info: {
   const radius = action.range;
   const green = new Set<TerrainHex>();
   const red = new Set<TerrainHex>();
-  // Only the two-line wall traversals can yield the same coordinate twice
-  // (both lines start at `b`). For every other method a single `grid.traverse`
-  // call visits each hex at most once, so we skip the coord-key dedup overhead
-  // on the hot rendering/targeting path.
-  const needsDedup =
-    action.method === "AOE_WALL_SHOOT" || action.method === "AOE_LARGE_WALL_SHOOT";
-  const seenTiles = needsDedup ? new Set<string>() : null;
   const user = users.find((u) => u.userId === userId);
   let tiles: Grid<TerrainHex> | undefined;
-
-  const addAffectedTile = (
-    target: TerrainHex,
-    getIsValid: () => boolean,
-    options?: { skipRed?: boolean },
-  ) => {
-    if (seenTiles) {
-      const key = `${target.col},${target.row}`;
-      if (seenTiles.has(key)) return;
-      seenTiles.add(key);
-    }
-
-    if (getIsValid()) {
-      green.add(target);
-    } else if (!options?.skipRed) {
-      red.add(target);
-    }
-  };
 
   // Get all ground effects which are barriers
   const barriers = info.ground.filter((g) => g.type === "barrier");
@@ -2573,19 +2548,19 @@ export const getAffectedTiles = (info: {
     if (tiles) tiles = tiles.filter((t) => t !== a);
   } else if (action.method === "ALL") {
     grid.forEach((target) => {
-      addAffectedTile(
-        target,
-        () => isValidMove({ action, target, user, users, barriers, clicked: b }),
-        { skipRed: true },
-      );
+      if (isValidMove({ action, target, user, users, barriers, clicked: b })) {
+        green.add(target);
+      }
     });
   }
 
   // Return green for valid moves and red for unvalid moves
   tiles?.forEach((target) => {
-    addAffectedTile(target, () =>
-      isValidMove({ action, target, user, users, barriers, clicked: b }),
-    );
+    if (isValidMove({ action, target, user, users, barriers, clicked: b })) {
+      green.add(target);
+    } else {
+      red.add(target);
+    }
   });
 
   return { green, red };
