@@ -553,6 +553,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                   userId={userData.userId}
                   userInQueue={userInSelectedRaidQueue}
                   userTeamIsClaiming={userQueueIsClaiming}
+                  isBanned={userData.isBanned}
                   onJoinTeam={handleJoinQueue}
                   onCreateTeam={() => handleJoinQueue()}
                   onLeave={handleLeaveQueue}
@@ -567,7 +568,15 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                     Click the button below to prepare for battle. This will clear any
                     stuck status before joining the queue.
                   </p>
-                  <Button onClick={() => readyToQueue()} disabled={readyPending}>
+                  <Button
+                    onClick={() => readyToQueue()}
+                    disabled={readyPending || userData.isBanned}
+                    title={
+                      userData.isBanned
+                        ? "You are banned and cannot queue for raids"
+                        : undefined
+                    }
+                  >
                     <Swords className="mr-2 h-4 w-4" />
                     {readyPending ? "Preparing..." : "Ready to Queue"}
                   </Button>
@@ -909,6 +918,7 @@ interface RaidTeamsDisplayProps {
   userId: string;
   userInQueue: boolean;
   userTeamIsClaiming: boolean;
+  isBanned: boolean;
   onJoinTeam: (teamId: string) => void;
   onCreateTeam: () => void;
   onLeave: () => void;
@@ -924,6 +934,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
   userId,
   userInQueue,
   userTeamIsClaiming,
+  isBanned,
   onJoinTeam,
   onCreateTeam,
   onLeave,
@@ -934,6 +945,9 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
 }) => {
   // Check if user can create a new team
   const canCreateNewTeam = activeTeams.length < maxTeams && !userInQueue;
+  const banTooltip = isBanned
+    ? "You are banned and cannot participate in raids"
+    : undefined;
 
   return (
     <div className="space-y-4">
@@ -946,7 +960,12 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
           </span>
         </div>
         {canCreateNewTeam && (
-          <Button size="sm" onClick={onCreateTeam} disabled={isJoining}>
+          <Button
+            size="sm"
+            onClick={onCreateTeam}
+            disabled={isJoining || isBanned}
+            title={banTooltip}
+          >
             <Swords className="mr-2 h-4 w-4" />
             {isJoining ? "Creating..." : "Create Team"}
           </Button>
@@ -960,7 +979,11 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
             No active teams. Create a team to start fighting the raid boss!
           </p>
           {!userInQueue && (
-            <Button onClick={onCreateTeam} disabled={isJoining}>
+            <Button
+              onClick={onCreateTeam}
+              disabled={isJoining || isBanned}
+              title={banTooltip}
+            >
               <Swords className="mr-2 h-4 w-4" />
               {isJoining ? "Creating..." : "Create Team"}
             </Button>
@@ -1013,7 +1036,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                   {Array.from({ length: emptySlots }).map((_, emptyIdx) => (
                     <RaidEmptySlot
                       key={`empty-slot-${team.id}-${emptyIdx}`}
-                      canJoin={team.canJoin && !userInQueue}
+                      canJoin={team.canJoin && !userInQueue && !isBanned}
                       onJoin={() => onJoinTeam(team.id)}
                       isJoining={isJoining}
                     />
@@ -1042,7 +1065,12 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                       </Button>
 
                       {isUserLeader && !userTeamIsClaiming && (
-                        <Button size="sm" onClick={onStart} disabled={isStarting}>
+                        <Button
+                          size="sm"
+                          onClick={onStart}
+                          disabled={isStarting || isBanned}
+                          title={banTooltip}
+                        >
                           {isStarting ? (
                             <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                           ) : (
@@ -1062,7 +1090,8 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                       size="sm"
                       variant="secondary"
                       onClick={() => onJoinTeam(team.id)}
-                      disabled={isJoining}
+                      disabled={isJoining || isBanned}
+                      title={banTooltip}
                     >
                       <Users className="mr-1 h-4 w-4" />
                       {isJoining ? "Joining..." : "Join Team"}
