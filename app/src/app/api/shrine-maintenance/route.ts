@@ -22,7 +22,10 @@ import {
 } from "@/libs/gamesettings";
 import { fetchVillages } from "@/server/api/routers/village";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
-import { setActiveBoostExpression } from "@/server/utils/shrine";
+import {
+  mergeActiveBoostsExpression,
+  setActiveBoostExpression,
+} from "@/server/utils/shrine";
 import {
   getCurrentSlotBoundary,
   getSlotIndex,
@@ -310,7 +313,11 @@ async function runShrineBoostTick(
     const villageData = villageMap.get(villageId);
     const settings = villageData?.shrineSettings as ShrineSettings | null;
     const currentBoostsBase = { ...(settings?.activeBoosts ?? {}) };
-    let hasBaseChanges = false;
+    const removeKeys: BoostTemplateEntry["boostType"][] = [];
+    const upserts: {
+      boostType: BoostTemplateEntry["boostType"];
+      endAt: string;
+    }[] = [];
 
     // Remove expired boosts
     const expired = expiredByVillage.get(villageId);
@@ -318,7 +325,7 @@ async function runShrineBoostTick(
       for (const boostType of expired) {
         if (boostType in currentBoostsBase) {
           delete currentBoostsBase[boostType];
-          hasBaseChanges = true;
+          removeKeys.push(boostType as BoostTemplateEntry["boostType"]);
         }
       }
     }
@@ -329,18 +336,23 @@ async function runShrineBoostTick(
       const newEndAt = endAt.toISOString();
       if (currentBoostsBase[boostType] !== newEndAt) {
         currentBoostsBase[boostType] = newEndAt;
-        hasBaseChanges = true;
+        upserts.push({
+          boostType: boostType as BoostTemplateEntry["boostType"],
+          endAt: newEndAt,
+        });
         activeUpdated++;
       }
     }
 
-    // Base update (always succeeds, no CAS): expiry cleanup + scheduled boosts
-    if (hasBaseChanges) {
+    // Base update (always succeeds, no CAS): expiry cleanup + scheduled boosts.
+    // Uses surgical JSON_REMOVE/JSON_SET so sibling keys written by concurrent
+    // writers (Kage activateBoost, AI defender updates) are preserved.
+    if (removeKeys.length > 0 || upserts.length > 0) {
       baseUpdates.push(
         drizzleDB
           .update(village)
           .set({
-            shrineSettings: withUpdatedBoosts(currentBoostsBase),
+            shrineSettings: mergeActiveBoostsExpression({ removeKeys, upserts }),
           })
           .where(eq(village.id, villageId)),
       );
@@ -366,9 +378,8 @@ async function runShrineBoostTick(
   }
 
   // Round 1: base updates always succeed (no CAS guard) — ensures expiry cleanup is committed.
-  // We must await this fully before dispatching template UPDATEs, otherwise withUpdatedBoosts
-  // (which writes the entire activeBoosts blob via CAST(... AS JSON)) can race with and clobber
-  // a template-written key that was deducted from tokens via CAS.
+  // Awaited before Round 2 so same-key ordering holds: Round 2 may upsert a key Round 1
+  // just removed, and parallelising the two rounds could let the activation be deleted.
   await Promise.all(baseUpdates);
 
   // Round 2: template CAS updates run in parallel with the expired-schedule DELETE.
@@ -485,16 +496,4 @@ export async function runStaleShrineLobbyCleanup(
     lobbiesCleared: deleteResult.rowsAffected ?? 0,
     usersReset: resetResult.rowsAffected ?? 0,
   };
-}
-
-/** Builds a JSON_SET expression that overwrites only $.activeBoosts, leaving every
- *  other shrineSettings key untouched. Critical for not clobbering concurrent
- *  AI defender or boost-template writes that target other keys on the same column. */
-function withUpdatedBoosts(
-  activeBoosts: Record<string, string>,
-): ReturnType<typeof sql> {
-  return sql`JSON_SET(
-    COALESCE(${village.shrineSettings}, JSON_OBJECT()),
-    '$.activeBoosts', CAST(${JSON.stringify(activeBoosts)} AS JSON)
-  )`;
 }
