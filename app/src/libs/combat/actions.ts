@@ -27,6 +27,7 @@ import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
 import { getPower, realizeTag, updateStatUsage } from "@/libs/combat/tags";
 import type {
   BasicActions,
+  BattleEffect,
   BattleUserItem,
   BattleUserJutsu,
   BattleUserState,
@@ -724,16 +725,15 @@ export const insertAction = (info: {
     const barrierAttacks = new Set<string>();
     // Path finder on grid
     const aStar = new PathCalculator(grid);
+    // Skip per-tile A* pathfinding when no barriers exist on the field
+    const hasBarriers = groundEffects.some((g) => g.type === "barrier");
+    const EMPTY_BARRIER_RESULT = { barriers: [] as BattleEffect[], totalAbsorb: 0 };
     // For each affected tile, apply the effects
     affectedTiles.forEach((tile) => {
       // Calculate how many barriers are between origin & target
-      const { barriers, totalAbsorb } = getBarriersBetween(
-        actorId,
-        aStar,
-        groundEffects,
-        userHex,
-        tile,
-      );
+      const { barriers, totalAbsorb } = hasBarriers
+        ? getBarriersBetween(actorId, aStar, groundEffects, userHex, tile)
+        : EMPTY_BARRIER_RESULT;
 
       // ADD EFFECTS
       if (action.target === "GROUND" || action.target === "EMPTY_GROUND") {
