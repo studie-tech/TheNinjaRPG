@@ -256,6 +256,18 @@ export const updateBattle = async (
           });
         });
     }
+
+    // Nudge each human teammate's user channel so any open /combat tab
+    // invalidates getBattle/getUser immediately on raid end. Without this the
+    // acting user (and any teammate not the one who pressed an action) keeps
+    // showing the old battle map and `Status: BATTLE` until the next poll.
+    if (pusher && raidEnded) {
+      humanTeammates
+        .filter((u) => !u.fledBattle)
+        .forEach((teammate) => {
+          void pusher.trigger(teammate.userId, "event", { type: "battleEnded" });
+        });
+    }
   } else {
     const result = await client
       .update(battle)
