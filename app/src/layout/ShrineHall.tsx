@@ -3,7 +3,7 @@
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, Clock, Coins, Shield } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ import {
   getDaysHoursMinutesSeconds,
   getSlotIndex,
   getTimeLeftStr,
+  isNewSlotDue,
 } from "@/utils/time";
 import type { BoostTemplateEntry } from "@/validators/shrine";
 
@@ -349,6 +350,20 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
     }
     prevActiveBoostTypesRef.current = currentTypes;
   }, [nowMs, user.village?.shrineSettings?.activeBoosts]);
+
+  // When a UTC slot boundary just passed, the maintenance cron may have auto-activated
+  // a template boost. Refetch the user so activeBoosts updates and the toast effect above
+  // can fire. Global tRPC uses staleTime: Infinity, so without this nothing refreshes.
+  // Gated on template presence so the hot path scales with template users, not all viewers.
+  const invalidateUser = useCallback(
+    () => utils.profile.getUser.invalidate(),
+    [utils.profile.getUser],
+  );
+  useInvalidateOnSlotBoundary(
+    nowMs,
+    !!user.village?.shrineSettings?.boostTemplate?.length,
+    invalidateUser,
+  );
 
   if (!sectorData) return <Loader explanation="Loading shrine data" />;
 
@@ -851,6 +866,25 @@ const useUtcNow = (enabled: boolean, intervalMs: number) => {
   }, [enabled, intervalMs]);
 
   return now;
+};
+
+/**
+ * Calls `invalidate` once each time a 2-hour UTC slot boundary is crossed while
+ * `nowMs` ticks forward. Used to refresh server state (e.g. cron-activated boosts)
+ * that won't otherwise update with the global `staleTime: Infinity` cache.
+ */
+const useInvalidateOnSlotBoundary = (
+  nowMs: number,
+  enabled: boolean,
+  invalidate: () => unknown,
+) => {
+  const prevTickMsRef = useRef<number>(nowMs);
+  useEffect(() => {
+    if (enabled && isNewSlotDue(new Date(nowMs), new Date(prevTickMsRef.current))) {
+      void invalidate();
+    }
+    prevTickMsRef.current = nowMs;
+  }, [nowMs, enabled, invalidate]);
 };
 
 /* -------------------------------------------------------------------------- */

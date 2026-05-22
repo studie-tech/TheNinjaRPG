@@ -23,6 +23,7 @@ import {
 import { fetchVillages } from "@/server/api/routers/village";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
 import {
+  boostInactivePredicate,
   mergeActiveBoostsExpression,
   setActiveBoostExpression,
 } from "@/server/utils/shrine";
@@ -389,6 +390,7 @@ async function runShrineBoostTick(
   type ScheduleType = (typeof expiredSchedules)[number];
   const expiredScheduleIds = expiredSchedules.map((s: ScheduleType) => s.id);
 
+  const nowIso = now.toISOString();
   const [templateUpdateResults] = await Promise.all([
     Promise.all(
       pendingTemplateActivations.map(({ villageId, boostType, newEndAt }) =>
@@ -399,7 +401,11 @@ async function runShrineBoostTick(
             tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
           })
           .where(
-            and(eq(village.id, villageId), gte(village.tokens, SHRINE_BOOST_COST)),
+            and(
+              eq(village.id, villageId),
+              gte(village.tokens, SHRINE_BOOST_COST),
+              boostInactivePredicate(boostType, nowIso),
+            ),
           ),
       ),
     ),
