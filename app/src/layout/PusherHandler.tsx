@@ -91,6 +91,10 @@ export const usePusherHandler = (
             router.push("/combat");
             void utils.combat.getBattle.invalidate();
           }
+        } else if (data.type === "battleEnded") {
+          await utils.profile.getUser.cancel();
+          void utils.profile.getUser.invalidate();
+          void utils.combat.getBattle.invalidate();
         } else if (data.type === "newInbox") {
           if (!pathname.includes("/inbox")) {
             showMutationToast({
