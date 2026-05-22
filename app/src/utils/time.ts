@@ -327,10 +327,15 @@ export const getFirstOfNextMonth = (): Date => {
 };
 
 /**
- * Returns the slot index (0–11) for a given UTC hour.
+ * Returns the slot index (0–11) for a given UTC hour (0–23).
  * Each slot covers a 2-hour window: slot 0 = 00:00–02:00, slot 11 = 22:00–00:00.
+ * Non-finite, negative, or out-of-range inputs are clamped so the result is
+ * always within 0–11.
  */
-export const getSlotIndex = (utcHour: number): number => Math.floor(utcHour / 2);
+export const getSlotIndex = (utcHour: number): number => {
+  if (!Number.isFinite(utcHour)) return 0;
+  return Math.min(11, Math.max(0, Math.floor(utcHour / 2)));
+};
 
 /**
  * Returns a Date set to the start of the 2-hour UTC slot containing `d`.

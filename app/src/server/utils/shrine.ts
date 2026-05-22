@@ -54,3 +54,18 @@ export function setActiveBoostExpression(
     upserts: [{ boostType, endAt: newEndAt }],
   });
 }
+
+/**
+ * CAS predicate that is TRUE iff village.shrineSettings.$.activeBoosts.<boostType>
+ * is missing or already expired at `nowIso`. Used inside UPDATE WHERE clauses to
+ * make boost activation idempotent — concurrent writers (cron template tick vs
+ * Kage manual activateBoost, or any retried cron) cannot double-deduct tokens
+ * or overwrite a still-live boost.
+ */
+export function boostInactivePredicate(
+  boostType: SHRINE_BOOST_TYPE,
+  nowIso: string,
+): ReturnType<typeof sql> {
+  const path = `$.activeBoosts.${boostType}`;
+  return sql`(JSON_EXTRACT(${village.shrineSettings}, ${path}) IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(${village.shrineSettings}, ${path})) < ${nowIso})`;
+}

@@ -29,7 +29,10 @@ import { getServerPusher } from "@/libs/pusher";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
-import { setActiveBoostExpression } from "@/server/utils/shrine";
+import {
+  boostInactivePredicate,
+  setActiveBoostExpression,
+} from "@/server/utils/shrine";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
@@ -224,11 +227,17 @@ export const shrineRouter = createTRPCRouter({
           ),
         })
         .where(
-          and(eq(village.id, user.villageId), gte(village.tokens, SHRINE_BOOST_COST)),
+          and(
+            eq(village.id, user.villageId),
+            gte(village.tokens, SHRINE_BOOST_COST),
+            boostInactivePredicate(input.boostType, new Date().toISOString()),
+          ),
         );
 
       if (updateRes.rowsAffected === 0) {
-        return errorResponse("Not enough village tokens to activate boost");
+        return errorResponse(
+          "Could not activate boost — insufficient tokens or boost already active",
+        );
       }
 
       return {
