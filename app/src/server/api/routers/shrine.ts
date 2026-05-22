@@ -36,7 +36,7 @@ import {
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
-import { boostTemplateSchema } from "@/validators/shrine";
+import { getBoostTemplateSchema, setBoostTemplateSchema } from "@/validators/shrine";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -459,7 +459,7 @@ export const shrineRouter = createTRPCRouter({
   // Get the boost template for a village
   getBoostTemplate: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get boost template for a village" } })
-    .input(z.object({ villageId: z.string() }))
+    .input(getBoostTemplateSchema)
     .query(async ({ ctx, input }) => {
       const [user, targetVillage] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -500,7 +500,7 @@ export const shrineRouter = createTRPCRouter({
         description: "Set boost template for a village (Kage/Elder only)",
       },
     })
-    .input(z.object({ villageId: z.string(), template: boostTemplateSchema }))
+    .input(setBoostTemplateSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [{ user }, level3Shrines] = await Promise.all([

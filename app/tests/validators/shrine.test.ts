@@ -50,10 +50,9 @@ describe("boostTemplateSchema", () => {
     }));
 
     const result = boostTemplateSchema.safeParse(entries);
+    const messages = result.error?.issues.map((i) => i.message) ?? [];
 
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.message).toBe(
-      "Template cannot exceed 420 entries",
-    );
+    expect(messages).toContain("Template cannot exceed 420 entries");
   });
 });
