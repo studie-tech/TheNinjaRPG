@@ -42,6 +42,7 @@ import {
   actionHasSharedCooldown,
   calcApReduction,
   calcPoolCost,
+  findBarrier,
   getAffectedTiles,
   getBarriersBetween,
   getEffectiveCurPool,
@@ -824,24 +825,46 @@ export const insertAction = (info: {
                 appliedEffects.add(idx);
               }
             }
-            // Extra: If no target, check if there is a barrier & apply damage only
+            // Extra: apply damage to barriers
             if (BARRIER_DAMAGE_TAG_TYPES.has(tag.type)) {
-              barriers.forEach((barrier) => {
-                const idx = `${barrier.id}-${tagIndex}`;
-                if (!barrierAttacks.has(idx)) {
-                  barrierAttacks.add(idx);
-                  targetUsernames.push("barrier");
-                  targetGenders.push("it");
-                  const barrierEffect = structuredClone(effect);
-                  barrierEffect.targetType = "barrier";
-                  barrierEffect.targetId = barrier.id;
-                  barrierEffect.id = nanoid();
-                  if ("absorbPercentage" in barrier) {
-                    barrierEffect.barrierAbsorb = barrier.absorbPercentage;
+              if (action.method === "SINGLE") {
+                // SINGLE: damage barriers on the A* path (projectile-in-path)
+                barriers.forEach((barrier) => {
+                  const idx = `${barrier.id}-${tagIndex}`;
+                  if (!barrierAttacks.has(idx)) {
+                    barrierAttacks.add(idx);
+                    targetUsernames.push("barrier");
+                    targetGenders.push("it");
+                    const barrierEffect = structuredClone(effect);
+                    barrierEffect.targetType = "barrier";
+                    barrierEffect.targetId = barrier.id;
+                    barrierEffect.id = nanoid();
+                    if ("absorbPercentage" in barrier) {
+                      barrierEffect.barrierAbsorb = barrier.absorbPercentage;
+                    }
+                    usersEffects.push(barrierEffect);
                   }
-                  usersEffects.push(barrierEffect);
+                });
+              } else {
+                // AOE: only damage barriers directly ON this affected tile
+                const barrierOnTile = findBarrier(groundEffects, tile.col, tile.row);
+                if (barrierOnTile && barrierOnTile.creatorId !== actorId) {
+                  const idx = `${barrierOnTile.id}-${tagIndex}`;
+                  if (!barrierAttacks.has(idx)) {
+                    barrierAttacks.add(idx);
+                    targetUsernames.push("barrier");
+                    targetGenders.push("it");
+                    const barrierEffect = structuredClone(effect);
+                    barrierEffect.targetType = "barrier";
+                    barrierEffect.targetId = barrierOnTile.id;
+                    barrierEffect.id = nanoid();
+                    if ("absorbPercentage" in barrierOnTile) {
+                      barrierEffect.barrierAbsorb = barrierOnTile.absorbPercentage;
+                    }
+                    usersEffects.push(barrierEffect);
+                  }
                 }
-              });
+              }
             }
           }
         });
