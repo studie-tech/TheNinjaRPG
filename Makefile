@@ -88,7 +88,7 @@ bun: install ## Execute bun command in local development.
 start: loadEnv # Run Next.js server, access at http://127.0.0.1:PORT
 	@echo "${GREEN}start on port $(PORT)${RESET}"
 	rm -rf app/.next
-	@make bun -- OPENAI_API_KEY=$(OPENAI_API_KEY) dev -p $(PORT)
+	@FORCE_COLOR=1 make bun -- OPENAI_API_KEY=$(OPENAI_API_KEY) dev -p $(PORT) 2>&1 | grep -v "Ignoring Unsecure message event"
 
 .PHONY: build
 build: # Build Next.js app

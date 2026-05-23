@@ -43,9 +43,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <TrpcClientProvider>
               <UserContextProvider>
                 <InstallPromptProvider>
-                  {env.NEXT_PUBLIC_MEASUREMENT_ID && (
-                    <GoogleTagManager gtmId={env.NEXT_PUBLIC_MEASUREMENT_ID} />
-                  )}
+                  {env.NEXT_PUBLIC_MEASUREMENT_ID &&
+                    process.env.NODE_ENV === "production" && (
+                      <GoogleTagManager gtmId={env.NEXT_PUBLIC_MEASUREMENT_ID} />
+                    )}
                   <LayoutSwitcher>{children}</LayoutSwitcher>
                   <Toaster />
                   <AcceptWarning />
