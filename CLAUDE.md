@@ -23,6 +23,12 @@ All make commands should be run from the root directory `/`, not from `/app`.
 - `make bun add [package]` - Add new package dependency
 - `make install` - Install dependencies with bun
 
+**PlanetScale Databases (organization: `nano-mathias`):**
+
+- **Production**: database `tnr`, branch `main-1`
+- **Development**: database `tnr`, branch `development`
+- **AI deployment** (separate app): database `theninja-ai`, branch `main`
+
 ## Architecture Overview
 
 This is a Next.js 15 application using the App Router, built as a browser-based RPG game called "TheNinja-RPG". The stack includes:

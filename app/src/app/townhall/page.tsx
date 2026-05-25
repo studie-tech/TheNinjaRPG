@@ -1253,8 +1253,8 @@ const AllianceList: React.FC<{
         </Select>
       </div>
 
-      {/* Entity List */}
-      <div className="space-y-2">
+      {/* Entity Grid */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {filteredEntities.map((entity) => (
           <AllianceCard
             key={entity.id}
@@ -1270,7 +1270,7 @@ const AllianceList: React.FC<{
           />
         ))}
         {filteredEntities.length === 0 && (
-          <p className="py-4 text-center text-muted-foreground">
+          <p className="col-span-full py-4 text-center text-muted-foreground">
             No villages or factions found
           </p>
         )}
@@ -1327,48 +1327,50 @@ const AllianceCard: React.FC<{
   };
 
   return (
-    <div className="flex items-center justify-between rounded-lg border p-3">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col rounded-lg border p-3">
+      <div className="grid grid-cols-[2fr_3fr_3fr] items-center gap-2">
         <Image
           src={entity.villageGraphic}
           alt={entity.name}
-          width={40}
-          height={40}
-          className="rounded"
+          width={80}
+          height={80}
+          className="aspect-square w-full rounded object-cover"
         />
-        <div>
-          <p className="font-bold">{entity.name}</p>
-          <div className="flex gap-1">
-            <span className={`rounded px-2 py-0.5 text-xs ${typeColors}`}>
+        <div className="min-w-0">
+          <p className="truncate font-bold text-sm">{entity.name}</p>
+          <div className="flex flex-wrap gap-1">
+            <span className={`rounded px-1.5 py-0.5 text-xs ${typeColors}`}>
               {typeLabel}
             </span>
-            <span className={`rounded px-2 py-0.5 text-xs ${statusColors[status]}`}>
+            <span className={`rounded px-1.5 py-0.5 text-xs ${statusColors[status]}`}>
               {capitalizeFirstLetter(status)}
             </span>
           </div>
           {entity.kage && (
-            <div className="mt-1 flex items-center gap-1 text-muted-foreground text-xs">
-              <AvatarImage
-                href={entity.kage.avatar}
-                alt={entity.kage.username}
-                userId={entity.kage.userId}
-                size={20}
-                hover_effect={false}
-                priority={false}
-              />
-              <Link
-                href={`/userid/${entity.kage.userId}`}
-                className="hover:text-foreground"
-              >
-                {isVillage ? "Kage" : "Leader"}: {entity.kage.username}
-              </Link>
-            </div>
+            <p className="mt-1 truncate text-muted-foreground text-xs">
+              {isVillage ? "Kage" : "Leader"}: {entity.kage.username}
+            </p>
           )}
         </div>
+        {entity.kage ? (
+          <Link href={`/userid/${entity.kage.userId}`}>
+            <AvatarImage
+              href={entity.kage.avatar}
+              alt={entity.kage.username}
+              userId={entity.kage.userId}
+              size={120}
+              hover_effect={true}
+              priority={false}
+              className="!m-0 !w-full !max-w-full !rounded-md"
+            />
+          </Link>
+        ) : (
+          <div />
+        )}
       </div>
 
       {isKage && !isLoading && (
-        <div className="flex gap-2">
+        <div className="mt-2 flex gap-2 border-t pt-2">
           {ally.success && status === "NEUTRAL" && (
             <Button
               size="sm"

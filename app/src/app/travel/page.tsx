@@ -472,7 +472,7 @@ export default function Travel() {
           highlights={villages}
           usersHighlighted={trackedBounties}
           userLocation={true}
-          showOwnership={showOwnership}
+          showOwnership={showOwnership && !userData?.tutorialOn}
           focusSector={focusSector}
           focusSectorLabel="Target"
           onTileClick={(sector) => {
@@ -483,7 +483,14 @@ export default function Travel() {
         />
       )
     );
-  }, [villages, globe, trackedBounties, showOwnership, focusSector]);
+  }, [
+    villages,
+    globe,
+    trackedBounties,
+    showOwnership,
+    focusSector,
+    userData?.tutorialOn,
+  ]);
 
   // Battle scene
   const SectorComponent = useMemo(() => {

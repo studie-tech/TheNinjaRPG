@@ -227,6 +227,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     id: "KvGkDox06od5iiFaGAzkM",
     title: "Item shop",
     elementIds: [
+      "tutorial-itemshop-item",
       "tutorial-itemshop-confirmPurchase-proceed",
       `tutorial-combat-action-${TUTORIAL_ITEM_ID}`,
     ],

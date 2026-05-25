@@ -24,6 +24,7 @@ import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   ItemTypes,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
+  TUTORIAL_ITEM_ID,
 } from "@/drizzle/constants";
 import type { Item, ItemType } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -629,7 +630,15 @@ const Shop: React.FC<ShopProps> = (props) => {
                           userData.reputationPoints >= repsDue &&
                           userData.seichiSilver >= seichiDue;
                         return (
-                          <li key={row.id} className="h-full min-h-0 min-w-0">
+                          <li
+                            key={row.id}
+                            id={
+                              row.id === TUTORIAL_ITEM_ID && !isOpen
+                                ? "tutorial-itemshop-item"
+                                : undefined
+                            }
+                            className="h-full min-h-0 min-w-0"
+                          >
                             <ShopCatalogCard
                               item={row}
                               selected={item?.id === row.id}

@@ -113,16 +113,23 @@ export const drawQuest = (info: {
         } else if (objective.task === "dialog") {
           markerSprite.material.color.setHex(0x6666a3);
         }
-        Object.assign(markerSprite.scale, new Vector3(h, h * 1.2, 1));
-        Object.assign(markerSprite.position, new Vector3(w / 2, h * 0.9, USER_LAYER));
+        const s = 1.5;
+        Object.assign(markerSprite.scale, new Vector3(h * s, h * 1.2 * s, 1));
+        Object.assign(
+          markerSprite.position,
+          new Vector3(w / 2, h * 0.9 * s, USER_LAYER),
+        );
         mesh.add(markerSprite);
         // White background for items
         const alphaMap = loadTexture(IMG_SECTOR_USER_SPRITE_MASK);
         const alphaMaterial = new SpriteMaterial({ map: alphaMap, alphaMap: alphaMap });
         const alphaSprite = new Sprite(alphaMaterial);
         alphaSprite.material.color.setHex(0xd3d9ea);
-        Object.assign(alphaSprite.scale, new Vector3(h * 0.8, h * 0.8, 1));
-        Object.assign(alphaSprite.position, new Vector3(w / 2, h * 1.0, USER_LAYER));
+        Object.assign(alphaSprite.scale, new Vector3(h * 0.8 * s, h * 0.8 * s, 1));
+        Object.assign(
+          alphaSprite.position,
+          new Vector3(w / 2, h * 1.0 * s, USER_LAYER),
+        );
         mesh.add(alphaSprite);
         // Image Sprite
         const map = loadTexture(
@@ -132,8 +139,8 @@ export const drawQuest = (info: {
         map.minFilter = LinearFilter;
         const material = new SpriteMaterial({ map: map, alphaMap: alphaMap });
         const sprite = new Sprite(material);
-        Object.assign(sprite.scale, new Vector3(h * 0.8, h * 0.8, 1));
-        Object.assign(sprite.position, new Vector3(w / 2, h * 1.0, USER_LAYER));
+        Object.assign(sprite.scale, new Vector3(h * 0.8 * s, h * 0.8 * s, 1));
+        Object.assign(sprite.position, new Vector3(w / 2, h * 1.0 * s, USER_LAYER));
         mesh.add(sprite);
         group_quest.add(mesh);
         meshCache.set(objective.id, mesh);
@@ -143,10 +150,15 @@ export const drawQuest = (info: {
       drawnIds.add(objective.id);
     });
 
-  // Hide all user counters which are not used anymore
+  // Wobble animation: horizontal sway every 2 seconds
+  const t = Date.now() / 1000;
+  const cycle = t % 2;
+  const wobbleX = cycle < 1 ? Math.sin(cycle * Math.PI * 4) * (1 - cycle) : 0;
   group_quest.children.forEach((object) => {
     if (!drawnIds.has(object.name)) {
       object.visible = false;
+    } else {
+      object.position.x += wobbleX * 2;
     }
   });
   profiler.reportCount("sector_quests", drawnIds.size);

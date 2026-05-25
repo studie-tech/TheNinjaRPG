@@ -837,8 +837,8 @@ const Sector: React.FC<SectorProps> = (props) => {
       scene.add(group_tiles);
       scene.add(group_edges);
       scene.add(group_assets);
-      scene.add(group_quest);
       scene.add(group_users);
+      scene.add(group_quest);
       scene.add(group_interaction);
 
       // Capture clicks to update move direction
