@@ -171,6 +171,15 @@ export function computeTemplateActivations(params: {
   if (template.length === 0) return [];
 
   const currentDayOfWeek = now.getUTCDay();
+  // Only the slot containing `now` is activated; earlier slots whose boundaries
+  // were crossed during a >2h cron outage are intentionally NOT backfilled.
+  // A boost lasts SHRINE_BOOST_DURATION_HOURS (2h) — exactly one slot — so any
+  // earlier missed slot's window (slotStart + 2h <= the current slot start <= now)
+  // has already fully elapsed; activating it would spend SHRINE_BOOST_COST tokens
+  // on an immediately-expired boost. This holds only while the boost duration
+  // equals the slot length: if SHRINE_BOOST_DURATION_HOURS ever exceeds it,
+  // earlier missed slots could still have live windows and this would need to
+  // walk every boundary in (prevTime, now] and emit per-slot, slot-anchored expiries.
   const currentSlotIndex = getSlotIndex(now.getUTCHours());
 
   // Find matching template entries for current slot
