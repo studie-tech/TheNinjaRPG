@@ -352,7 +352,15 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                     <UploadButton
                       endpoint="anbuUploader"
                       onClientUploadComplete={(res) => {
-                        const url = res?.[0]?.serverData?.fileUrl;
+                        const serverData = res?.[0]?.serverData;
+                        if (serverData?.error) {
+                          showMutationToast({
+                            success: false,
+                            message: serverData.error,
+                          });
+                          return;
+                        }
+                        const url = serverData?.fileUrl;
                         if (url) {
                           renameForm.setValue("image", url, {
                             shouldDirty: true,

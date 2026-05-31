@@ -3,10 +3,11 @@ import { and, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { FileRouter } from "uploadthing/next";
 import { createUploadthing } from "uploadthing/next";
-import { UploadThingError } from "uploadthing/server";
+import { UploadThingError, UTApi } from "uploadthing/server";
 import { z } from "zod";
 import type { FederalStatuses } from "@/drizzle/constants";
 import { historicalAvatar, userData, userUpload } from "@/drizzle/schema";
+import { classifyNsfwImage } from "@/libs/moderator";
 import { createThumbnail } from "@/libs/replicate";
 import { insertHistoricalSoundEffect } from "@/server/api/routers/audio";
 import { drizzleDB } from "@/server/db";
@@ -22,6 +23,29 @@ const f = createUploadthing({
     };
   },
 });
+
+type ImageUploadResult = { fileUrl: string; error?: string };
+type UploadedImage = { key: string; ufsUrl: string };
+
+const moderateUploadedImage = async (
+  file: UploadedImage,
+): Promise<ImageUploadResult> => {
+  const utapi = new UTApi();
+  try {
+    const moderation = await classifyNsfwImage(file.ufsUrl);
+    if (moderation.isNsfw) {
+      await utapi.deleteFiles(file.key);
+      return { fileUrl: "", error: moderation.reason };
+    }
+  } catch {
+    await utapi.deleteFiles(file.key);
+    return {
+      fileUrl: "",
+      error: "Unable to validate uploaded image. Please try another image.",
+    };
+  }
+  return { fileUrl: file.ufsUrl };
+};
 
 /**
  * Check if user is admin
@@ -52,14 +76,10 @@ const adminMiddleware = async () => {
 export const ourFileRouter = {
   imageUploader: f({ image: { maxFileSize: "64KB" } })
     .middleware(async () => await avatarMiddleware())
-    .onUploadComplete(({ file }) => {
-      return { fileUrl: file.ufsUrl };
-    }),
+    .onUploadComplete(async ({ file }) => moderateUploadedImage(file)),
   conceptArtFrameUploader: f({ image: { maxFileSize: "256KB" } })
     .middleware(async () => await avatarMiddleware())
-    .onUploadComplete(({ file }) => {
-      return { fileUrl: file.ufsUrl };
-    }),
+    .onUploadComplete(async ({ file }) => moderateUploadedImage(file)),
   modelUploader: f({ "model/gltf-binary": { maxFileSize: "256KB" } })
     .middleware(async () => await avatarMiddleware())
     .onUploadComplete(({ file }) => {
@@ -68,45 +88,62 @@ export const ourFileRouter = {
   tavernUploader: f({ image: { maxFileSize: "64KB" } })
     .middleware(async () => await avatarMiddleware())
     .onUploadComplete(async ({ metadata, file }) => {
+      const moderation = await moderateUploadedImage(file);
+      if (moderation.error) return moderation;
       await drizzleDB.insert(userUpload).values({
         id: nanoid(),
         userId: metadata.userId,
         imageUrl: file.ufsUrl,
       });
-      return { fileUrl: file.ufsUrl };
+      return moderation;
     }),
   anbuUploader: f({ image: { maxFileSize: "512KB" } })
     .middleware(async () => await avatarMiddleware())
     .onUploadComplete(async ({ file }) => {
+      const moderation = await moderateUploadedImage(file);
+      if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, "anbu-image", true);
-      return { fileUrl: file.ufsUrl };
+      return moderation;
     }),
   clanUploader: f({ image: { maxFileSize: "512KB" } })
     .middleware(async () => await avatarMiddleware())
     .onUploadComplete(async ({ file }) => {
+      const moderation = await moderateUploadedImage(file);
+      if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, "clan-image", true);
-      return { fileUrl: file.ufsUrl };
+      return moderation;
     }),
   tournamentUploader: f({ image: { maxFileSize: "512KB" } })
     .middleware(async () => await avatarMiddleware())
     .onUploadComplete(async ({ file }) => {
+      const moderation = await moderateUploadedImage(file);
+      if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, "tournament-image", true);
-      return { fileUrl: file.ufsUrl };
+      return moderation;
     }),
   avatarNormalUploader: f({ image: { maxFileSize: "512KB" } })
     .middleware(async () => await avatarMiddleware("NORMAL"))
     .onUploadComplete(async ({ metadata, file }) => {
+      const moderation = await moderateUploadedImage(file);
+      if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, metadata.userId, true);
+      return moderation;
     }),
   avatarSilverUploader: f({ image: { maxFileSize: "1MB" } })
     .middleware(async () => await avatarMiddleware("SILVER"))
     .onUploadComplete(async ({ metadata, file }) => {
+      const moderation = await moderateUploadedImage(file);
+      if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, metadata.userId, true);
+      return moderation;
     }),
   avatarGoldUploader: f({ image: { maxFileSize: "2MB" } })
     .middleware(async () => await avatarMiddleware("GOLD"))
     .onUploadComplete(async ({ metadata, file }) => {
+      const moderation = await moderateUploadedImage(file);
+      if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, metadata.userId, true);
+      return moderation;
     }),
   backgroundImageUploader: f({ image: { maxFileSize: "8MB" } })
     .middleware(adminMiddleware) // Use the adminMiddleware here

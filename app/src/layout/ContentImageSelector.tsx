@@ -157,7 +157,15 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                   <UploadButton
                     endpoint="imageUploader"
                     onClientUploadComplete={(res) => {
-                      const url = res?.[0]?.ufsUrl;
+                      const serverData = res?.[0]?.serverData;
+                      if (serverData?.error) {
+                        showMutationToast({
+                          success: false,
+                          message: serverData.error,
+                        });
+                        return;
+                      }
+                      const url = serverData?.fileUrl;
                       if (url) {
                         onUploadComplete(url);
                         setIsModalOpen(false);

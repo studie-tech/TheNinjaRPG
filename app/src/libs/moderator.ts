@@ -478,6 +478,34 @@ Allowed: action/combat scenes, anime-style characters in appropriate clothing, f
 };
 
 /**
+ * Classify if an uploaded image contains unsafe content
+ * @param imageUrl - The public image URL to classify
+ * @returns Whether the image is NSFW and the reason
+ */
+export const classifyNsfwImage = async (
+  imageUrl: string,
+): Promise<{ isNsfw: boolean; reason: string }> => {
+  const moderation = await openai.moderations.create({
+    model: "omni-moderation-latest",
+    input: [{ type: "image_url", image_url: { url: imageUrl } }],
+  });
+  const result = moderation.results?.[0];
+  const flaggedCategories = result
+    ? Object.entries(result.categories)
+        .filter(([, flagged]) => flagged)
+        .map(([category]) => category)
+    : [];
+
+  return {
+    isNsfw: Boolean(result?.flagged),
+    reason:
+      flaggedCategories.length > 0
+        ? `Image flagged for: ${flaggedCategories.join(", ")}`
+        : "Image passed moderation",
+  };
+};
+
+/**
  * Validate a user update reason
  * @param update - The update to validate
  * @param reason - The reason for the update

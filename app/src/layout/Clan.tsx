@@ -994,7 +994,15 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                     <UploadButton
                       endpoint="clanUploader"
                       onClientUploadComplete={(res) => {
-                        const url = res?.[0]?.serverData?.fileUrl;
+                        const serverData = res?.[0]?.serverData;
+                        if (serverData?.error) {
+                          showMutationToast({
+                            success: false,
+                            message: serverData.error,
+                          });
+                          return;
+                        }
+                        const url = serverData?.fileUrl;
                         if (url) {
                           editForm.setValue("image", url, {
                             shouldDirty: true,

@@ -175,7 +175,15 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                     <UploadButton
                       endpoint="tournamentUploader"
                       onClientUploadComplete={(res) => {
-                        const url = res?.[0]?.serverData?.fileUrl;
+                        const serverData = res?.[0]?.serverData;
+                        if (serverData?.error) {
+                          showMutationToast({
+                            success: false,
+                            message: serverData.error,
+                          });
+                          return;
+                        }
+                        const url = serverData?.fileUrl;
                         if (url) {
                           createForm.setValue("image", url, {
                             shouldDirty: true,

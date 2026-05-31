@@ -1361,7 +1361,12 @@ const AvatarChange: React.FC = () => {
                 : "avatarGoldUploader"
           }
           onClientUploadComplete={(res) => {
-            if (res?.[0]?.url) {
+            const serverData = res?.[0]?.serverData;
+            if (serverData?.error) {
+              showMutationToast({ success: false, message: serverData.error });
+              return;
+            }
+            if (serverData?.fileUrl) {
               setTimeout(() => void utils.profile.getUser.invalidate(), 1000);
             }
           }}

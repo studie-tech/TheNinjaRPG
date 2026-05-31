@@ -106,8 +106,11 @@ const RichInput: React.FC<RichInputProps> = (props) => {
         if (!uploadedFile) {
           throw new Error("Upload failed - no response");
         }
+        if (uploadedFile.serverData?.error) {
+          throw new Error(uploadedFile.serverData.error);
+        }
 
-        const uploadUrl = uploadedFile.url;
+        const uploadUrl = uploadedFile.serverData?.fileUrl;
         if (!uploadUrl) {
           throw new Error("Upload failed - no URL returned");
         }
