@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import {
   canApproveApplications,
+  canDeleteConceptArt,
   canViewAllApplications,
   getApprovalGroup,
 } from "@/utils/permissions";
@@ -36,6 +37,17 @@ test("head leads may view all applications but cannot approve", () => {
   expect(canApproveApplications("HEAD_CONTENT")).toBe(false);
   expect(canApproveApplications("HEAD_EVENT")).toBe(false);
   expect(canApproveApplications("HEAD_MODERATOR")).toBe(false);
+});
+
+test("concept art delete permission is owner and admin roles only", () => {
+  expect(canDeleteConceptArt("USER")).toBe(false);
+  expect(canDeleteConceptArt("OWNER")).toBe(true);
+  expect(canDeleteConceptArt("CODING-ADMIN")).toBe(true);
+  expect(canDeleteConceptArt("CONTENT-ADMIN")).toBe(true);
+  expect(canDeleteConceptArt("EVENT-ADMIN")).toBe(true);
+  expect(canDeleteConceptArt("MODERATOR-ADMIN")).toBe(true);
+  expect(canDeleteConceptArt("HEAD_MODERATOR")).toBe(true);
+  expect(canDeleteConceptArt("MODERATOR")).toBe(false);
 });
 
 test("non-approval staff do not get application approval access", () => {

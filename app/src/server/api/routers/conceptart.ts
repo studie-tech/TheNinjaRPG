@@ -16,6 +16,7 @@ import {
   uploadCompletedVideo,
 } from "@/libs/replicate";
 import { fetchUser } from "@/routers/profile";
+import { canDeleteConceptArt } from "@/utils/permissions";
 import {
   conceptArtFilterSchema,
   conceptArtPromptSchema,
@@ -82,10 +83,15 @@ export const conceptartRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const result = await fetchImage(ctx.drizzle, input.id, ctx.userId);
+      const [result, user] = await Promise.all([
+        fetchImage(ctx.drizzle, input.id, ctx.userId),
+        fetchUser(ctx.drizzle, ctx.userId),
+      ]);
       // Guard
       if (!result) return errorResponse("Image not found");
-      if (result.userId !== ctx.userId) return errorResponse("Not authorized");
+      if (result.userId !== ctx.userId && !canDeleteConceptArt(user.role)) {
+        return errorResponse("Not authorized");
+      }
       // Mutate
       await ctx.drizzle.delete(conceptImage).where(eq(conceptImage.id, input.id));
       return { success: true, message: "Image deleted" };
