@@ -362,6 +362,17 @@ export const canDeleteComment = (user: UserData, commentAuthorId: string) => {
   );
 };
 
+export const canDeleteConceptArt = (role: UserRole) => {
+  return [
+    "OWNER",
+    "HEAD_MODERATOR",
+    "CODING-ADMIN",
+    "CONTENT-ADMIN",
+    "EVENT-ADMIN",
+    "MODERATOR-ADMIN",
+  ].includes(role);
+};
+
 export const canEscalateBan = (user: UserData, report: UserReport) => {
   return (
     !report.adminResolved &&

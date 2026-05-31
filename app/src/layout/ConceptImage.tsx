@@ -32,6 +32,7 @@ import Image from "@/layout/Image";
 import ReportUser from "@/layout/Report";
 import { showMutationToast } from "@/libs/toast";
 import type { ImageWithRelations } from "@/routers/conceptart";
+import { canDeleteConceptArt } from "@/utils/permissions";
 import { secondsPassed } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 
@@ -241,9 +242,10 @@ const ConceptImage: React.FC<InputProps> = (props) => {
           </div>
         )}
         <div className="absolute top-2 right-2">
-          {image.userId === user?.userId && (
+          {(image.userId === user?.userId ||
+            (user && canDeleteConceptArt(user.role))) && (
             <Trash2
-              className={`cursor-pointer text-white hover:fill-red-500 ${showDetails ? "h-6 w-6" : "h-4 w-4"}`}
+              className={`cursor-pointer text-white hover:fill-red-500 ${showDetails ? "h-7 w-7" : "h-5 w-5"}`}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
