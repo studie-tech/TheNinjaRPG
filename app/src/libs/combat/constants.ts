@@ -163,8 +163,3 @@ export const POST_PIERCE_TAGS: string[] = [
   "decreaseheal",
   "increaseheal",
 ];
-
-/** When true, performAction includes damage pipeline steps for browser console logging. */
-export const COMBAT_DAMAGE_DEBUG =
-  process.env.NODE_ENV === "development" ||
-  process.env.NEXT_PUBLIC_COMBAT_DAMAGE_DEBUG === "true";

@@ -11,7 +11,6 @@ import {
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
   POST_DAMAGE_MODIFIER_TYPES,
 } from "@/drizzle/constants";
-import { COMBAT_DAMAGE_DEBUG } from "@/libs/combat/constants";
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
 import {
@@ -401,9 +400,9 @@ export const applyEffects = (
     battleRound: battle.round,
     sealEffects,
     eligibilityById: damageModifierEligibilityById,
-    collectSteps: COMBAT_DAMAGE_DEBUG,
-    damageDebugLogs: COMBAT_DAMAGE_DEBUG ? damageDebugLogs : undefined,
-    damageDebugByEffectId: COMBAT_DAMAGE_DEBUG ? damageDebugByEffectId : undefined,
+    collectSteps: true,
+    damageDebugLogs,
+    damageDebugByEffectId,
   });
 
   const modifierInfoConsequences = new Map<string, Consequence>();
