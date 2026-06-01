@@ -1157,9 +1157,13 @@ export const performBattleAction = (props: {
   }
 
   // Apply relevant effects, and get back new state + active effects
-  const { newBattle, actionEffects } = applyEffects(battle, actorId, action);
+  const { newBattle, actionEffects, damageDebugLogs } = applyEffects(
+    battle,
+    actorId,
+    action,
+  );
 
-  return { newBattle, actionEffects };
+  return { newBattle, actionEffects, damageDebugLogs };
 };
 
 /**

@@ -565,3 +565,32 @@ export type ActionEffect = {
   color: "red" | "green" | "blue" | "yellow" | "purple" | "orange" | "pink" | "gray";
   types?: (GeneralType | StatType | ElementName | PoolType | ZodAllTags["type"])[];
 };
+
+export type DamagePacketStepModifier = {
+  effectId?: string;
+  type: string;
+  fromType?: string;
+  targetId?: string;
+  power: number;
+  ratio: number;
+  applied: boolean;
+  contribution?: string;
+  note?: string;
+};
+
+export type DamagePacketStep = {
+  label: string;
+  damage: number;
+  modifiers?: DamagePacketStepModifier[];
+};
+
+export type DamagePacketDebugLog = {
+  effectId: string;
+  attackerId: string;
+  defenderId: string;
+  kind: "damage" | "residual";
+  rawDamage: number;
+  pipelineDamage: number;
+  afterShields?: number;
+  steps: DamagePacketStep[];
+};

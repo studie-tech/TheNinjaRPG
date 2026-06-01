@@ -11,6 +11,7 @@ import {
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
   POST_DAMAGE_MODIFIER_TYPES,
 } from "@/drizzle/constants";
+import { COMBAT_DAMAGE_DEBUG } from "@/libs/combat/constants";
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
 import {
@@ -98,6 +99,9 @@ import type {
   CombatAction,
   CompleteBattle,
   Consequence,
+  DamagePacketDebugLog,
+  DamagePacketStep,
+  DamagePacketStepModifier,
   ExtraState,
   GroundEffect,
   PreBattleGearModifiers,
@@ -312,6 +316,8 @@ export const applyEffects = (
 
   // Book-keeping for damage and heal effects
   const consequences = new Map<string, Consequence>();
+  const damageDebugLogs: DamagePacketDebugLog[] = [];
+  const damageDebugByEffectId = new Map<string, DamagePacketDebugLog>();
 
   // Remember effects applied to different users, so that we only apply effects once
   const appliedEffects = new Set<string>();
@@ -395,6 +401,9 @@ export const applyEffects = (
     battleRound: battle.round,
     sealEffects,
     eligibilityById: damageModifierEligibilityById,
+    collectSteps: COMBAT_DAMAGE_DEBUG,
+    damageDebugLogs: COMBAT_DAMAGE_DEBUG ? damageDebugLogs : undefined,
+    damageDebugByEffectId: COMBAT_DAMAGE_DEBUG ? damageDebugByEffectId : undefined,
   });
 
   const modifierInfoConsequences = new Map<string, Consequence>();
@@ -525,9 +534,9 @@ export const applyEffects = (
   });
 
   // Apply consequences to users
-  Array.from(consequences.values())
+  Array.from(consequences.entries())
     // Before collapsing consequences, we process each consequence indicidually
-    .map((c) => {
+    .map(([effectId, c]) => {
       // State
       const user = newUsersState.find((u) => u.userId === c.userId);
       const target = newUsersState.find((u) => u.userId === c.targetId);
@@ -603,13 +612,17 @@ export const applyEffects = (
       // Store pre-shield damage for reflect/lifesteal/absorb calculations
       const preShieldDamage = c.damage ?? 0;
 
+      const debugLog = damageDebugByEffectId.get(effectId);
+
       // Adjust damages and reduce shields
       if (target && user) {
         if (c.damage && c.damage > 0) {
           c.damage = calcAdjustedDamage(target, c.damage, c.types);
+          if (debugLog) debugLog.afterShields = c.damage;
         }
         if (c.residual && c.residual > 0) {
           c.residual = calcAdjustedDamage(target, c.residual, c.types);
+          if (debugLog) debugLog.afterShields = c.residual;
         }
         if (c.wound && c.wound > 0) {
           c.wound = calcAdjustedDamage(target, c.wound, c.types);
@@ -905,6 +918,7 @@ export const applyEffects = (
       groundEffects: newGroundEffects,
     },
     actionEffects,
+    damageDebugLogs: damageDebugLogs.length > 0 ? damageDebugLogs : undefined,
   };
 };
 
@@ -1505,11 +1519,67 @@ type DamagePacketComputeContext = {
   battleRound: number;
   modifierLists?: DamagePacketModifierLists;
   sealEffects?: UserEffect[];
+  collectSteps?: boolean;
 };
+
+const recordDamageStep = (
+  steps: DamagePacketStep[] | undefined,
+  label: string,
+  damage: number,
+  modifiers?: DamagePacketStepModifier[],
+) => {
+  steps?.push({ label, damage, modifiers });
+};
+
+const modifierFromEffect = (
+  effect: UserEffect,
+  damageEffect: UserEffect,
+  applied: boolean,
+  opts?: {
+    note?: string;
+    contribution?: string;
+    power?: number;
+    ratio?: number;
+  },
+): DamagePacketStepModifier => {
+  const ratio = opts?.ratio ?? getEfficiencyRatio(damageEffect, effect);
+  const power = opts?.power ?? getPower(effect).power;
+  return {
+    effectId: effect.id,
+    type: effect.type,
+    fromType: effect.fromType,
+    targetId: effect.targetId,
+    power,
+    ratio,
+    applied,
+    note: opts?.note,
+    contribution: opts?.contribution,
+  };
+};
+
+const syntheticModifier = (
+  type: string,
+  power: number,
+  applied: boolean,
+  opts?: {
+    fromType?: string;
+    contribution?: string;
+    note?: string;
+    ratio?: number;
+  },
+): DamagePacketStepModifier => ({
+  type,
+  fromType: opts?.fromType,
+  power,
+  ratio: opts?.ratio ?? 1,
+  applied,
+  contribution: opts?.contribution,
+  note: opts?.note,
+});
 
 export const computeDamagePacket = (
   ctx: DamagePacketComputeContext,
-): { damage: number } => {
+): { damage: number; steps?: DamagePacketStep[] } => {
   const {
     damageEffect,
     usersEffects,
@@ -1532,110 +1602,477 @@ export const computeDamagePacket = (
   const defenderGear =
     preBattleGearModifiers[defenderId] ?? emptyPreBattleGearModifiers();
 
+  const steps = ctx.collectSteps ? ([] as DamagePacketStep[]) : undefined;
   let damage = ctx.rawDamage;
+  recordDamageStep(steps, "raw (before pipeline)", damage);
 
+  const stage1IncMods: DamagePacketStepModifier[] = [];
   for (const effect of modifierLists.stage1PreBattleIncreases) {
     const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
+    if (ratio === 0) {
+      stage1IncMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          note: "efficiency 0",
+          ratio: 0,
+        }),
+      );
+      continue;
+    }
     const { power } = getPower(effect);
-    damage *= 1 + (power / 100) * ratio;
+    const mult = 1 + (power / 100) * ratio;
+    damage *= mult;
+    stage1IncMods.push(
+      modifierFromEffect(effect, damageEffect, true, {
+        power,
+        ratio,
+        contribution: `×${mult.toFixed(4)}`,
+      }),
+    );
+  }
+  if (steps && stage1IncMods.length > 0) {
+    recordDamageStep(steps, "stage-1 % increases", damage, stage1IncMods);
   }
 
   const incPoints =
     OUT_OF_COMBAT_BASE_DAMAGE_INCREASE +
     attackerGear.incDamageGivenFromGear +
     defenderGear.incDamageTakenFromGear;
+  const oocIncMods: DamagePacketStepModifier[] = [
+    syntheticModifier(
+      "base OOC damage increase",
+      OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
+      true,
+      {
+        contribution: `+${OUT_OF_COMBAT_BASE_DAMAGE_INCREASE} pp`,
+      },
+    ),
+  ];
+  if (attackerGear.incDamageGivenFromGear > 0) {
+    oocIncMods.push(
+      syntheticModifier(
+        "gear: inc damage given",
+        attackerGear.incDamageGivenFromGear,
+        true,
+        {
+          fromType: "gear",
+          contribution: `+${attackerGear.incDamageGivenFromGear} pp`,
+        },
+      ),
+    );
+  }
+  if (defenderGear.incDamageTakenFromGear > 0) {
+    oocIncMods.push(
+      syntheticModifier(
+        "gear: inc damage taken",
+        defenderGear.incDamageTakenFromGear,
+        true,
+        {
+          fromType: "gear",
+          contribution: `+${defenderGear.incDamageTakenFromGear} pp`,
+        },
+      ),
+    );
+  }
   damage *= 1 + incPoints / 100;
+  recordDamageStep(steps, "OOC + gear % increases", damage, oocIncMods);
 
+  const inBattleIncMods: DamagePacketStepModifier[] = [];
   for (const effect of modifierLists.inBattleIncreases) {
     const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
+    if (ratio === 0) {
+      inBattleIncMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          note: "efficiency 0",
+          ratio: 0,
+        }),
+      );
+      continue;
+    }
     const { power } = getPower(effect);
-    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
-    damage *= 1 + (power / 100) * ratio;
+    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) {
+      inBattleIncMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          power,
+          ratio,
+          note: "bloodline type mismatch",
+        }),
+      );
+      continue;
+    }
+    const mult = 1 + (power / 100) * ratio;
+    damage *= mult;
+    inBattleIncMods.push(
+      modifierFromEffect(effect, damageEffect, true, {
+        power,
+        ratio,
+        contribution: `×${mult.toFixed(4)}`,
+      }),
+    );
+  }
+  if (steps && inBattleIncMods.length > 0) {
+    recordDamageStep(steps, "in-combat % increases", damage, inBattleIncMods);
   }
 
   const baseDamageAfterBoosts = damage;
+  recordDamageStep(steps, "after all % increases (DR baseline)", baseDamageAfterBoosts);
 
   const drPoints =
     OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION +
     defenderGear.drTakenFromGear +
     attackerGear.drGivenFromGear;
+  const oocDrMods: DamagePacketStepModifier[] = [
+    syntheticModifier(
+      "base OOC damage reduction",
+      OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
+      true,
+      {
+        contribution: `+${OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION} pp`,
+      },
+    ),
+  ];
+  if (defenderGear.drTakenFromGear > 0) {
+    oocDrMods.push(
+      syntheticModifier("gear: DR taken", defenderGear.drTakenFromGear, true, {
+        fromType: "gear",
+        contribution: `+${defenderGear.drTakenFromGear} pp`,
+      }),
+    );
+  }
+  if (attackerGear.drGivenFromGear > 0) {
+    oocDrMods.push(
+      syntheticModifier("gear: DR given", attackerGear.drGivenFromGear, true, {
+        fromType: "gear",
+        contribution: `+${attackerGear.drGivenFromGear} pp`,
+      }),
+    );
+  }
   damage = applyPercentageDrMultiplier(damage, drPoints / 100);
+  recordDamageStep(steps, "OOC + gear % DR", damage, oocDrMods);
 
+  const stage1DrMods: DamagePacketStepModifier[] = [];
   for (const effect of modifierLists.stage1PreBattleDrEffects) {
     const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
+    if (ratio === 0) {
+      stage1DrMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          note: "efficiency 0",
+          ratio: 0,
+        }),
+      );
+      continue;
+    }
     const power = getSignedDrModifierPower(effect);
-    damage = applyPercentageDrMultiplier(damage, (Math.abs(power) / 100) * ratio);
+    const drRate = (Math.abs(power) / 100) * ratio;
+    const before = damage;
+    damage = applyPercentageDrMultiplier(damage, drRate);
+    stage1DrMods.push(
+      modifierFromEffect(effect, damageEffect, true, {
+        power,
+        ratio,
+        contribution: `${before.toFixed(2)} → ${damage.toFixed(2)}`,
+      }),
+    );
+  }
+  if (steps && stage1DrMods.length > 0) {
+    recordDamageStep(steps, "stage-1 % DR", damage, stage1DrMods);
   }
 
+  const inCombatDrMods: DamagePacketStepModifier[] = [];
   for (const effect of modifierLists.inCombatDrEffects) {
     const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
+    if (ratio === 0) {
+      inCombatDrMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          note: "efficiency 0",
+          ratio: 0,
+        }),
+      );
+      continue;
+    }
     const power = getSignedDrModifierPower(effect);
-    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
-    damage = applyPercentageDrMultiplier(damage, (Math.abs(power) / 100) * ratio);
+    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) {
+      inCombatDrMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          power,
+          ratio,
+          note: "bloodline type mismatch",
+        }),
+      );
+      continue;
+    }
+    const drRate = (Math.abs(power) / 100) * ratio;
+    const before = damage;
+    damage = applyPercentageDrMultiplier(damage, drRate);
+    inCombatDrMods.push(
+      modifierFromEffect(effect, damageEffect, true, {
+        power,
+        ratio,
+        contribution: `${before.toFixed(2)} → ${damage.toFixed(2)}`,
+      }),
+    );
+  }
+  if (steps && inCombatDrMods.length > 0) {
+    recordDamageStep(steps, "in-combat % DR", damage, inCombatDrMods);
   }
 
   const minDamage = baseDamageAfterBoosts * (1 - DMG_REDUCTION_CAP);
   damage = Math.max(damage, minDamage);
+  recordDamageStep(
+    steps,
+    `${(DMG_REDUCTION_CAP * 100).toFixed(0)}% DR cap floor (min ${minDamage.toFixed(2)})`,
+    damage,
+  );
 
+  const staticIncMods: DamagePacketStepModifier[] = [];
   let totalStaticIncrease = 0;
   for (const effect of modifierLists.staticIncEffects) {
-    if (sealCheck(effect, sealEffects)) continue;
+    if (sealCheck(effect, sealEffects)) {
+      staticIncMods.push(
+        modifierFromEffect(effect, damageEffect, false, { note: "sealed" }),
+      );
+      continue;
+    }
     const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
+    if (ratio === 0) {
+      staticIncMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          note: "efficiency 0",
+          ratio: 0,
+        }),
+      );
+      continue;
+    }
     const { power } = getPower(effect);
     if (
       isBloodlineDamageMod(effect) &&
       !allowBloodlineDamageModifier(damageEffect, effect, power)
     ) {
+      staticIncMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          power,
+          ratio,
+          note: "bloodline type mismatch",
+        }),
+      );
       continue;
     }
-    totalStaticIncrease += power * ratio;
+    const flat = power * ratio;
+    totalStaticIncrease += flat;
+    staticIncMods.push(
+      modifierFromEffect(effect, damageEffect, true, {
+        power,
+        ratio,
+        contribution: `+${flat.toFixed(2)}`,
+      }),
+    );
   }
   damage += totalStaticIncrease;
+  if (steps && staticIncMods.length > 0) {
+    recordDamageStep(steps, "static increases", damage, staticIncMods);
+  }
 
+  const staticDrMods: DamagePacketStepModifier[] = [];
   let totalStaticReduction = 0;
   for (const effect of modifierLists.staticDrEffects) {
-    if (sealCheck(effect, sealEffects)) continue;
+    if (sealCheck(effect, sealEffects)) {
+      staticDrMods.push(
+        modifierFromEffect(effect, damageEffect, false, { note: "sealed" }),
+      );
+      continue;
+    }
     const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
+    if (ratio === 0) {
+      staticDrMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          note: "efficiency 0",
+          ratio: 0,
+        }),
+      );
+      continue;
+    }
     const { power } = getPower(effect);
-    totalStaticReduction += Math.abs(power) * ratio;
+    const flat = Math.abs(power) * ratio;
+    totalStaticReduction += flat;
+    staticDrMods.push(
+      modifierFromEffect(effect, damageEffect, true, {
+        power,
+        ratio,
+        contribution: `-${flat.toFixed(2)}`,
+      }),
+    );
   }
   damage = Math.max(minDamage, damage - totalStaticReduction);
+  if (steps && staticDrMods.length > 0) {
+    recordDamageStep(steps, "static DR", damage, staticDrMods);
+  }
 
   const keystoneIncPoints =
     (attackerGear.incDamageGivenFromKeystone ?? 0) +
     (defenderGear.incDamageTakenFromKeystone ?? 0);
-  damage *= 1 + keystoneIncPoints / 100;
+  const keystoneIncMods: DamagePacketStepModifier[] = [];
+  if ((attackerGear.incDamageGivenFromKeystone ?? 0) > 0) {
+    keystoneIncMods.push(
+      syntheticModifier(
+        "keystone: inc damage given",
+        attackerGear.incDamageGivenFromKeystone ?? 0,
+        true,
+        {
+          fromType: "keystone",
+          contribution: `+${attackerGear.incDamageGivenFromKeystone} pp`,
+        },
+      ),
+    );
+  }
+  if ((defenderGear.incDamageTakenFromKeystone ?? 0) > 0) {
+    keystoneIncMods.push(
+      syntheticModifier(
+        "keystone: inc damage taken",
+        defenderGear.incDamageTakenFromKeystone ?? 0,
+        true,
+        {
+          fromType: "keystone",
+          contribution: `+${defenderGear.incDamageTakenFromKeystone} pp`,
+        },
+      ),
+    );
+  }
+  if (keystoneIncPoints !== 0) {
+    damage *= 1 + keystoneIncPoints / 100;
+    recordDamageStep(steps, "keystone % increases", damage, keystoneIncMods);
+  }
 
   const keystoneDrPoints =
     (defenderGear.drTakenFromKeystone ?? 0) + (attackerGear.drGivenFromKeystone ?? 0);
-  damage = applyPercentageDrMultiplier(damage, keystoneDrPoints / 100);
-  damage = Math.max(minDamage, damage);
+  const keystoneDrMods: DamagePacketStepModifier[] = [];
+  if ((defenderGear.drTakenFromKeystone ?? 0) > 0) {
+    keystoneDrMods.push(
+      syntheticModifier(
+        "keystone: DR taken",
+        defenderGear.drTakenFromKeystone ?? 0,
+        true,
+        {
+          fromType: "keystone",
+          contribution: `+${defenderGear.drTakenFromKeystone} pp`,
+        },
+      ),
+    );
+  }
+  if ((attackerGear.drGivenFromKeystone ?? 0) > 0) {
+    keystoneDrMods.push(
+      syntheticModifier(
+        "keystone: DR given",
+        attackerGear.drGivenFromKeystone ?? 0,
+        true,
+        {
+          fromType: "keystone",
+          contribution: `+${attackerGear.drGivenFromKeystone} pp`,
+        },
+      ),
+    );
+  }
+  if (keystoneDrPoints !== 0) {
+    const before = damage;
+    damage = applyPercentageDrMultiplier(damage, keystoneDrPoints / 100);
+    damage = Math.max(minDamage, damage);
+    keystoneDrMods.forEach((m) => {
+      if (m.applied) {
+        m.contribution = `${before.toFixed(2)} → ${damage.toFixed(2)}`;
+      }
+    });
+    recordDamageStep(steps, "keystone % DR", damage, keystoneDrMods);
+  }
 
+  const bloodlineIncMods: DamagePacketStepModifier[] = [];
   for (const effect of modifierLists.bloodlineIncreases) {
-    if (sealCheck(effect, sealEffects)) continue;
+    if (sealCheck(effect, sealEffects)) {
+      bloodlineIncMods.push(
+        modifierFromEffect(effect, damageEffect, false, { note: "sealed" }),
+      );
+      continue;
+    }
     const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
+    if (ratio === 0) {
+      bloodlineIncMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          note: "efficiency 0",
+          ratio: 0,
+        }),
+      );
+      continue;
+    }
     const { power } = getPower(effect);
-    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
-    damage *= 1 + (power / 100) * ratio;
+    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) {
+      bloodlineIncMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          power,
+          ratio,
+          note: "bloodline type mismatch",
+        }),
+      );
+      continue;
+    }
+    const mult = 1 + (power / 100) * ratio;
+    damage *= mult;
+    bloodlineIncMods.push(
+      modifierFromEffect(effect, damageEffect, true, {
+        power,
+        ratio,
+        contribution: `×${mult.toFixed(4)}`,
+      }),
+    );
+  }
+  if (steps && bloodlineIncMods.length > 0) {
+    recordDamageStep(steps, "bloodline % increases", damage, bloodlineIncMods);
   }
 
+  const bloodlineDrMods: DamagePacketStepModifier[] = [];
   for (const effect of modifierLists.bloodlineDrEffects) {
-    if (sealCheck(effect, sealEffects)) continue;
+    if (sealCheck(effect, sealEffects)) {
+      bloodlineDrMods.push(
+        modifierFromEffect(effect, damageEffect, false, { note: "sealed" }),
+      );
+      continue;
+    }
     const ratio = getEfficiencyRatio(damageEffect, effect);
-    if (ratio === 0) continue;
+    if (ratio === 0) {
+      bloodlineDrMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          note: "efficiency 0",
+          ratio: 0,
+        }),
+      );
+      continue;
+    }
     const power = getSignedDrModifierPower(effect);
-    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
-    damage = applyPercentageDrMultiplier(damage, (Math.abs(power) / 100) * ratio);
+    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) {
+      bloodlineDrMods.push(
+        modifierFromEffect(effect, damageEffect, false, {
+          power,
+          ratio,
+          note: "bloodline type mismatch",
+        }),
+      );
+      continue;
+    }
+    const drRate = (Math.abs(power) / 100) * ratio;
+    const before = damage;
+    damage = applyPercentageDrMultiplier(damage, drRate);
+    bloodlineDrMods.push(
+      modifierFromEffect(effect, damageEffect, true, {
+        power,
+        ratio,
+        contribution: `${before.toFixed(2)} → ${damage.toFixed(2)}`,
+      }),
+    );
+  }
+  if (steps && bloodlineDrMods.length > 0) {
+    recordDamageStep(steps, "bloodline % DR", damage, bloodlineDrMods);
   }
 
-  return { damage: Math.max(minDamage, damage) };
+  const finalDamage = Math.max(minDamage, damage);
+  recordDamageStep(steps, "pipeline final", finalDamage);
+
+  return { damage: finalDamage, steps };
 };
 
 export const applyDamageModifierPipelineToConsequences = ({
@@ -1646,6 +2083,9 @@ export const applyDamageModifierPipelineToConsequences = ({
   sealEffects: sealEffectsInput,
   eligibilityById: eligibilityByIdInput,
   usersStateById,
+  collectSteps,
+  damageDebugLogs,
+  damageDebugByEffectId,
 }: {
   consequences: Map<string, Consequence>;
   usersEffects: UserEffect[];
@@ -1655,6 +2095,9 @@ export const applyDamageModifierPipelineToConsequences = ({
   eligibilityById?: Map<string, DamageModifierEligibility>;
   /** @deprecated Prefer passing eligibilityById from applyEffects. */
   usersStateById?: Map<string, BattleUserState>;
+  collectSteps?: boolean;
+  damageDebugLogs?: DamagePacketDebugLog[];
+  damageDebugByEffectId?: Map<string, DamagePacketDebugLog>;
 }) => {
   const preBattleGearModifiers = extraState.preBattleGearModifiers ?? {};
   const sealEffects = sealEffectsInput ?? getActiveSealEffects(usersEffects);
@@ -1689,7 +2132,7 @@ export const applyDamageModifierPipelineToConsequences = ({
     }
 
     const rawDamage = consequence[damageKey] ?? 0;
-    const { damage } = computeDamagePacket({
+    const { damage, steps } = computeDamagePacket({
       rawDamage,
       damageEffect: dmgEffect,
       usersEffects,
@@ -1699,9 +2142,24 @@ export const applyDamageModifierPipelineToConsequences = ({
       battleRound,
       modifierLists,
       sealEffects,
+      collectSteps,
     });
 
     consequence[damageKey] = damage;
     consequence.baseDamageForModifiers ??= rawDamage;
+
+    if (damageDebugLogs && steps) {
+      const log: DamagePacketDebugLog = {
+        effectId,
+        attackerId: consequence.userId,
+        defenderId: consequence.targetId,
+        kind: damageKey,
+        rawDamage,
+        pipelineDamage: damage,
+        steps,
+      };
+      damageDebugLogs.push(log);
+      damageDebugByEffectId?.set(effectId, log);
+    }
   }
 };

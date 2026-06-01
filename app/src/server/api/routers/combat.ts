@@ -126,6 +126,7 @@ import type {
   BattleWar,
   CombatQueryUser,
   CompleteBattle,
+  DamagePacketDebugLog,
   ExtraState,
   GroundEffect,
   ProcessedItem,
@@ -559,6 +560,7 @@ export const combatRouter = createTRPCRouter({
           actionId?: string;
           userId?: string;
         }[] = [];
+        const damageDebugLogs: DamagePacketDebugLog[] = [];
 
         // Remember original values for round & activeUserId
         const originalRound = battle.round;
@@ -626,6 +628,9 @@ export const combatRouter = createTRPCRouter({
               newBattle = newState.newBattle;
               actionPerformed = true;
               actionEffects.push(...newState.actionEffects);
+              if (newState.damageDebugLogs) {
+                damageDebugLogs.push(...newState.damageDebugLogs);
+              }
               battleDescriptions.push(action.battleDescription);
             } catch (error) {
               let notification = "Unknown Error";
@@ -765,6 +770,7 @@ export const combatRouter = createTRPCRouter({
               logEntries: logEntries,
               battleUpdate: newMaskedBattle,
               updatedQuestIds: updatedQuestIds,
+              ...(damageDebugLogs.length > 0 ? { damageDebugLogs } : {}),
             };
           } catch (e) {
             console.error("Error updating battle state:", e);

@@ -353,6 +353,29 @@ describe("computeDamagePacket", () => {
     expect(damage).toBeCloseTo(404, 2);
   });
 
+  it("records pipeline steps when collectSteps is enabled", () => {
+    const { damage, steps } = computeDamagePacket({
+      rawDamage: 100,
+      damageEffect: makeDamageEffect(),
+      usersEffects: [],
+      attackerId: "attacker",
+      defenderId: "defender",
+      battleRound: 1,
+      preBattleGearModifiers: {
+        attacker: gearMods(),
+        defender: gearMods(),
+      },
+      collectSteps: true,
+    });
+
+    expect(steps?.length).toBeGreaterThan(2);
+    expect(steps?.[0]?.label).toContain("raw");
+    expect(steps?.at(-1)?.label).toBe("pipeline final");
+    expect(steps?.at(-1)?.damage).toBe(damage);
+    const oocInc = steps?.find((s) => s.label === "OOC + gear % increases");
+    expect(oocInc?.modifiers?.some((m) => m.type === "base OOC damage increase")).toBe(true);
+  });
+
   it("applies stage-1 skill DR after pre-battle pool without negative intermediate damage", () => {
     const skillDr = makeModifierEffect({
       id: "skill-dr",

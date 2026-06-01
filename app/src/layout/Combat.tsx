@@ -28,6 +28,7 @@ import Modal2 from "@/layout/Modal2";
 import WebGlError from "@/layout/WebGLError";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
+import { logDamagePacketDebug } from "@/libs/combat/damageDebug";
 import type {
   BattleState,
   CachedIntersections,
@@ -277,6 +278,9 @@ const Combat: React.FC<CombatProps> = (props) => {
       setBattleState({ battle: battleRef.current, result: null, isPending: true });
     },
     onSuccess: async (data) => {
+      if (data.damageDebugLogs?.length) {
+        logDamagePacketDebug(data.damageDebugLogs);
+      }
       // Notifications (if any)
       if (data.notification) {
         showMutationToast({ success: true, message: data.notification });
