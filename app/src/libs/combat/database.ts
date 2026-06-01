@@ -1150,7 +1150,7 @@ export const updateUser = async (
     // Check if user has active PvP quests with pvp_kills or defeat_opponents objectives
     // Get user quests from extraState (static data that doesn't change during battle)
     const activeQuests = getUserQuestsFromBattle(curBattle, user.controllerId).filter(
-      (q) => q.quest?.content !== null,
+      (q) => q.quest?.content?.objectives != null,
     );
     const activePvpQuests = activeQuests.filter((q) => q.questType === "pvp");
     const hasPvpKillsInPvpQuest = activePvpQuests.some((uq) =>

@@ -71,7 +71,7 @@ export const filterQuestTrackersForDbPersist = (
 ) => {
   const inMemoryOnlyAchievementQuestIds = new Set(
     user.userQuests
-      .filter((uq) => uq.quest.questType === "achievement" && uq.id === uq.questId)
+      .filter((uq) => uq.quest?.questType === "achievement" && uq.id === uq.questId)
       .map((uq) => uq.questId),
   );
   return trackers.filter((t) => !inMemoryOnlyAchievementQuestIds.has(t.id));
@@ -313,7 +313,7 @@ export const getReward = (
 
     // Chunin mission experience bonus (≤ level 40)
     if (
-      !!user.senseiId &&
+      user.senseiId &&
       user.level <= SENSEI_MAX_STUDENT_LEVEL &&
       userQuest.quest.questType === "mission"
     ) {
