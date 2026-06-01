@@ -22,7 +22,12 @@ import {
   UserRanks,
   WeaponTypes,
 } from "@/drizzle/constants";
-import type { Item, UserData } from "@/drizzle/schema";
+import type { battleAction, Item, UserData } from "@/drizzle/schema";
+import type {
+  CombatResult,
+  DamagePacketDebugLog,
+  ReturnedBattleDynamic,
+} from "@/libs/combat/types";
 import { DateTimeRegExp } from "@/utils/regex";
 import { rewardFields } from "@/validators/rewards";
 
@@ -38,6 +43,50 @@ export const performActionSchema = z.object({
   version: z.number(),
 });
 export type PerformActionType = z.infer<typeof performActionSchema>;
+
+const damagePacketStepModifierSchema = z.object({
+  effectId: z.string().optional(),
+  type: z.string(),
+  fromType: z.string().optional(),
+  targetId: z.string().optional(),
+  power: z.number(),
+  ratio: z.number(),
+  applied: z.boolean(),
+  contribution: z.string().optional(),
+  note: z.string().optional(),
+});
+
+const damagePacketStepSchema = z.object({
+  label: z.string(),
+  damage: z.number(),
+  modifiers: z.array(damagePacketStepModifierSchema).optional(),
+});
+
+const damagePacketDebugLogSchema = z.object({
+  effectId: z.string(),
+  attackerId: z.string(),
+  defenderId: z.string(),
+  kind: z.enum(["damage", "residual"]),
+  rawDamage: z.number(),
+  pipelineDamage: z.number(),
+  afterShields: z.number().optional(),
+  steps: z.array(damagePacketStepSchema),
+}) satisfies z.ZodType<DamagePacketDebugLog>;
+
+type BattleActionLogEntry = typeof battleAction.$inferSelect;
+
+/** Unified performAction response — all fields optional for every return path. */
+export const performActionResponseSchema = z.object({
+  updateClient: z.boolean().optional(),
+  notification: z.string().optional(),
+  result: z.custom<CombatResult | null>().optional(),
+  logEntries: z.custom<BattleActionLogEntry[]>().optional(),
+  battleUpdate: z.custom<ReturnedBattleDynamic>().optional(),
+  updatedQuestIds: z.array(z.string()).optional(),
+  damageDebugLogs: z.array(damagePacketDebugLogSchema).optional(),
+});
+
+export type PerformActionResponse = z.infer<typeof performActionResponseSchema>;
 
 /**
  * Convenience method for a string with a default value

@@ -191,6 +191,7 @@ import type { StatSchemaType } from "@/validators/combat";
 import {
   BarrierTag,
   DecreaseDamageTakenTag,
+  performActionResponseSchema,
   performActionSchema,
   statSchema,
 } from "@/validators/combat";
@@ -529,6 +530,7 @@ export const combatRouter = createTRPCRouter({
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(performActionSchema)
+    .output(performActionResponseSchema)
     .mutation(async ({ ctx, input }) => {
       Sentry.profiler.startProfiler();
       if (debug) console.log("============ Performing action ============");
