@@ -58,7 +58,7 @@ import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUnique } from "@/utils/grouping";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { canChangeContent, canSwapBloodline } from "@/utils/permissions";
+import { canChangeContent, canSwapBloodline, isStaffMember } from "@/utils/permissions";
 import {
   DAY_S,
   getDaysHoursMinutesSeconds,
@@ -183,7 +183,7 @@ export const bloodlineRouter = createTRPCRouter({
       const freeSwapsUsed = recentSwaps.length;
       const rawRemaining = freeSwaps - freeSwapsUsed;
       const freeSwapsRemaining = Math.max(0, rawRemaining);
-      const isFree = freeSwapsRemaining > 0;
+      const isFree = freeSwapsRemaining > 0 || isStaffMember(user);
       // Return
       return { isFree, freeSwapsUsed, freeSwapsRemaining, recentSwaps };
     }),
@@ -227,7 +227,8 @@ export const bloodlineRouter = createTRPCRouter({
       const freeSwaps = getFreeBloodlineSwaps(federalStatus);
       const freeSwapsUsed = monthlySwaps.length;
       const hasFreeSwapAvailable = freeSwapsUsed < freeSwaps;
-      const isFreeSwap = hasFreeSwapAvailable;
+      const isStaffFreeSwap = isStaffMember(user);
+      const isFreeSwap = hasFreeSwapAvailable || isStaffFreeSwap;
 
       if (!isFreeSwap && COST_SWAP_BLOODLINE > user.reputationPoints) {
         return errorResponse("Not enough reputation points");
@@ -254,27 +255,33 @@ export const bloodlineRouter = createTRPCRouter({
       // Update bloodline (this creates the "Bloodline Changed" log entry)
       const swapCost = isFreeSwap ? 0 : COST_SWAP_BLOODLINE;
       const swapMessage = `Bloodline Swapped from ${user.bloodline?.name} to ${line.name}`;
-      await updateBloodline(ctx.drizzle, user, line, swapCost, swapMessage);
+      const writes: Promise<unknown>[] = [
+        updateBloodline(ctx.drizzle, user, line, swapCost, swapMessage),
+      ];
 
-      // Log the swap for monthly tracking (separate from the "Bloodline Changed" log)
-      if (isFreeSwap) {
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "bloodlineSwap",
-          changes: [
-            `Bloodline swap (free ${federalStatus} - ${BLOODLINE_SWAP_FREE_DAYS} days)`,
-          ],
-          relatedId: line.id,
-          relatedMsg: `Free swap for Silver/Gold supporter (${BLOODLINE_SWAP_FREE_DAYS} day cooldown)`,
-          relatedImage: user.avatarLight,
-          relatedValue: 0,
-        });
+      // Log federal free swaps for monthly Silver/Gold tracking (staff benefit takes priority)
+      if (hasFreeSwapAvailable && !isStaffFreeSwap) {
+        writes.push(
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "bloodlineSwap",
+            changes: [
+              `Bloodline swap (free ${federalStatus} - ${BLOODLINE_SWAP_FREE_DAYS} days)`,
+            ],
+            relatedId: line.id,
+            relatedMsg: `Free swap for Silver/Gold supporter (${BLOODLINE_SWAP_FREE_DAYS} day cooldown)`,
+            relatedImage: user.avatarLight,
+            relatedValue: 0,
+          }),
+        );
       }
+
+      await Promise.all(writes);
 
       return {
         success: true,
-        message: `Bloodline swapped${isFreeSwap ? ` (Free for ${federalStatus} supporter)` : ""}`,
+        message: `Bloodline swapped${isFreeSwap ? (isStaffFreeSwap ? " (Free for staff member)" : ` (Free for ${federalStatus} supporter)`) : ""}`,
       };
     }),
   // Bloodline reskins (staff-only creation & moderation)

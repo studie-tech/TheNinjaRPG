@@ -103,11 +103,13 @@ const Post: React.FC<PostProps> = (props) => {
       userRole = "bg-orange-500";
       break;
     case "HEAD_CONTENT":
+    case "HEAD_BALANCE":
       userColor =
         "bg-linear-to-r from-sky-600 via-sky-500 to-sky-600 bg-clip-text text-transparent";
       userRole = "bg-sky-600";
       break;
     case "CONTENT":
+    case "BALANCE":
       userColor =
         "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent";
       userRole = "bg-purple-400";
@@ -165,14 +167,14 @@ const Post: React.FC<PostProps> = (props) => {
           ))}
         {props.user?.role !== "USER" && (
           <span
-            className={`${userRole} m-1 rounded-md p-1 ${["CODER", "MODERATOR", "JR_MODERATOR", "EVENT-ADMIN", "HEAD_EVENT", "HEAD_CONTENT"].includes(props.user.role) ? "text-black" : ""}`}
+            className={`${userRole} m-1 rounded-md p-1 ${["CODER", "MODERATOR", "JR_MODERATOR", "EVENT-ADMIN", "HEAD_EVENT", "HEAD_CONTENT", "HEAD_BALANCE"].includes(props.user.role) ? "text-black" : ""}`}
           >
             {capitalizeFirstLetter(props.user?.role)}
           </span>
         )}
         {props.user.villageName && props.user.villageHexColor && (
           <span
-            className={`m-1 rounded-md p-1 ${["glacier", "shine", "shroud"].includes(props.user.villageName.toLowerCase()) ? "text-black" : "text-white"}`}
+            className={`m-1 rounded-md p-1 ${["hyorin", "shirohana", "akasumi"].includes(props.user.villageName.toLowerCase()) ? "text-black" : "text-white"}`}
             style={{ backgroundColor: props.user.villageHexColor }}
           >
             {props.user.villageName}
