@@ -32,6 +32,7 @@ import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   boostInactivePredicate,
   setActiveBoostExpression,
+  setShrineSettingsKeyExpression,
 } from "@/server/utils/shrine";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
@@ -284,10 +285,10 @@ export const shrineRouter = createTRPCRouter({
         .update(village)
         .set({
           tokens: sql`${village.tokens} - ${SHRINE_AI_UNLOCK_COST}`,
-          shrineSettings: {
-            ...user.village.shrineSettings,
-            unlockedAiIds: updatedUnlocks,
-          },
+          shrineSettings: setShrineSettingsKeyExpression(
+            "unlockedAiIds",
+            updatedUnlocks,
+          ),
         })
         .where(
           and(
@@ -355,10 +356,7 @@ export const shrineRouter = createTRPCRouter({
       await ctx.drizzle
         .update(village)
         .set({
-          shrineSettings: {
-            ...user.village.shrineSettings,
-            activeAiIds: newAssigns,
-          },
+          shrineSettings: setShrineSettingsKeyExpression("activeAiIds", newAssigns),
         })
         .where(eq(village.id, user.villageId));
 

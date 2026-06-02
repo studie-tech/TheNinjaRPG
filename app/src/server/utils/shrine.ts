@@ -56,6 +56,25 @@ export function setActiveBoostExpression(
 }
 
 /**
+ * JSON_SET expression that overwrites a single top-level shrineSettings key
+ * (e.g. $.unlockedAiIds, $.activeAiIds) with `value`, leaving sibling keys —
+ * including $.activeBoosts and $.boostTemplate written by the cron template tick
+ * and Kage activateBoost — untouched. Use when a settings key's whole value is
+ * replaced but neighbouring keys must survive concurrent writers. Mirrors the
+ * inline JSON_SET pattern used by setBoostTemplate.
+ */
+export function setShrineSettingsKeyExpression(
+  key: "unlockedAiIds" | "activeAiIds",
+  value: string[],
+): ReturnType<typeof sql> {
+  return sql`JSON_SET(
+    COALESCE(${village.shrineSettings}, JSON_OBJECT()),
+    ${`$.${key}`},
+    CAST(${JSON.stringify(value)} AS JSON)
+  )`;
+}
+
+/**
  * CAS predicate that is TRUE iff village.shrineSettings.$.activeBoosts.<boostType>
  * is missing or already expired at `nowIso`. Used inside UPDATE WHERE clauses to
  * make boost activation idempotent — concurrent writers (cron template tick vs
