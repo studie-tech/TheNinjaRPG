@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import {
   SHRINE_BOOST_COST,
@@ -10,7 +10,6 @@ import {
   mpvpBattleQueue,
   mpvpBattleUser,
   sector,
-  shrineBoostSchedule,
   userData,
   village,
 } from "@/drizzle/schema";
@@ -24,7 +23,6 @@ import { fetchVillages } from "@/server/api/routers/village";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
 import {
   boostInactivePredicate,
-  mergeActiveBoostsExpression,
   setActiveBoostExpression,
 } from "@/server/utils/shrine";
 import {
@@ -65,8 +63,8 @@ export async function GET() {
       : null;
 
     const message = maintenanceResult
-      ? `Shrine maintenance completed: boost tick (${boostResult.activeUpdated} activated, ${boostResult.expiredDeleted} expired), stale lobbies cleared ${staleLobbyResult.lobbiesCleared} (${staleLobbyResult.usersReset} users reset), daily maintenance (${maintenanceResult.sectorsChecked} sectors checked, ${maintenanceResult.shrinesDowngraded} downgraded, ${maintenanceResult.shrinesDestroyed} destroyed)`
-      : `Shrine boost tick completed: ${boostResult.activeUpdated} activated, ${boostResult.expiredDeleted} expired; stale lobbies cleared ${staleLobbyResult.lobbiesCleared} (${staleLobbyResult.usersReset} users reset)`;
+      ? `Shrine maintenance completed: boost tick (${boostResult.activeUpdated} activated), stale lobbies cleared ${staleLobbyResult.lobbiesCleared} (${staleLobbyResult.usersReset} users reset), daily maintenance (${maintenanceResult.sectorsChecked} sectors checked, ${maintenanceResult.shrinesDowngraded} downgraded, ${maintenanceResult.shrinesDestroyed} destroyed)`
+      : `Shrine boost tick completed: ${boostResult.activeUpdated} activated; stale lobbies cleared ${staleLobbyResult.lobbiesCleared} (${staleLobbyResult.usersReset} users reset)`;
 
     return new Response(message, { status: 200 });
   } catch (cause) {
@@ -220,216 +218,93 @@ export function computeTemplateActivations(params: {
 }
 
 /**
- * Processes shrine boost schedules:
- * 1. Activates scheduled boosts that have started
- * 2. Removes expired boosts from villages
- * 3. Deletes expired schedule records
+ * Activates template-driven shrine boosts on UTC 2-hour slot boundaries.
+ *
+ * Templates are the only producer of village boosts the cron handles — there is
+ * no schedule table — so outside a slot boundary there is nothing to do and the
+ * full village scan is skipped. Expired boosts are not actively cleared: every
+ * consumer (`getShrineBoost`, the UI) treats a past-expiry key as inactive, the
+ * per-type keys are bounded and overwritten on re-activation, and
+ * `boostInactivePredicate` lets a lapsed type re-activate on its next slot.
  */
 async function runShrineBoostTick(
   now: Date = new Date(),
   prevTime: Date = new Date(0),
 ) {
-  const isSlotBoundary = isNewSlotDue(now, prevTime);
+  // Template boosts only fire on slot boundaries; nothing to process otherwise.
+  if (!isNewSlotDue(now, prevTime)) return { activeUpdated: 0 };
 
-  // Fetch all schedules, villages, and (conditionally) level-3 sectors in parallel
-  const [activeSchedules, expiredSchedules, allVillages, level3Sectors] =
-    await Promise.all([
-      drizzleDB
-        .select()
-        .from(shrineBoostSchedule)
-        .where(
-          and(
-            lte(shrineBoostSchedule.startAt, now),
-            gt(shrineBoostSchedule.endAt, now),
-          ),
-        ),
-      drizzleDB
-        .select()
-        .from(shrineBoostSchedule)
-        .where(lte(shrineBoostSchedule.endAt, now)),
-      drizzleDB.query.village.findMany({
-        columns: { id: true, shrineSettings: true, tokens: true, sector: true },
-      }),
-      isSlotBoundary
-        ? drizzleDB
-            .select({ villageId: sector.villageId })
-            .from(sector)
-            .where(eq(sector.shrineLevel, 3))
-        : Promise.resolve([]),
-    ]);
+  // Only needed on slot boundaries: villages (to read templates) and the set of
+  // villages controlling a Level 3 shrine (a prerequisite for activation).
+  const [allVillages, level3Sectors] = await Promise.all([
+    drizzleDB.query.village.findMany({
+      columns: { id: true, shrineSettings: true, tokens: true },
+    }),
+    drizzleDB
+      .select({ villageId: sector.villageId })
+      .from(sector)
+      .where(eq(sector.shrineLevel, 3)),
+  ]);
 
   const villagesWithLevel3Shrine = new Set(level3Sectors.map((s) => s.villageId));
 
-  const villageMap = new Map(allVillages.map((v) => [v.id, v]));
+  // Scale the work with template users, not total villages.
+  const villagesWithTemplate = allVillages.filter(
+    (v) =>
+      ((v.shrineSettings as ShrineSettings | null)?.boostTemplate?.length ?? 0) > 0,
+  );
 
-  // Find the latest endAt for each village+boostType among active schedules
-  const latestActiveByKey = new Map<
-    string,
-    { villageId: string; boostType: string; endAt: Date }
-  >();
-  for (const schedule of activeSchedules) {
-    const key = `${schedule.villageId}:${schedule.boostType}`;
-    const existing = latestActiveByKey.get(key);
-    if (!existing || schedule.endAt > existing.endAt) {
-      latestActiveByKey.set(key, {
-        villageId: schedule.villageId,
-        boostType: schedule.boostType,
-        endAt: schedule.endAt,
-      });
-    }
-  }
-
-  // Collect expired boost types per village (only if stored endAt has passed)
-  const expiredByVillage = new Map<string, Set<string>>();
-  for (const schedule of expiredSchedules) {
-    const villageData = villageMap.get(schedule.villageId);
-    const storedEndAt = (villageData?.shrineSettings as ShrineSettings | null)
-      ?.activeBoosts?.[schedule.boostType];
-    if (!storedEndAt) continue;
-
-    const storedEndAtMs = Date.parse(storedEndAt);
-    if (!Number.isFinite(storedEndAtMs) || storedEndAtMs > now.getTime()) continue;
-
-    if (!expiredByVillage.has(schedule.villageId)) {
-      expiredByVillage.set(schedule.villageId, new Set());
-    }
-    expiredByVillage.get(schedule.villageId)?.add(schedule.boostType);
-  }
-
-  // Batch per-village updates: base (expiry + scheduled, always) and template (CAS, separate)
-  // On slot boundaries we only need to revisit villages that actually have a template configured —
-  // iterating every village would scale work with total villages instead of template users.
-  const villagesWithTemplate = isSlotBoundary
-    ? allVillages.filter(
-        (v) =>
-          ((v.shrineSettings as ShrineSettings | null)?.boostTemplate?.length ?? 0) > 0,
-      )
-    : [];
-  const allAffectedVillageIds = new Set([
-    ...[...latestActiveByKey.values()].map((v) => v.villageId),
-    ...expiredByVillage.keys(),
-    ...villagesWithTemplate.map((v) => v.id),
-  ]);
-
-  let activeUpdated = 0;
-  const baseUpdates: Promise<unknown>[] = [];
   const pendingTemplateActivations: {
     villageId: string;
     boostType: BoostTemplateEntry["boostType"];
     newEndAt: string;
   }[] = [];
 
-  for (const villageId of allAffectedVillageIds) {
-    const villageData = villageMap.get(villageId);
-    const settings = villageData?.shrineSettings as ShrineSettings | null;
-    const currentBoostsBase = { ...(settings?.activeBoosts ?? {}) };
-    const removeKeys: BoostTemplateEntry["boostType"][] = [];
-    const upserts: {
-      boostType: BoostTemplateEntry["boostType"];
-      endAt: string;
-    }[] = [];
-
-    // Remove expired boosts
-    const expired = expiredByVillage.get(villageId);
-    if (expired) {
-      for (const boostType of expired) {
-        if (boostType in currentBoostsBase) {
-          delete currentBoostsBase[boostType];
-          removeKeys.push(boostType as BoostTemplateEntry["boostType"]);
-        }
-      }
-    }
-
-    // Add/update active boosts from schedule
-    for (const { villageId: vid, boostType, endAt } of latestActiveByKey.values()) {
-      if (vid !== villageId) continue;
-      const newEndAt = endAt.toISOString();
-      if (currentBoostsBase[boostType] !== newEndAt) {
-        currentBoostsBase[boostType] = newEndAt;
-        upserts.push({
-          boostType: boostType as BoostTemplateEntry["boostType"],
-          endAt: newEndAt,
-        });
-        activeUpdated++;
-      }
-    }
-
-    // Base update (always succeeds, no CAS): expiry cleanup + scheduled boosts.
-    // Uses surgical JSON_REMOVE/JSON_SET so sibling keys written by concurrent
-    // writers (Kage activateBoost, AI defender updates) are preserved.
-    if (removeKeys.length > 0 || upserts.length > 0) {
-      baseUpdates.push(
-        drizzleDB
-          .update(village)
-          .set({
-            shrineSettings: mergeActiveBoostsExpression({ removeKeys, upserts }),
-          })
-          .where(eq(village.id, villageId)),
-      );
-    }
-
-    // Template activations — separate CAS update so expiry cleanup is never blocked by tokens.
-    // Pass the merged activeBoosts (post Round 1 expiry + scheduled merge) so the "already active
-    // with future expiry" check respects scheduled windows that Round 1 is about to write.
+  for (const villageData of villagesWithTemplate) {
+    const settings = villageData.shrineSettings as ShrineSettings | null;
     const templateActivations = computeTemplateActivations({
       now,
       prevTime,
-      villageId,
-      villageTokens: villageData?.tokens ?? 0,
-      shrineSettings: settings
-        ? { ...settings, activeBoosts: currentBoostsBase }
-        : { activeBoosts: currentBoostsBase },
+      villageId: villageData.id,
+      villageTokens: villageData.tokens ?? 0,
+      shrineSettings: settings,
       villagesWithLevel3Shrine,
       boostCost: SHRINE_BOOST_COST,
     });
     for (const activation of templateActivations) {
-      pendingTemplateActivations.push({ villageId, ...activation });
+      pendingTemplateActivations.push({ villageId: villageData.id, ...activation });
     }
   }
 
-  // Round 1: base updates always succeed (no CAS guard) — ensures expiry cleanup is committed.
-  // Awaited before Round 2 so same-key ordering holds: Round 2 may upsert a key Round 1
-  // just removed, and parallelising the two rounds could let the activation be deleted.
-  await Promise.all(baseUpdates);
-
-  // Round 2: template CAS updates run in parallel with the expired-schedule DELETE.
-  // The DELETE targets a different table (shrineBoostSchedule), so it's independent of
-  // the per-village UPDATEs and can ride the same round-trip batch. MySQL row-level
-  // locking still serializes writes to the same village row for correctness.
-  type ScheduleType = (typeof expiredSchedules)[number];
-  const expiredScheduleIds = expiredSchedules.map((s: ScheduleType) => s.id);
-
+  // Each activation is an independent CAS update on its village row, run in
+  // parallel: MySQL serializes same-row writes for correctness while the
+  // boostInactivePredicate + token guards keep them idempotent, so a retried
+  // tick can never double-deduct tokens or overwrite a still-live boost.
   const nowIso = now.toISOString();
-  const [templateUpdateResults] = await Promise.all([
-    Promise.all(
-      pendingTemplateActivations.map(({ villageId, boostType, newEndAt }) =>
-        drizzleDB
-          .update(village)
-          .set({
-            shrineSettings: setActiveBoostExpression(boostType, newEndAt),
-            tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
-          })
-          .where(
-            and(
-              eq(village.id, villageId),
-              gte(village.tokens, SHRINE_BOOST_COST),
-              boostInactivePredicate(boostType, nowIso),
-            ),
+  const templateUpdateResults = await Promise.all(
+    pendingTemplateActivations.map(({ villageId, boostType, newEndAt }) =>
+      drizzleDB
+        .update(village)
+        .set({
+          shrineSettings: setActiveBoostExpression(boostType, newEndAt),
+          tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
+        })
+        .where(
+          and(
+            eq(village.id, villageId),
+            gte(village.tokens, SHRINE_BOOST_COST),
+            boostInactivePredicate(boostType, nowIso),
           ),
-      ),
+        ),
     ),
-    expiredScheduleIds.length > 0
-      ? drizzleDB
-          .delete(shrineBoostSchedule)
-          .where(inArray(shrineBoostSchedule.id, expiredScheduleIds))
-      : Promise.resolve(),
-  ]);
-  activeUpdated += templateUpdateResults.reduce(
+  );
+
+  const activeUpdated = templateUpdateResults.reduce(
     (total, res) => total + (res.rowsAffected ?? 0),
     0,
   );
 
-  return { activeUpdated, expiredDeleted: expiredScheduleIds.length };
+  return { activeUpdated };
 }
 
 /**

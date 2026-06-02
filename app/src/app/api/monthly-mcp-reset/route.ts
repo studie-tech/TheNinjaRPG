@@ -49,7 +49,6 @@ import {
   rankedPvpQueue,
   rankedUserRewards,
   ryoTrade,
-  shrineBoostSchedule,
   supportTicket,
   supportTicketActivity,
   tournament,
@@ -151,9 +150,6 @@ const runMcpReset = async () => {
 
     // Delete all village alliances
     drizzleDB.delete(villageAlliance),
-
-    // Delete shrine data
-    drizzleDB.delete(shrineBoostSchedule),
   ]);
 
   // Batch 3: Delete Combat & Battle Data (Parallel)
