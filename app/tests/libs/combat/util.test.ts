@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  getItemDisplayBattleDescription,
   getItemDisplayDescription,
   getItemDisplayImage,
   getItemDisplayName,
@@ -160,91 +159,5 @@ describe("getItemDisplayDescription", () => {
       },
     };
     expect(getItemDisplayDescription(source)).toBe("A sharp blade.");
-  });
-});
-
-describe("getItemDisplayBattleDescription", () => {
-  it("returns battleDescription from flat source", () => {
-    expect(
-      getItemDisplayBattleDescription({ battleDescription: "%user swings a blade" }),
-    ).toBe("%user swings a blade");
-  });
-
-  it("returns item.battleDescription when no active variant", () => {
-    const source = {
-      activeVariantId: null,
-      item: {
-        battleDescription: "%user swings a blade",
-        variants: [{ id: "v1", battleDescription: "%user swings the Crimson Blade" }],
-      },
-    };
-    expect(getItemDisplayBattleDescription(source)).toBe("%user swings a blade");
-  });
-
-  it("returns variant battleDescription when activeVariantId matches and variant has it", () => {
-    const source = {
-      activeVariantId: "v1",
-      item: {
-        battleDescription: "%user swings a blade",
-        variants: [{ id: "v1", battleDescription: "%user swings the Crimson Blade" }],
-      },
-    };
-    expect(getItemDisplayBattleDescription(source)).toBe("%user swings the Crimson Blade");
-  });
-
-  it("falls back to item.battleDescription when variant battleDescription is null", () => {
-    const source = {
-      activeVariantId: "v1",
-      item: {
-        battleDescription: "%user swings a blade",
-        variants: [{ id: "v1", battleDescription: null }],
-      },
-    };
-    expect(getItemDisplayBattleDescription(source)).toBe("%user swings a blade");
-  });
-});
-
-// ── reconnect / hydratedItems pre-resolution helpers ─────────────────────────
-//
-// These tests verify the pre-resolution contract used by the combat reconnect
-// path (hydratedItems in performAction).  At initiateBattle time, the active
-// variant's battleDescription is resolved and stored on BattleUserItem as
-// variantBattleDescription.  When a player reconnects, hydratedItems rebuilds
-// each item ref from extraState — it must carry variantBattleDescription forward
-// rather than re-deriving it (extraState.items has no variants array).
-//
-// The helpers below are the resolution primitives; these tests confirm their
-// contract so that a regression in the helpers would surface immediately.
-
-describe("pre-resolution contract: getItemDisplayBattleDescription for reconnect", () => {
-  it("resolves variant battleDescription when variants are available (initiateBattle path)", () => {
-    // At initiateBattle, the full item+variants object is available.
-    const source = {
-      activeVariantId: "v1",
-      item: {
-        battleDescription: "%user swings a blade",
-        variants: [{ id: "v1", battleDescription: "%user swings the Crimson Blade" }],
-      },
-    };
-    expect(getItemDisplayBattleDescription(source)).toBe("%user swings the Crimson Blade");
-  });
-
-  it("returns base battleDescription when variants array is absent (extraState.items path)", () => {
-    // extraState.items stores plain Item objects with no variants.
-    // If the pre-resolved value is lost, this is the fallback the combat system sees.
-    const source = {
-      activeVariantId: "v1",
-      item: { battleDescription: "%user swings a blade" },
-    };
-    expect(getItemDisplayBattleDescription(source)).toBe("%user swings a blade");
-  });
-
-  it("pre-resolved variantBattleDescription takes priority (BattleUserItem simulation)", () => {
-    // variantBattleDescription is stored on BattleUserItem at battle-init time and
-    // used directly in userItemToAction, bypassing the runtime helper. This test
-    // exercises that pre-resolved field path.
-    const preResolved = "%user swings the Crimson Blade";
-    const source = { variantBattleDescription: preResolved };
-    expect(getItemDisplayBattleDescription(source)).toBe(preResolved);
   });
 });

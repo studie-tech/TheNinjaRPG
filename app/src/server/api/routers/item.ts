@@ -618,8 +618,8 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query — ownership check joins userItem→itemVariant in parallel (variantId known upfront)
-      const [userResult, variant, ownershipRows, existingUnlock] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+      const [user, variant, ownershipRows, existingUnlock] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.itemVariant.findFirst({
           where: eq(itemVariant.id, input.variantId),
         }),
@@ -638,10 +638,8 @@ export const itemRouter = createTRPCRouter({
           ),
         }),
       ]);
-      const user = userResult.user;
 
       // Guards
-      if (!user) return errorResponse("User not found");
       if (user.isBanned) return errorResponse("You are banned");
       if (!variant) return errorResponse("Variant not found");
       if (variant.costType === "VARIANT_TOKEN") {
@@ -653,79 +651,50 @@ export const itemRouter = createTRPCRouter({
       if (existingUnlock) return errorResponse("Variant already unlocked");
 
       // Currency checks
-      if (variant.costType === "MONEY" && user.money < variant.cost) {
-        return errorResponse(`Insufficient Ryo. Need ${variant.cost}`);
+      const currency = getVariantCurrencyOps(variant.costType, variant.cost, user);
+      if (currency.balance < variant.cost) {
+        return errorResponse(`Insufficient ${currency.label}. Need ${variant.cost}`);
       }
-      if (variant.costType === "REPUTATION" && user.reputationPoints < variant.cost) {
-        return errorResponse(`Insufficient Reputation. Need ${variant.cost}`);
-      }
-      if (variant.costType === "SEICHI_SILVER" && user.seichiSilver < variant.cost) {
-        return errorResponse(`Insufficient Seichi Silver. Need ${variant.cost}`);
-      }
-      if (
-        variant.costType === "VILLAGE_PRESTIGE" &&
-        user.villagePrestige < variant.cost
-      ) {
-        return errorResponse(`Insufficient Prestige. Need ${variant.cost}`);
-      }
-
-      // Build currency update
-      const currencyWhere =
-        variant.costType === "MONEY"
-          ? gte(userData.money, variant.cost)
-          : variant.costType === "REPUTATION"
-            ? gte(userData.reputationPoints, variant.cost)
-            : variant.costType === "SEICHI_SILVER"
-              ? gte(userData.seichiSilver, variant.cost)
-              : gte(userData.villagePrestige, variant.cost);
-
-      const currencySet =
-        variant.costType === "MONEY"
-          ? { money: sql`${userData.money} - ${variant.cost}` }
-          : variant.costType === "REPUTATION"
-            ? { reputationPoints: sql`${userData.reputationPoints} - ${variant.cost}` }
-            : variant.costType === "SEICHI_SILVER"
-              ? { seichiSilver: sql`${userData.seichiSilver} - ${variant.cost}` }
-              : { villagePrestige: sql`${userData.villagePrestige} - ${variant.cost}` };
 
       // Mutate — deduct currency first with CAS guard (skip for free variants)
       if (variant.cost > 0) {
         const deductResult = await ctx.drizzle
           .update(userData)
-          .set(currencySet)
-          .where(and(eq(userData.userId, ctx.userId), currencyWhere));
+          .set(currency.decrementSet)
+          .where(and(eq(userData.userId, ctx.userId), currency.where));
 
         if (deductResult.rowsAffected !== 1) {
           return errorResponse("Insufficient funds — please refresh and try again");
         }
       }
 
-      // Insert unlock — pre-check above ensures this is not a duplicate.
-      // On unexpected DB error, refund if currency was deducted.
+      // Refund the deducted currency (no-op for free variants).
+      const refundCurrency = async () => {
+        if (variant.cost > 0) {
+          await ctx.drizzle
+            .update(userData)
+            .set(currency.incrementSet)
+            .where(eq(userData.userId, ctx.userId));
+        }
+      };
+
+      // Insert unlock. Both failure modes refund so the user is never charged
+      // without receiving the unlock:
+      //  - rowsAffected === 0: a concurrent purchase won the unique-index race and
+      //    onDuplicateKeyUpdate silently swallowed the duplicate, which would
+      //    otherwise double-charge this caller for an unlock it never inserted.
+      //  - thrown error: an unexpected DB failure.
       try {
-        await ctx.drizzle
+        const insertResult = await ctx.drizzle
           .insert(userItemVariant)
           .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
           .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-      } catch {
-        if (variant.cost > 0) {
-          const refundSet =
-            variant.costType === "MONEY"
-              ? { money: sql`${userData.money} + ${variant.cost}` }
-              : variant.costType === "REPUTATION"
-                ? {
-                    reputationPoints: sql`${userData.reputationPoints} + ${variant.cost}`,
-                  }
-                : variant.costType === "SEICHI_SILVER"
-                  ? { seichiSilver: sql`${userData.seichiSilver} + ${variant.cost}` }
-                  : {
-                      villagePrestige: sql`${userData.villagePrestige} + ${variant.cost}`,
-                    };
-          await ctx.drizzle
-            .update(userData)
-            .set(refundSet)
-            .where(eq(userData.userId, ctx.userId));
+        if (insertResult.rowsAffected === 0) {
+          await refundCurrency();
+          return errorResponse("Variant already unlocked");
         }
+      } catch {
+        await refundCurrency();
         return errorResponse("Failed to unlock variant — please try again");
       }
 
@@ -784,9 +753,9 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query — ownership check joins userItem→itemVariant in parallel (variantId known upfront)
-      const [userResult, tokenItem, variant, ownershipRows, existingUnlock] =
+      const [user, tokenItem, variant, ownershipRows, existingUnlock] =
         await Promise.all([
-          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+          fetchUser(ctx.drizzle, ctx.userId),
           fetchUserItemWithVariants(ctx.drizzle, ctx.userId, input.tokenUserItemId),
           ctx.drizzle.query.itemVariant.findFirst({
             where: eq(itemVariant.id, input.variantId),
@@ -806,10 +775,8 @@ export const itemRouter = createTRPCRouter({
             ),
           }),
         ]);
-      const user = userResult.user;
 
       // Guards
-      if (!user) return errorResponse("User not found");
       if (user.isBanned) return errorResponse("You are banned");
       if (!tokenItem) return errorResponse("Token item not found");
       if (!variant) return errorResponse("Variant not found");
@@ -828,37 +795,53 @@ export const itemRouter = createTRPCRouter({
       // Mutate — consume token first so a crash after this leaves the user
       // without the token but without the unlock (safe-failure direction: retryable).
       const newQty = tokenItem.quantity - 1;
-      const tokenResult = await (newQty <= 0
-        ? ctx.drizzle
-            .delete(userItem)
-            .where(
-              and(
-                eq(userItem.id, input.tokenUserItemId),
-                eq(userItem.quantity, tokenItem.quantity),
-              ),
-            )
-        : ctx.drizzle
-            .update(userItem)
-            .set({ quantity: newQty })
-            .where(
-              and(
-                eq(userItem.id, input.tokenUserItemId),
-                eq(userItem.quantity, tokenItem.quantity),
-              ),
-            ));
+      const consumeToken =
+        newQty <= 0
+          ? ctx.drizzle
+              .delete(userItem)
+              .where(
+                and(
+                  eq(userItem.id, input.tokenUserItemId),
+                  eq(userItem.quantity, tokenItem.quantity),
+                ),
+              )
+          : ctx.drizzle
+              .update(userItem)
+              .set({ quantity: newQty })
+              .where(
+                and(
+                  eq(userItem.id, input.tokenUserItemId),
+                  eq(userItem.quantity, tokenItem.quantity),
+                ),
+              );
+
+      // A thrown DB error here consumes nothing, so surface it gracefully and let
+      // the player retry rather than leaking an unhandled 500.
+      let tokenResult: Awaited<typeof consumeToken>;
+      try {
+        tokenResult = await consumeToken;
+      } catch {
+        return errorResponse("Could not consume Variant Token — please try again");
+      }
 
       if (tokenResult.rowsAffected !== 1) {
         return errorResponse("Token item was modified concurrently — please try again");
       }
 
-      // Insert unlock — idempotent via unique constraint. Token is already consumed
-      // at this point; a DB error here is surfaced to the user so they can contact
-      // support (variant not unlocked, token gone — rare but handled).
+      // Insert unlock — idempotent via unique constraint. The token is already
+      // consumed at this point, so both a thrown DB error and a swallowed duplicate
+      // (rowsAffected === 0, meaning a concurrent unlock won the race) are surfaced
+      // to the user — the token cannot be refunded once spent.
       try {
-        await ctx.drizzle
+        const insertResult = await ctx.drizzle
           .insert(userItemVariant)
           .values({ id: nanoid(), userId: ctx.userId, variantId: input.variantId })
           .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+        if (insertResult.rowsAffected === 0) {
+          return errorResponse(
+            "Variant was already unlocked — your token was consumed. Please contact support.",
+          );
+        }
       } catch {
         return errorResponse(
           "Token consumed but variant unlock failed — please contact support",
@@ -2249,6 +2232,60 @@ export const getItemRelations = async (client: DrizzleClient, itemId: string) =>
   return { aiEquippedItem, questsUsingItem };
 };
 export type ItemRelations = Awaited<ReturnType<typeof getItemRelations>>;
+
+// Currency types whose cost is drawn from a user balance (excludes VARIANT_TOKEN,
+// which is gated by consuming a Variant Token item instead).
+type VariantCurrencyType =
+  | "MONEY"
+  | "REPUTATION"
+  | "SEICHI_SILVER"
+  | "VILLAGE_PRESTIGE";
+
+// Single source of truth for variant currency handling: the user's current balance,
+// the CAS guard for an atomic deduct, and the decrement/increment update sets.
+// Adding a new currency only requires extending the map below in one place.
+const getVariantCurrencyOps = (
+  costType: VariantCurrencyType,
+  cost: number,
+  user: {
+    money: number;
+    reputationPoints: number;
+    seichiSilver: number;
+    villagePrestige: number;
+  },
+) => {
+  const ops = {
+    MONEY: {
+      label: "Ryo",
+      balance: user.money,
+      where: gte(userData.money, cost),
+      decrementSet: { money: sql`${userData.money} - ${cost}` },
+      incrementSet: { money: sql`${userData.money} + ${cost}` },
+    },
+    REPUTATION: {
+      label: "Reputation",
+      balance: user.reputationPoints,
+      where: gte(userData.reputationPoints, cost),
+      decrementSet: { reputationPoints: sql`${userData.reputationPoints} - ${cost}` },
+      incrementSet: { reputationPoints: sql`${userData.reputationPoints} + ${cost}` },
+    },
+    SEICHI_SILVER: {
+      label: "Seichi Silver",
+      balance: user.seichiSilver,
+      where: gte(userData.seichiSilver, cost),
+      decrementSet: { seichiSilver: sql`${userData.seichiSilver} - ${cost}` },
+      incrementSet: { seichiSilver: sql`${userData.seichiSilver} + ${cost}` },
+    },
+    VILLAGE_PRESTIGE: {
+      label: "Prestige",
+      balance: user.villagePrestige,
+      where: gte(userData.villagePrestige, cost),
+      decrementSet: { villagePrestige: sql`${userData.villagePrestige} - ${cost}` },
+      incrementSet: { villagePrestige: sql`${userData.villagePrestige} + ${cost}` },
+    },
+  };
+  return ops[costType];
+};
 
 export const fetchItem = async (client: DrizzleClient, id: string) => {
   return await client.query.item.findFirst({
